@@ -80,6 +80,6 @@ describe('the tool scope and rule match (^local-tool-grant contract half)', () =
     expect(validateKindPayload('approval.rule.revoked', { ruleId, repoKey: H, tool: 'mcp:neurons/../x', connId }).length).toBeGreaterThan(0);
   });
   it('the move is pinned', () => {
-    expect(CLIENT_API_ID).toBe('sha256:fed7e22ca4e35405f65592e3a3d829b33beeaada98b7321483496f4dd185c4a3');
+    expect(CLIENT_API_ID).toBe('sha256:af070b92e89fe985cb43d7b6f5a720d1f43e7ee0f6aa08d0c87db3e713a4f060');
   });
 });

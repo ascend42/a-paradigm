@@ -120,16 +120,21 @@ export const TRUST_DROP_TOAST = Object.freeze({ kind: 'warn' as ToastKind, key: 
 
 /* ── C6'b2-2 (Mika): the "ran by rule" toast (variant rule-ran) ──────────────────────────────────────────────────── */
 
+/** C6'a2-4: who started a call an Always rule passed (approval.auto{author}: 'human' a "/" run, absent the model). */
+export type RuleRanBy = 'human' | 'model' | 'both';
+
 export interface RuleRan {
   ruleId: string;
   hsid: string;
   tool: string;
   server: string;
+  by: 'human' | 'model';
 }
 
 /**
  * A kernel approval.auto{modeRef:'rule:<ruleId>'} for an MCP tool (`mcp:<server>/<tool>`): an Always rule passed it with
  * no card. Anything else (an edit a mode allowed, a kernel tool, a malformed row) is null. The names are display text.
+ * C6'a2-4: `by` is 'human' exactly when the row says author 'human' (a "/" run); no author is the model's call.
  */
 export function ruleRanOf(row: { kind?: unknown; payload?: unknown }): RuleRan | null {
   if (row.kind !== 'approval.auto' || !row.payload || typeof row.payload !== 'object') return null;
@@ -137,7 +142,7 @@ export function ruleRanOf(row: { kind?: unknown; payload?: unknown }): RuleRan |
   const ref = typeof p.modeRef === 'string' ? /^rule:(.{1,200})$/.exec(p.modeRef) : null;
   const m = typeof p.tool === 'string' ? /^mcp:([^/]{1,64})\/(.{1,64})$/.exec(p.tool) : null;
   if (!ref || !m || typeof p.hsid !== 'string') return null;
-  return { ruleId: ref[1]!, hsid: p.hsid, server: displayText(m[1]!).slice(0, 64), tool: displayText(m[2]!).slice(0, 64) };
+  return { ruleId: ref[1]!, hsid: p.hsid, server: displayText(m[1]!).slice(0, 64), tool: displayText(m[2]!).slice(0, 64), by: p.author === 'human' ? 'human' : 'model' };
 }
 
 export const RULE_RAN_TOAST = Object.freeze({
@@ -150,14 +155,31 @@ export const RULE_RAN_TOAST = Object.freeze({
   keyName: (t: Pick<RuleRan, 'tool' | 'server'>): string => `Revoke the rule for ${t.tool} on ${t.server}`,
 });
 
+/** One toast's passes so far: a pass by the other author makes it 'both'. */
+export const ruleRanByMerge = (a: RuleRanBy, b: RuleRanBy): RuleRanBy => (a === b ? a : 'both');
+
+const RULE_RAN_BY: Readonly<Record<RuleRanBy, string>> = Object.freeze({ human: 'by you from /', model: 'by the model', both: 'by you and the model' });
+
+/** Mika (C6'a2-4): the most characters of a tool or server name the rule-ran toast SHOWS (longer: cut, ending in …). */
+export const RULE_RAN_NAME_SHOWN = 28;
+
+/** A name cut to `max` code points, its last one `…` when it was longer (never splits a surrogate pair). */
+export function capName(s: string, max: number = RULE_RAN_NAME_SHOWN): string {
+  const cps = Array.from(s);
+  return cps.length <= max ? s : `${cps.slice(0, max - 1).join('')}…`;
+}
+
 /**
- * "ran by rule · write on fs"; repeated passes of one rule: "ran 4 times by rule · …". WHO it ran for is not said: the
- * kernel's approval.auto names no author and shares no call id with its tool.brokered row (whose argsHash is of the
- * model's args, while approval.auto's inputHash is of the reassembled call args), so the page cannot pair them, and an
- * audit notice never guesses. "by the model" / "by you from /" wait on a kernel `author` on approval.auto.
+ * "ran by rule · write on fs · by the model"; repeated passes of one rule: "ran 4 times by rule · … · by you and the
+ * model" once both authors' calls passed it. WHO it ran for is the kernel's own approval.auto{author} (C6'a2-4): 'human'
+ * a "/" run ("by you from /"), absent the model's call; the page never guesses. Mika (C6'a2-4): the SHOWN text cuts each
+ * name at RULE_RAN_NAME_SHOWN so the who always shows inside the toast's 4 lines; `{ full: true }` keeps the whole names
+ * (the announcement and the hover title; Revoke's accessible name is RULE_RAN_TOAST.keyName, whole too).
  */
-export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number): string {
-  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${t.tool} on ${t.server}`;
+export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number, by: RuleRanBy, o: { full?: boolean } = {}): string {
+  const tool = o.full ? t.tool : capName(t.tool);
+  const server = o.full ? t.server : capName(t.server);
+  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${tool} on ${server} · ${RULE_RAN_BY[by]}`;
 }
 
 /** The Revoke key's request: remove the rule (it only tightens: no presence). */

@@ -45,7 +45,7 @@ import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '.
 import { mountStandingFeed } from './standing-feed.js';
 import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
-import { RULE_RAN_TOAST, ruleRanOf, ruleRanText, ruleRevokeFailWords, ruleRevokeRequest, trustDropToastOf, TRUST_DROP_TOAST, type ToastKind } from '../core/toasts.js';
+import { RULE_RAN_TOAST, ruleRanByMerge, ruleRanOf, ruleRanText, type RuleRanBy, ruleRevokeFailWords, ruleRevokeRequest, trustDropToastOf, TRUST_DROP_TOAST, type ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
@@ -2916,11 +2916,12 @@ function mcpFailRow(r: { kind: string; payload?: unknown; principal?: string }):
 
 /**
  * C6'b2-2 (Mika, toast variant rule-ran): a kernel-signed approval.auto{modeRef:'rule:…'} for an MCP tool of a local
- * session this human opened is a toast "ran by rule · {tool} on {server}" (who it ran for waits on a kernel author): warn
+ * session this human opened is a toast "ran by rule · {tool} on {server} · by you from / | by the model" (C6'a2-4: the
+ * row's author; a toast that saw both says "by you and the model"): warn
  * for a tool that can't be undone, else info. Its one key, Revoke, removes the rule (request.rules.apply{remove}: it
  * only tightens, no presence). Repeated passes of one rule update ONE toast ("ran 4 times by rule"), never a flood.
  */
-const ruleToasts = new Map<string, { n: number; handle: ToastHandle }>();
+const ruleToasts = new Map<string, { n: number; by: RuleRanBy; handle: ToastHandle }>();
 function ruleRanRow(r: { kind: string; payload?: unknown; principal?: string }): void {
   if (r.kind !== 'approval.auto' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
   const t = ruleRanOf(r);
@@ -2928,12 +2929,14 @@ function ruleRanRow(r: { kind: string; payload?: unknown; principal?: string }):
   const had = ruleToasts.get(t.ruleId);
   if (had?.handle.present) {
     had.n++;
-    if (had.handle.keyEl) had.handle.update(ruleRanText(t, had.n)); // a Revoke in flight or done keeps its words
+    had.by = ruleRanByMerge(had.by, t.by);
+    if (had.handle.keyEl) had.handle.update(ruleRanText(t, had.n, had.by), { said: ruleRanText(t, had.n, had.by, { full: true }) }); // a Revoke in flight or done keeps its words
     return;
   }
   const cls = rulesStatusOf(status).rules.find((x) => x.ruleId === t.ruleId)?.class ?? null;
-  const entry = { n: 1, handle: null as unknown as ToastHandle };
-  entry.handle = toasts().show(ruleRanText(t, 1), {
+  const entry = { n: 1, by: t.by as RuleRanBy, handle: null as unknown as ToastHandle };
+  entry.handle = toasts().show(ruleRanText(t, 1, entry.by), {
+    said: ruleRanText(t, 1, entry.by, { full: true }),
     kind: RULE_RAN_TOAST.kind(cls),
     variant: 'rule-ran',
     key: {
