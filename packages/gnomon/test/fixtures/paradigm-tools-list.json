@@ -1,0 +1,2213 @@
+{
+  "tools": [
+    {
+      "name": "paradigm_status",
+      "description": "Get project overview — call this at session start for orientation. Shows symbol counts, project health, and a pointer to the full capability guide. ~100 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ],
+            "description": "Response detail level. \"concise\" returns minimal fields to save tokens (default…"
+          },
+          "check": {
+            "type": "string",
+            "enum": [
+              "plugins"
+            ],
+            "description": "plugins: check installed Claude Code plugins for updates"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_search",
+      "description": "Search for Paradigm symbols by name, description, or tags. Includes fuzzy matching for typo tolerance. Returns matching symbols with names, paths, types, and descriptions. ~150 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query (matches symbol names, descriptions, tags)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "component",
+              "flow",
+              "gate",
+              "signal",
+              "aspect"
+            ],
+            "description": "Optional: filter by symbol type (v2: #component, $flow, ^gate, !signal, ~aspect)"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Maximum results to return (default: 10)"
+          },
+          "fuzzy": {
+            "type": "boolean",
+            "description": "Enable fuzzy matching for typos (default: true)"
+          },
+          "includeWorkspace": {
+            "type": "boolean",
+            "description": "Also search sibling workspace projects (default: false). Requires workspace con…"
+          },
+          "componentType": {
+            "type": "string",
+            "description": "Filter components by type (e.g., \"view\", \"service\", \"tool\"). Only applies to #c…"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ],
+            "description": "Response detail level. \"concise\" returns minimal fields to save tokens (default…"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_related",
+      "description": "Get all symbols related to a given symbol. Call before modifying code to understand what uses this symbol and what it depends on. Returns uses/used-by lists with symbol types. ~150 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Symbol to find relations for"
+          }
+        },
+        "required": [
+          "symbol"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_ripple",
+      "description": "IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes. Returns direct and indirect dependents with file paths and dependency depth. ~300 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Symbol to analyze (e.g., \"#checkout\", \"$payment-flow\", \"^authenticated\")"
+          },
+          "depth": {
+            "type": "number",
+            "description": "How many hops to traverse (default: 3, max: 5)"
+          },
+          "includeWorkspace": {
+            "type": "boolean",
+            "description": "Also check sibling workspace projects for cross-project impact (default: false)…"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ],
+            "description": "Response detail level. \"concise\" returns minimal fields to save tokens (default…"
+          }
+        },
+        "required": [
+          "symbol"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_navigate",
+      "description": "Navigate the codebase efficiently. Use \"find\" to locate a symbol, \"explore\" to browse an area, or \"context\" to get relevant files for a task. Returns file paths, symbol locations, and context summaries. ~200 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intent": {
+            "type": "string",
+            "enum": [
+              "find",
+              "explore",
+              "context"
+            ],
+            "description": "Navigation intent: \"find\" for symbol lookup, \"explore\" for area browsing, \"cont…"
+          },
+          "target": {
+            "type": "string",
+            "description": "For \"find\": symbol (e.g., @checkout) or path. For \"explore\": category or area n…"
+          },
+          "task": {
+            "type": "string",
+            "description": "For \"context\" intent: describe the task (e.g., \"add Apple Pay to checkout\")"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ],
+            "description": "Response detail level. \"concise\" returns minimal fields (default: \"detailed\")"
+          }
+        },
+        "required": [
+          "intent"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_gates_for_route",
+      "description": "Suggest which gates should be applied to a route based on patterns in the project. Returns suggested gates with confidence scores and existing patterns. ~150 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string",
+            "description": "Route path (e.g., /api/users, /admin/settings)"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "description": "HTTP method"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ],
+            "description": "Response detail level. \"concise\" returns minimal fields to save tokens (default…"
+          }
+        },
+        "required": [
+          "route"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_reindex",
+      "description": "Rebuild scan-index.json, navigator.yaml, and flow-index.json from .purpose files. Call after modifying paradigm files or at the end of a work session to ensure static index files are fresh. Returns counts of indexed symbols, files processed, and any errors. ~150 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace"
+            ],
+            "description": "workspace: rebuild scan-index for every workspace member"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    {
+      "name": "paradigm_retrieve",
+      "description": "Rehydrate a large payload that a Paradigm tool SPILLED to disk (`.paradigm/spill/{handle}.json`) instead of dumping inline. Pass the `handle` a prior tool returned (e.g. a `warpline admit` changed-symbol set, a spilled graph). For array payloads, `offset`/`limit` return a bounded window instead of the whole set. Lossless — the full data was written verbatim. ~50 tokens + the window you ask for.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "The spill handle returned by the tool that spilled (e.g. \"admit-changed-l9x2-a1…"
+          },
+          "offset": {
+            "type": "number",
+            "description": "For array payloads: start index of the returned window (default 0)."
+          },
+          "limit": {
+            "type": "number",
+            "description": "For array payloads: max items to return from offset (default: to the end)."
+          }
+        },
+        "required": [
+          "handle"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_tool_activate",
+      "description": "List an on-demand tool for this session (sends tools/list_changed). Persist via config.yaml mcp.tools.enable. ~50 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "feature": {
+            "type": "string",
+            "description": "sentinel, symphony, classroom, habits, persona, university, assessment, conduct…"
+          }
+        },
+        "required": [
+          "feature"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_propose_block",
+      "description": "Author a soft-block (remediation) that the Stop hook will honor until resolved. Use when your archetype detects a condition the user should resolve before continuing (e.g., coverage drop, missing aspect, broken anchor). User can override via `paradigm override <id>` or PARADIGM_OVERRIDE env var. v6.1: only severity=guard hard-blocks; advise/auto-author are informational. ~150 tokens.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "claimant": {
+            "type": "string",
+            "description": "Archetype id authoring this block (e.g., \"compliance\", \"security\"). REQUIRED —…"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "advise",
+              "auto-author",
+              "guard"
+            ],
+            "description": "Block intent for this event. v6.1: only `guard` hard-blocks; `advise`/`auto-aut…"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Free-text explanation surfaced to the user verbatim. Be specific (component nam…"
+          },
+          "unblock_hint": {
+            "type": "string",
+            "description": "Plain-string remediation hint (v6.1; JSONLogic predicates ship v6.2). Tell the…"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "OPTIONAL ISO 8601 UTC timestamp. After this, Check 14 silently skips the remedi…"
+          },
+          "target": {
+            "type": "object",
+            "description": "OPTIONAL context: {file, symbol, line}.",
+            "properties": {
+              "file": {},
+              "symbol": {},
+              "line": {}
+            }
+          }
+        },
+        "required": [
+          "claimant",
+          "severity",
+          "reason",
+          "unblock_hint"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_orchestrate_inline",
+      "description": "REQUIRED before implementing features. Start with mode=\"quick\" for fast pre-check, or mode=\"plan\" for full orchestration planning. Plans and coordinates multi-agent task execution within the same session. - mode: \"quick\" - Lightweight pre-implementation check (~3-4k tokens). Jinx (advocate) stress-tests assumptions, reviewer checks feasibility. Returns greenlight or escalates to full orchestratio…",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "The task to orchestrate (e.g., \"Build @payment-system with Stripe integration\")"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "plan",
+              "execute"
+            ],
+            "description": "Mode: \"quick\" for lightweight pre-check (advocate + reviewer), \"plan\" returns s…"
+          },
+          "agents": {
+            "type": "array",
+            "description": "Optional: Override which agents to use (e.g., [\"architect\", \"builder\"])"
+          }
+        },
+        "required": [
+          "task"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_lore",
+      "description": "Project lore: session records, timeline, assessments, calibration. Ops (*=required): assess(id*,verdict*,notes), calibration(symbol,tag,author,dateFrom,dateTo,groupBy), delete(id*,confirm*), get(id*), record(title*,summary*,symbols_touched*,type,symbols_created,files_created,files_modified,lines_added,lines_removed,commit,duration_minutes,decisions[{id*,decision*,rationale*}],errors_encountered[{description*,resolution*,time_to_fix}],learnings,verification{status,details},tags,meta,body,linked_lore,linked_tasks,linked_commits,confidence,stream), search(symbol,author,hasAgent,authorType,type,tag,hasBody,dateFrom,dateTo,tags,hasReview,hasConfidence,hasAssessment,limit,offset), timeline(limit), update(id*,title,summary,type,symbols_touched,symbols_created,files_created,files_modified,lines_added,lines_removed,commit,duration_minutes,learnings,verification{status,details},tags,confidence).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "assess",
+              "calibration",
+              "delete",
+              "get",
+              "record",
+              "search",
+              "timeline",
+              "update"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "correct",
+              "partial",
+              "incorrect"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "dateFrom": {
+            "type": "string"
+          },
+          "dateTo": {
+            "type": "string"
+          },
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "symbol",
+              "tag",
+              "type"
+            ]
+          },
+          "confirm": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "agent-session",
+              "human-note",
+              "review",
+              "incident",
+              "milestone",
+              "retro",
+              "insight"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "symbols_touched": {
+            "type": "array"
+          },
+          "symbols_created": {
+            "type": "array"
+          },
+          "files_created": {
+            "type": "array"
+          },
+          "files_modified": {
+            "type": "array"
+          },
+          "lines_added": {
+            "type": "number"
+          },
+          "lines_removed": {
+            "type": "number"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "duration_minutes": {
+            "type": "number"
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {},
+                "decision": {},
+                "rationale": {}
+              },
+              "required": [
+                "id",
+                "decision",
+                "rationale"
+              ]
+            }
+          },
+          "errors_encountered": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {},
+                "resolution": {},
+                "time_to_fix": {}
+              },
+              "required": [
+                "description",
+                "resolution"
+              ]
+            }
+          },
+          "learnings": {
+            "type": "array"
+          },
+          "verification": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "partial",
+                  "untested"
+                ]
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          },
+          "tags": {
+            "type": "array"
+          },
+          "meta": {
+            "type": "object"
+          },
+          "body": {
+            "type": "string"
+          },
+          "linked_lore": {
+            "type": "array"
+          },
+          "linked_tasks": {
+            "type": "array"
+          },
+          "linked_commits": {
+            "type": "array"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "stream": {
+            "type": "string",
+            "enum": [
+              "work-log",
+              "journal",
+              "decision",
+              "auto"
+            ]
+          },
+          "hasAgent": {
+            "type": "boolean"
+          },
+          "authorType": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ]
+          },
+          "hasBody": {
+            "type": "boolean"
+          },
+          "hasReview": {
+            "type": "boolean"
+          },
+          "hasConfidence": {
+            "type": "boolean"
+          },
+          "hasAssessment": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    {
+      "name": "paradigm_purpose",
+      "description": "Edit .purpose files and portal.yaml gates/routes. Ops (*=required): portal_add_gate(id*,description*,type,location,requires,check,grants,emits,prizes[{id*,oneTime}]), portal_add_route(route*,method*,gates*), add_aspect(purposeFile*,id*,description*,anchors*,tags,appliesTo,enforcement), add_component(purposeFile*,id*,description*,section,file,status,endpoints,tests,flows,gates,signals,aspects,components,type,parent), add_flow(purposeFile*,id*,description*,gates,signals,components,steps[{component*,action*,description}]), add_gate(purposeFile*,id*,description*,requires,keys,signals), add_signal(purposeFile*,id*,description*,category,severity,emitters,related,data), add_state(purposeFile*,id*,description*,type,default,properties), init(purposeFile*,name*,description,context,version), link(purposeFile*,componentId*,section,signals,aspects,gates,flows,components), remove(purposeFile*,section*,id*), rename(oldId*,newId*,symbolType*), validate(purposeFile,includePortal).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "portal_add_gate",
+              "portal_add_route",
+              "add_aspect",
+              "add_component",
+              "add_flow",
+              "add_gate",
+              "add_signal",
+              "add_state",
+              "init",
+              "link",
+              "remove",
+              "rename",
+              "validate"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "requires": {
+            "type": "array"
+          },
+          "check": {
+            "type": "string"
+          },
+          "grants": {
+            "type": "array"
+          },
+          "emits": {
+            "type": "array"
+          },
+          "prizes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {},
+                "oneTime": {}
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          "route": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ]
+          },
+          "gates": {
+            "type": "array"
+          },
+          "purposeFile": {
+            "type": "string"
+          },
+          "anchors": {
+            "type": "array"
+          },
+          "tags": {
+            "type": "array"
+          },
+          "appliesTo": {
+            "type": "array"
+          },
+          "enforcement": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "components",
+              "features",
+              "gates",
+              "signals",
+              "aspects",
+              "flows",
+              "states"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "array"
+          },
+          "tests": {
+            "type": "array"
+          },
+          "flows": {
+            "type": "array"
+          },
+          "signals": {
+            "type": "array"
+          },
+          "aspects": {
+            "type": "array"
+          },
+          "components": {
+            "type": "array"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "component": {},
+                "action": {},
+                "description": {}
+              },
+              "required": [
+                "component",
+                "action"
+              ]
+            }
+          },
+          "keys": {
+            "type": "array"
+          },
+          "category": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "error"
+            ]
+          },
+          "emitters": {
+            "type": "array"
+          },
+          "related": {
+            "type": "array"
+          },
+          "data": {
+            "type": "object"
+          },
+          "default": {},
+          "properties": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "context": {
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          },
+          "componentId": {
+            "type": "string"
+          },
+          "oldId": {
+            "type": "string"
+          },
+          "newId": {
+            "type": "string"
+          },
+          "symbolType": {
+            "type": "string",
+            "enum": [
+              "#",
+              "^",
+              "!",
+              "$",
+              "~"
+            ]
+          },
+          "includePortal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    {
+      "name": "paradigm_wisdom",
+      "description": "Team wisdom: antipatterns/decisions per symbol, experts. Ops: context(symbols*), expert, promote(type*,id*), record(type*,id*,symbols*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "context",
+              "expert",
+              "promote",
+              "record"
+            ]
+          },
+          "symbols": {
+            "type": "array"
+          },
+          "include_global": {
+            "type": "boolean"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "area": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "antipattern",
+              "decision"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "alternative": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "accepted",
+              "deprecated",
+              "superseded"
+            ]
+          },
+          "rationale": {
+            "type": "object",
+            "properties": {
+              "factors": {
+                "type": "array"
+              },
+              "conclusion": {}
+            }
+          },
+          "consequences": {
+            "type": "object",
+            "properties": {
+              "positive": {
+                "type": "array"
+              },
+              "negative": {
+                "type": "array"
+              },
+              "mitigations": {
+                "type": "array"
+              }
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "project",
+              "global"
+            ]
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_history",
+      "description": "Symbol change history and fragility. Ops: context(symbols*), fragility(symbols*), record(type*,symbols*,description*), validate(result*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "context",
+              "fragility",
+              "record",
+              "validate"
+            ]
+          },
+          "symbols": {
+            "type": "array"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "implement",
+              "refactor",
+              "rollback"
+            ]
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "fix",
+              "refactor",
+              "experimental",
+              "confirmed"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "implementation_id": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "partial"
+            ]
+          },
+          "tests": {
+            "type": "object",
+            "properties": {
+              "passed": {},
+              "failed": {},
+              "skipped": {}
+            }
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_decision",
+      "description": "Decision stream. Ops: record(title*,decision*,rationale*,participants*[{id*,role*,stance*}]), search.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "record",
+              "search"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {},
+                "role": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ]
+                },
+                "stance": {
+                  "enum": [
+                    "proposed",
+                    "supported",
+                    "dissented",
+                    "abstained",
+                    "neutral"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "role",
+                "stance"
+              ]
+            }
+          },
+          "alternatives_considered": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "option": {},
+                "rejected_because": {}
+              }
+            }
+          },
+          "symbols_affected": {
+            "type": "array"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "proposed",
+              "superseded",
+              "deprecated",
+              "rejected"
+            ]
+          },
+          "tags": {
+            "type": "array"
+          },
+          "participant": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "dateFrom": {
+            "type": "string"
+          },
+          "dateTo": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "summary": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_journal",
+      "description": "Agent journal and work log. Ops: record(agent*,trigger*,insight*,project*,transferable*), search, work_log_record(agent*,summary*,outcome*), work_log_search.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "record",
+              "search",
+              "work_log_record",
+              "work_log_search"
+            ]
+          },
+          "agent": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "insight": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "transferable": {
+            "type": "boolean"
+          },
+          "confidence_before": {
+            "type": "number"
+          },
+          "confidence_after": {
+            "type": "number"
+          },
+          "pattern": {
+            "type": "object",
+            "properties": {
+              "id": {},
+              "applies_when": {},
+              "correct_approach": {}
+            }
+          },
+          "linked_work_log": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array"
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "source": {},
+              "trust": {
+                "enum": [
+                  "certified",
+                  "provisional",
+                  "external"
+                ]
+              },
+              "sourceSet": {
+                "type": "array"
+              }
+            }
+          },
+          "tag": {
+            "type": "string"
+          },
+          "dateFrom": {
+            "type": "string"
+          },
+          "dateTo": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "stats": {
+            "type": "boolean"
+          },
+          "summary": {},
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "partial",
+              "blocked"
+            ]
+          },
+          "task_ref": {
+            "type": "string"
+          },
+          "files_modified": {
+            "type": "array"
+          },
+          "symbols_touched": {
+            "type": "array"
+          },
+          "next_steps": {
+            "type": "array"
+          },
+          "blockers": {
+            "type": "array"
+          },
+          "duration_minutes": {
+            "type": "number"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_session",
+      "description": "Session health, recovery, checkpoints, handoff. Ops: context_check, handoff_prepare(summary*), checkpoint(phase*,context*), health, recover, stats.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "context_check",
+              "handoff_prepare",
+              "checkpoint",
+              "health",
+              "recover",
+              "stats"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "nextSteps": {
+            "type": "array"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "modifiedFiles": {
+            "type": "array"
+          },
+          "symbolsTouched": {
+            "type": "array"
+          },
+          "openQuestions": {
+            "type": "array"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "planning",
+              "implementing",
+              "validating",
+              "complete"
+            ]
+          },
+          "context": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "decisions": {
+            "type": "array"
+          },
+          "estimatedTotalTokens": {
+            "type": "number"
+          },
+          "contextWindowSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_task",
+      "description": "Tasks. Ops (*=required): create(blurb*,priority,tags,related_lore,claimant{kind,ref},parentTaskId,dependsOn,stage,external_ref{provider,ref,url,syncedAt},session_link), done(id*), list(status,priority,tag,limit), shelve(id*), update(id*,blurb,priority,status,tags,related_lore,related_assessments,claimant{kind,ref},parentTaskId,dependsOn,stage,external_ref{provider,ref,url,syncedAt},session_link).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "create",
+              "done",
+              "list",
+              "shelve",
+              "update"
+            ]
+          },
+          "blurb": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "tags": {
+            "type": "array"
+          },
+          "related_lore": {
+            "type": "array"
+          },
+          "claimant": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "archetype",
+                  "human",
+                  "peer"
+                ]
+              },
+              "ref": {}
+            }
+          },
+          "parentTaskId": {
+            "type": "string"
+          },
+          "dependsOn": {
+            "type": "array"
+          },
+          "stage": {
+            "type": "number"
+          },
+          "external_ref": {
+            "type": "object",
+            "properties": {
+              "provider": {},
+              "ref": {},
+              "url": {},
+              "syncedAt": {}
+            }
+          },
+          "session_link": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in-progress",
+              "done",
+              "shelved",
+              "active",
+              "all"
+            ]
+          },
+          "tag": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "related_assessments": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_agent",
+      "description": "Agent roster, profiles, expertise, prompts. Ops: activate(id*), bench(id*), expertise(symbol*), get(id*), list, prompt(agent*,task*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "activate",
+              "bench",
+              "expertise",
+              "get",
+              "list",
+              "prompt"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "all",
+              "global",
+              "project"
+            ]
+          },
+          "agent": {
+            "type": "string",
+            "enum": [
+              "advocate",
+              "architect",
+              "builder",
+              "cartographer",
+              "compliance",
+              "ftux",
+              "scholar",
+              "swift",
+              "tester",
+              "reviewer",
+              "security",
+              "documentor"
+            ]
+          },
+          "task": {
+            "type": "string"
+          },
+          "handoffContext": {
+            "type": "string"
+          },
+          "previousAgent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_protocol",
+      "description": "Repeatable protocols. Ops: get(id*), record(name*,description*), search(task*), update(id*), validate.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "get",
+              "record",
+              "search",
+              "update",
+              "validate"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "array"
+          },
+          "tags": {
+            "type": "array"
+          },
+          "symbols": {
+            "type": "array"
+          },
+          "exemplar": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "enum": [
+                    "create",
+                    "modify",
+                    "run",
+                    "verify"
+                  ]
+                },
+                "target": {},
+                "template_from": {},
+                "reference": {},
+                "command": {},
+                "notes": {}
+              },
+              "required": [
+                "action"
+              ]
+            }
+          },
+          "recorded_from": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_aspect",
+      "description": "Aspects: anchors, graph, drift. Ops: check(aspect*), confirm(query*,aspectId*), drift, get(aspectId*), graph(symbol*), heatmap, search(query*), suggest_scan(filePath*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "check",
+              "confirm",
+              "drift",
+              "get",
+              "graph",
+              "heatmap",
+              "search",
+              "suggest_scan"
+            ]
+          },
+          "aspect": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "aspectId": {
+            "type": "string"
+          },
+          "autoHeal": {
+            "type": "boolean"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "hops": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "accessType": {
+            "type": "string",
+            "enum": [
+              "search",
+              "ripple",
+              "navigate",
+              "direct"
+            ]
+          },
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_tags",
+      "description": "Tag bank (default op: list). Ops: list(action*), suggest(tag*,description*,reason*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "list",
+              "suggest"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "search",
+              "get"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "core",
+              "project",
+              "suggested",
+              "all"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "appliesTo": {
+            "type": "array"
+          },
+          "exampleSymbols": {
+            "type": "array"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_flow",
+      "description": "Flows. Ops: check, affected(symbol*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "check",
+              "affected"
+            ]
+          },
+          "flowId": {
+            "type": "string"
+          },
+          "checkImplementation": {
+            "type": "boolean"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "includeValidation": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "paradigm_graph",
+      "description": "Graphs: generate, symbol-graph slices, architecture. Ops: arch_diagram, arch_status, generate(name*), slice(symbol*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "arch_diagram",
+              "arch_status",
+              "generate",
+              "slice"
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "mermaid"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbols": {
+            "type": "array"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {},
+                "symbols": {
+                  "type": "array"
+                }
+              },
+              "required": [
+                "label",
+                "symbols"
+              ]
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {},
+                "target": {},
+                "label": {}
+              },
+              "required": [
+                "source",
+                "target"
+              ]
+            }
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "radius": {
+            "type": "number"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "ego",
+              "ripple",
+              "flow"
+            ]
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_notebook",
+      "description": "Agent notebooks. Ops: add(agentId*,context*,snippet*,concepts*), promote(agentId*,loreEntryId*), search(agentId*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "promote",
+              "search"
+            ]
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "concepts": {
+            "type": "array"
+          },
+          "tags": {
+            "type": "array"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "global",
+              "project"
+            ]
+          },
+          "parentId": {
+            "type": "string"
+          },
+          "lineageType": {
+            "type": "string",
+            "enum": [
+              "fix",
+              "derive",
+              "capture",
+              "promote"
+            ]
+          },
+          "loreEntryId": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": [
+              "concise",
+              "detailed"
+            ]
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_captain",
+      "description": "Captain (Cid): brief, debrief, board. Ops: board, brief(taskDescription*), debrief(orchestrationId*,sessionSummary*,touchedFiles*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "board",
+              "brief",
+              "debrief"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "read",
+              "claim",
+              "advance"
+            ]
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "claimant": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "archetype",
+                  "human",
+                  "peer"
+                ]
+              },
+              "ref": {}
+            }
+          },
+          "blockedOn": {
+            "type": "string"
+          },
+          "taskDescription": {
+            "type": "string"
+          },
+          "symbols": {
+            "type": "array"
+          },
+          "depth": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "standard",
+              "deep"
+            ]
+          },
+          "orchestrationId": {
+            "type": "string"
+          },
+          "sessionSummary": {
+            "type": "string"
+          },
+          "touchedFiles": {
+            "type": "array"
+          },
+          "newSymbols": {
+            "type": "array"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_pm",
+      "description": "PM governance: preflight before, postflight after implementation. Ops: postflight(filesModified*,symbolsTouched*), preflight(task*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "postflight",
+              "preflight"
+            ]
+          },
+          "filesModified": {
+            "type": "array"
+          },
+          "symbolsTouched": {
+            "type": "array"
+          },
+          "task": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_docs",
+      "description": "Generated docs. Ops: manifest, page, search(query*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "manifest",
+              "page",
+              "search"
+            ]
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "flow": {
+            "type": "string"
+          },
+          "portal": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "paradigm_ambient",
+      "description": "Ambient learning: nominations, events, context, promotion. Ops: engage(nomination_id*,response*), events, health, learn(agent*), learn_postflight, nominations, promote(agent*), compose(agent*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "engage",
+              "events",
+              "health",
+              "learn",
+              "learn_postflight",
+              "nominations",
+              "promote",
+              "compose"
+            ]
+          },
+          "nomination_id": {
+            "type": "string"
+          },
+          "response": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "dismissed",
+              "deferred"
+            ]
+          },
+          "resolve_debate": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "pending_only": {
+            "type": "boolean"
+          },
+          "include_debates": {
+            "type": "boolean"
+          },
+          "symbols": {
+            "type": "array"
+          },
+          "include_nominations": {
+            "type": "boolean"
+          },
+          "include_decisions": {
+            "type": "boolean"
+          },
+          "include_journal": {
+            "type": "boolean"
+          },
+          "max_decisions": {
+            "type": "number"
+          },
+          "max_journal": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "paradigm_compliance",
+      "description": "Compliance findings and enforcement. Ops: promote(response*), enforcement_configure(action*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "promote",
+              "enforcement_configure"
+            ]
+          },
+          "response": {
+            "type": "string",
+            "enum": [
+              "minimal",
+              "balanced",
+              "snooze",
+              "never"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "status",
+              "set-level",
+              "override",
+              "reset"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "strict",
+              "balanced",
+              "minimal",
+              "none"
+            ]
+          },
+          "checkId": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "block",
+              "warn",
+              "off"
+            ]
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    {
+      "name": "paradigm_authority",
+      "description": "Authority: claim or release a scope. Ops: claim(claimant*,scope*), release(claimant*,scope*).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "claim",
+              "release"
+            ]
+          },
+          "claimant": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "advise",
+              "warn",
+              "block"
+            ]
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    }
+  ]
+}

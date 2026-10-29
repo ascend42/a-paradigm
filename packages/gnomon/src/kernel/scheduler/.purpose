@@ -1,0 +1,63 @@
+version: "2.0"
+name: gnomon-kernel-scheduler
+description: >-
+  The kernel scheduler: log-derived timers and scheduled automations
+  (scheduler.ts, automation.ts) with zoned due times (zoned.ts).
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  scheduler:
+    description: >-
+      #scheduler (spec §3.5, §2.4 rule 3, §9.1 schedule.*, §10 law 5; M1.9) in
+      src/kernel/scheduler/. Log-derived timers (timer:v1, never stored): the
+      last fired due instant of a key is the max dueAt of its
+      schedule.automation.due rows, so start() rebuilds every timer from the
+      records + the log and no instant fires twice (G-SCH-01). automation:v1
+      {id, trigger: {at} | {every, anchor}, model: local|claude|any, attended}
+      is a LOCAL shape (not a wire object yet; moving it into
+      gnomon-contracts would move clientApiId). Every automation is attended:
+      attended:false is REFUSED (schedule.dropped{reason:
+      'unattended-unavailable'}) until an #approval-broker decision (M1.6) and
+      the run step (M1.7/M1.8) exist (law 5). Instants are strict ISO-8601
+      with Z or ±hh:mm; every is 1 min..10 years. Rebuild trusts only
+      kernel-principal due rows whose dueAt is not after their own at
+      (kernel principals = the unprovisioned p:00000000/kernel and the
+      current one, so root provisioning at M1.3 does not refire timers). One daemon ⇒ one timer per key: duplicates
+      (N worktrees) are dropped {reason:'duplicate-key'} (G-LAW-05b). An
+      instant due while down — or older than one period capped at the
+      horizon (a slept host) — fires as an attended event (late:true);
+      several missed instants coalesce (schedule.dropped{reason:'coalesced',
+      count}). A due row spends nothing; the run step is hard-wired to refuse
+      ENGINE{not-implemented} (session.refused) — no spawn, no permit
+      (G-LAW-05). Wakes are capped at 60 s; a failed append releases the hold
+      and retries in 5 s; stop() is a latch returning the in-flight tick,
+      which the daemon awaits before stopping children; the scheduler starts
+      before the idle monitor. While the next due instant is inside 10 min
+      the scheduler holds idle exit ('timer' holder). Clock and wake are seams
+      (now, arm), so the 24 h soak is a unit test. Daemon wiring: DaemonOptions
+      .automations (none by default; root-signed config later), handle.scheduler.
+      Loops step 6 (gnomon-loops.md §4): triggers add daily {at, tz} and weekly
+      {day, at, tz} (zoned.ts: one fire per local date; a time skipped by
+      spring-forward fires once at the end of the gap, a repeated one once at
+      its first occurrence; zones from the runtime's ICU, an unknown zone
+      refuses). parseAutomation's attended:false refusal lifts ONLY through an
+      `unattended` predicate (#loop-timers: the loop is trusted at its current
+      hash, unpaused, not held by the kill switch). Loop timers register and
+      unregister at run time (attachLoops, registerLoop, unregister,
+      unregisterAllLoops), keyed loop:<loopKey>#<trigger digest>; a due loop
+      timer is re-checked (still registered and trusted), writes its due row
+      {source: loop, loopKey, attended:false} and hands off to #loop-runner
+      (host.start(loopKey, {type, key, dueAt, late?})) instead of the refusal;
+      a late fire is a row for a human unless catchUp: once (runs once); a
+      refused hand-off writes schedule.dropped{reason: run-refused, refusal}.
+      Non-loop automations keep the hard-wired refusal.
+    path: src/kernel/scheduler/
+    type: module
+    tags: [gnomon, kernel, scheduler, paradigm-8]
+    tests:
+      - test/scheduler.test.ts
+      - test/scheduler-daemon.test.ts
+      - test/loop-timers.test.ts
+    oracles: [G-SCH-01, G-LAW-05, G-LAW-05b]

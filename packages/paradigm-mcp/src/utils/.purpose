@@ -2,6 +2,31 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  gnomon-staged:
+    description: >-
+      #gnomon-staged (TD-2026-10-27-833): utils/gnomon-staged.ts, the mode the Gnomon kernel sets
+      (PARADIGM_GNOMON_STAGED=1) when it runs the staged single-file bundle for a LOCAL model session. In that mode
+      the server skips Conductor auto-registration (ps/osascript, a global-dir write) and refuses
+      paradigm_plugin_check (it shells out and reaches the network). The global dir follows HOME (the kernel points it
+      at an empty per-session kernel-owned dir); git hardening comes from the kernel's GIT_CONFIG_* env. Paradigm loads
+      no .paradigm/ file as code in any mode (audited: habits, protocols, config, loops are data; loop checks run only
+      in the Gnomon kernel after a human trusts the exact content hash).
+      Aegis review fixes: H2 breadcrumbBase puts breadcrumbs, the session work
+      log, postflight liveness and verdicts under HOME; no background static
+      index rebuild per call (index-loader) and no university pack cache
+      (university-core) in the staged mode. M1 staged-guard.ts wraps Node's fs
+      write/read API once at start: writes only to <root>/.paradigm/**, .purpose
+      files, the root portal.yaml and HOME (never .git, never via a symlink),
+      reads only in the root, HOME and the bundle dir. M2 STAGED_REFUSED_FAMILIES
+      (persona, symphony, platform, conductor, brain, sentinel) are unlisted,
+      unannotated and refused. aspect suggest_scan refuses (unbundlable import).
+    path: src/utils/gnomon-staged.ts
+    type: module
+    tags: [mcp, gnomon, td-2026-10-27-833]
+    tests:
+      - src/tools/family-op-annotations.test.ts
+      - src/tools/staged-ops.test.ts
+      - src/utils/staged-guard.test.ts
   purpose-coverage-queue:
     description: >-
       #purpose-coverage-queue: purpose-coverage-queue.ts (T-2026-10-27-003).
@@ -186,7 +211,7 @@ components:
       - loop-templates.test.ts
     tags: [feature, gnomon, loops]
   tool-family:
-    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:''full'' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
+    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:''full'' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors. Per-op annotations (S-P, TD-2026-10-27-833): each ToolFamily carries opAnnotations = { <op>: the readOnly/destructive/idempotent/openWorld hints that op''s legacy definition DECLARES } (declaredOpHints; ops declaring none are omitted; consumers read a missing op as mutate). It is NOT in the listed definition (no tools/list _meta); it is served by the paradigm://tool-annotations resource (OP_ANNOTATIONS_RESOURCE_URI, schema OP_ANNOTATIONS_SCHEMA io.gnomon/op-annotations:v1). Top-level annotations hold for every op (familyAnnotations): readOnlyHint only if all ops are read-only; destructiveHint false only if every op is read-only or declares destructiveHint:false (an undeclared op counts as destructive, the MCP default); idempotentHint only if all ops declare it; openWorldHint true if any op does.'
     type: utility
     tags:
       - feature

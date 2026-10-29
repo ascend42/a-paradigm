@@ -32,9 +32,10 @@ import {
 } from '@a-company/premise-core';
 import { refreshContextSafely, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
 import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
-import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, type ToolFamily } from '../utils/tool-family.js';
+import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, OP_ANNOTATIONS_SCHEMA, type ToolFamily, type OpAnnotationsDocument } from '../utils/tool-family.js';
 import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
-import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, ON_DEMAND, findOnDemand } from './families.js';
+import { gnomonStaged, GNOMON_STAGED_REFUSAL, STAGED_REFUSED_FAMILIES } from '../utils/gnomon-staged.js';
+import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, LOCAL_ONLY_OPS, ON_DEMAND, findOnDemand } from './families.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
@@ -101,7 +102,7 @@ import { portalRoutes, type PortalRoute } from '../utils/portal-routes.js';
  * The registry provides tiered listing via getActiveTools() and
  * Map-based dispatch via dispatch().
  */
-function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRegistry {
+export function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRegistry {
   const registry = new ToolRegistry(rootDir);
 
   const reload: ReloadContextFn = reloadContext || (async () => {});
@@ -585,6 +586,17 @@ export function buildToolSurface(registry: ToolRegistry): ToolSurface {
     if (!legacyDefs.has(d.name)) legacyDefs.set(d.name, d);
   }
   const opsByFamily = familyOpsFromMap();
+  // TD-2026-10-27-833: the reviewed local-only read ops declare openWorldHint: false (LOCAL_ONLY_OPS). Code only:
+  // nothing here is read from the project.
+  for (const [family, ops] of Object.entries(LOCAL_ONLY_OPS)) {
+    for (const op of ops) {
+      const legacy = opsByFamily.get(family)?.[op];
+      const def = legacy ? legacyDefs.get(legacy) : undefined;
+      if (!legacy || !def) throw new Error(`LOCAL_ONLY_OPS names ${family}.${op}, which is not a registered op`);
+      if ((def.annotations as Record<string, unknown> | undefined)?.readOnlyHint !== true) throw new Error(`LOCAL_ONLY_OPS names ${family}.${op}, which is not read-only`);
+      legacyDefs.set(legacy, { ...def, annotations: { ...(def.annotations ?? {}), openWorldHint: false } });
+    }
+  }
   const families = new Map<string, ToolFamily>();
   for (const meta of FAMILY_META) {
     if (meta.plain) continue;
@@ -647,6 +659,27 @@ export function listSurfaceTools(
     }
   }
   return out;
+}
+
+/**
+ * Per-op annotations document (paradigm://tool-annotations) for the family
+ * tools present in `listed`. registerTools passes EVERY family, once, so the
+ * served document is a constant over code (TD-2026-10-27-833): neither the
+ * project's `.paradigm/config.yaml` nor a session's activations change it.
+ */
+export function buildOpAnnotationsDocument(surface: ToolSurface, listed: ReadonlyArray<{ name: string }>): OpAnnotationsDocument {
+  const tools: OpAnnotationsDocument['tools'] = {};
+  for (const t of listed) {
+    const fam = surface.families.get(t.name);
+    if (fam) tools[fam.name] = fam.opAnnotations;
+  }
+  return { schema: OP_ANNOTATIONS_SCHEMA, tools };
+}
+
+/** What registerTools hands back to the server (resources read the live listing). */
+export interface RegisteredTools {
+  /** Op-annotations document for the families in the CURRENT tools/list. */
+  opAnnotations: () => OpAnnotationsDocument;
 }
 
 export type ResolvedToolCall =
@@ -719,7 +752,7 @@ export function listToolDefinitions(rootDir: string = process.cwd()): ToolDefini
   return out;
 }
 
-export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: ReloadContextFn) {
+export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: ReloadContextFn): RegisteredTools {
   // Build the tool registry with all modules organized by tier
   const ctx0 = getContext();
   const registry = buildRegistry(ctx0.rootDir, reloadContext);
@@ -731,7 +764,9 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
   server.setRequestHandler(
     ListToolsRequestSchema,
     async () => {
-      return { tools: listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand) };
+      const tools = listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand);
+      // Aegis M2: the staged Gnomon mode never lists a network/exec family
+      return { tools: gnomonStaged() ? tools.filter((t) => !STAGED_REFUSED_FAMILIES.includes(t.name)) : tools };
     }
   );
 
@@ -746,6 +781,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       const resolveError = 'error' in resolved ? resolved.error : null;
       const name = 'error' in resolved ? requestedName : resolved.canonical;
       const args = ('error' in resolved ? (rawArgs ?? {}) : resolved.args) as Record<string, any>;
+      // Aegis M2: a network/exec family refuses in the staged Gnomon mode, by its family name or a legacy per-op name
+      if (gnomonStaged() && (STAGED_REFUSED_FAMILIES.includes(requestedName) || STAGED_REFUSED_FAMILIES.includes(LEGACY_TOOL_MAP[name]?.tool ?? ''))) {
+        return { content: [{ type: 'text', text: JSON.stringify({ error: GNOMON_STAGED_REFUSAL, tool: requestedName }) }], isError: true };
+      }
       addToolBreadcrumb(name, args);
       if (!('error' in resolved) && resolved.deprecatedAlias) {
         getSessionTracker().addBreadcrumb(
@@ -1337,6 +1376,12 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_plugin_check': {
+          // TD-2026-10-27-833: the staged Gnomon mode never shells out or reaches the network for this
+          if (gnomonStaged()) {
+            const text = JSON.stringify({ error: GNOMON_STAGED_REFUSAL }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }], isError: true };
+          }
           const { runPluginUpdateCheck, buildPluginCheckReport, detectPluginHost } = await import('../utils/plugin-update-checker.js');
           const results = await runPluginUpdateCheck();
           const pluginText = JSON.stringify(buildPluginCheckReport(results, detectPluginHost()), null, 2);
@@ -1481,6 +1526,13 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       return toolResult;
     }
   );
+
+  // TD-2026-10-27-833: the class map is a CONSTANT over code — every family's per-op hints, built once from the
+  // compiled definitions. It never follows the project's config or listing (a client reads only the entries of the
+  // tools it was listed), so nothing in `.paradigm/` can change how an op is classed.
+  // Aegis M2: staged, the refused network/exec families carry no annotations either
+  const opAnnotationsDoc = buildOpAnnotationsDocument(surface, [...surface.families.keys()].filter((n) => !gnomonStaged() || !STAGED_REFUSED_FAMILIES.includes(n)).map((name) => ({ name })));
+  return { opAnnotations: () => opAnnotationsDoc };
 }
 
 // ────────────────────────────────────────────────────────

@@ -52,7 +52,7 @@ import {
 import { APPROVE_SCOPE_KINDS, APPROVE_SCOPE_PREFIX_MAX_WORDS, APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, DECISION_SIG_V2_SCOPED_DECISIONS, decisionMessageV2, scopeDigest } from './card.js';
 import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
 import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_SUPPRESS_REASONS, OFFER_SUPPRESS_UNNAMED, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
-import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES, TURN_RESULT_PAIRING, OFFER_RETIRE_REASONS, SESSION_ANOMALY_REASONS, SESSION_NAME_MAX, SESSION_NAME_INPUT_MAX, RULES_APPLY_MAX, RULE_OFF_MAX_MS, RULE_CHANGE_OPS, RULE_ENABLE_CAUSES, RULES_BATCH_PATTERN, GIT_VERBS, GIT_VERB_PHASES, GIT_VERB_REASONS, GIT_VERB_HOST_PATTERN } from './event.js';
+import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES, TURN_RESULT_PAIRING, OFFER_RETIRE_REASONS, SESSION_ANOMALY_REASONS, SESSION_NAME_MAX, SESSION_NAME_INPUT_MAX, RULES_APPLY_MAX, RULE_OFF_MAX_MS, RULE_CHANGE_OPS, RULE_ENABLE_CAUSES, RULES_BATCH_PATTERN, GIT_VERBS, GIT_VERB_PHASES, GIT_VERB_REASONS, GIT_VERB_HOST_PATTERN, TOOL_BROKER_CLASSES, TOOL_BROKERED_DECISIONS, TOOL_BROKERED_AUTHORS, APPROVAL_AUTO_AUTHORS, TOOL_CALL_ID_PATTERN, TOOL_RESULT_POLICIES, TOOL_RESULT_SENT_POLICIES, SKILL_NAME_PATTERN, SKILL_RUN_VIAS, SKILL_RUN_DECISIONS, TOOL_BROKER_SERVER_PATTERN, TOOL_BROKER_TOOL_PATTERN, TOOL_SELECTION_TRIGGERS, TOOL_SELECTION_ID_PATTERN, TOOL_SELECTION_MAX_IDS, SESSION_MCP_STATES, SESSION_MCP_FITS, SESSION_MCP_ERROR_MAX, TOOL_TRUST_OPS, TOOL_TRUST_WHYS, TOOL_TRUST_ID_PATTERN, TOOL_TRUST_LAUNCH_PATTERN, SESSION_MEMORY_OPS, SESSION_MEMORY_KINDS, SESSION_MEMORY_REFUSALS, SESSION_MEMORY_SOURCE_PATTERN, SESSION_MEMORY_ID_PATTERN } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 import { LOOP_AUTONOMY, LOOP_CLOSURE_BY, LOOP_LAND_WAIT_REASONS, LOOP_PAUSE_REASONS, LOOP_REQUEST_OPS, LOOP_RUN_END_REASONS, LOOP_SCOPES, LOOP_SESSION_ORIGIN, LOOP_VERDICTS } from './event.js';
 import { LOOP_CHOICE_ONLY_DECISIONS } from './card.js';
@@ -175,6 +175,26 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   sessionRename: { nameMax: SESSION_NAME_MAX, inputMax: SESSION_NAME_INPUT_MAX, reset: '' },
   // 8.0:git-verbs (T-2026-10-23-002): git.verb{verb, phase, why}'s closed values and the host rule
   gitVerbs: { verbs: [...GIT_VERBS], phases: [...GIT_VERB_PHASES], reasons: [...GIT_VERB_REASONS], hostPattern: GIT_VERB_HOST_PATTERN.source },
+  // 8.0:local-lane (TD-2026-10-27-833 slice C1): tool.brokered{class, decision}'s closed values and the name rules
+  toolBrokered: { classes: [...TOOL_BROKER_CLASSES], decisions: [...TOOL_BROKERED_DECISIONS], authors: [...TOOL_BROKERED_AUTHORS], serverPattern: TOOL_BROKER_SERVER_PATTERN.source, toolPattern: TOOL_BROKER_TOOL_PATTERN.source, callIdPattern: TOOL_CALL_ID_PATTERN.source },
+  // 8.0:local-lane (C6'a2-4): approval.auto{author}'s closed values (human only; absent: the model's call); its callId
+  // follows toolBrokered.callIdPattern
+  approvalAuto: { authors: [...APPROVAL_AUTO_AUTHORS] },
+  // 8.0:local-lane (TD-2026-10-28-956 / -969 slice C6'a2-1): tool.result.policy / tool.result.sent's closed policy and
+  // skill.run's closed via, decision and name rule (the request.session.tools.* / skill.* kinds stay in the kernel)
+  // C6'a2-3: tool.result.sent's policy also takes once (a one-off send of a held "/" result)
+  toolResult: { policies: [...TOOL_RESULT_POLICIES], sentPolicies: [...TOOL_RESULT_SENT_POLICIES] },
+  skillRun: { vias: [...SKILL_RUN_VIAS], decisions: [...SKILL_RUN_DECISIONS], namePattern: SKILL_NAME_PATTERN.source },
+  // 8.0:local-lane (TD-2026-10-27-833 slice C3', Aegis M2): tool.selection{trigger}'s closed values and the id rule
+  toolSelection: { triggers: [...TOOL_SELECTION_TRIGGERS], idPattern: TOOL_SELECTION_ID_PATTERN.source, maxIds: TOOL_SELECTION_MAX_IDS },
+  // 8.0:local-lane (TD-2026-10-27-833 slice C5'a1, #mcp-servers): tool.trust{op, why}'s closed values and the id and
+  // launch-hash rules (the request.mcp.trust kind stays in the kernel)
+  toolTrust: { ops: [...TOOL_TRUST_OPS], whys: [...TOOL_TRUST_WHYS], idPattern: TOOL_TRUST_ID_PATTERN.source, launchPattern: TOOL_TRUST_LAUNCH_PATTERN.source },
+  // 8.0:local-lane (TD-2026-10-27-833 slice C6'a1, #local-mcp-client): session.mcp{state, fit}'s closed values and the error cap
+  sessionMcp: { states: [...SESSION_MCP_STATES], fits: [...SESSION_MCP_FITS], errorMax: SESSION_MCP_ERROR_MAX },
+  // 8.0:local-lane (TD-2026-10-27-833 slice B2): session.memory{op, kind, why}'s closed values, the id and source rules;
+  // session.context{aboveConfig} labels a human raise past the signed config (never above the endpoint's n_ctx)
+  sessionMemory: { ops: [...SESSION_MEMORY_OPS], kinds: [...SESSION_MEMORY_KINDS], refusals: [...SESSION_MEMORY_REFUSALS], sourcePattern: SESSION_MEMORY_SOURCE_PATTERN.source, idPattern: SESSION_MEMORY_ID_PATTERN.source },
   // 8.0:rules-view (Aegis M2/L1/L2): request.rules.apply{changes:[{ruleId, op, until?}]} (dispatcher-only, the human on a
   // gui or device connection): remove/off narrow at once; every `on` of a batch rides ONE strictness card (detail.op
   // cardOp, fresh presence, never standing, never voice); `until` is an ISO time ≤ offMaxMs ahead of the kernel clock or

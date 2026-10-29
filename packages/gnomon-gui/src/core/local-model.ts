@@ -18,6 +18,7 @@
 import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { FieldView, FormView, ResultView, SettingRow, SettingsSection } from './settings.js';
 import type { FolderFieldView } from './folder-field.js';
+import { probeTierOf, tierSettingsValue, TIER_COPY, type ProbeTier } from './tool-tier.js';
 
 export const LOCAL_SECTION = 'local-model' as const;
 export const LOCAL_PROBE_REQUEST = 'request.local.probe' as const;
@@ -94,6 +95,8 @@ export interface LocalProbeView {
   error?: string;
   tools: boolean;
   contextSize: number | null;
+  /** #gui-tool-tier (C4'b): status.local.lastProbe.tier of that endpoint (absent: not known) */
+  tier?: ProbeTier | null;
 }
 export interface LocalStatusView {
   state: 'not-connected' | 'not-offered' | 'windows' | 'none' | 'set';
@@ -132,7 +135,7 @@ export function localStatusOf(status: unknown): LocalStatusView {
     signer: str(l.signer),
     runner: r && str(r.dir) && str(r.treeSha256) ? { dir: r.dir as string, entry: str(r.entry) ?? 'cli.js', node: str(r.node) ?? '', nodeSha256: str(r.nodeSha256) ?? '', treeSha256: r.treeSha256 as string, version: str(r.version), source: str(r.source) ?? 'override' } : null,
     bundled: d && d.source === 'bundled' && str(d.dir) ? { dir: d.dir as string, version: str(d.version) } : null,
-    lastProbe: p && str(p.at) ? { ...(str(p.endpoint) ? { endpoint: p.endpoint as string } : {}), at: p.at as string, ok: p.ok === true, why: str(p.why) ?? (p.ok === true ? 'capable' : 'probe-failed'), ...(str(p.error) ? { error: p.error as string } : {}), tools: p.tools === true, contextSize: typeof p.contextSize === 'number' ? p.contextSize : null } : null,
+    lastProbe: p && str(p.at) ? { ...(str(p.endpoint) ? { endpoint: p.endpoint as string } : {}), at: p.at as string, ok: p.ok === true, why: str(p.why) ?? (p.ok === true ? 'capable' : 'probe-failed'), ...(str(p.error) ? { error: p.error as string } : {}), tools: p.tools === true, contextSize: typeof p.contextSize === 'number' ? p.contextSize : null, tier: probeTierOf(p.tier) } : null,
     probing: l.probing === true ? { since: str(l.probingSince) ?? isoOf(Date.now()), ...(str(l.probingEndpoint) ? { endpoint: l.probingEndpoint as string } : {}) } : null,
     lastFallback: f && str(f.at) ? { at: f.at as string, cwd: str(f.cwd) ?? '', title: str(f.title), reason: str(f.reason) ?? 'no capable local model' } : null,
     pendingCardId: str(l.pendingCardId),
@@ -327,8 +330,12 @@ export interface LocalUi {
   check: LocalProbeView | null;
   /** #gui-folder-field: the runner override as the compact folder field (the controller draws it while the form is open) */
   runnerView?: FolderFieldView | null;
+  /** #gui-tool-tier: a Re-measure asked (ms), until status.local.lastProbe.tier says it is no longer measuring */
+  measuring?: number | null;
+  /** #gui-tool-tier: a Reset to measured in flight */
+  resetting?: boolean;
 }
-export const emptyLocalUi = (): LocalUi => ({ form: null, open: false, errors: {}, advanced: false, busy: null, confirmOff: false, request: null, result: null, checking: null, check: null });
+export const emptyLocalUi = (): LocalUi => ({ form: null, open: false, errors: {}, advanced: false, busy: null, confirmOff: false, request: null, result: null, checking: null, check: null, measuring: null, resetting: false });
 
 /* ── the section ─────────────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -368,6 +375,28 @@ export function checkRowOf(p: LocalProbeView | null, v: LocalStatusView, checkin
     default:
       return { value: `no answer: ${errorWords(p.error)} · ${at}`, mark: '✕', how: `${e?.compat === 'ollama' ? 'Start Ollama (the menu bar app, or `ollama serve`)' : `Start ${server}`}, then Check again. Until then local sessions raise a fallback card and loops stop at their first model step.`, key: true };
   }
+}
+
+/** The endpoint the Tool tier row is about: the last probe's, when it is a configured one (else the first). */
+export function tierEndpointOf(v: LocalStatusView): string | null {
+  const lp = v.lastProbe?.endpoint;
+  return lp && v.endpoints.some((e) => e.id === lp) ? lp : (v.endpoints[0]?.id ?? null);
+}
+
+/** The Settings "Tool tier" row (Mika): the value, Re-measure, Reset to measured while a tier is remembered, the how line. */
+export function tierRowOf(v: LocalStatusView, ui: Pick<LocalUi, 'measuring' | 'resetting'>): SettingRow | null {
+  const ep = tierEndpointOf(v);
+  if (!ep || !v.runner) return null;
+  const t = v.lastProbe?.endpoint === ep ? (v.lastProbe.tier ?? null) : null;
+  const measuring = (ui.measuring ?? null) !== null || t?.measuring === true;
+  const remembered = t !== null && t.human !== null;
+  const which = v.endpoints.length > 1 ? `${ep} · ` : '';
+  const S = TIER_COPY.settings;
+  return {
+    kind: 'readonly', id: 'local-tier', label: S.label, value: `${which}${tierSettingsValue(t, measuring)}`, live: true,
+    how: remembered ? `${S.resetNote} ${S.how}` : S.how,
+    keys: [{ act: 'tier-remeasure', label: S.remeasure, quiet: true, ...(measuring ? { disabled: true, busy: true } : {}) }, ...(remembered ? [{ act: 'tier-reset', label: S.reset, quiet: true, ...(ui.resetting ? { disabled: true, busy: true } : {}) }] : [])],
+  };
 }
 
 /** The request line ("23:20 · ollama · 127.0.0.1:11434 · qwen2.5-coder:14b · sessions and loops"). */
@@ -438,6 +467,10 @@ export function localSection(i: LocalSectionInput): SettingsSection {
     // with several endpoints the one check names the endpoint it is about (Check again checks the first)
     const which = v.endpoints.length > 1 ? `${v.probing?.endpoint ?? ((ui.checking === null && probe?.endpoint) || v.endpoints[0]!.id)} · ` : '';
     rows.push({ kind: 'readonly', id: 'local-check', label: 'Check', value: `${which}${c.value}`, how: c.how, grp: true, live: true, ...(c.mark ? { mark: c.mark } : {}), ...(c.key ? { keys: [{ act: 'check', label: c.keyLabel ?? 'Check again', quiet: true }] } : {}), ...(probe?.contextSize !== null && probe ? { title: `context ${probe.contextSize} tokens, as the server reports it` } : {}) });
+    // #gui-tool-tier (C4'b): the endpoint's tool tier, after Check (the kernel's lastProbe.tier); Re-measure and,
+    // while a tier is remembered, Reset to measured
+    const tierRow = tierRowOf(v, ui);
+    if (tierRow) rows.push(tierRow);
     const r = v.runner;
     if (r) rows.push({ kind: 'readonly', id: 'local-runner', label: 'Runner', value: `gnomon-local${r.version ? ` ${r.version}` : ''} · ${r.source === 'bundled' ? 'bundled' : 'your folder'} · tree ${r.treeSha256.slice(0, 8)}`, how: '', grp: true, title: `${r.dir}/${r.entry} · node ${r.node}` });
     rows.push({ kind: 'readonly', id: 'local-signed', label: 'Signed', value: `config v${v.version ?? '?'}${v.signedAt ? ` · ${i.time(v.signedAt)}` : ''} · root key`, how: '', ...(r ? {} : { grp: true }) });

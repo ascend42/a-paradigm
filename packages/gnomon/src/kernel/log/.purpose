@@ -1,0 +1,351 @@
+version: "2.0"
+name: gnomon-kernel-log
+description: >-
+  The kernel log: the hash-chained, signed log (chain.ts, signer.ts,
+  kernel-log.ts), anchors and their policy, boot, replay, quarantine and
+  redaction.
+context:
+  - >-
+    The ~ample-internal-logs aspect, which covers the whole kernel, stays in
+    packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  kernel-log:
+    description: >-
+      TD-2026-10-20-514 (Aegis C1f, G-ID-12): replay's checkRootDecisions
+      checks every v2 root decision's rowsDigest against the logged card's
+      root-rows detail and, with the pinned root verifier, its rootSig
+      (root-rows-missing | root-rows-digest | root-sig-bad).
+      #kernel-log (spec §3.2, M1.2; research 29 §4 PR-4) — the one
+      hash-chained, append-only, segmented kernel log. node:sqlite; active
+      segment <home>/kernel.db, sealed segments <home>/log/segments/NNNNNN.db
+      (0600, dirs 0700; read-denied to every session by the session
+      profile, T-2026-10-18-010); a session reader (redaction.ts) sees only
+      its own hsid rows at every label, and voice.turn.*.audioRef never
+      (SESSION_NEVER_FIELDS, limited view); `chain` table per §3.2 plus a write-once `meta`;
+      BEFORE UPDATE/DELETE triggers abort (L1). hash = sha256(canonical(envelope
+      minus hash, sig)), prev(1) = sha256("gnomon-log-genesis:" + logId), seq
+      computed inside the write txn and checked against the in-memory tip.
+      Envelope = contracts event:v1, validated strict with default-label check;
+      unregistered kinds refused (never guessed), labels tighten-only (L6),
+      kernel/userland ownership enforced (L7), daemon.segment reserved to the
+      log, session.inject must carry {origin, hash, bytes}; session.compacted
+      (T-2026-10-18-016, P8-D93) must pass contracts
+      validateSessionCompactedPayload (closed, typed) else bad-payload; replay
+      folds its summaryHash as a RECORDED host hash. Signer seam
+      (signer.ts): Signer.sign(domain, message) prepends the §3.1 domain
+      (gnomon:event-sig:v1 etc.), key classes limited to their domains;
+      SoftwareEd25519Signer = the in-memory kernel key (keyId
+      gkey:v1:<sha256(spki PEM)>); root/approvals keys are hardware-only and
+      plug in after probes P04/P02; KeyRing verifies Ed25519 and P-256.
+      Unsigned rows only for daemon/socket/schedule; the §3.2 mandatory list
+      refuses unsigned (unsigned-mandatory). Segments rotate at 10⁶ rows with a
+      signed daemon.segment closing row and an unbroken chain across files;
+      crash mid-rotation is completed on open. Anchors: file <home>/head
+      (atomic tmp+rename; fsync only at genesis/rotation/close) and a
+      KeystoreAnchorStore SEAM that reports `unavailable` until the helper
+      exists (AnchorStore.write may be async; keystore writes are serialised).
+      ANCHOR POLICY (anchor-policy.ts; research 33 S33-05..07, P8-D82):
+      `append` is async and resolves {seq, hash, anchored, event}. Bulk rows
+      coalesce the file anchor (renamed when 63 rows are un-anchored or 50 ms
+      after the first, unref'd timer + inline check, and on checkpoint) and
+      queue the keystore anchor every 1023 rows / 1 s off the append path.
+      CRITICAL_ANCHOR_KINDS (approval.decide/suspect/presence.denied/
+      rule.learned/voice.arm/voice.disarm, key.*, grant.*, config.*,
+      manifest.*, billing.*, verdict.*, link pair/renew/revoke,
+      session.inject{origin:'peer'}, socket.auth.theft) commit with the bulk
+      durability (no fullfsync since S33-10 / P8-D83), then rename the file
+      anchor, then AWAIT the keystore write (it starts only after COMMIT
+      returned), and only then resolve {anchored: true}; no effect may be
+      released before that (a failed keystore write rejects
+      ENGINE{anchor-failed}). This is an ordering guarantee against a
+      same-user process, not a power-loss guarantee. Close writes durable
+      anchors (file AND keystore) carrying the clean-close marker
+      `closed: true`; open rewrites them without. BOOT SESSION (boot.ts,
+      S33-10): every anchor records `boot` = kern.bootsessionuuid (macOS,
+      spawned /usr/sbin/sysctl once per process) / boot_id (Linux) /
+      `unknown` (Windows until the parity phase); only the keystore copy is
+      authoritative. An anchor ahead of the db is INTEGRITY_BROKEN{truncated}
+      with data.cause `tamper` (same boot, clean close, or no comparable
+      keystore boot — fails closed) or `unclean-reboot` (boot changed, not a
+      clean close); a forged file-anchor boot/closed changes nothing.
+      The recovery open (an internal seam, see SEAM HARDENING) opens such a
+      log refusing every append and writing no anchor; acknowledgeGap
+      ({presenceToken}) (a branded PresenceToken, identity/presence.ts;
+      unclean-reboot only) appends one kernel-signed daemon.log.gap{lostFrom, lostTo,
+      lostHash, bootPrev, bootNow, fileLag} (contracts kind added, reserved to the
+      log) and re-anchors durably; the chain verifies across it. ROUND-2
+      HARDENING (research 33 S34-xx): every non-recovery open re-stamps the
+      keystore anchor with the current boot and the first append waits for it
+      (S34-01; cause semantics = "power loss OR tampering"); non-ahead anchors
+      get the full check even in recovery, and a file-only lead with a present
+      keystore cannot be acknowledged (FORBIDDEN{unauthenticated-lead},
+      S34-04); any lag behind a clean-close KEYSTORE anchor is anchor-lag
+      (S34-05); acknowledgeGap leaves recovery only after both anchors succeed
+      (S34-12) and rotates a daemon.segment tip first (S34-13). ANCHOR FAULTS
+      (S34-02): a post-COMMIT failure on a critical row (file anchor, rotation,
+      keystore reject or `keystoreTimeoutMs` timeout, default 5 s, S34-11)
+      rejects ENGINE{anchor-failed} and faults the log — bulk continues,
+      critical appends re-anchor first or refuse ENGINE{anchor-faulted}; on
+      recovery one kernel-signed daemon.anchor.failed{seq, kind} per failed
+      row is appended (contracts kind added, reserved); projections must treat
+      that seq as not having taken effect. `append` resolves anchored false |
+      'both' | 'file-only' (stub keystore), also in anchorStatus.anchoring
+      (S34-03); live `integrity` getter (ok | truncated | anchor-faulted);
+      close() resolves a CloseReport surfacing a failed keystore write. Verify
+      (S34-06): daemon.log.gap / daemon.segment / daemon.anchor.lag /
+      daemon.anchor.failed / socket.auth.theft are signature-mandatory, and
+      kernel-principal rows must carry a kernel key id (signer + kernelKeyIds)
+      — failure code `kernel-key`. Boot ids are validated as UUIDs; sysctl is
+      spawned with an empty env (S34-09). ROUND 3: the daemon.anchor.failed
+      marker is committed IMMEDIATELY in the post-commit failure path (durable
+      fault, S34-17); the fault clears only when every failed row has a marker
+      AND both anchors cover a head at/after it (S34-19); close() records
+      pending markers before its closing anchors and reports `fault`
+      (none|recovered|pending) in CloseReport; on open every critical row
+      above the keystore anchor without a marker gets one. An interrupted
+      acknowledgeGap (tip = kernel-signed daemon.log.gap naming the keystore
+      head as lostTo/lostHash) is re-anchored on open and openForRecovery.
+      RESERVED_KINDS exported; verify binds reserved-kind rows to the kernel
+      principal + key (`reserved-binding`) and VerifyReport.kernelBinding is
+      ok|failed|not-checked (standalone verify without kernel identity) —
+      S34-18. Keyless logs are non-rotating and diagnostic-only: the boundary
+      append and open-time lag/marker rows refuse before commit with
+      FORBIDDEN{kernel-key-required} (S34-22). Boot ids are normalised on both
+      sides; `unknown` is not cached and emits onDiagnostic `boot.unknown`
+      (S34-21). `fileAnchorMaxMs` test seam (S34-23). Keystore timeout runs
+      from dequeue; while a timed-out write is unsettled new writes refuse at
+      once (order kept, no hang). KNOWN GAPS — DECIDED: (a) P8-D84 —
+      accepted dev-only until T-2026-10-17-009: with the stub keystore (until
+      M1.3) every truncation classifies `tamper` and cannot be acknowledged —
+      a no-recovery window; recovery path = the quarantine command; (b) P8-D85
+      — the S33-07 file-anchor lag > 63 bound is not power-loss-safe
+      (un-fsynced renames can roll back), so at open, after the truncation
+      check, it is relaxed ONLY when the keystore anchor is present, not
+      closed, passes the full anchor check, and records a known boot that
+      differs from this known boot, and the file anchor's hash still matches
+      its row; a relaxed open appends a kernel-signed
+      daemon.anchor.lag{rows, which: 'file', bootPrev, bootNow} (keyless ⇒
+      FORBIDDEN{kernel-key-required}); every other case (same boot, unknown
+      boot, stub/absent/malformed/pre-D83/closed keystore, closed file anchor;
+      pre-D83 ⇒ relax boot-unknown) refuses anchor-lag with `data.relax`
+      naming why. The file anchor's own boot is never consulted. A relaxed
+      lag defers every open-time anchor write (file rewrite,
+      marker/keystore-lag re-anchor) until the signed row is committed
+      (evidence first); rotation completion runs first but writes no anchor. S34-24: keystore anchor ahead + any file
+      lag ⇒ truncated (cause from the keystore boot); the file anchor still
+      gets the hash and clean-close checks, only the > 63 bound is skipped,
+      and its lag is TruncationReport.fileLag and daemon.log.gap.fileLag
+      (additive). S34-30 CHECKS BEFORE WRITES: on open every integrity check
+      (file anchor + lag bounds / relax, keystore anchor + clean-close lag,
+      keyless refusals for the open-time marker / keystore-lag rows) runs
+      before the first anchor write, rotation completion or row append; a
+      crashed rotation is completed with NO anchor writes (the file rewrite
+      and the closing keystore re-stamp anchor the head), so a refused open
+      leaves both anchors byte-for-byte as found and no queued keystore write
+      lands after the throw. OPEN-PATH FOLLOW-UPS (T-2026-10-17-012/013/015):
+      S34-31 the keystore anchor is read before the create branch — a home
+      with no db but a present/malformed keystore anchor refuses missing-db
+      with no file written; the durable file-anchor rewrite runs BEFORE a
+      crashed rotation is completed (non-relaxed), so a crash after the seal
+      rename reopens as a rotation window; S34-25 a relaxed (P8-D85) open
+      whose rotation crashed after the seal rename (lagging file anchor, no
+      kernel.db) is accepted iff the same relaxation holds against the sealed
+      closing row (pure pre-check, keyless refuses kernel-key-required), the
+      segment is created and the relaxed row appended there first, the file
+      anchor second; acknowledgeGap completes a rotation with no anchor write
+      of its own (the closing row never overwrites the ahead keystore
+      anchor). ROTATION FAILURE (T-013(a)): any failure after the active db
+      is closed (fsync/fsyncDir EIO, seal rename, next kernel.db) halts the
+      instance — closed, timers stopped, append / acknowledgeGap refuse
+      ENGINE{rotation-failed} (in-process reason; reads refuse `closed`),
+      close() reports keystore 'failed' and writes no anchor; reopen
+      completes the rotation. Round 2: the halt starts at the closing-row
+      commit (durable file anchor, TRUNCATE checkpoint, journal switch), so
+      no row ever follows daemon.segment; a critical append rotates only
+      after its anchors settled and resolves anchored even if the rotation
+      then halts (surfaced on the next call / close). Stated residual: a
+      rotation halt inside acknowledgeGap after the seal rename turns the
+      acknowledgeable truncation into missing-db (fail-closed; quarantine). S34-29 (documented): a genesis fsyncDir(home)
+      failure leaves kernel.db without a head file ⇒ anchor-missing on every
+      later open; manual wipe / quarantine, never auto-recreated.
+      `forcedAnchorRate` / `anchorStatus` = status.log telemetry (forced
+      anchors per row over the last 10⁴ rows; > 1/64 = outside the measured
+      envelope). Open refuses INTEGRITY_BROKEN on missing-db (with anchor,
+      sealed segment or keys present), truncated (either anchor ahead of the
+      db, with the S33-10 cause), anchor-mismatch, anchor-missing, and anchor-lag (file anchor > 63
+      rows behind unless relaxed across a boot change per P8-D85, or any lag
+      behind a clean-close anchor); a smaller lag is
+      accepted only as a chain prefix and repaired; keystore lag > 1023
+      appends a kernel-signed daemon.anchor.lag{rows, which}
+      (contracts kind added; bootPrev/bootNow additive for which: 'file'). Fsync
+      policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss'
+      adds fullfsync per commit, which costs more than the 5 ms falsifier allows
+      (the M1.2 figure carries no recorded method or machine, so no number here).
+      G-LOG-04 (test:perf, one attempt): bulk p99 < 5 ms / ≤ 0.1 % over 5 ms,
+      critical at 1/s under bulk load (60 events in the unit pass) p99 <
+      25 ms; the ≥ 600-event 1/s oracle is the manual 10⁶ probe run.
+      verify(): full chain (segment links, genesis, anchors) or one segment;
+      detects tamper, re-hash forgery, truncation, reorder, stripped or bad
+      signatures, unknown keys, relaxed labels. read(): §9.3 projection per
+      reader class (human, read-token, community-client, session, mod, peer;
+      agent/voice refuse UNSUPPORTED pending M1.7/M4.x). M1.4 SLICE 2 READ
+      SIDE: projection uses the EFFECTIVE sensitivity = strictest of the
+      registered default, the envelope label and the stored column label (an
+      unknown label ranks secret) — labels never widen, and nothing in a
+      payload is consulted; readPage({reader, afterSeq, untilSeq?, maxScan,
+      kinds?, match?, visit}) re-hashes every envelope (mismatch or
+      seq/kind/id column disagreement ⇒ withheld + diagnostic read.withheld),
+      returns {lastScanned, scanned, withheld, head, caughtUp}; getById (the
+      UNIQUE id index) for ev: refs; onCommit(listener) — tail observers
+      called after COMMIT in seq order, exceptions reported as diagnostic
+      commit.listener.failed, never reaching the appender; sealed segment
+      infos cached (immutable). read() is now built on readPage. ROUND 2:
+      releasedHead() = highest seq with no unresolved critical row at or
+      below it (a critical row is pending from COMMIT until its anchors
+      resolve; failure ⇒ FAILED, withheld forever; failed seqs also loaded
+      from daemon.anchor.failed markers); readPage and getById never return
+      rows above it; onRelease(listener) wakes tails. readPage projects
+      BEFORE hashing for non-human readers, checks prev linkage across
+      contiguous rows (prev-mismatch ⇒ withheld) and states the residual (a
+      consistent same-user rewrite of a row and every later prev/hash passes
+      without signature verification). getById decides visibility before
+      the hash (row-integrity only for a row the reader could see).
+      Redaction: limited views drop hash/sig/prev, fields → {redacted: true},
+      stubs drop the envelope hash; mayBeVisible(e, reader) = metadata-only
+      visibility; projectionStats counter. ROUND 3: limited views drop idem
+      and refHash too (contracts FIELD_LABELS gain the content-digest audit:
+      approval.auto.inputHash, turn.sent.contentHash,
+      approval.voice.arm.phrasesHash, approval.voice.intent.handleHash /
+      challengeHash, link.msg.out.hash, inject.receipt.shas / source_hash /
+      frozenSliceHash); #hashAt uses the sealed-info cache. RESIDUAL until
+      M1.3 (header): with the stub keystore, a critical row left unanchored
+      by a crash in a previous run is not held out of the released head on
+      restart. Not yet: async
+      hardware signers, helper anchor, blobs/TTL pruning, projections tables,
+      wiring $daemon-lifecycle events into the log.
+      Durable-write platform seam (anchor.ts fsyncFile / fsyncDir, the one
+      place a path is fsynced; T-2026-10-17-011): on win32 a file is reopened
+      'r+' because FlushFileBuffers needs a writable handle (a read-only one is
+      EPERM), and the directory fsync is skipped (Windows cannot open a
+      directory for flush). STATED RESIDUAL (spec §16, S34-26): on win32 a
+      rename is atomic but NOT durable at return — node's renameSync has no
+      MOVEFILE_WRITE_THROUGH, so a power cut can undo it; a durable Windows
+      rename is parity-phase work (P8-D78). macOS/Linux: the file is reopened
+      'r' and fsync(2)ed, the directory fsync(2)ed; an unsupported directory
+      fsync (EINVAL/ENOTSUP/EOPNOTSUPP/EISDIR/EBADF, isBenignDirFsyncError) is
+      a no-op and any other error (EIO, …) is rethrown (S34-28).
+      SEAM HARDENING (T-2026-10-17-009(c), Aegis S34-10, §19.1 release gate):
+      `keystoreAnchor` and `bootSession` are no longer KernelLogOptions keys
+      (KernelLog.open refuses them at runtime with a TypeError; the private
+      constructor demands a module-private construct key held only by open
+      and the registered seam closures, so a cast call throws; verifyLog has
+      no keystoreAnchor option and always reads the kernel's own store, and
+      refuses the key at runtime), and the
+      recovery open and acknowledgeGap are no longer public members. The log
+      registers them once (class static block) with the internal seam
+      channel src/kernel/internal-seams.ts, read only by the internal test
+      entry src/kernel/testing.ts (openKernelLog, openKernelLogForRecovery,
+      acknowledgeGap, mintTestPresence). test/seams-fence.test.ts proves: no
+      src file imports the test entry; only presence.ts, kernel-log.ts,
+      manifest/install.ts (M1.5) and testing.ts import the channel; the closure of every tsup entry excludes
+      the test entry; no src/cli or $daemon-lifecycle file (nor any other src
+      file but the owners) names acknowledgeGap / openForRecovery; dist/
+      carries no test-entry marker and its KernelLog / KernelLogOptions types
+      expose no seam.
+      QUARANTINE (T-2026-10-17-009(a), P8-D89, quarantine.ts + src/cli/log-cli.ts):
+      `gnomon log quarantine [--home]` moves the whole home aside intact to the
+      sibling <home>.quarantine-<YYYYMMDDTHHMMSSZ>-<hex> (Windows-safe name)
+      and installs a new home whose log's genesis (seq 1) is the reserved,
+      kernel-signed daemon.log.quarantined{quarantinedLog,
+      quarantinedHead{seq, hash, segment}, evidencePath, authorizedBy}
+      (KernelLog.createQuarantineSuccessor is the only writer; append refuses
+      it; verify flags it anywhere but seq 1 and binds it to the kernel key).
+      Identity: EVERY head source (db tip, newest sealed segment, file
+      anchor, keystore anchor when one exists) is read — dbs from a private
+      scratch COPY (kernel.db + -wal, never -shm), so the evidence is never
+      written — and the HIGHEST seq is the quarantined head (a truncated db
+      behind its anchor is not hidden); all observed heads go in the journal
+      and the CLI readout, with a disagreement WARNING before the prompt.
+      Crash-safe: daemon lock (acquireDaemonLock) held across steps 1-4 and
+      released through the evidence path; build in <evidence>.new, journal,
+      rename home→evidence, rename staging→home (ENOENT there = installed by
+      another process). completePendingQuarantine (run by every quarantine,
+      by the CLI first and by startDaemon before it creates a home) installs
+      an interrupted quarantine ONLY if the unsigned journal checks out:
+      staging = evidence + '.new', evidence a quarantine-named sibling, both
+      plain dirs owned by this uid (no symlink/junction), the evidence holds
+      the journal's quarantinedLog, and the staging log's row 1 is a verified
+      daemon.log.quarantined matching newLog / evidencePath / quarantinedLog;
+      anything else is abandoned (reported, never deleted). These checks stop
+      accidents and planted junk; they are NOT authenticity (the journal is
+      unsigned and the staging keys are its own) — that waits for M1.3. The
+      staging genesis is checked on rows/chain/signature only, never via
+      verifyLog (which reads the per-user keystore anchor; M1.3 tripwire test
+      → T-2026-10-18-007), and the keystore anchor is consulted only for the
+      default home (spec §22 OPEN 19). Unreadable dbs are reported
+      (`unreadable: copy failed: CODE`), ENOSPC refuses no-space; EPERM/EBUSY
+      on the install refuses install-busy (retry; the pending install
+      finishes). A crash between the step-4 rename and the lock release
+      leaves our pidfile in the evidence, reported as lockResidue. An interrupted
+      install is reported as outcome completed-pending (CLI: COMPLETED).
+      Refuses daemon-running, not-a-home, nothing-to-quarantine,
+      quarantine-pending, home-busy (EPERM/EBUSY/EACCES on the move),
+      kernel-key-required. The genesis principal comes from kernelPrincipalOf
+      (the daemon's root-authority source). CLI output: src/cli/readout.ts
+      (#gnomon-kernel; instrument-readout voice — readout rows, `REFUSED  CODE
+      reason`, indented `next:`); canConnectSocket shared in
+      lifecycle/endpoint.ts. RESIDUALS: authorizedBy 'interactive-confirm' is
+      NO PROOF OF PRESENCE — an interactive TTY + typed last 8 chars of the
+      log id, passable by any same-user process owning a terminal, until
+      presence lands at M1.3; at M1.3 the keystore anchor item must move with
+      the evidence; a stale pidfile of a dead daemon is DELETED from the
+      evidence by the lock acquisition, its bytes kept in the journal
+      (stalePidfile, base64) — the only change to the old home.
+      `npm run
+      test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
+      win32 only, a missing perf file fails loudly elsewhere).
+    path: src/kernel/log/
+    type: module
+    tags: [gnomon, kernel, log, paradigm-8, pr-4, m1.2, p8-d82, p8-d83, p8-d84, p8-d85]
+    aspects: ["~ample-internal-logs"]
+    tests:
+      - test/kernel-log.test.ts
+      - test/kernel-log-posix.test.ts
+      - test/kernel-log-gap.test.ts
+      - test/kernel-log-crossboot.test.ts
+      - test/kernel-log-open-order.test.ts
+      - test/kernel-log-rotation-fault.test.ts
+
+      - test/boot-session.test.ts
+      - test/durable-fs.test.ts
+      - test/seams-fence.test.ts
+      - test/kernel-log-quarantine.test.ts
+      - test/kernel-log-quarantine-names.test.ts
+      - test/log-cli.test.ts
+      - test/log-cli-quarantine-posix.test.ts
+      - test/m112-replay.test.ts
+    oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11, G-KRN-01]
+    replay: >-
+      M1.12 slice 3 (G-KRN-01): replay.ts + cli/replay-cli.ts — `gnomon replay
+      [<home>] [--expect <sha256>] [--json]`. The fold runs INSIDE verifyLog's
+      single pass (VerifyLogOptions.onRow: the exact bytes verify checked;
+      round 2, B1 / Aegis C2), so a row committed after verify's read snapshot
+      is never folded, and the projection is discarded unless verify is ok.
+      gnomon-replay:v1 = {log, head, kinds, sessions{hsid: inputs
+      (session.inject{origin, hash, bytes}, turn.sent{turn, permitId,
+      contentHash}), host (recorded *Hash fields of session.spawned /
+      session.layers.changed)}, cards (last state)}; projectionHash =
+      sha256(canonicalJson(projection)). A turn.sent binds to the session's
+      last unconsumed origin:client inject (interleaved kernel/peer/mod injects
+      never match) and consumes it; a mismatch or no pending inject is
+      input-mismatch; an inject whose bytes is a string is inject-plaintext
+      (the append path's checkPayload refuses it; round 2, Aegis C1). Any
+      divergence, verify failure or --expect mismatch ⇒ REFUSED
+      INTEGRITY_BROKEN (exit 1). Read-only. Trust root: keys from the home's
+      keys/kernel-pub.jsonl + kernelPrincipalOf(), so every readout and --json
+      print `trust root: home-local` and `keystore: unavailable|anchored` —
+      consistency, never provenance (Aegis medium). Rows signed by registry
+      keys outside that file fail offline verify (residual).

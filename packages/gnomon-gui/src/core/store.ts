@@ -36,6 +36,9 @@ import { idleNoteOf, speakerName, startRungName, VOICE_ACTIVITY_KINDS, VOICE_ROW
 import { isClientRow, type EnrolState } from './voice-client.js';
 import { refusalPhrase } from './capture.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
+import { tierOfCapabilities, type Tier, type TierSource } from './tool-tier.js';
+import { runRowOf, skillReplayName, TAINT_LINE, taintsSession, type RunWords } from './slash-runs.js';
+import { SKILL_COPY } from './slash-menu.js';
 
 export interface Row {
   seq: number;
@@ -88,6 +91,12 @@ export interface SessionRow {
   firstUser?: string | null;
   /** 8.0:session-rename: the name the human gave it (the kernel's last session.renamed); null = the derived title. */
   name?: string | null;
+  /** #gui-tool-tier (C4'b): who opened it (session.open{by}), whether it is a loop session, and its local endpoint */
+  owner?: string | null;
+  loop?: boolean;
+  endpoint?: string | null;
+  /** #gui-tool-tier: the session's tool tier, from its last model.capabilities{hsid, tier, tierSource} */
+  tier?: { tier: Tier; source: TierSource; measured: Tier | null; previous?: Tier };
 }
 
 /** Session states that mean the session is gone (it can only come back through a session.open of a resume). */
@@ -286,12 +295,22 @@ export class GuiStore {
         if (typeof p.backend === 'string') s.backend = p.backend;
         if (typeof p.cwd === 'string') s.cwd = p.cwd;
         if (!s.openedAt && typeof r.at === 'string') s.openedAt = r.at;
+        // #gui-tool-tier: the opener (the kernel stamps the row; `by` names the principal who asked), loop or not
+        s.owner = typeof p.by === 'string' ? p.by : null;
+        s.loop = p.attended === false || p.origin === 'loop';
+        s.endpoint = typeof p.endpoint === 'string' ? p.endpoint : null;
+        delete s.tier;
       } else if (r.kind === 'session.refused') s.state = 'refused';
       else if (r.kind === 'session.orphaned') s.state = 'orphaned'; // the new kernel's boot sweep (§2.4 rule 4)
       else if (r.kind === 'session.exited' && failedExit(p)) s.state = 'failed';
       else if (r.kind === 'session.exited' || r.kind === 'session.stop' || r.kind === 'session.exit' || r.kind === 'session.end') s.state = 'ended';
       else if (isLiveState(s.state) && r.kind === 'turn.partial') s.state = 'streaming';
       else if (isLiveState(s.state) && r.kind === 'turn.result') s.state = 'idle';
+      // #gui-tool-tier: the kernel's record of the session's tier (at open, and after a human change)
+      if (r.kind === 'model.capabilities') {
+        const t = tierOfCapabilities(p, hsid);
+        if (t) s.tier = t;
+      }
       // 8.0:session-rename: the kernel's session.renamed (normalised display text; '' = back to the derived title)
       if (r.kind === 'session.renamed' && r.view === 'full' && validateKindPayload('session.renamed', p).length === 0 && p.hsid === hsid) s.name = (p.name as string) || null;
       if (!s.firstUser) {
@@ -670,7 +689,7 @@ export function rowDetail(r: Row): string | null {
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working' | 'hook' | 'claude-note';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working' | 'hook' | 'claude-note' | 'run';
 
 /**
  * T-2026-10-21-007: the clock of a turn still running. `since` is when the turn (or, on an activity line, its first
@@ -706,13 +725,18 @@ export interface ChatItem {
   live?: LiveClock;
   /** raw rows: the whole row (rowDetail), shown by the row's fold */
   detail?: string;
-  /** #gui-turn-steps: the hook-result line draws attention (a hook blocked, failed or timed out) */
-  tone?: 'warn';
+  /** #gui-turn-steps: the hook-result line draws attention (a hook blocked, failed or timed out); a result line whose
+   * run stopped short is 'warn' (amber), one whose run failed is 'fail' (vermilion, TD-2026-10-27-833, DESIGN rule 1) */
+  tone?: 'warn' | 'fail';
   /** #gui-turn-steps: the working key's steps so far, and whether its list is unfolded (the page sets it) */
   steps?: TurnStep[];
   open?: boolean;
   /** Mika Delta 11: an approval.decide line's card (the page may say what it answered there) */
   cardId?: string;
+  /** #gui-slash-runs: a "/" run this page started (its key: the page draws it from its own run) */
+  runKey?: string;
+  /** #gui-slash-runs: a "/" run from the kernel's tool.brokered{author:'human'} row (history: no result kept) */
+  runRow?: RunWords;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -915,13 +939,48 @@ function lineItems(line: string, guidanceHash: string | null = null): Array<Pick
   return [];
 }
 
-function resultText(p: Record<string, unknown>): string {
-  const parts = [p.isError === true ? 'error' : typeof p.subtype === 'string' ? p.subtype : 'done'];
+/**
+ * T-2026-10-26-003: how a local run ended, said honestly (the kernel's turn.result{stopReason}). A normal 'stop' reads
+ * as before; anything else names itself — never "done" for a run that hit the step limit.
+ */
+export const STOP_LABEL: Readonly<Record<string, string>> = Object.freeze({ max_steps: 'stopped: step limit', aborted: 'aborted', error: 'error' });
+/** A Claude result's subtype in words: a cap stop names its cap (the same event as the local step limit); any other error_* reads "error". */
+export const CLAUDE_RESULT_LABEL: Readonly<Record<string, string>> = Object.freeze({ error_max_turns: 'stopped: turn limit', error_max_budget_usd: 'stopped: budget limit', error_during_execution: 'error' });
+
+const n = (v: number): string => v.toLocaleString('en-US');
+
+/**
+ * The turn's result line. A local run (turn.result{stopReason, runUsage, replyBytes}, T-2026-10-26-003) reads its end
+ * state from stopReason, says "no answer" when the final reply was empty, and its tokens from runUsage — the run's whole
+ * agent_end usage, input + output (usage.tokens on that row is only the meter's uncharged remainder). The step limit
+ * names its number when the row carries the session's maxSteps (TD-2026-10-27-833; older rows read as before).
+ * `tone`: 'fail' for a run that failed — a local isError / stopReason 'error', or a Claude result with is_error or an
+ * error_* subtype (vermilion, DESIGN rule 1, TD-2026-10-27-833); 'warn' for one that did not end normally with an
+ * answer (amber); null otherwise (an aborted run stays quiet).
+ */
+export function resultLine(p: Record<string, unknown>): { text: string; tone: 'warn' | 'fail' | null } {
+  const reason = typeof p.stopReason === 'string' ? p.stopReason : null;
+  const abnormal = reason !== null && reason !== 'stop';
+  const steps = typeof p.maxSteps === 'number' && Number.isInteger(p.maxSteps) && p.maxSteps > 0 ? ` ${p.maxSteps}` : '';
+  const stopLabel = (r: string): string => (r === 'max_steps' ? `${STOP_LABEL[r]}${steps}` : (STOP_LABEL[r] ?? `stopped: ${r.replace(/_/g, ' ')}`));
+  const sub = typeof p.subtype === 'string' ? p.subtype : null;
+  const subLabel = sub === null ? null : (CLAUDE_RESULT_LABEL[sub] ?? (sub.startsWith('error') ? 'error' : null));
+  // a Claude cap stop (error_max_*) is a limit reached, not a failure: amber like the local step limit
+  const capped = sub !== null && sub.startsWith('error_max_');
+  const parts = [subLabel ?? (p.isError === true ? 'error' : abnormal ? stopLabel(reason) : (sub ?? 'done'))];
+  const noAnswer = reason !== null && reason !== 'aborted' && p.replyBytes === 0;
+  if (noAnswer) parts.push('no answer');
   if (typeof p.cost === 'number') parts.push(`$${p.cost.toFixed(4)}`);
+  const run = objOf(p.runUsage);
   const tokens = objOf(p.usage)?.tokens;
-  if (typeof tokens === 'number') parts.push(`${tokens.toLocaleString('en-US')} tokens`);
+  if (run && typeof run.tokens === 'number') {
+    parts.push(typeof run.input === 'number' && typeof run.output === 'number' ? `${n(run.tokens)} tokens (in ${n(run.input)} + out ${n(run.output)})` : `${n(run.tokens)} tokens`);
+  } else if (typeof tokens === 'number') parts.push(`${n(tokens)} tokens`);
   if (typeof p.permission_denials === 'number' && p.permission_denials > 0) parts.push(`${p.permission_denials} denied`);
-  return parts.join(' · ');
+  if (abnormal && typeof p.error === 'string' && p.error.trim()) parts.push(cap(oneLine(p.error), TOOL_SUMMARY_MAX));
+  // DESIGN rule 1: vermilion = failed, amber = warning; an error is never amber, an aborted run is neither
+  const failed = !capped && (p.isError === true || reason === 'error' || (sub !== null && sub.startsWith('error')));
+  return { text: parts.join(' · '), tone: failed ? 'fail' : capped || (reason !== 'aborted' && (reason === 'max_steps' || noAnswer)) ? 'warn' : null };
 }
 
 /**
@@ -1089,7 +1148,7 @@ function spokenFold(r: Row, p: Record<string, unknown> | null, open: SpokenGroup
 }
 
 /** A kernel row's chat item, or null when it is noise in the chat view. */
-function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: string }) | null {
+function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: string; tone?: ChatItem['tone'] }) | null {
   if (r.view === 'stub' || r.view === 'oversize' || r.payload === undefined) return null;
   const p = objOf(r.payload) ?? {};
   switch (r.kind) {
@@ -1105,8 +1164,10 @@ function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: strin
       return { role: 'system', text: 'session ended with the old kernel (orphaned at the next boot)' };
     case 'session.drained':
       return { role: 'system', text: 'session drained for a kernel restart' };
-    case 'turn.result':
-      return { role: 'result', text: resultText(p) };
+    case 'turn.result': {
+      const line = resultLine(p);
+      return { role: 'result', text: line.text, ...(line.tone ? { tone: line.tone } : {}) };
+    }
     case 'approval.request': {
       const card = objOf(p.card) ?? {};
       return { role: 'card', text: `needs you · ${typeof card.kind === 'string' ? card.kind : 'card'} (decide it in the stack)` };
@@ -1259,6 +1320,10 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   // Aegis L3: the kernel's speakable reply per source row (turnSeq): the said-aloud line is the kernel's words
   const kernelReply = new Map<number, { text: string; from: string }>();
   let turnGuidance: string | null = null; // Aegis M1: the guidanceHash of the latest turn.sent
+  // #gui-slash-runs: this page's "/" runs whose kernel tool.brokered{author:'human'} row has not come yet (in order)
+  const unclaimedRuns: Array<{ server: string; tool: string }> = [];
+  // C6'b2-2: the injection pause is said ONCE, where the session first took in a sent result or skill text
+  let taintNoted = false;
   for (const r of rows) {
     const p = objOf(r.payload);
     if (r.kind === 'voice.turn.agent' && p?.source === 'kernel-speakable' && typeof r.principal === 'string' && /^p:[0-9a-z]{8}\/kernel$/.test(r.principal) && typeof p.turnSeq === 'number' && Array.isArray(p.items)) {
@@ -1289,6 +1354,24 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
         placedTurn = undefined;
         echoTurn.push(lastWaiting());
         if (r.mark === 'voice-edited' && editedReplays > 0) editedReplays--;
+      } else if (r.kind === 'slash-run') {
+        // #gui-slash-runs: this page's "/" run, in the transcript from the press; the kernel's tool.brokered row for
+        // it (same server and tool, after it) is claimed below and not drawn twice
+        const p = objOf(r.payload) ?? {};
+        const key = typeof p.key === 'string' ? p.key : '';
+        const it = push(r, 0, { role: 'run', text: `you ran ${String(p.tool ?? '')} on ${String(p.server ?? '')}` }, 'tail');
+        it.runKey = key;
+        unclaimedRuns.push({ server: String(p.server ?? ''), tool: String(p.tool ?? '') });
+      } else if (r.kind === 'skill-ran') {
+        // #gui-slash-menu: a "/" skill run posts as the human's turn, "you ran skill /x args" (its replay is folded
+        // into it, below, and never shows the skill's text)
+        const p = objOf(r.payload) ?? {};
+        const name = String(p.name ?? '');
+        echoes.push(SKILL_COPY.ran(name, ''));
+        placedTurn = typeof r.turn === 'string' ? r.turn : undefined;
+        push(r, 0, { role: 'user', text: SKILL_COPY.ran(name, String(p.args ?? '')) }, 'message');
+        placedTurn = undefined;
+        echoTurn.push(lastWaiting());
       } else {
         // a refused send stays with the message it refused
         const last = waiting[waiting.length - 1];
@@ -1345,8 +1428,12 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       }
       steps.reset();
       const it = kernelItem(r);
-      if (it) push(r, 0, it);
-      else hidden++;
+      if (it) {
+        const line = push(r, 0, it);
+        // T-2026-10-26-003: a run stopped at the step limit, or with no answer, reads in the warning tone;
+        // TD-2026-10-27-833: a failed run reads in the fail tone
+        if (it.tone) line.tone = it.tone;
+      } else hidden++;
       // a folded turn's message no longer waits (its replay normally already started it)
       for (let i = waiting.length - 1; i >= 0; i--) if (waiting[i]!.turn !== undefined && closed.includes(waiting[i]!.turn!)) waiting.splice(i, 1);
       // the next waiting message starts, unless it is stamped for a later turn while another turn runs first
@@ -1367,7 +1454,12 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       if (typeof p.line === 'string' || facts !== undefined) steps.push(r.seq, r.at, typeof p.line === 'string' ? p.line : null, facts, typeof p.type === 'string' ? p.type : undefined);
     }
     if (r.kind === 'turn.event' && r.view === 'full' && p && typeof p.line === 'string') {
-      const its = lineItems(p.line, turnGuidance).map((it) => (it.role === 'assistant' ? withKernelSaid(it, kernelReply.get(r.seq)) : it)).filter((it) => {
+      const its = lineItems(p.line, turnGuidance).map((it) => {
+        if (it.role === 'assistant') return withKernelSaid(it, kernelReply.get(r.seq));
+        // #gui-slash-menu: a replayed "/" skill run reads "you ran skill /x" (and pairs with this page's own row)
+        const sk = it.role === 'user' ? skillReplayName(it.text) : null;
+        return sk ? { ...it, text: SKILL_COPY.ran(sk, '') } : it;
+      }).filter((it) => {
         if (it.role !== 'user') return true;
         const i = echoes.indexOf(oneLine(it.text));
         if (i < 0) return true;
@@ -1450,6 +1542,24 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
         } else push(r, v.part ?? 0, v, 'tail');
       }
       continue;
+    }
+    if (!taintNoted && taintsSession(r)) {
+      taintNoted = true;
+      push(r, 0, { role: 'system', text: TAINT_LINE });
+      continue;
+    }
+    if (r.kind === 'tool.brokered') {
+      // #gui-slash-runs: a "/" run's kernel row. One this page drew from the press is claimed (oldest first, same
+      // server and tool; an unknown tool's row names no tool); any other (an earlier page, a reload) is history
+      const hist = runRowOf(r);
+      if (hist) {
+        const at = unclaimedRuns.findIndex((u) => (hist.tool === null || u.tool === hist.tool) && (u.server === hist.server || hist.tool === null));
+        if (at >= 0) {
+          unclaimedRuns.splice(at, 1);
+          hidden++;
+        } else push(r, 0, { role: 'run', text: hist.words.head }, 'tail').runRow = hist.words;
+        continue;
+      }
     }
     const it = kernelItem(r);
     if (it) push(r, 0, it);

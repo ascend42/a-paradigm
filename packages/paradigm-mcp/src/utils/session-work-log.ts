@@ -28,6 +28,7 @@ import {
   type LearningHome,
 } from './learning-stores.js';
 import { log } from './mcp-logger.js';
+import { breadcrumbBase } from './gnomon-staged.js';
 
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
@@ -152,7 +153,7 @@ export interface SessionActivitySummary {
  */
 export function appendSessionWorkEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    const filePath = path.join(rootDir, SESSION_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), SESSION_LOG_FILE);
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -206,7 +207,7 @@ export function appendSessionWorkEntry(rootDir: string, entry: SessionWorkEntry)
  */
 export function readSessionWorkLog(rootDir: string): SessionWorkEntry[] {
   try {
-    const filePath = path.join(rootDir, SESSION_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), SESSION_LOG_FILE);
     if (!fs.existsSync(filePath)) return [];
 
     return fs.readFileSync(filePath, 'utf8')
@@ -230,7 +231,7 @@ export function readSessionWorkLog(rootDir: string): SessionWorkEntry[] {
  */
 export function clearSessionWorkLog(rootDir: string): void {
   try {
-    const filePath = path.join(rootDir, SESSION_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), SESSION_LOG_FILE);
     if (fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, '', 'utf8');
     }
@@ -296,7 +297,7 @@ export function recordPostflightLiveness(
       ...record,
     };
     // Machine home (scoped learning S2); the legacy repo log is frozen, still read.
-    appendLearningRows('postflight-liveness', rootDir, [full]);
+    appendLearningRows('postflight-liveness', breadcrumbBase(rootDir), [full]);
   } catch {
     // Non-fatal — the probe is advisory.
   }
@@ -308,7 +309,7 @@ export function recordPostflightLiveness(
  */
 export function readPostflightLiveness(rootDir: string): PostflightLivenessRecord[] {
   try {
-    return readLearningRows<PostflightLivenessRecord>('postflight-liveness', rootDir)
+    return readLearningRows<PostflightLivenessRecord>('postflight-liveness', breadcrumbBase(rootDir))
       .filter(e => typeof e.journalsWritten === 'number')
       .sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')));
   } catch {
@@ -326,7 +327,7 @@ export function readPostflightLiveness(rootDir: string): PostflightLivenessRecor
  */
 export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    appendLearningRows('verdicts', rootDir, [{ ...entry, author: entry.author ?? currentAuthor(rootDir) }]);
+    appendLearningRows('verdicts', breadcrumbBase(rootDir), [{ ...entry, author: entry.author ?? currentAuthor(rootDir) }]);
   } catch (err) {
     log.component('#session-work-log').warn('failed to record verdict', {
       error: err instanceof Error ? err.message : String(err),
@@ -348,7 +349,7 @@ function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, rootDir:
  * repo rows, minus a teammate's repo rows.
  */
 export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
-  return readLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, {
+  return readLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', breadcrumbBase(rootDir), {
     filter: (row, at) => !row.consumed && !isTeammateRepoVerdict(row, at, rootDir),
   });
 }
@@ -360,7 +361,7 @@ export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
  */
 export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): void {
   const consumed = new Set(nominationIds);
-  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean; migrated?: boolean }>('verdicts', rootDir, (row, at) => {
+  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean; migrated?: boolean }>('verdicts', breadcrumbBase(rootDir), (row, at) => {
     if (!row.nominationId || !consumed.has(row.nominationId)) return undefined;
     if (row.consumed || row.migrated || isTeammateRepoVerdict(row, at, rootDir)) return undefined;
     return { ...row, consumed: true };

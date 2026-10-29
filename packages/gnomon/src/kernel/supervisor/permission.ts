@@ -134,7 +134,12 @@ export function inputHash(input: unknown): string {
   try {
     c = canonicalJson(input);
   } catch {
-    c = JSON.stringify(input) ?? 'null';
+    // Aegis L2 (C1 review): the fallback may throw too (a cycle, a BigInt, a very deep value): hash a fixed marker
+    try {
+      c = JSON.stringify(input) ?? 'null';
+    } catch {
+      c = '"[unserialisable input]"';
+    }
   }
   return `sha256:${createHash('sha256').update(c, 'utf8').digest('hex')}`;
 }

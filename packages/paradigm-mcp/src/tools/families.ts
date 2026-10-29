@@ -92,6 +92,40 @@ export const FAMILY_META: FamilyMeta[] = [
   { name: 'paradigm_test_fixtures', tier: 'on-demand', keys: ['test_fixtures', 'fixtures'], detector: 'fixtures', plain: true, description: '' },
 ];
 
+/**
+ * #paradigm-mcp (TD-2026-10-27-833, Gnomon staged Paradigm): the read-only ops that touch ONLY local state (the
+ * project's files, `.paradigm/`, the Paradigm global dir, local git) and never the network. buildToolSurface stamps
+ * `openWorldHint: false` on each one's legacy definition, so a client that classes by annotations (the Gnomon kernel:
+ * read = readOnlyHint && !openWorldHint) runs them without a card. Reviewed family by family against each handler's
+ * imports: no op here reaches fetch, ws, the symphony relay, the platform bridge, personas, conductor, the loops
+ * kernel client, the plugin update checker or a sync provider. Families that do reach the network or another
+ * process (symphony, personas, platform, conductor, loop, brain, university, sentinel) are absent: their ops stay
+ * open-world. A mutate or destructive op is never listed (its class does not depend on openWorldHint). Aegis H2:
+ * an op that writes (captain.brief: .cid-session; pm.postflight: .habits-blocking; aspect get/search: heatmap and DB
+ * writes; wisdom.context: the global wisdom dir; pm.preflight: .paradigm/sentinel/sentinel.db) or reads any
+ * absolute path (aspect.suggest_scan) is NOT local-only; staged-ops.test.ts runs every op here
+ * against a fixture repo and asserts nothing under the repo or HOME changes (the session trail dir aside).
+ */
+export const LOCAL_ONLY_OPS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  paradigm_lore: ['calibration', 'get', 'search', 'timeline'],
+  paradigm_purpose: ['validate'],
+  paradigm_wisdom: ['expert'],
+  paradigm_history: ['context', 'fragility'],
+  paradigm_decision: ['search'],
+  paradigm_journal: ['search', 'work_log_search'],
+  paradigm_session: ['context_check', 'health', 'recover', 'stats'],
+  paradigm_task: ['list'],
+  paradigm_agent: ['expertise', 'get', 'list', 'prompt'],
+  paradigm_protocol: ['get', 'search', 'validate'],
+  paradigm_aspect: ['check', 'graph', 'heatmap'],
+  paradigm_tags: ['list'],
+  paradigm_flow: ['check', 'affected'],
+  paradigm_graph: ['arch_diagram', 'arch_status', 'slice'],
+  paradigm_notebook: ['search'],
+  paradigm_docs: ['manifest', 'page', 'search'],
+  paradigm_ambient: ['events', 'health', 'compose'],
+});
+
 export const DEFAULT_FAMILIES = FAMILY_META.filter(f => f.tier === 'default');
 export const ON_DEMAND = FAMILY_META.filter(f => f.tier === 'on-demand');
 

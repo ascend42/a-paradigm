@@ -126,6 +126,48 @@ final class DecisionSignTests: XCTestCase {
         XCTAssertTrue(r.prompts.isEmpty)
     }
 
+    // ── 1.10.0 (TD-2026-10-28-969, C6'a2-h, G-HLP-02): the `permission` row table ──────────────────────────────
+
+    /// A destructive brokered Always (cardKind `permission`, rootRows []) signs its decision row and nothing else.
+    func testPermissionSignsOnlyItsDecisionRow() throws {
+        XCTAssertNil(rowTableRefusal(cardKind: "permission", rows: []))
+        let v = try vector("C3: a permission decision signs only its decision row")
+        let r = Rig()
+        let out = try r.server.handle(request(v))
+        XCTAssertEqual(r.prompts.count, 1, "one presence for the decision")
+        XCTAssertEqual(r.calls.map { $0.0 }, [.approvals, .root])
+        XCTAssertEqual(r.calls.map { $0.1 }, [2, 1], "the root key signs the decision row only")
+        XCTAssertEqual((out["rootSigs"] as? [String])?.count, 1)
+        XCTAssertEqual(out["shown"] as? String, v["shown"] as? String)
+        XCTAssertTrue((out["shown"] as? String ?? "").contains("always on permission"))
+    }
+
+    /// Any row after the decision row is refused before a prompt or a key, whatever its kind.
+    func testPermissionRefusesAnyFurtherRow() throws {
+        let why = "a permission decision signs only its decision row"
+        let extras: [[Json]] = [
+            [["schemaVersion": "grantRow:v1", "kind": "grant.trust", "cardId": "card:x"]],
+            [["kind": "tool.rule", "cardId": "card:x"]],
+            [["schemaVersion": "gnomon-root-local:v1", "cardId": "card:x"]],
+            [["kind": "grant.install"], ["kind": "grant.install"]],
+        ]
+        for rows in extras { XCTAssertEqual(rowTableRefusal(cardKind: "permission", rows: rows), why) }
+        let r = Rig()
+        XCTAssertEqual(errorCode { try r.server.handle(request(try vector("C3: a permission decision never signs a grant row"))) }, "batch-refused")
+        XCTAssertTrue(r.prompts.isEmpty, "a refused batch never prompts")
+        XCTAssertTrue(r.calls.isEmpty, "a refused batch never signs")
+    }
+
+    /// The table stays closed: adding `permission` opens no other kind (nor a near-miss spelling of it).
+    func testAnUnknownKindIsStillRefused() throws {
+        for k in ["budget", "Permission", "permission.always", "permissions", "tool.rule", ""] {
+            XCTAssertEqual(rowTableRefusal(cardKind: k, rows: []), "no row table for card kind \(k)", k)
+        }
+        let r = Rig()
+        XCTAssertEqual(errorCode { try r.server.handle(request(try vector("C3: an unknown card kind"))) }, "batch-refused")
+        XCTAssertTrue(r.prompts.isEmpty)
+    }
+
     /// The ONE shared fixture, also read by packages/gnomon/test/decision-batch.test.ts (the TS mirror).
     func testSharedBindingVectors() throws {
         let vectors = try loadVectors()

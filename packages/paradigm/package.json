@@ -19,7 +19,8 @@
     "bin"
   ],
   "scripts": {
-    "build": "node scripts/generate-hooks.mjs && tsup && npm run build:platform-ui && npm run build:sentinel-assets",
+    "build": "node scripts/generate-hooks.mjs && tsup && npm run build:mcp-bundle && npm run build:platform-ui && npm run build:sentinel-assets",
+    "build:mcp-bundle": "node scripts/build-mcp-bundle.mjs",
     "build:sentinel-assets": "rm -rf dist/sentinel-ui && cp -r ../sentinel/ui/dist dist/sentinel-ui",
     "check:hooks": "node scripts/generate-hooks.mjs --check",
     "build:platform-ui": "cd platform-ui && npx vite build",

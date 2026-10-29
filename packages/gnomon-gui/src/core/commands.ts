@@ -44,6 +44,10 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'local.setup', title: 'Set up local model…', keys: 'Settings · Local model' },
   // #gui-mcp-servers (T-2026-10-23-003): Settings at the MCP servers section (section-focused)
   { id: 'mcp.open', title: 'MCP servers…', keys: 'Settings · MCP servers' },
+  // #gui-capability-browser (C6'b1): the focused local session's Tools and memory drawer (also ⋯ and the tier key's menu)
+  { id: 'tools.open', title: 'Tools and memory… (this local session’s tools, servers, pins and memory)', keys: '⋯ · Tools and memory' },
+  // #gui-slash-menu (C6'b2-1): the focused session's "/" menu (skills, Gnomon commands, this local session's tools)
+  { id: 'slash.open', title: '/ menu… (skills, Gnomon commands and this session’s tools)', keys: 'type / in the composer' },
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
   // #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui): the Loops leaf and the kill switch
   { id: 'loops.open', title: 'Loops… (the Loops view: list, graph, keys)' },
@@ -116,7 +120,8 @@ export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // #gui-wordmark-menu: nor menu.* (the Gnomon menu holds Settings… and the pane toggles)
   // #gui-loops: nor loops.* (loops.pause-all is the kill switch; a block must never press it)
   // #gui-local-model: nor local.* (it opens the root-card form of Settings)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.') && !id.startsWith('loops.') && !id.startsWith('local.')),
+  // #gui-capability-browser: nor tools.* (the drawer holds Pin, Restart server and Delete memory)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.') && !id.startsWith('loops.') && !id.startsWith('local.') && !id.startsWith('tools.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';

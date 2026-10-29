@@ -1,0 +1,331 @@
+version: "2.0"
+name: gnomon-kernel-desk
+description: >-
+  The Desk: kernel folds and routers behind the GUI Desk. Desk guidance, offer
+  routing between mods and sessions, Desk statistics, the per-turn economy view,
+  and the MCP server passthrough and enable/disable cards.
+context:
+  - >-
+    desk-guidance.ts, offer-router.ts, desk-stats.ts and turn-economy.ts are
+    derived views over log rows; mcp-passthrough.ts, mcp-servers.ts and
+    mcp-server-cards.ts handle user MCP servers.
+  - >-
+    The ^offer-accept and ^mcp-server-enable gates and the $offer-handoff flow
+    stay in packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  desk-guidance:
+    description: >-
+      #desk-guidance (TD-2026-10-20-812 A1, slice S1; spec §12.9).
+      src/kernel/desk/desk-guidance.ts: the frozen DESK_BODY (pinned
+      DESK_BODY_HASH) and a kernel-composed roster from manifest fields only
+      (mod name, offer kind, phase, title; A7), wrapped in <gnomon-desk>.
+      composeGuidance(voice, desk) returns ONE block (voice first, blank line,
+      desk) so table talk and the Desk share the single extra text block under
+      one turn.sent{guidanceHash} that trace-cli extrasAgree admits (Aegis M2);
+      voice alone is exactly TABLE_TALK_GUIDANCE. The supervisor's
+      setTurnGuidance takes the composite (setVoiceGuidance is its alias).
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mod-playbooks, paradigm-8]
+    flows: [$offer-handoff]
+    tests:
+      - test/desk-guidance.test.ts
+      - test/table-talk-session.test.ts
+    oracles: [G-DSK-01]
+  offer-router:
+    description: >-
+      #offer-router (TD-2026-10-20-812, slice S1; spec §12.9).
+      src/kernel/desk/offer-router.ts: a fold over committed rows (daemon
+      log.onCommit, like the speakable projector; seed() replays offer.* and
+      request.offer.mute at boot). When the main-chain reply ends
+      (message_delta or an assistant line with stop_reason end_turn,
+      parent_tool_use_id null; T-2026-10-21-006, since Claude Code can emit
+      turn.result ~30 s later, after the next turn was sent) it parses the
+      text of the turn's FINAL main-chain assistant message with
+      offerBlockOf; a tool_use stop never evaluates, a sub-agent message is
+      ignored, turn.result evaluates only a turn whose end was not seen, and
+      each turn is evaluated once. At most one per reply, none while another
+      turn sent before the reply ended is outstanding (a turn sent after it
+      does not suppress it), none while the session has a pending card; the mod must be installed, granted, unpaused (DeskMods), not muted
+      for the hsid (offer.decided not-now / stop-here) nor its repo
+      (request.offer.mute, repo:<16 hex> from the session's repoKey), and the
+      kind one of its declared offers; phase, title and contextIn are copied
+      from the manifest (Aegis D3). It returns the kernel offer.shown row (the
+      daemon appends it). decide(): request.offer.decide from the human on a
+      gui/device connection only (Aegis D1), offer live (session running and
+      owned by the asker), latest for the hsid, undecided (exactly one
+      decision; a concurrent replay is refused before the row commits); writes
+      request.offer.decide + offer.decided and on open sends the kernel
+      template "Open <title>: use the <handoffTool> tool." as the human
+      (session.inject origin kernel). offer.kept once per offer when the
+      declared handoffTool on mcp__gnomon-<mod>__ completes without error
+      after open. mute(): request.offer.mute row as the kernel. Aegis S1
+      fixes: open names the fully qualified tool mcp__<server>__<handoffTool>;
+      only kernel-principal rows fold; the next turn.sent retires the shown
+      offer; decided once the request row commits (a retry is a replay, no
+      second request row), send failures reported (diag send.failed); a mod
+      paused or muted after open never counts as kept (diag kept.refused);
+      mutes survive session exit until the bounded state is evicted. Every
+      evaluation that shows nothing returns a kernel offer.suppressed{hsid,
+      turn, why, name?, offerKind?} row for the signed log (founder ruling,
+      contracts 8.0:T-2026-10-21-006; closed, checked at append by
+      #kernel-log), why in no-block | turn-streaming | pending-card |
+      not-offerable | kind-undeclared | malformed; name/offerKind only when
+      the block named them; names only, never message text; at most one per
+      completed turn, no-block only while the session has an offerable mod.
+      Review M2: turn.result{turn} closes every outstanding turn up to the one
+      it names (FIFO when absent). Review R3: session.exited, session.open and
+      session.drained drop the turn state (outstanding turns, message text,
+      evaluation marks; mutes stay, L7), since a resumed session restarts
+      its turn ids at /1. Review R4: the turn.result fallback writes no row
+      for an errored or interrupted turn (isError, or a subtype other than
+      success). Review R1: each outstanding turn is a record evaluated at most
+      once; a reply's end is attributed to the oldest outstanding turn not
+      yet evaluated (an interleaved stream no longer loses the next turn's
+      offer); "others" counts only outstanding turns still streaming (not yet
+      evaluated); turn.result keeps the text of a newer turn's message.
+      Review R2: a message_delta end_turn is evaluated at its message_stop; a
+      new main-chain message in an evaluated turn before its turn.result (a
+      Stop-hook continuation) or a blocking Stop hook_response
+      (stopHookBlocked, founder 2026-10-23: buildClaudeArgv passes
+      --include-hook-events, so the lines arrive; measured on claude 2.1.309
+      the block is exit_code 2 or exit 0 with stdout JSON decision block,
+      never a top-level decision or outcome 'blocked'; cancelled = a timeout
+      and exit 1 never block; Aegis M2: the kernel row's hook facts decide
+      first, the line is parsed only for a row without them) retires the
+      shown offer and re-opens the turn; replay lines (isReplay) mark turns
+      started, so the stream's turn is exact and a turn folded into a later
+      one settles without a row. Re-review L-1: with replay lines an
+      unconsumed queued turn is not "streaming"; without them a message after
+      every outstanding turn is evaluated continues the previous message's
+      turn. Re-review L-2: replay lines before the stream is live (the
+      first system.init or turn.sent since a session boundary) are ignored,
+      in the router and the supervisor's consumedTurns. Re-review M-2: a retired offer that was
+      still undecided is the kernel row offer.retired{offerId, hsid,
+      why:'continued'} (OFFER_SEED_KINDS: folded at boot), and a decide on
+      it is refused 'retired'. Review C2: gnomon desk stats folds only
+      kernel-principal offer.shown / offer.suppressed rows. Review C3
+      (verified): desk stats key on offerId (ULID), mod and hsid, the GUI
+      slips on offerId anchored by seq, and the router and the GUI drop
+      turn state at session.open, so turn ids restarting at /1 after a
+      resume collide nowhere. Pause
+      and mute stop offers at once; removing the server applies to new
+      sessions. CLI
+      `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by
+      reason)/open/not-now/stop-here/kept per mod from the verified log, and
+      the unnamed suppressions (no-block, malformed) per session; re-review
+      M-3: a retired, undecided offer leaves shown (counted as retired) and a
+      suppression counts once per (hsid, session.open seq, turn).
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mod-playbooks, paradigm-8]
+    flows: [$offer-handoff]
+    gates: [^offer-accept]
+    signals: []
+    tests:
+      - test/offer-router.test.ts
+      - test/desk-stats.test.ts
+    oracles: [G-DSK-02, G-DSK-03, G-DSK-04]
+  desk-stats:
+    description: >-
+      #desk-stats. src/kernel/desk/desk-stats.ts: the pure foldDeskStats /
+      foldDeskUnnamed `gnomon desk stats` prints (moved from cli/desk-cli.ts,
+      which re-exports them) and DeskTally, the kernel's live tally (seeded
+      from the log once, fed by onCommit, bounded) behind
+      status.mods.installed[].desk.
+    tags: [desk]
+    signals: []
+    tests:
+      - test/mods-admin.test.ts
+      - test/desk-stats.test.ts
+  turn-economy:
+    description: >-
+      #turn-economy (orchestration design §12 Phase 0 item 1, the `turn.economy`
+      fold; spec id #turn-economy). src/kernel/desk/turn-economy.ts: a derived
+      READ-ONLY VIEW (no log kind, no contract change) over turn.event /
+      turn.sent / turn.result / session.open. One numbers-and-ids row per turn
+      (a result that folds a queued turn is one row, foldedTurns 2): modelCalls
+      (distinct main-chain message.id), preEditExplore {read, grep, glob} until
+      the first Edit/Write/NotebookEdit, ctxAtStart (null for the first turn of
+      an epoch, a resume included), cacheReadShare from turn.result split, and
+      subagentTokensByModel (parent_tool_use_id lines, by message.model). Keyed
+      (hsid, session.open epoch seq, turn) as #desk-stats is, since turn ids
+      restart at /1 after a resume. Lines stored by hash only are counted as
+      truncated in the coverage and never parsed; rewritten (lineKept) lines
+      are not read. foldTurnEconomy is the pure fold; EconomyTally (daemon.ts,
+      next to DeskTally) seeds from the human projection on first read and is
+      fed by onCommit. CLI: `gnomon economy stats [<home>] [--json]`
+      (src/cli/economy-cli.ts, folds incrementally inside verifyLog onRow).
+      Review fields: ctxMax, callsOver140k, ctxHistogram (bounded buckets),
+      conductorModel, subagentUncachedByModel, edited, ctxAtStartSource
+      (prev | firstCall), hashOnly / truncatedAssistant / excludeFromMedians;
+      model names sanitised; assistant lines with no outstanding turn are
+      dropped (coverage.unpairedLines).
+    tags: [desk, economy, paradigm-8]
+    signals: []
+    tests:
+      - test/turn-economy.test.ts
+  mcp-passthrough:
+    description: >-
+      #mcp-passthrough (TD-2026-10-20-812 A2, slice S1; spec §12.9).
+      src/kernel/desk/mcp-passthrough.ts: DeskMods / readDeskMods (installed,
+      pinned snapshot verifies, manifest matches its grant, capabilities and
+      egress granted, not paused; cached on the grant table) and mergeDeskMcp,
+      wired as SupervisorOptions.deskMcp into the session mcp.json: gnomon-<mod>
+      (gnomon-<mod>-<entry> for extra entries), never a repo server name nor an
+      earlier mod's, repo-muted mods skipped. Per-user launch override (Aegis
+      D2): kernel state only (<home>/desk/mcp-overrides.json, 0600), never a
+      repo file; `gnomon mod config <mod> --command <abs> --args … --env N=v`
+      writes a request under <home>/mods/<mod>/ (session sandboxes cannot write
+      the home); McpConfigCards raises a root-class grant card showing
+      command, args, env NAMES and the launch hash; only allow writes the
+      store. Accepted only for what provides.mcp[].config declares
+      (validateMcpUserConfig) and an absolute command; a store entry failing
+      the checks falls back to the manifest launch. Fail closed (Aegis S2):
+      a server whose RESOLVED command is not absolute (isAbsoluteCommand:
+      POSIX /… or a Windows drive path; // and UNC refused) is never added
+      (skipped needs-config, daemon diag daemon.desk.mcp.unconfigured with
+      the gnomon mod config hint); both shipped first-party defaults fail it
+      until configured. S0b regression fix: the session base is the repo's
+      VERIFIED GENERATED distro mcp.json (.gnomon/generated/.mcp.json, named
+      gm_<pub>_<distro> by renderGenerated) and is passed as opts.distro /
+      repoServersOnly(repo, distro): kernel output, so it bypasses the
+      reserved-prefix drop that still applies to repo-authored names; a mod
+      deriving the same name wins it (PassthroughResult.shadowed, diag
+      mcp.distro-shadowed) and a distro server is never in `added` (H1/H1b
+      intact). Names come from ONE helper, serverNameOf: an entry
+      named <mod> or gnomon-<mod> is gnomon-<mod>, else gnomon-<mod>-<entry>
+      (gnomon-neurons-brain); #offer-router's kept check uses the same helper.
+      Aegis S1 fixes: repo servers named with a reserved desk prefix
+      (RESERVED_DESK_PREFIXES gnomon-, gm_, gx_) are dropped (diag
+      mcp.reserved); the daemon records the servers added per hsid and the
+      router offers and counts kept only through them; no desk server before
+      the router is bound (mcp.unbound); per added server a diag mcp.added
+      {server, launchHash, overridden}; launchHashOf is an HMAC under the
+      kernel key <home>/desk/launch-hash.key; overrides refuse secret-marked
+      env names (manifest provides.mcp[].config.secret), non-.exe commands on
+      win32 and args the card would truncate (MCP_CARD_ARGS_MAX); the card
+      says env values land in the session's mcp.json and labels the requester
+      "a request file under the Gnomon home".
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mcp, mod-playbooks, paradigm-8]
+    tests:
+      - test/mcp-passthrough.test.ts
+    oracles: [G-DSK-05]
+  mcp-servers:
+    description: >-
+      #mcp-servers (T-2026-10-23-003): the human's own MCP servers and the
+      first-party Paradigm MCP in Gnomon sessions, still under
+      --strict-mcp-config. src/kernel/desk/mcp-servers.ts discovers the
+      servers Claude Code would load (~/.claude.json user + projects map,
+      the repo .mcp.json, enabled user-scope plugins' plugin.json/.mcp.json
+      with the root realpath'd inside ~/.claude/plugins), classifies each
+      (problems: name, law-7, env-name, remote, command, plugin-path, args,
+      transport, first-party; flags: shell wrapper, fetch-at-launch), shows
+      rows with NAMES only (env, header, ${NAME} refs; secret-looking args
+      hidden; URL without query), hashes each declaration with an HMAC under
+      the kernel launch key, resolves the first-party @a-company/paradigm
+      (paradigm-mcp bin inside the package) and composes a session's set
+      (first party, then enabled servers whose hash still matches; ${NAME}
+      values from ~/.gnomon/loop-env; missing ⇒ skipped env-missing).
+      src/kernel/desk/mcp-server-cards.ts McpServers: the store
+      <home>/desk/mcp-servers.json (0600), request.mcp.enable raising ONE
+      grant card (detail.action mcp.enable; root class, hand-only, never
+      standing; prepare refuses a changed declaration), request.mcp.disable
+      and the first-party on/off with no card, status.mcp (names only),
+      the per-session compose and the first-party write-denies
+      (SupervisorOptions.mcpDenyWrite). A repo .mcp.json or local server is
+      turned on for its own repo only. Windows: rows yes, enabling refused
+      (root key). Every server runs inside the session sandbox (no nested
+      SBPL, measured); the card names the host and says it has the
+      session's network.
+      TD-2026-10-23-361 (Aegis review, founder rulings): H1 the human's own
+      ~/.claude/settings*.json allow rules for a server's mcp__ tools are
+      honoured and NAMED (autoAllowRules) on the card, the row and the
+      Paradigm row; Gnomon adds none. M3 the first party runs live from its
+      resolved path, unpinned, linked shown (accepted residual: a session in
+      a linked checkout can change the next session's Paradigm MCP, which
+      runs under the same profile); every enabled `all` server's command and
+      absolute args are write-denied in sessions, inside-roots exempt and
+      logged (mcp.deny.skipped). M1 ${NAME} only in URL path and query (a
+      loopback port excepted), placeholders shown, the expanded URL
+      re-checked at compose. M2 law-7 references refused. L1 repo .mcp.json
+      symlink / hard link / outside-repo refused. L2 secret NAME=value and
+      short-flag values hidden. L3 inline code flagged. L5 mcp.user.added
+      after the merge (noteMerged).
+      #batch-card (founder 2026-10-23: "grouped cards of related things,
+      one password"): request.mcp.enable{servers:[{id, scope, repo?}]}
+      turns 1..MCP_ENABLE_MAX (16) servers on with ONE grant card
+      (detail.servers[], rootRows []) and one fresh presence; each server is
+      its own fenced field block (mcpBatchCardLines: what runs or where it
+      connects, env and header names, takes-from, auto-allow rules, launch
+      hash). Everything is validated first (servers[i] named in the
+      refusal; nothing raised); over the count cap or MAX_CARD_CHARS
+      (measured after wrapping, maxCardChars for tests) refused, never cut.
+      A server already on is left out (unchanged); a batch overlapping a
+      waiting card is refused (card-pending), the same batch again returns
+      its card. At allow each launch hash is checked again: a changed server
+      is skipped and reported (status.mcp.skipped, mcp.user.skipped-changed);
+      when every server changed, prepare refuses before the presence prompt.
+      A single {id, scope} is a batch of one with its one-server card.
+      Turning off stays immediate with no card. status.mcp.max names the cap.
+      Aegis Lows (2026-10-23): L1 skips kept per cardId (status.mcp.skips,
+      newest last, at most MCP_SKIPS_KEPT 16, each with on[] and the deciding
+      connId; status.mcp.skipped stays the newest), the event carries connId;
+      L2 permission.ts fieldLines splits on every line break (\r\n, \n, \r,
+      \v, \f, U+0085, U+2028, U+2029) so no line escapes a fence; L3 every
+      enable card, one server too, carries the wrapped block (never cut).
+      TD-2026-10-27-833 (staged Paradigm): LOCAL_MCP_SOURCES is first-party,
+      user, plugin; composeLocal gives the first-party Paradigm MCP only from a
+      verified staged pin (#paradigm-stage: autoStage for an npm-global
+      install, then verifyStaged), else a refused pin-mismatch entry and the
+      daemon.desk event mcp.first-party.pin-mismatch. request.mcp.paradigm.stage
+      {preview?} (human, gui/device; dispatcher-only, no row) stages the
+      install now (the only way a linked checkout is staged) and replies with
+      source, version, sourceKind, git dirty, treeSha256. status.mcp.firstParty
+      gains staged (the pin and its dir) and pinMismatch (the last
+      verification's why, or 'no pin'); a GUI card is C6'.
+      Per-server trust (TD-2026-10-27-833 slice C5'a1, G-LCL-23): how much a
+      LOCAL session believes a user or plugin server's own tool labels lives
+      in KERNEL-signed tool.trust{id, label, op set|cleared|dropped, binding,
+      why, launchHash?, toolsHash?} rows folded by TrustBook
+      (src/kernel/local/trust-book.ts), never in mcp-servers.json:
+      composeLocal no longer reads the store's old trust field and the next
+      write drops it. request.mcp.trust{id, op preview|commit|clear, token?}
+      (human, gui/device, dispatch kind list): preview reads the newest
+      listing of the server in this daemon run (listedOf over the daemon's
+      McpListCache; none: not-listed) and answers the trust notice, the tools
+      that would run with no card and a single-use 60 s token bound to
+      (principal, id, launchHash, toolsHash); commit re-checks token, listing
+      and declaration, then (Aegis H1, founder: trusting always needs a fresh
+      press) raises ONE grant card, detail.action 'mcp.trust' binding {id,
+      launchHash, toolsHash, reads}: root key and a fresh presence,
+      hand-only, never standing, never voice; prepare and effect check the
+      listing again, and only an allow writes the set row; clear needs no
+      token. Aegis L3: at daemon start reconcileTrust drops again (why
+      disabled) any trusted id that is on nowhere.
+      Refused (MCP_TRUST_REFUSALS): platform (win32), first-party,
+      not-local, remote, fetches, remote-proxy, problem, bad-id,
+      not-enabled, not-listed, changed. Turning a server off everywhere drops
+      its trust (why disabled). status.mcp server rows gain trust{level
+      untrusted|trusted, why, since?}; firstParty.trust is first-party. GUI is
+      C5'b. Slice C5'a2 (Aegis hardening, G-LCL-22): ONE open trust card per
+      server id (#trustCards); a repeat commit with a live token returns the
+      open card's cardId and raises nothing, like enable's #pending. Always
+      rules for brokered tools (^local-tool-grant) are #local-tool-broker and
+      #always-rules.
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
+    signals: ['!mcp-server-enabled', '!mcp-server-disabled']
+    gates: ['^mcp-server-enable']
+    tests:
+      - test/mcp-servers.test.ts
+      - test/mcp-servers-sandbox.test.ts
+      - test/mcp-trust-request.test.ts
+      - test/local-trust.test.ts
+    oracles: [G-MCP-01, G-MCP-02, G-MCP-03, G-MCP-04, G-MCP-05, G-MCP-06, G-MCP-07, G-LCL-22, G-LCL-23]

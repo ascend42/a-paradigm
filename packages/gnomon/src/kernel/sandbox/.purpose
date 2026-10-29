@@ -1,0 +1,51 @@
+version: "2.0"
+name: gnomon-kernel-sandbox
+description: >-
+  The kernel sandbox profiles (darwin sandbox-exec) for what it spawns: the
+  gnomon-web transport (transport.ts), sessions, mods, loop checks and loop acts
+  (session.ts, mod.ts, loop-check.ts, loop-act.ts).
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  oracle-sandbox:
+    description: >-
+      #oracle-sandbox (spec §15.5) — the kernel's sandbox profiles. M1.4
+      lands the `transport` profile for gnomon-web (src/kernel/sandbox/
+      transport.ts): profile data, the darwin sandbox-exec SBPL generator
+      (default-deny; read of `/`, /usr/lib, /System/Library, the node binary
+      and its install's lib/ — never the prefix — plus Homebrew's Cellar, opt
+      and etc/openssl@3; refused `sandbox-unavailable` if any granted read
+      subpath equals or contains $HOME, the gnomon home or its keys dir
+      (Aegis C2);
+      the child's entry dir and package.json ancestors, the pinned bundle;
+      metadata of their ancestors; sysctl-read; exec of node only; NO
+      network-* rule at all (no bind, no inbound, no outbound — the kernel
+      listens and hands connected sockets over the IPC channel,
+      T-2026-10-18-020); no fork, no write, no mach-lookup; every path
+      realpath'd; env empty; TRANSPORT_PROFILE v2). Platform registry TRANSPORT_BACKENDS
+      (G-WIN-05): darwin only; win32 is the Windows parity phase (P8-D78);
+      any platform without a backend refuses `sandbox-unavailable` (fail
+      closed). Residuals: ancestor metadata is visible; node may re-exec
+      itself; the child reads and writes the sockets it is handed.
+      T-2026-10-18-017 (measured): SBPL accepts only `*` or `localhost` as a
+      network host, and `(local ip "localhost:*")` matches every address
+      configured on this host's interfaces (LAN and wildcards included), so
+      no listen rule can be loopback-only. T-2026-10-18-020 (Aegis ruling)
+      therefore removed every network-* rule: the kernel listens on 127.0.0.1
+      and passes the CONNECTED socket (never the listening fd, whose listen()
+      would be re-checked). Falsifiers in web-sandbox.test.ts: every child
+      bind/listen/UDP/outbound/unix attempt EPERM against an unsandboxed
+      control; a handed socket serves HTTP + a WebSocket round trip; the en0
+      address at the endpoint port is refused; the SBPL names no network
+      rule. The T-017 loopback-listen retry is gone (nothing left to flake).
+      The other seven profiles land with their milestones (session M1.7,
+      oracle M2.3, …).
+    path: src/kernel/sandbox/
+    type: module
+    tags: [gnomon, kernel, sandbox, paradigm-8, m1-4]
+    tests:
+      - test/web-sandbox.test.ts
+      - test/web-units.test.ts
+    oracles: [G-WEB-07]

@@ -158,6 +158,8 @@ export interface SessionPolicy {
   allowWriteRefused?: string;
   /** why the session-env carve-back was withheld (fail closed: no allow), when `claudeSessionEnv` asked for it */
   sessionEnvRefused?: string;
+  /** TD-2026-10-27-833: why the mcpStateDir carve-back was withheld */
+  mcpStateRefused?: string;
   /** outbound loopback connects refused to these ports (the web endpoint) */
   denyLoopbackPorts: number[];
   /** process-info on every process but self (process-info*, sysctl process lists, the sysmond lookup on macOS) */
@@ -254,6 +256,15 @@ export interface SessionPolicyInput {
   kernelWorktrees?: boolean;
   /** T-2026-10-23-004 / Aegis round 2 M1: the session's TMPDIR — only its own realpath is writable (a Gnomon-made dir for a Claude session) */
   tmpdir?: string;
+  /**
+   * TD-2026-10-27-833: the first-party Paradigm MCP's own profile only — its per-session global dir
+   * `<home>/sessions/<x>-pg` (kernel-made, empty at open, removed at exit) is carved back WRITABLE after the home
+   * deny (literal re-denied: never removed, renamed or swapped). Any other path (or a realpath elsewhere) is withheld
+   * (mcpStateRefused) and the server then cannot write its global state.
+   */
+  mcpStateDir?: string;
+  /** TD-2026-10-27-833: extra READ denies (the staged Paradigm's profile: the user's real ~/.paradigm, ~/.conductor) */
+  extraDenyRead?: readonly PolicyPath[];
   /** Aegis round 2 H: the session's Gnomon-made tool cache dir (SESSION_CACHE_ENV); writable */
   sessionCache?: string;
   /**
@@ -323,7 +334,12 @@ function within(p: string, root: string): boolean {
 }
 
 /** The only top-level home entries a session may be granted a read under (one level below them, never the root itself). */
-export const HOME_READABLE_ROOTS = Object.freeze(['sessions', 'bin', 'runners']);
+/** TD-2026-10-27-833: `mcp/<…>` holds the staged first-party Paradigm MCP (read by its own server's profile only). */
+export const HOME_READABLE_ROOTS = Object.freeze(['sessions', 'bin', 'runners', 'mcp']);
+/** TD-2026-10-27-833: the name of a session's first-party MCP state dir (`<home>/sessions/<name>`). */
+export const MCP_STATE_DIR_RE = /^[A-Za-z0-9]{1,64}-pg$/;
+/** #paradigm-stage stagedDirName: `<safe version>-<treeSha256[:12]>`. */
+export const STAGED_PARADIGM_DIR_RE = /^[A-Za-z0-9._-]{1,64}-[0-9a-f]{12}$/;
 
 /** The kernel log files inside the home (spec §3.2; kernel-log.ts ACTIVE_DB + SEGMENTS_DIR): read-denied by name too. */
 export const KERNEL_LOG_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }> = Object.freeze([
@@ -497,7 +513,9 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     const real = realpathLoose(a.path);
     const rel = path.relative(homeReal, real);
     const parts = rel.split(path.sep);
-    if (!rel || path.isAbsolute(rel) || parts[0] === '..' || parts.length < 2 || !HOME_READABLE_ROOTS.includes(parts[0]!) || parts.some((x) => x === '' || x === '.' || x === '..')) {
+    // Aegis (staged Paradigm, low): `mcp/` is readable ONLY as mcp/first-party/paradigm/<version>-<treeSha12>[/…]
+    const mcpBad = parts[0] === 'mcp' && !(parts.length >= 4 && parts[1] === 'first-party' && parts[2] === 'paradigm' && STAGED_PARADIGM_DIR_RE.test(parts[3]!));
+    if (!rel || path.isAbsolute(rel) || parts[0] === '..' || parts.length < 2 || !HOME_READABLE_ROOTS.includes(parts[0]!) || mcpBad || parts.some((x) => x === '' || x === '.' || x === '..')) {
       throw new TypeError(`#manifest-loader: a session may read only inside ${HOME_READABLE_ROOTS.map((r) => `${r}/<x>`).join(', ')} of the Gnomon home (got ${JSON.stringify(rel)})`);
     }
     allowRead.push({ path: real, match: a.match, class: 'gnomon-home' });
@@ -557,6 +575,15 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     return undefined;
   };
   const allowWriteRefused = inp.claudeTranscripts ? carve(CLAUDE_TRANSCRIPTS_REL, 'transcripts', 'transcript') : undefined;
+  // TD-2026-10-27-833: the staged Paradigm server's per-session global dir (strict shape; realpath must be exactly it)
+  let mcpStateRefused: string | undefined;
+  if (inp.mcpStateDir !== undefined) {
+    const want = path.join(homeReal, 'sessions', path.basename(inp.mcpStateDir));
+    const real = realpathLoose(inp.mcpStateDir);
+    if (!MCP_STATE_DIR_RE.test(path.basename(inp.mcpStateDir))) mcpStateRefused = 'the MCP state dir name is not <x>-pg';
+    else if (real !== want) mcpStateRefused = `the MCP state dir resolves outside <home>/sessions (${real})`;
+    else allowWrite.push({ path: real, match: 'subpath', class: 'cache' });
+  }
   // Aegis round 3 M: this session's own Claude Code temp subtree (a strict uuid; each cwd as Claude Code encodes it)
   if (claudeTmpRoot && SESSION_UUID_RE.test(inp.claudeTmp!.uuid)) {
     for (const c of new Set(inp.claudeTmp!.cwds)) allowWrite.push({ path: path.join(claudeTmpRoot, c.replace(/[^A-Za-z0-9]/g, '-'), inp.claudeTmp!.uuid), match: 'subpath', class: 'temp' });
@@ -590,7 +617,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   return {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
-    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home'), ...(inp.userHome ? CREDENTIAL_READ_DENY.map((c) => P(path.join(inp.userHome!, ...c.rel.split('/')), c.match, 'keys')) : []), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : [])]),
+    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home'), ...(inp.userHome ? CREDENTIAL_READ_DENY.map((c) => P(path.join(inp.userHome!, ...c.rel.split('/')), c.match, 'keys')) : []), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : []), ...(inp.extraDenyRead ?? [])]),
     allowRead: uniq(allowRead),
     allowReadMetadata: uniq([...meta].map((m) => ({ path: m, match: 'literal' as const, class: 'gnomon-home' as const }))),
     denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog]),
@@ -600,6 +627,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     writeAllow,
     ...(allowWriteRefused ? { allowWriteRefused } : {}),
     ...(sessionEnvRefused ? { sessionEnvRefused } : {}),
+    ...(mcpStateRefused ? { mcpStateRefused } : {}),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],
     processInfo: 'deny-others',
     launchers: 'deny',

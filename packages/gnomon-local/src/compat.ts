@@ -67,11 +67,26 @@ export interface RequestInput {
   thinking?: boolean;
 }
 
-/** The compact surface: names + one-line descriptions, argument schemas reduced to property names and types. */
+/**
+ * Slice B1: the FIXED order tools are offered in (every surface, native schema and text-tool prompt alike), so the
+ * request prefix is stable across turns and sessions; a name outside it sorts last, in its given order.
+ */
+export const TOOL_ORDER: readonly string[] = Object.freeze(['list_dir', 'read_file', 'read_section', 'grep', 'outline', 'edit', 'write_file']);
+
+/** `tools` in TOOL_ORDER (stable for names outside it). */
+export function orderTools<T extends { name: string }>(tools: readonly T[]): T[] {
+  const rank = (n: string): number => {
+    const i = TOOL_ORDER.indexOf(n);
+    return i < 0 ? TOOL_ORDER.length : i;
+  };
+  return tools.map((t, i) => ({ t, i })).sort((x, y) => rank(x.t.name) - rank(y.t.name) || x.i - y.i).map((x) => x.t);
+}
+
+/** The compact surface: names + one-line descriptions (the first 120 chars), argument schemas reduced to property names and types. */
 export function surfaceTools(tools: readonly ToolSpec[], surface: ToolSurface): ToolSpec[] {
   if (surface === 'none') return [];
-  if (surface === 'full') return tools.map((t) => ({ ...t }));
-  return tools.map((t) => {
+  if (surface === 'full') return orderTools(tools).map((t) => ({ ...t }));
+  return orderTools(tools).map((t) => {
     const props = (t.parameters.properties ?? {}) as Record<string, { type?: string }>;
     const compact: Record<string, { type: string }> = {};
     for (const [k, v] of Object.entries(props)) compact[k] = { type: typeof v?.type === 'string' ? v.type : 'string' };

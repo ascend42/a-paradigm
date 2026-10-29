@@ -1,0 +1,106 @@
+version: "2.0"
+name: gnomon-kernel-lifecycle
+description: >-
+  The daemon lifecycle: home and pidfile, ready and exit codes, children, idle
+  stop, successor hand-off, the build stamp and self-update watch, the app
+  bundle and app zip, and the release pins the kernel checks against.
+context:
+  - >-
+    daemon.ts, home.ts, pidfile.ts, ready.ts and successor.ts carry the
+    $daemon-lifecycle flow (declared in packages/gnomon/.purpose).
+  - >-
+    build-stamp.ts and update-watch.ts pick up a new build; app-bundle.ts,
+    app-zip.ts and release-pins.ts check the shipped app.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  update-watch:
+    description: >-
+      #update-watch (TD-2026-10-19-063, flow 2) — self-update pickup. The
+      build writes dist/build-id.json {version, commit, distHash,
+      guiBundleHash} (scripts/build-stamp.mjs); at boot the kernel writes
+      <home>/kernel-build.json (0600) with what it loaded
+      (lifecycle/build-stamp.ts). lifecycle/update-watch.ts polls the stamp on
+      the configured cadence UPDATE_POLL_MS (30 s) and, once per distinct new
+      stamp, the kernel raises its OWN daemon-stop{reason:'upgrade'} card
+      (broker/daemon-stop.ts raiseUpgrade, UPGRADE_CARD_TIMEOUT_MS 24 h,
+      first line "Gnomon was updated: v→v′ (commit)"; at most one per
+      UPGRADE_CARD_COOLDOWN_MS 1 h per kernel (Aegis L); it shares the one-card
+      slot with a launcher's daemon.stop{reason:'upgrade'}). Accept takes one
+      Touch ID (F3), drains (§2.4 rule 11), releases the lock and socket, and
+      runForeground spawns ONE detached successor (lifecycle/successor.ts:
+      reexecArgs + cleanReexecEnv + --prefer-port <old web port>, 127.0.0.1
+      only, exclusive; a taken port falls back and status reports
+      web.portFallback). The helper binary is watched on the same tick
+      (identity/helper.ts HelperRepin): changed + nothing in flight ⇒ re-pinned
+      through pinHelper and `serve` recycled, no card; unsigned, unverifiable
+      or not holding this identity's keys ⇒ fail closed.
+    tags: [kernel, lifecycle]
+    signals: ["!daemon-update-detected"]
+  release-pins:
+    description: >-
+      #release-pins (T-2026-10-21-028, TD-2026-10-21-758 zero-build, G-HLP-01;
+      Aegis M1 review) — the exact native bytes THIS kernel build accepts,
+      COMPILED INTO THE BUNDLE. npm run build:release (scripts/build-release.mjs):
+      tsup (dev pass) → scripts/write-release-manifest.mjs (release-manifest:v1
+      from the signed GnomonHelper.app / GnomonVoiceIO.app executables: name,
+      --version ≥ the kernel floor, sha256, the requirement the kernel enforces
+      checked with codesign -R, arch via lipo) → tsup again with
+      GNOMON_RELEASE_MANIFEST, so tsup.config.ts defines __GNOMON_RELEASE__ and
+      __GNOMON_RELEASE_MANIFEST__ → build-stamp.mjs (copies the manifest into
+      the stamp for status only). lifecycle/release-pins.ts reads ONLY the
+      compiled values: release ⇒ identity/helper.ts pinHelper and
+      voice/voice-install.ts (install and recheckVoiceApp right before the
+      spawn) require the pinned sha256 for this arch on top of the signature
+      and version floor ('checksum'); a release with a missing or invalid
+      compiled manifest is broken (every pin refused); deleting or editing the
+      stamp, loading dist/index.js or copying dist never makes it dev. Not a
+      release ⇒ dev (signature + version floor only). The daemon records the
+      mode in <home>/kernel-build.json; `gnomon daemon status` reports build:
+      release | dev | broken; the setup helper row says which.
+    path: src/kernel/lifecycle/release-pins.ts
+    type: module
+    tags: [kernel, lifecycle, release, security]
+    related: ["#identity", "#gnomon-voice", "#update-watch", "#setup-preflight"]
+    tests:
+      - test/release-pins.test.ts
+      - test/daemon-lifecycle.test.ts
+  app-bundle:
+    description: >-
+      #app-bundle (T-2026-10-21-029, TD-2026-10-21-758 zero-build; 8.0 M2) —
+      where a kernel running from a release Gnomon.app finds its siblings,
+      derived from its OWN file's realpath at run time (never recorded), so a
+      moved or copied app (M4: ~/Applications) still works. Layout:
+      <X>.app/Contents/Resources/kernel (this kernel), Resources/node/bin/node
+      (the bundled node: the wrapper spawns the kernel with it, so
+      process.execPath and every child — gnomon-web, mods, the voice client,
+      the model fetch, successors — use it, never PATH node),
+      Resources/gnomon-voice (the voice client + sherpa), Helpers/GnomonHelper.app,
+      Helpers/GnomonVoiceIO.app. appBundleOf(from) is null outside a bundle,
+      where every caller keeps its monorepo / node_modules lookup. In a bundle:
+      defaultHelperPath and helperPathFor (identity-cli, provision.ts
+      openHardwareIdentity, setup-cli and setup-endpoint completeDevice) use the
+      app's own helper over a recorded identity.json path (stale after a move);
+      resolveVoiceClientEntry looks ONLY in Resources/gnomon-voice (never walks
+      above the app); voiceIoSourceApp copies voice-io from Helpers. Trust is
+      unchanged: requirement + release sha256 pin (#release-pins), never path.
+      appInstallDir (M4's one install-location choice): /Applications when
+      writable without sudo, else ~/Applications (App Management protection).
+      8.0 M4 (T-2026-10-21-031): Resources/gnomon-mods (AppBundle.mods,
+      BUNDLE_MODS_REL) is the first-party mods catalog; inside a bundle
+      mods-admin findFirstPartyRoot reads ONLY it (null when absent, never
+      walks out of the app). openHardwareIdentity takes `from` and `pins`
+      (test seams) and HelperRepin `pins`: a running release kernel whose app
+      was replaced in place refuses the newer helper (its compiled pin names
+      the old sha256) until restart; the identity (SE keys bound to the
+      helper's access group, never its path) survives a move, a replace and a
+      raised helper floor (test/app-upgrade-identity.test.ts). The paradigm
+      shim (#gnomon-app-installer) mirrors appInstallDir in plain JS.
+    path: src/kernel/lifecycle/app-bundle.ts
+    type: module
+    tags: [kernel, lifecycle, release, distribution]
+    related: ["#release-pins", "#release-darwin", "#identity", "#gnomon-voice", "#gnomon-wrapper", "#mods-admin", "#gnomon-app-installer"]
+    tests:
+      - test/app-bundle.test.ts
+      - test/app-upgrade-identity.test.ts

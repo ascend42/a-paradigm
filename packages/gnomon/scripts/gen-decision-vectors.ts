@@ -70,7 +70,13 @@ add('C3: an install capability row never names a device', A, batch('install', 'i
 add('C3: the publisher row names another publisher', A, batch('install', 'install', [pub({ publisher: 'other' }), inst()]));
 add('C3: an uninstall never signs a grant.install', [presence], batch('uninstall', 'allow', [inst()]));
 add('C3: a mod.mcp.config decision signs no grant row', [approve(C, 'allow'), presence], batch('mod.mcp.config', 'allow', [trust()]));
-add('C3: an unknown card kind', [approve(C, 'allow'), presence], batch('permission', 'allow', []));
+add('C3: an unknown card kind', [approve(C, 'allow'), presence], batch('budget', 'allow', []));
+// 8.0:local-lane C6'a2-h (helper 1.10.0, G-HLP-02): a destructive brokered Always signs its decision row only
+// Aegis a2-h nit: the tool broker raises the permission card with no presence override, so its purpose is the
+// broker's default `approval.decide` (broker.ts r.presence?.purpose ?? 'approval.decide'), never mod.install
+const presenceDecide = 'gnomon:presence:v1\napproval.decide\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge';
+add('C3: a permission decision signs only its decision row', [approve(C, 'always'), presenceDecide], batch('permission', 'always', []));
+add('C3: a permission decision never signs a grant row', [approve(C, 'always'), presenceDecide], batch('permission', 'always', [trust()]));
 add('F3: a voice enrolment row without a cardId is refused', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: undefined })]));
 add('C3: a voice enrolment for another card', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: C2 })]));
 add('C2: egress hosts that do not fit the line are refused, never truncated', A, batch('install', 'install', [trust(), egress({ hosts: Array.from({ length: 30 }, (_, i) => `h${i}-${'y'.repeat(40)}.example.com`) }), inst()]));
@@ -142,7 +148,7 @@ add('C3: a loops flag that is not a boolean', LA, batch('local.config', 'allow',
 add('C2: a model with a control character cannot be shown', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ model: 'qwen\u0007' })] })]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
-  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
+  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
   vectors: v,
 };
 writeFileSync(process.argv[2]!, JSON.stringify(out, null, 2) + '\n');

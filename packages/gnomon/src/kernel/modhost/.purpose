@@ -1,0 +1,196 @@
+version: "2.0"
+name: gnomon-kernel-modhost
+description: >-
+  The mod host: runs installed mods as kernel children (host.ts, channel.ts,
+  bridge.ts), their feed and fold, effects, egress proxy and state, the paradigm
+  slice, and the GUI Mods panel admin (mods-admin.ts).
+context:
+  - >-
+    The CLI half of mod install (#mod-cli) lives in src/cli/.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  mods-admin:
+    description: >-
+      #mods-admin (the GUI Mods panel's kernel half; founder dogfood
+      2026-10-21). src/kernel/modhost/mods-admin.ts: status() merges
+      installed / available / catalog into the human class's status.mods
+      (pin, tier, source, version, run state, MCP server, offers, Desk counts,
+      a shipped first-party tree that is not the pin = update; available =
+      packages/gnomon-mods beside the kernel, findFirstPartyRoot, tier by
+      hash). request() serves request.mod.install{source:'folder', path}
+      (the A8 contracts kind, written as a row) and the dispatcher-only
+      request.mod.link|pause|start|uninstall|config, each exactly its
+      `gnomon mod` verb (stageInstall, writePause, requestStart,
+      requestUninstall, requestMcpConfig), human on a gui/device connection
+      only; then StagedCardPickup / McpConfigCards scan at once so the card
+      is in the stack before the answer. Signs nothing. A URL source is
+      refused UNSUPPORTED (slice S4). 8.0 M4: in a release Gnomon.app the
+      catalog is ONLY the app's Contents/Resources/gnomon-mods (#app-bundle;
+      never a folder beside the app); elsewhere the nearest gnomon-mods above
+      the module (clone, npm package).
+    tags: [mods, gui]
+    signals: []
+    tests:
+      - test/mods-admin.test.ts
+      - test/socket-abi.test.ts
+      - test/app-bundle.test.ts
+  mod-host:
+    description: >-
+      TD-2026-10-20-514: the uninstall card shows its grant.uninstall row in
+      detail.rootRows, prepares it (pin still effective) and commits it via
+      appendSignedGrantRows: ONE presence; a dropped request expires the card.
+      S0b (Aegis L1): status.mods.publishers maps each RUNNING mod id to its
+      publisher display {host, verified} (publisherDisplayOf(publisher, source)
+      from the install row's source), so GUI panel headers and offer chips render
+      'name (pub @ host)' or 'name (pub, unverified)'. A status sub-field: not in
+      STATUS_RESERVED_FIELDS, so clientApiId does not move.
+      #mod-host (spec §3.8, §12.1-§12.3, §15.5 row mod; §19.1 M1.11 slice 1)
+      in src/kernel/modhost/. host.ts ModHost - one child per mod, started
+      ONLY via #manifest-loader loadMod (root-signed grant.install, snapshot
+      integrity, manifestHash, grants; a changed linked folder pauses and
+      stages the re-approve card instead of loading, G-MOD-08); effects in
+      force = union of tool effects, capped at read while grant.install{dev}
+      is live, an expired dev period pauses (mod.dev.expired, fail closed);
+      spawns node <index.mjs|index.js> from the pinned snapshot under the
+      default-deny mod profile (sandbox/mod.ts registry +
+      platform/darwin/mod-sbpl.ts; same floor as sessions: macOS 15+ and SIP;
+      other platforms refuse sandbox-unavailable), env GNOMON_MOD_NAME +
+      GNOMON_EGRESS_PROXY only; tracked by DaemonChildren kind mod IN MEMORY
+      (no mod.spawned/mod.exited kind: adding one moves clientApiId);
+      init must echo mod-abi:v1 and MOD_ABI_ID. channel.ts - JSON-RPC 2.0
+      NDJSON over stdio (1 MiB frames, stderr tail). Calls serialized per mod
+      so mod->host requests are attributed exactly; effects.ts enforces
+      state.get=read, state.set=write, kernel.call by verb (approve never,
+      log.append only own declared modns, session.send only inside a tool
+      call with the caller hsid) => FORBIDDEN + mod.effect.refused. Timeout =>
+      cancel{cancelToken}, unhonoured => restart; crash => mod.health{ok:false}
+      + restart (cap 3/10 min). block.ts closed kit:v1 gate (256 KiB / 2000
+      nodes, sanitizeLine, Button command id only, Image alt + sha256 blob,
+      Canvas names a ds; S5: Text may carry a `cap`, the closed contracts
+      shape {shape, hue 0..5, filled, state, label <=40} checked by checkCap,
+      any other field refused, label sanitized; kitId/modAbiId/clientApiId do
+      not move). relayView/relayCommand stamp relayedFor from the
+      caller. egress-proxy.ts per-mod loopback CONNECT proxy (443 only;
+      granted declared hosts; IP literals, private names, Anthropic hosts,
+      private resolutions and calls lacking network refused). state.ts
+      per-mod KV <home>/mods/<name>/state.db (sibling of state/, never granted; O_NOFOLLOW reads, random O_EXCL tmp; JSON in slice 1). Round 2 (Aegis): state/ and blobs/ must be real dirs at their expected paths before every profile build; tunnels closed at call end; proxy head deadline, connection cap, idle timeout, resolve-check-connect, wider non-public ranges; explicit verb-effect table; session.send pinned to the caller hsid, permitId stripped; channel caps in-flight mod requests at 16 with backpressure.
+      Test seams (unsandboxed launcher, egress dialer) only via
+      kernel/testing.ts createModHostForTest. SLICE 2: call-id binding
+      (host mints callId on view.render/command.run/tool.call, the SDK echoes
+      it on state.get/state.set/kernel.call; a foreign or ended callId is
+      FORBIDDEN modCode CALL + mod.effect.refused{why:call-id}; none = idle;
+      modAbiId moved 00ae702b -> 7aaf92f4, clientApiId unchanged);
+      bridge.ts createModKernelCall (log.append own modns clamped to
+      kind/payload<=16 KiB/audience/sensitivity, Aegis C2, appended under the
+      mod principal; every other verb via dispatcher.callAs as a
+      connection-less mod principal) and createModRelayPort (mod.view /
+      mod.command start the mod on first use; relayedFor stamped by the
+      dispatcher from the caller connection; GUI mod.command refused until a
+      gesture proof, M1.10); startDaemon constructs the host, status.mods +
+      status.modAbiId, stopAll before the children sweep at every exit;
+      folder watch on a running linked mod (fs.watch recursive, .git
+      ignored, 500 ms debounce => stop{changed} + loadMod pause + re-approve
+      card). Round 2 (review + Aegis): own-modns appends go as:'userland'
+      under the mod principal, kernel-key-signed as an attestation
+      (attributed by principal, never keyId; spec §3.2 L7); relay admission
+      ModHost.admit (name/id shapes refused BAD_REQUEST in dispatch; an
+      uninstalled name NOT_INSTALLED with manifest.refuse folded past 8 per
+      10 s; paused answered from memory; relay starts count against
+      RESTART_CAP; DOWN until an operator start); per-mod append budget (20
+      rows/s, 64 KiB per call) and 8 mod->host requests in flight per mod;
+      status.mods full to the human class only, counts otherwise; watcher
+      unarmed on exit/timeout/pause/cap and re-armed on a successful start;
+      a lost mod.paused / mod.effect.refused row surfaces as
+      daemon.mod.row.unrecorded. Round 3 (Aegis R2-1/R2-2): fold.ts RowFold -
+      mod.effect.refused (per mod, keyed effect|why|verb, verb clipped) and
+      relay-miss manifest.refuse rows: 8 individual per 10 s window, the rest
+      one coalesced row on the timer / next window / stop / stopAll, at most
+      16 keys + other<Field>s + distinct (exact to 1024, then distinctCapped);
+      the bridge drops a call's byte tally on the host's onCallEnd and prunes
+      past idle seconds (never a wholesale clear); kernel-side refusals reach
+      a mod as code + reason only (generic message, no wrapped data).
+      Slice 3: the gnomon mod CLI and its control surface (#mod-cli, below);
+      a <home>/mods/<name>/paused marker makes every start return
+      paused{why:user}. feed.ts: ModHost.feed (startDaemon queues committed
+      rows, bounded 4096, and feeds only rows at or below the log's released
+      head; turn.partial coalesced to one edge per hsid; ModChannel.notify
+      drops past 256 KiB unread stdin, counted in inspect
+      droppedNotifications) forwards a fixed projection of session.open/exited,
+      turn.partial/result, approval.request/decide/expire and warpline.knot
+      (kernel fields only; project = a hue index from sha256(cwd)) to running
+      mods requiring log.read - the #workshop-mod input. The feed starts
+      from the state in force (founder report 2026-10-23, "working 0 of 0"
+      beside "1 live"): ModHostOptions.feedBacklog, after a log.read mod's
+      init, replays through the same projection, to that mod only, the
+      rows feed.ts FeedBacklog folds from this boot (FEED_BACKLOG_KINDS
+      from this boot's daemon.start: each live session's session.open,
+      warpline.knot and open turn.partial, each pending approval.request,
+      each mod.paused not cleared by mod.health ok; bounded 256/256/64).
+      Aegis review 2026-10-23: startDaemon keeps ONE FeedBacklog
+      (requireBoot) that flushFeed feeds as rows are released, before
+      mods.feed, so a prime is O(state) with no disk read; nothing is primed
+      until this boot's daemon.start is released; a queue overflow marks it
+      stale and the next prime resyncs with a log.read bounded to
+      fromSeq = bootSeq. feed() skips a mod until its prime is done
+      (Running.primed), so rows released during init arrive once, inside the
+      backlog, in order; #primeFeed refuses a stopping or replaced runner.
+      Tests: test/workshop-mod.test.ts. Projection v2
+      (#ledger-mod input; Aegis M1: ONLY to mods granted the narrower
+      log.read:usage capability, named on the install card; log.read alone
+      gets v1 and turn.result as {hsid}; feedAccessOf/feedReaches; a
+      local-tier manifest may not combine log.read:usage with egress,
+      #manifest-loader validateManifest) adds NUMBERS-ONLY rows: turn.usage/turn.result
+      {hsid, tokens, tokensIn/tokensOut/cacheRead/cacheWrite from the
+      turn.result split the supervisor now records from Claude's
+      result.usage, costMicros}, session.compacted {hsid, tokensBefore,
+      tokensAfter}, budget.usage {dimension, n, of?, usdMicros?, over?},
+      budget.ladder {dimension, scope, rung %}, budget.pause/resume/
+      breaker.open/close and permit.deny {dimension}; every number clamped
+      (feedCount), strings only ids or enum tokens (test/mod-feed-v2.test.ts
+      property test); seq/at validated. status() lists views of running mods
+      ({name, viewId, slot, placement, dev}) for the #gui mod panels.
+      FIRST_PARTY_PACKAGE_HASHES pins the Workshop, the Ledger and Paradigm Context. Still to come: spend from the caller permit,
+      dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
+      K1 (#paradigm-context-mod): paradigm-slice.ts, the paradigm-slice:v1
+      kernel projection of a LIVE session's repo (.paradigm/tasks/entries,
+      decisions/TD-*.yaml, lore/entries/**): open/high task counts, top 5
+      tasks, last 5 decisions {id,title,date}, last 5 lore {id,title,type},
+      symbols touched; zero-dep strict YAML subset (malformed files skipped
+      and counted), symlinks and realpath escapes refused, files capped,
+      titles §4.5-sanitised, path-redacted, ≤120 chars; sensitivity secret
+      dropped; no absolute path in the slice (hue + basename only). Granted
+      by paradigm.read:summary (CAPABILITY_FORMS; not an id input; a
+      manifest holding it may list no egress, any tier).
+      Aegis review (H1/M2/M3/L1/L3): no super-linear regex over file text
+      (key lines split by indexOf, trailing comments found by a linear scan,
+      scalars and titles capped at SCALAR_MAX 4 KiB before any regex); the
+      root walk runs in realpath space (cwd and home realpath'ed, case-folded
+      on darwin/win32, never at or above the home); bounded opendir
+      iteration (MAX_ENTRIES), MAX_TASK_PARSED 512, SLICE_BYTE_BUDGET 3 MiB;
+      the cache is keyed by the .paradigm realpath (hue per cwd, sync read =
+      single-flight; a worker is a follow-up); files: dev+ino match, nlink>1
+      refused, re-realpath + stat(realpath) vs fstat after open; realpath(cwd)
+      and realpath(home) scrubbed.
+      K3: a RELAYED render's input is host-composed (host.ts
+      composeRelayedInput, HOST_INPUT_KEYS focus/hsid/paradigm): the client
+      names only {focus:{hsid}} (or the K0 {hsid}); the host joins that hsid
+      SERVER-SIDE to the live session cwd (ModHostOptions.focusCwd; daemon:
+      supervisor.scopeOf) and gives a paradigm.read:summary mod exactly
+      {hsid?, paradigm: slice | unfocused}; a forged repo/path/cwd/paradigm is
+      ignored (test/mod-focus.test.ts). Other mods get their non-host keys +
+      {hsid}. Local-lane sessions are not joined yet (unfocused).
+      Aegis M1: the join checks the CALLER. The dispatcher stamps
+      relayedFor{principal, connId, principalClass}; the host keeps the class
+      host-side (the mod's relayedFor stays {principal, connId}). Human: any
+      live hsid. Agent/session: only its OWN session (ModHostOptions.
+      focusPrincipal; daemon: supervisor.principalOf(hsid) === caller).
+      Voice, mod, unknown: unfocused (peer/read-token never reach mod.view:
+      RELAY_TIERS false). Falsifier: test/mod-focus.test.ts (agent naming
+      another session's hsid).
+      HOST-LEVEL FALSIFIERS (test/mod-capability-falsifier.test.ts, real stub
+      children; mutation-checked): log.read-only mods get no usage kind and
+      turn.result exactly {hsid}; a mod without paradigm.read:summary never
+      receives the slice (relayed, forged, or via the feed).
+    tags: [kernel, mods, sandbox, M1.11]

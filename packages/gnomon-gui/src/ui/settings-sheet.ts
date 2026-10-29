@@ -25,6 +25,7 @@
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { folderFieldEl } from './folder-field.js';
 import { rulesBlockEl } from './rules-block.js';
+import { trapTab } from './tier-picker.js';
 import { SETTINGS_RUNS, type FieldView, type FormKey, type FormView, type ResultView, type SectionId, type SettingRow, type SettingsSection } from '../core/settings.js';
 
 /** The Local model section's press path (ui/local-model.ts LocalModelController). */
@@ -63,7 +64,11 @@ export interface SettingsDeps {
   local?: LocalPress;
   rules?: RulesPress;
   /** #gui-mcp-servers: a press on an `mcp:` key (ui/mcp-servers.ts) */
-  mcp?: { press(act: string, value: string | null, trusted: boolean): void };
+  mcp?: { press(act: string, value: string | null, trusted: boolean): void; escape?(): boolean; sheetClosed?(): void };
+  /** #gui-capability-browser (C6'b1): a press on a `kept:` key (Local model › Kept memory; ui/tools-drawer.ts KeptFlow) */
+  kept?: { press(act: string, value: string | null, trusted: boolean): void; escape(): boolean };
+  /** called each time the sheet opens (Kept memory reads request.session.memory.list then) */
+  onOpen?: () => void;
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -89,13 +94,14 @@ function rich(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, t
   return h(doc, tag, attrs, ...parts.map((p, i) => (i % 2 ? h(doc, 'code', null, p) : p)));
 }
 
-function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
-  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
+/** A settings-form key (exported for #gui-capability-browser's drawer, which reuses the readonly rows with keys). */
+export function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
+  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.ariaDisabled ? { 'aria-disabled': 'true' } : {}), ...(k.pressed !== undefined ? { 'aria-pressed': String(k.pressed) } : {}), ...(k.describedBy ? { 'aria-describedby': k.describedBy } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
   if (k.disabled) (b as unknown as { disabled: boolean }).disabled = true;
   return b;
 }
 
-function resultEl(doc: MiniDoc, r: ResultView): MiniEl {
+export function resultEl(doc: MiniDoc, r: ResultView): MiniEl {
   return h(doc, 'p', { class: `sf-result${r.fail ? ' fail' : ''}`, role: r.fail ? 'alert' : 'status' }, r.lead ? h(doc, 'strong', null, r.lead) : null, r.text);
 }
 
@@ -135,14 +141,19 @@ function formEl(doc: MiniDoc, f: FormView): MiniEl {
   return form;
 }
 
-function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
+/** One row of a section (exported for #gui-capability-browser's drawer). */
+export function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
   if (r.kind === 'rules') return rulesBlockEl(doc, r.view);
   if (r.kind === 'term') return h(doc, 'div', { class: 'settings-row sf-term', 'data-row': r.id }, h(doc, 'span', { class: 'settings-label' }), h(doc, 'p', { class: 'meta settings-how' }, r.text, h(doc, 'code', null, r.code)));
   const head = h(doc, 'span', { class: 'settings-label' }, r.label);
   if (r.kind === 'form') {
     const row = h(doc, 'div', { class: 'settings-row settings-form', 'data-row': r.id }, head);
     if (r.form) row.appendChild(formEl(doc, r.form));
-    else if (r.confirm) row.appendChild(h(doc, 'div', { class: 'set-form', role: 'group', 'aria-label': r.confirm.label }, h(doc, 'p', { class: 'sf-lead' }, r.confirm.text), h(doc, 'div', { class: 'sf-keys' }, ...r.confirm.keys.map((k) => keyEl(doc, k)))));
+    else if (r.confirm) {
+      const c = r.confirm;
+      // C5'b: the trust preview's notice, its lead line and the reads list sit above the keys
+      row.appendChild(h(doc, 'div', { class: 'set-form', role: 'group', 'aria-label': c.label }, c.text ? h(doc, 'p', { class: 'sf-lead' }, c.text) : null, ...(c.lines ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.list?.length ? h(doc, 'ul', { class: 'sf-list' }, ...c.list.map((x) => h(doc, 'li', null, x))) : null, ...(c.after ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.result ? resultEl(doc, c.result) : null, h(doc, 'div', { class: 'sf-keys' }, ...c.keys.map((k) => keyEl(doc, k)))));
+    }
     else if (r.keys.length === 1) row.appendChild(keyEl(doc, r.keys[0]!));
     else if (r.keys.length) row.appendChild(h(doc, 'div', { class: 'sf-keys' }, ...r.keys.map((k) => keyEl(doc, k))));
     if (r.result) row.appendChild(resultEl(doc, r.result));
@@ -180,8 +191,8 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     row.setAttribute('data-readonly', 'true');
     if (r.grp) row.setAttribute('data-grp', 'start');
     if (r.live) row.setAttribute('aria-live', 'polite');
-    row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value));
-    if (r.how) row.appendChild(rich(doc, 'p', { class: 'meta settings-how' }, r.how));
+    row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value, r.chip ? ' ' : null, r.chip ? h(doc, 'span', { class: `chip${r.chip.ink ? ' ink' : ''}` }, r.chip.text) : null));
+    if (r.how) row.appendChild(r.howId ? setId(rich(doc, 'p', { class: 'meta settings-how' }, r.how), r.howId) : rich(doc, 'p', { class: 'meta settings-how' }, r.how));
     // the keys are a group named by their row, so "Turn off" is heard with what it turns off (Mika 2026-10-23)
     if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys', role: 'group', 'aria-label': r.label }, ...r.keys.map((k) => keyEl(doc, k))));
   }
@@ -199,6 +210,8 @@ export function sectionEl(doc: MiniDoc, s: SettingsSection, focused = false): Mi
   const hid = `settings-h-${s.id}`;
   const sec = h(doc, 'section', { class: `settings-sec${focused ? ' focused' : ''}`, 'data-section': s.id, 'aria-labelledby': hid, ...(s.owner ? { 'data-kernel-owned': 'true' } : {}) }, setId(h(doc, 'h3', { class: 'title settings-h', tabindex: '-1' }, s.title, s.owner ? ' ' : null, s.owner ? h(doc, 'span', { class: 'sec-owner' }, s.owner) : null), hid));
   if (s.intro) sec.appendChild(h(doc, 'p', { class: 'settings-intro' }, s.intro));
+  // C5'b: one persistent polite line per section that has one (empty when idle; mountSettings keeps its node)
+  if (s.live !== undefined) sec.appendChild(h(doc, 'p', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'data-live': s.id }, s.live));
   for (const r of s.rows) sec.appendChild(rowEl(doc, r));
   return sec;
 }
@@ -244,8 +257,16 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     // a repaint keeps the reader where they were: emptying the body clamps its scroll to the top (the Rules filter
     // re-paints on every key, and the field being typed in must not scroll away; Mika 2026-10-23)
     const top = body.scrollTop;
+    // C5'b: a live line must persist to be announced: keep the old nodes and carry the new text into them
+    const lives = new Map([...body.querySelectorAll<HTMLElement>('[data-live]')].map((n) => [n.dataset.live!, n] as const));
     painting = true;
     paintSettings(document as unknown as MiniDoc, body, d.model(), focused);
+    for (const n of body.querySelectorAll<HTMLElement>('[data-live]')) {
+      const old = lives.get(n.dataset.live!);
+      if (!old) continue;
+      if (old.textContent !== n.textContent) old.textContent = n.textContent;
+      n.replaceWith(old);
+    }
     painting = false;
     body.scrollTop = top;
     const el = keep ? (body.querySelector(keep) as HTMLElement | null) : null;
@@ -273,6 +294,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     overlay.hidden = true;
     focused = null;
     d.local?.sheetClosed();
+    d.mcp?.sheetClosed?.();
     back?.focus();
     back = null;
   };
@@ -280,6 +302,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     if (overlay.hidden) back = document.activeElement as HTMLElement | null;
     overlay.hidden = false;
     focused = section ?? null;
+    d.onOpen?.();
     repaint();
     const heading = section ? (body.querySelector(`#settings-h-${CSS.escape(section)}`) as HTMLElement | null) : null;
     if (heading) {
@@ -328,6 +351,10 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
       // the submit key presses through the form's submit (Enter in a field presses it too)
       if (lm.disabled || lm.type === 'submit') return;
       if (lm.dataset.lmAct!.startsWith('mcp:')) return d.mcp?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
+      if (lm.dataset.lmAct!.startsWith('kept:')) {
+        if (lm.getAttribute('aria-disabled') === 'true') return; // it keeps its focus; its press does nothing
+        return d.kept?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
+      }
       return d.local?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
     }
     const b = t.closest('[data-settings-run]') as HTMLButtonElement | null;
@@ -371,6 +398,11 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     true,
   );
   document.getElementById('settings-close')?.addEventListener('click', close);
+  // Mika (C5'b review): the sheet is aria-modal, so Tab stays inside it (the shared trapTab, never a copy)
+  const dialog = (overlay.querySelector('[role="dialog"]') as HTMLElement | null) ?? overlay;
+  overlay.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Tab' && !overlay.hidden) trapTab(dialog, e as KeyboardEvent);
+  });
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close(); // a press on the scrim closes it
   });
@@ -381,6 +413,8 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     repaint,
     escape: () => {
       if (d.rules?.escape()) return; // #gui-rules-view: an open Turn off ▾ folds first, focus back on its key
+      if (d.mcp?.escape?.()) return; // C5'b: an open trust preview closes first, focus back on its Trust… key
+      if (d.kept?.escape()) return; // C6'b1: an open Kept memory confirm closes first, focus back on its Delete
       if (!d.local?.escape()) close();
     },
     focusLocal,

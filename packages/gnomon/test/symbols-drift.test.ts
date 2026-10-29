@@ -34,7 +34,9 @@ const PACKAGES = path.join(REPO_ROOT, 'packages');
 const SPEC = path.join(REPO_ROOT, 'docs', 'specs', 'gnomon.md');
 const ALLOWLIST = path.join(PKG_ROOT, 'test', 'symbol-allowlist.json');
 const HEADER_LINES = 40;
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.build', '.git', 'results']);
+// build output is never a symbol source: `release` holds the built Gnomon.app, whose bundled copies of
+// .purpose files (e.g. Contents/Resources/gnomon-mods/.purpose) would otherwise count as declarations
+const SKIP_DIRS = new Set(['node_modules', 'dist', '.build', '.git', 'results', 'release']);
 
 const SECTION_PREFIX: Record<string, string> = { components: '#', flows: '$', gates: '^', signals: '!', aspects: '~' };
 const SYMBOL_ID = /^[#$^!~][a-z][a-z0-9-]*$/;

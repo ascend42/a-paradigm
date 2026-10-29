@@ -101,6 +101,7 @@
  * `request.voice.arm`, root verbs and `permit.reserve` stay refused.
  */
 import { FOLDER_CHECK_REQUEST, FOLDER_CHOOSE_REQUEST, FOLDER_REQUESTS } from '../folders/folders.js';
+import { LOCAL_SESSION_REQUESTS } from '../supervisor/local-session.js';
 import {
   CLIENT_API_ID,
   CLIENT_RELAYS,
@@ -453,6 +454,14 @@ export interface HumanRequestPort {
    * human on a gui or device connection ONLY (never voice, an agent or a session; the asker stamped here). Dispatcher-
    * only and never a row: it is not in the §9.1 registry, so no contract id moves. status.local rides extraStatus.
    */
+  /**
+   * Slice B2 (#local-working-memory): request.session.compact{hsid} | request.session.context{hsid, target} |
+   * request.session.memory.delete{hsid} from the human on a gui or device connection ONLY (the asker stamped here).
+   * Dispatcher-only (never §9.1 rows themselves; the effects write session.context / session.memory / session.compacted).
+   */
+  localSession?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
+  };
   local?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
     /** status.local in full (the human class only; localStatusFor) */
@@ -1016,8 +1025,18 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // slice B2 (#local-working-memory): compact / context target / delete memory of a local session (gui/device human only)
+      if (typeof pa?.kind === 'string' && LOCAL_SESSION_REQUESTS.includes(pa.kind) && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.localSession) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.localSession.request({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.kind, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // #mcp-servers (T-2026-10-23-003): the human turns their own MCP servers on or off (gui/device human only)
-      if ((pa?.kind === 'request.mcp.enable' || pa?.kind === 'request.mcp.disable') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.mcp) {
+      if ((pa?.kind === 'request.mcp.enable' || pa?.kind === 'request.mcp.disable' || pa?.kind === 'request.mcp.paradigm.stage' || pa?.kind === 'request.mcp.trust') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.mcp) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {

@@ -11,32 +11,73 @@
  *     fields ignored, an unknown `type` is `unknown` (logged, never acted on),
  *     a non-object is `malformed`. Usage only from `message_end.usage` and
  *     `agent_end.usage` — never model text (§2.2).
+ *   T-2026-10-26-003: `message` carries textBytes (the assistant text's size,
+ *     never the text) and `end` carries input/output beside the total, so the
+ *     kernel's turn.result can say "no answer" and the run's real usage.
+ *   Slice B1 (TD-2026-10-27-833): `context_report` (the child's context
+ *     ledger at each turn start) is a typed `context` event — bounded numbers
+ *     only (each a non-negative integer ≤ CONTEXT_NUM_MAX, else null); the
+ *     kernel logs the raw line as turn.event and does not act on it yet.
+ *   Slice S1 (TD-2026-10-27-833, the two-way protocol): `tool_request{id,
+ *     toolCallId, name, args}` is a typed `tool-request` event, every field
+ *     bounded (id tr-N, toolCallId <= 128 chars, a tool-name pattern, args a
+ *     JSON object of at most TOOL_ARGS_MAX_BYTES); a malformed one carries
+ *     `error` (the kernel answers it as an error when its id is usable).
+ *     toolResponseLine / toolsSetLine are the kernel's replies.
+ *   Slice B2 (#local-working-memory): `tool` events also carry toolCallId,
+ *     the start's args.path (a string of at most TOOL_PATH_MAX chars: the
+ *     kernel records the files a session edited) and an error end's result
+ *     head (at most TOOL_ERROR_HEAD chars: the last failing tool);
+ *     memorySetLine / compactLine / setContextLine write the kernel's
+ *     context commands (the ContextChannel).
  *   LocalUsageMeter — each message's usage is charged once; agent_end charges
  *     only what the messages did not (no double count).
  *   promptLine / followUpLine / steerLine / abortLine — the stdin commands;
  *     interrupt is the `abort` command, never a signal (A23-4).
+ *   localAdapter — this file's #backend-adapter (../backend-adapter.ts): the
+ *     core codec (argv, parse, newMeter, turnLine = prompt | follow_up by
+ *     inFlight, interruptLine = abort) plus the SteerChannel and
+ *     ToolBrokerChannel capabilities; local-session.ts calls it as `drv`.
+ *     OfferedTool / ToolResponse live in ../backend-adapter.ts (re-exported).
  */
 
-export function buildLocalArgv(i: { configPath: string; hsid: string }): string[] {
+import type { BackendAdapter, ContextChannel, MemorySet, OfferedTool, SteerChannel, ToolBrokerChannel, ToolResponse } from '../backend-adapter.js';
+
+export type { OfferedTool, ToolResponse } from '../backend-adapter.js';
+
+/** The local child's argv input (#backend-adapter's `A` for the local backend). */
+export interface LocalArgvInput {
+  configPath: string;
+  hsid: string;
+}
+
+export function buildLocalArgv(i: LocalArgvInput): string[] {
   return ['--mode', 'rpc', '--config', i.configPath, '--session', i.hsid];
 }
 
 export type LocalEvent =
   | { kind: 'capabilities'; type: string; model: string | null; tools: boolean | null; ctx: number | null; compat: string | null; textTools: boolean | null }
   | { kind: 'partial'; type: string; bytes: number }
-  | { kind: 'message'; type: string; tokens: number | null; toolCalls: number }
+  | { kind: 'message'; type: string; tokens: number | null; toolCalls: number; textBytes: number }
   | { kind: 'repair'; type: string; tool: string | null; steps: string[] }
-  | { kind: 'tool'; type: string; phase: 'start' | 'end'; tool: string | null; isError: boolean | null }
+  | { kind: 'tool'; type: string; phase: 'start' | 'end'; tool: string | null; isError: boolean | null; toolCallId: string | null; path: string | null; errorHead: string | null }
   | { kind: 'turn'; type: string; phase: 'start' | 'end' }
   | { kind: 'start'; type: string }
   | { kind: 'compaction'; type: string; phase: 'start' | 'end'; reason: string | null; tokensBefore: number | null; tokensAfter: number | null; summaryHash: string | null; summaryBytes: number | null; error: string | null }
-  | { kind: 'end'; type: string; tokens: number | null; stopReason: string | null; error: string | null }
-  | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
+  | { kind: 'context'; type: string; turn: number | null; target: number | null; slots: { system: number | null; memory: number | null; tools: number | null; history: number | null; reply: number | null }; historyUsed: number | null; compactions: number | null }
+  | { kind: 'end'; type: string; tokens: number | null; input: number | null; output: number | null; stopReason: string | null; error: string | null }
+  | { kind: 'response'; type: string; id: string | null; command: string | null; success: boolean | null; error: string | null }
+  | { kind: 'tool-request'; type: string; id: string | null; toolCallId: string | null; name: string | null; args: Record<string, unknown> | null; error: string | null }
+  | { kind: 'tool-cancel'; type: string; id: string | null }
+  | { kind: 'tools-applied'; type: string; id: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: 'malformed' };
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+/** Slice B1: a context_report number — a non-negative integer no larger than this, else null. */
+export const CONTEXT_NUM_MAX = 1 << 24;
+const cnum = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= CONTEXT_NUM_MAX ? v : null);
 const s = (v: unknown, max = 200): string | null => (typeof v === 'string' ? v.slice(0, max) : null);
 const b = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
 
@@ -63,14 +104,14 @@ export function parseLocalLine(line: string): LocalEvent {
     case 'message_update':
       return { kind: 'partial', type, bytes: typeof e.delta === 'string' ? Buffer.byteLength(e.delta) : 0 };
     case 'message_end': {
-      const m = e.message as { toolCalls?: unknown } | undefined;
-      return { kind: 'message', type, tokens: tokensOf(e.usage), toolCalls: Array.isArray(m?.toolCalls) ? m.toolCalls.length : 0 };
+      const m = e.message as { toolCalls?: unknown; content?: unknown } | undefined;
+      return { kind: 'message', type, tokens: tokensOf(e.usage), toolCalls: Array.isArray(m?.toolCalls) ? m.toolCalls.length : 0, textBytes: typeof m?.content === 'string' ? Buffer.byteLength(m.content.trim()) : 0 };
     }
     case 'model_repair':
       return { kind: 'repair', type, tool: s(e.toolName, 64), steps: Array.isArray(e.steps) ? e.steps.filter((x): x is string => typeof x === 'string').slice(0, 16) : [] };
     case 'tool_execution_start':
     case 'tool_execution_end':
-      return { kind: 'tool', type, phase: type.endsWith('start') ? 'start' : 'end', tool: s(e.toolName, 64), isError: b(e.isError) };
+      return toolEventOf(type, e);
     case 'turn_start':
     case 'turn_end':
       return { kind: 'turn', type, phase: type.endsWith('start') ? 'start' : 'end' };
@@ -80,15 +121,91 @@ export function parseLocalLine(line: string): LocalEvent {
     case 'compaction_end':
       // slice 2: logged (turn.event) and never acted on — its usage reaches the meter through agent_end's remainder
       return { kind: 'compaction', type, phase: type.endsWith('start') ? 'start' : 'end', reason: s(e.reason, 32), tokensBefore: num(e.tokensBefore), tokensAfter: num(e.tokensAfter), summaryHash: typeof e.summaryHash === 'string' && /^sha256:[0-9a-f]{64}$/.test(e.summaryHash) ? e.summaryHash : null, summaryBytes: num(e.summaryBytes), error: s(e.error, 500) };
+    case 'context_report': {
+      const sl = e.slots !== null && typeof e.slots === 'object' && !Array.isArray(e.slots) ? (e.slots as Record<string, unknown>) : {};
+      return { kind: 'context', type, turn: cnum(e.turn), target: cnum(e.target), slots: { system: cnum(sl.system), memory: cnum(sl.memory), tools: cnum(sl.tools), history: cnum(sl.history), reply: cnum(sl.reply) }, historyUsed: cnum(e.historyUsed), compactions: cnum(e.compactions) };
+    }
     case 'agent_end':
-      return { kind: 'end', type, tokens: tokensOf(e.usage), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
+    {
+      const u = e.usage !== null && typeof e.usage === 'object' ? (e.usage as { input?: unknown; output?: unknown }) : {};
+      return { kind: 'end', type, tokens: tokensOf(e.usage), input: num(u.input), output: num(u.output), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
+    }
     case 'response':
-      return { kind: 'response', type, command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
+      return { kind: 'response', type, id: s(e.id, 64), command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
     case 'fatal':
       return { kind: 'fatal', type, error: s(e.error, 500) };
+    case 'tool_request':
+      return toolRequestOf(type, e);
+    case 'tool_cancel':
+      // Aegis M1: the child gave up on a call (its timeout or abort); honouring it only removes privilege
+      return { kind: 'tool-cancel', type, id: typeof e.id === 'string' && TOOL_REQUEST_ID_RE.test(e.id) ? e.id : null };
+    case 'tools_applied':
+      // slice C3' (Aegis M3): the child applied the tools_set with this id (its next step offers that set)
+      return { kind: 'tools-applied', type, id: typeof e.id === 'string' && /^ts-[1-9]\d{0,8}$/.test(e.id) ? e.id : null };
     default:
       return { kind: 'unknown', type };
   }
+}
+
+/** Slice B2: the longest tool path the kernel takes from a tool_execution_start (longer: null). */
+export const TOOL_PATH_MAX = 1024;
+/** Slice B2: how much of an error end's result the kernel keeps (the last failing tool). */
+export const TOOL_ERROR_HEAD = 300;
+
+function toolEventOf(type: string, e: Record<string, unknown>): Extract<LocalEvent, { kind: 'tool' }> {
+  const start = type.endsWith('start');
+  const args = e.args !== null && typeof e.args === 'object' && !Array.isArray(e.args) ? (e.args as Record<string, unknown>) : null;
+  const p = start && args && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= TOOL_PATH_MAX ? args.path : null;
+  const isError = b(e.isError);
+  const errorHead = !start && isError === true && typeof e.result === 'string' ? e.result.slice(0, TOOL_ERROR_HEAD) : null;
+  return { kind: 'tool', type, phase: start ? 'start' : 'end', tool: s(e.toolName, 64), isError, toolCallId: typeof e.toolCallId === 'string' && TOOL_CALL_ID_RE.test(e.toolCallId) ? e.toolCallId : null, path: p, errorHead };
+}
+
+/** Slice S1: bounds of a tool_request (the child's broker.ts mirrors them). */
+export const TOOL_REQUEST_ID_RE = /^tr-[1-9]\d{0,9}$/;
+export const TOOL_NAME_RE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+export const TOOL_CALL_ID_MAX = 128;
+/** Aegis L5: a toolCallId the kernel accepts (the child substitutes its own for anything else). */
+export const TOOL_CALL_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+/** Aegis L2: the deepest args nesting measured before any stringify. */
+export const TOOL_ARGS_MAX_DEPTH = 16;
+
+/** Aegis L2: the nesting depth of a parsed value, iteratively (never recursion); stops counting past `max`. */
+export function nestingDepth(v: unknown, max = TOOL_ARGS_MAX_DEPTH): number {
+  let deepest = 0;
+  const stack: Array<[unknown, number]> = [[v, 1]];
+  while (stack.length) {
+    const [x, d] = stack.pop()!;
+    if (x === null || typeof x !== 'object') continue;
+    deepest = Math.max(deepest, d);
+    if (deepest > max) return deepest;
+    for (const y of Object.values(x as Record<string, unknown>)) stack.push([y, d + 1]);
+  }
+  return deepest;
+}
+export const TOOL_ARGS_MAX_BYTES = 64 * 1024;
+/** The most content one tool_response carries (the child refuses more). */
+export const TOOL_RESPONSE_MAX_CHARS = 256 * 1024;
+
+function toolRequestOf(type: string, e: Record<string, unknown>): Extract<LocalEvent, { kind: 'tool-request' }> {
+  const id = typeof e.id === 'string' && TOOL_REQUEST_ID_RE.test(e.id) ? e.id : null;
+  const out = { kind: 'tool-request' as const, type, id, toolCallId: null as string | null, name: null as string | null, args: null as Record<string, unknown> | null, error: null as string | null };
+  const extra = Object.keys(e).find((k) => !['type', 'id', 'toolCallId', 'name', 'args'].includes(k));
+  if (!id) return { ...out, error: 'id is not a tool request id' };
+  if (extra !== undefined) return { ...out, error: `unknown field ${extra.slice(0, 32)}` };
+  if (typeof e.toolCallId !== 'string' || !TOOL_CALL_ID_RE.test(e.toolCallId)) return { ...out, error: 'toolCallId must match [A-Za-z0-9_.:-]{1,128}' };
+  if (typeof e.name !== 'string' || !TOOL_NAME_RE.test(e.name)) return { ...out, toolCallId: e.toolCallId, error: 'name is not a tool name' };
+  const a = e.args;
+  if (a === null || typeof a !== 'object' || Array.isArray(a)) return { ...out, toolCallId: e.toolCallId, name: e.name, error: 'args must be a JSON object' };
+  if (nestingDepth(a) > TOOL_ARGS_MAX_DEPTH) return { ...out, toolCallId: e.toolCallId, name: e.name, error: `args are nested deeper than ${TOOL_ARGS_MAX_DEPTH}` };
+  let size: number;
+  try {
+    size = Buffer.byteLength(JSON.stringify(a), 'utf8');
+  } catch {
+    return { ...out, toolCallId: e.toolCallId, name: e.name, error: 'args are not plain JSON' };
+  }
+  if (size > TOOL_ARGS_MAX_BYTES) return { ...out, toolCallId: e.toolCallId, name: e.name, error: `args are over ${TOOL_ARGS_MAX_BYTES} bytes` };
+  return { ...out, toolCallId: e.toolCallId, name: e.name, args: a as Record<string, unknown> };
 }
 
 /** Per run: messages charged as they end; agent_end charges only the remainder. */
@@ -104,10 +221,53 @@ export class LocalUsageMeter {
     this.#run = 0;
     return rest;
   }
+  /** #backend-adapter: `message` → message(tokens), `end` → end(tokens), any other event → 0. */
+  charge(ev: LocalEvent): number {
+    if (ev.kind === 'message') return this.message(ev.tokens);
+    if (ev.kind === 'end') return this.end(ev.tokens);
+    return 0;
+  }
 }
 
 const line = (o: Record<string, unknown>): string => `${JSON.stringify(o)}\n`;
-export const promptLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'prompt', message });
-export const followUpLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'follow_up', message });
+/** slice C6'a2-1 (Aegis M1): `data` are kernel-framed "/" results the child pushes as their own data messages. */
+export const promptLine = (message: string, id?: string, data?: readonly string[]): string => line({ ...(id ? { id } : {}), type: 'prompt', message, ...(data?.length ? { data: [...data] } : {}) });
+export const followUpLine = (message: string, id?: string, data?: readonly string[]): string => line({ ...(id ? { id } : {}), type: 'follow_up', message, ...(data?.length ? { data: [...data] } : {}) });
 export const steerLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'steer', message });
 export const abortLine = (): string => line({ type: 'abort' });
+/** Slice S1: the kernel's answer to one tool_request (content capped at TOOL_RESPONSE_MAX_CHARS). */
+export const toolResponseLine = (r: ToolResponse): string => line({ type: 'tool_response', id: r.id, content: r.content.slice(0, TOOL_RESPONSE_MAX_CHARS), isError: r.isError, provenance: r.provenance });
+/** Aegis N4: the call's effect started (the child extends its wait for this id). */
+export const toolProgressLine = (id: string): string => line({ type: 'tool_progress', id, state: 'running' });
+/**
+ * Slice S1: the brokered tools offered from the child's next step on. Slice C4'a (#local-tool-tier): an optional
+ * `surface` (compact | full) the child applies together with the set (a tier change), then recomputes its ledger.
+ */
+export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>, id?: string, surface?: 'compact' | 'full'): string => line({ ...(id ? { id } : {}), type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })), ...(surface ? { surface } : {}) });
+
+/** Slice B2: the working-memory block (the kernel's render; goalHash only when it pins the goal whole). */
+export const memorySetLine = (m: MemorySet, id?: string): string => line({ ...(id ? { id } : {}), type: 'memory_set', render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) });
+/** Slice B2: compact at the child's next model step (the human's request.session.compact). */
+export const compactLine = (): string => line({ type: 'compact' });
+/** Slice B2: the context target (kernel-clamped; the child clamps again to n_ctx and the 0.85 rule). */
+export const setContextLine = (contextTarget: number): string => line({ type: 'set_context', contextTarget });
+
+/** #backend-adapter: the local driver — the core codec plus the steer, tool-broker and context channels. */
+export interface LocalAdapter extends BackendAdapter<'local', LocalArgvInput, LocalEvent>, SteerChannel, ToolBrokerChannel, ContextChannel {}
+
+/** Wired to the free functions above (they stay exported). A turn sent while one runs is a follow_up, else a prompt. */
+export const localAdapter: LocalAdapter = Object.freeze({
+  backend: 'local' as const,
+  argv: (i: LocalArgvInput): string[] => buildLocalArgv(i),
+  parse: (line: string): LocalEvent => parseLocalLine(line),
+  newMeter: (): LocalUsageMeter => new LocalUsageMeter(),
+  turnLine: (t: { text: string; inFlight: boolean; data?: readonly string[] }): string => (t.inFlight ? followUpLine(t.text, undefined, t.data) : promptLine(t.text, undefined, t.data)),
+  interruptLine: (): string => abortLine(),
+  steerLine: (text: string): string => steerLine(text),
+  toolsSetLine: (tools: ReadonlyArray<OfferedTool>, id?: string, surface?: 'compact' | 'full'): string => toolsSetLine(tools, id, surface),
+  toolResponseLine: (r: ToolResponse): string => toolResponseLine(r),
+  toolProgressLine: (id: string): string => toolProgressLine(id),
+  memorySetLine: (m: MemorySet, id?: string): string => memorySetLine(m, id),
+  compactLine: (): string => compactLine(),
+  setContextLine: (contextTarget: number): string => setContextLine(contextTarget),
+});

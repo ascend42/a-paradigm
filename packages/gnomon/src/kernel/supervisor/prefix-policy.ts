@@ -18,6 +18,10 @@
  *   - every word is printable ASCII (0x21–0x7e): no homoglyph or invisible character can make two
  *     prefixes look alike; argv0 has no `/` or `\` (no path to a program the session can write).
  *   - argv0 is not an interpreter, shell or runner (INTERPRETER_DENYLIST, plus python*).
+ *   - argv0 is not a destructive program (DESTRUCTIVE_ARGV0: rm, mv, dd, truncate, shred, chmod, chown, rsync …;
+ *     Aegis C6'a2-2 M1): its later arguments decide what it destroys, so no match-time check can bound it.
+ *   - every argv0 check uses ONE normalised form (normalArgv0: lowercased, `.exe` dropped; Aegis C6'a2-2 R1), as
+ *     APFS and NTFS resolve `Env`, `GIT` or `bash.exe`; a git or build-tool subcommand is lowercased too.
  *   - package managers / build tools (BUILD_TOOLS): NONE is ever a prefix rule. BUILD_TOOL_PREFIX_ALLOW is EMPTY
  *     (Aegis second BLOCK, H2–H4/M1/M2): even a "read-only" subcommand runs or routes code the repo controls —
  *     `.yarnrc.yml` yarnPath swaps the yarn binary, `.cargo/config.toml` rustc-wrapper / build.rustc runs a program
@@ -64,6 +68,43 @@ export const INTERPRETER_DENYLIST: ReadonlySet<string> = new Set([
   // Aegis LP1 review (gnomon-loops §3.1): Windows script hosts and exec wrappers that run another program
   'cmd', 'powershell', 'pwsh', 'wscript', 'cscript', 'mshta', 'arch', 'script', 'stdbuf', 'setsid', 'chroot', 'sandbox-exec', 'busybox',
 ]);
+
+/**
+ * Aegis C6'a2-2 M1 (G-BRK-09): programs that delete, overwrite, move, re-own or re-permission data (or kill
+ * processes). Their damage is in their ARGUMENTS (`rm build/x -rf src` under an `rm build/x` rule), which no
+ * path check can bound, so none is EVER a prefix rule: refused at offer, accept, fold and match (prefixRefusal).
+ * Compared case-insensitively with any `.exe` dropped (APFS and NTFS resolve `RM` and `rm.exe` to rm). find
+ * (-delete, -exec) and xargs are already INTERPRETER_DENYLIST; git clean / reset / checkout / restore / rm /
+ * stash are outside GIT_SUBCOMMAND_ALLOW; rsync (--delete) is here.
+ */
+export const DESTRUCTIVE_ARGV0: ReadonlySet<string> = new Set([
+  'rm', 'rmdir', 'unlink', 'srm', 'shred', 'wipe', 'trash', 'mv', 'dd', 'truncate', 'ln', 'install', 'rsync',
+  'chmod', 'chown', 'chgrp', 'chflags', 'chattr', 'setfacl', 'xattr', 'mkfs', 'newfs', 'fdisk', 'diskutil', 'wipefs', 'mkswap',
+  'kill', 'pkill', 'killall', 'del', 'erase', 'rd', 'move', 'ren', 'rename', 'remove-item',
+  // Aegis C6'a2-2 R2: they overwrite or extract files where their later arguments say
+  'cp', 'tee', 'tar', 'unzip', 'ditto', 'patch', 'split', 'scp', 'curl', 'wget', 'copy', 'xcopy', 'robocopy',
+]);
+
+/**
+ * Aegis C6'a2-2 R1: argv0 as the filesystem resolves it. APFS and NTFS are case-insensitive, Windows runs `rm.exe`,
+ * `rm.com`, `rm.cmd` or `rm.bat` for `rm`, and NTFS ignores trailing dots and spaces, so `Env`, `GIT`, `bash.exe`,
+ * `RM.BAT`, `rm.` and `rm ` are env, git, bash and rm: EVERY argv0 check (interpreter, python, git, build tool,
+ * destructive) uses this one form, at offer, accept, fold and match. destructiveArgv0 (M1) is DESTRUCTIVE_ARGV0 on
+ * this form, plus mkfs.* / newfs_*.
+ */
+export function normalArgv0(a0: string): string {
+  let n = a0.toLowerCase();
+  for (let prev = ''; prev !== n; ) {
+    prev = n;
+    n = n.replace(/[. ]+$/, '').replace(/\.(?:exe|com|cmd|bat)$/, '');
+  }
+  return n;
+}
+
+export function destructiveArgv0(a0: string): boolean {
+  const n = normalArgv0(a0);
+  return DESTRUCTIVE_ARGV0.has(n) || /^(mkfs|newfs)[._]/.test(n);
+}
 
 /**
  * Package managers and build tools: NEVER a prefix rule (BUILD_TOOL_PREFIX_ALLOW is empty; see the header). Listed
@@ -122,9 +163,13 @@ const PRINTABLE = /^[\x21-\x7e]+$/;
 export function prefixRefusal(prefix: readonly string[]): string | null {
   if (prefix.length < 2 || prefix.length > 3) return 'a prefix rule is 2 or 3 words (a single word allows every command of the program)';
   if (!prefix.every((w) => typeof w === 'string' && w.length <= 128 && PRINTABLE.test(w))) return 'prefix words are printable ASCII only';
-  const [a0, a1] = prefix as [string, string];
-  if (a0.includes('/') || a0.includes('\\')) return 'the program is named by a path';
-  if (INTERPRETER_DENYLIST.has(a0) || /^python/.test(a0)) return `${a0} runs arbitrary code: never a prefix rule`;
+  const [raw0, raw1] = prefix as [string, string];
+  if (raw0.includes('/') || raw0.includes('\\')) return 'the program is named by a path';
+  // Aegis R1: one normalised argv0 (and git/build-tool subcommand) for every check below
+  const a0 = normalArgv0(raw0);
+  const a1 = raw1.toLowerCase();
+  if (INTERPRETER_DENYLIST.has(a0) || /^python/.test(a0)) return `${raw0} runs arbitrary code: never a prefix rule`;
+  if (destructiveArgv0(a0)) return `${a0} can delete or overwrite whatever its later arguments name: never a prefix rule`;
   if (prefix.some((w) => pathWordBad(w))) return 'a prefix word names a path';
   if (a0 === 'git') {
     if (prefix.length !== 2) return 'a git prefix is exactly two words: git <subcommand>';
@@ -188,10 +233,10 @@ export function prefixMatchRefusal(argv: readonly string[], prefix: readonly str
       if (gate) return `${a}: a gate-class path (${gate})`;
     }
   }
-  if (prefix[0] === 'git') {
+  if (normalArgv0(prefix[0] ?? '') === 'git') {
     const later = argv.slice(2);
     for (const a of later) if (gitPrefixOptBad(a)) return `git ${a.split('=')[0]}: an option that runs a program or redirects git`;
-    if (prefix[1] === 'branch' && !later.every((a) => GIT_BRANCH_LIST.has(a) || /^--(sort|format)=/.test(a))) return 'git branch only lists under a prefix rule';
+    if ((prefix[1] ?? '').toLowerCase() === 'branch' && !later.every((a) => GIT_BRANCH_LIST.has(a) || /^--(sort|format)=/.test(a))) return 'git branch only lists under a prefix rule';
   }
   return null;
 }

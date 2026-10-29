@@ -88,8 +88,13 @@ async function stillOurs(control: ProcessControl, desc: readonly ProcRow[]): Pro
   return desc.filter((d) => now.get(d.pid) === d.start);
 }
 
-export type ChildKind = 'session' | 'local-runner' | 'mod';
-export type SessionChildKind = Exclude<ChildKind, 'mod'>;
+/**
+ * `mcp-server` (TD-2026-10-27-833 slice C2', Aegis M3): an MCP server a local session spawned; like a mod it writes no
+ * session.spawned row, and DaemonChildren stops it with the daemon. Its session reaps it by process group at exit.
+ */
+export type ChildKind = 'session' | 'local-runner' | 'mod' | 'mcp-server';
+export type SessionChildKind = Exclude<ChildKind, 'mod' | 'mcp-server'>;
+const isSessionKind = (k: ChildKind): k is SessionChildKind => k === 'session' || k === 'local-runner';
 
 export interface SpawnIntent {
   spawnId: string;
@@ -189,7 +194,7 @@ export class DaemonChildren {
     const pid = input.child.pid;
     if (this.#closed) throw new Error('daemon is stopping: no new children');
     if (pid === undefined) throw new Error('child has no pid (spawn failed)');
-    const session = input.kind !== 'mod';
+    const session = isSessionKind(input.kind);
     if (session && isLive(input.child) && this.#o.control.probeGroup(pid) === 'gone') {
       throw new Error(`a ${input.kind} child must be spawned detached (its own process group) so it can be stopped as a group`);
     }
@@ -245,7 +250,7 @@ export class DaemonChildren {
     const all = [...this.#live];
     // ONE process-table snapshot for the whole stop (not one `ps` per child), taken before any child is signalled
     const control = this.#o.control;
-    const shared = control.snapshot && all.some((t) => t.input.kind !== 'mod') ? control.snapshot().catch(() => null) : undefined;
+    const shared = control.snapshot && all.some((t) => isSessionKind(t.input.kind)) ? control.snapshot().catch(() => null) : undefined;
     const survivors = await Promise.all(all.map((t) => this.#stop(t, reason, shared)));
     await new Promise((r) => setImmediate(r)); // let exit handlers write their rows
     return this.#live.size + survivors.filter(Boolean).length;
@@ -259,7 +264,7 @@ export class DaemonChildren {
     t.stopReason = reason;
     const { child } = t.input;
     const control = this.#o.control;
-    const session = t.input.kind !== 'mod';
+    const session = isSessionKind(t.input.kind);
     let resolveTree: (v: TreeVerdict) => void = () => undefined;
     if (session) t.tree = new Promise<TreeVerdict>((r) => (resolveTree = r));
     // snapshot the tree BEFORE any signal: once the leader dies its children are reparented and the ppid walk loses them

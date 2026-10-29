@@ -21,7 +21,8 @@
  *   - Esc closes the confirm or the form first (entries kept until the sheet closes), then the sheet.
  */
 import { RpcError, type ShownRefusal } from '../core/client.js';
-import { changeForm, changesOf, deniedResult, editField, emptyLocalUi, expiredResult, firstInvalid, formErrors, localStatusOf, pickServer, probeAnswerOf, probeRequest, probeVerdict, REMOVE_REQUEST, refusalLine, requestLine, setRequest, setupForm, turnedOffResult, appliedToast, turnedOffToast, type LocalField, type LocalForm, type LocalRequest, type LocalUi } from '../core/local-model.js';
+import { clearRequest, remeasureLaterText, remeasureRequest, TIER_COPY } from '../core/tool-tier.js';
+import { changeForm, changesOf, deniedResult, editField, emptyLocalUi, expiredResult, firstInvalid, formErrors, localStatusOf, pickServer, probeAnswerOf, probeRequest, probeVerdict, REMOVE_REQUEST, refusalLine, requestLine, setRequest, setupForm, tierEndpointOf, turnedOffResult, appliedToast, turnedOffToast, type LocalField, type LocalForm, type LocalRequest, type LocalUi } from '../core/local-model.js';
 import type { LocalFocus, LocalPress } from './settings-sheet.js';
 import { FolderField, fieldView } from '../core/folder-field.js';
 import { focusFolder, routeFolderPress } from './folder-field.js';
@@ -177,6 +178,11 @@ export class LocalModelController implements LocalPress {
         return this.#paint({ act: 'turn-off' });
       case 'check':
         return void this.#checkAgain();
+      // #gui-tool-tier (C4'b): Re-measure and Reset to measured (the kernel's request.local.tier.*)
+      case 'tier-remeasure':
+        return void this.#remeasure();
+      case 'tier-reset':
+        return void this.#resetTier();
       default:
         return;
     }
@@ -292,6 +298,51 @@ export class LocalModelController implements LocalPress {
     else await this.#d.refreshStatus();
     ui.checking = null;
     this.#paint({ act: a?.ok ? 'change' : 'check' });
+  }
+
+  /** Re-measure: the kernel answers at once; the row says measuring… until status.local.lastProbe.tier says otherwise. */
+  async #remeasure(): Promise<void> {
+    const ui = this.#ui;
+    const v = localStatusOf(this.#d.status());
+    const ep = tierEndpointOf(v);
+    if (!ep || (ui.measuring ?? null) !== null || (v.lastProbe?.endpoint === ep && v.lastProbe.tier?.measuring)) return; // disabled while measuring
+    ui.measuring = this.#d.now();
+    ui.result = null;
+    this.#paint();
+    const r = await this.#call(remeasureRequest(ep));
+    if (!r.ok) {
+      ui.measuring = null;
+      // Aegis C4'b L1: the kernel allows one re-measure per endpoint every few seconds: say when, never auto-retry
+      const wait = r.refusal?.data?.why === 'rate-limited' ? Number(r.refusal.data.retryAfterMs) : NaN;
+      ui.result = Number.isFinite(wait) ? { text: remeasureLaterText(wait) } : { text: r.text, fail: true };
+      return this.#paint({ act: 'tier-remeasure' });
+    }
+    // the result lands in lastProbe.tier (a model.capabilities row also refreshes status): re-read until it settles
+    for (let n = 0; n < POLL_MAX; n++) {
+      await this.#d.refreshStatus();
+      const s = localStatusOf(this.#d.status());
+      if (!(s.lastProbe?.endpoint === ep && s.lastProbe.tier?.measuring)) break;
+      await (this.#d.wait ?? ((x: number) => new Promise((res) => setTimeout(res, x))))(POLL_MS);
+    }
+    ui.measuring = null;
+    this.#paint();
+  }
+
+  /** Reset to measured: the kernel forgets the remembered tier; new sessions open measured, open ones keep theirs. */
+  async #resetTier(): Promise<void> {
+    const ui = this.#ui;
+    const ep = tierEndpointOf(localStatusOf(this.#d.status()));
+    if (!ep || ui.resetting) return;
+    ui.resetting = true;
+    ui.result = null;
+    this.#paint();
+    const r = await this.#call(clearRequest(ep));
+    ui.resetting = false;
+    const why = r.ok && r.v && typeof r.v === 'object' ? (r.v as { cleared?: unknown; why?: unknown }) : null;
+    if (!r.ok) ui.result = { text: r.text, fail: true };
+    else if (why?.cleared !== true && typeof why?.why === 'string' && why.why !== 'none') ui.result = { text: `Not changed: ${(TIER_COPY.remember[why.why] ?? why.why).replace(/^can’t remember: /, '')}`, fail: true };
+    await this.#d.refreshStatus();
+    this.#paint({ act: r.ok ? 'tier-remeasure' : 'tier-reset' });
   }
 
   escape(): boolean {

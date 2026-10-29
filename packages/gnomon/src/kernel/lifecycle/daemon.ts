@@ -161,6 +161,10 @@ import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
 import { McpServers } from '../desk/mcp-server-cards.js';
+import { McpListCache } from '../local/mcp-client.js';
+import { toolRulePaused, type ToolRulePauseSource } from '../local/tool-broker.js';
+import { McpTrust, trustSourceOf } from '../local/trust-book.js';
+import { ResultPolicy, resultPolicySourceOf, rulePassesOf } from '../local/result-policy.js';
 import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
@@ -889,6 +893,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     catchUp(ruleBook, ruleSourceOf(log));
     return ruleBook;
   };
+  // slice C5'a1 (#mcp-servers trust, Arky 8): the TrustBook folds KERNEL-signed tool.trust rows; it catches up HERE,
+  // before any local session can index or start a pool, and every later read catches up again (a fold re-narrows)
+  const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
+  mcpTrust.sync();
+  // slice C6'a2-1 (#local-result-policy): the human's "/" result policy, folded from KERNEL-signed tool.result.policy rows
+  const resultPolicy = new ResultPolicy({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: resultPolicySourceOf(log), append: (kind, payload) => appendRow(kind, payload) });
+  resultPolicy.sync();
+  // slice C5'a1: the one tools/list cache (LocalLane's sessions list into it; request.mcp.trust reads its newest per id)
+  const mcpListCache = new McpListCache();
   // P8-D86/D87 run modes: folded from KERNEL-signed approval.mode.set / session.open{runMode} rows (a repo's mode
   // persists across sessions and restarts); strictness levels are not built (no level source ⇒ the ceiling permits
   // every mode). The control is the request.mode.set handler (dispatcher `requests`) and the session port's runMode.
@@ -996,9 +1009,22 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     liveRepos: () => supervisor.liveScopes().map((x) => ({ cwd: x.cwd, hsid: x.hsid })),
     emit: (e) => emit({ kind: 'daemon.desk', ...e } as DaemonEvent),
+    // slice C5'a1 (Arky 6): request.mcp.trust previews and commits against the lane's newest listing; trust rows
+    listedOf: (id) => mcpListCache.newest(id),
+    trust: mcpTrust,
   });
+  // Aegis L3: a trusted server that is on nowhere any more is dropped again (a disabled drop row that failed to write)
+  mcpServers.reconcileTrust();
   const supervisor: SessionSupervisor = new SessionSupervisor({
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
+    // TD-2026-10-27-833 slice C2': local sessions reach the same servers (first-party Paradigm + the enabled ones)
+    localMcp: (ctx) => mcpServers.composeLocal(ctx),
+    localMcpCache: mcpListCache,
+    localMcpTrust: mcpTrust,
+    localResultPolicy: resultPolicy,
+    // Aegis L1 (C6'a2-1): the last day's Always-rule passes, so a restart never resets a destructive rule's day count
+    localRulePasses: () => rulePassesOf(log),
+    localMcpEnabled: (id, launchHash) => mcpServers.enabledAt(id, launchHash),
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
     deskMcp: (distroServers, ctx) => {
@@ -1523,7 +1549,13 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         revoke: (ctx: Parameters<typeof rulesRevoke>[0], payload: unknown) => rulesRevoke(ctx, payload),
         // 8.0:rules-view (#rules-apply): the Rules view's one save, and status.rules (human class only)
         apply: (asker: Parameters<typeof rulesApply.apply>[0], payload: unknown) => rulesApply.apply(asker, payload),
-        status: () => rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped() }),
+        status: () => {
+          // 8.0:local-lane C5'a3: a tool rule's paused reason from the newest listing, the TrustBook and the enabled set
+          // (read once per status; display only, matching never reads it)
+          let on: Set<string> | null = null;
+          const src: ToolRulePauseSource = { listed: (label) => mcpListCache.listingsByLabel(label), trust: (id) => mcpTrust.of(id), on: (id) => (on ??= mcpServers.enabledIds()).has(id) };
+          return rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped(), paused: (r) => toolRulePaused(r, src) });
+        },
       },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
@@ -1531,6 +1563,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       // TD-2026-10-23-162 (#folder-picker): the folder field's three read-only asks (status.folders is the human's)
       folders: { choose: (asker: FolderAsker, payload: unknown) => folderPicker.choose(asker, payload), check: (asker: FolderAsker, payload: unknown) => folderPicker.check(asker, payload), recent: (asker: FolderAsker, payload: unknown) => folderPicker.recent(asker, payload), status: () => folderPicker.status(), connectionClosed: (connId: string) => folderPicker.connectionClosed(connId) },
       mcp: { request: (asker: Parameters<McpServers['request']>[0], kind: string, payload: unknown) => mcpServers.request(asker, kind, payload), status: () => mcpServers.status() },
+      localSession: { request: (asker: Parameters<SessionSupervisor['localSessionRequest']>[0], kind: string, payload: unknown) => supervisor.localSessionRequest(asker, kind, payload) },
       local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload), status: () => localStatus() },
     },
     reads: { log, hub },

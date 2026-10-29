@@ -2,7 +2,7 @@
  * #tool-family — listed family schema shape, op signatures, required-param audit.
  */
 import { describe, it, expect } from 'vitest';
-import { defineFamily, HANDLER_DEFAULTED } from './tool-family.js';
+import { defineFamily, HANDLER_DEFAULTED, familyAnnotations } from './tool-family.js';
 import type { ToolDefinition } from './tool-registry.js';
 
 const loreRecord: ToolDefinition = {
@@ -113,5 +113,40 @@ describe('required-param audit (handler defaults)', () => {
   it('params without a handler default stay required', () => {
     const fam = defineFamily({ name: 'paradigm_lore', description: 'Lore.', ops: { get: 'paradigm_lore_get' } }, defs);
     expect('error' in fam.resolve({ op: 'get' })).toBe(true);
+  });
+});
+
+describe('per-op annotations (io.gnomon/op-annotations:v1)', () => {
+  const ro: ToolDefinition = { name: 'x_list', description: '', inputSchema: { type: 'object' }, annotations: { title: 'List', readOnlyHint: true, destructiveHint: false, openWorldHint: false } };
+  const wr: ToolDefinition = { name: 'x_create', description: '', inputSchema: { type: 'object' }, annotations: { readOnlyHint: false, destructiveHint: false } };
+  const del: ToolDefinition = { name: 'x_delete', description: '', inputSchema: { type: 'object' }, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true } };
+  const bare: ToolDefinition = { name: 'x_bare', description: '', inputSchema: { type: 'object' } };
+  const d = new Map([ro, wr, del, bare].map(t => [t.name, t]));
+  const fam = (ops: Record<string, string>) => defineFamily({ name: 'x', description: 'X.', ops }, d).definition;
+
+  it('keeps only declared hints (no title), omits undeclared ops, and adds nothing to the listed definition', () => {
+    const family = defineFamily({ name: 'x', description: 'X.', ops: { list: 'x_list', create: 'x_create', bare: 'x_bare' } }, d);
+    expect(JSON.stringify(family.definition)).not.toContain('_meta');
+    expect(family.opAnnotations).toEqual({
+      list: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      create: { readOnlyHint: false, destructiveHint: false },
+    });
+  });
+
+  it('top level: read-only only when every op is', () => {
+    expect(fam({ list: 'x_list' }).annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+    expect(fam({ list: 'x_list', create: 'x_create' }).annotations).toEqual({ readOnlyHint: false, destructiveHint: false });
+  });
+
+  it('top level: destructive when any op is declared destructive or declares nothing', () => {
+    expect(fam({ list: 'x_list', delete: 'x_delete' }).annotations!.destructiveHint).toBe(true);
+    expect(fam({ list: 'x_list', bare: 'x_bare' }).annotations).toEqual({ readOnlyHint: false, destructiveHint: true });
+  });
+
+  it('idempotent only when every op declares it; read-only + destructive still counts as destructive', () => {
+    expect(fam({ delete: 'x_delete' }).annotations!.idempotentHint).toBe(true);
+    expect(fam({ delete: 'x_delete', create: 'x_create' }).annotations!.idempotentHint).toBeUndefined();
+    expect(familyAnnotations([{ readOnlyHint: true, destructiveHint: true }]).destructiveHint).toBe(true);
+    expect(familyAnnotations([{ openWorldHint: false }, { openWorldHint: true }]).openWorldHint).toBe(true);
   });
 });

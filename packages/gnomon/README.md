@@ -124,4 +124,7 @@ the confirmation, and start again.
 ## For developers
 
 `npm run build:gnomon && npm run test:gnomon` from the repo root. Package layout,
-symbols and tests are described in `packages/gnomon/.purpose`.
+symbols and tests are described in `packages/gnomon/.purpose` (package-wide
+entries, flows and gates) and in the `.purpose` file next to each area's code
+(`src/kernel/<area>/.purpose`, `src/cli/.purpose`, `src/adapters/.purpose`, and
+so on).

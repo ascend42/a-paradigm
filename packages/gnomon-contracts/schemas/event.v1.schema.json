@@ -216,12 +216,15 @@
     "session.alias.rejected",
     "session.anomaly",
     "session.compacted",
+    "session.context",
     "session.context.threshold",
     "session.drained",
     "session.exited",
     "session.idle",
     "session.inject",
     "session.layers.changed",
+    "session.mcp",
+    "session.memory",
     "session.model",
     "session.open",
     "session.orphaned",
@@ -232,6 +235,7 @@
     "session.sandbox",
     "session.spawned",
     "session.tainted",
+    "skill.run",
     "socket.auth.fail",
     "socket.auth.ok",
     "socket.auth.reconnect.requested",
@@ -253,6 +257,11 @@
     "tend.digest",
     "tend.proposal.fate",
     "tend.teacher.drafted",
+    "tool.brokered",
+    "tool.result.policy",
+    "tool.result.sent",
+    "tool.selection",
+    "tool.trust",
     "turn.ask-user",
     "turn.event",
     "turn.partial",
@@ -390,10 +399,19 @@
     "request.voice.arm": "M1.1:P8-D58",
     "request.voice.narrow": "M1.1:P8-D58",
     "session.anomaly": "8.0:T-2026-10-21-008",
+    "session.context": "8.0:local-lane",
     "session.context.threshold": "8.0:TD-2026-10-20-812",
     "session.drained": "8.0:P8-D98",
+    "session.mcp": "8.0:local-lane",
+    "session.memory": "8.0:local-lane",
     "session.model": "8.0:model-switch",
     "session.renamed": "8.0:session-rename",
+    "skill.run": "8.0:local-lane",
+    "tool.brokered": "8.0:local-lane",
+    "tool.result.policy": "8.0:local-lane",
+    "tool.result.sent": "8.0:local-lane",
+    "tool.selection": "8.0:local-lane",
+    "tool.trust": "8.0:local-lane",
     "verdict.incident": "M1.1:P8-D86-D88"
   },
   "x-gnomon-reserved-payload-fields": {
@@ -446,7 +464,8 @@
     "approval.rule.learned": {
       "match": "8.0:P8-D98",
       "prefix": "8.0:TD-2026-10-20-294",
-      "path": "8.0:TD-2026-10-23-939"
+      "path": "8.0:TD-2026-10-23-939",
+      "bindHash": "8.0:local-lane"
     },
     "approval.decide": {
       "scope": "8.0:TD-2026-10-20-294",
@@ -522,7 +541,9 @@
       "tool",
       "path",
       "inputHash",
-      "modeRef"
+      "modeRef",
+      "author",
+      "callId"
     ],
     "request.strictness.set": [
       "repo",
@@ -928,6 +949,87 @@
       "cardId",
       "host",
       "exitCode"
+    ],
+    "tool.brokered": [
+      "hsid",
+      "server",
+      "tool",
+      "class",
+      "argsHash",
+      "decision",
+      "bytes",
+      "isError",
+      "cardId",
+      "author",
+      "callId"
+    ],
+    "tool.result.policy": [
+      "hsid",
+      "repoKey",
+      "tool",
+      "bindHash",
+      "policy"
+    ],
+    "tool.result.sent": [
+      "hsid",
+      "tool",
+      "argsHash",
+      "bytes",
+      "cut",
+      "policy"
+    ],
+    "skill.run": [
+      "hsid",
+      "name",
+      "skillHash",
+      "argsHash",
+      "via",
+      "decision",
+      "tokens"
+    ],
+    "session.memory": [
+      "hsid",
+      "op",
+      "id",
+      "source",
+      "kind",
+      "textHash",
+      "bytes",
+      "why"
+    ],
+    "tool.selection": [
+      "hsid",
+      "trigger",
+      "hash",
+      "added",
+      "removed",
+      "found",
+      "unfitPins"
+    ],
+    "tool.trust": [
+      "id",
+      "label",
+      "op",
+      "binding",
+      "why",
+      "launchHash",
+      "toolsHash"
+    ],
+    "session.mcp": [
+      "hsid",
+      "server",
+      "state",
+      "fit",
+      "error"
+    ],
+    "session.context": [
+      "hsid",
+      "target",
+      "previous",
+      "requested",
+      "configTarget",
+      "nCtx",
+      "aboveConfig"
     ]
   },
   "x-gnomon-compaction-reasons": [

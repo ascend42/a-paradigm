@@ -15,7 +15,7 @@ const HTML = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
 const st = (voice: unknown, principalKind = 'human') => ({ principalKind, voice });
 const playing = (more: Record<string, unknown> = {}) => st({ attached: null, clientConnected: true, playback: { playing: true, at: '2026-10-19T10:00:00Z' }, stopSpeakingSeq: 0, ...more });
 
-describe('Stop speaking: the pure core', () => {
+describe('G-GUI-16 Stop speaking: the pure core', () => {
   it('playing is status.voice.playback.playing === true only', () => {
     expect(playbackPlaying(playing())).toBe(true);
     for (const p of [null, undefined, {}, { playing: false }, { playing: 'yes' }, { playing: 1 }]) expect(playbackPlaying(st({ playback: p })), JSON.stringify(p)).toBe(false);
@@ -50,7 +50,7 @@ describe('Stop speaking: the pure core', () => {
   });
 });
 
-describe('Stop speaking: the page wiring', () => {
+describe('G-GUI-16 Stop speaking: the page wiring', () => {
   it('a hidden ⏹ button sits beside the mic pill, painted from status', () => {
     expect(HTML).toMatch(/<button id="voice-stop"[^>]*aria-label="Stop speaking"[^>]*hidden>Stop speaking<\/button>/);
     expect(APP).toContain("$('voice-stop').hidden = !stopSpeakingShown(status);");

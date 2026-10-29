@@ -63,7 +63,9 @@ components:
       egress none, no tools or commands; tier first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES). Fixtures strip, strip-reduced,
       over-budget, breaker, compacted with golden renders
       (test/ledger-mod.test.ts, light and dark); goldens regenerate with
-      `npm run repin:first-party` in packages/gnomon.
+      `npm run repin:first-party` in packages/gnomon
+      (packages/gnomon/scripts/repin-first-party.mjs, which renders the
+      Workshop, Ledger and Paradigm Context goldens from their pure models).
     tags: [mods, first-party]
   paradigm-context-mod:
     description: >-
@@ -122,6 +124,7 @@ components:
       first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES); tested
       in test/neurons-mod.test.ts.
     tags: [mods, first-party, desk]
+    oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   constellation-mod:
     description: >-
       #constellation-mod - packages/gnomon-mods/constellation (the Desk,
@@ -141,3 +144,4 @@ components:
       first-party (packageHash pinned); tested in
       test/constellation-mod.test.ts.
     tags: [mods, first-party, desk]
+    oracles: [G-DSK-06, G-DSK-07, G-DSK-08]

@@ -25,14 +25,18 @@ export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
  * it is RAISED if the running helper is older ("update the Gnomon app"), so a decision never reaches a helper whose
  * decision.sign does not know the kind (the batch path never falls back after a decision.sign error, Aegis C6).
  * loop-trust shipped in the 1.8.0 SOURCE after the signed 1.8.0 was cut, so it needs 1.9.0 too.
+ * 8.0:local-lane C6'a2-1 (TD-2026-10-28-969, #local-tool-broker destructive Always): `permission` — a destructive
+ * brokered card's `always` is root class (RaiseInput.rootDecisions ['always'], rootRows []); its table signs the decision
+ * row only and first ships in helper 1.10.0 (Protocol.swift rowTableRefusal, slice a2-h, G-HLP-02). #local-tool-broker asks
+ * ApprovalBroker.rootTableReady first, so an older helper is offered allow | deny only (never a raise-time refusal).
  */
-export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.freeze({ 'loop-trust': '1.9.0', 'local.config': '1.9.0' });
+export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.freeze({ 'loop-trust': '1.9.0', 'local.config': '1.9.0', permission: '1.10.0' });
 
 /** Mirrors Bounds in Protocol.swift. */
 export const DECISION_BOUNDS = Object.freeze({ maxMessages: 10, maxApprovals: 2, maxRootRows: 8, maxMessageBytes: 65_536, maxBytes: 256 * 1024, maxLineChars: 1200, maxReasonChars: 160 });
 
 /** The card kinds that have a row table (C3). A root-class card's decision row names one of these. */
-export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config'] as const);
+export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'permission'] as const);
 export type RowTableKind = (typeof ROW_TABLE_KINDS)[number];
 
 export interface DecisionRowV2 {
@@ -191,6 +195,7 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       if (kinds.length !== 1 || kinds[0] !== LOCAL_ROOT_SCHEMA) return 'a local.config signs exactly one gnomon-root-local:v1 row';
       return localRowRefusal(rows[0]!);
     }
+    case 'permission':
     case 'mod.mcp.config':
     case 'api-token':
     case 'peer-pair':

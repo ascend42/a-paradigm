@@ -27,7 +27,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, isBrokeredCard, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf, toolScopesOf } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, pickChoices, renderChoices, replyChoices, replyHash, toggleChoice } from '../core/choices.js';
@@ -45,7 +45,7 @@ import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '.
 import { mountStandingFeed } from './standing-feed.js';
 import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
-import type { ToastKind } from '../core/toasts.js';
+import { RULE_RAN_TOAST, ruleRanByMerge, ruleRanOf, ruleRanText, type RuleRanBy, ruleRevokeFailWords, ruleRevokeRequest, trustDropToastOf, TRUST_DROP_TOAST, type ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
@@ -62,6 +62,12 @@ import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, placeWords, plainAppend, type
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
+import { mountTierPicker, type TierPicker } from './tier-picker.js';
+import { KeptFlow, mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
+import { drawerAccess, mcpFailToastOf, MCP_FAIL_TOAST, serversOffOf, serversOffText } from '../core/tools-drawer.js';
+import { mountSlashMenu, renderRunRow, type SlashMenu } from './slash-menu.js';
+import { SLASH_COMMANDS } from '../core/slash-menu.js';
+import { runWords } from '../core/slash-runs.js';
 import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, RepinReturn, type KeptChoice } from '../core/folder-field.js';
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
@@ -117,6 +123,10 @@ const shortKeyId = (spki: string): string => {
 let noticeCard: { cardId: string; seen: boolean } | null = null;
 /** #gui-model-picker (ui/model-picker.ts), mounted below; null until then */
 let modelPicker: ModelPicker | null = null;
+let tierPicker: TierPicker | null = null;
+/** #gui-capability-browser (C6'b1): the Tools and memory drawer of a local session (ui/tools-drawer.ts), mounted below */
+let toolsDrawer: ToolsDrawer | null = null;
+let slashMenu: SlashMenu | null = null;
 /** #gui-toast: the one toast region (ui/toasts.ts), mounted on first use (the chat column's right edge). */
 let toastRegion: Toasts | null = null;
 const toasts = (): Toasts =>
@@ -283,6 +293,8 @@ function unmountAll(): void {
 
 /** A new transcript (focus, raw toggle): rebuild from scratch, stuck to the bottom. */
 function resetTranscript(): void {
+  if (slashMenu?.flow.state()?.hsid !== focused) slashMenu?.close(); // #gui-slash-menu: the menu is the focused session's
+  if (focused) void slashMenu?.flow.ensureSkills(focused); // the host slips of its replies read its loaded skills
   unmountAll();
   memo = null;
   items = [];
@@ -309,8 +321,12 @@ function paintChatHead(): void {
   const meta = $('chead-meta');
   // #gui-model-picker: a streaming session repaints this header on every row; the model key stays put (its open
   // menu, its focus) and the parts around it are rebuilt before and after it
-  for (const n of Array.from(meta.childNodes)) if (!(n instanceof HTMLElement && n.hasAttribute('data-model-chip'))) meta.removeChild(n);
-  if (!s) modelPicker?.headChip(meta, null);
+  // #gui-tool-tier: the tier key (a local session's) stays put the same way
+  for (const n of Array.from(meta.childNodes)) if (!(n instanceof HTMLElement && (n.hasAttribute('data-model-chip') || n.hasAttribute('data-tier-chip')))) meta.removeChild(n);
+  if (!s) {
+    modelPicker?.headChip(meta, null);
+    tierPicker?.headChip(meta, null);
+  }
   if (s) {
     const g = store.groups().find((x) => x.sessions.some((y) => y.hsid === s.hsid));
     const hue = groupHue(s.repo ?? UNSCOPED, g?.sessions ?? [s]);
@@ -320,6 +336,10 @@ function paintChatHead(): void {
     // Mika (2026-10-23 delta): the project name ellipsizes last and keeps its whole name in the title
     meta.prepend(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node, h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
+    tierPicker?.headChip(meta, s.hsid); // #gui-tool-tier: a local session's tool tier, ▾ to change it (its owner)
+    // #gui-capability-browser (C6'b1): a server of this session that stopped is plain meta text, never a chip
+    const off = s.backend === 'local' ? serversOffText(serversOffOf(store.transcript(s.hsid), s.hsid)) : '';
+    if (off) meta.appendChild(h(doc, 'span', { class: 'chead-off' }, off) as unknown as Node);
     // Mika (2026-10-23): "started · 9m" is the one part that ellipsizes, so the model key is never the one clipped
     meta.appendChild(h(doc, 'span', { class: 'chead-when' }, `${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`) as unknown as Node);
   }
@@ -535,6 +555,12 @@ function itemEl(it: FoldedItem): HTMLElement {
     return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}${it.live ? ' live' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`, clock) as unknown as HTMLElement;
   }
   if (it.role === 'working') return workingEl(it);
+  // #gui-slash-runs: a "/" run row, from this page's run (its result held in memory only) or the kernel's row (history)
+  if (it.role === 'run') {
+    const v = it.runKey ? slashMenu?.flow.run(it.runKey) : null;
+    if (v) return renderRunRow(doc, runWords(v), { key: v.key, at: v.at, now: Date.now() }) as unknown as HTMLElement;
+    if (it.runRow) return renderRunRow(doc, it.runRow, { key: null, at: it.at ?? '', now: Date.now() }) as unknown as HTMLElement;
+  }
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
@@ -561,19 +587,52 @@ function itemEl(it: FoldedItem): HTMLElement {
   const slips = slipsAt.get(it.key) ?? [];
   // #gui-host-hints: the reply text above is shown verbatim; a host slip under it says the Gnomon way
   const host = it.role === 'assistant' && !rawMode ? hostHintsFor(it.key, it.text) : [];
-  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : it.tone === 'fail' ? ' fail' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+}
+
+/**
+ * #gui-slash-runs: a run row's keys. Decide in the stack focuses the card GROUP, never its Allow (a second Enter cannot
+ * allow it); the data fold opens and folds in place, the focus staying on its key.
+ */
+function onRunKey(k: HTMLElement, e: Event): void {
+  if (!e.isTrusted) return; // G-GUI-04
+  const key = k.dataset.runKey ?? '';
+  const v = slashMenu?.flow.run(key);
+  if (!v) return;
+  const act = k.dataset.runAct;
+  if (act === 'decide' && v.cardId) return focusCardGroup(v.cardId, 'card');
+  if (act === 'fold' || act === 'unfold') {
+    slashMenu!.flow.fold(key, act === 'unfold');
+    ($('viewport').querySelector(`[data-run="${CSS.escape(key)}"] .run-fold`) as HTMLElement | null)?.focus({ preventScroll: true });
+  }
+  if (k.getAttribute('aria-disabled') === 'true') return; // aria-busy: it sends nothing
+  // C6'b2-2: Send this one; the row is remounted: focus goes back to the same key, else to the row's policy line
+  if (act === 'send') void slashMenu!.flow.sendOne(key, true).then(() => focusRunKey(key, ['send']));
+  // C6'b2-2: the first-use question; Keep to me hands focus to the Send this one key it brings
+  if (act === 'always-send' || act === 'keep') void slashMenu!.flow.choosePolicy(key, act === 'always-send' ? 'send' : 'ask', true).then(() => focusRunKey(key, act === 'keep' ? ['keep', 'send'] : ['always-send']));
+}
+/** C6'b2-2: after a run row's key settles, focus the first of `acts` still there, else the row's policy line. */
+function focusRunKey(key: string, acts: string[]): void {
+  const row = $('viewport').querySelector(`[data-run="${CSS.escape(key)}"]`);
+  const a = document.activeElement;
+  if (a && a !== document.body && !row?.contains(a)) return; // the human moved on: focus stays where they put it
+  const to = acts.map((x) => row?.querySelector(`[data-run-act="${CSS.escape(x)}"]`)).find(Boolean) ?? row?.querySelector('.run-policy');
+  (to as HTMLElement | null | undefined)?.focus({ preventScroll: true });
 }
 
 /* ── #gui-host-hints (founder 2026-10-23): host slips under a reply that names what does not run in Gnomon ── */
 /** the hints each mounted reply drew (the Copy key copies from here: the same string its <code> shows) */
-const hostAt = new Map<string, { text: string; hints: HostHint[] }>();
+const hostAt = new Map<string, { text: string; hints: HostHint[]; skills: string }>();
 let hostCopied: string | null = null;
 let hostCopiedTimer: ReturnType<typeof setTimeout> | null = null;
 function hostHintsFor(key: string, text: string): HostHint[] {
+  // #gui-slash-menu: a slash command naming one of this session's loaded skills runs from / (its slip says so)
+  const skills = focused ? (slashMenu?.flow.loadedSkills(focused) ?? []) : [];
+  const sig = skills.join(' ');
   const had = hostAt.get(key);
-  if (had && had.text === text) return had.hints;
-  const hints = hostHintsOf(text);
-  if (hints.length) hostAt.set(key, { text, hints });
+  if (had && had.text === text && had.skills === sig) return had.hints;
+  const hints = hostHintsOf(text, skills);
+  if (hints.length) hostAt.set(key, { text, hints, skills: sig });
   else hostAt.delete(key);
   if (hostAt.size > 400) hostAt.delete(hostAt.keys().next().value!);
   return hints;
@@ -1080,6 +1139,8 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         now: Date.now(),
         voice: cardVoiceOf(c.card),
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
+        brokered: isBrokeredCard(c.card.block, c.tool), // C5'a3: no plain always key on a brokered MCP card
+        toolScope: c.kind === 'permission' ? toolScopesOf(c.card) : null, // C5'b: the scoped Always, only from a verified tool-scope node
         localNs: localNsOf(session?.principal),
         // #gui-loops: the kernel's authorship basis (status.loops authoredBy agent-key-claim), never guessed from a name
         loopClaimedBy: c.kind.startsWith('loop-') ? loopClaimOf(c.card) : null,
@@ -1569,6 +1630,72 @@ store.onChange(() => standingFeed.repaint());
 // #gui-model-picker: the New-session model select, the header chip + switch, the Settings slot; its own module
 modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice, folder: () => nsField.value() });
 store.onChange(() => modelPicker?.repaint());
+// #gui-tool-tier (C4'b): a local session's tool tier in the header (the owner's key ▾, a plain chip otherwise)
+tierPicker = mountTierPicker(document, { client: () => client, session: (hsid) => store.sessions.get(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), me: () => session?.principal ?? myPrincipal(), model: (hsid) => sessionModelOf(store.transcript(hsid))?.model ?? 'this model', notice, openTools: (hsid, trusted, opener) => void toolsDrawer?.open(hsid, 'tools', trusted, opener) });
+store.onChange(() => tierPicker?.repaint());
+// #gui-capability-browser (C6'b1): the Tools and memory drawer (⋯ more menu, the tier key's menu, the palette)
+toolsDrawer = mountToolsDrawer(document, {
+  client: () => client,
+  session: (hsid) => toolsSessionOf(hsid),
+  rows: (hsid) => store.transcript(hsid),
+  now: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  openTier: (hsid) => tierPicker?.openMenu(hsid) ?? false,
+  openSettings: () => settings.open(MCP_SECTION),
+});
+/** Who may see what of a session in the Tools and memory drawer (null: not a local attended session). */
+function toolsSessionOf(hsid: string): { access: NonNullable<ReturnType<typeof drawerAccess>>; title: string } | null {
+  const s = store.sessions.get(hsid);
+  const access = s ? drawerAccess({ backend: s.backend, loop: s.loop === true, live: isLiveState(s.state), owner: s.owner ?? null, me: session?.principal ?? myPrincipal() }) : null;
+  return s && access ? { access, title: sessionTitle(s) } : null;
+}
+/** The palette's and the more menu's "Tools and memory…": the focused session's drawer, or why not. */
+function openTools(trusted: boolean, opener: HTMLElement | null = null): void {
+  if (!focused || !toolsSessionOf(focused)) return notice('Tools and memory is for a local model session: focus one first', 'info', { source: 'tools' });
+  toolsDrawer?.open(focused, null, trusted, opener);
+}
+// #gui-slash-menu (C6'b2-1): the "/" menu above the composer; #gui-slash-runs: its run rows in the transcript
+slashMenu = mountSlashMenu(document, {
+  client: () => client,
+  textarea: $<HTMLTextAreaElement>('composer-text'),
+  host: $('composer'),
+  now: () => Date.now(),
+  access: (hsid) => slashAccessOf(hsid),
+  commands: SLASH_COMMANDS,
+  runAdded: (v) => {
+    // the row is in the transcript at the press (memory only, like the composer echo)
+    local.push({ seq: store.head + 0.5, kind: 'slash-run', connId: 'local', session: v.hsid, payload: { key: v.key, server: v.server, tool: v.tool }, at: v.at });
+    paintTranscript();
+  },
+  runChanged: (v) => {
+    for (const it of items) if (it.runKey === v.key) remountItem(it.key);
+    paintTranscript();
+  },
+  command: (id, trusted) => run(id, trusted),
+  openTools: (hsid, trusted) => void toolsDrawer?.open(hsid, 'tools', trusted, $('composer-text')),
+  skillRan: (hsid, name, args, turn) => {
+    // a skill run posts as the human's turn: "you ran skill /name args", stamped with its turn id (pairs with turn.sent)
+    local.push({ seq: store.head + 0.5, kind: 'skill-ran', connId: 'local', session: hsid, payload: { name, args }, at: new Date().toISOString(), ...(turn ? { turn } : {}) });
+    follow.jump();
+    paintTranscript();
+  },
+  skillsChanged: (hsid) => {
+    if (hsid !== focused) return;
+    for (const it of items) if (it.role === 'assistant') remountItem(it.key);
+    paintTranscript();
+  },
+});
+/** The palette's and a host slip's "Open / menu": the focused session's menu, or why not. */
+function openSlash(trusted: boolean): void {
+  if (!focused || !slashAccessOf(focused)) return notice('The / menu is for a running session you opened: focus one first', 'info', { source: 'slash' });
+  slashMenu?.openFor(focused, trusted);
+}
+/** What "/" offers in a session: its owner's skills while it runs; a local attended session's tools too (null: nothing). */
+function slashAccessOf(hsid: string): { tools: boolean; skills: boolean } | null {
+  const s = store.sessions.get(hsid);
+  const me = session?.principal ?? myPrincipal();
+  if (!s || s.loop === true || !isLiveState(s.state) || s.owner == null || me === null || s.owner !== me) return null;
+  return { tools: drawerAccess({ backend: s.backend, loop: false, live: true, owner: s.owner, me }) === 'owner', skills: true };
+}
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
 // #gui-local-model: the Local model section's press paths (ui/local-model.ts); the sheet hands it presses
 const localModel = new LocalModelController({
@@ -1604,10 +1731,34 @@ const mcpServers = new McpServersController({
   },
   focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
   connId: () => session?.connId ?? null, // a card's skips are shown only to the connection that decided it
+  // C5'b: the trust panel moves focus only when it is already in the panel (or on its Trust… key)
+  focused: () => {
+    const a = document.activeElement as HTMLElement | null;
+    return a && a.closest(`#settings-body [data-section="${MCP_SECTION}"]`) ? (a.dataset.lmAct ?? null) : null;
+  },
+});
+// #gui-capability-browser (C6'b1): Settings › Local model › Kept memory (the ended sessions' working memory)
+const keptTitle = (hsid: string): string => {
+  const s = store.sessions.get(hsid);
+  return s ? sessionTitle(s) : `session …${hsid.slice(-8)}`;
+};
+const kept = new KeptFlow({
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  repaint: () => settings.repaint(),
+  title: keptTitle,
+  // Open: the drawer over the sheet; Esc closes it and focus returns to this Open key
+  open: (hsid) => void toolsDrawer?.openMemory(hsid, keptTitle(hsid), true, document.activeElement as HTMLElement | null),
+  focus: (f) => {
+    const sec = document.querySelector(`#settings-body [data-section="${LOCAL_SECTION}"]`);
+    const el = 'heading' in f ? sec?.querySelector('h3') : sec?.querySelector(`[data-lm-act="${CSS.escape(f.act)}"]${f.value !== undefined ? `[data-lm-value="${CSS.escape(f.value)}"]` : ''}`);
+    (el as HTMLElement | null | undefined)?.focus();
+  },
 });
 const settings = mountSettings(document, {
   local: localModel,
   mcp: mcpServers,
+  kept,
+  onOpen: () => void kept.read(),
   model: () =>
     settingsModel({
       theme,
@@ -1625,6 +1776,7 @@ const settings = mountSettings(document, {
       local: { ui: localModel.ui(), loopsUsing: loopsUsingLocal() },
       rules: rulesBlock(rulesStatusOf(status), rulesUi, (hsid) => sessionName(hsid) || null),
       mcp: { ui: mcpServers.ui(), hsid: focused },
+      kept: kept.ui(),
     }),
   run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
   revoke: (grantId) => void revokeGrant(grantId),
@@ -1852,6 +2004,12 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         loopRow(r); // #gui-loops: loop done toasts and a status re-read
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
         rulesRow(r); // #gui-rules-view: a rule row re-reads status.rules; a timed off that ended is a 6 s toast
+        trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
+        ruleRanRow(r); // C6'b2-2: an Always rule passed an MCP call with no card: "ran by rule", one toast per rule
+        mcpFailRow(r); // C6'b1: a server of my running local session stopped: a fail toast with "see Tools"
+        toolsDrawer?.row(r); // C6'b1: the open drawer re-reads on its session's tool.selection and session.mcp rows
+        slashMenu?.flow.row(r); // C6'b2-1: a carded "/" run settled (read its result once); the open menu re-reads
+        if (r.kind === 'session.memory' && settings.isOpen() && (r.payload as { op?: unknown } | undefined)?.op === 'delete') void kept.read(); // C6'b1: Kept memory
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
@@ -2128,11 +2286,11 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
  * #gui-local-model (rule form-says-where-the-card-is): Decide in the stack focuses the card GROUP, never its Allow,
  * so a second Enter cannot allow it.
  */
-function focusCardGroup(cardId: string): void {
+function focusCardGroup(cardId: string, what: CardLabel = 'grant card'): void {
   uncoverStack(stackCovers);
   const el = cardInPile(cardId) as HTMLElement | null;
   if (!el) {
-    notice(notArrivedText('grant card'), 'warn');
+    notice(notArrivedText(what), 'warn');
     if (noticeShown) cardWait = { cardId, toast: noticeShown };
     return;
   }
@@ -2745,6 +2903,93 @@ function rulesRow(r: { kind: string; payload?: unknown; principal?: string }): v
   void refreshStatus();
 }
 
+/**
+ * C6'b1 (#gui-capability-browser): a kernel-signed session.mcp{state:'failed'} of a running local session this human
+ * opened is a fail toast "<server> stopped: <short cause>" whose key "see Tools" opens the drawer at that server.
+ */
+function mcpFailRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'session.mcp' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = mcpFailToastOf(r);
+  if (!t || toolsSessionOf(t.hsid)?.access !== 'owner') return;
+  toasts().show(t.text, { kind: MCP_FAIL_TOAST.kind, key: { label: MCP_FAIL_TOAST.key, onPress: (e: MouseEvent) => e.isTrusted && toolsDrawer?.openServer(t.hsid, t.server, true) } });
+}
+
+/**
+ * C6'b2-2 (Mika, toast variant rule-ran): a kernel-signed approval.auto{modeRef:'rule:…'} for an MCP tool of a local
+ * session this human opened is a toast "ran by rule · {tool} on {server} · by you from / | by the model" (C6'a2-4: the
+ * row's author; a toast that saw both says "by you and the model"): warn
+ * for a tool that can't be undone, else info. Its one key, Revoke, removes the rule (request.rules.apply{remove}: it
+ * only tightens, no presence). Repeated passes of one rule update ONE toast ("ran 4 times by rule"), never a flood.
+ */
+const ruleToasts = new Map<string, { n: number; by: RuleRanBy; handle: ToastHandle }>();
+function ruleRanRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'approval.auto' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = ruleRanOf(r);
+  if (!t || toolsSessionOf(t.hsid)?.access !== 'owner') return;
+  const had = ruleToasts.get(t.ruleId);
+  if (had?.handle.present) {
+    had.n++;
+    had.by = ruleRanByMerge(had.by, t.by);
+    if (had.handle.keyEl) had.handle.update(ruleRanText(t, had.n, had.by), { said: ruleRanText(t, had.n, had.by, { full: true }) }); // a Revoke in flight or done keeps its words
+    return;
+  }
+  const cls = rulesStatusOf(status).rules.find((x) => x.ruleId === t.ruleId)?.class ?? null;
+  const entry = { n: 1, by: t.by as RuleRanBy, handle: null as unknown as ToastHandle };
+  entry.handle = toasts().show(ruleRanText(t, 1, entry.by), {
+    said: ruleRanText(t, 1, entry.by, { full: true }),
+    kind: RULE_RAN_TOAST.kind(cls),
+    variant: 'rule-ran',
+    key: {
+      label: RULE_RAN_TOAST.key,
+      ariaLabel: RULE_RAN_TOAST.keyName(t),
+      onPress: (e: MouseEvent) => {
+        const k = entry.handle.keyEl;
+        if (!e.isTrusted || !k || k.getAttribute('aria-disabled') === 'true') return; // G-GUI-04; once per press
+        if (!client) return void notice('Not removed: nothing was sent, Gnomon is not connected · next: try again once it is', 'fail', { source: 'rule-revoke' });
+        k.setAttribute('aria-disabled', 'true');
+        k.setAttribute('aria-busy', 'true');
+        k.textContent = RULE_RAN_TOAST.removing;
+        client
+          .call('log.append', ruleRevokeRequest(t.ruleId))
+          .then(() => {
+            entry.handle.update(RULE_RAN_TOAST.removed, { dropKey: true });
+            void refreshStatus();
+          })
+          .catch((err: unknown) => {
+            k.removeAttribute('aria-disabled');
+            k.removeAttribute('aria-busy');
+            k.textContent = RULE_RAN_TOAST.key;
+            notice(ruleRevokeFailWords(err instanceof RpcError ? err.refusal.reason : null, !(err instanceof RpcError)), 'fail', { source: 'rule-revoke' });
+          });
+      },
+    },
+  });
+  ruleToasts.set(t.ruleId, entry);
+}
+
+/** C5'b: a kernel-signed tool.trust{op:'dropped'} (launch or tools changed) is a warn toast; Trust again… opens its row. */
+function trustDropRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'tool.trust' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = trustDropToastOf(r, status);
+  if (!t) return;
+  toasts().show(t.text, {
+    kind: TRUST_DROP_TOAST.kind,
+    key: {
+      label: TRUST_DROP_TOAST.key,
+      onPress: (e: MouseEvent) => {
+        if (!e.isTrusted) return;
+        settings.open(MCP_SECTION);
+        // the server's own row: its Trust… key (or its first key while trust waits on a new listing)
+        const v = t.id.replace(/["\\]/g, '\\$&');
+        const sec = document.querySelector(`#settings-body [data-section="${MCP_SECTION}"]`);
+        const k = (sec?.querySelector(`[data-lm-act="mcp:trust"][data-lm-value="${v}"]`) ?? sec?.querySelector(`[data-lm-value="${v}"]`)) as HTMLElement | null;
+        k?.scrollIntoView({ block: 'center' });
+        k?.focus({ preventScroll: true });
+      },
+    },
+  });
+}
+
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
 /** The control's state is the kernel's status.runModes only (never a guess): re-read on a mode row (store 'modes'). */
 async function refreshStatus(): Promise<void> {
@@ -2959,6 +3204,8 @@ function paintModeMenu(): void {
 }
 
 function openMoreMenu(): void {
+  // #gui-capability-browser (C6'b1): "Tools and memory…" for a local attended session only
+  $('tools-open').hidden = !focused || !toolsSessionOf(focused);
   $('more-menu').hidden = false;
   $('more-btn').setAttribute('aria-expanded', 'true');
 }
@@ -3596,6 +3843,8 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'rules.open') settings.open('rules'); // #gui-rules-view: Settings › Permissions › Rules
   else if (id === 'local.setup') settings.open(LOCAL_SECTION); // #gui-local-model: section-focused
   else if (id === 'mcp.open') settings.open(MCP_SECTION); // #gui-mcp-servers: section-focused
+  else if (id === 'tools.open') openTools(trusted); // #gui-capability-browser: the focused local session's drawer
+  else if (id === 'slash.open') openSlash(trusted); // #gui-slash-menu: the focused session's "/" menu
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
@@ -3796,6 +4045,8 @@ function wire(): void {
     if (c) return onChoice(e, c);
     const send = (e.target as HTMLElement).closest('.choices.live [data-choice-send]') as HTMLElement | null;
     if (send) return onChoiceSend(e, send); // #gui-ask-card multi-select
+    const rk = (e.target as HTMLElement).closest('[data-run-act]') as HTMLElement | null;
+    if (rk) return onRunKey(rk, e);
     toggleAct(e.target);
   });
   // #gui-table-talk: inside the live choices a letter / number picks (only with an empty composer); arrows move
@@ -3950,6 +4201,8 @@ function wire(): void {
   // dictation: typing in the composer, or clicking into a draft, holds it (never auto-send mid-edit)
   $('composer-tall').addEventListener('click', () => toggleComposerTall());
   window.addEventListener('resize', () => fitComposer());
+  // #gui-slash-menu: "/" and one word opens the menu on the focused session (the human's own typing only)
+  $('composer-text').addEventListener('input', (e) => slashMenu?.input($<HTMLTextAreaElement>('composer-text').value, focused, e.isTrusted));
   $('composer-text').addEventListener('input', () => {
     fitComposer();
     if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: $<HTMLTextAreaElement>('composer-text').value, now: Date.now() });
@@ -3975,6 +4228,7 @@ function wire(): void {
   });
   $('dictation-hold').addEventListener('click', () => dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() }));
   $('composer-text').addEventListener('keydown', (e) => {
+    if (slashMenu?.key(e)) return; // #gui-slash-menu: ↑/↓, Enter and Esc belong to the open "/" menu
     if (e.key === 'Tab' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault(); // ⇧Tab cycles the run mode, as in Claude Code (§11.5)
       cycleMode(e.isTrusted);
@@ -4063,6 +4317,10 @@ function wire(): void {
   });
   // fidelity 2: the ⋯ menu holds the item counts and the raw toggle (the comp's header has neither)
   $('more-btn').addEventListener('click', () => ($('more-menu').hidden ? openMoreMenu() : closeMoreMenu()));
+  $('tools-open').addEventListener('click', (e) => {
+    closeMoreMenu();
+    openTools(e.isTrusted, $('more-btn'));
+  });
   document.addEventListener('click', (e) => {
     if (!$('more-menu').hidden && !(e.target as HTMLElement).closest('.more-wrap')) closeMoreMenu();
   });
@@ -4155,6 +4413,9 @@ function wire(): void {
       closeVoiceMenu(true); // #gui-voice-ladder: back to the pill
     } else if (e.key === 'Escape' && voiceSheet.isOpen()) {
       voiceSheet.close(); // #gui-voice-settings: an inline step ends with the sheet (a trial never outlives it)
+    } else if (e.key === 'Escape' && toolsDrawer?.isOpen()) {
+      e.preventDefault();
+      toolsDrawer.close(); // #gui-capability-browser: focus returns to the opener
     } else if (e.key === 'Escape' && dict.grace) {
       e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
       dispatchDictation({ type: 'graceCancel', now: Date.now() });

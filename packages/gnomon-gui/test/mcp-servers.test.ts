@@ -27,7 +27,7 @@ const rows = (s: unknown, hsid: string | null = 'h1', ui = emptyMcpUi()): Settin
 const keysOf = (r: SettingRow | undefined): string[] => (r && 'keys' in r && r.keys ? r.keys.map((k) => `${k.act}${k.value ? `=${k.value}` : ''}`) : []);
 const byLabel = (rs: SettingRow[], l: string) => rs.find((r) => 'label' in r && r.label === l);
 
-describe('#gui-mcp-servers section', () => {
+describe('G-MCP-08 #gui-mcp-servers section', () => {
   it('is a kernel-owned section with the first-party Paradigm MCP on, and names, never values', () => {
     const sec = mcpSection({ status: status(), ui: emptyMcpUi(), hsid: 'h1' });
     expect(sec).toMatchObject({ id: MCP_SECTION, title: 'MCP servers', owner: '· kernel-owned' });
@@ -107,7 +107,7 @@ describe('#gui-mcp-servers section', () => {
   });
 });
 
-describe('#gui-mcp-servers press path', () => {
+describe('G-MCP-08 #gui-mcp-servers press path', () => {
   function ctl(answer: (req: unknown) => Promise<unknown>) {
     const calls: unknown[] = [];
     const decided: string[] = [];
@@ -215,7 +215,7 @@ describe('#gui-mcp-servers press path', () => {
   });
 });
 
-describe('#gui-mcp-servers one press, or several on one card (Mika 2026-10-23)', () => {
+describe('G-MCP-08 #gui-mcp-servers one press, or several on one card (Mika 2026-10-23)', () => {
   const flush = () => new Promise((r) => setTimeout(r, 0));
   function ctl(answer: (req: unknown) => Promise<unknown>) {
     const calls: unknown[] = [];
@@ -272,7 +272,7 @@ describe('#gui-mcp-servers one press, or several on one card (Mika 2026-10-23)',
   });
 });
 
-describe('#gui-mcp-servers skips per card (kernel 09ecc6a8: status.mcp.skips)', () => {
+describe('G-MCP-08 #gui-mcp-servers skips per card (kernel 09ecc6a8: status.mcp.skips)', () => {
   const flush = () => new Promise((r) => setTimeout(r, 0));
   const run = async (st: unknown, connId: string | null) => {
     let cur: unknown = status();
@@ -313,7 +313,7 @@ describe('#gui-mcp-servers skips per card (kernel 09ecc6a8: status.mcp.skips)', 
   });
 });
 
-describe('#gui-mcp-servers enable card face (Mika 2026-10-23)', () => {
+describe('G-MCP-08 #gui-mcp-servers enable card face (Mika 2026-10-23)', () => {
   it('shows the kernel lines (what runs, the fetch warning) on the face, not under details, and its title wraps', async () => {
     const { renderCard } = await import('../src/core/render.js');
     type El = { tag: string; className: string; attrs: Map<string, string>; kids: unknown[]; appendChild(c: unknown): unknown; setAttribute(n: string, v: string): void };

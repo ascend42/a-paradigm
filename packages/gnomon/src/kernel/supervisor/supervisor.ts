@@ -113,16 +113,23 @@ import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
+import type { LocalMcpServer, McpListCache } from '../local/mcp-client.js';
+import type { PoolTrust } from '../local/trust-book.js';
+import type { ResultPolicyPort } from '../local/result-policy.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, mcpResponseLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import { claudeCodeAdapter, type ClaudeCodeAdapter, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import type { UsageMeter } from '../../adapters/backend-adapter.js';
+import { LineSplitter } from '../../adapters/line-splitter.js';
 import { EDIT_RULE_TOOLS as EDIT_SCOPE_TOOLS } from './rules.js';
 import { answerFor, askNoteCap, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
-import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle } from './local-session.js';
+import { LocalLane, SESSION_SKILL_RUN_REQUEST, SESSION_SKILLS_LIST_REQUEST, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle, type LocalSessionAsker, type SkillRunStatus } from './local-session.js';
+import { CLAUDE_SKILL_TOKEN_LIMIT, listSkills, nativeSkillText, skillArgsRefusal, skillRunTemplate, SlashSkillsProbe, stagedSkillForRun, type SlashProbeRun, type StagedSkills } from './skill-run.js';
+import { sendTokens } from '../local/result-policy.js';
 import type { LocalProbeSink } from '../local/config-request.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
@@ -237,6 +244,12 @@ export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids
 
 export interface SupervisorOptions {
   log: SupervisorLog;
+  /**
+   * slice C6'a2-2 (brief item 6): runs the slash-skill canary under a Claude binary (SlashSkillsProbe stages it in a
+   * kernel scratch dir and caches the answer by the binary's sha256). Absent: no probe, so a Claude session's "/" skill
+   * runs as the kernel's template.
+   */
+  slashProbe?: SlashProbeRun;
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'> & Partial<Pick<BudgetFuse, 'reattribute'>>;
   /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
@@ -276,10 +289,24 @@ export interface SupervisorOptions {
    * package dir and the node that runs it, so no session can swap what the next session's server runs.
    */
   mcpDenyWrite?: (ctx: { cwd: string; worktree?: string }) => readonly PolicyPath[];
+  /**
+   * TD-2026-10-27-833 slice C2' (#local-mcp-client): the MCP servers an attended LOCAL session may reach (the daemon:
+   * McpServers.composeLocal, the same set a Claude session gets in that repo). Absent ⇒ local sessions get none.
+   */
+  localMcp?: (ctx: { hsid: string; cwd: string; worktree?: string }) => readonly LocalMcpServer[];
+  /** slice C5'a1: the daemon's tools/list cache and TrustBook, shared with request.mcp.trust (#mcp-servers) */
+  localMcpCache?: McpListCache;
+  localMcpTrust?: PoolTrust & { subscribe?: (fn: (id: string) => void) => () => void };
+  /** slice C6'a2-1 (#local-result-policy): the human's "/" result policy (kernel-signed tool.result.policy rows) */
+  localResultPolicy?: ResultPolicyPort;
+  /** slice C6'a2-1 (Aegis L1): the last day's rule passes (approval.auto{modeRef:'rule:<id>'}) */
+  localRulePasses?: () => Iterable<{ ruleId: string; at: number }>;
+  /** slice C6'a1 (Aegis L1): McpServers.enabledAt — a third-party server is still on at its open-time launch hash */
+  localMcpEnabled?: (id: string, launchHash: string) => boolean;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
-  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; editPath?: string | null; repoEdits?: boolean }) => { ruleId: string } | null;
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; editPath?: string | null; repoEdits?: boolean; bindHash?: string | null; toolClass?: 'mutate' | 'destructive' }) => { ruleId: string } | null;
   /**
    * P8-D87 run modes (broker/run-mode.ts RunModeControl.view): the session's EFFECTIVE mode (stricter of the chosen
    * mode and the strictness ceiling), read at every permission request. Absent ⇒ `ask` (Move 1's behaviour).
@@ -388,7 +415,7 @@ interface Session {
   state: 'running' | 'stopping' | 'exited';
   turns: number;
   seq: number;
-  meter: UsageMeter;
+  meter: UsageMeter<AdapterEvent>;
   stderrBytes: number;
   watch: NodeJS.Timeout | null;
   /** P8-D96: unanswered can_use_tool requests by requestId (bounded: MAX_PENDING_PERMISSIONS) */
@@ -399,6 +426,15 @@ interface Session {
   /** item 3: ExitPlanMode tool_use input.plan by tool_use id (bounded TOOL_ID_CAP) and the last plan-file Write content (display only) */
   planUses: Map<string, string>;
   lastPlanFile: string | null;
+  /** slice C6'a2-2: the repo skills staged for this session (its kernel-staged plugin; absent: no repo context) */
+  skills?: StagedSkills;
+  /**
+   * slice C6'a2-2 (Aegis, audit parity): set once a repo skill's text was sent to this session. AUDIT ONLY: nothing
+   * gates on it (the local lane's taint gates destructive rules; a Claude session has no such gate).
+   */
+  skillTainted?: boolean;
+  /** slice C6'a2-2: the private claude copy this session execs and its sha256 hex (the slash probe's cache key) */
+  binary?: { exec: string; sha256: string };
   policy: SessionPolicy;
   /** §2.4 rule 11: set when the drain wrote this session's session.drained row */
   drained?: DrainOutcome;
@@ -562,6 +598,8 @@ function refused(code: RefusalCode, message: string, data: Record<string, unknow
   return new RefusedError(refuse({ code, data }), `#supervisor: ${message}`);
 }
 
+/** #backend-adapter: this lane's wire codec (argv, parse, meter, turn / interrupt lines, permission / control / SDK MCP channels). */
+const drv: ClaudeCodeAdapter = claudeCodeAdapter;
 const sha = (s: string | Buffer): string => `sha256:${createHash('sha256').update(s).digest('hex')}`;
 
 /** The `turn.sent` / client `session.inject` contentHash of a turn's text (the exact bytes written to claude's stdin as the user message text). `gnomon trace` (#gnomon-trace) reuses it to check a transcript prompt against the log. */
@@ -708,6 +746,8 @@ export class SessionSupervisor {
   /** Aegis M: the in-home node dir on the session PATH is write-denied in every session profile */
   readonly #pathDenies: PolicyPath[];
   readonly #local: LocalLane;
+  /** slice C6'a2-2: whether a Claude binary runs a plugin skill typed into a turn (cached by its sha256) */
+  readonly #slash: SlashSkillsProbe;
   /** §2.4 rule 11: set once a drain begins; session.open and session.send are refused ENGINE{draining} from then on */
   #drain: Promise<DrainReport> | null = null;
   /** §2.4 rule 11 (B2): hsids this kernel resumed after an upgrade */
@@ -755,11 +795,16 @@ export class SessionSupervisor {
     // Aegis ruling 3: one row at daemon start when the OS identity is incomplete (names only, no error text)
     const missing = missingIdentity(this.#identity);
     if (missing.length) void Promise.resolve().then(() => o.log('session.sandbox', { phase: 'identity', missing })).catch(() => undefined);
+    this.#slash = new SlashSkillsProbe({ home: o.home, ...(o.slashProbe ? { run: o.slashProbe } : {}) });
     this.#local = new LocalLane({
-      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath, pathDenies: this.#pathDenies,
+      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), ...(this.#gitVerbs ? { gitVerbs: this.#gitVerbs } : {}), ...(o.runMode ? { runMode: o.runMode } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath, pathDenies: this.#pathDenies,
       kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
+      ...(o.localMcp ? { localMcp: o.localMcp } : {}), ...(o.mcpDenyWrite ? { mcpDenyWrite: o.mcpDenyWrite } : {}),
+      ...(o.localMcpCache ? { mcpCache: o.localMcpCache } : {}), ...(o.localMcpTrust ? { mcpTrust: o.localMcpTrust } : {}), ...(o.localResultPolicy ? { resultPolicy: o.localResultPolicy } : {}), ...(o.localRulePasses ? { rulePasses: o.localRulePasses } : {}), ...(o.localMcpEnabled ? { mcpEnabled: o.localMcpEnabled } : {}),
+      // slice C5'a2 (^local-tool-grant): brokered tool rules from the same RuleBook
+      ...(o.alwaysRule ? { alwaysRule: o.alwaysRule } : {}),
     });
   }
 
@@ -922,6 +967,8 @@ export class SessionSupervisor {
 
   async #spawnClaude(req: OpenRequest, r?: ResumeInput): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
     const hsid = r?.hsid ?? mintHsid();
+    // Aegis N5: a resumed hsid closed earlier in this process (drain → resume) gets its kernel verbs back
+    if (r) this.#gitVerbs?.openSession(hsid);
     const principalId = this.#principalFor(hsid);
     const uuid = r?.uuid ?? randomUUID();
     const userHome = this.#userHome();
@@ -1096,7 +1143,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), appendSystemPrompt: sessionSystemPrompt({ ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}), gitVerbs: this.#gitVerbs ? GIT_VERBS_GUIDANCE : null }), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
+      const argv = drv.argv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), appendSystemPrompt: sessionSystemPrompt({ ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}), gitVerbs: this.#gitVerbs ? GIT_VERBS_GUIDANCE : null }), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -1133,8 +1180,9 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], consumedTurns: 0, replayLive: false,
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
+        ...(repoCtx ? { skills: { dir: repoCtx.pluginDir, ctx: { skills: repoCtx.skills, refused: repoCtx.refused } } } : {}), binary: { exec: priv.exec, sha256: priv.sha256 },
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -1300,7 +1348,7 @@ export class SessionSupervisor {
   }
 
   async #onLine(s: Session, line: string): Promise<void> {
-    const ev = parseStreamLine(line);
+    const ev = drv.parse(line);
     const bytes = Buffer.byteLength(line);
     // Aegis M2: a hook line's facts (id, event, name, exit, outcome, blocked) come from the FULL line, before it is
     // stored by hash or rewritten, and ride as kernel-set fields: a hook printing past EVENT_LINE_CAP cannot hide a block
@@ -1343,7 +1391,7 @@ export class SessionSupervisor {
       case 'partial':
         if (ev.parentToolUseId === null) this.#replyEdge(s, ev.type, ev.stopReason);
         await this.#o.log('turn.partial', { hsid: s.hsid, bytes: ev.bytes }, { session: s.hsid });
-        if (ev.usage) await usage('turn.usage', s.meter.message(ev.usage.messageId, ev.usage.tokens));
+        await usage('turn.usage', s.meter.charge(ev));
         return;
       case 'message':
         for (const t of ev.toolUses) {
@@ -1354,7 +1402,7 @@ export class SessionSupervisor {
           if (t.name === 'ExitPlanMode' && t.id !== null && typeof inp.plan === 'string' && inp.plan.length <= MAX_ATTACHED_PLAN_CHARS) bounded(s.planUses, t.id, inp.plan);
           if (t.name === 'Write' && typeof inp.file_path === 'string' && PLAN_FILE.test(inp.file_path) && typeof inp.content === 'string' && inp.content.length <= MAX_ATTACHED_PLAN_CHARS) s.lastPlanFile = inp.content;
         }
-        if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
+        await usage('turn.usage', s.meter.charge(ev));
         if (ev.parentToolUseId === null && ev.stopReason !== null) {
           // voice busy guard: an assistant line carrying its stop_reason (no partial stream): end_turn ends the reply,
           // any other stop (tool_use) means the turn goes on
@@ -1386,7 +1434,7 @@ export class SessionSupervisor {
         const closedPermits = s.turnPermits.splice(0, k);
         s.consumedTurns = Math.max(0, s.consumedTurns - k);
         const turn = closedIds[closedIds.length - 1];
-        await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}), ...(turn !== undefined ? { turn } : {}) });
+        await usage('turn.result', s.meter.charge(ev), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}), ...(turn !== undefined ? { turn } : {}) });
         // voice busy guard: the reply's end is its message_stop when it was seen (the result may be ~30 s late);
         // the result is the fallback end. A turn still outstanding after this result streams next (re-armed).
         if (!s.replyDone) s.lastTurnEndAt = Date.now();
@@ -1425,7 +1473,7 @@ export class SessionSupervisor {
           await this.#o.broker?.suspect?.('duplicate-request-id', { hsid: s.hsid, requestId: ev.requestId, cardId: dup.cardId }, s.hsid).catch(() => undefined);
           if (dup.cardId) await this.#o.broker?.expire?.(dup.cardId, 'duplicate-request-id').catch(() => false);
         }
-        await this.#write(s, permissionDenyLine(ev.requestId, 'Denied: the permission request was malformed.'), { answer: 'deny', requestId: ev.requestId, why: 'malformed' });
+        await this.#write(s, drv.denyLine(ev.requestId, 'Denied: the permission request was malformed.'), { answer: 'deny', requestId: ev.requestId, why: 'malformed' });
         return;
       }
       case 'malformed':
@@ -1454,7 +1502,7 @@ export class SessionSupervisor {
         void this.#onMcp(s, ev).catch(() => undefined);
         return;
       case 'control-request-unknown':
-        if (ev.requestId !== null) await this.#write(s, controlErrorLine(ev.requestId, `unsupported control request: ${ev.subtype.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId });
+        if (ev.requestId !== null) await this.#write(s, drv.errorLine(ev.requestId, `unsupported control request: ${ev.subtype.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId });
         return;
       default:
         return; // user replays, control responses, unknown types and malformed lines: logged above, never acted on
@@ -1465,11 +1513,11 @@ export class SessionSupervisor {
   async #onMcp(s: Session, ev: Extract<AdapterEvent, { kind: 'mcp-message' }>): Promise<void> {
     const verbs = this.#gitVerbs;
     if (!verbs || ev.serverName !== KERNEL_MCP_SERVER) {
-      await this.#write(s, controlErrorLine(ev.requestId, `no sdk mcp server named ${ev.serverName.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId, channel: 'kernel-mcp' });
+      await this.#write(s, drv.errorLine(ev.requestId, `no sdk mcp server named ${ev.serverName.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId, channel: 'kernel-mcp' });
       return;
     }
     const answer = await kernelMcpAnswer(ev.message, verbs, () => (s.state === 'running' ? this.#verbSession(s) : null));
-    await this.#write(s, mcpResponseLine(ev.requestId, answer), { answer: 'mcp', requestId: ev.requestId, channel: 'kernel-mcp' });
+    await this.#write(s, drv.mcpResponseLine(ev.requestId, answer), { answer: 'mcp', requestId: ev.requestId, channel: 'kernel-mcp' });
   }
 
   /**
@@ -1503,7 +1551,7 @@ export class SessionSupervisor {
       dup.closedWhy = 'duplicate-request-id';
       await this.#o.broker?.suspect?.('duplicate-request-id', { hsid: s.hsid, requestId, cardId: dup.cardId }, s.hsid).catch(() => undefined);
       if (dup.cardId) await this.#o.broker?.expire?.(dup.cardId, 'duplicate-request-id').catch(() => false);
-      await this.#write(s, permissionDenyLine(requestId, 'Denied: the permission request id was reused.'), { answer: 'deny', requestId, why: 'duplicate-request-id' });
+      await this.#write(s, drv.denyLine(requestId, 'Denied: the permission request id was reused.'), { answer: 'deny', requestId, why: 'duplicate-request-id' });
       return;
     }
     const repo = s.worktree ?? s.cwd;
@@ -1512,7 +1560,7 @@ export class SessionSupervisor {
     const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite, ...(planText ? { planText } : {}) });
     if (plan.kind === 'auto-deny') {
       if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny', why: plan.why }, { session: s.hsid });
-      await this.#write(s, permissionDenyLine(requestId, plan.message), { answer: 'deny', requestId, why: plan.why, ...(plan.denyClass ? { denyClass: plan.denyClass } : {}) });
+      await this.#write(s, drv.denyLine(requestId, plan.message), { answer: 'deny', requestId, why: plan.why, ...(plan.denyClass ? { denyClass: plan.denyClass } : {}) });
       return;
     }
     const b = this.#o.broker;
@@ -1525,7 +1573,7 @@ export class SessionSupervisor {
     const mayAuto = (modeRef: string): boolean => (loopBy !== null ? loopClampAllows(modeRef, loopBy.trustCard) : true);
     if (mode === 'manual' && manualHolds(ev.toolName) && !s.planApproved) {
       // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
-      await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
+      await this.#write(s, drv.denyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
       return;
     }
     // #kernel-mcp: the kernel's own verb tools carry their own gate (^git-init-gate / ^git-push-gate: run mode, card,
@@ -1541,7 +1589,7 @@ export class SessionSupervisor {
           logged = false;
         }
       }
-      await this.#write(s, logged ? permissionAllowLine(requestId, structuredClone(ev.input)) : permissionDenyLine(requestId, loopBy !== null ? 'Denied: loop sessions never run kernel verbs.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'kernel-verb' });
+      await this.#write(s, logged ? drv.allowLine(requestId, structuredClone(ev.input)) : drv.denyLine(requestId, loopBy !== null ? 'Denied: loop sessions never run kernel verbs.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'kernel-verb' });
       return;
     }
     // the auto-edits pass for an edit request, outside manual mode: auto-edits uses it, and (TD-2026-10-23-939 follow-up,
@@ -1562,7 +1610,7 @@ export class SessionSupervisor {
           logged = false;
         }
         if (logged) {
-          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'mode', modeRef: 'mode:auto-edits' });
+          await this.#write(s, drv.allowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'mode', modeRef: 'mode:auto-edits' });
           return;
         }
       }
@@ -1586,7 +1634,7 @@ export class SessionSupervisor {
         }
         if (logged) {
           // both hashes: the request's (as on approval.auto) and the anchored input actually sent (sensitive inject row)
-          await this.#write(s, permissionAllowLine(requestId, updated), { answer: 'allow', requestId, why: 'mode', modeRef: roRef, inputHash: plan.inputHash, anchoredInputHash: inputHash(updated) });
+          await this.#write(s, drv.allowLine(requestId, updated), { answer: 'allow', requestId, why: 'mode', modeRef: roRef, inputHash: plan.inputHash, anchoredInputHash: inputHash(updated) });
           return;
         }
       }
@@ -1610,13 +1658,13 @@ export class SessionSupervisor {
           logged = false;
         }
         if (logged) {
-          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'rule', modeRef: `rule:${rule.ruleId}` });
+          await this.#write(s, drv.allowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'rule', modeRef: `rule:${rule.ruleId}` });
           return;
         }
       }
     }
     if (!b || typeof b.decisionOf !== 'function' || s.pending.size >= MAX_PENDING_PERMISSIONS) {
-      await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
+      await this.#write(s, drv.denyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
       return;
     }
     const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
@@ -1674,14 +1722,14 @@ export class SessionSupervisor {
       // updatedInput = the KERNEL-held input + the answers validated against the kernel-held questions (re-checked here)
       const parsed = parseAskAnswer(e.questions, note);
       if (!('error' in parsed)) {
-        const line = permissionAllowLine(requestId, { ...e.input, answers: parsed.answers });
+        const line = drv.allowLine(requestId, { ...e.input, answers: parsed.answers });
         await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length });
         return;
       }
     }
     if (e.cardKind === 'plan' && decision === 'approve-plan') s.planApproved = true; // manual: writes and exec may now raise cards
     const a = e.cardKind ? answerFor(e.cardKind, decision, note) : { behavior: 'deny' as const, message: 'Denied.' };
-    const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
+    const line = a.behavior === 'allow' ? drv.allowLine(requestId, e.input) : drv.denyLine(requestId, a.message);
     await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
   }
 
@@ -1834,7 +1882,7 @@ export class SessionSupervisor {
         throw err;
       }
       const permitId = fresh.permitId;
-      const line = controlSetModelLine(requestId, to);
+      const line = drv.setModelLine(requestId, to);
       const answer = new Promise<{ subtype: string | null; error: string | null; errorCode: string | null } | null | 'timeout'>((resolve) => {
         const t = setTimeout(() => {
           s.controlWaiters.delete(requestId);
@@ -1958,6 +2006,7 @@ export class SessionSupervisor {
       permit = await this.#o.fuse.reserve({ principal, principalClass: 'human', attended: true, kind: 'turn', backend: 'claude-code', scope: { user: principal, session: s.hsid } });
     }
     this.#usedTurnPermits.add(permit.permitId);
+    const inFlight = s.turnPermits.length > 0; // #backend-adapter TurnInput (claude-code's turnLine ignores it)
     s.turnPermits.push(permit.permitId);
     s.replyDone = false; // voice busy guard: a turn sent streams until its reply ends
     s.replyEnding = false;
@@ -1978,7 +2027,7 @@ export class SessionSupervisor {
     const guidance = sentBy === 'piece' ? [base, pieceGuidance(book.nextPiece())].filter((x): x is string => x !== null).join('\n\n') : base;
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), origin: sentBy === 'unverified' ? 'voice-unverified' : sentBy !== null ? 'voice' : 'hand', ...(sentBy !== null ? { sentBy } : {}), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
     book.sent(sentBy);
-    this.#stdin(s, userMessageLine(p.text, guidance));
+    this.#stdin(s, drv.turnLine({ text: p.text, inFlight, guidance }));
     return { turn: turnId(s.hsid, n) };
   }
 
@@ -1986,7 +2035,7 @@ export class SessionSupervisor {
     if (this.#local.has(p.hsid)) return this.#local.stop(principal, p);
     const s = this.#get(principal, p.hsid);
     if (p.interrupt) {
-      if (s.state === 'running') this.#stdin(s, controlInterruptLine());
+      if (s.state === 'running') this.#stdin(s, drv.interruptLine());
       return { signals: ['control_request:interrupt'], exited: false };
     }
     return this.#stopSession(s, 'session.stop');
@@ -1999,7 +2048,7 @@ export class SessionSupervisor {
     await this.#expirePending(s, expireWhy);
     const signals = ['control_request:interrupt', 'stdin:close'];
     try {
-      this.#stdin(s, controlInterruptLine());
+      this.#stdin(s, drv.interruptLine());
       s.trace?.ctl({ event: 'stdin-close', reason });
       s.child.stdin?.end();
     } catch {
@@ -2082,7 +2131,7 @@ export class SessionSupervisor {
     if (outcome === 'interrupted') {
       s.trace?.ctl({ event: 'drain-interrupt', deadlineMs, deadlineSource });
       // Aegis L5: a failed interrupt write is recorded, never swallowed (the drain still proceeds: the stop below ends the turn)
-      await this.#write(s, controlInterruptLine(), { channel: 'drain', deadlineMs, deadlineSource }).catch(() =>
+      await this.#write(s, drv.interruptLine(), { channel: 'drain', deadlineMs, deadlineSource }).catch(() =>
         this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', channel: 'drain', deadlineMs, deadlineSource, failed: true }, { session: s.hsid }).catch(() => undefined),
       );
       await this.#until(() => s.state !== 'running' || s.turnPermits.length === 0, DRAIN_INTERRUPT_GRACE_MS);
@@ -2123,6 +2172,72 @@ export class SessionSupervisor {
   /** The lane's probe state for request.local.probe (a Check again of a configured endpoint refreshes it). */
   localProbeSink(): LocalProbeSink {
     return this.#local;
+  }
+
+  /**
+   * Slice B2 (#local-working-memory): the human-only local-session requests (request.session.compact | .context |
+   * .memory.delete), dispatcher-only; LocalLane.humanRequest re-checks the asker and the owner.
+   */
+  localSessionRequest(asker: LocalSessionAsker, kind: string, payload: unknown): Promise<Record<string, unknown>> {
+    // slice C6'a2-2: "/" skills of a CLAUDE session are served here; a local session's by the lane
+    const hsid = payload !== null && typeof payload === 'object' ? (payload as { hsid?: unknown }).hsid : undefined;
+    if ((kind === SESSION_SKILLS_LIST_REQUEST || kind === SESSION_SKILL_RUN_REQUEST) && typeof hsid === 'string' && this.#sessions.has(hsid)) return this.#claudeSkillRequest(asker, kind, payload as Record<string, unknown>);
+    return this.#local.humanRequest(asker, kind, payload);
+  }
+
+  /**
+   * Slice C6'a2-2: request.session.skills.list{hsid} / request.session.skill.run{hsid, name, args} for a Claude session
+   * (the human owner on a gui or device connection; dispatcher-only, no request row). The skills are the session's
+   * kernel-staged plugin (P8-D97 sanitized copy). A run goes natively (`/project:<name> <args>`, Claude expands the
+   * STAGED copy) when the slash probe says this binary does so, else as the kernel's template (staged body, $ARGUMENTS
+   * once, the kernel's first line). Either way it is the human's next turn and every tool call in it is the model's
+   * (P8-D96 cards as normal). One hash-only skill.run row per listed skill run or refused.
+   */
+  async #claudeSkillRequest(asker: LocalSessionAsker, kind: string, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
+      throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
+    }
+    const keys = kind === SESSION_SKILL_RUN_REQUEST ? ['hsid', 'name', 'args'] : ['hsid'];
+    if (Object.keys(p).some((k) => !keys.includes(k))) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
+    const s = this.#sessions.get(p.hsid as string);
+    if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running session for this principal', { reason: 'not-found' });
+    const listed = s.skills ? listSkills(s.skills) : [];
+    if (kind === SESSION_SKILLS_LIST_REQUEST) return { hsid: s.hsid, skills: listed };
+    if (typeof p.name !== 'string' || p.name.length === 0 || p.name.length > 64) throw refused('BAD_REQUEST', `${kind}: name must be a listed skill name`, { reason: 'bad-params', field: 'name' });
+    const name = p.name;
+    const args = p.args === undefined ? '' : p.args;
+    // Aegis L2: ONE read of the staged copy, the listing checks re-made on that text
+    const staged = stagedSkillForRun(s.skills, name);
+    if (!staged) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', content: `No runnable skill ${name.slice(0, 64)} in this session.` };
+    const skillHash = `sha256:${staged.sha}`;
+    const argsHash = `sha256:${createHash('sha256').update(typeof args === 'string' ? args : (JSON.stringify(args) ?? '')).digest('hex')}`;
+    const row = (via: 'native' | 'template', decision: 'ran' | 'refused', tokens?: number) => this.#o.log('skill.run', { hsid: s.hsid, name, skillHash, argsHash, via, decision, ...(tokens !== undefined ? { tokens } : {}) }, { session: s.hsid }).catch(() => undefined);
+    const bad = skillArgsRefusal(args);
+    if (bad !== null) {
+      await row('template', 'refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', content: `${bad}.` };
+    }
+    // Aegis L1: the substituted template is re-checked for shell preprocessing, before either path
+    const { template, refusal } = skillRunTemplate({ name, staged, args: args as string });
+    if (refusal !== null) {
+      await row('template', 'refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', content: `${refusal}.` };
+    }
+    // Aegis L3: capped like the local lane (the native expansion is the same body)
+    const tokens = sendTokens(template);
+    const limit = CLAUDE_SKILL_TOKEN_LIMIT;
+    if (tokens > limit) {
+      await this.#o.log('skill.run', { hsid: s.hsid, name, skillHash, argsHash, via: 'template', decision: 'over-budget', tokens }, { session: s.hsid }).catch(() => undefined);
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'over-budget', tokens, limit, content: `${name} is about ${tokens} tokens, over the skill limit of ${limit}.` };
+    }
+    const native = s.binary ? await this.#slash.native(s.binary) : false;
+    const text = native ? nativeSkillText(name, args as string) : template;
+    const via = native ? 'native' : 'template';
+    // audit parity with the local lane: marked before the send, gating nothing (Claude sessions have no taint gate)
+    s.skillTainted = true;
+    const sent = await this.send(asker.principal, { hsid: s.hsid, text, origin: 'kernel' });
+    await row(via, 'ran', native ? undefined : tokens);
+    return { hsid: s.hsid, status: 'ran' satisfies SkillRunStatus, via, turn: sent.turn, skillHash, tokens, limit };
   }
 
   /** The local lane config new opens use (undefined = none). */

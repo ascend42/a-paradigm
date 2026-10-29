@@ -43,7 +43,7 @@ function verbsFor(x: SessionWorld) {
 }
 const sess = (x: SessionWorld): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: x.cwd, repoKey: 'sha256:00', mode: 'auto-edits', planApproved: false, loop: false, worktreesGuarded: true });
 
-describe.runIf(OK)('git verbs under the session profile', () => {
+describe.runIf(OK)('G-GIT-07 git verbs under the session profile', () => {
   it('a fresh folder: git init is refused in the sandbox; the kernel makes the repo; the session commits; config and hooks stay denied', async () => {
     w = sessionWorld();
     fs.rmSync(path.join(w.cwd, '.git'), { recursive: true });

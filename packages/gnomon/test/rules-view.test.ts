@@ -365,4 +365,21 @@ describe('#rules-apply: narrow at once, one card for loosening', () => {
     expect(row.wordsChars).toBe(ruleWords(b.get(card(1))!).length);
     expect(() => parseRulesApply({ changes: [{ ruleId: card(1), op: 'off', until: 'Fri Oct 24 2026' }] }, T0)).toThrow();
   });
+
+  it("8.0:local-lane C6'a2-3 (K3): status.rules names a tool rule's class (destructive | mutate); other rules have none", () => {
+    const { b } = clockBook();
+    const bindHash = `sha256:${'c'.repeat(64)}`;
+    const toolRule = (cardId: string, tool: string, irreversible: boolean): RuleRow[] => [
+      { principal: K, keyId: KEY, kind: 'approval.request', payload: { card: { cardId, kind: 'permission' }, ...(irreversible ? { flags: ['irreversible'] } : {}), tool, tool_input: { t: 'x' }, bindHash } },
+      { principal: K, keyId: KEY, kind: 'approval.decide', payload: { cardId, decision: 'always', presence: 'fresh', scope: { kind: 'tool' }, ...(irreversible ? { rootSig: { signer: 'root', sig: 'AAAA' } } : {}) } },
+      { principal: K, keyId: KEY, kind: 'approval.rule.learned', payload: { cardId, tool, match: 'tool', bindHash, presence: 'fresh', repoKey: REPO } },
+    ];
+    for (const r of [...toolRule(card(1), 'mcp:srv/drop', true), ...toolRule(card(2), 'mcp:srv/write', false), ...learnRows(card(3))]) b.fold(r);
+    const rows = (rulesStatus(b) as { rules: Array<Record<string, unknown>> }).rules;
+    const byId = (id: string) => rows.find((r) => r.ruleId === id)!;
+    expect(byId(card(1))).toMatchObject({ match: 'tool', class: 'destructive' });
+    expect(byId(card(2))).toMatchObject({ match: 'tool', class: 'mutate' });
+    expect(byId(card(3)).match).toBe('exact');
+    expect('class' in byId(card(3))).toBe(false);
+  });
 });

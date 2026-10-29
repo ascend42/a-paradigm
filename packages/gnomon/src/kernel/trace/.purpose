@@ -1,0 +1,50 @@
+version: "2.0"
+name: gnomon-kernel-trace
+description: >-
+  Per-project trace capture: mode.ts holds the on/off state per project folder
+  and capture.ts writes a traced session to its jsonl file.
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  trace-capture:
+    description: >-
+      #trace-capture (src/kernel/trace/): a CORE per-project audit mode, on
+      every home and build (TD-2026-10-19-057, amends TD-2026-10-19-139). The
+      human switches it on per project folder (mode.ts; CLI `gnomon trace
+      on|off|status|path`); state lives ONLY in <home>/trace-folders.json
+      (0600, keyed by realpath). The supervisor reads the mode at every
+      session.open and resume for the session cwd and, when on, tees every
+      stdin and stdout line plus kernel ctl notes to
+      <home>/trace/<project key>/<hsid with ':' as '-'>.jsonl, one {t, dir,
+      line} per LF line. Project key = slug of the folder name + '-' + 12 hex
+      of sha256(realpath); project.json in the key dir records the realpath
+      (a mismatch refuses trace-unsafe). NOTHING is written into the project
+      tree. The session profile's gnomon-home deny covers <home>/trace,
+      renames included; no project-tree deny exists for the trace (Aegis L7).
+      Dirs 0700, files 0600, lstat + O_NOFOLLOW|O_NONBLOCK (+O_EXCL to create):
+      a link, FIFO or device refuses trace-unsafe without hanging (Aegis M3).
+      Refusals (TRACE_REFUSALS, published in gnomon-contracts
+      D98_CLOSED_VALUES) are reported on session.sandbox{traced:false,
+      traceRefused}; traced:true otherwise (both reserved under P8-D98). Never
+      blocks a session: bounded queue, out dropped first, in/ctl evict queued
+      out and have a reserve, drops counted in ctl notes. Aegis M1: per-record
+      bound 64 KiB (truncated copy + hash + bytes); past the 50 MiB file bound
+      a capped note, then in/ctl in full and out as skeletons; past 4x out is
+      only counted. Aegis M2/L4: span redaction on the decoded value
+      ([redacted:<kind>]: PEM, grt:v1:, sk-ant-, ghp_, github_pat_, AKIA,
+      xox[bp]-, secret env values). Aegis L3: prior-close-unclean note on a
+      resume after an unclean close; a drain flushes with a 2 s deadline.
+      Residuals: prompt and tool text in the clear, readable by the user's own
+      account outside Gnomon; exact-folder match only (a session in
+      /proj/sub is untraced when /proj is traced, follow-up); in/ctl past the
+      hard bound are unbounded; win32 has no POSIX modes (sessions refuse
+      sandbox-unavailable). Zero deps: no logger; visibility is the kernel
+      log row.
+    path: src/kernel/trace/
+    type: module
+    tags: [gnomon, kernel, audit, paradigm-8]
+    tests:
+      - test/trace-capture.test.ts
+      - test/trace-session.test.ts

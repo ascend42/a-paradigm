@@ -1,0 +1,846 @@
+version: "2.0"
+name: gnomon-kernel-local
+description: >-
+  Local model sessions: the kernel side of running a local runner (the bundled
+  or pinned runner, its endpoint and routing), brokering its tool calls through
+  the supervisor, and the config request that changes the local model setup.
+context:
+  - >-
+    bundled-runner.ts, runner-pin.ts, endpoint.ts, probe.ts and routing.ts start
+    and reach the runner; tool-broker.ts brokers its tool calls;
+    config-request.ts serves the config change.
+  - >-
+    The flows $local-brokered-call and $local-config-flow, which cross into the
+    supervisor and the CLI, stay in packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  local-runner:
+    description: >-
+      #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Loops step 8:
+      LocalLane.openLoop(ref, req) (and supervisor.openLoop) is the ONE
+      unattended open: a trusted loop run's judge/summarize step, only with a
+      registry run reference; origin 'loop', surface none, maxSteps 1, no
+      kernel names in the env, permit scope.loop, model text hash-only in
+      turn.event, ask() returns the reply; no capable endpoint throws
+      LoopModelUnavailable (no card, never Claude); isLoopSession(hsid) for
+      step 12's loop.request pre-gate (see #loop-runner). Kernel side:
+      local-session.ts maps a SUCCESSFUL compaction_end (summaryHash + both
+      token counts, no error) onto the typed session.compacted{hsid, turn,
+      reason, summaryHash, tokensBefore, tokensAfter} row (compactedPayloadOf;
+      T-2026-10-18-016, P8-D93) after the raw turn.event line, which stays;
+      src/kernel/local/endpoint.ts (loopback/LAN rule on the normalised host;
+      hostnames, Anthropic hosts, link-local/metadata, public, userinfo,
+      forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via
+      config.ts), config.ts (compat names = gnomon-local allowlist, no cloud;
+      assertNotClaude: law 7 never runs claude under a backend:local permit),
+      probe.ts (/slots n_ctx, else /props, else Ollama /api/show num_ctx, else
+      the loaded context in /api/ps; tools only on a live tool call; slice C4'a: probeToolSkill
+      runs T2-T4 after a successful T1 — pure predicates over the reply JSON, byte-stable bodies,
+      120 s per test, 3 min in all, stop at the first failure — and fingerprintOf keys the tier
+      cache, see #local-tool-tier),
+      routing.ts (local|claude|any; capable = probe ok + tools (or text-tool
+      opt-in) + n_ctx >= floor 8192), src/adapters/local/runner.ts (pi rpc
+      JSONL driver, tolerant parse, LocalUsageMeter no double count),
+      src/kernel/supervisor/local-session.ts (LocalLane: incapable local =>
+      fallback card via the broker + model.fallback.requested +
+      MODEL_UNAVAILABLE{cardId}, no spawn; fallback-cloud decision opens
+      Claude, S7; any => session.routed; capable => local session.spawn
+      permit recorded with model + repo (P8-D92 meter, never capped) ->
+      session profile -> intend/track kind local-runner; stdout turn.event
+      first, model.capabilities/model.repair, usage against the spawn
+      permit). Round 2: tools confined to realpath roots (no .git, no symlink final component), probe bodies capped 1 MiB, configured model id preferred, assertNotClaude on realpaths + @anthropic-ai/claude-code, explicit backend pins the route, launchPlan TEST-RIG seam (test/local-lane-spawn.test.ts). Slice 2: config.ts loadLocalConfig reads the ROOT-SIGNED
+      <home>/local.signed.json (schema gnomon-root-local:v1; unsigned, tampered,
+      unparseable, invalid or older than the sidecar/chain high-water mark =>
+      NO local config, logged config.unsigned / config.loaded{file,
+      fallback:'none'}; a signed public endpoint is applied and refuses every
+      open BILLING_REFUSED), wired by the daemon; round 2 (Aegis H1): the
+      runner pin is MANDATORY (node + nodeSha256, package dir + treeSha256,
+      entry) — runner-pin.ts copies the tree into <home>/runners/<treeSha256>/,
+      hashes the COPY, verifies node and execs <realpath node> <realpath
+      copied entry> (PERMIT_REQUIRED runner-pin-mismatch{part}); residual:
+      node is not copied (Homebrew node loads ../lib) — round 3: EVERY session profile (Claude and local) denies writes to node, its install prefix and the pinned source dir (policy.ts localRunnerDenies, fed from the loaded local config), and node is re-hashed synchronously right before spawn; a concurrent staging rename (EEXIST/ENOTEMPTY) is success iff the dest verifies; turn.event rows for compaction lines keep summaryHash/summaryBytes even over the line cap; a signed config with maxTokens >= 0.85 x contextTarget is invalid; round 2 (M3): roots resolved ONCE by native realpath (fail closed) and only the resolved paths reach the policy, child config, darwin extras, repo id and spawn cwd; re-checked right before spawn; per-task endpoint choice = first endpoint in
+      signed order capable for the floor; probeAll at daemon start records
+      model.probe/model.capabilities; roots inside the Gnomon home refused;
+      the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a
+      turn in flight writes the steer line under that turn's permit
+      (session.inject + turn.steer, no new permit), idle it is a plain send; round 2: the steer needs the in-flight turn permit live (else PERMIT_REQUIRED); the child refuses a steer that reaches it idle and the kernel logs turn.steer{phase:refused, by:child};
+      Claude sessions refuse steer BAD_REQUEST. T-2026-10-26-003: runner.ts
+      parses message_end.textBytes (the reply's size, never its text) and
+      agent_end input/output beside the total; local-session.ts turn.result
+      keeps usage.tokens as the meter's remainder (charged once) and adds
+      runUsage{tokens,input,output} (the run's whole agent_end usage) and
+      replyBytes (the last assistant text's size, 0 = no answer) beside
+      stopReason, so the GUI can say how the run ended; TD-2026-10-27-833:
+      turn.result also carries maxSteps, the step cap written to that
+      session's local.yaml (cfg.maxSteps ?? 16; a loop step its own cap), so
+      the GUI's step-limit line names its number. Slice C1: tool_request lines, tools_set at open and the answers are #local-tool-broker's (see it). Deferred: darwin sandboxed
+      e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
+      local CLI verb, the claude estimate on the card, attended/unattended
+      local automations (law 5). #backend-adapter: the DRIVER half is src/adapters/local/ (runner.ts: localAdapter, LocalAdapter = core + SteerChannel + ToolBrokerChannel, LocalArgvInput, LocalUsageMeter.charge(ev); fixtures/<gnomon-local version>-turn.jsonl), called as `drv` by src/kernel/supervisor/local-session.ts; the kernel half is src/kernel/local/.
+      SLICE C6'a2-2 ("/" skills, TD-2026-10-28-956 / -969; G-LCL-29): an
+      attended session stages its repo skills at open (buildRepoContext
+      skillsOnly into <session dir>/context: sanitized, never the live file);
+      LocalLane.humanRequest serves request.session.skills.list{hsid} (refused,
+      user-invocable:false and unsupported names loaded:false with a why) and
+      request.session.skill.run{hsid, name, args} (src/kernel/supervisor/
+      skill-run.ts: a loaded listed name, args <= 4 KiB NFC badText-clean one
+      line without !` or ```!, the staged body under the kernel's first line
+      with $ARGUMENTS replaced once by split/join, over half the context target
+      refused over-budget with its tokens and the limit). A run TAINTS the
+      session before the template is written (founder: skill text taints the
+      session; G-LCL-27), goes as the human's turn (session.inject origin
+      kernel, its goal data tool:skill) and every tool call in it is the
+      model's. One hash-only skill.run row per listed run or refusal.
+    driver-path: src/adapters/local/
+    path: src/kernel/local/
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, m1.8]
+    implements: "#backend-adapter"
+    related: ["#backend-adapter", "#claude-adapter", "#gnomon-local"]
+    tests:
+      - test/local-runner.test.ts
+      - test/local-config.test.ts
+      - test/local-lane-spawn.test.ts
+      - test/local-tool-broker.test.ts
+      - test/local-skill-lane.test.ts
+      - test/skill-run.test.ts
+    oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c, G-LCL-29]
+  local-tool-broker:
+    description: >-
+      #local-tool-broker (TD-2026-10-27-833 slices S1 + C1; T-2026-10-26-003):
+      the kernel half of a local session's BROKERED tools,
+      src/kernel/local/tool-broker.ts, with the protocol in
+      src/adapters/local/runner.ts and the wiring in
+      src/kernel/supervisor/local-session.ts. S1 makes the child protocol
+      two-way: child -> kernel tool_request{id tr-N, toolCallId <= 128,
+      name (tool-name pattern), args (a JSON object <= 64 KiB)}, parsed into
+      a typed tool-request event (closed keys; a malformed one carries
+      error); kernel -> child tool_response{id, content <= 256 Ki chars,
+      isError, provenance kernel | mcp:<server>} and tools_set{tools:[{name,
+      description, parameters, class read|mutate|destructive}]} (the child
+      applies it from its next step on); memory_set / compact / set_context
+      are slice B2's (#local-working-memory).
+      Every request has a deadline: TOOL_TIMEOUT_MS 30 s for read,
+      CARD_TIMEOUT_MS 5 min for a carded class, the same numbers on both
+      sides; the child's abort and the kernel's stop/exit cancel calls in
+      flight as error results. $local-brokered-call: resolve the name in the
+      OFFERED set (else unknown-tool) -> validateBrokeredArgs against the full
+      schema (unknown keys always refused, types/required/enum, strings <=
+      min(maxLength, 4096), arrays <= 64, depth 6, 16 KiB, no C0/C1 control or
+      bidi character in keys or strings; G-LCL-15) -> class gate (read runs;
+      mutate/destructive raise a `permission` card via broker.raise with
+      composePermission's fenced lines, every argument shown, allow | deny,
+      no Always; no decisionOf => no-approval-surface; cancel/deadline expires
+      the card) -> the target (C1: the kernel's own SDK server through
+      kernelMcpAnswer, kernelSdkTarget, provenance kernel; the VerbSession of
+      a local session is mode ask, never plan-approved, never guarded
+      worktrees) -> shapeBrokeredResult (NULs dropped, <= 64 Ki chars) -> ONE
+      hash-only tool.brokered{hsid, server, tool?, class?, argsHash, decision,
+      bytes, isError, cardId?} row (contracts 8.0:local-lane, closed decision
+      enum, validateKindPayload) -> reply. At open LocalLane writes ONE
+      tools_set (after session.sandbox, whose brokeredTools names it) with the
+      C1 narrowing (offeredKernelTools: classed tools only, never the worktree
+      verbs, KERNEL_TOOL_CLASSES init=mutate, push/repo-create=destructive);
+      none when no kernel verbs are served (win32) and NEVER for a loop
+      session (its broker offers nothing and refuses loop-session). The
+      tool_request turn.event row is hash-only; requests are answered outside
+      the stdout queue; at most 16 in flight per session (busy). GAPS for
+      C2'/C5' (Aegis owns the class/trust grant design): no capability index
+      or narrowing beyond the worktree drop; kernel verbs keep their own gate,
+      so a carded verb can show the brokered card AND its own (git.push always
+      does); no Always/standing grants for brokered tools; no per-server trust
+      tiers (mcp:<server> provenance is plumbed but has no target yet); a card
+      approved just before the child's deadline may run after the child gave
+      up; control characters are refused outright (no newline in brokered
+      args). Aegis C1 review (fixed): H1 one gate per call — a target that
+      owns its gate (kernelSdkTarget.ownsGate: the kernel verbs) gets no broker
+      card; the verb's VerbSession carries local:true plus the call's
+      AbortSignal and deadline, so the queue wait, the verb card (timeoutMs =
+      deadline - now, expired on abort) and the moment before the effect all
+      honour them (git.verb why `cancelled`), and a local session never gets an
+      Always rule, an Always choice or an auto pass; M1 the receipt time is
+      stamped in the stdout handler, the kernel deadline is the child's minus
+      DEADLINE_MARGIN_MS (it answers `expired` first), and the child's
+      tool_cancel{id} cancels the call; M2 GitVerbs.closeSession marks the hsid
+      closed (refused before any card and after the decision); M3 the run-mode
+      book is read like a Claude session's (manual => the verbs refuse and no
+      mutate/destructive tool is offered at open); M4 one carded call in flight
+      (busy), a deny cool-down of DENY_COOLDOWN_MS per tool + args (cooldown),
+      SUSPEND_AFTER_DENIES denies in SUSPEND_WINDOW_MS suspend the session
+      (suspended; the row is the notice); L1 the validator refuses Cc/Cf/Co/Cn
+      and default-ignorable characters and non-NFC text, checks pattern,
+      minLength and type unions, and refuses a schema keyword it does not
+      know; L2 runner.ts measures nesting iteratively before stringify, a line
+      the parser throws on is still a hash-only row, inputHash's fallback is
+      guarded; L3 the card's argsHash is the canonical inputHash and the
+      tool_execution_* lines of a brokered tool are hash-only; L4 decisions
+      expired and allowed-cancelled (clientApiId moved again); L5 duplicate
+      in-flight ids are bad-args and toolCallId is [A-Za-z0-9_.:-]{1,128}; L6
+      broker cards name the tool `kernel:<tool>` / `mcp:<server>/<tool>`; L7
+      the broker exists before stdout is read (a backstop answers and logs),
+      and a child that stops reading its stdin (> CHILD_STDIN_HIGH_WATER
+      queued) is stopped. Aegis re-check (N1-N6, fixed): a verb's in-flight
+      slot is released when its queued run settles; carded calls the child
+      cancels count toward suspension and carded requests are capped at
+      CARDED_PER_MINUTE; the row's decision follows the verb's closed why
+      (refused for the rest, approved only on success) and carries the verb's
+      cardId (kernel-mcp _meta gnomon/cardId); a request received at or before
+      the session's last interrupt is cancelled; tool_cancel is honoured in the
+      stdout handler ahead of the queue, and once the effect starts the kernel
+      sends tool_progress{id, state running} (the child waits RUN_TIMEOUT_MS
+      more, the kernel deadline stops); GitVerbs.openSession clears a closed
+      hsid on open/resume; schema patterns pass unsafePattern first; the init
+      verb's last cancel check precedes the remnant .git removal.
+      Slice C2': a NARROW tool (#capability-index entry plus its own target,
+      one server of the session's #local-mcp-client pool, ownsGate false) is
+      reassembled (op fixed by the kernel; any other key refused), validated
+      against the FULL schema (safe-regex gate included), class-gated as
+      above (read runs; mutate/destructive one card at a time naming
+      mcp:<server>/<tool> with the reassembled call and the dropped params),
+      called with the signal and deadline, answered source mcp:<server>, and
+      logged tool.brokered{server, tool: the narrow name}; setTools()
+      replaces the set on a server's list_changed (LocalLane re-sends
+      tools_set). LocalLane offers kernel verbs plus the narrow tools
+      #tool-selector picks (slice C3'; it replaced the C2' offerWithin rule)
+      and re-sends tools_set when the selection's hash changes; find_tool is
+      the kernel's own (answered in local-session.ts, never by this broker);
+      a manual session gets read-class narrow tools only; loop sessions get no
+      MCP tools; a session with MCP servers also takes #mcp-servers'
+      write-denies (mcpDenyWrite). Slice C4'a (#local-tool-tier): BrokeredTool.form ('narrow' |
+      'full') is the form a narrow tool was OFFERED in; a full one is read by reassembleFull, a
+      narrow one by reassemble; a tier change re-offering the same entry in another form keeps the
+      previous form callable and winning its name until the child's tools_applied (formShadow).
+      Slice C5'a1 (G-LCL-23): trustLive(server) is checked on the RESOLVED tool (grace entries
+      included): a read narrow tool runs with no card only while its server is trusted or
+      first-party NOW, else it takes a card as mutate (logged so); absent trustLive believes
+      nothing. A trusted read the pool finds untrusted at its first spawn is refused
+      (trust-dropped -> refused). Every brokered MCP card names the server's trust level
+      (TRUST_CARD_LINE).
+      Slice C5'a2 (^local-tool-grant, G-LCL-22): a mutate narrow tool of a server trusted
+      or first-party NOW is ruleable. toolBindHash = sha256 of the entry id, the sha256 of
+      its FULL schema, its class and the server's live trust binding (trustBindingOf; the
+      entry, never its form). The rule pass (after the manual check, before the carded rate
+      limit) asks options.rules.match(repoKey, mcp:<server>/<tool>, bindHash); a match writes
+      approval.auto{modeRef:'rule:<id>'} first (no row, no run), counts as carded in flight,
+      takes RULED_PER_MINUTE (20) and the tool timeout, runs on trust (trustedRead) and logs
+      approved with no cardId. No match: the card offers allow | deny | always with a
+      ruleScope, detail.toolScopes ['tool'] and detail.brokered.bindHash; always counts as
+      allow. Destructive, read, untrusted, kernel verbs, manual and loop never.
+      Slice C5'a3: every brokered card's block carries one {type:'tool-scope', detail} node
+      (like edit-scope) holding the card's full detail, inside the contentHash (toolScopes,
+      tool, server, trust, bindHash), so the GUI can verify what the kernel offered.
+      toolRulePaused (status.rules[].paused, display only) judges EVERY listing under the
+      rule's label (McpListCache.listingsByLabel: ids sharing a label, per-repo listings),
+      the TrustBook and the #mcp-servers enabled set: server-off, untrusted (no live trust
+      for that listing's binding), changed (no mutate entry of the tool has the rule's
+      bindHash), match or unknown. A reason only when every listing gives it (Aegis L1);
+      any match, unknown or mixed reasons: null (omitted).
+      "/" runs and destructive Always, kernel side (TD-2026-10-28-956 / -969
+      slice C6'a2-1). LocalLane.humanRequest serves (dispatcher-only, no
+      request rows, loop sessions refused) request.session.tools.start{hsid}
+      (tier 0 only: #startMcp with no setTools or tools_set; #reselect sends
+      nothing while the tier is 0), request.session.tools.run{hsid, id, args,
+      form} (a capabilities key of the current index; servers-off,
+      unknown-tool, untrusted, narrow only for a non-humanOnly entry; then
+      LocalToolBroker.runHuman: author 'human' rows, HUMAN_RUNS_PER_MINUTE 10,
+      shared MAX_CARDED_IN_FLIGHT, no cooldown or suspension strikes;
+      {status ran|refused|carded, runId, cardId?, content?, isError}) and
+      request.session.tools.result{hsid, runId} (a carded run, same
+      principal, 10 min, read once). capabilities tools[].run says whether
+      "/" can run it (untrusted, unchecked-schema via schemaRefusal). Slice
+      C6'a2-3: request.session.tools.send{hsid, runId} sends one held ran
+      result once (see #local-result-policy); capabilities also gives
+      tools[].policy and tainted.
+      #local-tool-broker: every destructive card, and (Aegis L3) every card of
+      a server with no live trust, is irreversible (fresh presence each time); a
+      destructive tool's Always is root class (rootDecisions ['always'],
+      rootRows [], row table permission, helper >= 1.10.0 asked first via
+      ApprovalBroker.rootTableReady so an older helper gets allow | deny);
+      #always-rules learns it only from an irreversible request whose decide
+      row is presence 'fresh' with a rootSig; no expiry; class-matched;
+      DestructiveRuleBudget 3/session/minute and 30/rule/day (past either, a
+      card); in a tainted session a model call is carded. The Swift
+      permission row table is in the helper 1.10.0 source (a2-h, G-HLP-02);
+      until a signed 1.10.0 ships in Gnomon.app no destructive Always is
+      offered. GAPS: skills are slice a2-2; the Revoke toast and "/"
+      menu are C6'b2; a one-off send under policy ask is not built.
+      Slice C6'a2-4: a rule-passed call's approval.auto carries author
+      'human' for a "/" run (absent: the model's) and a random callId
+      (call:<ULID>, never from the args) that its tool.brokered row carries
+      too, so readers pair the two rows (G-LCL-22).
+    path: src/kernel/local/tool-broker.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker]
+    gates: ['^local-tool-grant']
+    signals: []
+    tests:
+      - test/local-tool-broker.test.ts
+      - test/local-lane-spawn.test.ts
+      - test/local-mcp-lane.test.ts
+      - test/loop-model-e2e.test.ts
+      - test/git-verbs.test.ts
+      - test/local-trust.test.ts
+      - test/local-tool-rules.test.ts
+    oracles: [G-LCL-15, G-LCL-16, G-LCL-22, G-LCL-23, G-LCL-25, G-LCL-27, G-LCL-28, G-HLP-02]
+  capability-index:
+    description: >-
+      #capability-index (TD-2026-10-27-833 slice C2'): narrow(list, server,
+      {trust, opAnnotations}) turns ANY MCP server's tools/list into narrow
+      tools a small model can call; one global rule, never a per-server
+      pack. SPLIT: a required string enum param named op/action/operation/
+      command (or described as the operation, else the only required enum)
+      gives one tool per value, `<tool>.<op>`; the op is fixed by the kernel
+      and is never a narrow param. FLATTEN: nested objects become dotted
+      primitive params (two object levels), arrays of primitives one
+      comma-separated string; arrays of objects, unions, refs, free-form or
+      untyped values and unsafe property names are never offered (required
+      -> the tool is humanOnly, optional -> dropped). TRIM: required params
+      plus at most 3 optional ones (starred in the op's description segment,
+      then mentioned, then default/enum; an op with a segment keeps only the
+      params it names); the rest listed in `dropped`. DESCRIBE: first
+      sentence + op label, <= 100 chars. CLASS: annotations only for trust
+      trusted | first-party (readOnlyHint read, destructiveHint destructive,
+      else mutate); a split op takes its class from the server's
+      op-annotations resource (schema io.gnomon/op-annotations:v1, found
+      generically, size-bounded, shape-validated or ignored whole), else the
+      tool's _meta["io.gnomon/op-annotations"] map; an op neither names is
+      mutate (a destructive parent stays destructive); trust enabled is
+      always mutate. ID `<server>/<tool>[.<op>]@<sha256(schema)[:8]>`; the
+      entry keeps the FULL schema. reassemble() refuses any key that is not
+      a narrow param (the op included), sets the op, splits commas and
+      nests dotted params as own properties; the broker validates the result
+      against the full schema (safe-regex gate included) before any target
+      runs (G-LCL-16). The C2' offer rule (offerWithin): kernel verbs first,
+      then narrow tools in index order while their compact-surface tokens fit
+      toolsSlotTokens(contextTarget) = min(1500, 15 % of the target), at most
+      48 brokered tools; human-only and taken names skipped. C3' replaced it
+      in LocalLane with #tool-selector (the slot rule and MAX_OFFERED stay;
+      LOCAL_RESERVED_TOOL_NAMES now holds find_tool too). Slice C4'a (#local-tool-tier): the FULL
+      form — fullParameters (an unsplit tool's inputSchema; a split op's minus its op param),
+      fullRefusal/fullOfferable (every keyword at every depth in SCHEMA_KEYWORDS, depth <= 6, no
+      proto keys, TOOL_NAME_RE, <= BROKER_PARAMETERS_BYTES (the child's parametersBytes, parity
+      test) and <= FULL_TOOL_MAX_TOKENS 800, every description/title/enum/default string unchanged
+      by cleanServerText), offeredForm, parametersIn, surfaceTokens(tools, compact|full) and
+      reassembleFull (an op-param key refused, the op set, validateBrokeredArgs on the full schema).
+    path: src/kernel/local/capability-index.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
+    signals: []
+    tests:
+      - test/capability-index.test.ts
+    oracles: [G-LCL-16]
+  tool-selector:
+    description: >-
+      #tool-selector (TD-2026-10-27-833 slice C3', design G2/G3; spec §13.1
+      "Tool selection"): src/kernel/local/tool-selector.ts, which narrow tools
+      a local session is offered at a step. selectTools is PURE and
+      deterministic (no clock, no randomness, no embeddings): BM25 (k1 1.2,
+      b 0.75; a term every candidate holds is not scored; scores rounded to
+      1e-9) over each candidate's name (twice), description and narrow param
+      names, tokenised with camelCase splits, stop words and a small suffix
+      stemmer. Query = the working-memory Goal + the latest user or steer text
+      + the last tool error (each <= QUERY_PART_MAX 600 chars, <= 64 distinct
+      terms) + a find_tool need. Priority: human pins, then STICKY tools
+      (called in the last STICKY_STEPS 2 steps), then the need's top matches
+      (<= FIND_TOOL_MAX_RESULTS 5; they replace the bottom of the set), then
+      earlier find_tool matches still in force, then positive scores (desc,
+      ties by id), then index order; taken while the set stays under SELECT_K
+      24 (until C4' derives K from the tier) and MAX_OFFERED, and the compact
+      surface fits toolsSlotTokens(target) after the fixed tools (kernel
+      verbs and find_tool). Output in INDEX order with a hash of the ids.
+      Candidates exclude human-only entries, reserved names
+      (LOCAL_RESERVED_TOOL_NAMES incl. find_tool), the gnomon_ prefix, fixed
+      names, later duplicates, a name bound to another server this session
+      (no rebinding) and whatever `allow` refuses (manual: read-class only,
+      over pins, stickiness and needs). LocalLane (local-session.ts) keeps
+      per-session state (steps from turn_end lines, the sticky window, found
+      matches for RESELECT_EVERY_STEPS steps, the latest user/steer text,
+      find_tool calls per run) and re-selects on a goal change (a prompt, a
+      follow_up's run start), a steer, a find_tool, every
+      RESELECT_EVERY_STEPS 4 steps and a server's list_changed — never every
+      step — and writes tools_set only when the offered hash changed, always
+      ahead of the line that follows (prompt, steer, find_tool answer).
+      find_tool{need} is the ONE meta-tool: the child offers it as a core tool
+      whenever brokered tools exist (gnomon-local find-tool.ts; spec parity
+      with FIND_TOOL_SPEC), it rides tool_request, and the kernel answers it
+      (class read, no card): need <= 200 chars, cleaned with cleanServerText,
+      closed {need}, at most FIND_TOOL_PER_TURN 3 per run (else refused); the
+      selector runs with the need, tools_set goes out, then the answer (<= 5
+      `- name: description` lines, a carded class flagged "asks the human
+      first"); one hash-only tool.brokered{server gnomon, tool find_tool,
+      class read} row; its tool_execution lines are hash-only. A found tool is
+      callable from the NEXT step; until then the child refuses it (unknown
+      tool) and the broker refuses any name outside its current offered set
+      (G-LCL-20). Human pins (founder decision: human-only):
+      request.session.tools.pin{hsid, name, pinned} (gui/device, the owner;
+      the name must be a non-human-only narrow tool of the session) writes a
+      working-memory tool-pin entry, source human (WorkingMemory.pinTool, at
+      most MAX_TOOL_PINS 8); the model's note{} can never mint one. Selection
+      only decides what is offered: a mutate or destructive tool it offers
+      still raises its card at call time. Loop sessions have no selector and
+      no brokered tools; a find_tool from one falls to the broker, which
+      refuses loop-session. Aegis C3' review (fixed): M1 one server holds
+      at most serverCap(K) = max(6, ceil(K/3)) of the found and ranked tiers
+      (pins and sticky exempt; the rest fall to the tail), ties break by
+      index, BM25 docs count the first DOC_PARAM_NAMES 8 param names and each
+      description term once; M2 every change of the offered set is one
+      tool.selection{hsid, trigger goal|steer|find|periodic|list_changed|pin|
+      mode, hash, added, removed, found, unfitPins} row (contracts
+      8.0:local-lane, capability ids only; the query and need never logged);
+      M3 tools_set carries id ts-N, the child answers tools_applied{id} when
+      the set takes effect, and the broker keeps the previous set callable
+      (union; the new entry wins a name) until the ack for the latest id,
+      cleared on agent_start and pruned on list_changed (entry id gone or no
+      server target); L1 the query is split trusted (the human goal, a human
+      steer) / untrusted (offer or unverified-voice text, the failing tool's
+      NAME only) and destructive tools enter only via trusted text, pins,
+      sticky or a need, never the tail; L2 sticky credit only on decision ran;
+      L3 toolPins() keeps well-formed names, at most 8; L4 a run-mode change
+      re-selects at the next step end; L5 find_tool lines name the server;
+      L6 reserved names compare lower-cased (selector and child). Gaps: K and
+      the slot were not per tier until C4'a; a found mutate tool is offered
+      (carded), not refused; the mode change is noticed at a step end. Slice C4'a
+      (#local-tool-tier): new inputs slot, surface and allowFull (K, slot and surface from
+      tierPlan; SELECT_K is only the default, 12); each candidate costs its OFFERED form in the
+      session's surface; tier 3 admits fullOfferable human-only entries; pins go first but never
+      raise K or the slot (unfitPins{name, why tier-0|not-offerable|over-k|over-slot}; at K 0
+      every pin is unfit); output forms[] aligned with selected (a full id hashes as id#full).
+    path: src/kernel/local/tool-selector.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
+    related: ["#capability-index", "#local-tool-broker", "#local-working-memory", "#gnomon-local"]
+    signals: []
+    tests:
+      - test/tool-selector.test.ts
+      - test/local-tool-broker.test.ts
+      - test/local-working-memory.test.ts
+      - test/paradigm-staged-lane.test.ts
+    oracles: [G-LCL-20]
+  local-tool-tier:
+    description: >-
+      #local-tool-tier (TD-2026-10-27-833 slice C4'a; spec §13.1 "Tool tiers"; founder rulings in the C4'a brief):
+      src/kernel/local/tool-tier.ts (pure table + store), wired in src/kernel/supervisor/local-session.ts. One tier
+      0-3 per attended local session, fixed at open, changed only by the human's two-phase commit (never implicitly:
+      the prompt cache). effectiveTier = min(human ?? skill, windowTier(target)); skill = skillTier(passed) (T1 1,
+      T1-T3 2, all four 3, T1 failed 0); window: <4096 0, >=4096 1, >=8192 2, >=16384 3 of min(config, n_ctx) (never
+      the trained maximum), an unknown n_ctx caps it at 1; a pending measurement opens provisional at min(1, window).
+      tierPlan: tier 0 K 0, no brokered tool at all (no kernel verb, no MCP server started, so no find_tool); 1 K 4,
+      slot min(600, 10%); 2 K 12, min(1500, 15%); 3 K 12, min(4000, 25%), surface full (every offered tool FULL when
+      fullOfferable, complex human-only ones included; else narrow). The endpoint's configured surface only lowers the
+      tier's (lowerSurface). Store <gnomonHome>/local/tool-tiers.json (schema gnomon-tool-tiers:v1; 0600, temp +
+      fsync + rename, never through a symlink; shape-validated, a corrupt/oversized file ignored, a bad record
+      dropped): records keyed sha256(base|model|fingerprint) with skill, passed, version (TIER_PROBE_VERSION), human;
+      readTiers, lookupTier, writeMeasured, setHuman; a new fingerprint drops the old digest's records (human value
+      too); no TTL. LocalLane: probeAll and Check again (recordProbe) run #measure in the background (fingerprintOf,
+      then probeToolSkill on a cache miss; a model with no fingerprint is measured into memory only); remeasure(id)
+      forces one (C4'b: request.local.tier.remeasure; a running one is joined); tierSettled() for tests; status.local.lastProbe.tier{skill,
+      passed, measuring, window, human}. At open: local.yaml surface from the tier, model.capabilities{hsid, tier,
+      tierSource measured|human|provisional, measured, surface}. request.session.tier (dispatcher-only, human-only
+      via humanRequest: an agent principal is refused on both phases; the owner of a running attended session):
+      {op:'preview', tier} → {from, to (window-capped), requested, measured, window, k, slotTokens, slotShare,
+      surface 'a→b', cacheLost, leaving, unfitPins, notice, token, expiresInMs, rememberable, rememberWhy?
+      no-fingerprint|store-unwritable (C4'b; tiersWritable)}; the token is 128-bit random, single
+      use (every commit attempt consumes it), TIER_TOKEN_TTL_MS 60 s, bound to the principal, the session, the tier
+      and the selection generation (bumped on every change of the offered set), else refused reason 'stale';
+      {op:'commit', token, remember?} re-selects (a raise from 0 starts the MCP pool), sends tools_set{id, tools,
+      surface}, logs model.capabilities{hsid, tier, previous, measured, tierSource:'human'} and tool.selection{trigger
+      'tier'} (the one contracts change); remember:true writes the per-model human value (rememberWhy no-fingerprint
+      when none is known). Until tools_applied the previous set and its forms stay callable (#local-tool-broker form
+      shadow). A tier never touches allow, classOf, cards, trust, the manual filter or the destructive-entry rules
+      (C5' owns grants). C4'b: request.local.tier.remeasure{endpoint} (answers {measuring:true, joined, queued} at once; a running
+      re-measure is joined, a background unforced run gets the forced one queued after it; at most one per endpoint
+      per REMEASURE_GAP_MS, else rate-limited with retryAfterMs; a config change mid-probe skips the measure: Aegis
+      C4'b L1/L2) and
+      request.local.tier.clear{endpoint} (setHuman null; one model.capabilities{endpoint, tierSource:'measured',
+      action:'human-cleared', previous} row; open sessions keep their tier), both human-only via humanRequest, in
+      LOCAL_SESSION_REQUESTS. Gaps: a context-target change does not re-tier a
+      live session (the slot follows the target); after a config hot apply an endpoint whose base or model changed
+      is provisional until Check again or a restart. Aegis C4'a review (fixed): M1 fullRefusal also requires
+      required names to be carriable property names of the same node and patterns to be clean, and refuses any
+      template-token shape in every carried string; L1 every selection tools_set of a tiered session carries its
+      surface and the child keeps a pending surface when a set carries none; L2 a commit checks running, awaits the
+      (shared) MCP start, re-checks running and the generation, and only then changes the tier (a racing commit is
+      stale); L3 an existing <home>/local that is too open is chmodded 0700 (ours, not win32). Sign-off low: tokenShape (NFKC; `<|` `|>` closing tags `<tool` `<function` `<think` `<<` `>>`, and
+      case-sensitive [NAME]/[/NAME] brackets incl. Mistral tekken) refuses full-form text and makes describe() fall
+      back to 'MCP tool.' at every tier; kept separate from SPECIAL_TOKEN/shape.ts (those neutralise model-read output
+      and must stay narrow).
+    path: src/kernel/local/tool-tier.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
+    related: ["#tool-selector", "#capability-index", "#local-tool-broker", "#local-runner", "#gnomon-local"]
+    signals: []
+    tests:
+      - test/tool-tier.test.ts
+      - test/tier-probe.test.ts
+      - test/local-tier-lane.test.ts
+    oracles: [G-LCL-21]
+  local-mcp-client:
+    description: >-
+      #local-mcp-client (TD-2026-10-27-833 slice C2'): the kernel's minimal
+      stdio MCP client (newline JSON-RPC: initialize, tools/list paged and
+      bounded, tools/call, resources/list + resources/read only to find an
+      io.gnomon/op-annotations:v1 document for a trusted server,
+      notifications/tools/list_changed -> re-list and re-read annotations,
+      notifications/cancelled on abort or timeout; server-to-client requests
+      answered not-supported). Bounds: 4 MiB per message (over it the server
+      is killed), per-request timeouts (the broker's deadline for calls),
+      256 tools, 32 requests in flight, 3 starts per server per session.
+      LocalMcpPool (one per local session): servers from
+      McpServers.composeLocal (#mcp-servers: user and plugin servers, and
+      since TD-2026-10-27-833 the first-party Paradigm MCP ONLY from a
+      verified staged pin (#paradigm-stage; else listed refused fit
+      pin-mismatch, and the pool refuses first-party trust without one); no
+      project/local scope; slice C5'a1: never trust from the store: every
+      third-party server comes in enabled with its launch hash and plugin
+      version, and the pool asks the TrustBook (trust-book.ts) for the
+      EFFECTIVE trust, trusted only while the book holds exactly this
+      listing's binding sha256({id, launchHash, pluginVersion, toolsHash});
+      the binding is re-checked at index, on a cache hit, at the first spawn
+      (a trusted server narrowed from the cache re-lists once before its
+      first call) and on list_changed, and a mismatch drops trust everywhere
+      with one tool.trust{op:'dropped', why launch-changed|tools-changed}
+      row; op-annotation resources are read for first-party only; the cache
+      keeps a newest-per-id index {launchHash, toolsHash, at} for
+      request.mcp.trust; trustLive(label) answers the broker (slice C5'a2:
+      trustBindingOf(label) gives a tool rule's trust half: the TrustBook
+      binding while trusted, first-party:<toolsHash>, else null); LocalLane
+      re-narrows every session on a trust fold (pruneGrace by class, forced
+      tools_set)); http/sse refused remote-refused, reserved labels
+      label-reserved. Aegis H1 (re-check): servers run in a neutral cwd
+      (sessions/<short>-mcp under the Gnomon home: empty, write-denied,
+      outside every root, removed at exit) and are refused launch-writable
+      when it runs a shell or inline code, or when the command, a path
+      candidate of an arg or env value (whole, after =, a flag's rest,
+      file:// stripped, ~/$HOME/%USERPROFILE% expanded) or a PATH entry lies
+      in a root (launchCheck; lexical + longest-prefix realpath, case-folded
+      on darwin/win32), with a substring backstop on each root's text at a
+      path boundary. The neutral dir is made non-recursively and an existing
+      one must be an empty, owned, real directory. Aegis H2: each server spawns lazily under its OWN
+      policy (no session dir or runner copy; the neutral cwd readable) with
+      every GNOMON_* name stripped (serverEnv); runner and servers are
+      denied the kernel socket. Failures are recorded readably
+      (LocalLane.mcpReport; a server under ~ says so). Aegis M3 (re-check):
+      a group is killed once when its leader closes; closeAll signals only
+      live leaders.
+      Kernel-lifetime tools/list cache per launch + repo (a hit spawns
+      nothing until the first call), failures cached 60 s, one 15 s deadline
+      per server at open. Aegis M3/M4: servers tracked as children kind
+      mcp-server; one
+      relist in flight + one pending, 2 s apart, 6 a minute then stale;
+      tools_set only on a changed offered-set hash; a name never rebinds to
+      another server.
+      TD-2026-10-27-833 (staged Paradigm): launchCheck lets exactly the last
+      positional of a staged first-party server (`node <staged entry> <repo
+      root>`) name a session root, and nothing else (an entry outside the
+      staged dir, a subdir, an extra arg or any other trust is refused); a
+      server composed refused (pin-mismatch) is listed and never launched.
+      Slice C6'a1 (TD-2026-10-28-956): LocalMcpPool.report() gives each
+      server's state now (starting, running, failed, not-started), its last
+      error (failed only), starts and live trust; onState says started (its
+      initialize answered) and failed (a start, a failed listing, or the
+      process after it started: a runtime crash, once; never a kill of the
+      pool's own), which LocalLane logs as session.mcp{hsid, server, state,
+      fit?, error?} (also one refused row per launch-check and pool
+      refusal). restart(label) is the human's request.session.mcp.restart:
+      the process reaped, starts, last error and the cache's recent-failure
+      mark reset, started and listed again under one deadline (onChanged
+      re-selects), one per server (busy); trustHolds(label) is false once a
+      server narrowed trusted in this session is not believed now, or the
+      TrustBook holds another binding (the restart is then refused
+      trust-changed); LocalLane re-checks the staged pin and launchCheck
+      with the open's inputs (mcpLaunch.check) first.
+    path: src/kernel/local/mcp-client.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
+    signals: []
+    tests:
+      - test/local-mcp-client.test.ts
+      - test/local-mcp-lane.test.ts
+      - test/paradigm-staged-lane.test.ts
+      - test/local-trust.test.ts
+      - test/local-capabilities-lane.test.ts
+    oracles: [G-LCL-17, G-LCL-18, G-LCL-19, G-LCL-23, G-LCL-24]
+  gui-capability-browser:
+    description: >-
+      #gui-capability-browser, KERNEL SIDE (TD-2026-10-27-833 slice C6'a1,
+      TD-2026-10-28-956; designed by Mika; the GUI drawer itself is a later
+      slice). LocalLane.humanRequest serves, human-only (gui or device),
+      owner-gated (a non-owner NOT_FOUND) and dispatcher-only (in
+      LOCAL_SESSION_REQUESTS, never rows):
+      request.session.capabilities{hsid} — READ ONLY (no row, nothing
+      selected, bound, started or sent): {generation, tier, k, surface,
+      mode, verbs:[{name, class}], servers:[{label, trust, state
+      running|starting|not-started|refused|failed, fit?, why?, error?,
+      starts, counts:{read, mutate, destructive}}], pins:[{name, offered,
+      why? over-k|no-room|no-full-form|tier-0}] (a dry selection at the
+      session's own tier; the GUI words the code), tools:[{id, name,
+      server, class, humanOnly, availability
+      offered|findable|slash-only|not-at-tier|manual-reads-only,
+      description, params:[{name, required, type, enum?, description?}],
+      fullSchema?}]}. It folds mcpReport (launch-check and pool refusals,
+      index failures) with LocalMcpPool.report() (runtime crashes). Every
+      description, error, why and server string goes through
+      cleanServerText and is capped (CAPABILITY_TEXT_MAX 240; a full
+      schema's strings 512, keys 64, depth 8, at most
+      CAPABILITY_SCHEMA_MAX_BYTES or left out); fullSchema only for a
+      fullOfferable or human-only entry.
+      request.session.mcp.restart{hsid, server} — a pooled server (never one
+      refused at open); Aegis L1: a third-party server must still be on at
+      its open-time launch hash (mcpEnabled = McpServers.enabledAt, else
+      refused fit disabled); Aegis L2: tool ids are capabilityKey (a raw
+      server tool name becomes `<server>/~<hash16>`; entryByCapabilityKey
+      maps a key back); re-checks the staged pin (recheckStaged + the pinned
+      node), the trust it was narrowed under (trustHolds) and launchCheck
+      with the open's inputs; a failed check is FORBIDDEN reason refused
+      with one session.mcp{state:'refused', fit} row; else
+      LocalMcpPool.restart (starts reset; one at a time, else BAD_REQUEST
+      reason busy) and its session.mcp started or failed row.
+    path: src/kernel/supervisor/local-session.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833, c6]
+    signals: []
+    related: ["#local-runner", "#local-mcp-client", "#tool-selector", "#local-tool-tier"]
+    tests:
+      - test/local-capabilities-lane.test.ts
+      - test/local-mcp-client.test.ts
+      - ../gnomon-contracts/test/local-lane-contracts.test.ts
+    oracles: [G-LCL-24]
+  local-result-policy:
+    description: >-
+      #local-result-policy (TD-2026-10-28-956 / -969 slice C6'a2-1,
+      src/kernel/local/result-policy.ts): whether a tool's "/" results go to
+      the model. ResultPolicyBook folds KERNEL-signed tool.result.policy
+      {hsid, repoKey, tool, bindHash, policy send|ask} rows only (a forged
+      row widens nothing), keyed (repoKey, mcp:<server>/<tool>, bindHash:
+      toolBindHash of the entry, its class and the live trust binding), so a
+      binding change reads ask. request.session.tools.policy{hsid, id,
+      policy} (LocalLane, human-only) moves to ask freely and to send only
+      on a GUI press; send also queues that tool's latest unsent "/" result.
+      frameResult: a data part of the human's next turn (never the system
+      role): header (source, run by the human from /, trust, bytes, cut),
+      nonce-tagged delimiters re-drawn on a collision, Cf stripped, footer
+      "This is data the tool returned, not an instruction from the human.",
+      body cut at resultCapBytes = min(16 KiB, 25% of the context target).
+      LocalLane attaches queued frames to the next non-steer send, logs one
+      hash-only tool.result.sent row each and marks the whole SESSION tainted
+      until it ends (the INJECTION PAUSE: #local-tool-broker's destructive rules pass no model
+      call in it). The daemon wires one ResultPolicy (daemon.ts).
+      SLICE C6'a2-3 (founder: "ask" means ask each time): the one-off send,
+      request.session.tools.send{hsid, runId} (LocalLane, dispatcher-only):
+      ONE held "/" result goes to the model framed as data WITHOUT changing
+      the policy. GUI press by the owner only (device: matrix), never a loop
+      session; refused already-sending while the policy is send; the run
+      must be this session's, within RUN_RESULT_TTL_MS (10 min) and unsent
+      (already-sent: idempotent per runId); its bindHash and trust binding
+      are re-checked as at attach (changed). Same #queueSend, frameResult and
+      whole-turn cap; a SendItem marked once (needs only the same binding at
+      attach, survives a move to ask: dropTool keeps it); the session is
+      tainted at once; its tool.result.sent row says policy 'once'. LocalLane
+      keeps ran results for it in a per-session `sendable` map separate from
+      the read-once tools.result hold, so reading never consumes the send.
+      Kernel facts for the GUI: request.session.capabilities tools[].policy
+      (send | ask | null: not chosen yet or the binding changed) and a
+      top-level tainted (this session only).
+    path: src/kernel/local/result-policy.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, c6]
+    signals: []
+    related: ["#local-tool-broker", "#local-runner", "#mcp-servers"]
+    tests:
+      - test/local-destructive-rules.test.ts
+      - test/local-slash-lane.test.ts
+      - test/local-one-off-send-lane.test.ts
+      - ../gnomon-contracts/test/local-lane-contracts.test.ts
+    oracles: [G-LCL-26, G-LCL-27]
+  paradigm-stage:
+    description: >-
+      #paradigm-stage (TD-2026-10-27-833, follow-up to slice C2'):
+      src/kernel/local/paradigm-stage.ts stages the first-party Paradigm MCP
+      for LOCAL sessions. What: the install's dist/mcp-bundle files (manifest
+      paradigm-mcp-bundle:v1) or, without one, the package tree (node_modules
+      .bin link dirs skipped); a symlink, hardlink (nlink > 1), special file or
+      entry resolving outside the source refuses the whole stage. Where:
+      <home>/mcp/first-party/paradigm/<version>-<treeSha12>/ (dirs 0700, files
+      0400; temp dir then rename), <dir>.manifest.json, pin.json {schema
+      gnomon-paradigm-pin:v1, version, source, sourceKind npm-global |
+      linked-checkout, treeSha256, stagedAt, entry, layout, dirty}; the newest
+      previous stage is kept, older ones pruned. Hash: sha256 over sorted
+      `<rel>\0<mode>\0<sha256>` lines of the COPY. When: autoStage stages an
+      npm-global install when its version or source differs from the pin; a
+      linked checkout never (only request.mcp.paradigm.stage, #mcp-servers);
+      never on a file change. Verify: verifyStaged at session open (file set,
+      modes, regular, nlink 1, sha256, tree hash); recheckStaged right before
+      spawn (size/mtime/inode). LocalLane runs it with the runner's pinned node
+      (verifyNode again before spawn) under its OWN profile (staged dir
+      readable, <home>/sessions/<short>-pg read+write via the policy's
+      mcpStateDir carve-back, ~/.paradigm and ~/.conductor read-denied), in the
+      neutral cwd, stripped env plus HOME at the -pg dir,
+      PARADIGM_GNOMON_STAGED=1 and GIT_CONFIG_* (no fsmonitor, no hooks path);
+      a pre-spawn mismatch is a session.sandbox{phase mcp-pin-mismatch} row and
+      the server fails. Paradigm's write ops are mutate/destructive (cards);
+      its local-only reads are class read (openWorldHint false from code).
+      .paradigm/ decision: Paradigm loads no .paradigm/ file as code (habits,
+      protocols, config, loop files are data; loop checks run only in the
+      kernel after a human trust card on the content hash), so .paradigm/ stays
+      read-write and the staged mode turns off the server's own side effects.
+      RESIDUAL RISK: .paradigm/ habits, protocols, prompts and wisdom a local
+      model writes can steer later Claude sessions. Windows: composeLocal
+      refuses the staged server on win32 (no helper grants the session SID a
+      read ACE on the staged dir yet). Aegis review fixes: H3 edit-ledger.ts
+      (<home>/local-edits.jsonl: open{roots}, close, edit{realpath}) — a linked
+      checkout with a local edit under the source since its build, or a live
+      local session whose roots overlap it, refuses request.mcp.paradigm.stage
+      (local-writes) unless {force:true}; the reply shows git status with
+      --ignored --untracked-files=all, the build time vs HEAD's commit time and
+      those writes. M3 the server env reuses ANCHOR_GIT_CONFIG plus
+      GIT_NO_LAZY_FETCH, GIT_ATTR_NOSYSTEM, GIT_TERMINAL_PROMPT=0 and
+      GIT_CONFIG_GLOBAL at the null device. M4 every source file is read
+      through an O_NOFOLLOW fd whose fstat matches the selected ino/dev
+      (regular, nlink 1). Low: homeReadable under mcp/ is only
+      mcp/first-party/paradigm/<version>-<sha12>. Should-fix: a ledger over
+      LEDGER_MAX_BYTES is read from its tail and reports incomplete since its
+      oldest row read; inside the window that counts as local-writes (force
+      only). Chosen over compaction: no rewrite of a kernel ledger, fails
+      closed. A local session whose open row cannot be appended is refused
+      before spawn (a failed open appends close). The stage reply also lists
+      edits under the source in the last 7 days (recentLocalEdits).
+    path: src/kernel/local/paradigm-stage.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
+    signals: []
+    tests:
+      - test/paradigm-stage.test.ts
+      - test/paradigm-staged-lane.test.ts
+    oracles: [G-LCL-18, G-LCL-19]
+  local-working-memory:
+    description: >-
+      #local-working-memory (TD-2026-10-27-833 slice B2; T-2026-10-26-003; spec §13.1 "Working memory and context
+      control"): the KERNEL-OWNED working memory of an attended local session, src/kernel/local/working-memory.ts,
+      wired in src/kernel/supervisor/local-session.ts and src/adapters/local/runner.ts (ContextChannel:
+      memorySetLine, compactLine, setContextLine). Store: <home>/sessions/<short>/memory.jsonl, 0600, append-only
+      ops (a meta line with hsid and owner, put/del), replayed on reload; kept until the human deletes it (no
+      expiry; the session dir is never pruned while it holds memory; delete unlinks the file). Entries {id wm-N,
+      kind goal|fact|note|file-ref|tool-pin, source human|kernel|model|tool:<server>, text, at, pinned}. Kernel-
+      written: the goal (each prompt; a follow_up's when its run starts), edited files (write_file/edit tool ends,
+      de-duplicated), the last failing tool (source tool:<server>: its text is tool output, rendered as data).
+      Slice C3' (#tool-selector): human tool pins are kind tool-pin, source human, text `pinned tool: <name>`
+      (pinTool/unpinTool, only from request.session.tools.pin, at most MAX_TOOL_PINS 8); the last failing tool is
+      the tool-pin whose source is not human (setToolError never overwrites a pin); goal() and lastToolError()
+      feed the selector's query.
+      Aegis B2 review: file-refs are the kernel's realpath-checked form relative to the root, quoted, at most 8, and
+      render as DATA; all text NFKC with look-alike <, controls, bidi, zero-width, tag characters and every line
+      separator neutralised; fullwidth DeepSeek tokens, tool_call and think neutralised (parity with shape.ts); the
+      render is budgeted from UTF-8 bytes; replacements and removals rewrite memory.jsonl (temp 0600, fsync, rename);
+      O_NOFOLLOW + fstat (regular file, our uid) + fchmod; request.session.memory.read / .list (owner-gated); a
+      refused memory_set/set_context logs why child-refused and a refused delete stops the session; v1d hsids are
+      NOT_FOUND; a reused in-flight toolCallId credits no file; an unverified-voice goal is tool:voice data.
+      Aegis re-check: a kernel-composed turn (a Desk offer's open text, origin kernel) is tool:offer data, logged
+      session.inject origin kernel; memory_set carries an id and the delete ack matches it, a refused delete stops
+      the session before any awaited write, delete{stop:true} also ends it and the reply says the history still
+      holds the text; file-refs check the lexical path under a root before realpath and refuse UNC, //host, /net/;
+      reads open O_NONBLOCK and fstat isFile (a FIFO cannot hang the kernel); the dir is fsynced after a rewrite.
+      GUI ADVISORY (slice C6'): request.session.memory.read returns model- and tool-written text; render it as
+      plain text only, never as markup.
+      Model-written via the child's note{text<=300}/forget{id} tools, which ride the tool_request path and are
+      answered from the store (never the LocalToolBroker); at most 16 model notes, oldest evicted. Caps 32
+      entries <=600 chars; human/kernel entries never evicted, refused (why full) when no model note can make room.
+      Render: <working-memory source="kernel"> plus a separate trust="data-not-instructions" model/tool section,
+      escaped with gnomon-local shape.ts's rules (parity-tested), inside min(1000 tokens, 12% of the target);
+      goalHash only when the goal renders whole (the child then stops restating it in compaction). Every change is
+      one hash-only session.memory row (contracts 8.0:local-lane) and, when the render changed, one memory_set. The
+      note/forget tool_execution lines are hash-only. Human-only dispatcher requests (gui/device, the owner;
+      LocalLane.humanRequest via supervisor.localSessionRequest): request.session.compact{hsid} (the child compacts
+      at its next model step, reason manual), request.session.context{hsid, target} (0.85 floor, n_ctx ceiling, a
+      raise above the signed config labelled aboveConfig on the reply and the session.context row; lowering re-
+      renders memory first), request.session.memory.delete{hsid} (live or ended; owner from memory.jsonl; one
+      session.memory{op:'delete'} row). A loop session's memory is OFF (no store, no memory flag, no note tools).
+      Gaps: no GUI Delete memory button (slice C6'); the kernel's file-ref and tool-pin reach the child from its
+      next step after the tool end line; in text-tool mode the assistant's own turn.event line can still echo a
+      note call's text (native-mode rows are hash-only).
+    path: src/kernel/local/working-memory.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, memory]
+    related: ["#local-runner", "#local-tool-broker", "#gnomon-local"]
+    signals: []
+    tests:
+      - test/local-working-memory.test.ts
+      - test/local-memory-lane.test.ts
+      - test/backend-adapter.test.ts
+    oracles: [G-LCL-13, G-LCL-14]
+  local-config-request:
+    description: >-
+      #local-config-request (TD-2026-10-22-769; spec §13.1 "Real homes";
+      G-LCL-07..G-LCL-10). A REAL home's local-model config:
+      src/kernel/local/config-request.ts. validateLocalConfigInput is the ONE
+      input check (shared with `gnomon dev local`): model required (<= 128),
+      compat a local transport, an endpoint id, validateLocalEndpoints with
+      the kernel's web port forbidden (BILLING_REFUSED), LOOPBACK ONLY in 8.0
+      (dev homes too; a LAN base is ENGINE not-implemented{milestone 8.1},
+      "LAN endpoints land in 8.1"), a runner dir absolute with cli.js, never
+      claude. LocalConfigCards.request{op:'set', endpoint, runner?} raises ONE
+      `grant` card (detail.action local.config; root class, hand only, never
+      standing or always) whose allow signs ONE gnomon-root-local:v1 row
+      (decision-batch.ts row table local.config: closed fields, <= 4 loopback
+      endpoints, a pinned runner; helper 1.9.0, refused at RAISE on an older
+      helper "update the Gnomon app", broker ROW_TABLE_MIN_HELPER); a set
+      edits ONE endpoint by id and keeps the others ("unchanged" on the card);
+      prepare re-pins the runner and recomputes the version (above the file,
+      the sidecar and the chain high-water) under beginRootDecision, else
+      "the config changed while the card was open: ask again"; the effect
+      writes local.signed.json through the ONE writer (config.ts
+      writeLocalConfigDoc: temp 0600, fsync, rename, never through a
+      symlink) and calls the daemon's hot reload. {op:'remove'} is
+      notify-and-proceed (no card): the file is deleted and the reload logs
+      config.loaded{fallback:'none', why:'removed'}. request.local.probe
+      {model, base?, compat?} is the read-only loopback check before a card
+      (Mika C1: no card, no row, human only, one in flight, one per 2 s).
+      Both are dispatcher-only (never rows; clientApiId unmoved);
+      status.local (extraStatus) carries the endpoints, the runner (bundled
+      or override, version, tree, node version and sha), signer, version and
+      signedAt, the last probe and the last fallback, the platform
+      (unsupported 'platform' on win32) and offered. bundled-runner.ts: the
+      gnomon-local cli.js ships inside the kernel's dist/gnomon-local
+      (tsup.config.ts bundle-gnomon-local; npm tarball and the app's
+      Resources/kernel/dist), its tree hash compiled in and verified at load;
+      a typed absolute runner dir overrides it. CLI raw form `gnomon local
+      set|status|remove` (src/cli/local-cli.ts); the guided form is Settings
+      → Local model (#gui, a separate design track).
+      Aegis review (merge after fixes): the helper line shows the runner dir
+      and node path in full (<= 256 chars each; never compacted; an
+      OVERRIDE runner marked through the row's runnerSource); status.local
+      in full to the human only (dispatch.ts localStatusFor); a remove writes
+      a tombstone sidecar under beginRootDecision before the unlink, logs
+      config.loaded{removed:true, version}, and no file at or below it
+      applies again (loadLocalConfig chainRemoved / tombstone floor);
+      nextLocalVersion counts the file only when its signature verifies; the
+      sidecar goes through writeHomeFileAtomic; the probe answers for the
+      configured model (listed) with one error word; no base path in 8.0,
+      localhost stored as 127.0.0.1; the kernel's web and mod egress ports
+      are forbidden; validateLocalEndpoints refuses non-loopback (lan-8.1);
+      a bundled runner must match the compiled pin and a release build fails
+      without it; an override runner must identify as gnomon-local; an
+      unknown helper version on a hardware root counts as too old.
+      Follow-ups: a request.local.probe of a CONFIGURED endpoint (Check
+      again; base, model and compat match) reports to the LocalLane
+      (LocalProbeSink: configuredEndpoint, probeGen, beginProbe,
+      recordProbe): it shows as status.local.probing{probingSince,
+      probingEndpoint} while it runs and refreshes status.local.lastProbe
+      and the probe cache like the automatic probe (model-missing kept as
+      the why); a probe begun under an older config records nothing. The
+      automatic probe (probeAll) shows as probing too. LoopRunner
+      status.loops.startRefused also lists every trusted loop that would be
+      refused NOW (count 0, trigger 'none'), recomputed at every status
+      build and config apply; still one per loop, the first fire keeps its
+      since.
+    path: src/kernel/local/config-request.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, td-2026-10-22-769]
+    signals: ['!config.loaded']
+    gates: ['^subscription-only']
+    tests:
+      - test/local-config-request.test.ts
+      - test/dev-local.test.ts
+      - test/decision-batch.test.ts
+    oracles: [G-SUB-06, G-LCL-07, G-LCL-08, G-LCL-09, G-LCL-10]

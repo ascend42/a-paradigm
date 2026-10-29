@@ -1,0 +1,135 @@
+version: "2.0"
+name: gnomon-adapters
+description: >-
+  Backend adapters: the interface a session backend implements
+  (backend-adapter.ts) and its implementations, Claude Code (claude-code/) and
+  local models (local/).
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  backend-adapter:
+    description: >-
+      #backend-adapter (spec §2.2 Backend drivers; declared by the 2026-10-27
+      founder decision, built by T-2026-10-27-004) — the shared WIRE CODEC
+      every backend driver implements, in
+      src/adapters/backend-adapter.ts (types only, importing neither
+      adapter): BackendAdapter<B, A, E, T> = backend id, argv(input),
+      parse(line) → Tolerant<E> (the event union must have `unknown` and
+      `malformed` kinds), newMeter() → UsageMeter<E>{charge(ev)}, turnLine(
+      TurnInput{text, inFlight}) and interruptLine() (the backend's own
+      control message, never a signal). A backend's extra channels are
+      CAPABILITY interfaces — PermissionChannel (allowLine / denyLine),
+      ControlChannel (errorLine / setModelLine), SdkMcpChannel
+      (mcpResponseLine), SteerChannel (steerLine), ToolBrokerChannel
+      (toolsSetLine / toolResponseLine / toolProgressLine; OfferedTool,
+      ToolResponse) — and a concrete adapter type is the core intersected
+      with only the capabilities it really has: ClaudeCodeAdapter = core +
+      Permission + Control + SdkMcp (claudeCodeAdapter in
+      src/adapters/claude-code/adapter.ts, #claude-adapter), LocalAdapter =
+      core + Steer + ToolBroker (localAdapter in src/adapters/local/runner.ts,
+      #local-runner's driver half). No optional members and no fake methods:
+      claudeCodeAdapter.steerLine is a compile error. There is no
+      normalized cross-backend event vocabulary; each adapter keeps its own
+      event union. src/adapters/index.ts holds BACKEND_ADAPTERS (by id) and
+      AnyBackendAdapter; src/adapters/line-splitter.ts the §3.3 capped line
+      splitter both lanes use. The lanes carry out start / send / stop with
+      it, each binding `const drv` (src/kernel/supervisor/supervisor.ts for
+      claude-code, src/kernel/supervisor/local-session.ts for local); the
+      process halves (spawn, sandbox, permits, trace, broker) stay in each
+      lane; session.open{backend: claude-code | local} picks one (supervisor
+      port.ts). Conformance: test/backend-adapter.test.ts replays every
+      adapter over each of its fixtures (src/adapters/<backend>/fixtures/
+      <version>-turn.jsonl + .expect.json, schema
+      gnomon-adapter-replay:v1: kinds, types, charged; G-ADP-01 claude-code,
+      G-ADP-02 local), fuzzes parse (never throws), checks the tolerant
+      kinds, and poisons every model-text string (text, content, delta,
+      result, thinking) to show usage is never read from model text.
+      session-supervisor.test.ts also replays the synthetic claude fixture
+      through a live session (fake claude's mode.replay): each driver line is
+      a turn.event in order, seq contiguous, the session still running.
+      The nightly RECORDED re-record per backend version is a todo (needs a
+      trace extractor and scheduled CI; local needs a lane tee); both
+      fixtures today are synthetic (their expect.json says source).
+    path: src/adapters/
+    type: module
+    tags: [gnomon, adapter, backend, paradigm-8]
+    related: ["#claude-adapter", "#local-runner", "#supervisor"]
+    tests:
+      - test/backend-adapter.test.ts
+      - test/claude-adapter.test.ts
+      - test/local-runner.test.ts
+      - test/session-supervisor.test.ts
+    oracles: [G-ADP-01, G-ADP-02]
+  claude-adapter:
+    model-guard: >-
+      Model picker (Aegis): buildClaudeArgv refuses a model that fails
+      contracts claudeModelProblem with a TypeError, because `--model` takes
+      the NEXT argv token whatever it is (a value like --verbose or
+      --dangerously-skip-permissions would be eaten as the model or reach
+      claude's parser). Defence in depth behind the supervisor's own check.
+    usage-split: >-
+      #ledger-mod (K2 feed v2): parseStreamLine's result event also carries
+      split {in, out, cacheRead, cacheWrite} = usageSplit(result.usage)
+      (numbers only; Aegis L2: each floored and clamped to a safe integer at
+      the source, so the logged row equals the feed projection); the total and the
+      UsageMeter charging are unchanged.
+    backend-scope: >-
+      TD-2026-10-19-252 (spec §1, §2.2, §22 item 26): backends are Claude
+      and local models only. Other agents (opencode, grok, ...) get their
+      own driver later, each with its own law-7 billing ruling; there is no
+      generic ACP passthrough.
+    description: >-
+      #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in
+      src/adapters/claude-code/adapter.ts. P8-D96: argv --permission-prompts
+      host --permission-prompt-tool stdio (assertPermissionChannel throws on
+      any other value); events permission-request / control-cancel /
+      control-request-unknown; stdin permissionAllowLine /
+      permissionDenyLine / controlErrorLine (never updatedPermissions). SLICE 2 (T-2026-10-18-010 L4):
+      SESSION_HOOKS_MODES all|user-only|none and settingSourcesFor(mode) ->
+      --setting-sources; the mode is the root-signed config.sessions.hooks
+      (budget/config.ts parseSessionsSection; default all; rollback/invalid
+      after a signed config => none), wired by the daemon into #supervisor
+      and logged as session.sandbox.settingSources. P8-D97: pluginDirs
+      (--plugin-dir) and addDirs (--add-dir), deduped; repoContextFor(mode)
+      is true for audited only. Q6: EXTRA_FLAGS allow-list (--max-turns,
+      --no-session-persistence) and ARGV_GRAMMAR/assertArgv (each kernel flag
+      once; --agents/--tools never; one variadic --add-dir). The §3.3 argv with FORBIDDEN_FLAGS
+      throwing (G-RUN-01, also --flag=value and extras); stream-json parse,
+      TOLERANT (unknown fields ignored, unknown types `unknown`, non-objects
+      `malformed` — the falsifier); UsageMeter charges each message id once
+      and the result only its remainder; 4 MiB line cap; the stdin user and
+      control_request interrupt lines. fixtures/2.1.302-turn.jsonl replays
+      the shapes p10m-claude-compat-generated observed (G-ADP-01, synthetic;
+      recorded nightly replay is slice 2). Founder 2026-10-23:
+      --include-hook-events (kernel-owned, exactly once, never an extra):
+      system.hook_started{hook_id, hook_name, hook_event} and
+      system.hook_response{…, output, stdout, stderr, exit_code, outcome}
+      (claude 2.1.309; no command, no duration) parse as `unknown` and are
+      turn.event rows like every line (the sensitive kind's redaction, big
+      lines by hash); #gui-turn-steps reads them, the kernel acts only on a
+      blocking Stop response (#offer-router). Aegis 2026-10-23: M2
+      hookFactsOf reads {id, event, name, exit, outcome, blocked} from the
+      FULL line and #supervisor logs it as turn.event.hook (kernel-set, also
+      when the line goes by hash); stopHookBlocked lives here. L2
+      hookStoredLine: a hook_response's stdout / stderr / output stay inline
+      only up to HOOK_OUTPUT_INLINE_CAP (4 KB) each, redacted by trace's
+      redactText, else {bytes, sha256}; output = stdout + stderr is dropped;
+      the row adds lineHash, bytes and lineKept{hashed, dropped, redacted}.
+      L3 (#kernel-log redaction.ts): SESSION_NEVER_FIELDS hides a
+      hook_response row's line and lineHash from a session reader, even its
+      own (the hook facts stay). Claude's synthetic user line (Stop hook
+      feedback, isSynthetic) is hook output too: syntheticStoredLine caps
+      and redacts each text block the same way, the row says
+      `synthetic: true`, and the session-reader rule hides its line and
+      lineHash (an older row is matched by "isSynthetic":true in the line);
+      a real user line is stored as received. #backend-adapter: claudeCodeAdapter (ClaudeCodeAdapter = core + PermissionChannel + ControlChannel + SdkMcpChannel) wires these free functions, UsageMeter.charge(ev) is the meter entry the supervisor calls, and LineSplitter moved to src/adapters/line-splitter.ts (re-exported).
+    path: src/adapters/claude-code/
+    type: module
+    tags: [gnomon, adapter, stream-json, paradigm-8, m1.7]
+    implements: "#backend-adapter"
+    related: ["#backend-adapter", "#local-runner"]
+    tests:
+      - test/claude-adapter.test.ts
+    oracles: [G-RUN-01, G-ADP-01]

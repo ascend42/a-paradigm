@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939', '8.0:rules-view', '8.0:git-verbs'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939', '8.0:rules-view', '8.0:git-verbs', '8.0:local-lane'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -93,6 +93,8 @@ const SESSION_RENAME = '8.0:session-rename' as const;
 const LOOPS = '8.0:loops' as const;
 /** Kernel-run git verbs (T-2026-10-23-002: git.init, git.push, repo.create outside the session sandbox): one clientApiId move. */
 const GIT_VERB_TAG = '8.0:git-verbs' as const;
+/** The local lane (TD-2026-10-27-833, T-2026-10-26-003): the kernel-brokered tools of a local session (slice C1): one clientApiId move. */
+const LOCAL_LANE = '8.0:local-lane' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -278,6 +280,38 @@ const TABLE: Row[] = [
   // gnomon_repo_create): `requested` before any card or effect, then exactly one of `refused` (why), `ran` or `failed`
   // (exitCode). Never a URL, path, token or command output: the host is the kernel-resolved remote host only.
   ['git', 'kernel', 'verb', GIT_VERB_TAG],
+  // 8.0:local-lane (TD-2026-10-27-833 slice C1, #local-tool-broker): tool.brokered{hsid, server, tool?, class?, argsHash,
+  // decision, bytes, isError, cardId?} — one brokered tool call of a local session (the child's tool_request, answered
+  // by the kernel): HASH-ONLY (the args are a digest, the result a byte count; never args, output, paths or model text).
+  // 8.0:local-lane (TD-2026-10-27-833 slice C3', Aegis M2, #tool-selector): tool.selection{hsid, trigger, hash, added,
+  // removed, found, unfitPins} — a local session's offered narrow-tool set changed: capability ids only (never the
+  // query, a find_tool need or any model text).
+  // 8.0:local-lane (TD-2026-10-27-833 slice C5'a1, #mcp-servers trust): tool.trust{id, label, op, binding, why?,
+  // launchHash?, toolsHash?} — the human trusted or cleared an MCP server's own tool labels, or the kernel dropped that
+  // trust (its launch or its tool list changed, or it was turned off). KERNEL-signed only; TrustBook folds no other row.
+  // 8.0:local-lane (TD-2026-10-28-956 / -969 slice C6'a2-1, #local-tool-broker "/" runs): tool.brokered gains author
+  // ('human': a "/" run the human started; absent: the model's call). tool.result.policy{hsid, repoKey, tool, bindHash,
+  // policy} — the human's choice whether a tool's "/" results go to the model (send) or not (ask), keyed by the repo,
+  // the brokered tool name and its bindHash: KERNEL-signed only (ResultPolicyBook folds no other row; a binding change
+  // reads ask). tool.result.sent{hsid, tool, argsHash, bytes, cut, policy} — one "/" result the kernel attached to the
+  // human's next turn as framed data (hash-only: never the result); its policy is send, or (slice C6'a2-3) once: the
+  // human sent one held result while the tool stayed ask.
+  // 8.0:local-lane (slice C6'a2-4, #local-tool-broker): a call an Always rule passed writes approval.auto{author?,
+  // callId} and its tool.brokered{callId}: one random call id (call:<ULID>, never derived from the args) pairs the two
+  // rows; approval.auto{author:'human'} marks a "/" run the human started (absent: the model's call).
+  ['tool', 'kernel', 'brokered selection trust result.policy result.sent', LOCAL_LANE],
+  // 8.0:local-lane (slice C6'a2): skill.run{hsid, name, skillHash, argsHash, via, decision, tokens?} — the human ran a
+  // repo skill from "/" (native: the model's own slash skill; template: the kernel's sanitized template). Hash-only.
+  ['skill', 'kernel', 'run', LOCAL_LANE],
+  // 8.0:local-lane (TD-2026-10-27-833 slice B2, #local-working-memory): session.memory{hsid, op, id?, source?, kind?,
+  // textHash?, bytes, why?} — one change to a local session's kernel-owned working memory: HASH-ONLY (never the text).
+  // session.context{hsid, target, previous, requested, configTarget, nCtx, aboveConfig} — the human changed a local
+  // session's context target; aboveConfig labels a raise past the signed config (notify-and-proceed, founder Q4).
+  // 8.0:local-lane (TD-2026-10-27-833 slice C6'a1, #local-mcp-client): session.mcp{hsid, server, state, fit?, error?} —
+  // one MCP server of a local session started, failed (its start, or its process after it started) or was refused (at
+  // open, or a restart whose launch, trust or pin binding no longer holds), so the GUI can say so. The server is its
+  // label; the error is cleaned server text, capped (a field-level sensitive label: it can name a path).
+  ['session', 'kernel', 'memory context mcp', LOCAL_LANE],
 ];
 
 /** Per-kind sensitivity overrides from §9.1's last column. */
@@ -292,6 +326,13 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'approval.auto.miss': 'sensitive',
   // 8.0:git-verbs: the remote host and the verb's input digest are project detail
   'git.verb': 'sensitive',
+  // 8.0:local-lane: the args digest is of model-written text
+  'tool.brokered': 'sensitive',
+  // 8.0:local-lane (B2): the text digest is of human or model text
+  'session.memory': 'sensitive',
+  // 8.0:local-lane (C6'a2): the args digest is of human-typed "/" arguments
+  'tool.result.sent': 'sensitive',
+  'skill.run': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -305,6 +346,8 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' },
   // TD-2026-10-23-939 follow-up: a file rule's path is project detail, like approval.auto's
   'approval.rule.learned': { path: 'sensitive' },
+  // 8.0:local-lane (C6'a1): a server's error can name a path under the human's home
+  'session.mcp': { error: 'sensitive' },
   // 8.0:session-rename: a session name is the human's own words (it may echo the conversation): a limited reader never gets it
   'request.session.rename': { name: 'sensitive' },
   'session.renamed': { name: 'sensitive' },
@@ -378,7 +421,9 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   // P8-D98 (TD-2026-10-19-528 F2): the match mode of a learned always-rule; only 'exact' (ALWAYS_RULE_MATCHES).
   // TD-2026-10-20-294: a prefix rule carries its words; the always decision that learned it carries the same scope.
   // TD-2026-10-23-939 follow-up: a file rule carries the kernel-resolved path of the card's edit (sensitive: project detail)
-  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES, path: EDIT_RULES }),
+  // 8.0:local-lane (slice C5', ^local-tool-grant): a `tool` rule carries the card's bindHash (the entry, its full schema,
+  // its class and the server's trust binding); a different bindHash at call time leaves the rule dormant
+  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES, path: EDIT_RULES, bindHash: LOCAL_LANE }),
   // TD-2026-10-23-815 (Aegis L2): a standing-covered decision names the device (unlock key) the grant matched on
   'approval.decide': Object.freeze({ scope: PREFIX_RULES, device: EDIT_RULES }),
   // T-2026-10-20-007: the digest of the ANCHORED command the kernel actually ran (the rewritten updatedInput)
@@ -406,7 +451,9 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'approval.strictness.lowered': ['repo', 'from', 'to', 'cardId', 'override'],
   'approval.strictness.held': ['repo', 'level', 'reason'],
   'approval.mode.set': ['scope', 'from', 'to', 'by', 'presence'],
-  'approval.auto': ['hsid', 'tool', 'path', 'inputHash', 'modeRef'],
+  // 8.0:local-lane (C6'a2-4): author (APPROVAL_AUTO_AUTHORS; absent: the model's call) and callId (TOOL_CALL_ID_PATTERN,
+  // the same id as the call's tool.brokered row) on a brokered call an Always rule passed
+  'approval.auto': ['hsid', 'tool', 'path', 'inputHash', 'modeRef', 'author', 'callId'],
   'request.strictness.set': ['repo', 'to'],
   'request.mode.set': ['repo', 'hsid', 'to'],
   'request.incident': ['refs', 'severity'],
@@ -522,6 +569,23 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'session.context.threshold': Object.freeze(['hsid', 'usedTokens', 'windowTokens', 'ratio']),
   // 8.0:git-verbs: closed, ids and closed values only (host is a validated DNS name, never a URL)
   'git.verb': Object.freeze(['hsid', 'verb', 'phase', 'inputHash', 'why', 'cardId', 'host', 'exitCode']),
+  // 8.0:local-lane: closed and hash-only (tool and class absent when the name resolved to no offered tool)
+  'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author', 'callId']),
+  // 8.0:local-lane (C6'a2): closed; the repo key, the brokered tool name, its bindHash and the closed policy only
+  'tool.result.policy': Object.freeze(['hsid', 'repoKey', 'tool', 'bindHash', 'policy']),
+  // 8.0:local-lane (C6'a2): closed and hash-only (never the result)
+  'tool.result.sent': Object.freeze(['hsid', 'tool', 'argsHash', 'bytes', 'cut', 'policy']),
+  // 8.0:local-lane (C6'a2): closed and hash-only (never the skill text or the arguments)
+  'skill.run': Object.freeze(['hsid', 'name', 'skillHash', 'argsHash', 'via', 'decision', 'tokens']),
+  // 8.0:local-lane (B2): closed and hash-only; delete carries no entry fields, refused carries why
+  'session.memory': Object.freeze(['hsid', 'op', 'id', 'source', 'kind', 'textHash', 'bytes', 'why']),
+  // 8.0:local-lane (C3'): closed; ids are capability ids, the hash the selection's; no query or need text
+  'tool.selection': Object.freeze(['hsid', 'trigger', 'hash', 'added', 'removed', 'found', 'unfitPins']),
+  // 8.0:local-lane (C5'a1): closed; ids, the server label, hashes and closed values only (never a command or a value)
+  'tool.trust': Object.freeze(['id', 'label', 'op', 'binding', 'why', 'launchHash', 'toolsHash']),
+  // 8.0:local-lane (C6'a1): closed state and fit; refused carries fit, failed carries error
+  'session.mcp': Object.freeze(['hsid', 'server', 'state', 'fit', 'error']),
+  'session.context': Object.freeze(['hsid', 'target', 'previous', 'requested', 'configTarget', 'nCtx', 'aboveConfig']),
 });
 
 /** Keys of a KIND_PAYLOADS entry that may be absent (every other key is required). */
@@ -530,6 +594,12 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'request.session.restart': Object.freeze(['checkpointRef']),
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
   'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
+  'tool.brokered': Object.freeze(['tool', 'class', 'cardId', 'author', 'callId']),
+  'skill.run': Object.freeze(['tokens']),
+  'session.memory': Object.freeze(['id', 'source', 'kind', 'textHash', 'why']),
+  // 8.0:local-lane (C5'a1): a set row carries launchHash and toolsHash (a drop names which one changed)
+  'tool.trust': Object.freeze(['why', 'launchHash', 'toolsHash']),
+  'session.mcp': Object.freeze(['fit', 'error']),
   // 8.0:rules-view: cause 'human' carries batch, connId and cardId; cause 'expired' carries until (validateKindPayload)
   'approval.rule.enabled': Object.freeze(['batch', 'connId', 'cardId', 'until']),
 });
@@ -567,6 +637,8 @@ export type GitVerbPhase = (typeof GIT_VERB_PHASES)[number];
  *   timeout             git or gh ran past the kernel's limit
  *   worktree-exists     worktree add: a worktree (or anything) of that name, or that branch, already exists
  *   no-worktree         worktree remove: no kernel worktree of that name
+ *   cancelled           8.0:local-lane: a local session's brokered call was aborted, passed its deadline, or its session
+ *                       ended (before the card, while it was open, or after the decision; nothing ran)
  *   busy                the session already has the most verb calls in flight (Aegis L5)
  *   unguarded           worktree verbs: this session's profile has no kernel-worktree denies (win32/linux)
  *   secret-in-push      push: the kernel's secret scan hit in the pushed commits and the human denied the card
@@ -597,10 +669,149 @@ export const GIT_VERB_REASONS = [
   'busy',
   'unguarded',
   'secret-in-push',
+  'cancelled',
 ] as const;
 export type GitVerbReason = (typeof GIT_VERB_REASONS)[number];
 /** git.verb{host}: a lowercase DNS name (LDH labels; punycode stays visible as xn--), at most 253 characters. */
 export const GIT_VERB_HOST_PATTERN = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+/** tool.brokered{class} (CLOSED, 8.0:local-lane): a brokered tool's grant class (read runs; mutate/destructive take a card). */
+export const TOOL_BROKER_CLASSES = ['read', 'mutate', 'destructive'] as const;
+export type ToolBrokerClass = (typeof TOOL_BROKER_CLASSES)[number];
+/**
+ * tool.brokered{decision} (CLOSED, 8.0:local-lane): what the kernel did with one brokered call.
+ *   ran                 a read-class tool ran
+ *   approved            a mutate/destructive tool's card was allowed and it ran
+ *   denied              the human denied the card (or it expired)
+ *   unknown-tool        the name is not in the session's offered set
+ *   bad-args            the args failed the full schema (unknown key, type, size, a control or bidi character)
+ *   loop-session        a loop session never runs a brokered tool
+ *   no-approval-surface no broker could take the card
+ *   cancelled           the call was aborted (abort, tool_cancel, the session's stop) before the target ran
+ *   expired             the call's kernel deadline passed (a pending card expired) before the target ran
+ *   allowed-cancelled   the card was ALLOWED but the call was cancelled or expired before the target ran
+ *   cooldown            the same args were denied moments ago (a deny cool-down)
+ *   suspended           this session's brokered calls are suspended after repeated denies or cancelled cards
+ *   refused             the target refused the call for another reason (manual mode, bad input, remote changed, …)
+ *   busy                the session already has MAX_BROKERED_IN_FLIGHT calls in flight
+ *   not-running         the session is not running
+ */
+export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'expired', 'allowed-cancelled', 'cooldown', 'suspended', 'refused', 'busy', 'not-running'] as const;
+export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
+/**
+ * tool.selection{trigger} (CLOSED, 8.0:local-lane C3'): why the kernel re-selected a local session's narrow tools.
+ * `tier` (C4'a, #local-tool-tier): the human committed a tool-tier change (request.session.tier).
+ */
+export const TOOL_SELECTION_TRIGGERS = ['goal', 'steer', 'find', 'periodic', 'list_changed', 'pin', 'mode', 'tier'] as const;
+export type ToolSelectionTrigger = (typeof TOOL_SELECTION_TRIGGERS)[number];
+/** tool.selection{added, removed, found}: capability ids `<server>/<tool>[.<op>]@<sha256(schema)[:8]>`, at most this many each. */
+export const TOOL_SELECTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}$/;
+export const TOOL_SELECTION_MAX_IDS = 64;
+/**
+ * tool.brokered{author} (CLOSED, 8.0:local-lane C6'a2): `human` marks a "/" run the human started
+ * (request.session.tools.run); absent, the call is the model's.
+ */
+export const TOOL_BROKERED_AUTHORS = ['human'] as const;
+export type ToolBrokeredAuthor = (typeof TOOL_BROKERED_AUTHORS)[number];
+/**
+ * approval.auto{author} (CLOSED, 8.0:local-lane C6'a2-4): `human` marks a brokered "/" run an Always rule passed;
+ * absent, the call was the model's (or the row is not a brokered call's).
+ */
+export const APPROVAL_AUTO_AUTHORS = ['human'] as const;
+export type ApprovalAutoAuthor = (typeof APPROVAL_AUTO_AUTHORS)[number];
+/**
+ * approval.auto{callId} / tool.brokered{callId} (8.0:local-lane C6'a2-4): `call:<ULID>`, minted at random by the kernel
+ * for one brokered call an Always rule passed (never derived from the args); the two rows of that call carry the same id.
+ */
+export const TOOL_CALL_ID_PATTERN = /^call:[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+/**
+ * tool.result.policy{policy} / tool.result.sent{policy} (CLOSED, C6'a2): send (a "/" result of this tool goes to the
+ * model with the human's next turn, as framed data) or ask (it does not). No row, or a binding change: ask.
+ */
+export const TOOL_RESULT_POLICIES = ['send', 'ask'] as const;
+export type ToolResultPolicy = (typeof TOOL_RESULT_POLICIES)[number];
+/**
+ * tool.result.sent{policy} (CLOSED, C6'a2-3): the policies above, plus `once` — a held "/" result the human sent to the
+ * model one time (request.session.tools.send) while the tool's policy stayed ask or unchosen. tool.result.policy never
+ * takes `once` (it is not a standing choice).
+ */
+export const TOOL_RESULT_SENT_POLICIES = [...TOOL_RESULT_POLICIES, 'once'] as const;
+export type ToolResultSentPolicy = (typeof TOOL_RESULT_SENT_POLICIES)[number];
+/** skill.run{name}: a repo skill name (lowercase letters, digits and hyphens, at most 64). */
+export const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** skill.run{via} (CLOSED, C6'a2): native (the model's own slash skill) or template (the kernel's sanitized template). */
+export const SKILL_RUN_VIAS = ['native', 'template'] as const;
+export type SkillRunVia = (typeof SKILL_RUN_VIAS)[number];
+/** skill.run{decision} (CLOSED, C6'a2): ran, refused (not listed, bad arguments, a loop session…) or over-budget. */
+export const SKILL_RUN_DECISIONS = ['ran', 'refused', 'over-budget'] as const;
+export type SkillRunDecision = (typeof SKILL_RUN_DECISIONS)[number];
+/** tool.brokered{server}: the MCP server name the call went to (`gnomon` = the kernel's own SDK server). */
+export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+/** tool.brokered{tool}: an offered tool name (kernel-chosen, never model text). */
+export const TOOL_BROKER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+/**
+ * tool.trust{op} (CLOSED, 8.0:local-lane C5'a1, #mcp-servers): set (the human's commit of request.mcp.trust), cleared
+ * (the human's clear) or dropped (the kernel: the server's binding changed, or it was turned off).
+ */
+export const TOOL_TRUST_OPS = ['set', 'cleared', 'dropped'] as const;
+export type ToolTrustOp = (typeof TOOL_TRUST_OPS)[number];
+/**
+ * tool.trust{why} (CLOSED): human (set and cleared), launch-changed (its command, args, env, plugin version: the launch
+ * hash or plugin version moved), tools-changed (its tools/list: names, schemas, annotations, op-annotations moved),
+ * disabled (the human turned the server off).
+ */
+export const TOOL_TRUST_WHYS = ['human', 'launch-changed', 'tools-changed', 'disabled'] as const;
+export type ToolTrustWhy = (typeof TOOL_TRUST_WHYS)[number];
+/**
+ * session.mcp{state} (CLOSED, 8.0:local-lane C6'a1): started (its initialize answered), failed (a start, or its process
+ * after it started, ended with an error: `error`), refused (never run: `fit`).
+ */
+export const SESSION_MCP_STATES = ['started', 'failed', 'refused'] as const;
+export type SessionMcpState = (typeof SESSION_MCP_STATES)[number];
+/**
+ * session.mcp{fit} (CLOSED, state refused only): remote-refused, launch-writable, label-reserved and pin-mismatch as
+ * #local-mcp-client's ServerFit; trust-changed (a restart of a server narrowed as trusted whose trust binding no longer
+ * holds); disabled (a restart of a server the human turned off, or relaunched under another hash, since open).
+ */
+export const SESSION_MCP_FITS = ['remote-refused', 'launch-writable', 'label-reserved', 'pin-mismatch', 'trust-changed', 'disabled'] as const;
+export type SessionMcpFit = (typeof SESSION_MCP_FITS)[number];
+/** session.mcp{error}: cleaned server text, at most this many characters, no control characters. */
+export const SESSION_MCP_ERROR_MAX = 240;
+/** tool.trust{id}: a user or plugin MCP server id (`<source>:<owner>:<name>`, printable ASCII, no space). */
+export const TOOL_TRUST_ID_PATTERN = /^(?:user|plugin):[\x21-\x7e]{0,255}:[\x21-\x7e]{1,128}$/;
+/** tool.trust{launchHash}: the server's launch hash (#mcp-servers declHash, keyed: it never confirms a guessed value). */
+export const TOOL_TRUST_LAUNCH_PATTERN = /^hmac-sha256:[0-9a-f]{64}$/;
+
+/**
+ * session.memory{op} (CLOSED, 8.0:local-lane slice B2): what changed in a local session's working memory.
+ *   add      a new entry (a model note, a file the session edited, the goal of a first prompt)
+ *   replace  a kernel entry replaced in place (the goal of a new prompt, the latest failing tool)
+ *   forget   the model forgot one of its own notes
+ *   evict    the oldest model note left to make room (human and kernel entries are never evicted)
+ *   refused  an entry was refused (why)
+ *   delete   the human deleted the session's whole memory (no entry fields)
+ */
+export const SESSION_MEMORY_OPS = ['add', 'replace', 'forget', 'evict', 'refused', 'delete'] as const;
+export type SessionMemoryOp = (typeof SESSION_MEMORY_OPS)[number];
+/** session.memory{kind} (CLOSED): the entry's kind. */
+export const SESSION_MEMORY_KINDS = ['goal', 'fact', 'note', 'file-ref', 'tool-pin'] as const;
+export type SessionMemoryKind = (typeof SESSION_MEMORY_KINDS)[number];
+/**
+ * session.memory{why} (CLOSED, op refused only):
+ *   full        the memory holds its cap of entries and none may be evicted
+ *   too-long    the text is over the entry's cap
+ *   empty       the text is empty
+ *   not-found   forget named an id that is not in memory
+ *   not-a-note  forget named an entry the model did not write
+ *   off           this session has no working memory (a loop session)
+ *   child-refused the child refused the kernel's memory_set or set_context (Aegis B2 L1; no entry fields)
+ */
+export const SESSION_MEMORY_REFUSALS = ['full', 'too-long', 'empty', 'not-found', 'not-a-note', 'off', 'child-refused'] as const;
+export type SessionMemoryRefusal = (typeof SESSION_MEMORY_REFUSALS)[number];
+/** session.memory{source}: who wrote the entry — the human, the kernel, the model, or a tool behind a named MCP server. */
+export const SESSION_MEMORY_SOURCE_PATTERN = /^(?:human|kernel|model|tool:[a-z0-9][a-z0-9_-]{0,63})$/;
+/** session.memory{id}: a working-memory entry id (kernel-minted, never reused in a session). */
+export const SESSION_MEMORY_ID_PATTERN = /^wm-[1-9]\d{0,8}$/;
 
 /**
  * turn.result{turn} (review M2, a deliberate clientApiId move): the id of the LATEST turn the result closes. The
@@ -747,8 +958,10 @@ export type VoiceDisarmReason = (typeof VOICE_DISARM_REASONS)[number];
  * the learned words (approval.rule.learned{match:'prefix', prefix}). TD-2026-10-23-939 follow-up (Aegis): `file` = later
  * edits of one kernel-resolved path (approval.rule.learned{match:'file', path}); `repo-edits` = every edit the auto-edits
  * pass allows in the repo. Both match only through the supervisor's auto-edits pass, never in manual mode.
+ * 8.0:local-lane (C5', ^local-tool-grant): `tool` = later calls of ONE brokered tool (+ op) on ONE server in the repo,
+ * any arguments, while the card's bindHash still holds (approval.rule.learned{match:'tool', bindHash}).
  */
-export const ALWAYS_RULE_MATCHES = ['exact', 'prefix', 'file', 'repo-edits'] as const;
+export const ALWAYS_RULE_MATCHES = ['exact', 'prefix', 'file', 'repo-edits', 'tool'] as const;
 export type AlwaysRuleMatch = (typeof ALWAYS_RULE_MATCHES)[number];
 
 /** F2: the always-rule `match` field is closed (absent = 'exact', the v1 `matchExact:true` reading). */
@@ -761,7 +974,11 @@ export const RULE_ID_PATTERN = ID_PATTERNS.card;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const KEBAB_64 = /^[a-z][a-z0-9-]{0,63}$/;
-const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/;
+/**
+ * A rule's tool name: a Claude tool name, or (8.0:local-lane C5') a brokered MCP tool `mcp:<server>/<tool>` (the
+ * namespaced name a brokered card shows). Checked on approval.rule.revoked / disabled / enabled rows only.
+ */
+export const TOOL_NAME = /^(?:[A-Za-z][A-Za-z0-9_.:-]{0,127}|mcp:[a-z0-9][a-z0-9_-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63})$/;
 
 export interface SessionDrainedPayload {
   /** The backend session uuid the new kernel resumes with `--resume <uuid>`. */
@@ -931,6 +1148,102 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('why' in v) c.closedEnum('why', v.why, SESSION_ANOMALY_REASONS);
       break;
+    case 'tool.brokered':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('server' in v) c.str('server', v.server, TOOL_BROKER_SERVER_PATTERN, 'an MCP server name');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_BROKER_TOOL_PATTERN, 'a tool name');
+      if ('class' in v) c.closedEnum('class', v.class, TOOL_BROKER_CLASSES);
+      if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('decision' in v) c.closedEnum('decision', v.decision, TOOL_BROKERED_DECISIONS);
+      if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
+      if ('isError' in v && typeof v.isError !== 'boolean') c.fail('isError', 'must be a boolean');
+      if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
+      if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
+      if ('author' in v) c.closedEnum('author', v.author, TOOL_BROKERED_AUTHORS);
+      if ('callId' in v) c.str('callId', v.callId, TOOL_CALL_ID_PATTERN, 'call:<ULID>');
+      break;
+    case 'tool.result.policy':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key)');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a brokered tool name (mcp:<server>/<tool>)');
+      if ('tool' in v && typeof v.tool === 'string' && !v.tool.startsWith('mcp:')) c.fail('tool', 'is a brokered MCP tool name (mcp:<server>/<tool>)');
+      if ('bindHash' in v) c.str('bindHash', v.bindHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('policy' in v) c.closedEnum('policy', v.policy, TOOL_RESULT_POLICIES);
+      break;
+    case 'tool.result.sent':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a brokered tool name (mcp:<server>/<tool>)');
+      if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
+      if ('cut' in v && typeof v.cut !== 'boolean') c.fail('cut', 'must be a boolean');
+      if ('policy' in v) c.closedEnum('policy', v.policy, TOOL_RESULT_SENT_POLICIES);
+      break;
+    case 'skill.run':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('name' in v) c.str('name', v.name, SKILL_NAME_PATTERN, 'a skill name');
+      if ('skillHash' in v) c.str('skillHash', v.skillHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('via' in v) c.closedEnum('via', v.via, SKILL_RUN_VIAS);
+      if ('decision' in v) c.closedEnum('decision', v.decision, SKILL_RUN_DECISIONS);
+      if ('tokens' in v && (typeof v.tokens !== 'number' || !Number.isSafeInteger(v.tokens) || v.tokens < 0)) c.fail('tokens', 'must be a non-negative integer');
+      break;
+    case 'tool.trust': {
+      if ('id' in v) c.str('id', v.id, TOOL_TRUST_ID_PATTERN, 'a user or plugin MCP server id');
+      if ('label' in v) c.str('label', v.label, TOOL_BROKER_SERVER_PATTERN, 'an MCP server label');
+      if ('op' in v) c.closedEnum('op', v.op, TOOL_TRUST_OPS);
+      if ('binding' in v) c.str('binding', v.binding, SHA256_TAGGED, 'sha256:<hex>');
+      if ('why' in v) c.closedEnum('why', v.why, TOOL_TRUST_WHYS);
+      if ('launchHash' in v) c.str('launchHash', v.launchHash, TOOL_TRUST_LAUNCH_PATTERN, 'hmac-sha256:<hex>');
+      if ('toolsHash' in v) c.str('toolsHash', v.toolsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if (v.op === 'set' && !('launchHash' in v && 'toolsHash' in v && v.why === 'human')) c.fail('op', 'a set row carries launchHash, toolsHash and why human');
+      if (v.op === 'cleared' && v.why !== 'human') c.fail('why', 'a cleared row is the human\'s (why human)');
+      if (v.op === 'dropped' && !(v.why === 'launch-changed' || v.why === 'tools-changed' || v.why === 'disabled')) c.fail('why', 'a dropped row names launch-changed, tools-changed or disabled');
+      break;
+    }
+    case 'session.mcp': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('server' in v) c.str('server', v.server, TOOL_BROKER_SERVER_PATTERN, 'an MCP server label');
+      if ('state' in v) c.closedEnum('state', v.state, SESSION_MCP_STATES);
+      if ('fit' in v) c.closedEnum('fit', v.fit, SESSION_MCP_FITS);
+      if ('error' in v && (typeof v.error !== 'string' || v.error.length === 0 || [...v.error].length > SESSION_MCP_ERROR_MAX || /[\p{Cc}]/u.test(v.error))) c.fail('error', `must be 1..${SESSION_MCP_ERROR_MAX} characters of text`);
+      if (('fit' in v) !== (v.state === 'refused')) c.fail('fit', 'is present exactly when state is refused');
+      if (('error' in v) !== (v.state === 'failed')) c.fail('error', 'is present exactly when state is failed');
+      break;
+    }
+    case 'tool.selection': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('trigger' in v) c.closedEnum('trigger', v.trigger, TOOL_SELECTION_TRIGGERS);
+      if ('hash' in v) c.str('hash', v.hash, SHA256_TAGGED, 'sha256:<hex>');
+      for (const k of ['added', 'removed', 'found'] as const) {
+        if (!(k in v)) continue;
+        const a = v[k];
+        if (!Array.isArray(a) || a.length > TOOL_SELECTION_MAX_IDS || !a.every((x) => typeof x === 'string' && TOOL_SELECTION_ID_PATTERN.test(x))) c.fail(k, `must be at most ${TOOL_SELECTION_MAX_IDS} capability ids`);
+      }
+      if ('unfitPins' in v && (typeof v.unfitPins !== 'number' || !Number.isSafeInteger(v.unfitPins) || v.unfitPins < 0 || v.unfitPins > 64)) c.fail('unfitPins', 'must be an integer 0..64');
+      break;
+    }
+    case 'session.memory': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('op' in v) c.closedEnum('op', v.op, SESSION_MEMORY_OPS);
+      if ('id' in v) c.str('id', v.id, SESSION_MEMORY_ID_PATTERN, 'wm-<n>');
+      if ('source' in v) c.str('source', v.source, SESSION_MEMORY_SOURCE_PATTERN, 'human | kernel | model | tool:<server>');
+      if ('kind' in v) c.closedEnum('kind', v.kind, SESSION_MEMORY_KINDS);
+      if ('textHash' in v) c.str('textHash', v.textHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
+      if ('why' in v) c.closedEnum('why', v.why, SESSION_MEMORY_REFUSALS);
+      if (('why' in v) !== (v.op === 'refused')) c.fail('why', 'is present exactly when op is refused');
+      if (v.op === 'delete' && ('id' in v || 'source' in v || 'kind' in v || 'textHash' in v)) c.fail('op', 'delete carries no entry fields');
+      if (v.op !== 'delete' && v.op !== 'refused' && !('id' in v && 'source' in v && 'kind' in v && 'textHash' in v)) c.fail('id', 'an entry change carries id, source, kind and textHash');
+      break;
+    }
+    case 'session.context': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      for (const k of ['target', 'previous', 'requested', 'configTarget'] as const) if (k in v) c.int(k, v[k], 1);
+      if ('nCtx' in v && v.nCtx !== null && (typeof v.nCtx !== 'number' || !Number.isSafeInteger(v.nCtx) || v.nCtx < 1)) c.fail('nCtx', 'must be a positive integer or null (unknown)');
+      if ('aboveConfig' in v && typeof v.aboveConfig !== 'boolean') c.fail('aboveConfig', 'must be a boolean');
+      if (typeof v.target === 'number' && typeof v.configTarget === 'number' && typeof v.aboveConfig === 'boolean' && v.aboveConfig !== v.target > v.configTarget) c.fail('aboveConfig', 'is true exactly when target is above configTarget');
+      break;
+    }
     case 'git.verb':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('verb' in v) c.closedEnum('verb', v.verb, GIT_VERBS);

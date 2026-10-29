@@ -1,0 +1,76 @@
+version: "2.0"
+name: gnomon-probes
+description: >-
+  The M1.0 probe harness: one directory per probe and run.mjs to run them;
+  results/ holds their output.
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  gnomon-probes:
+    description: >-
+      M1.0 probe harness (spec §19.1, research 29 §2). `node
+      packages/gnomon/probes/run.mjs <id> [--out-dir d] [--timeout ms]` imports
+      probes/<id>/probe.mjs (zero deps, no build), runs its default export with
+      {id, platform, arch, probeDir, signal}, and writes a probeResult:v1 record
+      to probes/results/<id>.<platform>.json. Throws and timeouts become verdict
+      `fail`. Exit codes 0 pass / 1 fail / 2 partial / 64 usage. Probe ids match
+      ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and
+      its results are gitignored; real results are committed from hardware runs
+      only. A `fail` on a ruling means a re-plan memo before dependent builds.
+      Unsigned macOS probes: p10m-sbx-deny-mac (S29-03/04 sandbox-exec session
+      denies + escape matrix), p11-ws-framing (RFC 6455 over node:http with a
+      forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS
+      and phys_footprint), p-noise-vectors (Noise IK/XX/XXpsk3 over node:crypto
+      against a verbatim cacophony/snow vector subset in vectors.json, G-LNK-11)
+      p-log-fsync (kernel-log head-anchor fsync stalls, arms A-G; arm G =
+      the research 33 policy: coalesced anchor + forced fullfsync+anchor at
+      1/64, judged by the restated G-LOG-04; env P_LOG_FSYNC_ARMS accepts
+      A,E,G) and p01-claude-cli (read-only `claude --version`/`--help` flag check;
+      live items pending-manual). M1.0 batch 2 (probes/README.md lists them):
+      unattended p06-local-caps (llama.cpp /slots n_ctx + live tool-call
+      detection; no endpoint = partial, recorded not failed), p09-ed25519-matrix
+      (WebCrypto Ed25519 in Node + every local engine under the §11.2 CSP;
+      safari.html for Safari by hand, P09_SAFARI_LINE to record it),
+      p12-excalidraw-csp (pinned Excalidraw bundled by esbuild in a temp dir,
+      loaded under the §11.2 CSP; violations by phase, size, parse time),
+      p14-link-outbound (default-deny sandbox-exec link profile), p03-pipe-dacl
+      (win32, W1: Node cannot adopt a foreign pipe, the default pipe DACL lets Everyone and
+      Anonymous read, a WRITE_DAC client handle makes it owner-only pipe-wide, a squatted
+      name fails the listen EADDRINUSE); founder-run
+      p00-sign-notary, p04-se-helper, p05-keychain-acl (signed
+      GnomonHelperProbe.app from _shared/helper/ProbeHelper.swift; fail fast
+      with a founder-steps pointer when the identity / provisioning profile /
+      gnomon-notary profile is missing; prompt-free halves run unattended),
+      p07-launch-token (NSWorkspace hand-off, eslogger + log stream + ps
+      capture with an argv positive control, browser history grep incl.
+      mozlz4), p01-claude-cli-manual (hook session_id, control_request
+      interrupt, loopback-override observation, managed policy; claude by the
+      path p01 recorded, never PATH). s29-10-voice-custody is a README stub
+      pending the signed helper. p14b-link-fdpass (research paradigm-8/37):
+      the kernel stand-in dials the peer and passes the connected socket over
+      IPC to a deny-default child with no network* allow; full duplex 4 MiB,
+      peer close, redial hand-off, child connect/UDP/listen/unix/file/exec all
+      EPERM. p14b-web-handoff (T-2026-10-18-020): the inbound twin — the
+      kernel stand-in listens on 127.0.0.1 (pauseOnConnect) and hands each
+      accepted socket to a deny-default child with no network-* rule; full
+      duplex 4 MiB, client close, 5 repeated hand-offs, every child
+      bind/listen (0.0.0.0, ::, en0, 127.0.0.1, ::1, no host), UDP bind,
+      outbound TCP and unix connect EPERM; pass on darwin. p-replay-order
+      (T-2026-10-21-008, re-review M-1/M-4, darwin, real pinned claude, haiku):
+      the ordering of SENT, replay, message_start/stop, tool_result and result
+      for a queued message (during a tool call, after the final message_stop,
+      back to back, inside a Stop-hook continuation) and for a blocking Stop
+      hook with and without --include-hook-events; finding: the replay line is
+      written on consumption, never on receipt, and hook_response lines appear
+      only with --include-hook-events (exit_code 2, outcome 'error'). probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
+      cleanups on SIGINT/SIGTERM/ctx.signal for founder-run probes, ask()
+      rejects on abort — wkwebview-load.swift, helper/) is shared code, not a
+      probe id. p12 pins its whole tree with a committed package-lock.json
+      (npm ci). CI probe results go to $RUNNER_TEMP, never probes/results/.
+    path: probes/
+    type: module
+    tags: [gnomon, probes, m1.0]
+    tests:
+      - test/probe-harness.test.ts

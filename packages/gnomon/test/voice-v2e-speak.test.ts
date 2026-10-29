@@ -161,7 +161,7 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     expect(readInputChoice(home)).toBeNull();
   });
 
-  it('#voice-reply-mode: Speak and show by default; show only is held, validated, on status and persisted (0600) per home', () => {
+  it('G-VOX-22 #voice-reply-mode: Speak and show by default; show only is held, validated, on status and persisted (0600) per home', () => {
     const r = new VoiceReports(() => 1);
     expect(r.status().replyMode).toBe('speak');
     expect(r.replyMode('show')).toEqual({ replyMode: 'show' });

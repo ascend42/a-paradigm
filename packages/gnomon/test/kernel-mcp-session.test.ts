@@ -27,7 +27,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-describe.skipIf(!darwinFloor().ok)('#kernel-mcp through a session', () => {
+describe.skipIf(!darwinFloor().ok)('G-GIT-08 #kernel-mcp through a session', () => {
   it('the gnomon SDK server is in mcp.json, the guidance in argv, a kernel tool passes once and tools/call makes the repo', async () => {
     w = sessionWorld();
     fs.rmSync(path.join(w.cwd, '.git'), { recursive: true });

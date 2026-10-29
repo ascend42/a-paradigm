@@ -87,6 +87,9 @@ describe('tools/list budget (7.13)', () => {
       expect(b.count).toBe(ANCHOR_TOOLS.length + DEFAULT_FAMILIES.length);
       expect(b.tokens).toBeLessThan(TOKEN_BUDGET);
       expect(b.json).not.toContain('"aliases"');
+      // Per-op annotations live in paradigm://tool-annotations, never in tools/list.
+      expect(b.json).not.toContain('op-annotations');
+      expect(b.json).not.toContain('"_meta"');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -101,6 +104,7 @@ describe('tools/list budget (7.13)', () => {
     expect(b.count).toBeLessThanOrEqual(TOOL_BUDGET);
     expect(b.tokens).toBeLessThan(TOKEN_BUDGET);
     expect(b.json).not.toContain('"aliases"');
+    expect(b.json).not.toContain('op-annotations');
   });
 });
 

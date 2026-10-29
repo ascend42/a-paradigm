@@ -74,8 +74,26 @@
  * allowed effect, carrying the `until` it saw at raise) and `{cause:'expired', until}` (the kernel sweep's feed row) clear
  * it only while it is still the flag that `until` names (Aegis M-2: a stale card never undoes a newer off). Enabled ONLY clears a flag on a rule that stands: it never creates a rule, and a
  * revoke (or the repo brake) drops the flag with the rule, so nothing brings a revoked rule back.
+ *
+ * BROKERED TOOLS (8.0:local-lane C5'a2, ^local-tool-grant): `match:'tool', bindHash` — later calls of ONE brokered MCP
+ * tool (+ op) `mcp:<server>/<tool>` on ONE server in the repo, any arguments. Formed only when the kernel-signed
+ * approval.request carries the card's bindHash (the broker copies detail.brokered.bindHash, inside the contentHash, of a
+ * card #local-tool-broker offered the tool scope on), the decide row carries scope {kind:'tool'} and the learned row
+ * names the SAME bindHash and tool. It matches only a call whose bindHash (the entry id, the sha256 of its FULL schema,
+ * its class and the server's live trust binding) is the rule's: a schema, class or trust change leaves it dormant (it
+ * stands, listed, and matches again only if that exact binding comes back). Never in manual mode (`ctx.prefixRules`
+ * false). An `mcp:` tool never matches an exact, prefix or edit rule.
+ *
+ * DESTRUCTIVE TOOL RULES (8.0:local-lane C6'a2-1, TD-2026-10-28-969): a tool rule is DESTRUCTIVE when its kernel-signed
+ * approval.request carries flags including `irreversible` (#local-tool-broker flags every destructive brokered card). It
+ * is formed ONLY when the decide row's presence is exactly 'fresh' AND it carries a rootSig (the card's `always` is root
+ * class), and the learned row's presence is 'fresh' too: never from a standing grant, a CLI touch, a cached unlock or
+ * voice. It has no expiry (it stands until revoked or its binding changes). It matches only a call whose class is
+ * destructive (PrefixMatchContext.toolClass), and a mutate rule never matches a destructive call (nor the reverse;
+ * the bindHash covers the class too).
  */
 import path from 'node:path';
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/index.js';
 import { inputHash } from './permission.js';
 import { pushRuleWords } from '../git/verbs.js';
@@ -124,10 +142,24 @@ export interface PrefixMatchContext {
    * false ⇒ no repo-edits rule matches (fail closed); file rules, like prefix rules, need only prefixRules.
    */
   repoEdits?: boolean;
+  /**
+   * 8.0:local-lane C5'a2: a brokered call's bindHash NOW (#local-tool-broker); a tool rule matches only this exact value
+   * (a different one leaves the rule dormant). Absent or null ⇒ no tool rule matches.
+   */
+  bindHash?: string | null;
+  /**
+   * 8.0:local-lane C6'a2-1: the brokered call's class. A destructive call matches only a destructive tool rule; any other
+   * value (absent included) matches only a mutate tool rule.
+   */
+  toolClass?: 'mutate' | 'destructive';
 }
 
 /** The tools a scoped edit rule covers (the auto-edits tools). */
 export const EDIT_RULE_TOOLS: readonly string[] = Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
+/** 8.0:local-lane C5'a2: a brokered MCP tool's rule name (contracts TOOL_NAME's mcp form; tool-broker.ts brokeredToolName). */
+export const BROKERED_RULE_TOOL = /^mcp:[a-z0-9][a-z0-9_-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+const BIND_HASH = /^sha256:[0-9a-f]{64}$/;
 
 export const MAX_RULES = 1024;
 export const MAX_TRACKED_REQUESTS = 4096;
@@ -160,8 +192,12 @@ export interface AlwaysRule {
   inputHash: string;
   /** RC5: Bash exact rules only — bashCommandHash of the learned request's input (null when it had another key) */
   commandHash?: string | null;
-  /** 'exact' (inputHash), 'prefix' (a Bash rule over one literal simple command starting with `prefix`), 'file' (edits of `path`) or 'repo-edits' (every edit the auto-edits pass allows in the repo) */
-  match: 'exact' | 'prefix' | 'file' | 'repo-edits';
+  /** 'exact' (inputHash), 'prefix' (a Bash rule over one literal simple command starting with `prefix`), 'file' (edits of `path`), 'repo-edits' (every edit the auto-edits pass allows in the repo) or 'tool' (any call of one brokered MCP tool while `bindHash` holds) */
+  match: 'exact' | 'prefix' | 'file' | 'repo-edits' | 'tool';
+  /** tool rules only (8.0:local-lane C5'a2): the binding the card showed; a call with another bindHash never matches */
+  bindHash?: string;
+  /** tool rules only (8.0:local-lane C6'a2-1): a destructive tool rule (its card was irreversible; root class, fresh) */
+  destructive?: boolean;
   /** prefix rules only: the literal argv words */
   prefix?: string[];
   /** file rules only: the absolute path the auto-edits pass resolved on the card */
@@ -193,11 +229,23 @@ function commandTextOf(tool: unknown, input: unknown): { command?: string; comma
  * 8.0:rules-view (Aegis L1): what a rule allows, in plain words the KERNEL composes from its own RuleBook (never page
  * text). The Rules view lists them and the batch card's lines name each re-enabled rule with them.
  */
+/**
+ * 8.0:local-lane C5'a3 (Mika): a brokered tool rule's words, `any call of <tool> on the <server> MCP server (any
+ * arguments)`. The names come from the rule's own mcp:<server>/<tool> name (BROKERED_RULE_TOOL), each cleaned by the
+ * display sanitizer every card line passes through (sanitizeDisplayText); a name of another shape is shown whole.
+ */
+export function toolRuleWords(tool: string): string {
+  const clean = (s: string): string => sanitizeDisplayText(s).text;
+  const m = BROKERED_RULE_TOOL.test(tool) ? /^mcp:([^/]+)\/(.+)$/.exec(tool) : null;
+  return m ? `any call of ${clean(m[2]!)} on the ${clean(m[1]!)} MCP server (any arguments)` : `any call of ${clean(tool)} (any arguments)`;
+}
+
 export function ruleWords(r: AlwaysRule): string {
   if (r.words) return r.words;
   if (r.match === 'prefix') return `Bash commands starting ${(r.prefix ?? []).join(' ')} …`;
   if (r.match === 'file') return `edits to ${r.path ?? '?'}`;
   if (r.match === 'repo-edits') return 'edits in this repo (same as auto-edits)';
+  if (r.match === 'tool') return toolRuleWords(r.tool);
   if (r.tool === 'Bash') {
     if (r.command === undefined) return 'this exact Bash command';
     const n = r.commandChars ?? r.command.length;
@@ -227,7 +275,9 @@ function bump<V>(m: Map<string, V>, k: string, v: V, cap: number): void {
 
 export class RuleBook {
   readonly #trust: KernelTrust;
-  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null; hsid?: string; command?: string; commandChars?: number; words?: string }>();
+  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null; hsid?: string; command?: string; commandChars?: number; words?: string; bindHash?: string; irreversible?: boolean }>();
+  /** 8.0:local-lane C6'a2-1: cardId → the always decide row was presence 'fresh' exactly AND carried a rootSig */
+  readonly #freshRoot = new Map<string, boolean>();
   /** cardId → the decide row's scope key ('exact' or the canonical prefix JSON) */
   readonly #always = new Map<string, string>();
   readonly #rules = new Map<string, AlwaysRule>();
@@ -255,7 +305,11 @@ export class RuleBook {
     if (r.kind === 'approval.request') {
       const card = obj(p.card);
       if (!card || card.kind !== 'permission' || typeof card.cardId !== 'string' || typeof p.tool !== 'string' || !('tool_input' in p)) return;
-      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null, ...(typeof r.session === 'string' ? { hsid: r.session } : {}), ...commandTextOf(p.tool, p.tool_input), ...((): { words?: string } => { const w = p.tool === 'gnomon_git_push' ? pushRuleWords(p.tool_input) : null; return w ? { words: w } : {}; })() }, MAX_TRACKED_REQUESTS);
+      // 8.0:local-lane C5'a2: a brokered card's request row carries the bindHash of its detail (inside the contentHash)
+      const bindHash = BROKERED_RULE_TOOL.test(p.tool) && typeof p.bindHash === 'string' && BIND_HASH.test(p.bindHash) ? p.bindHash : null;
+      // 8.0:local-lane C6'a2-1: a destructive brokered card is flagged irreversible (the flags inside its contentHash)
+      const irreversible = Array.isArray(p.flags) && p.flags.includes('irreversible');
+      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null, ...(typeof r.session === 'string' ? { hsid: r.session } : {}), ...commandTextOf(p.tool, p.tool_input), ...((): { words?: string } => { const w = p.tool === 'gnomon_git_push' ? pushRuleWords(p.tool_input) : null; return w ? { words: w } : {}; })(), ...(bindHash ? { bindHash } : {}), ...(irreversible ? { irreversible: true } : {}) }, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'grant.standing') {
       // TD-2026-10-23-815: the grant as minted (kernel-signed; a malformed row covers nothing)
       const exp = typeof p.expiresAt === 'string' ? Date.parse(p.expiresAt) : NaN;
@@ -284,19 +338,23 @@ export class RuleBook {
       let key = 'exact';
       if (p.scope !== undefined) {
         const sc = obj(p.scope);
-        if (sc && (sc.kind === 'file' || sc.kind === 'repo-edits') && Object.keys(sc).length === 1) key = `@${sc.kind}`;
+        if (sc && (sc.kind === 'file' || sc.kind === 'repo-edits' || sc.kind === 'tool') && Object.keys(sc).length === 1) key = `@${sc.kind}`;
         else {
           if (!sc || sc.kind !== 'prefix' || !prefixOk(sc.prefix) || Object.keys(sc).length !== 2) return; // a malformed scope learns nothing
           key = JSON.stringify(sc.prefix);
         }
       }
       bump(this.#always, p.cardId, key, MAX_TRACKED_REQUESTS);
+      // 8.0:local-lane C6'a2-1: a destructive tool rule needs THIS: fresh presence exactly and the root signature
+      const rs = obj(p.rootSig);
+      bump(this.#freshRoot, p.cardId, p.presence === 'fresh' && !!rs && typeof rs.signer === 'string' && rs.signer.length > 0 && typeof rs.sig === 'string' && rs.sig.length > 0, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'approval.rule.learned') {
       const cardId = p.cardId;
       const isPrefix = p.match === 'prefix';
       const isEdit = p.match === 'file' || p.match === 'repo-edits';
+      const isTool = p.match === 'tool';
       const exact = 'match' in p ? p.match === 'exact' : p.matchExact === true;
-      if (typeof cardId !== 'string' || (!exact && !isPrefix && !isEdit) || typeof p.tool !== 'string' || typeof p.repoKey !== 'string') return;
+      if (typeof cardId !== 'string' || (!exact && !isPrefix && !isEdit && !isTool) || typeof p.tool !== 'string' || typeof p.repoKey !== 'string') return;
       // Aegis W4-A L2: only a fresh (or CLI) touch learns a rule, never cached or click. TD-2026-10-23-815: or a standing
       // grant the fold verified at the decide row (same grant, permission:always, the rule's repo among its repos)
       if (p.presence !== 'fresh' && p.presence !== 'cli') {
@@ -307,6 +365,22 @@ export class RuleBook {
       const decided = this.#always.get(cardId);
       if (!req || req.tool !== p.tool || decided === undefined) return;
       const base = { ruleId: cardId, repoKey: p.repoKey, tool: p.tool, inputHash: req.inputHash, seq: typeof r.seq === 'number' ? r.seq : null, presence: String(p.presence ?? 'fresh'), ...(typeof r.at === 'string' ? { learnedAt: r.at } : {}), ...(req.hsid ? { hsid: req.hsid } : {}) };
+      // 8.0:local-lane C5'a2: a brokered MCP tool learns ONLY a tool rule (never exact, prefix or edits)
+      if (BROKERED_RULE_TOOL.test(p.tool) !== isTool) return;
+      if (isTool) {
+        // the decide row's scope is the tool scope, and the learned bindHash is the one the kernel-signed request row
+        // carried from the card's detail (the same check as the tool name above)
+        if (decided !== '@tool' || !req.bindHash || p.bindHash !== req.bindHash) return;
+        // 8.0:local-lane C6'a2-1 (TD-2026-10-28-969): a destructive (irreversible) card learns only from a FRESH touch
+        // with the root key — never standing, CLI, cached or voice
+        if (req.irreversible) {
+          if (p.presence !== 'fresh' || this.#freshRoot.get(cardId) !== true) return;
+          bump(this.#rules, cardId, { ...base, match: 'tool', bindHash: req.bindHash, destructive: true }, MAX_RULES);
+          return;
+        }
+        bump(this.#rules, cardId, { ...base, match: 'tool', bindHash: req.bindHash }, MAX_RULES);
+        return;
+      }
       if (exact) {
         if (decided !== 'exact') return; // a scoped decision never learns a different rule
         bump(this.#rules, cardId, { ...base, match: 'exact', ...(req.words ? { words: req.words } : {}), ...(p.tool === 'Bash' ? { commandHash: req.commandHash, ...(req.command !== undefined ? { command: req.command, commandChars: req.commandChars ?? req.command.length } : {}) } : {}) }, MAX_RULES);
@@ -344,6 +418,7 @@ export class RuleBook {
       if (typeof p.ruleId !== 'string') return;
       this.#rules.delete(p.ruleId);
       this.#always.delete(p.ruleId);
+      this.#freshRoot.delete(p.ruleId);
       this.#off.delete(p.ruleId);
     } else if (r.kind === 'approval.rule.disabled') {
       // 8.0:rules-view: off, on a rule that STANDS (an off row for an unknown or revoked rule marks nothing)
@@ -407,6 +482,15 @@ export class RuleBook {
     // 8.0:rules-view: an off rule never matches (one clock reading for the whole match)
     const now = this.#clock();
     const live = [...this.#rules.values()].filter((r) => this.isOn(r.ruleId, now));
+    // 8.0:local-lane C5'a2 (^local-tool-grant): a brokered MCP tool matches only a tool rule with the call's bindHash NOW,
+    // never in manual mode; a rule whose binding differs is dormant (it stands, it does not match)
+    if (tool.startsWith('mcp:')) {
+      if (!ctx || !ctx.prefixRules || typeof ctx.bindHash !== 'string' || !BIND_HASH.test(ctx.bindHash)) return null;
+      // 8.0:local-lane C6'a2-1: a destructive call matches only a destructive rule, any other call only a mutate rule
+      const destructive = ctx.toolClass === 'destructive';
+      for (const r of live) if (r.match === 'tool' && r.repoKey === repoKey && r.tool === tool && r.bindHash === ctx.bindHash && (r.destructive === true) === destructive) return r;
+      return null;
+    }
     for (const r of live) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.inputHash === hash) return r;
     // RC5: an exact Bash rule also matches the same command text with another description/timeout (both hashes fold)
     if (tool === 'Bash' && toolInput !== undefined) {

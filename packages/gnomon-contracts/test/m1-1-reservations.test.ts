@@ -257,7 +257,16 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:loops (loop-trust/loop-choice cards, continue/stop, the loop.* + request.loop.* kinds, descriptor loops): was sha256:c4e2c7d9…e2c9.
 // Moved once by 8.0:rules-view (approval.rule.disabled + approval.rule.enabled + descriptor rulesView): was sha256:aa537e4c…79d4.
 // Moved once by 8.0:git-verbs (T-2026-10-23-002: the git.verb kind + descriptor gitVerbs, merged after 8.0:rules-view): was sha256:b4639c99…bd8b.
-const PINNED_CLIENT_API_ID = 'sha256:295c5ac772b6c621b465943a106c441a7572603090f96f7f01293f7af0cec298';
+// Moved once by 8.0:local-lane (TD-2026-10-27-833 slice C1: the tool.brokered kind + descriptor toolBrokered): was sha256:295c5ac7…c298.
+// Moved again by 8.0:local-lane (Aegis C1 review: tool.brokered expired/allowed-cancelled/cooldown/suspended, git.verb why cancelled): was sha256:dea90210…85ea.
+// Moved again by 8.0:local-lane (Aegis C1 re-check N2: tool.brokered decision refused): was sha256:aac99220…12db.
+// Moved again by 8.0:local-lane (TD-2026-10-27-833 slice B2: session.memory + session.context, descriptor sessionMemory): was sha256:c47ec016…8c55.
+// Moved again by 8.0:local-lane (Aegis B2 review L1: session.memory why child-refused): was sha256:04cbb358…41ff.
+// Moved again by 8.0:local-lane (TD-2026-10-27-833 slice C5'a1: tool.trust, the tool scope and match, TOOL_NAME mcp names, descriptor toolTrust): was sha256:7a4754b7…144d.
+// Moved again by 8.0:local-lane (TD-2026-10-27-833 slice C6'a1: session.mcp, descriptor sessionMcp): was sha256:f2b45e1b…156a.
+// Moved again by 8.0:local-lane (Aegis C6'a1 L1: session.mcp fit disabled): was sha256:58e12025…e405.
+// Moved again by 8.0:local-lane (TD-2026-10-28-956 / -969 slice C6'a2-3: tool.result.sent policy once, descriptor toolResult.sentPolicies): was sha256:ef710386…e6c3.
+const PINNED_CLIENT_API_ID = 'sha256:af070b92e89fe985cb43d7b6f5a720d1f43e7ee0f6aa08d0c87db3e713a4f060';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -616,6 +625,8 @@ describe('event labels and payload docs (round 2)', () => {
       'loop.landed': { paths: 'sensitive' },
       'loop.proposed': { paths: 'sensitive' },
       'loop.request': { repo: 'sensitive' },
+      // 8.0:local-lane (C6'a1): an MCP server's error can name a path under the human's home
+      'session.mcp': { error: 'sensitive' },
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {

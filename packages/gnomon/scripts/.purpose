@@ -1,0 +1,141 @@
+version: "2.0"
+name: gnomon-scripts
+description: >-
+  Build, pack and release scripts for the gnomon package: the build stamp,
+  prepack, the darwin release and app bundle build, and the perf test runner.
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  release-darwin:
+    description: >-
+      #release-darwin (T-2026-10-21-029, TD-2026-10-21-758; 8.0 M2) —
+      scripts/release-darwin.mjs builds ONE relocatable Gnomon.app per arch on
+      the founder's Mac (host arch only; another arch is refused; Gnomon 8.0
+      ships for Apple silicon Macs only, TD-2026-10-22-310, so --arch x64 is
+      refused with X64_REFUSED unless --experimental-x64): helper and
+      voice-io (their own signed builds), build:gnomon + build:release (#release-pins
+      compiled in), the official Node 24 tarball from nodejs.org REFUSED unless it
+      hashes to packages/gnomon-wrapper/bundled-node.lock.json (never which node),
+      a Contents-shaped stage (Resources/node, Resources/kernel = dist +
+      package.json only: zero runtime deps, Resources/gnomon-voice = package,
+      dist, models manifest, sherpa-onnx-node + its darwin-<arch> package),
+      inside-out signing in the stage (sherpa libs, then node with
+      NodeEntitlements.plist), cargo tauri build with
+      GNOMON_WRAPPER_BUNDLE_STAGE (build.rs pins bundle-relative paths and the
+      staged hashes), assembly with Helpers/ (ditto, signatures kept; the
+      assembled app must re-hash to the staged pins), the app signed with its
+      empty Entitlements.plist (no --deep), verify --strict --deep + the wrapper
+      requirement, optional --notarize (notarize-darwin.mjs, keychain profile
+      gnomon-notary), then ditto -c -k --keepParent zip + .sha256. --unsigned
+      = ad-hoc (CI/tests); --dry-run = no swift/npm/cargo/network/codesign,
+      placeholder binaries, the real layout and pin logic. kernelTreeHash is the
+      JS twin of the wrapper's tree.rs (shared test vector).
+      Aegis M2 review: the lock must carry gpg provenance from
+      scripts/bump-bundled-node.mjs (SHASUMS256.txt.sig verified against the
+      vendored Node release keys, both tarballs checked, signer recorded);
+      staged trees refuse symlinks (dereference false); node is signed with
+      identifier gnomon.node and verified with codesign -R against the
+      requirement the wrapper compiles; the built wrapper must report
+      --build-mode bundle before signing; --unsigned signs node ad-hoc without
+      the hardened runtime (ad-hoc sherpa addons fail library validation).
+      8.0 M3 (T-2026-10-21-030): step 10 copies the zip + sha256 into the npm
+      platform package as Gnomon.app.zip(.sha256) (copyIntoPlatformPackage; a
+      SIGNED release defaults to packages/gnomon-darwin-<arch>, an --unsigned
+      or --dry-run build only with --package-dir); --dry-run --zip runs the
+      ditto zip on the placeholder app, whose placeholder GnomonHelper.app
+      carries a versioned framework with real symlinks (PLACEHOLDER_FRAMEWORK)
+      for the pack round trip.
+      8.0 M4 (T-2026-10-21-031): stageMods copies packages/gnomon-mods byte
+      for byte (no symlinks, no native code) to Resources/gnomon-mods
+      (LAYOUT.mods, required by missingFromLayout); the dry-run test checks
+      the moved app's kernel finds them and each still hashes to a
+      FIRST_PARTY_PACKAGE_HASHES pin.
+    path: scripts/release-darwin.mjs
+    type: script
+    tags: [release, distribution, signing]
+    related: ["#app-bundle", "#release-pins", "#gnomon-wrapper", "#gnomon-helper", "#gnomon-voice"]
+    tests:
+      - test/release-darwin.test.ts
+  gnomon-npm-packaging:
+    description: >-
+      #gnomon-npm-packaging (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3) —
+      @a-company/gnomon is PUBLIC (publishConfig access public; files dist +
+      gnomon-mods; bins gnomon, gnomond, gnomon-web; exports ./cli and
+      ./package.json for the paradigm shim). Its tarball carries no unpublished
+      dependency: gnomon-contracts is a devDependency inlined by tsup
+      (noExternal; the G-KRN-02 dist scan), and scripts/prepack.mjs copies the
+      first-party mods (packages/gnomon-mods, no package.json, symlinks
+      refused) to packages/gnomon/gnomon-mods byte for byte so
+      findFirstPartyRoot resolves them beside an installed kernel with their
+      pinned packageHash; postpack removes the copy. gnomon-local, mod-sdk and
+      gui are not runtime imports and do not ship. optionalDependencies are
+      exactly @a-company/gnomon-darwin-arm64 at this version (the one
+      G-SEC-01 exception: a zip-only package the kernel never imports).
+      Apple silicon only in 8.0 (TD-2026-10-22-310, "Gnomon 8.0 ships for
+      Apple silicon Macs only"): there is no x64 platform package; the
+      lockstep flags any other gnomon-darwin-* optional dependency and the
+      sync removes it, the publish gate, the release preflight, prepack and
+      seal-npm-release cover arm64 only, and release-darwin refuses --arch
+      x64 without --experimental-x64 (the x64 path is kept, unpublished).
+      Node floor: engines node >=24.0.0, the same as paradigm and every other
+      package (8.0 is Node 24 everywhere; scripts/gnomon-node-gate.mjs is gone).
+      Lockstep: scripts/sync-gnomon-versions.mjs (repo root; --check for CI)
+      makes the platform package version, this optional dep and
+      @a-company/paradigm's exact dependency follow this package's version;
+      test/version-lockstep.test.ts fails on drift. The platform packages are
+      excluded from the root workspaces ("!packages/gnomon-darwin-*"): their
+      os/cpu fields make npm install fail on the other arch. Acceptance:
+      scripts/pack-roundtrip.mjs builds a zip with release-darwin --dry-run
+      --unsigned --zip (or takes --zip <signed zip>), copies it into a copy of
+      the platform package, npm pack, tar -x, ditto -x -k, then checks the
+      file set, the sha256, the app layout (missingFromLayout), every symlink
+      against the source app and each framework's Versions/Current, and runs
+      codesign --verify --strict --deep + spctl -a only for a Developer ID
+      signature (otherwise skipped with a message); it reports packed and
+      unpacked sizes.
+      Aegis M3 review: (high 1) nothing unsigned or dev is publishable.
+      `npm run publish:gnomon` runs scripts/gate-gnomon-publish.mjs FIRST as a
+      plain command (lifecycle hooks are skippable with --ignore-scripts; it is
+      also gnomon's prepublishOnly): lockstep; each platform package has no
+      scripts and exact files, and its zip, unpacked with ditto into a temp
+      dir, passes codesign --verify --deep --strict -R (the wrapper
+      requirement, team OU SW4BMQ8PNL), xcrun stapler validate and spctl -a -t
+      exec; gnomon's dist is a RELEASE build of this version whose compiled
+      appZips equal the arm64 zip. prepack refuses a non-release dist too.
+      Release order (scripts/publish-gnomon.mjs, #publish-gnomon): gate, then
+      arm64, then gnomon, verified on npm, before paradigm. CI never
+      publishes them: `npm run release` (scripts/release.mjs, #release-publish)
+      refuses unless both are already on npm at this version, so
+      changeset publish skips them and paradigm cannot ship first
+      (test/release-excludes-gnomon.test.ts).
+      release-darwin's `signed` now means Developer ID + notarized + stapled
+      (stapler validate after notarize) and --package-dir refuses anything
+      else without --allow-unsigned-for-tests. (high 2) each zip's sha256 is
+      COMPILED into the published gnomon: scripts/seal-npm-release.mjs runs
+      build-release.mjs with write-release-manifest --app-zip <arch>=<zip> for
+      the arm64 platform zip (release-manifest:v1 appZips; the contract
+      still admits x64 for when it returns); src/kernel/lifecycle/
+      app-zip.ts verifyAppZip checks a zip against that pin (dev ⇒ refused
+      `dev`, no entry ⇒ `unpinned`, mismatch ⇒ `checksum`) and never reads the
+      shipped .sha256; platformPackageZip realpaths the resolved package and
+      checks its name. Exported as appZip from the package index; the M4
+      installer must call it before unpacking. Changesets cannot exclude
+      these packages (its `ignore` is versioning-only and rejects
+      non-workspace packages and paradigm's dependency on gnomon), so
+      release.yml's `changeset publish` is stopped by gnomon's prepack and
+      prepublishOnly gate instead, and never sees the platform packages
+      (not workspaces).
+    path: scripts/prepack.mjs
+    type: script
+    tags: [release, distribution, npm, gnomon]
+    related: ["#release-darwin", "#gnomon-darwin-arm64", "#gnomon-shim", "#mods-admin"]
+    tests:
+      - test/version-lockstep.test.ts
+      - test/pack-roundtrip.test.ts
+      - test/sec-01.test.ts
+      - test/app-zip.test.ts
+      - test/gate-gnomon-publish.test.ts
+      - test/release-darwin.test.ts
+      - test/release-excludes-gnomon.test.ts

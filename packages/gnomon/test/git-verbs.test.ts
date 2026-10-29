@@ -102,7 +102,7 @@ function rig(w: ReturnType<typeof world>, o: { gh?: (args: readonly string[]) =>
 const sess = (w: ReturnType<typeof world>, x: Partial<VerbSession> = {}): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: w.repo, repoKey: 'sha256:00', mode: 'ask', planApproved: false, loop: false, worktreesGuarded: true, ...x });
 const phases = (r: Rig) => r.rows.map((x) => `${String(x.phase)}${x.why ? `:${String(x.why)}` : ''}`);
 
-describe('git.init (^git-init-gate)', () => {
+describe('G-GIT-04 git.init (^git-init-gate)', () => {
   it('ask: a card, then a repo with the kernel template only (no hooks, no samples, branch main)', async () => {
     const w = world();
     const r = rig(w);
@@ -181,7 +181,7 @@ describe('git.init (^git-init-gate)', () => {
   });
 });
 
-describe('git.push (^git-push-gate)', () => {
+describe('G-GIT-05 git.push (^git-push-gate)', () => {
   it('the card is composed from the kernel\'s own reading: URL, host, branch; the push argv is hardened; rows carry no URL', async () => {
     const w = world();
     committed(w.repo);
@@ -407,7 +407,7 @@ describe('git.push (^git-push-gate)', () => {
   });
 });
 
-describe('remote parsing and egress (Aegis)', () => {
+describe('G-GIT-06 remote parsing and egress (Aegis)', () => {
   it('only https and ssh to a plain host; helpers, local paths, cleartext and passwords refuse', () => {
     for (const u of ['ext::sh -c x', 'fd::3', 'file:///tmp/r.git', '/tmp/r.git', '../r', 'git://github.com/o/r', 'http://github.com/o/r', 'https://u:p@github.com/o/r', 'https://tok@github.com/o/r', '-u', 'https://github.com/o/r?x=1', 'https://github.com/o', 'https://github.com/a/b/c']) {
       expect('error' in parseRemote(u), u).toBe(true);
@@ -442,7 +442,7 @@ describe('remote parsing and egress (Aegis)', () => {
   });
 });
 
-describe('repo.create', () => {
+describe('G-GIT-05 repo.create', () => {
   const gh = (owner = 'ascend42') => (args: readonly string[]) => (args[0] === 'api' ? { code: 0, stdout: `${owner}\n`, stderr: '' } : { code: 0, stdout: 'https://github.com/x\n', stderr: '' });
   it('private by default: one card (no Always), gh creates, the kernel adds the remote and pushes with --set-upstream', async () => {
     const w = world();
@@ -477,7 +477,7 @@ describe('repo.create', () => {
   });
 });
 
-describe('git.worktree.add / remove', () => {
+describe('G-GIT-04 git.worktree.add / remove', () => {
   it('makes .gnomon/worktrees/<name> on a new branch with no hooks, excludes it from status, and removes it', async () => {
     const w = world();
     committed(w.repo);
@@ -584,7 +584,7 @@ describe('Aegis M2: no git verbs on win32 (where the refusal lives: SessionSuper
   });
 });
 
-describe('#kernel-mcp', () => {
+describe('G-GIT-08 #kernel-mcp', () => {
   it('serves initialize, tools/list and tools/call; never routes another server or method', async () => {
     const w = world();
     const r = rig(w);
@@ -625,5 +625,132 @@ describe('#kernel-mcp', () => {
     expect(ev).toMatchObject({ kind: 'mcp-message', requestId: 'r-1', serverName: 'gnomon' });
     expect(JSON.parse(mcpResponseLine('r-1', { jsonrpc: '2.0', id: 1, result: {} }))).toEqual({ type: 'control_response', response: { subtype: 'success', request_id: 'r-1', response: { mcp_response: { jsonrpc: '2.0', id: 1, result: {} } } } });
     expect(parseStreamLine(JSON.stringify({ type: 'control_request', request_id: 'bad id!', request: { subtype: 'mcp_message', server_name: 'gnomon' } })).kind).toBe('control-request-unknown');
+  });
+});
+
+describe('slice C1 (#local-tool-broker, Aegis H1/M2): a local session\'s brokered verb honours its abort and deadline', () => {
+  /** A GitVerbs whose card waits for the test; records raises and expiries. */
+  function held(w: ReturnType<typeof world>) {
+    const raised: Array<Record<string, unknown>> = [];
+    const expired: string[] = [];
+    const rows: Array<Record<string, unknown>> = [];
+    let decide: (d: string) => void = () => undefined;
+    const decision = new Promise<string>((res) => (decide = res));
+    const verbs = new GitVerbs({
+      log: async (kind, payload) => void rows.push({ kind, ...payload }),
+      broker: { raise: async (i: Record<string, unknown>) => (raised.push(i), { cardId: `card:01JAAAAAAAAAAAAAAAAAAAAAA${raised.length}` }), decisionOf: () => decision, auto: async () => undefined, expire: async (id: string) => (expired.push(id), true) } as never,
+      gnomonHome: w.gnomonHome,
+      userHome: () => w.userHome,
+    });
+    return { verbs, raised, expired, rows, decide };
+  }
+  const until = async (f: () => boolean): Promise<void> => {
+    for (let i = 0; i < 200 && !f(); i++) await new Promise((r) => setTimeout(r, 10));
+  };
+
+  it('an abort while the verb card is open expires the card and runs nothing', async () => {
+    const w = world();
+    const h = held(w);
+    const ctl = new AbortController();
+    const p = h.verbs.call('gnomon_git_init', {}, sess(w, { local: true, signal: ctl.signal }));
+    await until(() => h.raised.length === 1);
+    ctl.abort();
+    expect((await p).why).toBe('cancelled');
+    h.decide('allow');
+    expect(h.expired).toEqual(['card:01JAAAAAAAAAAAAAAAAAAAAAA1']);
+    expect(fs.existsSync(path.join(w.repo, '.git'))).toBe(false);
+    // the caller is answered at once; the run's own refusal row follows
+    await until(() => h.rows.some((r) => r.why === 'cancelled'));
+    expect(h.rows.at(-1)).toMatchObject({ phase: 'refused', why: 'cancelled' });
+  });
+
+  it('the deadline: the card lives no longer than the call, then expires; nothing runs', async () => {
+    const w = world();
+    const h = held(w);
+    const res = await h.verbs.call('gnomon_git_init', {}, sess(w, { local: true, deadline: Date.now() + 150 }));
+    expect(res.why).toBe('cancelled');
+    expect(h.raised[0]!.timeoutMs).toBeLessThanOrEqual(1000);
+    await until(() => h.expired.length === 1);
+    expect(h.expired).toHaveLength(1);
+    expect(fs.existsSync(path.join(w.repo, '.git'))).toBe(false);
+  });
+
+  it('an abort during the queue wait (another verb holds the repo) answers at once; the queued run refuses and raises no card', async () => {
+    const w = world();
+    const h = held(w);
+    const first = h.verbs.call('gnomon_git_init', {}, sess(w));
+    await until(() => h.raised.length === 1);
+    const ctl = new AbortController();
+    const second = h.verbs.call('gnomon_git_init', {}, sess(w, { hsid: 'hsid:v1:01JBBBBBBBBBBBBBBBBBBBBBBB', local: true, signal: ctl.signal }));
+    ctl.abort();
+    expect((await second).why).toBe('cancelled');
+    h.decide('deny');
+    await first;
+    await until(() => h.rows.filter((r) => r.why === 'cancelled').length === 1);
+    expect(h.rows.filter((r) => r.why === 'cancelled')).toHaveLength(1);
+    expect(h.raised).toHaveLength(1);
+  });
+
+  it('a local session gets ONE card per verb: no Always offered, no Always rule, no auto pass', async () => {
+    const w = world();
+    committed(w.repo);
+    const r = rig(w);
+    r.set.url = ['https://github.com/o/r.git'];
+    r.set.rule = { ruleId: 'rule:01JAAAAAAAAAAAAAAAAAAAAAAA' };
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w, { local: true }))).ok).toBe(true);
+    expect(r.raised).toHaveLength(1);
+    expect(r.raised[0]!.decisions).not.toContain('always');
+    expect(r.raised[0]).not.toHaveProperty('ruleScope');
+    expect(r.autos).toEqual([]);
+    const w2 = world();
+    const r2 = rig(w2);
+    expect((await r2.verbs.call('gnomon_git_init', {}, sess(w2, { local: true, mode: 'auto-edits' }))).ok).toBe(true);
+    expect(r2.raised).toHaveLength(1);
+    expect(r2.autos).toEqual([]);
+  });
+
+  it('Aegis M2: closeSession refuses later verbs, and an allow that lands after it runs nothing', async () => {
+    const w = world();
+    const h = held(w);
+    const p = h.verbs.call('gnomon_git_init', {}, sess(w));
+    await until(() => h.raised.length === 1);
+    await h.verbs.closeSession('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA');
+    h.decide('allow');
+    expect((await p).why).toBe('cancelled');
+    expect(fs.existsSync(path.join(w.repo, '.git'))).toBe(false);
+    expect((await h.verbs.call('gnomon_git_init', {}, sess(w))).why).toBe('cancelled');
+    expect(h.raised).toHaveLength(1);
+  });
+});
+
+describe('Aegis C1 re-check: N1 and N5 in GitVerbs', () => {
+  it('N1: an abandoned queued wait keeps its verb slot until the run settles', async () => {
+    const w = world();
+    let release: (v: string) => void = () => undefined;
+    const held = new Promise<string>((res) => (release = res));
+    const verbs = new GitVerbs({ log: async () => undefined, broker: { raise: async () => ({ cardId: 'card:01JAAAAAAAAAAAAAAAAAAAAAAA' }), decisionOf: () => held, auto: async () => undefined, expire: async () => true } as never, gnomonHome: w.gnomonHome, userHome: () => w.userHome });
+    const first = verbs.call('gnomon_git_init', {}, sess(w));
+    const abandoned = [1, 2, 3].map(async () => {
+      const ctl = new AbortController();
+      const p = verbs.call('gnomon_git_init', {}, sess(w, { local: true, signal: ctl.signal }));
+      ctl.abort();
+      return p;
+    });
+    for (const p of abandoned) expect((await p).why).toBe('cancelled');
+    // four runs are still queued or waiting on the card: the session is at its cap
+    expect((await verbs.call('gnomon_git_init', {}, sess(w))).why).toBe('busy');
+    release('deny');
+    await first;
+    for (let i = 0; i < 100; i++) await new Promise((r) => setTimeout(r, 5));
+    expect((await verbs.call('gnomon_git_init', {}, sess(w, { cwd: w.root }))).why).not.toBe('busy');
+  });
+
+  it('N5: openSession clears a closed hsid (a same-process resume gets its verbs back)', async () => {
+    const w = world();
+    const r = rig(w);
+    await r.verbs.closeSession('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA');
+    expect((await r.verbs.call('gnomon_git_init', {}, sess(w))).why).toBe('cancelled');
+    r.verbs.openSession('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA');
+    expect((await r.verbs.call('gnomon_git_init', {}, sess(w))).ok).toBe(true);
   });
 });

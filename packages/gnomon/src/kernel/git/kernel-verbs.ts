@@ -27,6 +27,11 @@
  *   refuses remote-changed. repo.create offers no Always; a public repo takes the irreversible flag.
  *   Never tags (--no-follow-tags), never a mirror, no hooks, only https/ssh, no redirects.
  * Loop sessions never run a verb (loop-session). One verb at a time per repo root (queued).
+ * Slice C1 (#local-tool-broker, Aegis H1/M2): a LOCAL session's verb call (VerbSession.local, from the kernel-brokered
+ * path) carries the brokered call's AbortSignal and deadline: the queue wait, the card (timeoutMs = deadline - now; an
+ * abort expires it) and the moment right before the effect all honour them (refused `cancelled`); Always rules and
+ * auto-edits never apply to a local session (one card per verb, always). closeSession marks the hsid closed: a closed
+ * session's verbs are refused before any card and again after the decision.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -57,7 +62,18 @@ export interface VerbSession {
   loop: boolean;
   /** Aegis M2: this session's profile carries the kernel-worktree denies (darwin kernelWorktrees); else no worktree verb */
   worktreesGuarded: boolean;
+  /** slice C1 (Aegis H1): a local-model session's brokered call: no Always rule, no auto pass, always the verb's card */
+  local?: true;
+  /** slice C1 (Aegis H1): the brokered call's cancel signal (abort, tool_cancel, the session's stop) */
+  signal?: AbortSignal;
+  /** slice C1 (Aegis H1): the brokered call's deadline (epoch ms); the card expires at it, nothing runs after it */
+  deadline?: number;
+  /** slice C1 (Aegis N4): called once, right before the effect starts (the broker tells the child the call is running) */
+  onEffect?: () => void;
 }
+
+/** Aegis M2: hsids closeSession has closed (bounded; hsids are never reused). */
+const CLOSED_CAP = 4096;
 
 /** Aegis L5: verb calls one session may have in flight (queued or waiting on a card); past it, refused busy. */
 export const MAX_VERB_CALLS_PER_SESSION = 4;
@@ -66,6 +82,8 @@ export interface VerbResult {
   ok: boolean;
   text: string;
   why?: GitVerbReason;
+  /** slice C1 (Aegis N2): the card this call raised, if any (kernel-mcp passes it in _meta) */
+  cardId?: string;
 }
 
 export interface McpToolSpec {
@@ -245,6 +263,18 @@ export class GitVerbs {
   /** Aegis L5: verb calls in flight per hsid */
   readonly #inflight = new Map<string, number>();
 
+  /** slice C1 (Aegis M2): sessions that ended; their verbs are refused before any card and after the decision */
+  readonly #closedSessions = new Set<string>();
+
+  /** slice C1 (Aegis H1/M2): this call must stop now (aborted, past its deadline, or its session closed). */
+  #cancelled(s: VerbSession): boolean {
+    return this.#closedSessions.has(s.hsid) || s.signal?.aborted === true || (s.deadline !== undefined && Date.now() >= s.deadline);
+  }
+
+  #cancel(s: VerbSession, verb: GitVerb, hash: string, extra: { cardId?: string; host?: string } = {}): Promise<VerbResult> {
+    return this.#refuse(s, verb, hash, 'cancelled', 'Cancelled: the request was aborted, ran past its deadline, or its session ended. Nothing was run.', extra);
+  }
+
   async call(tool: string, args: unknown, s: VerbSession): Promise<VerbResult> {
     const verb = GIT_VERB_TOOLS[tool];
     if (!verb) return { ok: false, text: `unknown tool ${tool.slice(0, 64)}` };
@@ -255,19 +285,53 @@ export class GitVerbs {
       return this.#refuse(s, verb, h, 'busy', `This session already has ${n} git verbs in flight: wait for them.`);
     }
     this.#inflight.set(s.hsid, n + 1);
-    try {
-      return await this.#queued(verb, args, s);
-    } finally {
+    // Aegis N1: the slot is released when the queued RUN settles (an abandoned wait still holds it), exactly once
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
       const m = (this.#inflight.get(s.hsid) ?? 1) - 1;
       if (m <= 0) this.#inflight.delete(s.hsid);
       else this.#inflight.set(s.hsid, m);
+    };
+    // Aegis N2: the card this call raised rides on the result
+    let card: string | undefined;
+    const sc: VerbSession & { onCard?: (id: string) => void } = { ...s, onCard: (id) => void (card = id) };
+    try {
+      const r = await this.#queued(verb, args, sc, release);
+      return card && !r.cardId ? { ...r, cardId: card } : r;
+    } catch (e) {
+      release();
+      throw e;
     }
   }
 
-  async #queued(verb: GitVerb, args: unknown, s: VerbSession): Promise<VerbResult> {
+  /** Aegis N5: a session (re)opened with this hsid (a resume in the same process) is no longer closed. */
+  openSession(hsid: string): void {
+    this.#closedSessions.delete(hsid);
+  }
+
+  async #queued(verb: GitVerb, args: unknown, s: VerbSession, settled: () => void = () => undefined): Promise<VerbResult> {
     const root = real(verb === 'git.init' ? s.cwd : (s.worktree ?? s.cwd));
     const prev = this.#queue.get(root) ?? Promise.resolve();
     const run = prev.catch(() => undefined).then(() => this.#run(verb, args, s, root));
+    void run.then(settled, settled);
+    if (s.signal || s.deadline !== undefined) {
+      // slice C1 (Aegis H1): a brokered call waiting in the queue stops waiting on abort or at its deadline; the queued
+      // run itself re-checks #cancelled first and refuses, so nothing runs late
+      const stop = new Promise<VerbResult>((resolve) => {
+        const done = (): void => resolve({ ok: false, why: 'cancelled', text: 'Cancelled while waiting for another git verb in this repo. Nothing was run.' });
+        if (s.signal?.aborted) return done();
+        s.signal?.addEventListener('abort', done, { once: true });
+        if (s.deadline !== undefined) setTimeout(done, Math.max(0, s.deadline - Date.now())).unref?.();
+      });
+      this.#queue.set(root, run);
+      void run.then(
+        () => (this.#queue.get(root) === run ? void this.#queue.delete(root) : undefined),
+        () => (this.#queue.get(root) === run ? void this.#queue.delete(root) : undefined),
+      );
+      return Promise.race([run, stop]);
+    }
     this.#queue.set(root, run);
     try {
       return await run;
@@ -278,6 +342,9 @@ export class GitVerbs {
 
   /** The session ended: its pending verb cards expire into deny. */
   async closeSession(hsid: string): Promise<void> {
+    // slice C1 (Aegis M2): later verbs of this hsid are refused, and so is any decision still in flight
+    this.#closedSessions.add(hsid);
+    while (this.#closedSessions.size > CLOSED_CAP) this.#closedSessions.delete(this.#closedSessions.values().next().value as string);
     const ids = [...(this.#cards.get(hsid) ?? [])];
     this.#cards.delete(hsid);
     for (const id of ids) await this.#o.broker?.expire?.(id, 'session-exited').catch(() => false);
@@ -287,6 +354,7 @@ export class GitVerbs {
     const a = args !== null && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
     const reqHash = inputHash({ verb, root, args: a ?? args ?? null });
     await this.#row(s, verb, 'requested', reqHash);
+    if (this.#cancelled(s)) return this.#cancel(s, verb, reqHash);
     try {
       switch (verb) {
         case 'git.init':
@@ -348,8 +416,11 @@ export class GitVerbs {
     const block = { ...wb, children: [...(wb.children ?? []), { type: 'git-verb', detail: structuredClone(detail) }] };
     let cardId: string;
     try {
-      const c = await b.raise({ kind: 'permission', requestedBy: s.principalId, hsid: s.hsid, attended: true, detail, lines: card.lines, block, ...(card.flags.length ? { flags: [...card.flags] } : {}), toolInput, tool, decisions: [...card.decisions], ...(card.decisions.includes('always') ? { ruleScope: { repoKey: s.repoKey } } : {}) });
+      // slice C1 (Aegis H1): a local session never learns an Always; its card lives no longer than the call's deadline
+      const decisions = s.local ? card.decisions.filter((x) => x !== 'always') : [...card.decisions];
+      const c = await b.raise({ kind: 'permission', requestedBy: s.principalId, hsid: s.hsid, attended: true, detail, lines: card.lines, block, ...(card.flags.length ? { flags: [...card.flags] } : {}), toolInput, tool, decisions, ...(decisions.includes('always') ? { ruleScope: { repoKey: s.repoKey } } : {}), ...(s.deadline !== undefined ? { timeoutMs: Math.max(1000, s.deadline - Date.now()) } : {}) });
       cardId = c.cardId;
+      (s as VerbSession & { onCard?: (id: string) => void }).onCard?.(cardId);
     } catch {
       return { decision: 'none', cardId: null };
     }
@@ -357,7 +428,31 @@ export class GitVerbs {
     set.add(cardId);
     this.#cards.set(s.hsid, set);
     try {
-      return { decision: await b.decisionOf(cardId), cardId };
+      if (this.#cancelled(s)) {
+        await b.expire?.(cardId, 'cancelled').catch(() => false);
+        return { decision: 'cancelled', cardId };
+      }
+      let onAbort: (() => void) | undefined;
+      let timer: NodeJS.Timeout | undefined;
+      const stop = new Promise<string>((resolve) => {
+        onAbort = () => resolve('cancelled');
+        s.signal?.addEventListener('abort', onAbort, { once: true });
+        if (s.deadline !== undefined) {
+          timer = setTimeout(onAbort, Math.max(0, s.deadline - Date.now()));
+          timer.unref?.();
+        }
+      });
+      let decision: string;
+      try {
+        decision = await Promise.race([b.decisionOf(cardId), stop]);
+      } finally {
+        if (onAbort) s.signal?.removeEventListener('abort', onAbort);
+        clearTimeout(timer);
+      }
+      if (decision === 'cancelled') await b.expire?.(cardId, 'cancelled').catch(() => false);
+      // re-checked after the decision (Aegis H1/M2): an allow that lands after an abort, the deadline or the session's end runs nothing
+      if (this.#cancelled(s)) return { decision: 'cancelled', cardId };
+      return { decision, cardId };
     } catch {
       return { decision: 'deny', cardId };
     } finally {
@@ -381,7 +476,7 @@ export class GitVerbs {
     let cardId: string | undefined;
     let ran = false;
     const b = this.#o.broker;
-    if (s.mode === 'auto-edits' && b && typeof b.auto === 'function') {
+    if (s.mode === 'auto-edits' && !s.local && b && typeof b.auto === 'function') {
       try {
         // log before effect: no approval.auto row, no auto-run (the card is raised instead)
         await b.auto({ hsid: s.hsid, tool: 'gnomon_git_init', path: root, inputHash: hash, modeRef: 'mode:auto-edits' });
@@ -394,6 +489,7 @@ export class GitVerbs {
       const d = await this.#decide(s, initCard(root, remnant), 'gnomon_git_init', toolInput, hash);
       cardId = d.cardId ?? undefined;
       if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: not made a repo.');
+      if (d.decision === 'cancelled') return this.#cancel(s, verb, hash, d.cardId ? { cardId: d.cardId } : {});
       if (d.decision !== 'allow') return this.#refuse(s, verb, hash, 'denied', 'The human did not approve making this folder a repo.', cardId ? { cardId } : {});
     }
     // TOCTOU: the folder is checked again after the decision (a .git planted meanwhile refuses)
@@ -402,8 +498,11 @@ export class GitVerbs {
     const git = (this.#o.git ?? gitPath)();
     if (!git) return this.#fail(s, verb, hash, 'tool-missing', 'git is not installed where Gnomon looks for it.', cardId ? { cardId } : {});
     const gitDir = path.join(root, '.git');
+    // Aegis re-check: the last cancel check comes before ANY change (the remnant removal included)
+    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, cardId ? { cardId } : {});
     if (dotGitOf(root) === 'remnant') fs.rmSync(gitDir, { recursive: true, force: true });
     else if (remnant) return this.#refuse(s, verb, hash, 'in-repo', 'The .git folder changed after the card: not made a repo.', cardId ? { cardId } : {});
+    s.onEffect?.();
     const res = await this.#exec()(git, ['init', '--quiet', '--template=', `--initial-branch=${INIT_BRANCH}`, '--', root], { cwd: root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.init });
     if (res.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git init ran too long and was stopped.', { ...(cardId ? { cardId } : {}), exitCode: -1 });
     if (res.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git init failed: ${redactOutput(res.stderr, 400)}`, { ...(cardId ? { cardId } : {}), exitCode: res.code });
@@ -519,7 +618,7 @@ export class GitVerbs {
     const b = this.#o.broker;
     let cardId: string | undefined;
     let viaRule = false;
-    if (!force && !warning && !scan.secrets.length && !scan.incomplete && b && typeof b.auto === 'function') {
+    if (!force && !warning && !scan.secrets.length && !scan.incomplete && !s.local && b && typeof b.auto === 'function') {
       let m: { ruleId: string } | null = null;
       try {
         m = this.#o.alwaysRule?.(s.repoKey, 'gnomon_git_push', ruleHash, rule, { prefixRules: s.mode !== 'manual', roots: this.#roots(s) }) ?? null;
@@ -542,6 +641,7 @@ export class GitVerbs {
       const d = await this.#decide(s, card, 'gnomon_git_push', rule, ruleHash);
       cardId = d.cardId ?? undefined;
       if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: not pushed.', { host: info.host });
+      if (d.decision === 'cancelled') return this.#cancel(s, verb, hash, d.cardId ? { cardId: d.cardId } : {});
       if (d.decision !== 'allow' && d.decision !== 'always') return this.#refuse(s, verb, hash, scan.secrets.length ? 'secret-in-push' : 'denied', scan.secrets.length ? 'The human did not approve pushing commits that look like they hold a secret.' : 'The human did not approve this push.', { host: info.host, ...(cardId ? { cardId } : {}) });
     }
     return this.#doPush(s, verb, hash, { st, remote, info, force, lease, upstream: false, ...(cardId ? { cardId } : {}) }, a.branch);
@@ -595,7 +695,10 @@ export class GitVerbs {
     const ref = `refs/heads/${p.st.branch}`;
     // Aegis round 2 M3: the sha read before the card is what is pushed (never whatever the branch points to now)
     const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.force ? [`--force-with-lease=${ref}:${p.lease ?? ''}`] : []), '--', p.remote, `${p.st.sha}:${ref}`];
-    const r = await this.#exec()(git, args, { cwd: p.st.root, env: await this.#netEnv(path.dirname(git), p.st.gitDir), timeoutMs: VERB_TIMEOUTS.push });
+    const env = await this.#netEnv(path.dirname(git), p.st.gitDir);
+    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
+    const r = await this.#exec()(git, args, { cwd: p.st.root, env, timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git push ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git push to ${p.info.slug} failed: ${redactOutput(`${r.stderr}\n${r.stdout}`, 800)}`, { ...ids, exitCode: r.code });
     this.#pushed.set(`${p.st.gitDir}\0${p.remote}\0${p.st.branch}`, p.st.sha);
@@ -643,11 +746,14 @@ export class GitVerbs {
     const cardId = d.cardId ?? undefined;
     const ids = { host, ...(cardId ? { cardId } : {}) };
     if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: nothing created.', { host });
+    if (d.decision === 'cancelled') return this.#cancel(s, verb, hash, d.cardId ? { cardId: d.cardId } : {});
     if (d.decision !== 'allow') return this.#refuse(s, verb, hash, 'denied', 'The human did not approve creating this repo.', ids);
     // re-read after the card: the same branch, still no such remote, the config still plain
     const st2 = await this.#repoState(root, undefined);
     if (isRefused(st2)) return this.#refuse(s, verb, hash, st2.refused, st2.text, ids);
     if (st2.branch !== st.branch || (await exists())) return this.#refuse(s, verb, hash, 'remote-changed', 'The repo changed after the card: nothing created. Ask again.', ids);
+    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     const c = await this.#exec()(gh, ['repo', 'create', `${owner}/${a.name}`, visibility === 'public' ? '--public' : '--private'], { cwd: this.#o.userHome(), env: ghEnv, timeoutMs: VERB_TIMEOUTS.create });
     if (c.timedOut) return this.#fail(s, verb, hash, 'timeout', 'gh repo create ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (c.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `gh repo create failed: ${redactOutput(c.stderr, 600)}`, { ...ids, exitCode: c.code });
@@ -665,7 +771,7 @@ export class GitVerbs {
    */
   async #editGate(s: VerbSession, verb: GitVerb, hash: string, card: VerbCard, tool: string, toolInput: Record<string, unknown>, at: string, forceCard: boolean): Promise<{ cardId?: string } | VerbResult> {
     const b = this.#o.broker;
-    if (!forceCard && s.mode === 'auto-edits' && b && typeof b.auto === 'function') {
+    if (!forceCard && s.mode === 'auto-edits' && !s.local && b && typeof b.auto === 'function') {
       try {
         await b.auto({ hsid: s.hsid, tool, path: at, inputHash: hash, modeRef: 'mode:auto-edits' });
         return {};
@@ -675,6 +781,7 @@ export class GitVerbs {
     }
     const d = await this.#decide(s, card, tool, toolInput, hash);
     if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: nothing done.');
+    if (d.decision === 'cancelled') return this.#cancel(s, verb, hash, d.cardId ? { cardId: d.cardId } : {});
     if (d.decision !== 'allow') return this.#refuse(s, verb, hash, 'denied', 'The human did not approve this.', d.cardId ? { cardId: d.cardId } : {});
     return d.cardId ? { cardId: d.cardId } : {};
   }
@@ -764,6 +871,8 @@ export class GitVerbs {
     const gate = await this.#editGate(s, verb, hash, card, remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', { verb, root, name: a.name, branch, base, ...(baseSha ? { baseSha } : {}), force, ...(steer.hash ? { steeringHash: steer.hash } : {}) }, dir, force || steer.diff.length > 0);
     if ('ok' in gate) return gate;
     const ids = gate.cardId ? { cardId: gate.cardId } : {};
+    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     if (remove) {
       const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'worktree', 'remove', ...(force ? ['--force'] : []), '--', dir], { ...local, timeoutMs: VERB_TIMEOUTS.init });
       if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git worktree remove failed: ${redactOutput(r.stderr, 400)}`, { ...ids, exitCode: r.code });
@@ -774,6 +883,8 @@ export class GitVerbs {
     const w = this.#worktreesDir(root, true);
     if (isRefused(w)) return this.#refuse(s, verb, hash, w.refused, w.text, ids);
     if (fs.existsSync(dir)) return this.#refuse(s, verb, hash, 'worktree-exists', `${dir} already exists.`, ids);
+    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, '--work-tree', root, 'worktree', 'add', '--quiet', '-b', branch, '--', dir, baseSha], { ...local, timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git worktree add ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git worktree add failed: ${redactOutput(r.stderr, 400)}`, { ...ids, exitCode: r.code });

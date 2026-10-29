@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BUILTINS, copyTextOf, HOST_HINTS_MAX, HOST_OPEN_IDS, HOST_SLASH_TABLE, hostHintsOf, NO_SLASH, SAFE_ARG, type HostHint } from '../src/core/host-hints.js';
+import { renderRunRow } from '../src/ui/slash-menu.js';
+import { runReducer, runWords, startRun } from '../src/core/slash-runs.js';
+import { SKILL_HINT_LINE, BUILTINS, copyTextOf, HOST_HINTS_MAX, HOST_OPEN_IDS, HOST_SLASH_TABLE, hostHintsOf, NO_SLASH, SAFE_ARG, type HostHint } from '../src/core/host-hints.js';
 import { displayText, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { chatItems, type Row } from '../src/core/store.js';
 import { renderHostSlips } from '../src/ui/host-slip.js';
@@ -240,5 +242,44 @@ describe('#gui-host-hints slip DOM', () => {
   it('the CSS: the offer-slip paper, flat; the command mono and wrapping', () => {
     expect(CSS).toMatch(/\.host-slip \{ transform: none; \}/);
     expect(CSS).toMatch(/\.host-cmd \{[^}]*font-family: var\(--mono\)[^}]*overflow-wrap: anywhere/);
+  });
+});
+
+describe("#gui-host-hints: a loaded skill runs from / (C6'b2-1 host-slip amendment)", () => {
+  it('a slash command naming a listed, loaded skill: "Run it from /" with Open / menu, never the no-slash words', () => {
+    for (const text of ['Run `/review main` next.', '/review', 'Type /project:review to check it.']) {
+      const [h] = hostHintsOf(text, ['review']);
+      expect(h, text).toMatchObject({ line: SKILL_HINT_LINE, action: { kind: 'open', id: 'slash.open', label: 'Open / menu' } });
+      expect(h!.line).not.toContain(NO_SLASH);
+    }
+    expect(HOST_OPEN_IDS).toContain('slash.open');
+  });
+  it('without the skill loaded the old words stay; the table keeps its own commands; prose never counts', () => {
+    expect(hostHintsOf('Type /review now', [])[0]!.line).toBe(NO_SLASH);
+    expect(hostHintsOf('Run `/mcp`', ['mcp'])[0]!.action).toMatchObject({ kind: 'open', id: 'mcp.open' });
+    expect(hostHintsOf('the review step', ['review'])).toEqual([]);
+  });
+});
+
+describe('#gui-slash-runs: the run row over a fake document', () => {
+  it('text nodes only; the data edge and label; the fold key; Decide in the stack only while carded', () => {
+    const at = '2026-10-28T12:00:00.000Z';
+    const run = `run-${'a'.repeat(24)}`;
+    const base = startRun({ key: 'lr-1', hsid: 'h', tool: 'grep', server: 'fs', toolId: 'fs/grep@0123abcd', cls: 'read', policy: 'send', at });
+    const long = Array.from({ length: 20 }, (_, i) => `<b>x${i}</b>`).join('\n');
+    const ran = runReducer(base, { type: 'reply', v: { status: 'ran', runId: run, content: long, isError: false } });
+    const el = renderRunRow(fdoc, runWords(ran), { key: 'lr-1', at, now: Date.parse(at) }) as unknown as FEl;
+    expect(el.className).toBe('trow role-run');
+    const all = el.all();
+    expect(all.some((e) => e.tag === 'b')).toBe(false);
+    expect(all.find((e) => e.className.includes('run-data'))!.text).toContain('data');
+    expect(all.find((e) => e.className.includes('run-fold'))!.text).toBe('show all 20 lines');
+    expect(el.text).toContain('goes with your next message');
+    const carded = runReducer(base, { type: 'reply', v: { status: 'carded', runId: run, cardId: 'card:1' } });
+    const c = renderRunRow(fdoc, runWords(carded), { key: 'lr-1', at, now: Date.parse(at) }) as unknown as FEl;
+    expect(c.all().find((e) => e.attrs.get('data-run-act') === 'decide')!.text).toBe('Decide in the stack');
+    expect(el.all().some((e) => e.attrs.get('data-run-act') === 'decide')).toBe(false);
+    const running = renderRunRow(fdoc, runWords(base), { key: 'lr-1', at, now: Date.parse(at) + 5000 }) as unknown as FEl;
+    expect(running.text).toContain('running… · 5s');
   });
 });

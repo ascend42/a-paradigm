@@ -1,0 +1,75 @@
+version: "2.0"
+name: gnomon-kernel-setup
+description: >-
+  First-run setup on the kernel side: the setup endpoint the GUI walks through
+  (setup-endpoint.ts) and the preflight checks it runs before provisioning
+  (preflight.ts).
+context:
+  - >-
+    The $first-run flow and the ^setup-token gate stay in
+    packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  setup-endpoint:
+    description: >-
+      #setup-endpoint (spec §11.2 rule 11, §2.4 rule 9; T-2026-10-19-005
+      MVP-b) — the SETUP MODE loopback endpoint: a #web-endpoint (same
+      gnomon-web transport child, rules.ts, 127.0.0.1 only, the SAME pinned
+      #gui bundle) whose dispatcher is the closed gnomon-setup:v1 protocol
+      (gnomon-contracts setup.ts, own SETUP_API_ID; clientApiId unchanged):
+      hello / auth {setupToken} / setup.preflight / setup.name / setup.begin /
+      setup.purge {gen} / setup.complete (I10, the saved row, 0 prompts) /
+      setup.finish, events setup.state and setup.presence
+      {n,of,purpose,digest12}. No gnomon-rpc verb is reachable. An ephemeral
+      Ed25519 setup key signs serverSig. One setup connection; a closed
+      socket aborts the #provisioner at its next step boundary. Exact params
+      key sets: the page carries only name, a server-listed gen, and clicks.
+      Entry: bare gnomon / gnomon setup on a TTY print the setup URL (and
+      every expected digest: the terminal is the surface to trust); gnomon
+      setup --cli keeps the prompts; up --wrapper emits {t:setup,...} and then
+      continues into {t:up}. Falsified in test/setup-endpoint.test.ts
+      (G-SET-08..14) and test/wrapper-channel.test.ts. Never hangs: it
+      settles on finish (also for an already-set-up home), token expiry, a
+      10 min idle cap, socket close, transport stop or token reuse; a refused
+      purge (GNOMON_HOME guard, in-use / identity-malformed) or a failed
+      begin returns to the checks. The checks are read-only: setup state
+      lives in a private scratch dir and the home is created at begin.
+      stop() removes that scratch dir BEFORE it waits for a running step, so
+      the wrapper's quit / stdin EOF (Gnomon.app Cmd-Q, which kills the
+      kernel at most 10 s later) cleans it even with a Touch ID prompt held
+      open; an EOF that came before waitSetup listened also stops it. A
+      failed rm (e.g. EACCES) never rejects stop(); the next run sweeps it.
+    path: src/kernel/setup/setup-endpoint.ts
+    type: service
+    related: ["#provisioner", "#setup-preflight", "#web-endpoint", "#gui-setup", "#first-run"]
+    tests:
+      - test/setup-endpoint.test.ts
+      - test/wrapper-channel.test.ts
+    gates: ["^setup-token", "^unprovisioned-only"]
+    tags: [kernel, setup, web]
+  setup-preflight:
+    description: >-
+      #setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no
+      key, no file write, no prompt; only key.list): helper signed+pinned and
+      not from a sandboxed shell, touch-id (helper 1.4.0 presence.available:
+      LAContext canEvaluatePolicy, never a prompt; pass or fail), macos (floor 15 =
+      SESSION_SANDBOX_MIN_MACOS, TD-2026-10-22-220: below it fails naming the update,
+      matching the app's LSMinimumSystemVersion and the helper/voice-io targets;
+      test/macos-floor.test.ts pins them), sip (csrutil;
+      off = warn), claude (resolved, pin none/match/mismatch → `gnomon session
+      repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags),
+      node floor (NODE_MAJOR_FLOOR 24, equal to scripts/install-darwin.mjs: the
+      source-install floor; a zero-build release bundles its own Node),
+      leftover generations (purge, never adopt), home state (dev
+      marker, symlink, malformed identity.json: shown, never touched). Each
+      check {id, status pass|warn|fail, detail, fix}. INFORMATIVE only (Aegis
+      I12): #provisioner and #gnomon-up enforce on their own. The helper row
+      names the build's #release-pins mode (release sha256-pinned, or dev).
+    path: src/kernel/setup/preflight.ts
+    type: module
+    tags: [gnomon, kernel, setup]
+    related: ["#first-run", "#provisioner"]
+    tests:
+      - test/setup.test.ts
