@@ -3,7 +3,7 @@
  * tool.brokered kind is registered, closed and HASH-ONLY.
  */
 import { describe, expect, it } from 'vitest';
-import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SKILL_RUN_DECISIONS, SKILL_RUN_VIAS, TOOL_RESULT_POLICIES, TOOL_RESULT_SENT_POLICIES, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
+import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SKILL_RUN_DECISIONS, SKILL_RUN_VIAS, TOOL_RESULT_POLICIES, TOOL_RESULT_SENT_POLICIES, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, APPROVAL_AUTO_AUTHORS, RESERVED_KIND_PAYLOADS, TOOL_CALL_ID_PATTERN, validateKindPayload } from '../src/index.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
 const row = { hsid: HSID, server: 'gnomon', tool: 'gnomon_git_push', class: 'destructive', argsHash: `sha256:${'a'.repeat(64)}`, decision: 'approved', bytes: 12, isError: false, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' };
@@ -11,7 +11,7 @@ const row = { hsid: HSID, server: 'gnomon', tool: 'gnomon_git_push', class: 'des
 describe('tool.brokered (8.0:local-lane)', () => {
   it('is a kernel kind, sensitive, reserved under 8.0:local-lane, with a closed payload', () => {
     expect(EVENT_KINDS['tool.brokered']).toMatchObject({ kind: 'tool.brokered', owner: 'kernel', sensitivity: 'sensitive', reserved: '8.0:local-lane' });
-    expect(KIND_PAYLOADS['tool.brokered']).toEqual(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author']);
+    expect(KIND_PAYLOADS['tool.brokered']).toEqual(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author', 'callId']);
     expect((CLIENT_API_DESCRIPTOR as unknown as { toolBrokered: { decisions: string[] } }).toolBrokered.decisions).toEqual([...TOOL_BROKERED_DECISIONS]);
   });
   it('a valid row passes; an unresolved tool omits tool and class', () => {
@@ -26,6 +26,22 @@ describe('tool.brokered (8.0:local-lane)', () => {
     expect(validateKindPayload('tool.brokered', { ...row, tool: 'rm -rf /' }).length).toBeGreaterThan(0);
     const { class: _c, ...noClass } = row;
     expect(validateKindPayload('tool.brokered', noClass).length).toBeGreaterThan(0);
+  });
+  it("C6'a2-4: callId is optional and call:<ULID> only (never an args digest)", () => {
+    expect(validateKindPayload('tool.brokered', { ...row, callId: 'call:01HZZZZZZZZZZZZZZZZZZZZZZZ' })).toEqual([]);
+    expect(validateKindPayload('tool.brokered', { ...row, callId: `sha256:${'a'.repeat(64)}` }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('tool.brokered', { ...row, callId: 'call:x' }).length).toBeGreaterThan(0);
+    expect(TOOL_CALL_ID_PATTERN.test('call:01HZZZZZZZZZZZZZZZZZZZZZZZ')).toBe(true);
+  });
+});
+
+describe("approval.auto author and callId (8.0:local-lane C6'a2-4)", () => {
+  it('the field list names author and callId; author is closed to human; the descriptor publishes both rules', () => {
+    expect(RESERVED_KIND_PAYLOADS['approval.auto']).toEqual(['hsid', 'tool', 'path', 'inputHash', 'modeRef', 'author', 'callId']);
+    expect([...APPROVAL_AUTO_AUTHORS]).toEqual(['human']);
+    const d = CLIENT_API_DESCRIPTOR as unknown as { approvalAuto: { authors: string[] }; toolBrokered: { callIdPattern: string } };
+    expect(d.approvalAuto).toEqual({ authors: ['human'] });
+    expect(d.toolBrokered.callIdPattern).toBe(TOOL_CALL_ID_PATTERN.source);
   });
 });
 

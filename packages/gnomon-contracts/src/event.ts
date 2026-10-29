@@ -296,6 +296,9 @@ const TABLE: Row[] = [
   // reads ask). tool.result.sent{hsid, tool, argsHash, bytes, cut, policy} — one "/" result the kernel attached to the
   // human's next turn as framed data (hash-only: never the result); its policy is send, or (slice C6'a2-3) once: the
   // human sent one held result while the tool stayed ask.
+  // 8.0:local-lane (slice C6'a2-4, #local-tool-broker): a call an Always rule passed writes approval.auto{author?,
+  // callId} and its tool.brokered{callId}: one random call id (call:<ULID>, never derived from the args) pairs the two
+  // rows; approval.auto{author:'human'} marks a "/" run the human started (absent: the model's call).
   ['tool', 'kernel', 'brokered selection trust result.policy result.sent', LOCAL_LANE],
   // 8.0:local-lane (slice C6'a2): skill.run{hsid, name, skillHash, argsHash, via, decision, tokens?} — the human ran a
   // repo skill from "/" (native: the model's own slash skill; template: the kernel's sanitized template). Hash-only.
@@ -448,7 +451,9 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'approval.strictness.lowered': ['repo', 'from', 'to', 'cardId', 'override'],
   'approval.strictness.held': ['repo', 'level', 'reason'],
   'approval.mode.set': ['scope', 'from', 'to', 'by', 'presence'],
-  'approval.auto': ['hsid', 'tool', 'path', 'inputHash', 'modeRef'],
+  // 8.0:local-lane (C6'a2-4): author (APPROVAL_AUTO_AUTHORS; absent: the model's call) and callId (TOOL_CALL_ID_PATTERN,
+  // the same id as the call's tool.brokered row) on a brokered call an Always rule passed
+  'approval.auto': ['hsid', 'tool', 'path', 'inputHash', 'modeRef', 'author', 'callId'],
   'request.strictness.set': ['repo', 'to'],
   'request.mode.set': ['repo', 'hsid', 'to'],
   'request.incident': ['refs', 'severity'],
@@ -565,7 +570,7 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   // 8.0:git-verbs: closed, ids and closed values only (host is a validated DNS name, never a URL)
   'git.verb': Object.freeze(['hsid', 'verb', 'phase', 'inputHash', 'why', 'cardId', 'host', 'exitCode']),
   // 8.0:local-lane: closed and hash-only (tool and class absent when the name resolved to no offered tool)
-  'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author']),
+  'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author', 'callId']),
   // 8.0:local-lane (C6'a2): closed; the repo key, the brokered tool name, its bindHash and the closed policy only
   'tool.result.policy': Object.freeze(['hsid', 'repoKey', 'tool', 'bindHash', 'policy']),
   // 8.0:local-lane (C6'a2): closed and hash-only (never the result)
@@ -589,7 +594,7 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'request.session.restart': Object.freeze(['checkpointRef']),
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
   'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
-  'tool.brokered': Object.freeze(['tool', 'class', 'cardId', 'author']),
+  'tool.brokered': Object.freeze(['tool', 'class', 'cardId', 'author', 'callId']),
   'skill.run': Object.freeze(['tokens']),
   'session.memory': Object.freeze(['id', 'source', 'kind', 'textHash', 'why']),
   // 8.0:local-lane (C5'a1): a set row carries launchHash and toolsHash (a drop names which one changed)
@@ -708,6 +713,17 @@ export const TOOL_SELECTION_MAX_IDS = 64;
  */
 export const TOOL_BROKERED_AUTHORS = ['human'] as const;
 export type ToolBrokeredAuthor = (typeof TOOL_BROKERED_AUTHORS)[number];
+/**
+ * approval.auto{author} (CLOSED, 8.0:local-lane C6'a2-4): `human` marks a brokered "/" run an Always rule passed;
+ * absent, the call was the model's (or the row is not a brokered call's).
+ */
+export const APPROVAL_AUTO_AUTHORS = ['human'] as const;
+export type ApprovalAutoAuthor = (typeof APPROVAL_AUTO_AUTHORS)[number];
+/**
+ * approval.auto{callId} / tool.brokered{callId} (8.0:local-lane C6'a2-4): `call:<ULID>`, minted at random by the kernel
+ * for one brokered call an Always rule passed (never derived from the args); the two rows of that call carry the same id.
+ */
+export const TOOL_CALL_ID_PATTERN = /^call:[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 /**
  * tool.result.policy{policy} / tool.result.sent{policy} (CLOSED, C6'a2): send (a "/" result of this tool goes to the
  * model with the human's next turn, as framed data) or ask (it does not). No row, or a binding change: ask.
@@ -1144,6 +1160,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
       if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
       if ('author' in v) c.closedEnum('author', v.author, TOOL_BROKERED_AUTHORS);
+      if ('callId' in v) c.str('callId', v.callId, TOOL_CALL_ID_PATTERN, 'call:<ULID>');
       break;
     case 'tool.result.policy':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

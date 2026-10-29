@@ -163,9 +163,10 @@ describe('G-LCL-22 a ruleable call: the card offers Always, the rule passes the 
     const next = await r.call('write', { t: 'other args' });
     expect(next).toMatchObject({ isError: false, decision: 'approved' });
     expect(r.pending()).toEqual([]);
-    expect(r.autos()).toEqual([{ hsid: HSID, tool: 'mcp:srv/write', inputHash: expect.stringMatching(/^sha256:/), modeRef: `rule:${card.cardId}` }]);
+    // slice C6'a2-4: a model call carries no author, and one random callId pairs the two rows
+    expect(r.autos()).toEqual([{ hsid: HSID, tool: 'mcp:srv/write', inputHash: expect.stringMatching(/^sha256:/), modeRef: `rule:${card.cardId}`, callId: expect.stringMatching(/^call:/) }]);
     const row = r.brokeredRows().at(-1)!;
-    expect(row).toMatchObject({ tool: 'write', class: 'mutate', decision: 'approved' });
+    expect(row).toMatchObject({ tool: 'write', class: 'mutate', decision: 'approved', callId: r.autos()[0]!.callId });
     expect(row).not.toHaveProperty('cardId');
     expect(validateKindPayload('tool.brokered', row)).toEqual([]);
     expect(r.calls.at(-1)).toMatchObject({ args: { t: 'other args' }, trustedRead: true });
