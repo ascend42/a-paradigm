@@ -14,7 +14,7 @@
  * (~/Library/Caches/gnomon-release/node) or GNOMON_SEA_TEST=1 allows the download.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -71,6 +71,54 @@ describe.skipIf(!RUN)('#kernel-sea built binary (ad-hoc)', () => {
     await expect(sea.buildSeaBinary({ baseNode: '/nonexistent', main: '/x', out: '/x', identifier: 'gnomon.kernel', work: root })).rejects.toThrow(/only release-darwin/);
     await expect(sea.buildSeaBinary({ baseNode: '/nonexistent', main: '/x', out: '/x', work: root })).rejects.toThrow(/explicit identifier/);
   });
+
+  /** A copy of the signed kernel in a fresh root with a copy of dist + package.json (and optionally a child node). */
+  function copyRoot(tag: string, node: 'signed' | 'impostor' | 'none' = 'signed'): string {
+    const r = realpathSync(mkdtempSync(path.join(privateTmpRoot(), tag)));
+    cpSync(path.join(root, 'dist'), path.join(r, 'dist'), { recursive: true });
+    copyFileSync(path.join(root, 'package.json'), path.join(r, 'package.json'));
+    copyFileSync(built.kernel, path.join(r, 'gnomon.kernel'));
+    mkdirSync(path.join(r, 'node', 'bin'), { recursive: true });
+    if (node === 'signed') copyFileSync(built.childNode.path, path.join(r, 'node', 'bin', 'node'));
+    if (node === 'impostor') {
+      // the pristine pinned node, ad-hoc signed with the dev child identifier: right identifier, wrong cdhash
+      copyFileSync(built.childNode.path, path.join(r, 'node', 'bin', 'node'));
+      const s = spawnSync('/usr/bin/codesign', ['--force', '--sign', '-', '--identifier', 'gnomon.node.dev', path.join(r, 'node', 'bin', 'node')], { encoding: 'utf8' });
+      expect(s.status, s.stderr).toBe(0);
+    }
+    return r;
+  }
+
+  it('FALSIFIER (Aegis H1): beside changed kernel files the signed kernel refuses to start (exit 78), before any kernel code', () => {
+    const r = copyRoot('sh1-');
+    try {
+      const k = path.join(r, 'gnomon.kernel');
+      expect(spawnSync(k, ['--version'], { env: ENV(r), encoding: 'utf8' }).status).toBe(0);
+      for (const tamper of [() => writeFileSync(path.join(r, 'dist', 'extra.js'), 'x'), () => writeFileSync(path.join(r, 'dist', 'transport', 'gnomon-web.js'), 'console.log("evil")\n')]) {
+        tamper();
+        const v = spawnSync(k, ['--version'], { env: ENV(r), encoding: 'utf8' });
+        expect(v.status).toBe(78);
+        expect(v.stderr).toMatch(/do not|hash to .* not this build's.*refusing to start/);
+        expect(v.stdout).toBe('');
+      }
+    } finally {
+      rmSync(r, { recursive: true, force: true });
+    }
+  });
+
+  it('FALSIFIER (Aegis H1): beside an impostor child node (right identifier, wrong cdhash) the kernel spawns no child', async () => {
+    const r = copyRoot('sh2-', 'impostor');
+    try {
+      const k = path.join(r, 'gnomon.kernel');
+      const devHome = path.join(r, 'devhome');
+      expect(spawnSync(k, ['dev', 'init', '--home', devHome], { env: ENV(r), encoding: 'utf8' }).status).toBe(0);
+      const c = spawnSync(k, ['dev', 'up', '--home', devHome, '--wrapper'], { env: ENV(r), input: 'launch\nquit\n', encoding: 'utf8', timeout: 45_000 });
+      expect(c.stdout + c.stderr).toMatch(/refuses to spawn a child|child-node requirement/);
+      expect(c.stdout).not.toContain('"t":"launch"');
+    } finally {
+      rmSync(r, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('FALSIFIER: NODE_OPTIONS=--require=<x.js> has no effect (CLI)', () => {
     const inj = injector(root);

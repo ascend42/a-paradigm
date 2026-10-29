@@ -45,6 +45,33 @@ export class SeaChildNodeMissing extends Error {
   }
 }
 
+/**
+ * Aegis S0 H1: the checks the signed SEA carries (scripts/sea/sea-prelude.mjs, frozen on globalThis.__gnomonSea
+ * before any kernel code runs): checkDist (dist/ + package.json beside the SEA hash to the tree baked in at build)
+ * and checkChildNode (the child node meets the cdhash-pinned requirement baked in at build). Both throw.
+ */
+export interface SeaGuard {
+  readonly profile: 'release' | 'dev';
+  readonly distTree: string;
+  readonly childNodeRequirement: string;
+  checkDist(): void;
+  checkChildNode(node: string): void;
+}
+
+/** The SEA's guard, or null (plain node, or a SEA built without one). */
+export function seaGuard(): SeaGuard | null {
+  const g = (globalThis as { __gnomonSea?: SeaGuard }).__gnomonSea;
+  return g && typeof g.checkDist === 'function' && typeof g.checkChildNode === 'function' ? g : null;
+}
+
+/** A child node (or the kernel files beside the SEA) the SEA's guard refused: fail closed, no child is spawned. */
+export class SeaChildNodeRefused extends Error {
+  constructor(readonly node: string | null, why: string) {
+    super(`the SEA kernel refuses to spawn a child: ${why}; rebuild (npm run build:sea) or reinstall Gnomon`);
+    this.name = 'SeaChildNodeRefused';
+  }
+}
+
 export interface SeaFacts {
   /** default: node:sea isSea() */
   sea?: boolean;
@@ -54,6 +81,8 @@ export interface SeaFacts {
   bundle?: AppBundle | null;
   /** default: a regular-file check */
   isFile?: (p: string) => boolean;
+  /** default: seaGuard() */
+  guard?: SeaGuard | null;
 }
 
 /** True when this process is the SEA kernel (node:sea; false under plain node). */
@@ -90,14 +119,14 @@ export function seaChildNodeCandidates(f: Pick<SeaFacts, 'execPath' | 'bundle'> 
   return out;
 }
 
-let cached: string | undefined;
-
 /**
- * The node binary every node child of the kernel runs. Not a SEA: process.execPath. SEA: the signed gnomon.node
- * (bundle, else beside the dev SEA); none ⇒ SeaChildNodeMissing. Memoized for the process when called with no facts.
+ * The node binary every node child of the kernel runs, checked RIGHT BEFORE the caller spawns (every call site is a
+ * spawn or the PATH/profile built for one). Not a SEA: process.execPath. SEA: the signed gnomon.node (bundle, else
+ * beside the dev SEA); none ⇒ SeaChildNodeMissing. Aegis S0 H1: then the SEA's guard re-checks the kernel files
+ * beside it (checkDist) and the node's cdhash-pinned code requirement (checkChildNode); no guard, or either check
+ * failing ⇒ SeaChildNodeRefused. Never falls back to execPath.
  */
 export function childNodePath(f?: SeaFacts): string {
-  if (f === undefined && cached !== undefined) return cached;
   const sea = f?.sea ?? runningAsSea();
   const execPath = f?.execPath ?? process.execPath;
   if (!sea) return execPath;
@@ -105,7 +134,14 @@ export function childNodePath(f?: SeaFacts): string {
   const looked = seaChildNodeCandidates({ execPath, ...(f && 'bundle' in f ? { bundle: f.bundle ?? null } : {}) });
   const hit = looked.find((p) => isFile(p));
   if (!hit) throw new SeaChildNodeMissing(looked);
-  if (f === undefined) cached = hit;
+  const guard = f && 'guard' in f ? (f.guard ?? null) : seaGuard();
+  if (!guard) throw new SeaChildNodeRefused(hit, 'this SEA carries no build guard (dist tree, child-node requirement)');
+  try {
+    guard.checkDist();
+    guard.checkChildNode(hit);
+  } catch (e) {
+    throw new SeaChildNodeRefused(hit, e instanceof Error ? e.message : String(e));
+  }
   return hit;
 }
 

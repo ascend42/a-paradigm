@@ -483,7 +483,10 @@ export async function release(argv) {
       const sea = await import('./build-sea.mjs');
       const seaWork = path.join(work, 'sea');
       mkdirSync(seaWork, { recursive: true });
-      const main = await sea.bundleSeaMain(path.join(seaWork, 'sea-main.cjs'));
+      // Aegis S0 H1: the staged node's cdhash-pinned requirement and the staged kernel tree are baked into the SEA
+      const childReq = sea.childNodeRequirement({ signing, identifier: NODE_IDENTIFIER, cdhash: sea.cdhashOf(stagedNode) });
+      const build = { profile: 'release', version, distTree: kernelTreeHash(path.join(stage, LAYOUT.kernel)), childNodeRequirement: childReq };
+      const main = await sea.bundleSeaMain(path.join(seaWork, 'sea-main.cjs'), { build });
       await sea.buildSeaBinary({ baseNode: fetched.node, main, out: stagedKernelExe, identifier: sea.KERNEL_IDENTIFIER, release: true, identity, work: seaWork });
       const kq = capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${sea.kernelRequirement(signing)}`, stagedKernelExe]);
       if (kq.status !== 0) throw new Error(`the signed SEA kernel does not meet the requirement the wrapper and helper check: ${String(kq.stderr).slice(0, 300)}`);

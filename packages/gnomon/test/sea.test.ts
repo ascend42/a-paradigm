@@ -17,12 +17,31 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error -- a plain .mjs script, no declarations
 import * as sea from '../scripts/build-sea.mjs';
 import { reexecArgs } from '../src/kernel/lifecycle/env.js';
-import { childNodePath, DEV_CHILD_NODE_REL, gnomondEntryOf, KERNEL_DEV_IDENTIFIER, KERNEL_IDENTIFIER, KERNEL_SEA_NAME, runningAsSea, SEA_GNOMOND_ARG, SeaChildNodeMissing, seaChildNodeCandidates, CHILD_NODE_DEV_IDENTIFIER, CHILD_NODE_IDENTIFIER } from '../src/kernel/lifecycle/sea.js';
+import { childNodePath, DEV_CHILD_NODE_REL, gnomondEntryOf, KERNEL_DEV_IDENTIFIER, KERNEL_IDENTIFIER, KERNEL_SEA_NAME, runningAsSea, SEA_GNOMOND_ARG, SeaChildNodeMissing, SeaChildNodeRefused, seaChildNodeCandidates, seaGuard, type SeaGuard, CHILD_NODE_DEV_IDENTIFIER, CHILD_NODE_IDENTIFIER } from '../src/kernel/lifecycle/sea.js';
 import type { AppBundle } from '../src/kernel/lifecycle/app-bundle.js';
 import { PKG_ROOT, walk } from './helpers.js';
 
 const KERNEL = '/Applications/Gnomon.app/Contents/Resources/kernel/gnomon.kernel';
 const bundle = { node: '/Applications/Gnomon.app/Contents/Resources/node/bin/node' } as AppBundle;
+/** A guard stub recording its calls; `distFails` / `nodeFails` make the matching check throw. */
+function guard(o: { distFails?: boolean; nodeFails?: boolean } = {}): SeaGuard & { calls: string[] } {
+  const calls: string[] = [];
+  return {
+    profile: 'release',
+    distTree: 'sha256:x',
+    childNodeRequirement: 'identifier "gnomon.node"',
+    calls,
+    checkDist() {
+      calls.push('dist');
+      if (o.distFails) throw new Error('dist hashes to something else');
+    },
+    checkChildNode(n: string) {
+      calls.push(`node:${n}`);
+      if (o.nodeFails) throw new Error('does not meet the child-node requirement');
+    },
+  };
+}
+const ok = guard();
 
 describe('#kernel-sea childNodePath', () => {
   it('not a SEA: process.execPath (or the given execPath), whatever exists', () => {
@@ -32,7 +51,7 @@ describe('#kernel-sea childNodePath', () => {
   });
 
   it('FALSIFIER: under the SEA in Gnomon.app a child runs the bundled gnomon.node, never the kernel', () => {
-    const got = childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true });
+    const got = childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true, guard: ok });
     expect(got).toBe(bundle.node);
     expect(got).not.toBe(KERNEL);
   });
@@ -40,13 +59,28 @@ describe('#kernel-sea childNodePath', () => {
   it('FALSIFIER: a dev SEA uses <dir of gnomon.kernel>/node/bin/node', () => {
     const dev = '/repo/packages/gnomon/gnomon.kernel';
     const want = path.join('/repo/packages/gnomon', DEV_CHILD_NODE_REL);
-    expect(childNodePath({ sea: true, execPath: dev, bundle: null, isFile: (p) => p === want })).toBe(want);
+    expect(childNodePath({ sea: true, execPath: dev, bundle: null, isFile: (p) => p === want, guard: ok })).toBe(want);
     expect(seaChildNodeCandidates({ execPath: KERNEL, bundle })).toEqual([bundle.node, path.join(path.dirname(KERNEL), DEV_CHILD_NODE_REL)]);
   });
 
   it('FALSIFIER: under the SEA with no gnomon.node it throws SeaChildNodeMissing: it never falls back to execPath', () => {
     expect(() => childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => false })).toThrow(SeaChildNodeMissing);
     expect(() => childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: (p) => p === KERNEL })).toThrow(/never spawns itself/);
+  });
+
+  it('FALSIFIER (Aegis H1): every call re-runs the guard: the kernel files, then the node it returns', () => {
+    const g = guard();
+    childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true, guard: g });
+    childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true, guard: g });
+    expect(g.calls).toEqual(['dist', `node:${bundle.node}`, 'dist', `node:${bundle.node}`]);
+  });
+
+  it('FALSIFIER (Aegis H1): a node that fails its requirement, changed kernel files, or no guard: refused, never spawned', () => {
+    expect(() => childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true, guard: guard({ nodeFails: true }) })).toThrow(SeaChildNodeRefused);
+    expect(() => childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true, guard: guard({ distFails: true }) })).toThrow(/dist hashes to something else/);
+    expect(() => childNodePath({ sea: true, execPath: KERNEL, bundle, isFile: () => true, guard: null })).toThrow(/no build guard/);
+    expect(seaGuard()).toBeNull(); // plain node: no guard, and none is needed
+    expect(childNodePath({ sea: false, execPath: '/x/node', guard: guard({ nodeFails: true, distFails: true }) })).toBe('/x/node');
   });
 
   it('the gnomond entry is the SEA itself under the SEA, the script otherwise', () => {
@@ -69,6 +103,9 @@ describe('#kernel-sea re-exec argv', () => {
   it('the prelude and the kernel agree on the selector', () => {
     const prelude = readFileSync(path.join(PKG_ROOT, 'scripts', 'sea', 'sea-prelude.mjs'), 'utf8');
     expect(prelude).toContain(`args[0] === '${SEA_GNOMOND_ARG}'`);
+    // Aegis H1: the prelude checks the kernel tree with the release script's algorithm before any kernel code runs
+    expect(prelude).toContain("const KERNEL_TREE_DOMAIN = 'gnomon-wrapper-kernel-tree:v1';");
+    expect(prelude.indexOf('checkDist();\n} catch')).toBeGreaterThan(0);
     for (const k of ['NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS']) expect(prelude).toContain(`'${k}'`);
   });
 });
@@ -96,6 +133,18 @@ describe('#kernel-sea build constants (scripts/build-sea.mjs)', () => {
     const layout = readFileSync(path.join(PKG_ROOT, '..', 'gnomon-wrapper', 'src', 'layout.rs'), 'utf8');
     expect(layout).toContain('pub const KERNEL_EXE_REL: &str = "Resources/kernel/gnomon.kernel";');
     expect(layout).toContain('pub const KERNEL_IDENTIFIER: &str = "gnomon.kernel";');
+  });
+
+  it('FALSIFIER (Aegis H1): the child-node requirement is cdhash-pinned (+ the Developer ID anchor and team when signed)', () => {
+    const cd = 'ab'.repeat(20);
+    expect(sea.childNodeRequirement({ signing: 'adhoc', identifier: 'gnomon.node.dev', cdhash: cd })).toBe(`identifier "gnomon.node.dev" and cdhash H"${cd}"`);
+    expect(sea.childNodeRequirement({ signing: 'developer-id', identifier: 'gnomon.node', cdhash: cd })).toMatch(/^anchor apple generic .*subject\.OU\] = "SW4BMQ8PNL" and identifier "gnomon\.node" and cdhash H"(ab){20}"$/);
+    expect(() => sea.childNodeRequirement({ signing: 'adhoc', identifier: 'gnomon.node', cdhash: 'nope' })).toThrow();
+  });
+
+  it('FALSIFIER (Aegis H1): bundleSeaMain refuses to build a SEA without the dist tree and a cdhash-pinned child requirement', async () => {
+    await expect(sea.bundleSeaMain('/nonexistent/out.cjs', {})).rejects.toThrow(/needs build/);
+    await expect(sea.bundleSeaMain('/nonexistent/out.cjs', { build: { profile: 'dev', distTree: 'sha256:' + '0'.repeat(64), childNodeRequirement: 'identifier "gnomon.node.dev"' } })).rejects.toThrow(/cdhash-pinned/);
   });
 
   it('the kernel entitlements are allow-jit only: no get-task-allow, no library-validation opt-out', () => {

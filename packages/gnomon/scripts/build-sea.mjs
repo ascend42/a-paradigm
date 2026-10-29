@@ -7,7 +7,7 @@
  * script, so the kernel becomes a Node Single Executable Application whose signature covers its code.
  *
  *   node packages/gnomon/scripts/build-sea.mjs [--sign auto|adhoc] [--out-dir <dir>] [--node-cache <dir>]
- *        [--no-child-node] [--json]
+ *        [--json]
  *
  *   This CLI builds a DEV SEA only (Aegis S0 review H2): identifier gnomon.kernel.dev, its children's node
  *   gnomon.node.dev. Only release-darwin.mjs produces `gnomon.kernel` (buildSeaBinary refuses that identifier unless
@@ -19,7 +19,6 @@
  *                   "unsigned → guarded only" (CI). `adhoc` forces ad-hoc.
  *   --out-dir       where gnomon.kernel (and node/bin/node, the gnomon.node) go; default packages/gnomon (the kernel package root: the
  *                   SEA finds dist/ beside itself, sea-prelude.mjs).
- *   --no-child-node do not write <out-dir>/node/bin/node (gnomon.node) (the release stages it at Resources/node/bin/node).
  *
  * Steps:
  *   1. esbuild: scripts/sea/sea-main.mjs + dist/cli/gnomon.js + dist/cli/gnomond.js → one CommonJS main (Node 24's
@@ -32,9 +31,9 @@
  *      the kernel requirement (kernelRequirement below, what the helper checks);
  *   5. self-test: `gnomon.kernel --version` answers, and with NODE_OPTIONS=--require=<marker.js> the marker never
  *      runs (fail closed: the build is refused otherwise);
- *   6. unless --no-child-node: <out-dir>/node/bin/node = the same base node, signed identifier gnomon.node
- *      (NodeEntitlements.plist),
- *      the binary the kernel's children run (src/kernel/lifecycle/sea.ts childNodePath).
+ *   0. FIRST <out-dir>/node/bin/node = the same base node, signed identifier gnomon.node.dev (NodeEntitlements.plist),
+ *      the binary the kernel's children run (src/kernel/lifecycle/sea.ts childNodePath); its cdhash-pinned
+ *      requirement and the dist tree hash are baked into the SEA (Aegis S0 H1, sea-prelude.mjs).
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -142,11 +141,37 @@ export function signBinary(file, { identity, identifier, entitlements }) {
   return sig;
 }
 
-/** esbuild sea-main.mjs (+ both dist entries) → one CommonJS file. `dist` must be built (npm run build:gnomon). */
-export async function bundleSeaMain(outfile, { pkg = PKG } = {}) {
+/** The 20-byte cdhash (hex) of a signed file (codesign -dvvv CDHash). */
+export function cdhashOf(file) {
+  const d = capture('/usr/bin/codesign', ['-dvvv', file]);
+  const cd = /^CDHash=([0-9a-f]{40})$/m.exec(d.stderr)?.[1];
+  if (!cd) throw new Error(`no CDHash for ${file}: ${d.stderr.slice(0, 200)}`);
+  return cd;
+}
+
+/**
+ * Aegis S0 H1: the requirement the SEA checks on its children's node before every spawn, pinned to that node's cdhash
+ * (so an ad-hoc node with the right identifier, or another signed node, never passes): `identifier "<id>" and cdhash
+ * H"<cdhash>"`, plus the Developer ID anchor and team when signed.
+ */
+export function childNodeRequirement({ signing, identifier, cdhash }) {
+  if (!/^[0-9a-f]{40}$/.test(cdhash ?? '')) throw new Error(`bad cdhash ${cdhash}`);
+  const tail = `identifier "${identifier}" and cdhash H"${cdhash}"`;
+  if (signing === 'developer-id') return `${DEVELOPER_ID_ANCHOR} and ${tail}`;
+  if (signing === 'adhoc') return tail;
+  throw new Error(`unknown signing ${signing}`);
+}
+
+/**
+ * esbuild sea-main.mjs (+ both dist entries) → one CommonJS file. `dist` must be built (npm run build:gnomon).
+ * `build` = { profile: 'dev'|'release', version, distTree, childNodeRequirement } is baked in as __GNOMON_SEA_BUILD__
+ * (sea-prelude.mjs refuses to start without it).
+ */
+export async function bundleSeaMain(outfile, { pkg = PKG, build } = {}) {
+  if (!build || !['dev', 'release'].includes(build.profile) || !/^sha256:[0-9a-f]{64}$/.test(build.distTree ?? '') || !/cdhash H"[0-9a-f]{40}"/.test(build.childNodeRequirement ?? '')) throw new Error('bundleSeaMain needs build { profile, distTree, childNodeRequirement (cdhash-pinned) }');
   for (const e of ['gnomon.js', 'gnomond.js']) if (!existsSync(path.join(pkg, 'dist', 'cli', e))) throw new Error(`${pkg}/dist/cli/${e} is missing: run npm run build:gnomon first`);
-  const { build } = await import('esbuild');
-  await build({
+  const esbuild = await import('esbuild');
+  await esbuild.build({
     entryPoints: [path.join(pkg, 'scripts', 'sea', 'sea-main.mjs')],
     bundle: true,
     platform: 'node',
@@ -154,7 +179,7 @@ export async function bundleSeaMain(outfile, { pkg = PKG } = {}) {
     target: 'node24',
     outfile,
     // sea-prelude.mjs sets it from realpath(execPath) before any dist entry initialises
-    define: { 'import.meta.url': 'globalThis.__gnomonSeaMetaUrl' },
+    define: { 'import.meta.url': 'globalThis.__gnomonSeaMetaUrl', __GNOMON_SEA_BUILD__: JSON.stringify(JSON.stringify(build)) },
     legalComments: 'none',
     logLevel: 'error',
   });
@@ -215,35 +240,40 @@ export async function pinnedBaseNode({ arch = process.arch, nodeCache, work }) {
 }
 
 /**
- * Build a DEV gnomon.kernel (identifier gnomon.kernel.dev) and, unless childNode is false, node/bin/node signed as
- * gnomon.node.dev, into `outDir`. Returns a JSON-able summary. The base node is the pinned bundled node, always.
+ * Build a DEV gnomon.kernel (identifier gnomon.kernel.dev) and its children's node/bin/node (gnomon.node.dev) into
+ * `outDir`. Returns a JSON-able summary. The base node is the pinned bundled node, always.
+ * Aegis S0 H1: the child node is signed FIRST, so its cdhash-pinned requirement and the dist tree hash of `pkg` are
+ * baked into the SEA (bundleSeaMain); the SEA refuses to start beside any other dist and to spawn any other node.
+ * `outDir` must hold (or be) a kernel package root whose dist/ + package.json equal `pkg`'s.
  */
-export async function buildKernelSea({ pkg = PKG, outDir = PKG, sign = 'auto', nodeCache, childNode = true } = {}) {
+export async function buildKernelSea({ pkg = PKG, outDir = PKG, sign = 'auto', nodeCache } = {}) {
   if (process.platform !== 'darwin') throw new Error('the SEA kernel is built on macOS (codesign, Mach-O injection)');
   const s = await resolveSigning(sign);
   const version = JSON.parse(readFileSync(path.join(pkg, 'package.json'), 'utf8')).version;
   const work = mkdtempSync(path.join(os.tmpdir(), 'gnomon-build-sea-'));
   try {
     const base = await pinnedBaseNode({ nodeCache, work });
-    const main = await bundleSeaMain(path.join(work, 'sea-main.cjs'), { pkg });
+    // 1. the children's node, signed first: its cdhash goes into the SEA
+    const to = path.join(outDir, CHILD_NODE_REL);
+    mkdirSync(path.dirname(to), { recursive: true });
+    const tmp = `${to}.tmp`;
+    copyFileSync(base.node, tmp);
+    chmodSync(tmp, 0o755);
+    const nodeSig = signBinary(tmp, { identity: s.identity, identifier: NODE_DEV_IDENTIFIER, entitlements: NODE_ENTITLEMENTS });
+    renameSync(tmp, to);
+    const childReq = childNodeRequirement({ signing: s.signing, identifier: NODE_DEV_IDENTIFIER, cdhash: cdhashOf(to) });
+    must(capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${childReq}`, to]), 'codesign -R child node requirement');
+    // 2. the SEA, with the dist tree and the child-node requirement baked in
+    const { kernelTreeHash } = await import('./release-darwin.mjs');
+    const build = { profile: 'dev', version, distTree: kernelTreeHash(pkg), childNodeRequirement: childReq };
+    const main = await bundleSeaMain(path.join(work, 'sea-main.cjs'), { pkg, build });
     const kernel = path.join(outDir, KERNEL_SEA_NAME);
     const built = await buildSeaBinary({ baseNode: base.node, main, out: kernel, identifier: KERNEL_DEV_IDENTIFIER, identity: s.identity, work });
     must(capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${kernelRequirement(s.signing, 'dev')}`, kernel]), 'codesign -R dev kernel requirement');
     // Aegis H2: a dev SEA must never meet the production requirement
     if (capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${kernelRequirement(s.signing, 'release')}`, kernel]).status === 0) throw new Error(`${kernel} meets the release requirement; refused`);
     const test = selfTest(kernel, version);
-    let child = null;
-    if (childNode) {
-      const to = path.join(outDir, CHILD_NODE_REL);
-      mkdirSync(path.dirname(to), { recursive: true });
-      const tmp = `${to}.tmp`;
-      copyFileSync(base.node, tmp);
-      chmodSync(tmp, 0o755);
-      const sig = signBinary(tmp, { identity: s.identity, identifier: NODE_DEV_IDENTIFIER, entitlements: NODE_ENTITLEMENTS });
-      renameSync(tmp, to);
-      child = { path: to, signature: sig };
-    }
-    return { kernel, profile: 'dev', version, nodeVersion: built.nodeVersion, sha256: built.sha256, signing: s.signing, identity: s.name, signature: built.signature, selfTest: test, childNode: child, note: s.note };
+    return { kernel, profile: 'dev', version, nodeVersion: built.nodeVersion, sha256: built.sha256, signing: s.signing, identity: s.name, signature: built.signature, selfTest: test, childNode: { path: to, signature: nodeSig, requirement: childReq }, distTree: build.distTree, note: s.note };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -254,7 +284,7 @@ function parseArgs(argv) {
     const i = argv.indexOf(n);
     return i >= 0 ? argv[i + 1] : undefined;
   };
-  return { sign: v('--sign') ?? 'auto', outDir: path.resolve(v('--out-dir') ?? PKG), nodeCache: v('--node-cache'), childNode: !argv.includes('--no-child-node'), json: argv.includes('--json') };
+  return { sign: v('--sign') ?? 'auto', outDir: path.resolve(v('--out-dir') ?? PKG), nodeCache: v('--node-cache'), json: argv.includes('--json') };
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
