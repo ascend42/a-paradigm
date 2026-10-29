@@ -40,7 +40,11 @@ import Foundation
 /// its gnomon-root-decision:v2 row ONLY (rootRows:[]), and any further row is refused. The kernel offers a
 /// destructive Always only from this version (ROW_TABLE_MIN_HELPER.permission); an older helper keeps allow and deny.
 /// Same protocol, additive.
-let gnomonHelperVersion = "1.10.0"
+/// 1.11.0 (TD-2026-10-29-746 / -894 / -340, G-HLP-03, G-HLP-04): the caller check (Caller.swift) and the no-presence ops
+/// it guards — kernel.cert (KernelCert.swift), anchor.read / anchor.write (Anchor.swift), presence.mode / presence.mode.on
+/// (Mode.swift), click.open / click.sign (ClickKey.swift) — plus the presence.mode and kernel-custody row tables. Same
+/// protocol, additive; the kernel selects them from info.version (HELPER_OP_MIN, ROW_TABLE_MIN_HELPER).
+let gnomonHelperVersion = "1.11.0"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).

@@ -55,6 +55,20 @@ export const HELPER_PROTOCOL = 'gnomon-helper:v2'; // v2 (helper 1.6.0): voice a
  * every founder build, so an allowlist shipped with the kernel would break on
  * each rebuild; the floor stops downgrades to known-weaker helpers.
  */
+/**
+ * TD-2026-10-29-746 (helper 1.11.0, G-HLP-03/04): the first helper version that answers each additive op. The kernel
+ * sends one only when the running helper's info.version is at least this (an older helper answers `bad-request`).
+ */
+export const HELPER_OP_MIN: Readonly<Record<string, string>> = Object.freeze({
+  'decision.sign': '1.8.0',
+  'kernel.cert': '1.11.0',
+  'anchor.read': '1.11.0',
+  'anchor.write': '1.11.0',
+  'presence.mode': '1.11.0',
+  'presence.mode.on': '1.11.0',
+  'click.open': '1.11.0',
+  'click.sign': '1.11.0',
+});
 export const MIN_HELPER_VERSION = '1.6.0'; // 1.6.0: protocol v2, voice arms (own store), approve-voice under an arm only, lock/sleep observer push; 1.5.0: root fresh signs return `shown` (setup's helper-line check), decisionSig v2 prompt line; 1.4.0: presence.available
 // was 1.3.0: // 1.3.0: T-2026-10-18-028 M2 (absolute unlock TTL + signature cap in the helper)
 /** The designated requirement the helper must satisfy (Developer ID, this team, this identifier). */

@@ -431,7 +431,16 @@ kernel key     Ed25519 keypair, EPHEMERAL: generated in kernel memory at every s
                the release script signs `gnomon.kernel`; dev builds sign `gnomon.kernel.dev` / `gnomon.node.dev` (Developer ID or ad-hoc), which
                never meet the release requirement, and a dev Gnomon.app accepts only `gnomon.kernel.dev` (Aegis S0 H2). Transport: the helper is the kernel's stdio child; it reads the peer's audit token with
                LOCAL_PEERTOKEN on its stdin socketpair and runs SecCodeCheckValidity against `identifier "gnomon.kernel" and anchor apple generic and certificate
-               leaf[subject.OU] = SW4BMQ8PNL` (probe P1; the XPC service below is the fallback if that probe fails). A same-user `node` running a script fails that
+               leaf[subject.OU] = SW4BMQ8PNL` (probe P1 PASS, signed 2026-10-29: stdio, no XPC). Helper 1.11.0 (S1, `G-HLP-03`) hardcodes the full
+               requirement (Developer ID anchor + intermediate + leaf OIDs, team, identifier gnomon.kernel; gnomon.kernel.dev only in a helper built with
+               -DGNOMON_HELPER_DEV), requires kSecCSStrictValidate, the hardened runtime, no get-task-allow, never ad-hoc or gnomon.node, an unchanged parent
+               and a kernel version floor read from the SEA's signed GNOMON_STAMP section; it then signs `gnomon:kernel-cert:v1` {kernelKeyId, pub, logId,
+               boot, pid, pidVersion, callerCdhash, startedAt, issuedAt, expiresAt (24 h)} with a Secure Enclave `kernel-cert` key (group
+               SW4BMQ8PNL.gnomon.prod only, .privateKeyUsage, no presence, AfterFirstUnlockThisDeviceOnly read back from the key's access control, not
+               pdmn: probe P3 finding) for one kernel key per helper, at most 4 per boot-hour, and keeps the log anchor `gnomon-head` (no presence, 10
+               writes a second; rollback and fork refused). The key works from the first login after boot (locked screen included); before the first
+               login no user keychain and no kernel exist. The SEA also pins the voice client tree (Resources/gnomon-voice, addons included), re-checked
+               before each voice spawn and model fetch, and verifies each direct gnomon.node child RUNNING (codesign -R on its pid, SIGKILL on failure). A same-user `node` running a script fails that
                check, so status.kernelKeyCustody is `full` on macOS ONLY for a Developer-ID-signed SEA; an ad-hoc SEA (CI, dev without the identity: "unsigned →
                guarded only") and npm-only installs (node + script) report `partial` and get only the guarded profile. Dev builds also produce a signed SEA so the
                founder can dogfood. Superseded original: the key in the keystore item `gnomon-kernel-key`, released only to the signed kernel by an XPC service
@@ -2102,6 +2111,8 @@ Rules:
 | Falsifier | Symbols | Check |
 |---|---|---|
 | `G-HLP-01` | `#release-pins`, `#app-bundle` | a sibling binary inside the app (the helper, voice-io) is accepted only if its code-signing requirement, its version floor and the release sha256 compiled into the kernel all hold; a moved app keeps its identity, trust never rests on the path |
+| `G-HLP-03` | `#gnomon-helper` | helper 1.11.0 (TD-2026-10-29-746, S1) answers kernel.cert, anchor.*, presence.mode and click.* only to the signed kernel instance that spawned it: a caller that is not the signed kernel, an ad-hoc, gnomon.node, dev (in a release helper), older, non-hardened or get-task-allow kernel, another peer than the unchanged parent, or another process instance after the first is refused `caller-refused` (`CallerTests`); a kernel cert names its boot, log, instance and expiry and is refused on another boot, another log, after expiry or under another key (`KernelCertTests.testACertReplayedAcrossBootsOrLogsOrAfterExpiryIsRefused`), at most 4 per boot-hour persisted across helper restarts; the anchor refuses a rollback, a fork and another log and reports the verdict for the kernel's own head (`AnchorTests`); the presence.mode and kernel-custody row tables agree with the TS mirror on the shared vectors, and kernel-custody registers only this helper's cert key |
+| `G-HLP-04` | `#gnomon-helper` | the click key (helper 1.11.0): click.open issues a non-permanent Secure Enclave key only when the helper's OWN stored mode is off and the kernel presents that signed presence.mode row's hash (fail closed when unreadable or mismatched), only to the signed kernel and an app-bound connection; click.sign signs `gnomon:approve:v1` only and refuses presence:v1, approve-voice:v1, row-sig:v1 and every root card kind; the key dies on conn.close, every session push, 12 h and mode-on, and is capped at 60 a minute and 512 per key; no helper source reads a key's attributes or token blob (`ClickKeyTests`) |
 | `G-HLP-02` | `#approval-broker` | the helper's `permission` row table (helper 1.10.0, slice C6'a2-h, TD-2026-10-28-969) signs the decision row of a destructive brokered Always and nothing else: `decision.sign` with cardKind `permission` and rootRows [] signs one root row, any further row of any kind is refused `batch-refused` before a prompt or a key, and every other unlisted kind is still refused (`packages/gnomon-helper/darwin/Tests/gnomon-helper-tests/DecisionSignTests.swift`: `testPermissionSignsOnlyItsDecisionRow`, `testPermissionRefusesAnyFurtherRow`, `testAnUnknownKindIsStillRefused`). The Swift table and the TS mirror `rowTableRefusal` agree on the shared vectors (`packages/gnomon-contracts/test/fixtures/decision-batch-vectors.json`: the permission ok vector and the extra-row refusal, read by `testSharedBindingVectors` and `packages/gnomon/test/decision-batch.test.ts`). Below 1.10.0 the kernel never raises a destructive Always (`rootTableReady('permission')` is false, `ROW_TABLE_MIN_HELPER.permission`), so an older helper is offered allow and deny only (`packages/gnomon/test/local-destructive-rules.test.ts`) |
 | `G-SEC-01` | `#gnomon-npm-packaging` | the published platform packages carry no scripts and no dependencies of any kind |
 
@@ -2348,7 +2359,7 @@ Regenerated by the checker that implements §7.1 (including the suffixed-range r
 | `sym:#git-verbs` | symbol | 6.6 | G-GIT-04, G-GIT-05, G-GIT-06, G-GIT-07 |
 | `sym:#gnome-persona-mod` | symbol | 2.1 | G-GNM-01, G-GNM-02, G-GNM-03 |
 | `sym:#gnomon-app-installer` | symbol | 18.1 |  |
-| `sym:#gnomon-helper` | symbol | 3.1.1 | G-HLP-01, G-ID-01, G-ID-02, G-ID-03, G-ID-04, G-ID-05, G-ID-06, G-ID-07, G-ID-08, G-ID-09, G-ID-10 |
+| `sym:#gnomon-helper` | symbol | 3.1.1 | G-HLP-01, G-HLP-03, G-HLP-04, G-ID-01, G-ID-02, G-ID-03, G-ID-04, G-ID-05, G-ID-06, G-ID-07, G-ID-08, G-ID-09, G-ID-10 |
 | `sym:#gnomon-helper-build` | symbol | 19.1 | G-HLP-01, G-ID-01, G-ID-02, G-ID-03, G-ID-04, G-ID-05, G-ID-06, G-ID-07, G-ID-08 |
 | `sym:#gnomon-kernel` | symbol | 2.1 | G-KRN-01, G-KRN-02, G-SEC-01 |
 | `sym:#gnomon-npm-packaging` | symbol | 18.1 | G-SEC-01 |
