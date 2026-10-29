@@ -45,15 +45,37 @@ final class Server {
     let presence: (String) throws -> LAContext
     let signer: (KeyClass, String, LAContext, [Data]) throws -> [String]
     let session: SessionProbe
+    /// 1.11.0 (G-HLP-03): the caller check for the ops that need no presence (Caller.swift).
+    let caller: CallerGate
+    /// 1.11.0: the helper's own items (anchor, presence mode, cert rate), the kernel-cert issuer and the anchor.
+    let items: ItemStore
+    let issuer: CertIssuer
+    let anchor: Anchor
+    let modes: ModeStore
+    let clock: () -> Date
+    let clickFactory: () throws -> ClickSigner
 
     init(custody: Custody = Custody(),
          presence: @escaping (String) throws -> LAContext = evaluatePresence,
          signer: @escaping (KeyClass, String, LAContext, [Data]) throws -> [String] = { k, g, ctx, msgs in try signAll(try loadPrivateKey(k, g, context: ctx), msgs) },
-         session: SessionProbe = CGSessionProbe()) {
+         session: SessionProbe = CGSessionProbe(),
+         caller: CallerGate = CallerGate(probe: SystemCallerProbe()),
+         items: ItemStore = KeychainItemStore(),
+         certKey: CertKey = SecureEnclaveCertKey(),
+         boot: @escaping () -> String = bootSessionId,
+         clock: @escaping () -> Date = Date.init,
+         clickFactory: @escaping () throws -> ClickSigner = { try EphemeralSEClickKey() }) {
         self.custody = custody
         self.presence = presence
         self.signer = signer
         self.session = session
+        self.caller = caller
+        self.items = items
+        self.clock = clock
+        self.issuer = CertIssuer(key: certKey, items: items, boot: boot, clock: clock)
+        self.anchor = Anchor(items: items, clock: clock)
+        self.modes = ModeStore(items: items)
+        self.clickFactory = clickFactory
     }
 
     func handle(_ req: Json) throws -> Json {
@@ -61,7 +83,7 @@ final class Server {
         switch op {
         case "info":
             let held = custody.sync { (custody.unlocks.count, custody.arms.count) }
-            return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": held.0, "arms": held.1]
+            return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": held.0, "arms": held.1, "devKernel": helperAcceptsDevKernel]
 
         case "presence.available":
             // #setup-preflight (T-2026-10-19-005 MVP-b): canEvaluatePolicy only asks whether a prompt COULD run; it never shows one
@@ -168,6 +190,14 @@ final class Server {
             let g = try generation(req)
             _ = try connId(req) // validated (the kernel's connection, informational)
             let batch = try decisionBatch(req)
+            // Aegis S1 L2: the cards that change what the helper itself holds come only from the verified kernel
+            if ["presence.mode", "kernel-custody", "log.quarantine"].contains(batch.cardKind) { _ = try caller.require() }
+            if batch.cardKind == "kernel-custody" {
+                // 1.11.0: the migration card registers THIS helper's kernel-cert key, never another
+                guard batch.rows[1]["certKey"] as? String == (try issuer.key.publicKey()).base64EncodedString() else {
+                    throw HelperError("batch-refused", "the kernel-cert key row names another key than this helper's")
+                }
+            }
             let why = try reason(req)
             let line = try decisionLine(batch)
             let ctx = try presence(decisionPromptText(line, why))
@@ -175,7 +205,21 @@ final class Server {
             let approvalSigs = batch.approvals.isEmpty ? [] : try signer(.approvals, g, ctx, batch.approvals)
             let rootSigs = try signer(.root, g, ctx, batch.root)
             guard approvalSigs.count == batch.approvals.count, rootSigs.count == batch.root.count else { throw HelperError("sign", "a signature is missing") }
-            return ["approvalSigs": approvalSigs, "rootSigs": rootSigs, "shown": line, "kept": false]
+            var out: Json = ["approvalSigs": approvalSigs, "rootSigs": rootSigs, "shown": line, "kept": false]
+            if batch.cardKind == "log.quarantine", let f = batch.rows[1]["from"] as? Json, let from = try? anchorHead(f), let to = batch.rows[1]["to"] as? String {
+                // Aegis S1 H2: the signed quarantine allows ONE anchor move from that head to that log
+                do {
+                    try anchor.allowMove(from: from, to: to)
+                    out["anchorMove"] = ["stored": true]
+                } catch {
+                    out["anchorMove"] = ["stored": false]
+                }
+            }
+            if let m = storedModeOf(batch) {
+                // 1.11.0 (G-HLP-04): the helper's own copy of the switch, stored only after the row was signed
+                out["mode"] = setMode(m)
+            }
+            return out
 
         case "arm.open":
             // §14.7: a FRESH presence evaluation, bound to {humanConnId, voiceConnId}, kept per armId
@@ -263,8 +307,75 @@ final class Server {
         case "conn.close":
             // a connection closed: its cached unlock AND every arm naming it (as human or voice) end
             guard let c = try connId(req) else { throw bad("conn.close needs a connId") }
-            let r = custody.sync { (custody.unlocks.drop(c), custody.arms.closeReferencing(c)) }
-            return ["dropped": r.0, "arms": r.1]
+            let r = custody.sync { (custody.unlocks.drop(c), custody.arms.closeReferencing(c), custody.clicks.drop(c)) }
+            return ["dropped": r.0, "arms": r.1, "click": r.2]
+
+        case "presence.mode":
+            _ = try caller.require()
+            let m = try modes.read()
+            var out: Json = ["mode": m.mode]
+            if let h = m.rowHash { out["rowHash"] = h }
+            return out
+
+        case "presence.mode.on":
+            // switching Touch ID back ON needs no presence (TD-2026-10-29-340); it revokes every click key first
+            _ = try caller.require()
+            return setMode(StoredMode(mode: "on", rowHash: nil, cardId: nil))
+
+        case "click.open":
+            _ = try caller.require()
+            guard let c = try connId(req) else { throw bad("click.open needs a connId") }
+            guard req["appBound"] as? Bool == true else { throw HelperError("click-refused", "a click key binds only an app-bound GUI connection") }
+            guard let presented = req["modeRowHash"] as? String, fullMatch(presented, "^sha256:[0-9a-f]{64}$") else { throw bad("click.open presents the presence.mode row hash") }
+            // fail closed: the helper's OWN copy of the switch, readable, OFF, and the row the kernel presents
+            let m = try modes.read()
+            guard m.mode == "off", m.rowHash == presented else { throw HelperError("click-refused", "Touch ID is not switched off by that signed row") }
+            guard session.usable() else { throw HelperError("session-locked", "the session is locked, switched out or unknown; no click key") }
+            let epoch0 = custody.epoch
+            let signer = try clickFactory()
+            let id: String? = custody.sync {
+                guard custody.epochIsCurrent(epoch0) else { return nil }
+                return custody.clicks.put(c, signer)
+            }
+            guard let keyId = id else { throw HelperError("click-refused", "a session event, or \(maxClickKeys) click keys are held") }
+            return ["keyId": keyId, "publicKey": signer.publicKey.base64EncodedString(),
+                    "bounds": ["absoluteSeconds": Int(Bounds.unlockAbsoluteSeconds), "maxSignatures": Bounds.maxSignaturesPerUnlock, "perMinute": clickPerMinute]]
+
+        case "click.sign":
+            _ = try caller.require()
+            guard let c = try connId(req) else { throw bad("click.sign needs a connId") }
+            guard let k = req["keyId"] as? String, k.count <= 80 else { throw bad("click.sign names its keyId") }
+            let msgs = try clickMessages(req) // approve:v1 only, never a root card: before any key is looked up
+            guard session.usable() else {
+                custody.invalidateAll()
+                throw HelperError("no-click", "the session is locked, switched out or unknown; every click key was revoked")
+            }
+            return try custody.sync {
+                switch custody.clicks.use(c, keyId: k, signatures: msgs.count) {
+                case .noKey: throw HelperError("no-click", "no live click key with this id for this connection")
+                case .rate: throw HelperError("rate-limited", "at most \(clickPerMinute) click signatures a minute")
+                case .ok(let signer):
+                    do {
+                        return ["sigs": try msgs.map { try signer.sign($0).base64EncodedString() }, "keyId": k]
+                    } catch {
+                        custody.clicks.drop(c)
+                        throw HelperError("no-click", "the click key no longer signs")
+                    }
+                }
+            }
+
+        case "kernel.cert":
+            // 1.11.0 (G-HLP-03): no presence; only the signed kernel instance that spawned this helper
+            let who = try caller.require()
+            return try issuer.issue(try certRequest(req), caller: who)
+
+        case "anchor.read":
+            _ = try caller.require()
+            return try anchor.read(req)
+
+        case "anchor.write":
+            _ = try caller.require()
+            return try anchor.write(req)
 
         case "unlock.drop":
             guard let c = try connId(req) else { throw bad("unlock.drop needs a connId") }
@@ -277,6 +388,20 @@ final class Server {
             throw bad("unknown op")
         }
     }
+
+    /// Store the switch; switching ON revokes every click key first (fail closed: an unstored OFF stays ON).
+    func setMode(_ m: StoredMode) -> Json {
+        if m.mode == "on" { revokeClicks(cause: "mode-on") }
+        do {
+            try modes.store(m)
+            return ["stored": true, "mode": m.mode]
+        } catch {
+            return ["stored": false, "mode": m.mode]
+        }
+    }
+
+    /// Click keys (ClickKey.swift, 1.11.0); a no-op until they exist.
+    func revokeClicks(cause: String) { _ = custody.sync { custody.clicks.dropAll() } }
 
     private func armRoom(_ p: Arms.Put) throws {
         switch p {

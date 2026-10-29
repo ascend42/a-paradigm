@@ -76,6 +76,25 @@ components:
       override is in the closed row and an override is marked on the line;
       loop.trusted by ('root' or a principal) and requestedBy are principal
       ids of at most 128 chars;
+      Helper 1.11.0 (TD-2026-10-29-746/-894/-340, G-HLP-03, G-HLP-04): the
+      caller check (Caller.swift: LOCAL_PEERTOKEN on stdin, the unchanged
+      parent, the hardcoded gnomon.kernel requirement with kSecCSStrictValidate,
+      hardened runtime, no get-task-allow, never ad-hoc or gnomon.node, the
+      SEA's GNOMON_STAMP version floor; gnomon.kernel.dev only with
+      -DGNOMON_HELPER_DEV / build-darwin.mjs --dev-kernel) guards the
+      no-presence ops: kernel.cert (SE kernel-cert key, group
+      SW4BMQ8PNL.gnomon.prod only, AfterFirstUnlockThisDeviceOnly checked from
+      accc; gnomon-kernel-cert:v1 bound to boot, log, pid + pidversion and
+      cdhash, 24 h, 4 per boot-hour), anchor.read / anchor.write (gnomon-head,
+      rollback/fork refused, 10 writes a second), presence.mode /
+      presence.mode.on (the helper's own gnomon-presence-mode item; off only
+      after a signed presence.mode decision), click.open / click.sign (a
+      non-permanent SE click key for an app-bound connection while the stored
+      mode is off; approve:v1 only, never a root card; revoked on close, push,
+      12 h and mode-on; 60 a minute, 512 per key). Row tables presence.mode
+      and kernel-custody (the cert-key row must name this helper's key).
+      Tests: CallerTests, KernelCertTests, AnchorTests, ClickKeyTests and the
+      shared vectors;
       Helper 1.10.0 (TD-2026-10-28-969, C6'a2-h, G-HLP-02): the `permission`
       row table — a destructive brokered Always (rootDecisions ['always'],
       rootRows []) signs its gnomon-root-decision:v2 row only; any further

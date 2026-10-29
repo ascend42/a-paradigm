@@ -141,7 +141,7 @@ describe('#kernel-sea build constants (scripts/build-sea.mjs)', () => {
     const prelude = readFileSync(path.join(PKG_ROOT, 'scripts', 'sea', 'sea-prelude.mjs'), 'utf8');
     // every stat the caches read is a BigInt stat
     const stats = [...prelude.matchAll(/fs\.(l?statSync)\(([^)]*)\)/g)].map((m) => m[2]);
-    expect(stats.length).toBe(3);
+    expect(stats.length).toBe(5) // dist tree (2), child node, voice tree (2): helper 1.11.0 slice;
     for (const a of stats) expect(a, a).toContain('{ bigint: true }');
     // the fingerprint itself (importing the prelude would run it, so its source is evaluated alone)
     const src = /export const fp = (\(st\) => \{[\s\S]*?\n\});/.exec(prelude)?.[1];

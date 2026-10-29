@@ -68,8 +68,12 @@ components:
       - test/daemon-lifecycle.test.ts
   kernel-sea:
     description: >-
-      #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13) — the
-      kernel as a signed Node SEA, gnomon.kernel (identifier gnomon.kernel,
+      #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13) — S1
+      additions: the build stamp section GNOMON_STAMP (the helper's kernel
+      version floor), the voice client tree pin (checkVoiceClient before each
+      voice spawn and model fetch) and gateRunningChild (codesign -R on a
+      direct gnomon.node child's pid right after spawn, SIGKILL on failure).
+      The kernel as a signed Node SEA, gnomon.kernel (identifier gnomon.kernel,
       team SW4BMQ8PNL, hardened runtime, allow-jit only, no get-task-allow),
       so the helper can identify it by code signature (audit token +
       SecCodeCheckValidity; probe p15). scripts/build-sea.mjs bundles

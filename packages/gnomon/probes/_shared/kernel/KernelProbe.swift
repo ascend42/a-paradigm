@@ -14,7 +14,7 @@
 //   se-lookup <label>              a second process: is any key with this label in the keychain?
 //   se-reimport <blobFile>         a second process: can the token blob be loaded and used (CryptoKit)?
 //   se-perm-create <tag> <group>   a PERMANENT SE key in <group> (AfterFirstUnlockThisDeviceOnly, .privateKeyUsage)
-//   se-perm-sign <tag> <group>     load it and sign (no presence)
+//   se-perm-sign <tag> <group>     load it and sign (no presence); also reports its protection (the reboot recheck)
 //   se-perm-delete <tag> <group>
 import CryptoKit
 import Foundation
@@ -64,6 +64,30 @@ func accessControl() -> SecAccessControl {
         emit(["ok": false, "stage": "access-control"].merging(cfErr(err)) { a, _ in a })
     }
     return ac
+}
+
+/// The data-protection class of an item created with kSecAttrAccessControl. P3 finding (S1): such an item carries its
+/// class INSIDE the access control (`accc`), whose description starts with it (`<SecAccessControlRef: cku;…>`); the
+/// separate `pdmn` attribute is not set from it (a non-permanent SE key reports no pdmn at all; a permanent one may
+/// report none or the default), so reading pdmn alone said false for a key that was created right.
+func protection(_ attrs: [String: Any]) -> [String: Any] {
+    var out: [String: Any] = ["pdmn": attrs[kSecAttrAccessible as String] as? String ?? NSNull()]
+    if let ac = attrs[kSecAttrAccessControl as String] {
+        let d = CFCopyDescription(ac as CFTypeRef) as String
+        out["accessControl"] = d
+        if let r = d.range(of: "SecAccessControlRef: ") {
+            out["accc"] = String(d[r.upperBound...].prefix { $0 != ";" && $0 != ">" })
+        }
+    }
+    return out
+}
+
+func readProtection(_ tag: String, _ group: String) -> [String: Any] {
+    var q = permQuery(tag, group)
+    q[kSecReturnAttributes as String] = true
+    var item: CFTypeRef?
+    let st = SecItemCopyMatching(q as CFDictionary, &item)
+    return protection(item as? [String: Any] ?? [:]).merging(["readback": Int(st)]) { a, _ in a }
 }
 
 func permQuery(_ tag: String, _ group: String) -> [String: Any] {
@@ -191,7 +215,9 @@ case "se-perm-create":
     var item: CFTypeRef?
     let st = SecItemCopyMatching(q as CFDictionary, &item)
     let a = item as? [String: Any] ?? [:]
-    emit(["ok": true, "use": signVerify(key), "readback": Int(st), "accessible": a[kSecAttrAccessible as String] as? String ?? NSNull(), "group": a[kSecAttrAccessGroup as String] as? String ?? NSNull()])
+    let p = protection(a)
+    emit(["ok": true, "use": signVerify(key), "readback": Int(st), "accessible": p["pdmn"]!, "accc": p["accc"] ?? NSNull(), "accessControl": p["accessControl"] ?? NSNull(),
+          "group": a[kSecAttrAccessGroup as String] as? String ?? NSNull()])
 
 case "se-perm-sign":
     var q = permQuery(args[1], args[2])
@@ -200,7 +226,7 @@ case "se-perm-sign":
     let st = SecItemCopyMatching(q as CFDictionary, &item)
     guard st == errSecSuccess, let k = item else { emit(["ok": false, "stage": "load", "status": Int(st)]) }
     let use = signVerify(k as! SecKey)
-    emit(["ok": (use["signed"] as? Bool) == true, "use": use])
+    emit(["ok": (use["signed"] as? Bool) == true, "use": use, "protection": readProtection(args[1], args[2]), "uptimeSeconds": Int(ProcessInfo.processInfo.systemUptime)])
 
 case "se-perm-delete":
     let st = SecItemDelete(permQuery(args[1], args[2]) as CFDictionary)

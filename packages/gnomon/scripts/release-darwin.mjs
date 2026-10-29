@@ -64,7 +64,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -134,6 +134,67 @@ export function kernelTreeHash(pkg) {
   const h = createHash('sha256').update(`${KERNEL_TREE_DOMAIN}\n`);
   for (const [n, s] of files) h.update(`${n}\0${s}\n`);
   return `sha256:${h.digest('hex')}`;
+}
+
+export const VOICE_TREE_DOMAIN = 'gnomon-voice-tree:v1';
+const VOICE_MAX_FILES = 50_000;
+const VOICE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * Helper 1.11.0 slice (TD-2026-10-29-746): the voice client tree the SEA pins — package.json, dist/ and node_modules/
+ * (the .node and .dylib addons included, after they were codesigned) of Resources/gnomon-voice. A symlink is hashed
+ * as its target text, never followed. The JS twin of sea-prelude.mjs checkVoice.
+ */
+export function voiceTreeHash(dir) {
+  const files = [];
+  let total = 0;
+  const walk = (abs, rel) => {
+    for (const name of readdirSync(abs).sort()) {
+      const full = path.join(abs, name);
+      const r = `${rel}/${name}`;
+      const st = lstatSync(full);
+      if (st.isSymbolicLink()) files.push([r, `link:${readlinkSync(full)}`]);
+      else if (st.isDirectory()) walk(full, r);
+      else if (st.isFile()) {
+        total += st.size;
+        if (files.length >= VOICE_MAX_FILES || total > VOICE_MAX_BYTES) throw new Error('the voice client tree is too large');
+        files.push([r, sha256File(full)]);
+      } else throw new Error(`not a regular file in the voice client tree: ${r}`);
+    }
+  };
+  if (!lstatSync(path.join(dir, 'package.json')).isFile()) throw new Error('the voice client package.json is not a regular file');
+  files.push(['package.json', sha256File(path.join(dir, 'package.json'))]);
+  for (const sub of ['dist', 'node_modules']) if (existsSync(path.join(dir, sub))) walk(path.join(dir, sub), sub);
+  files.sort((a, b) => Buffer.compare(Buffer.from(a[0]), Buffer.from(b[0])));
+  const h = createHash('sha256').update(`${VOICE_TREE_DOMAIN}\n`);
+  for (const [n, s] of files) h.update(`${n}\0${s}\n`);
+  return `sha256:${h.digest('hex')}`;
+}
+
+/**
+ * Aegis S1 H1: a release ships only the RELEASE helper. Refuses a bundle whose CFBundleIdentifier is not gnomon.helper,
+ * whose `info` does not say devKernel: false (a -DGNOMON_HELPER_DEV helper says true; a pre-1.11 one says nothing),
+ * or, when signed, that does not meet the release HELPER_REQUIREMENT (identifier gnomon.helper). Runs on the built
+ * AND the --skip-native path. `cap` is the capture function (tests stub it).
+ */
+export function assertReleaseHelper(app, { signed, requirement, cap }) {
+  const exe = path.join(app, 'Contents', 'MacOS', 'gnomon-helper');
+  const id = cap('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', path.join(app, 'Contents', 'Info.plist')]);
+  if (id.status !== 0 || String(id.stdout).trim() !== 'gnomon.helper') throw new Error(`the helper bundle id is ${JSON.stringify(String(id.stdout).trim())}, not gnomon.helper: a dev helper is never shipped`);
+  const r = cap(exe, ['once'], { input: '{"id":1,"op":"info"}\n' });
+  let info = null;
+  try {
+    info = JSON.parse(String(r.stdout).trim().split('\n').pop());
+  } catch {
+    // not JSON
+  }
+  if (!info || info.ok !== true || info.devKernel !== false) throw new Error(`the helper's info.devKernel is ${JSON.stringify(info?.devKernel)}, not false: a dev helper (or one older than 1.11.0) is never shipped`);
+  if (signed) {
+    if (!/identifier "gnomon\.helper"$/.test(requirement)) throw new Error('the release helper requirement must pin identifier gnomon.helper');
+    const v = cap('/usr/bin/codesign', ['--verify', '--strict', `-R=${requirement}`, app]);
+    if (v.status !== 0) throw new Error(`the helper does not meet the release requirement (identifier gnomon.helper): ${String(v.stderr).slice(0, 300)}`);
+  }
+  return info;
 }
 
 /** The validated lock entry for `arch`: { version, url, file, sha256 }. */
@@ -347,8 +408,8 @@ function run(cmd, args, opts = {}) {
   if (r.status !== 0) throw new Error(`${path.basename(cmd)} ${args.slice(0, 3).join(' ')} failed (exit ${r.status ?? r.signal})`);
 }
 
-function capture(cmd, args) {
-  return spawnSync(cmd, args, { encoding: 'utf8', timeout: 180_000 });
+function capture(cmd, args, opts = {}) {
+  return spawnSync(cmd, args, { encoding: 'utf8', timeout: 180_000, ...(opts.input !== undefined ? { input: opts.input } : {}) });
 }
 
 /** The placeholder framework a --dry-run helper app carries: the real versioned-bundle symlink shape. */
@@ -432,6 +493,13 @@ export async function release(argv) {
       await step('build GnomonHelper.app', () => run(process.execPath, [path.join(PACKAGES, 'gnomon-helper', 'scripts', 'build-darwin.mjs'), ...signFlag]));
       await step('build GnomonVoiceIO.app', () => run(process.execPath, [path.join(PACKAGES, 'gnomon-voice', 'scripts', 'build-voice-io.mjs'), ...signFlag]));
     }
+    // Aegis S1 H1: built or reused (--skip-native), the helper that ships is the release helper, never a dev one
+    if (!o.dryRun) {
+      await step('the helper is the release helper (gnomon.helper, devKernel false)', async () => {
+        const { HELPER_REQUIREMENT } = await import(path.join(PACKAGES, 'gnomon-helper', 'scripts', 'signing.mjs'));
+        assertReleaseHelper(path.join(PACKAGES, 'gnomon-helper', 'bin', 'darwin', 'GnomonHelper.app'), { signed: !o.unsigned, requirement: HELPER_REQUIREMENT, cap: capture });
+      });
+    }
     // 2. the kernel (GUI embedded, helper and voice-io pins compiled in)
     await step('npm run build:gnomon', () => run('npm', ['run', 'build:gnomon']));
     await step(`npm run build:release -w @a-company/gnomon -- --arch ${o.arch}`, () => run('npm', ['run', 'build:release', '-w', '@a-company/gnomon', '--', '--arch', o.arch, ...(o.unsigned ? ['--no-codesign'] : [])]));
@@ -485,9 +553,9 @@ export async function release(argv) {
       mkdirSync(seaWork, { recursive: true });
       // Aegis S0 H1: the staged node's cdhash-pinned requirement and the staged kernel tree are baked into the SEA
       const childReq = sea.childNodeRequirement({ signing, identifier: NODE_IDENTIFIER, cdhash: sea.cdhashOf(stagedNode) });
-      const build = { profile: 'release', version, distTree: kernelTreeHash(path.join(stage, LAYOUT.kernel)), childNodeRequirement: childReq };
+      const build = { profile: 'release', version, distTree: kernelTreeHash(path.join(stage, LAYOUT.kernel)), childNodeRequirement: childReq, voiceTree: voiceTreeHash(path.join(stage, LAYOUT.voice)) };
       const main = await sea.bundleSeaMain(path.join(seaWork, 'sea-main.cjs'), { build });
-      await sea.buildSeaBinary({ baseNode: fetched.node, main, out: stagedKernelExe, identifier: sea.KERNEL_IDENTIFIER, release: true, identity, work: seaWork });
+      await sea.buildSeaBinary({ baseNode: fetched.node, main, out: stagedKernelExe, identifier: sea.KERNEL_IDENTIFIER, release: true, identity, work: seaWork, stamp: { profile: 'release', version } });
       const kq = capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${sea.kernelRequirement(signing)}`, stagedKernelExe]);
       if (kq.status !== 0) throw new Error(`the signed SEA kernel does not meet the requirement the wrapper and helper check: ${String(kq.stderr).slice(0, 300)}`);
       sea.selfTest(stagedKernelExe, version);

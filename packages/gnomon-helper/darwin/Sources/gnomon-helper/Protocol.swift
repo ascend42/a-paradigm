@@ -40,7 +40,11 @@ import Foundation
 /// its gnomon-root-decision:v2 row ONLY (rootRows:[]), and any further row is refused. The kernel offers a
 /// destructive Always only from this version (ROW_TABLE_MIN_HELPER.permission); an older helper keeps allow and deny.
 /// Same protocol, additive.
-let gnomonHelperVersion = "1.10.0"
+/// 1.11.0 (TD-2026-10-29-746 / -894 / -340, G-HLP-03, G-HLP-04): the caller check (Caller.swift) and the no-presence ops
+/// it guards — kernel.cert (KernelCert.swift), anchor.read / anchor.write (Anchor.swift), presence.mode / presence.mode.on
+/// (Mode.swift), click.open / click.sign (ClickKey.swift) — plus the presence.mode and kernel-custody row tables. Same
+/// protocol, additive; the kernel selects them from info.version (HELPER_OP_MIN, ROW_TABLE_MIN_HELPER).
+let gnomonHelperVersion = "1.11.0"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).
@@ -366,6 +370,18 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
         // TD-2026-10-22-769 (1.9.0): a real home's local-model config signs exactly one gnomon-root-local:v1 row
         guard kinds == [localRootSchema] else { return "a local.config signs exactly one gnomon-root-local:v1 row" }
         return localRowRefusal(rows[0])
+    case "presence.mode":
+        // 1.11.0 (TD-2026-10-29-340/-894, G-HLP-04): the global Touch ID switch signs exactly one mode row
+        guard kinds == [presenceModeSchema] else { return "a presence.mode signs exactly one gnomon-presence-mode:v1 row" }
+        return presenceModeRowRefusal(rows[0])
+    case "log.quarantine":
+        // 1.11.0 (Aegis S1 H2): moving the anchor to another log with no genesis row takes a root decision
+        guard kinds == [logQuarantineSchema] else { return "a log.quarantine signs exactly one gnomon-log-quarantine:v1 row" }
+        return logQuarantineRowRefusal(rows[0])
+    case "kernel-custody":
+        // 1.11.0 (TD-2026-10-29-746): the migration card registers the kernel-cert key, then seals the legacy kernel keys
+        guard kinds == [kernelCertKeySchema, kernelLegacySchema] else { return "a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row" }
+        return kernelCustodyRefusal(rows)
     case "permission", "mod.mcp.config", "api-token", "peer-pair", "grant":
         // 1.10.0 (G-HLP-02): a destructive brokered Always (`permission`) signs its decision row only, like these
         return kinds.isEmpty ? nil : "a \(cardKind) decision signs only its decision row"
@@ -433,6 +449,51 @@ func localRowRefusal(_ r: Json) -> String? {
           let ns = ru["nodeSha256"] as? String, fullMatch(ns, "^[0-9a-f]{64}$"), let ts = ru["treeSha256"] as? String, fullMatch(ts, "^[0-9a-f]{64}$"),
           let entry = str(ru["entry"], 128), fullMatch(entry, "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"), !entry.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     else { return "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry" }
+    return nil
+}
+
+let presenceModeSchema = "gnomon-presence-mode:v1"
+let kernelCertKeySchema = "gnomon-kernel-cert-key:v1"
+let kernelLegacySchema = "gnomon-kernel-legacy:v1"
+let kernelLegacyMaxKeys = 64
+
+/// A closed field set: nil = only these keys.
+private func onlyFields(_ r: Json, _ fields: Set<String>, _ what: String) -> String? {
+    for k in r.keys.sorted() where !fields.contains(k) { return "a \(what) row never carries \(String(k.prefix(40)))" }
+    return nil
+}
+
+/// 1.11.0: the presence.mode row (mirror of presenceModeRowRefusal in decision-batch.ts). nil = allowed.
+func presenceModeRowRefusal(_ r: Json) -> String? {
+    if let e = onlyFields(r, ["schemaVersion", "mode", "cardId", "createdAt"], "presence mode") { return e }
+    guard let m = r["mode"] as? String, m == "on" || m == "off" else { return "a presence mode row names on or off" }
+    return nil
+}
+
+/// 1.11.0 (Aegis S1 H2): the log.quarantine row (mirror of logQuarantineRowRefusal). nil = allowed.
+func logQuarantineRowRefusal(_ r: Json) -> String? {
+    if let e = onlyFields(r, ["schemaVersion", "from", "to", "cardId", "createdAt"], "log quarantine") { return e }
+    guard let f = r["from"] as? Json, f.count == 3, (try? anchorHead(f)) != nil else { return "a log quarantine row names the anchored head {logId, seq, hash}" }
+    guard let to = r["to"] as? String, fullMatch(to, "^log:[0-9A-HJKMNP-TV-Z]{26}$"), to != f["logId"] as? String else { return "a log quarantine row names the new log" }
+    return nil
+}
+
+/// 1.11.0: the kernel-custody rows (mirror of kernelCustodyRefusal). rows = [cert-key row, legacy row]. nil = allowed.
+func kernelCustodyRefusal(_ rows: [Json]) -> String? {
+    let k = rows[0], l = rows[1]
+    if let e = onlyFields(k, ["schemaVersion", "certKey", "certKeyId", "cardId", "createdAt"], "kernel-cert key") { return e }
+    guard let b64 = k["certKey"] as? String, b64.count == 88, let raw = Data(base64Encoded: b64), raw.count == 65, raw.first == 0x04,
+          raw.base64EncodedString() == b64 else { return "a kernel-cert key row names a P-256 X9.63 public key" }
+    guard k["certKeyId"] as? String == sha256Tag(raw) else { return "a kernel-cert key row's certKeyId is sha256 of its key" }
+    if let e = onlyFields(l, ["schemaVersion", "keyIds", "logId", "headSeq", "headHash", "cardId", "createdAt"], "kernel legacy") { return e }
+    guard let ids = l["keyIds"] as? [Any], ids.count >= 1, ids.count <= kernelLegacyMaxKeys else { return "a kernel legacy row seals 1..\(kernelLegacyMaxKeys) key ids" }
+    var seen = Set<String>()
+    for v in ids {
+        guard let s = v as? String, fullMatch(s, "^gkey:v1:[0-9a-f]{64}$"), seen.insert(s).inserted else { return "a kernel legacy key id is a unique gkey:v1:<64 hex>" }
+    }
+    guard let log = l["logId"] as? String, fullMatch(log, "^log:[0-9A-HJKMNP-TV-Z]{26}$") else { return "a kernel legacy row names its log" }
+    guard jsonWhole(l["headSeq"]) != nil else { return "a kernel legacy row names its head seq (a whole number)" }
+    guard let h = l["headHash"] as? String, fullMatch(h, "^sha256:[0-9a-f]{64}$") else { return "a kernel legacy row names its head hash" }
     return nil
 }
 
@@ -602,6 +663,18 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
         return "trust loop \(sc)/\(l) repo \(rk.dropFirst(7).prefix(12)) \(h.prefix(19))"
     case localRootSchema:
         return localRowShown(r)
+    case presenceModeSchema:
+        guard let m = s("mode") else { return nil }
+        return m == "off" ? "Touch ID OFF: every approval becomes a click (root actions keep Touch ID)" : "Touch ID ON"
+    case logQuarantineSchema:
+        guard let f = r["from"] as? Json, let fl = f["logId"] as? String, let fs = jsonWhole(f["seq"]), let fh = f["hash"] as? String, let to = s("to") else { return nil }
+        return "QUARANTINE log \(fl) at seq \(fs) \(fh.prefix(19)) and anchor the new log \(to)"
+    case kernelCertKeySchema:
+        guard let id = s("certKeyId") else { return nil }
+        return "register the kernel-cert key \(id.prefix(19))"
+    case kernelLegacySchema:
+        guard let ids = r["keyIds"] as? [Any], let log = s("logId"), let seq = jsonWhole(r["headSeq"]), let h = s("headHash") else { return nil }
+        return "seal \(ids.count) legacy kernel keys of \(log) at seq \(seq) \(h.prefix(19))"
     default:
         return nil
     }

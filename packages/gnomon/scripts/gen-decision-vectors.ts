@@ -1,8 +1,9 @@
 // TD-2026-10-20-514: regenerate the shared decision.sign vectors from the TS mirror (node >= 23 strips the types):
 //   node --no-warnings scripts/gen-decision-vectors.ts ../gnomon-contracts/test/fixtures/decision-batch-vectors.json
+import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { canonicalJson } from '@a-company/gnomon-contracts';
-import { checkDecisionBatch, decisionRowV2, intentOf, BatchRefusal } from '../src/kernel/identity/decision-batch.ts';
+import { checkDecisionBatch, clickApproveMessage, clickDecisionRefusal, decisionRowV2, intentOf, BatchRefusal } from '../src/kernel/identity/decision-batch.ts';
 const C = 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', C2 = 'card:01HZZZZZZZZZZZZZZZZZZZZZZY';
 const H = 'sha256:' + 'a'.repeat(64), H2 = 'sha256:' + 'b'.repeat(64), MH = 'sha256:' + 'c'.repeat(64), MH2 = 'sha256:' + 'd'.repeat(64), PK = 'sha256:' + 'e'.repeat(64);
 const ME = 'p:abcdefgh/matt', T = '2026-10-20T12:00:00.000Z';
@@ -146,10 +147,57 @@ add('C3: a fractional version', LA, batch('local.config', 'allow', [lrow({ versi
 add('C3: a boolean version', LA, batch('local.config', 'allow', [lrow({ version: true })]));
 add('C3: a loops flag that is not a boolean', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ loops: 1 })] })]));
 add('C2: a model with a control character cannot be shown', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ model: 'qwen\u0007' })] })]));
+// helper 1.11.0 (TD-2026-10-29-340/-894/-746, G-HLP-03/04): presence.mode and kernel-custody
+const modeRow = (o: R = {}) => ({ schemaVersion: 'gnomon-presence-mode:v1', mode: 'off', cardId: C, createdAt: T, ...o });
+const PM = [approve(C, 'allow'), presence];
+add('presence.mode: switch Touch ID off', PM, batch('presence.mode', 'allow', [modeRow()]));
+add('presence.mode: switch Touch ID on', PM, batch('presence.mode', 'allow', [modeRow({ mode: 'on' })]));
+add('C3: a presence.mode with no row', PM, batch('presence.mode', 'allow', []));
+add('C3: a presence.mode never signs a grant row', PM, batch('presence.mode', 'allow', [modeRow(), trust()]));
+add('C3: a presence.mode row names on or off', PM, batch('presence.mode', 'allow', [modeRow({ mode: 'sometimes' })]));
+add('C3: a presence.mode row field outside the closed set', PM, batch('presence.mode', 'allow', [modeRow({ scope: 'all' })]));
+const CERT_PUB = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]);
+const sha = (b: Buffer) => `sha256:${createHash('sha256').update(b).digest('hex')}`;
+const certKeyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-cert-key:v1', certKey: CERT_PUB.toString('base64'), certKeyId: sha(CERT_PUB), cardId: C, createdAt: T, ...o });
+const legacyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-legacy:v1', keyIds: [`gkey:v1:${'1'.repeat(64)}`, `gkey:v1:${'2'.repeat(64)}`], logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', headSeq: 812, headHash: H2, cardId: C, createdAt: T, ...o });
+add('kernel-custody: register the kernel-cert key and seal the legacy keys', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow()]));
+add('C3: a kernel-custody in the wrong order', PM, batch('kernel-custody', 'allow', [legacyRow(), certKeyRow()]));
+add('C3: a kernel-custody without the legacy seal', PM, batch('kernel-custody', 'allow', [certKeyRow()]));
+add('C3: a kernel-cert key id that is not the key hash', PM, batch('kernel-custody', 'allow', [certKeyRow({ certKeyId: H }), legacyRow()]));
+add('C3: a kernel-cert key that is not X9.63', PM, batch('kernel-custody', 'allow', [certKeyRow({ certKey: Buffer.alloc(65, 7).toString('base64') }), legacyRow()]));
+add('C3: a legacy seal with a repeated key id', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ keyIds: [`gkey:v1:${'1'.repeat(64)}`, `gkey:v1:${'1'.repeat(64)}`] })]));
+add('C3: a legacy seal with no key id', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ keyIds: [] })]));
+add('C3: a legacy seal with a fractional head seq', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ headSeq: 1.5 })]));
+add('C3: a legacy seal field outside the closed set', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ partial: false })]));
+// Aegis S1 H2: log.quarantine (a root decision moves the helper's log anchor to another log)
+const qRow = (o: R = {}) => ({ schemaVersion: 'gnomon-log-quarantine:v1', from: { logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', seq: 812, hash: H2 }, to: 'log:01HZZZZZZZZZZZZZZZZZZZZZZB', cardId: C, createdAt: T, ...o });
+add('log.quarantine: move the anchor from the anchored head to a new log', PM, batch('log.quarantine', 'allow', [qRow()]));
+add('C3: a log.quarantine to the same log', PM, batch('log.quarantine', 'allow', [qRow({ to: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA' })]));
+add('C3: a log.quarantine whose head carries an extra field', PM, batch('log.quarantine', 'allow', [qRow({ from: { logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', seq: 812, hash: H2, extra: 1 } })]));
+add('C3: a log.quarantine with no head hash', PM, batch('log.quarantine', 'allow', [qRow({ from: { logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', seq: 812, hash: 'x' } })]));
+add('C3: a log.quarantine never signs a second row', PM, batch('log.quarantine', 'allow', [qRow(), modeRow()]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
-  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
+  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
   vectors: v,
 };
 writeFileSync(process.argv[2]!, JSON.stringify(out, null, 2) + '\n');
+// Aegis S1 M1: the click-approve vectors (beside the decision vectors): message bytes and refusal or null
+const cm = (o: Partial<Parameters<typeof clickApproveMessage>[0]> = {}) => clickApproveMessage({ cardId: C, cardKind: 'permission', cardClass: 'reversible', decision: 'allow', contentHash: H, approver: ME, ...o }).toString('utf8');
+const cv: R[] = [];
+const addc = (name: string, message: string) => cv.push({ name, message, refused: clickDecisionRefusal(Buffer.from(message, 'utf8')) });
+addc('a permission allow', cm());
+addc('a reversible always', cm({ decision: 'always' }));
+addc('an answer with its digest', cm({ cardKind: 'question', decision: 'answer', answerDigest: H2 }));
+addc('a destructive allow is a click', cm({ cardClass: 'destructive' }));
+addc('a destructive always is never a click', cm({ cardClass: 'destructive', decision: 'always' }));
+addc('an irreversible always is never a click', cm({ cardClass: 'irreversible', decision: 'always' }));
+for (const k of ['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'presence.mode', 'kernel-custody', 'log.quarantine']) addc(`a root card kind ${k}`, cm({ cardKind: k }));
+addc('an unknown card class', cm({ cardClass: 'safe' }));
+addc('an approve:v1 (the presence domain)', approve());
+addc('a presence:v1', presence);
+addc('a row-sig:v1', row(modeRow()));
+addc('an approve-voice:v1', 'gnomon:approve-voice:v1\nx');
+addc('an empty field', cm({ cardKind: '' }));
+writeFileSync(process.argv[2]!.replace('decision-batch-vectors.json', 'click-approve-vectors.json'), JSON.stringify({ schema: 'gnomon-click-approve-vectors:v1', note: 'Aegis S1 M1: the click-key rule on the approve:v2 bytes. Generated by packages/gnomon/scripts/gen-decision-vectors.ts from decision-batch.ts clickDecisionRefusal; read by packages/gnomon/test/decision-batch.test.ts and the Swift ClickKeyTests. refused null = a click key signs it.', vectors: cv }, null, 2) + '\n');
 console.log(v.map((x) => `${x.error ?? 'ok'}\t${x.name}\t${x.why ?? ''}`).join('\n'));

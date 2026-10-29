@@ -3,7 +3,10 @@
 //
 //   node packages/gnomon-helper/scripts/build-darwin.mjs            signed (Developer ID, founder's Mac)
 //   node packages/gnomon-helper/scripts/build-darwin.mjs --unsigned bundle only (CI, any Mac)
-//   … [--out <dir>] [--profile <path>]
+//   … [--out <dir>] [--profile <path>] [--dev-kernel]
+//   --dev-kernel: a DEV helper (-Xswiftc -DGNOMON_HELPER_DEV) whose caller check also accepts gnomon.kernel.dev
+//   (helper 1.11.0, G-HLP-03). Never used for a release: release-darwin.mjs builds without it, and `info` reports
+//   `devKernel: true` for a dev helper so a release check can refuse one.
 //
 // Steps (the recipe probe P04 proved, packages/gnomon/probes/_shared/signing.mjs):
 //   1. swift build -c release (SwiftPM, packages/gnomon-helper/darwin)
@@ -19,7 +22,7 @@
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ACCESS_GROUP, APP_ID, APP_NAME, BUNDLE_ID, EXE_NAME, HELPER_REQUIREMENT, PKG_ROOT, PROFILE_PATH, TEAM, checkProfile, fail, findIdentity, run, sha256File } from './signing.mjs';
+import { APP_NAME, EXE_NAME, PKG_ROOT, TEAM, checkProfile, fail, findIdentity, helperFlavor, run, sha256File } from './signing.mjs';
 
 if (process.platform !== 'darwin') fail('the darwin helper builds on macOS only');
 
@@ -30,17 +33,23 @@ const value = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const unsigned = flag('--unsigned');
-const outDir = path.resolve(value('--out') ?? path.join(PKG_ROOT, 'bin', 'darwin'));
-const profilePath = value('--profile') ?? PROFILE_PATH;
+const devKernel = flag('--dev-kernel');
+// Aegis S1 H1: the dev helper's identity, group, profile and output dir never overlap the release ones
+const F = helperFlavor(devKernel);
+const { bundleId: BUNDLE_ID, appId: APP_ID, accessGroup: ACCESS_GROUP, requirement: HELPER_REQUIREMENT } = F;
+const outDir = path.resolve(value('--out') ?? path.join(PKG_ROOT, 'bin', F.outDir));
+if (devKernel && path.resolve(outDir) === path.resolve(PKG_ROOT, 'bin', 'darwin')) fail('a --dev-kernel helper never goes to bin/darwin (the release helper dir); it builds into bin/darwin-dev');
+const profilePath = value('--profile') ?? F.profilePath;
 
 const say = (s) => process.stdout.write(`${s}\n`);
 
 // 1. compile
 const swiftDir = path.join(PKG_ROOT, 'darwin');
 say('swift build -c release …');
-const sb = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir], { timeout: 600_000 });
+const devFlags = devKernel ? ['-Xswiftc', '-DGNOMON_HELPER_DEV'] : [];
+const sb = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir, ...devFlags], { timeout: 600_000 });
 if (sb.status !== 0) fail(`swift build failed:\n${(sb.stderr || sb.stdout).slice(-2000)}`);
-const binPath = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir, '--show-bin-path']).stdout;
+const binPath = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir, ...devFlags, '--show-bin-path']).stdout;
 const built = path.join(binPath, EXE_NAME);
 const version = /gnomon-helper (\S+)/.exec(run(built, ['--version']).stdout)?.[1];
 if (!version) fail('the built helper does not answer --version');
@@ -73,7 +82,7 @@ writeFileSync(
 let signing = { signed: false };
 if (!unsigned) {
   const identity = findIdentity();
-  const profile = checkProfile(profilePath);
+  const profile = checkProfile(profilePath, F);
   copyFileSync(profile.path, path.join(app, 'Contents', 'embedded.provisionprofile'));
   const ent = path.join(stage, 'helper.entitlements');
   writeFileSync(
@@ -146,5 +155,5 @@ checksums = {
   note: 'sha256 per built helper executable; written by scripts/build-darwin.mjs. ADVISORY: the kernel does not read this file; a release kernel pins the helper sha256 from its release manifest (packages/gnomon/scripts/write-release-manifest.mjs, G-HLP-01) on top of the code-signing requirement and the version floor. A timestamped signature changes the sha on every build.',
   binaries: { ...(checksums.binaries ?? {}), [rel]: { sha256: sha256File(destExe), version, ...signing } },
 };
-writeFileSync(checksumsFile, `${JSON.stringify(checksums, null, 2)}\n`);
+if (!devKernel) writeFileSync(checksumsFile, `${JSON.stringify(checksums, null, 2)}\n`);
 say(JSON.stringify({ app: dest, version, ...signing }, null, 2));

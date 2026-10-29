@@ -133,12 +133,15 @@ final class Arms {
 final class Custody {
     let unlocks: Unlocks
     let arms: Arms
+    /// 1.11.0 (G-HLP-04): the click keys (ClickKey.swift), revoked with everything else on a session event.
+    let clicks: ClickKeys
     private let lock = NSLock()
     private var epochValue: UInt64 = 0
 
-    init(unlocks: Unlocks = Unlocks(), arms: Arms = Arms()) {
+    init(unlocks: Unlocks = Unlocks(), arms: Arms = Arms(), clicks: ClickKeys = ClickKeys()) {
         self.unlocks = unlocks
         self.arms = arms
+        self.clicks = clicks
     }
 
     /// Run `body` with exclusive access to both stores. Never nest.
@@ -160,6 +163,7 @@ final class Custody {
     func invalidateAll() -> (arms: [String], unlocks: Int) {
         sync {
             epochValue &+= 1
+            clicks.dropAll()
             return (arms: arms.closeAll(), unlocks: unlocks.dropAll())
         }
     }

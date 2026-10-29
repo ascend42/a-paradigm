@@ -3,10 +3,19 @@
 // Claims (no Touch ID, no prompt):
 //   a. the signed helper-shaped binary (.app, bundle id gnomon.probe, embedded profile, hardened runtime, Developer
 //      ID, keychain-access-groups [SW4BMQ8PNL.gnomon.probe]) creates a PERMANENT Secure Enclave P-256 key in that group
-//      with kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly and .privateKeyUsage only, reads back accessibility
-//      `cku` (AfterFirstUnlockThisDeviceOnly), and signs with it from a second process run;
+//      with kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly and .privateKeyUsage only, reads back the protection
+//      class `cku` (AfterFirstUnlockThisDeviceOnly) FROM ITS ACCESS CONTROL (`accc`), and signs with it from a second
+//      process run. S1 P3 finding: the first signed run read `pdmn` (kSecAttrAccessible), which is NOT set from an
+//      access control: a key created with SecAccessControlCreateWithFlags(..., AfterFirstUnlockThisDeviceOnly,
+//      .privateKeyUsage) carries `cku` in accc and reports no pdmn (measured unsigned on a non-permanent SE key:
+//      `pdmn nil accc <SecAccessControlRef: cku;...>`). The key was right; the check was wrong. pdmn stays in the evidence;
 //   b. a DIFFERENT binary signed by the same Developer ID with the hardened runtime but WITHOUT the entitlement
 //      cannot use it (errSecMissingEntitlement -34018 or errSecItemNotFound -25300), nor can an ad-hoc copy.
+// Reboot recheck (S1): GNOMON_P17_KEEP=1 keeps the key and prints its tag; after a reboot, log in, lock the screen with a
+// delayed run pending, and GNOMON_P17_RECHECK=<tag> signs with the kept key and reads its protection again (then deletes
+// it). Before the FIRST login after boot the user's data-protection keychain is still locked and no user process (the
+// kernel, the helper) runs, so "before interactive login" is not a state the kernel-cert key can be used in: the floor is
+// after first unlock, which includes a locked screen afterwards.
 // Group: SW4BMQ8PNL.gnomon.probe, NOT SW4BMQ8PNL.gnomon.prod as the S0 brief named (Aegis H1: a probe binary
 // entitled to the production group could read production keys). The entitlement mechanism is identical; the tool
 // refuses any other group or tag.
@@ -30,10 +39,13 @@ export default async function probe(ctx) {
   else if (!profile.present || !profile.valid) missing.push('a valid provisioning profile ~/.config/gnomon-signing/gnomon-helper.provisionprofile granting SW4BMQ8PNL.gnomon.probe');
   if (missing.length) return prerequisiteFailure(missing, { profile });
   const dir = workDir('p17');
-  const tag = `gnomon-p17-${randomBytes(4).toString('hex')}`;
+  const recheck = process.env.GNOMON_P17_RECHECK;
+  const keep = process.env.GNOMON_P17_KEEP === '1' && recheck === undefined;
+  if (recheck !== undefined && !/^gnomon-p17-[0-9a-f]{8}$/.test(recheck)) return { verdict: 'fail', evidence: { error: 'GNOMON_P17_RECHECK must be a gnomon-p17-<8 hex> tag' } };
+  const tag = recheck ?? `gnomon-p17-${randomBytes(4).toString('hex')}`;
   let appExe = null;
   const done = onAbort(() => {
-    const del = appExe ? json(appExe, ['se-perm-delete', tag, PROBE_GROUP]).json : null;
+    const del = appExe && !keep ? json(appExe, ['se-perm-delete', tag, PROBE_GROUP]).json : { kept: keep };
     rmSync(dir, { recursive: true, force: true });
     return del;
   }, ctx.signal);
@@ -41,6 +53,15 @@ export default async function probe(ctx) {
   try {
     const tool = buildTool(dir);
     appExe = buildProbeApp(dir, tool).exe;
+    if (recheck) {
+      evidence.recheck = json(appExe, ['se-perm-sign', tag, PROBE_GROUP]).json;
+      const rc = { r_signsAfterReboot: evidence.recheck?.ok === true, r_afterFirstUnlock: evidence.recheck?.protection?.accc === 'cku' };
+      evidence.claims = rc;
+      const ok = Object.values(rc).every(Boolean);
+      evidence.summary = `P3 recheck ${ok ? 'PASS' : 'FAIL'}: ${Object.entries(rc).map(([k, v]) => `${k}=${v}`).join(' ')} uptime=${evidence.recheck?.uptimeSeconds}s`;
+      process.stderr.write(`${evidence.summary}\n`);
+      return { verdict: ok ? 'pass' : 'fail', evidence };
+    }
     const other = path.join(dir, 'kernel-probe-other');
     copyFileSync(tool, other);
     signBare(other, 'gnomon.probe.other', true);
@@ -53,7 +74,8 @@ export default async function probe(ctx) {
     const refused = (r) => r?.ok === false && [-34018, -25300].includes(r?.status);
     const claims = {
       a_created: evidence.create?.ok === true && evidence.create?.use?.signed === true,
-      a_afterFirstUnlock: evidence.create?.accessible === 'cku',
+      // the class lives in the access control (accc); pdmn is reported but not set from it (S1 P3 finding)
+      a_afterFirstUnlock: evidence.create?.accc === 'cku',
       a_signsFromSecondRun: evidence.signAgain?.ok === true,
       b_otherSignedBinaryRefused: refused(evidence.otherSigned),
       b_adhocRefused: refused(evidence.adhoc),
@@ -63,6 +85,7 @@ export default async function probe(ctx) {
     const line = `P3 ${all ? 'PASS' : 'FAIL'}: ${Object.entries(claims).map(([k, v]) => `${k}=${v}`).join(' ')}`;
     process.stderr.write(`${line}\n`);
     evidence.summary = line;
+    if (keep) process.stderr.write(`P3 kept ${tag}: reboot, log in, then GNOMON_P17_RECHECK=${tag}\n`);
     return { verdict: all ? 'pass' : 'fail', evidence };
   } finally {
     evidence.cleanup = done();

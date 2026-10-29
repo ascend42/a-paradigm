@@ -26,7 +26,12 @@ import Foundation
 import LocalAuthentication
 import Security
 
+#if GNOMON_HELPER_DEV
+/// Aegis S1 H1: a dev helper (gnomon.helper.dev) holds its keys in its OWN group, never the production one.
+let accessGroup = "SW4BMQ8PNL.gnomon.dev"
+#else
 let accessGroup = "SW4BMQ8PNL.gnomon.prod"
+#endif
 
 func tag(_ key: KeyClass, _ gen: String) -> Data { Data("gnomon.\(gen).\(key.rawValue)".utf8) }
 

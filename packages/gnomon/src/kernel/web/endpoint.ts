@@ -84,6 +84,7 @@ import { decodeLine, encodeFrame, NdjsonDecoder } from '../socket/framing.js';
 import { errorFrame, notificationFrame, parseRequest, refusalWith, resultFrame, RpcRefusal, type RpcResponseFrame } from '../socket/rpc.js';
 import type { ConnectionContext } from '../socket/server.js';
 import { PRE_AUTH_MAX_FRAME_BYTES } from '../socket/server.js';
+import { gateRunningChild } from '../lifecycle/sea.js';
 import { GUI_BUNDLE_HASH, materializeGuiBundle } from './gui-pin.js';
 import { GuiAccess, type GuiSession, type LaunchBinding } from './launch.js';
 import type { ResumeGate } from './resume.js';
@@ -543,6 +544,7 @@ export class WebEndpoint {
     this.#plan = plan;
     // fd 3 = the IPC channel: it carries only the connected sockets the kernel hands over (WEB_CONN_MESSAGE)
     const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: plan.env, windowsHide: true });
+    void gateRunningChild(child); // Aegis S1 M2: nothing it says is read until the RUNNING child meets gnomon.node's pin
     this.#dropUnacked();
     // The child never speaks on the IPC channel: one that does is not ours (Aegis C1). A handle it attaches is closed.
     const closeHandle = (h: unknown): void => {
