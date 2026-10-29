@@ -9,9 +9,35 @@
  *  - records missing archetype/taskType/total are skipped.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
-import { percentile, aggregateActuals } from './calibrate.js';
+import { percentile, aggregateActuals, calibrateCommand } from './calibrate.js';
+
+describe('calibrateCommand output (scoped learning S4)', () => {
+  it('every band and count names its population; legacy rows are legacy-prior', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'calibrate-pop-'));
+    try {
+      fs.mkdirSync(path.join(root, '.paradigm', 'events'), { recursive: true });
+      const rows = Array.from({ length: 8 }, (_, i) => line('builder', 'feature', 1000 + i));
+      fs.writeFileSync(path.join(root, '.paradigm', 'events', 'estimate-actuals.jsonl'), rows.join('\n') + '\n');
+      const out: string[] = [];
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation((s: unknown) => { out.push(String(s)); return true; });
+      try {
+        await calibrateCommand({ project: root });
+      } finally {
+        spy.mockRestore();
+      }
+      const text = out.join('');
+      expect(text).toContain('legacy-prior');
+      expect(text).toMatch(/builder · feature.*\[population: legacy-prior\]/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 /** Build a JSONL line for an actual record. */
 function line(archetype: string, taskType: string, total: number): string {

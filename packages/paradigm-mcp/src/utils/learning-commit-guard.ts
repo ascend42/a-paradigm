@@ -20,8 +20,12 @@
  *   - machine-path         one of THIS machine's own paths (home dir, learning
  *                          home, state dir), never a generic pattern;
  *   - human-feedback-public with `learning.visibility: public` (the default
- *                          when unset): an added `trigger: human_feedback`
- *                          entry without an explicit `home: repo`.
+ *                          when unset): an added entry tagged `human-taught`
+ *                          whose home was only inferred (`home_source:
+ *                          inferred`). The human confirms it belongs to the
+ *                          repo and it passes (S3: repo notebooks never carry
+ *                          the journal's `trigger`, so the rule keys on the
+ *                          tag and home_source that promotion carries over).
  *
  * Changing a rule or the scope is a schema change: bump LEARNING_GUARD_SCHEMA.
  */
@@ -30,7 +34,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { listLearningStores } from './learning-stores.js';
 
-export const LEARNING_GUARD_SCHEMA = 'learning-guard:v2';
+export const LEARNING_GUARD_SCHEMA = 'learning-guard:v3';
 
 /** The PARADIGM_OVERRIDE id that lets one commit through (logged). */
 export const LEARNING_GUARD_OVERRIDE_ID = 'learning-guard';
@@ -126,12 +130,21 @@ function checkObject(obj: Record<string, unknown>, file: string, line: number | 
   if (obj.home === 'user' || obj.home === 'machine') {
     out.push({ path: file, line, rule: 'home-not-repo', detail: `home: ${obj.home} (user and machine data are never committed)` });
   }
-  if ((opts.visibility ?? 'public') === 'public' && obj.trigger === 'human_feedback' && obj.home !== 'repo') {
-    out.push({ path: file, line, rule: 'human-feedback-public', detail: 'human_feedback entry without an explicit home: repo in a public repository' });
+  if ((opts.visibility ?? 'public') === 'public' && isHumanTaughtInferred(obj)) {
+    out.push({ path: file, line, rule: 'human-feedback-public', detail: HUMAN_TAUGHT_INFERRED_DETAIL });
   }
   const own = Object.values(obj).filter(v => typeof v === 'string').join('\n');
   const mp = machinePath(own, opts);
   if (mp) out.push({ path: file, line, rule: 'machine-path', detail: `this machine's path ${mp}` });
+}
+
+/** The refusal detail for an inferred human-taught entry in a public repository. */
+export const HUMAN_TAUGHT_INFERRED_DETAIL =
+  'human-taught lesson whose home was only inferred, in a public repository: confirm this lesson belongs to the repo (paradigm teach --home repo)';
+
+/** An entry tagged human-taught whose home the human never chose or confirmed. */
+export function isHumanTaughtInferred(obj: Record<string, unknown>): boolean {
+  return Array.isArray(obj.tags) && obj.tags.includes('human-taught') && obj.home_source === 'inferred';
 }
 
 function parseStructured(file: string, content: string): unknown {

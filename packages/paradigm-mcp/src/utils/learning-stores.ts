@@ -704,12 +704,13 @@ export function readLearningRows<T extends object>(
  * Rewrite every existing physical file of `artifact` in place. `fn` returns the
  * replacement row, or undefined to keep the line byte-identical. `at` is the
  * physical home. Returns the number of rows changed. Non-fatal per file.
+ * `dryRun` counts the rows `fn` would change and writes nothing.
  */
 export function rewriteLearningRows<T extends object>(
   artifact: LearningArtifact,
   root: string,
   fn: (row: T, at: LearningHome) => T | undefined,
-  opts: PathForOptions = {},
+  opts: PathForOptions & { dryRun?: boolean } = {},
 ): number {
   let changed = 0;
   for (const loc of existingLocations(artifact, root, opts)) {
@@ -727,7 +728,7 @@ export function rewriteLearningRows<T extends object>(
           return line;
         }
       });
-      if (fileChanged) fs.writeFileSync(loc.file, updated.join('\n') + '\n', 'utf8');
+      if (fileChanged && !opts.dryRun) fs.writeFileSync(loc.file, updated.join('\n') + '\n', 'utf8');
     } catch {
       /* non-fatal */
     }
@@ -819,11 +820,132 @@ export function currentAuthor(root?: string): string {
 }
 
 /**
- * Whether `author` is the current user: the hashed identity, or the raw OS
- * username S1 stamped before hashing (matched on read only, never written).
+ * Whether `author` is the current user: the hashed identity only. S3 removed
+ * the S1 transition shim (a raw OS username match); `paradigm migrate
+ * learning-stores --scopes --apply` restamps those S1 rows (s1RawAuthor).
  */
 export function isOwnAuthor(author: unknown, root?: string): boolean {
-  if (typeof author !== 'string') return false;
-  if (author === currentAuthor(root)) return true;
-  return !process.env.PARADIGM_AUTHOR && author === osUsername();
+  return typeof author === 'string' && author === currentAuthor(root);
+}
+
+/**
+ * The raw author S1 stamped before authors were hashed: this machine's OS
+ * username. Read ONLY by the migration that restamps those rows; never
+ * written, never matched by readers.
+ */
+export function s1RawAuthor(): string | null {
+  return osUsername();
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Scoped learning S4: the per-home census and calibration population labels.
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * A calibration population, as every rate shows it: one home, or the
+ * pre-scoping legacy rows used only as a labelled cold-start prior. Rates
+ * from different populations are never pooled silently.
+ */
+export type CalibrationPopulation = LearningHome | 'legacy-prior';
+
+/** The display population for an internal one ('legacy' / 'legacy-repo' → 'legacy-prior'). */
+export function populationOf(p: LearningHome | 'legacy' | 'legacy-repo' | 'legacy-prior'): CalibrationPopulation {
+  return p === 'legacy' || p === 'legacy-repo' ? 'legacy-prior' : p;
+}
+
+export interface LearningCensusRow {
+  artifact: LearningArtifact;
+  /** Records per physical home (jsonl rows, or data files for a folder store). */
+  counts: Record<LearningHome, number>;
+  /** Pre-scoping JSONL rows (no home, no author, not migrated). */
+  legacy: number;
+  /** ISO time of the newest write across every home, when any exists. */
+  lastWrite?: string;
+  /** Hook writes skipped because learn-path could not resolve (S2). */
+  skipped: number;
+}
+
+function newestMtime(p: string, isDir: boolean): number {
+  try {
+    if (!isDir) return fs.statSync(p).mtimeMs;
+    let best = 0;
+    for (const ent of fs.readdirSync(p, { withFileTypes: true })) {
+      const child = path.join(p, ent.name);
+      best = Math.max(best, ent.isDirectory() ? newestMtime(child, true) : fs.statSync(child).mtimeMs);
+    }
+    return best;
+  } catch {
+    return 0;
+  }
+}
+
+const isDataFile = (f: string) => isYaml(f) || f.endsWith('.json') || f.endsWith('.jsonl') || f.endsWith('.habit');
+
+/** Per-artifact counts of `.paradigm/.sessions/learn-path-skips` (tab-separated, artifact in column 2). */
+export function learnPathSkipCounts(root: string): Record<string, number> {
+  const by: Record<string, number> = {};
+  try {
+    const lines = fs.readFileSync(path.join(path.resolve(root), '.paradigm', '.sessions', 'learn-path-skips'), 'utf8').split('\n');
+    for (const l of lines) {
+      if (!l.trim()) continue;
+      const artifact = (l.split('\t')[1] ?? 'unknown').replace(/[^a-z0-9-]/gi, '').slice(0, 40) || 'unknown';
+      by[artifact] = (by[artifact] ?? 0) + 1;
+    }
+  } catch {
+    /* no skips file */
+  }
+  return by;
+}
+
+/**
+ * The doctor census (S4): for every scoped store, its record count in each
+ * home (repo / user / machine), the legacy rows, the last write and the
+ * learn-path skips. User-shared stores (journals, global notebooks and
+ * wisdom) count the person's cross-project store. Read-only; never throws.
+ */
+export function learningCensus(root: string, opts: PathForOptions = {}): LearningCensusRow[] {
+  const skips = learnPathSkipCounts(root);
+  const out: LearningCensusRow[] = [];
+  for (const artifact of Object.keys(ARTIFACTS) as LearningArtifact[]) {
+    const counts: Record<LearningHome, number> = { repo: 0, user: 0, machine: 0 };
+    let legacy = 0;
+    let newest = 0;
+    const rel = ARTIFACTS[artifact].rel;
+    const isJsonl = rel[rel.length - 1].endsWith('.jsonl');
+    for (const loc of existingLocations(artifact, root, opts)) {
+      let isDir = false;
+      try {
+        isDir = fs.statSync(loc.file).isDirectory();
+      } catch {
+        continue;
+      }
+      if (isJsonl && !isDir) {
+        for (const row of parseJsonl<Record<string, unknown>>(loc.file)) {
+          counts[loc.home]++;
+          if (row.home === undefined && row.author === undefined && row.migrated !== true) legacy++;
+        }
+      } else if (isDir) {
+        counts[loc.home] += artifact === 'journals' ? countJournals(loc.file) : countFiles(loc.file, isDataFile, true);
+      } else {
+        counts[loc.home] += 1;
+      }
+      newest = Math.max(newest, newestMtime(loc.file, isDir));
+    }
+    const skipped = skips[artifact] ?? 0;
+    if (counts.repo + counts.user + counts.machine + skipped === 0) continue;
+    out.push({ artifact, counts, legacy, ...(newest > 0 ? { lastWrite: new Date(newest).toISOString() } : {}), skipped });
+  }
+  return out;
+}
+
+/** One census row as a doctor line: `verdicts: repo 3 (legacy 3) · user 10 · machine 0 · last write 2026-10-28`. */
+export function formatCensusRow(r: LearningCensusRow): string {
+  const parts = [
+    `repo ${r.counts.repo}${r.legacy > 0 ? ` (legacy ${r.legacy})` : ''}`,
+    `user ${r.counts.user}`,
+    `machine ${r.counts.machine}`,
+  ];
+  if (r.lastWrite) parts.push(`last write ${r.lastWrite.slice(0, 10)}`);
+  if (r.skipped > 0) parts.push(`${r.skipped} skipped (learn-path)`);
+  return `${r.artifact}: ${parts.join(' · ')}`;
 }

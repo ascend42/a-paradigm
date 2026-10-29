@@ -32,7 +32,7 @@ import { loadJournalEntries } from './journal-loader.js';
 import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
 import { appendClassroomCertification } from './field-failures.js';
 import { log } from './mcp-logger.js';
-import type { PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
+import type { HomeSource, PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
 import {
   appendLearningRows,
   groupByHome,
@@ -41,6 +41,9 @@ import {
   readLearningHomeConfig,
   readLearningRows,
   rewriteLearningRows,
+  hasRepoHome,
+  populationOf,
+  type CalibrationPopulation,
   type LearningHome,
 } from './learning-stores.js';
 
@@ -802,15 +805,18 @@ export function getNominationStats(
   const groups = groupByHome(nominations.filter(n => !n.legacy), scope);
   const byHome: Partial<Record<LearningHome, NominationRateStats>> = {};
   for (const h of Object.keys(groups) as LearningHome[]) {
-    if (groups[h].length > 0) byHome[h] = rateStats(groups[h]);
+    if (groups[h].length > 0) byHome[h] = rateStats(groups[h], h);
   }
-  return { ...rateStats(groups[scope]), home: scope, byHome, ...(legacy.length > 0 ? { legacy: rateStats(legacy) } : {}) };
+  // S4: every rate names its population (repo, user, machine or legacy-prior).
+  return { ...rateStats(groups[scope], scope), home: scope, byHome, ...(legacy.length > 0 ? { legacy: rateStats(legacy, 'legacy-prior') } : {}) };
 }
 
 /** A calibration population: one home, or the legacy repo rows used as a labelled cold-start prior. */
 export type NominationPopulation = LearningHome | 'legacy-repo';
 
 export interface NominationRateStats {
+  /** S4: the population this rate is computed over; populations are never pooled. */
+  population: CalibrationPopulation;
   total: number;
   accepted: number;
   dismissed: number;
@@ -819,13 +825,14 @@ export interface NominationRateStats {
   acceptRate: number;
 }
 
-function rateStats(nominations: Nomination[]): NominationRateStats {
+function rateStats(nominations: Nomination[], population: CalibrationPopulation): NominationRateStats {
   const accepted = nominations.filter(n => n.response === 'accepted').length;
   const dismissed = nominations.filter(n => n.response === 'dismissed').length;
   const deferred = nominations.filter(n => n.response === 'deferred').length;
   const pending = nominations.filter(n => !n.engaged).length;
   const engaged = accepted + dismissed + deferred;
   return {
+    population,
     total: nominations.length,
     accepted,
     dismissed,
@@ -858,10 +865,16 @@ export function getNeverlandMetrics(
     threshold: number;
     expertiseCount: number;
     notebookCount: number;
+    /** S4: notebook entries per home (repo included). */
+    notebooksByHome: { repo: number; user: number };
+    /** S4: the population acceptRate is computed over. */
+    population: CalibrationPopulation;
     transferableCount: number;
     totalNominations: number;
   }>;
   aggregate: {
+    /** S4: the population avgAcceptRate is computed over (never pooled across homes). */
+    population: CalibrationPopulation;
     avgAcceptRate: number;
     avgThreshold: number;
     totalExpertise: number;
@@ -876,21 +889,30 @@ export function getNeverlandMetrics(
     .map(p => {
       const stats = getNominationStats(rootDir, p.id);
 
-      // Count notebook entries (check file existence)
-      let notebookCount = 0;
-      try {
-        const nbDir = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
-        if (fs.existsSync(nbDir)) {
-          notebookCount = fs.readdirSync(nbDir).filter(f => f.endsWith('.yaml')).length;
+      // Count notebook entries per home (S4): the repo notebooks and the user's.
+      const countIn = (dir: string): number => {
+        try {
+          return fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.yaml')).length : 0;
+        } catch {
+          return 0;
         }
-      } catch { /* skip */ }
+      };
+      const userNb = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
+      const repoNb = path.join(rootDir, '.paradigm', 'notebooks', p.id);
+      const notebooksByHome = {
+        repo: hasRepoHome(rootDir) && path.resolve(repoNb) !== path.resolve(userNb) ? countIn(repoNb) : 0,
+        user: countIn(userNb),
+      };
+      const notebookCount = notebooksByHome.repo + notebooksByHome.user;
 
       return {
         id: p.id,
+        population: stats.population,
         acceptRate: stats.acceptRate,
         threshold: p.attention?.threshold ?? 0.5,
         expertiseCount: (p.expertise || []).length,
         notebookCount,
+        notebooksByHome,
         transferableCount: (p.transferable || []).length,
         totalNominations: stats.total,
       };
@@ -919,6 +941,9 @@ export function getNeverlandMetrics(
   return {
     agents: agentMetrics,
     aggregate: {
+      // S4: every agent's headline rate is the nominations scope's population;
+      // the average is over that one population, never pooled across homes.
+      population: populationOf(nominationScope(rootDir)),
       avgAcceptRate,
       avgThreshold,
       totalExpertise,
@@ -1008,6 +1033,7 @@ export function autoPromoteJournalEntries(
     project: string;
     transferable?: boolean;
     home?: LearningHome;
+    home_source?: HomeSource;
   }>;
 
   const promoted: Array<{ journalId: string; notebookId: string }> = [];
@@ -1045,6 +1071,8 @@ export function autoPromoteJournalEntries(
     // Scoped learning: the promotion, its notebook entry, its cert and this
     // decision row all carry the JOURNAL's home (transferable:false → repo).
     const home = promotionHomeOf(entry);
+    // S3: the notebook entry says whether the human chose that home.
+    const homeSource: HomeSource = entry.home_source === 'explicit' ? 'explicit' : 'inferred';
     appendPromotionDecision(rootDir, {
       home,
       ts: new Date().toISOString(),
@@ -1089,6 +1117,7 @@ export function autoPromoteJournalEntries(
             createdBy: agentId,
           },
           home,
+          home_source: homeSource,
         },
         home === 'user' ? 'global' : 'project',
         rootDir
@@ -1182,8 +1211,15 @@ export function gatedPromoteJournalEntry(
   rootDir: string,
   agentId: string,
   journalId: string,
-  opts: { certifiedBy?: 'peer' | 'quorum'; refinedForm?: string } = {}
-): { promoted: boolean; journalId: string; notebookId?: string; reason?: string } {
+  opts: {
+    certifiedBy?: 'peer' | 'quorum';
+    refinedForm?: string;
+    /** S3: the home the human picked at sign-off (a flip). Recorded as explicit. */
+    home?: LearningHome;
+    /** S3: the human saw the home at sign-off and kept it. Recorded as explicit. */
+    homeConfirmed?: boolean;
+  } = {}
+): { promoted: boolean; journalId: string; notebookId?: string; reason?: string; home?: LearningHome; home_source?: HomeSource } {
   // Load all of the agent's journal entries (all triggers) and find the target.
   const journal = loadJournalEntries(agentId, { limit: 500 }) as Array<{
     id: string;
@@ -1194,6 +1230,7 @@ export function gatedPromoteJournalEntry(
     tags?: string[];
     transferable?: boolean;
     home?: LearningHome;
+    home_source?: HomeSource;
   }>;
 
   const entry = journal.find(e => e.id === journalId);
@@ -1214,8 +1251,12 @@ export function gatedPromoteJournalEntry(
     .map(normalizeConcept)
     .filter(Boolean);
 
-  // Scoped learning: the promotion carries the journal's home (transferable:false → repo).
-  const home = promotionHomeOf(entry);
+  // Scoped learning: the promotion carries the journal's home (transferable:false → repo),
+  // unless the human flipped it at sign-off (S3). A flip or a confirm is explicit.
+  const home = opts.home ?? promotionHomeOf(entry);
+  const homeSource: HomeSource = opts.home !== undefined || opts.homeConfirmed || entry.home_source === 'explicit'
+    ? 'explicit'
+    : 'inferred';
   const { entry: nbEntry } = addNotebookEntry(
     agentId,
     {
@@ -1232,6 +1273,7 @@ export function gatedPromoteJournalEntry(
         createdBy: agentId,
       },
       home,
+      home_source: homeSource,
     },
     home === 'user' ? 'global' : 'project',
     rootDir
@@ -1254,7 +1296,7 @@ export function gatedPromoteJournalEntry(
 
   markJournalPromoted(agentId, entry.id, nbEntry.id);
 
-  return { promoted: true, journalId, notebookId: nbEntry.id };
+  return { promoted: true, journalId, notebookId: nbEntry.id, home, home_source: homeSource };
 }
 
 // ── Surfacing Config ──

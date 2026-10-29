@@ -380,7 +380,7 @@ export const PRE_COMMIT_HOOK = `#!/bin/sh
 # paradigm-hook-version: 3
 # Refuses a commit whose staged learning-store data carries a home: user/machine
 # row, a machine path, or (learning.visibility public, the default) a
-# human_feedback entry without home: repo. Escape (logged):
+# human-taught entry whose home was only inferred. Escape (logged):
 #   PARADIGM_OVERRIDE=learning-guard git commit ...
 # Fails open when the CLI cannot be found.
 

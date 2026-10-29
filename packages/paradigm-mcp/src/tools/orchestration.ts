@@ -19,7 +19,7 @@ import { handleCaptainTool } from './captain.js';
 import { log } from '../utils/mcp-logger.js';
 import type { AgentRelay } from '../utils/agent-relay.js';
 import { learnedTablePath } from '../utils/calibration-aggregate.js';
-import { appendLearningRows } from '../utils/learning-stores.js';
+import { appendLearningRows, homeOf, readLearningHomeConfig, type CalibrationPopulation } from '../utils/learning-stores.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 export type TaskClassification = {
@@ -178,6 +178,11 @@ export interface OrchestrationPlan {
      * repo actuals: the estimate is labelled as a prior, not measured fact.
      */
     basis?: 'legacy-prior';
+    /**
+     * S4: the population the learned bands come from (repo, user, machine or
+     * legacy-prior). Absent when every band is the hardcoded constant.
+     */
+    population?: CalibrationPopulation;
     note?: string;
   };
   /** Agents requested (override / classification / roster) but not dispatchable */
@@ -2109,11 +2114,20 @@ export function planAgentSequence(
   let minTokens = 0;
   let maxTokens = 0;
   let usedLegacyPrior = false;
+  let usedLearned = false;
   for (const agent of plannedAgents) {
     const estimate = resolveAgentEstimate(learnedTable, agent.name, taskType);
     minTokens += estimate.min;
     maxTokens += estimate.max;
     if (estimate.legacyPrior) usedLegacyPrior = true;
+    if (estimate.source === 'learned') usedLearned = true;
+  }
+  // S4: name the population the learned bands come from; never pooled.
+  let learnedPopulation: CalibrationPopulation | undefined;
+  if (usedLearned) {
+    try {
+      learnedPopulation = homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir || '.'));
+    } catch { /* population label is best-effort */ }
   }
   // Add documentor estimate if included
   if (documentorAdded) {
@@ -2135,9 +2149,12 @@ export function planAgentSequence(
         min: minTokens,
         max: maxTokens,
         basis: 'legacy-prior',
-        note: 'Prior: bands learned from legacy repo actuals (cold start), not yet measured in this home',
+        population: 'legacy-prior',
+        note: 'Prior [population: legacy-prior]: bands learned from legacy repo actuals (cold start), not yet measured in this home',
       }
-      : { min: minTokens, max: maxTokens },
+      : learnedPopulation
+        ? { min: minTokens, max: maxTokens, population: learnedPopulation, note: `Learned [population: ${learnedPopulation}]: bands from this home's actuals only` }
+        : { min: minTokens, max: maxTokens },
     ...(undispatchable.length > 0 ? { undispatchable } : {}),
   };
 }

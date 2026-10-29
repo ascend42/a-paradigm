@@ -179,6 +179,15 @@ export function getClassroomToolsList() {
             type: 'string',
             description: 'Optional refined snippet to store instead of the raw correct_approach/insight',
           },
+          home: {
+            type: 'string',
+            enum: ['repo', 'user'],
+            description: "Scoped learning S3: the home the human picked at sign-off (repo = committed and shared, user = just them). Given = home_source explicit. Omit to keep the journal's home.",
+          },
+          homeConfirmed: {
+            type: 'boolean',
+            description: "The human saw the candidate's home at sign-off and kept it: records home_source explicit.",
+          },
         },
         required: ['agent', 'journalId'],
       },
@@ -349,6 +358,8 @@ export async function handleClassroomTool(
         {
           certifiedBy: args.certifiedBy as 'peer' | 'quorum' | undefined,
           refinedForm: args.refinedForm as string | undefined,
+          home: args.home === 'repo' || args.home === 'user' ? args.home : undefined,
+          homeConfirmed: args.homeConfirmed === true,
         },
       );
       return { handled: true, text: JSON.stringify(result, null, 2) };

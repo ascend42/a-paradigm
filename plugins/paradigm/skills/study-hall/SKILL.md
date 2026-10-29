@@ -19,6 +19,7 @@ This is the **unattended** half of the Classroom. Agents follow their *approved*
 ## The report (this is the gate, so make it actionable)
 End with a **diff-shaped** report the returning teacher can act on without re-reading:
 - Per agent: what was staged (the candidate insight), the scenarios probed and their result (survived / broke / poison-pill caught or missed), and the source it came from.
+- Per candidate: its home, `repo` (committed, shared) or `user` (just the human), and that it is only inferred (`home_source: inferred`). Study hall never picks a home for the human; the teacher can flip it at `/paradigm:class` sign-off.
 - A top line: N candidates staged · K agents skipped on gate-zero (stale/expired curriculum) · poison-pill catch summary.
 - Point the teacher at `/paradigm:class review` to adjudicate.
 

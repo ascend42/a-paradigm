@@ -30,6 +30,7 @@ import {
   type LearnedBand,
   type LearnedTokenTable,
 } from '../../../paradigm-mcp/src/utils/calibration-aggregate.js';
+import { populationOf } from '../../../paradigm-mcp/src/utils/learning-stores.js';
 
 export { MIN_SAMPLES, aggregateActuals, percentile };
 export type { LearnedBand, LearnedTokenTable };
@@ -55,16 +56,19 @@ export async function calibrateCommand(options: {
     return;
   }
   const { groups, samplesRead, home, otherHomes, legacySamples, coldStartPrior, learnedFile } = result;
+  // S4: every band says which population it was learned from; never pooled.
+  const population = populationOf(result.population);
+  const tag = `[population: ${population}]`;
 
   const learned = groups.filter(g => g.learned);
   const pending = groups.filter(g => !g.learned);
 
   header('Calibration — learned token-estimate table');
   kv('Samples read', String(samplesRead));
-  kv('Population', coldStartPrior ? `legacy repo rows (cold-start prior; no ${home}-home samples yet)` : `${home} home`);
-  if (!coldStartPrior && legacySamples > 0) dim(`  Legacy repo rows (separate population, not pooled): ${legacySamples}`);
-  const others = Object.entries(otherHomes).map(([h, n]) => `${h}: ${n}`);
-  if (others.length > 0) dim(`  Not pooled (other homes): ${others.join(', ')}`);
+  kv('Population', coldStartPrior ? `legacy-prior (legacy repo rows as a cold-start prior; no ${home}-home samples yet)` : home);
+  if (!coldStartPrior && legacySamples > 0) dim(`  [population: legacy-prior] ${legacySamples} legacy repo row(s), separate, not pooled`);
+  const others = Object.entries(otherHomes).map(([h, n]) => `[population: ${h}] ${n}`);
+  if (others.length > 0) dim(`  Not pooled (other populations): ${others.join(', ')}`);
   kv('Groups', String(groups.length));
   kv('Written to', learnedFile);
 
@@ -72,7 +76,7 @@ export async function calibrateCommand(options: {
     out('');
     success(`${learned.length} group(s) learned (n >= ${MIN_SAMPLES}):`);
     for (const g of learned) {
-      kv(`${g.archetype} · ${g.taskType}`, `${g.band!.min}–${g.band!.max} tokens (n=${g.band!.n})`);
+      kv(`${g.archetype} · ${g.taskType}`, `${g.band!.min}–${g.band!.max} tokens (n=${g.band!.n}) ${tag}`);
     }
   } else {
     out('');
@@ -83,7 +87,7 @@ export async function calibrateCommand(options: {
     out('');
     dim(`${pending.length} group(s) below floor (n < ${MIN_SAMPLES}) — still using the constant prior:`);
     for (const g of pending) {
-      dim(`  ${g.archetype} · ${g.taskType} (n=${g.n})`);
+      dim(`  ${g.archetype} · ${g.taskType} (n=${g.n}) ${tag}`);
     }
   }
 }

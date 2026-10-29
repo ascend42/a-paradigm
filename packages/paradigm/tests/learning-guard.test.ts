@@ -83,10 +83,24 @@ describe('learningGuardViolations (pure)', () => {
     expect(learningGuardViolations([{ path: '.paradigm/notebooks/n.yaml', content: bad, previous }]).map(v => v.rule)).toEqual(['home-not-repo']);
   });
 
-  it('blocks human_feedback without home: repo when public (the default), not when private', () => {
-    const file = { path: '.paradigm/notebooks/n.yaml', content: 'entries:\n  - id: e1\n    trigger: human_feedback\n' };
-    expect(learningGuardViolations([file]).map(x => x.rule)).toEqual(['human-feedback-public']);
-    expect(learningGuardViolations([file], { visibility: 'private' })).toEqual([]);
+  it('S3: blocks an inferred human-taught entry when public (the default), passes it when explicit or private', () => {
+    const inferred = { path: '.paradigm/notebooks/n.yaml', content: 'id: e1\nhome: repo\nhome_source: inferred\ntags: [auth, human-taught]\n' };
+    const v = learningGuardViolations([inferred]);
+    expect(v.map(x => x.rule)).toEqual(['human-feedback-public']);
+    expect(v[0].detail).toContain('confirm this lesson belongs to the repo (paradigm teach --home repo)');
+    expect(learningGuardViolations([inferred], { visibility: 'private' })).toEqual([]);
+    const explicit = { path: '.paradigm/notebooks/n.yaml', content: 'id: e1\nhome: repo\nhome_source: explicit\ntags: [auth, human-taught]\n' };
+    expect(learningGuardViolations([explicit])).toEqual([]);
+    // Not human-taught, or a legacy trigger-only entry: not this rule's business.
+    expect(learningGuardViolations([{ path: '.paradigm/notebooks/m.yaml', content: 'id: e2\nhome_source: inferred\ntags: [auth]\n' }])).toEqual([]);
+    expect(learningGuardViolations([{ path: '.paradigm/notebooks/l.yaml', content: 'id: e3\ntrigger: human_feedback\n' }])).toEqual([]);
+  });
+
+  it('S3: the human_feedback rule judges only ADDED entries; an inferred entry already in HEAD passes', () => {
+    const prev = 'id: e1\nhome_source: inferred\ntags: [human-taught]\n';
+    expect(learningGuardViolations([{ path: '.paradigm/notebooks/n.yaml', content: prev, previous: prev }])).toEqual([]);
+    // Outside the learning stores (decisions) it never applies.
+    expect(learningGuardViolations([{ path: '.paradigm/decisions/d.yaml', content: prev }])).toEqual([]);
   });
 
   it("machine paths: only this machine's own paths; a generic /Users/x/ path passes", () => {
@@ -121,9 +135,9 @@ describe.skipIf(!hasGit)('learning-guard on staged files (git)', () => {
     expect(runLearningGuard(root, files)).toEqual([]);
   });
 
-  it('a new home:user row in nominations is blocked; a public human_feedback entry is blocked', () => {
+  it('a new home:user row in nominations is blocked; a public inferred human-taught entry is blocked', () => {
     stage('.paradigm/events/nominations.jsonl', '{"id":"n1","home":"user"}\n');
-    stage('.paradigm/notebooks/n.yaml', 'id: n\ntrigger: human_feedback\n');
+    stage('.paradigm/notebooks/n.yaml', 'id: n\nhome_source: inferred\ntags: [human-taught]\n');
     expect(runLearningGuard(root, stagedGuardFiles(root)).map(v => v.rule).sort()).toEqual(['home-not-repo', 'human-feedback-public']);
     fs.writeFileSync(path.join(root, '.paradigm', 'config.yaml'), 'learning:\n  visibility: private\n');
     expect(runLearningGuard(root, stagedGuardFiles(root)).map(v => v.rule)).toEqual(['home-not-repo']);

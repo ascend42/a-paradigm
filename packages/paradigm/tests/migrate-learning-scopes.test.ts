@@ -73,6 +73,34 @@ describe('migrate learning-stores --scopes', () => {
     expect(readPendingVerdicts(root).map(v => v.nominationId).sort()).toEqual(['n1', 'n3']);
   });
 
+  it('S3: restamps S1 raw-username authors with the hashed author, then migrates them as own rows; idempotent', async () => {
+    const raw = os.userInfo().username;
+    const repoFile = path.join(root, '.paradigm', 'events', 'verdicts.jsonl');
+    fs.mkdirSync(path.dirname(repoFile), { recursive: true });
+    fs.writeFileSync(repoFile, [
+      { timestamp: 't1', type: 'user-verdict', nominationId: 'n1', author: raw },
+      { timestamp: 't2', type: 'user-verdict', nominationId: 'n2', author: 'bob' },
+    ].map(r => JSON.stringify(r)).join('\n') + '\n');
+    const userFile = pathFor('verdicts', 'user', root);
+    fs.mkdirSync(path.dirname(userFile), { recursive: true });
+    fs.writeFileSync(userFile, JSON.stringify({ timestamp: 't0', nominationId: 'n0', author: raw, home: 'user' }) + '\n');
+    const before = fs.readFileSync(repoFile, 'utf8');
+
+    const dry = await migrateLearningScopes(root);
+    expect(dry.steps.map(s => [s.kind, s.rows, s.status])).toEqual([['restamp-authors', 2, 'planned']]);
+    expect(fs.readFileSync(repoFile, 'utf8')).toBe(before);
+
+    const applied = await migrateLearningScopes(root, { apply: true, yes: true });
+    expect(applied.steps.map(s => [s.kind, s.rows, s.status])).toEqual([['restamp-authors', 2, 'done'], ['own-rows', 1, 'done']]);
+    expect(rows(userFile).map(r => [r.nominationId, r.author])).toEqual([['n0', 'me'], ['n1', 'me']]);
+    expect(rows(repoFile).map(r => [r.author, r.migrated === true])).toEqual([['me', true], ['bob', false]]);
+    const repoBefore = fs.readFileSync(repoFile, 'utf8');
+    const again = await migrateLearningScopes(root, { apply: true, yes: true });
+    expect(again.steps).toEqual([]);
+    expect(fs.readFileSync(repoFile, 'utf8')).toBe(repoBefore);
+    expect(JSON.stringify(rows(userFile))).not.toContain(`"${raw}"`);
+  });
+
   it('offers no-git user records back to the repo after git init', async () => {
     const prev = process.env.PARADIGM_LEARNING_ASSUME_REPO;
     delete process.env.PARADIGM_LEARNING_ASSUME_REPO;
