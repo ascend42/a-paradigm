@@ -45,15 +45,19 @@ final class Server {
     let presence: (String) throws -> LAContext
     let signer: (KeyClass, String, LAContext, [Data]) throws -> [String]
     let session: SessionProbe
+    /// 1.11.0 (G-HLP-03): the caller check for the ops that need no presence (Caller.swift).
+    let caller: CallerGate
 
     init(custody: Custody = Custody(),
          presence: @escaping (String) throws -> LAContext = evaluatePresence,
          signer: @escaping (KeyClass, String, LAContext, [Data]) throws -> [String] = { k, g, ctx, msgs in try signAll(try loadPrivateKey(k, g, context: ctx), msgs) },
-         session: SessionProbe = CGSessionProbe()) {
+         session: SessionProbe = CGSessionProbe(),
+         caller: CallerGate = CallerGate(probe: SystemCallerProbe())) {
         self.custody = custody
         self.presence = presence
         self.signer = signer
         self.session = session
+        self.caller = caller
     }
 
     func handle(_ req: Json) throws -> Json {
@@ -61,7 +65,7 @@ final class Server {
         switch op {
         case "info":
             let held = custody.sync { (custody.unlocks.count, custody.arms.count) }
-            return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": held.0, "arms": held.1]
+            return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": held.0, "arms": held.1, "devKernel": helperAcceptsDevKernel]
 
         case "presence.available":
             // #setup-preflight (T-2026-10-19-005 MVP-b): canEvaluatePolicy only asks whether a prompt COULD run; it never shows one

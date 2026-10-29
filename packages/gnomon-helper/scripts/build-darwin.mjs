@@ -3,7 +3,10 @@
 //
 //   node packages/gnomon-helper/scripts/build-darwin.mjs            signed (Developer ID, founder's Mac)
 //   node packages/gnomon-helper/scripts/build-darwin.mjs --unsigned bundle only (CI, any Mac)
-//   … [--out <dir>] [--profile <path>]
+//   … [--out <dir>] [--profile <path>] [--dev-kernel]
+//   --dev-kernel: a DEV helper (-Xswiftc -DGNOMON_HELPER_DEV) whose caller check also accepts gnomon.kernel.dev
+//   (helper 1.11.0, G-HLP-03). Never used for a release: release-darwin.mjs builds without it, and `info` reports
+//   `devKernel: true` for a dev helper so a release check can refuse one.
 //
 // Steps (the recipe probe P04 proved, packages/gnomon/probes/_shared/signing.mjs):
 //   1. swift build -c release (SwiftPM, packages/gnomon-helper/darwin)
@@ -30,6 +33,7 @@ const value = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const unsigned = flag('--unsigned');
+const devKernel = flag('--dev-kernel');
 const outDir = path.resolve(value('--out') ?? path.join(PKG_ROOT, 'bin', 'darwin'));
 const profilePath = value('--profile') ?? PROFILE_PATH;
 
@@ -38,9 +42,10 @@ const say = (s) => process.stdout.write(`${s}\n`);
 // 1. compile
 const swiftDir = path.join(PKG_ROOT, 'darwin');
 say('swift build -c release …');
-const sb = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir], { timeout: 600_000 });
+const devFlags = devKernel ? ['-Xswiftc', '-DGNOMON_HELPER_DEV'] : [];
+const sb = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir, ...devFlags], { timeout: 600_000 });
 if (sb.status !== 0) fail(`swift build failed:\n${(sb.stderr || sb.stdout).slice(-2000)}`);
-const binPath = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir, '--show-bin-path']).stdout;
+const binPath = run('/usr/bin/xcrun', ['swift', 'build', '-c', 'release', '--package-path', swiftDir, ...devFlags, '--show-bin-path']).stdout;
 const built = path.join(binPath, EXE_NAME);
 const version = /gnomon-helper (\S+)/.exec(run(built, ['--version']).stdout)?.[1];
 if (!version) fail('the built helper does not answer --version');
