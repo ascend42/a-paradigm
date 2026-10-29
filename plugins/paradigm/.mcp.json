@@ -2,11 +2,9 @@
   "mcpServers": {
     "paradigm": {
       "type": "stdio",
-      "command": "npx",
+      "command": "node",
       "args": [
-        "--package=@a-company/paradigm",
-        "-y",
-        "paradigm-mcp",
+        "${CLAUDE_PLUGIN_ROOT}/scripts/paradigm-mcp-launch.cjs",
         "${CLAUDE_PROJECT_DIR}"
       ],
       "env": {

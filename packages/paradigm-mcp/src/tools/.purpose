@@ -264,7 +264,7 @@ components:
       - neverland
       - mcp
   CaptainTools:
-    description: '3 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt), paradigm_captain_debrief (post-task coverage audit: .purpose stub creation, pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid; v7 §3 adds a postflight-liveness check that self-heals — runs runPostflightLearning itself when the settlement-liveness probe shows no postflight ran, and on self-heal failure proposes an ADVISE block, never guard), and paradigm_captain_board (#captain-board — Cid''s owned run-DAG read+write artifact: read assembles the live orchestration DAG from non-terminal epic tasks + their stage-children ordered by stage/dependsOn, plus ripple-ranked unclaimed open tasks and a summary; claim writes a task claimant keeping status open with a human/peer-over-archetype override guard; advance records a Cid-owned blocked_on reason without changing status — v7.0 has no blocked status). Core-tier always loaded. Cid closes navigation; Loid closes learning. Ownership boundary: Cid writes claimant/blocked_on (present tense); Loid writes settledAt (past tense) — they never co-write a field.'
+    description: '3 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt), paradigm_captain_debrief (post-task coverage audit via #purpose-coverage — own or documenting-ancestor .purpose, placeholder stubs never count; uncovered dirs become one purpose-coverage paradigm task, never written stubs; new-symbol pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid; v7 §3 adds a postflight-liveness check that self-heals — runs runPostflightLearning itself when the settlement-liveness probe shows no postflight ran, and on self-heal failure proposes an ADVISE block, never guard), and paradigm_captain_board (#captain-board — Cid''s owned run-DAG read+write artifact: read assembles the live orchestration DAG from non-terminal epic tasks + their stage-children ordered by stage/dependsOn, plus ripple-ranked unclaimed open tasks and a summary; claim writes a task claimant keeping status open with a human/peer-over-archetype override guard; advance records a Cid-owned blocked_on reason without changing status — v7.0 has no blocked status). Core-tier always loaded. Cid closes navigation; Loid closes learning. Ownership boundary: Cid writes claimant/blocked_on (present tense); Loid writes settledAt (past tense) — they never co-write a field.'
     type: tool-group
     tags:
       - core
@@ -278,7 +278,7 @@ components:
     signals:
       - '!cid-brief-produced'
       - '!cid-debrief-complete'
-      - '!coverage-stub-created'
+      - '!coverage-gap-queued'
       - '!session-insights-ready'
       - '!cid-claim-written'
       - '!cid-postflight-self-healed'
@@ -316,6 +316,34 @@ components:
       - '#paradigm-arch-status'
       - '#paradigm-arch-diagram'
     file: packages/paradigm-mcp/src/tools/arch.ts
+  captain:
+    description: >-
+      Cid's captain tool module (src/tools/captain.ts): brief, debrief and board.
+      Debrief coverage (T-2026-10-27-003) scores each touched directory with
+      purpose-core resolvePurposeCoverage (#purpose-coverage): covered when its own
+      .purpose, or an ancestor .purpose that documents it (path/files/tests/anchors
+      pointing into or containing it, or a file mention), is real documentation.
+      Placeholder stubs (Cid's old "# Auto-generated .purpose stub" header, the stop
+      hook's auto-fix stub, all-TODO descriptions, under 50 chars) never count and are
+      reported as placeholderPurposes. The debrief writes NO .purpose files: truly
+      uncovered dirs go to uncoveredDirs, one paradigm task tagged purpose-coverage
+      (#purpose-coverage-queue, the createTask writer paradigm_task_create uses,
+      deduped against active purpose-coverage tasks; coverageTaskId). That task is the
+      only record of the gap: nothing is appended to .pending-review for it (the
+      Stop hook deletes that file every turn and reads it as edited file paths).
+      Covered dirs with new symbols still get a captain-debrief-new-symbols entry. coverageScore before == after (nothing is written);
+      coverageAdded is kept for compatibility and is always empty. The brief's
+      coverage score uses the same resolver.
+    file: src/tools/captain.ts
+    type: tool
+    tags: [orchestration, coverage, cid]
+    signals:
+      - '!coverage-gap-queued'
+    components:
+      - '#purpose-coverage'
+    tests:
+      - src/tools/captain-debrief-coverage.test.ts
+      - src/tools/captain-board.test.ts
   captain-board:
     description: v7 §3 — paradigm_captain_board, Cid's owned run-DAG artifact (read|claim|advance). read assembles the live orchestration DAG from non-terminal epic tasks + their stage children (ordered by stage/dependsOn) plus ripple-ranked unclaimed open tasks; claim writes a task claimant keeping status open (human/peer override archetype); advance records a Cid-owned blocked_on reason. Session-open proposes claimants (a real per-session mutation, replacing the anonymous task dump); session-close debrief reads the settlement-liveness probe and self-heals (runs postflight itself, advise-not-guard). Resolves the audit's inert-Captain finding.
     file: src/tools/captain.ts

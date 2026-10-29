@@ -1,12 +1,13 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
-name: packages
-description: "TODO: describe what this directory/module does"
-context:
-  - "Stub created by Cid during coverage audit — update with real context"
-# Key files touched:
-# - loom (merged to main)
-components:
-  packages:
-    description: "TODO: describe this component"
-    tags: []
+version: 2.0.0
+description: >-
+  The npm workspaces of the a-paradigm monorepo. Each package carries its own
+  .purpose with its symbols; this file only maps the folders. Paradigm CLI and
+  MCP: paradigm/, paradigm-mcp/, paradigm-vscode/, logger/, runtime/. Symbol and
+  file cores: purpose/core, premise/core, portal/, probe/, university-core/ and
+  the university/ content pack. Gnomon (the 8.0 kernel and Mac app): gnomon/,
+  gnomon-contracts/, gnomon-gui/, gnomon-wrapper/, gnomon-helper/,
+  gnomon-local/, gnomon-voice/, gnomon-mod-sdk/, gnomon-mods/ and the
+  gnomon-darwin-arm64/ platform package. Warpline: warpline/ and
+  warpline-action/. Sentinel: sentinel/, sentinel-rs/, sentinel-web/. Also
+  conductor/ and the site/. Build order is in the root package.json
+  (build:core, build:gnomon, build:packages, build:cli).

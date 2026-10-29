@@ -1,0 +1,21 @@
+version: 2.0.0
+description: >-
+  The Paradigm Cursor plugin: deterministic enforcement hooks, the MCP tools and
+  compliance skills for Cursor. Cursor's marketplace does not take third-party
+  plugins yet, so README.md documents the manual install.
+components:
+  cursor-plugin:
+    description: >-
+      Plugin layout. hooks/hooks.json maps Cursor hook events to the scripts.
+      scripts/*.sh (scripts/paradigm-common.sh, scripts/paradigm-stop.sh,
+      scripts/paradigm-pretooluse.sh and the rest) are COPIES generated from
+      packages/paradigm/src/commands/hooks/scripts by
+      packages/paradigm/scripts/generate-hooks.mjs; edit the sources there.
+      skills/ holds the lore, preflight, postflight and scan skills.
+    type: config
+    files:
+      - hooks/hooks.json
+      - scripts/paradigm-common.sh
+    components:
+      - '#paradigm-hooks'
+    tags: [plugin, cursor, hooks]

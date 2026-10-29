@@ -19,11 +19,11 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-/** A copy of just the three package.json files the lockstep covers. */
+/** A copy of just the four package.json files the lockstep covers. */
 function fixtureRepo(): string {
   const d = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'gnomon-lockstep-')));
   dirs.push(d);
-  for (const p of ['gnomon', 'paradigm', 'gnomon-darwin-arm64']) {
+  for (const p of ['gnomon', 'paradigm', 'paradigm-mcp', 'gnomon-darwin-arm64']) {
     mkdirSync(path.join(d, 'packages', p), { recursive: true });
     cpSync(path.join(REPO, 'packages', p, 'package.json'), path.join(d, 'packages', p, 'package.json'));
   }
@@ -46,12 +46,14 @@ describe('gnomon version lockstep', () => {
     edit('gnomon-darwin-arm64', (j) => (j.version = '7.9.9'));
     edit('gnomon', (j) => (j.optionalDependencies['@a-company/gnomon-darwin-arm64'] = '^8.0.0'));
     edit('paradigm', (j) => delete j.dependencies['@a-company/gnomon']);
+    edit('paradigm-mcp', (j) => (j.dependencies['@a-company/gnomon'] = '8.0.0'));
     const drift = sync.gnomonVersionDrift(d).map((x: { field: string }) => x.field).sort();
-    expect(drift).toEqual(['dependencies.@a-company/gnomon', 'optionalDependencies.@a-company/gnomon-darwin-arm64', 'version']);
-    expect(sync.syncGnomonVersions(d)).toHaveLength(3);
+    expect(drift).toEqual(['dependencies.@a-company/gnomon', 'dependencies.@a-company/gnomon', 'optionalDependencies.@a-company/gnomon-darwin-arm64', 'version']);
+    expect(sync.syncGnomonVersions(d)).toHaveLength(4);
     expect(sync.gnomonVersionDrift(d)).toEqual([]);
     const want = read('packages/gnomon/package.json').version;
     expect(JSON.parse(readFileSync(path.join(d, 'packages', 'paradigm', 'package.json'), 'utf8')).dependencies['@a-company/gnomon']).toBe(want);
+    expect(JSON.parse(readFileSync(path.join(d, 'packages', 'paradigm-mcp', 'package.json'), 'utf8')).dependencies['@a-company/gnomon']).toBe(want);
   });
 });
 

@@ -21,13 +21,11 @@
  * statically.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { log } from './mcp-logger.js';
 import { loadTask, loadTasks, type Task, type TaskStatus } from './task-loader.js';
 import { recordOrchestrationCompletion } from './orchestration-marker.js';
+import { appendLearningRows } from './learning-stores.js';
 
-const LIVENESS_FILE = '.paradigm/events/settlement-liveness.jsonl';
 
 /** Default staleness window for the reaper, in minutes. Env-overridable. */
 const DEFAULT_STALE_MINUTES = 30;
@@ -75,9 +73,8 @@ interface LivenessRecord {
 
 function appendLiveness(rootDir: string, record: LivenessRecord): void {
   try {
-    const filePath = path.join(rootDir, LIVENESS_FILE);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.appendFileSync(filePath, JSON.stringify(record) + '\n', 'utf8');
+    // Machine home (scoped learning S2); the legacy repo log is frozen, still read.
+    appendLearningRows('settlement-liveness', rootDir, [record]);
   } catch (err) {
     // The probe is best-effort; a probe-write failure must never break settlement.
     log.component('#task-settlement').warn('Failed to append liveness record', {

@@ -76,6 +76,9 @@ beforeAll(() => {
     git(wt, 'init', '-q');
   }
   fs.appendFileSync(path.join(root, 'packages', 'p0', 'src', 'a.ts'), '// edit\n');
+  // session 't' edited a.ts through Write/Edit (the touched-files ledger the Stop hook judges)
+  fs.mkdirSync(path.join(root, '.paradigm', '.sessions'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.paradigm', '.sessions', 't.touched'), 'packages/p0/src/a.ts\n');
   // Stub CLI: fast checks, but every "fire-and-forget" verb sleeps 10 s. If any
   // hook backgrounds one without detaching it, the pipe stays open and the
   // EOF-based timing below blows the budget.

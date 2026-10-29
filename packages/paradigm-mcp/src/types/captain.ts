@@ -93,7 +93,17 @@ export interface SessionInsights {
 }
 
 export interface DebriefReport {
+  /**
+   * @deprecated Always empty. The debrief no longer writes .purpose stubs into
+   * the working tree; uncovered directories are in `uncoveredDirs`.
+   */
   coverageAdded: string[];
+  /** Touched directories no .purpose documents (own or ancestor; placeholders excluded). */
+  uncoveredDirs: string[];
+  /** The paradigm task created for `uncoveredDirs` (absent when none, or all already queued). */
+  coverageTaskId?: string;
+  /** Placeholder .purpose stubs met while scoring; they never count as coverage. */
+  placeholderPurposes: string[];
   delegatedToDocumentor: string[];
   loreEntryId: string;
   coverageScore: {

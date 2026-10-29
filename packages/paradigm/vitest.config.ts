@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
+    // Scoped learning: PARADIGM_LEARNING_HOME → empty temp dir per test file.
+    setupFiles: ['./vitest.setup.ts'],
     include: [
       'src/**/*.test.ts',
       'tests/**/*.test.ts',

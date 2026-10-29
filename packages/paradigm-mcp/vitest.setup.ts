@@ -12,6 +12,16 @@ import { afterAll } from 'vitest';
 const isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-brain-home-'));
 process.env.PARADIGM_BRAIN_HOME = isolated;
 
+// Scoped learning: per-repo user and machine stores (verdicts, nominations,
+// promotion-decisions, ...) resolve under PARADIGM_LEARNING_HOME, so no test
+// writes into the real ~/.paradigm/projects.
+const learningHome = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-learning-home-'));
+process.env.PARADIGM_LEARNING_HOME = learningHome;
+// Temp roots are not git repositories; keep their repo home (review F4 rule).
+// The scoped-learning tests unset this to exercise the no-repo-home path.
+process.env.PARADIGM_LEARNING_ASSUME_REPO = '1';
+
 afterAll(() => {
   fs.rmSync(isolated, { recursive: true, force: true });
+  fs.rmSync(learningHome, { recursive: true, force: true });
 });

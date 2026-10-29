@@ -42,7 +42,7 @@ import {
   PurposeParseCache,
 } from '@a-company/purpose-core';
 import { findGateFiles } from '@a-company/portal-core';
-import { aggregateFromDirectory } from './aggregator.js';
+import { aggregateFromDirectory, INDEX_DISCOVERY } from './aggregator.js';
 import { buildSymbolIndex } from './symbol-index.js';
 import type { AggregationResult, SymbolIndex } from './types.js';
 
@@ -154,7 +154,7 @@ function sameStamps(a: Stamp[] | null, b: Stamp[]): boolean {
 
 async function refresh(absRoot: string, state: RootState): Promise<LiveIndex> {
   const [purposeFiles, portalFiles] = await Promise.all([
-    findPurposeFiles(absRoot),
+    findPurposeFiles(absRoot, INDEX_DISCOVERY),
     findGateFiles(absRoot),
   ]);
   const purposeStamps = stampAll(purposeFiles);
@@ -185,7 +185,7 @@ async function refresh(absRoot: string, state: RootState): Promise<LiveIndex> {
   const result = await aggregateFromDirectory(absRoot, {
     loadPurposeFiles: async (sourcePath) =>
       parsePurposeFilesCached(
-        path.resolve(sourcePath) === absRoot ? purposeFiles : await findPurposeFiles(sourcePath),
+        path.resolve(sourcePath) === absRoot ? purposeFiles : await findPurposeFiles(sourcePath, INDEX_DISCOVERY),
         cache,
       ),
     findPortalFiles: async (sourcePath) =>

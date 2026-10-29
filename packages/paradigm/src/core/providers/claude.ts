@@ -7,7 +7,8 @@
  *
  * Supports:
  * - Streaming responses
- * - Tool use
+ * - Tool use (claude-tools.ts: paths confined to the working directory,
+ *   run_command behind ^command-execution-consent, every command logged)
  * - MCP server integration
  * - Budget tracking
  */
@@ -21,6 +22,10 @@ import {
   MODEL_PRICING,
 } from '../agent-provider.js';
 import { AgentDefinition } from '../../commands/team/types.js';
+import * as path from 'path';
+import { CommandGate, CommandGateDeps, userConfigPath, userHomeDir } from './command-consent.js';
+import { ToolContext, commandLogPathFor, executeTool, toolDefinitions } from './claude-tools.js';
+import * as fs from 'fs';
 
 // ============================================================================
 // Types
@@ -81,6 +86,52 @@ const MODEL_IDS: Record<AgentModel, string> = {
 };
 
 // ============================================================================
+// Run root check
+// ============================================================================
+
+/**
+ * A run's working directory may not be the filesystem root, the user's home,
+ * or any folder above home: the tools' confinement would then cover ~/.ssh,
+ * shell rc files and ~/.paradigm. Returns a reason, or null when fine.
+ */
+export function unsafeRunRoot(workingDirectory: string, home: string): string | null {
+  let root: string;
+  let realHome: string;
+  try {
+    root = fs.realpathSync.native(workingDirectory);
+  } catch {
+    return `Working directory ${workingDirectory} does not exist.`;
+  }
+  try {
+    realHome = fs.realpathSync.native(home);
+  } catch {
+    realHome = path.resolve(home);
+  }
+  if (path.parse(root).root === root) {
+    return `Refusing to run an agent with the filesystem root (${root}) as its working directory.`;
+  }
+  const rel = path.relative(root, realHome);
+  if (rel === '' || !(rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel))) {
+    return `Refusing to run an agent with your home folder, or a folder above it (${root}), as its working directory. Run it from a project folder.`;
+  }
+  return null;
+}
+
+/**
+ * Absolute paths write_file never touches: ~/.paradigm, ~/.claude, the command
+ * log, and the consent config's real location (it may be a symlink elsewhere).
+ */
+export function deniedWritesFor(home: string, commandLogPath: string, configPath?: string): string[] {
+  const denied = [path.join(home, '.paradigm'), path.join(home, '.claude'), commandLogPath];
+  try {
+    denied.push(fs.realpathSync.native(configPath ?? userConfigPath(home)));
+  } catch {
+    // No config yet.
+  }
+  return denied;
+}
+
+// ============================================================================
 // Claude Provider
 // ============================================================================
 
@@ -90,7 +141,8 @@ export class ClaudeAgentProvider implements AgentProvider {
   private apiKey: string | null = null;
   private baseUrl = 'https://api.anthropic.com/v1';
 
-  constructor() {
+  /** @param consentDeps test seam for ^command-execution-consent (config path, prompt, TTY). */
+  constructor(private readonly consentDeps: CommandGateDeps = {}) {
     this.apiKey = process.env.ANTHROPIC_API_KEY || null;
   }
 
@@ -136,6 +188,31 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Build system prompt
     const systemPrompt = this.buildSystemPrompt(agent, options);
 
+    // Tools: paths confined to the working directory; run_command behind
+    // ^command-execution-consent. One gate per run so the answer to the
+    // consent question applies to the rest of the run.
+    const workingDirectory = options.workingDirectory || process.cwd();
+    const home = this.consentDeps.homeDir ?? userHomeDir();
+    const rootProblem = unsafeRunRoot(workingDirectory, home);
+    if (rootProblem) {
+      yield { type: 'error', content: rootProblem, timestamp: new Date().toISOString() };
+      return;
+    }
+    const gate = new CommandGate(options.commandPolicy, { ...this.consentDeps, workingDirectory });
+    const commandLogPath = commandLogPathFor(workingDirectory, home);
+    const toolCtx: ToolContext = {
+      workingDirectory,
+      gate,
+      // Snapshot: a setting flipped to true mid-run must not enable it.
+      commandsOffered: gate.isOffered(),
+      commandLogPath,
+      agent: agent.name,
+      timeout: options.timeout,
+      mcpServerPath: options.mcpServerPath,
+      deniedWrites: deniedWritesFor(home, commandLogPath, this.consentDeps.configPath),
+      reviewWrites: new Set<string>(),
+    };
+
     // Track conversation
     const messages: AnthropicMessage[] = [
       { role: 'user', content: options.task },
@@ -154,7 +231,7 @@ export class ClaudeAgentProvider implements AgentProvider {
 
       try {
         // Make streaming API call
-        const response = await this.streamRequest(modelId, systemPrompt, messages, options);
+        const response = await this.streamRequest(modelId, systemPrompt, messages, options, toolCtx);
 
         // Process stream
         let assistantContent: ContentBlock[] = [];
@@ -216,7 +293,7 @@ export class ClaudeAgentProvider implements AgentProvider {
               });
 
               // Execute tools and add results
-              const toolResults = await this.executeTools(assistantContent, options);
+              const toolResults = await this.executeTools(assistantContent, toolCtx);
               messages.push({
                 role: 'user',
                 content: toolResults,
@@ -264,10 +341,15 @@ export class ClaudeAgentProvider implements AgentProvider {
       }
     }
 
-    // Final message
+    // Final message. Allowed-but-sensitive writes (#write-guard) are listed
+    // for the user to review.
+    const reviewWrites = [...(toolCtx.reviewWrites ?? [])];
     yield {
       type: 'done',
-      content: 'Agent completed',
+      content: reviewWrites.length > 0
+        ? `Agent completed. Review these writes: ${reviewWrites.join(', ')}`
+        : 'Agent completed',
+      ...(reviewWrites.length > 0 ? { reviewWrites } : {}),
       usage: totalUsage,
       timestamp: new Date().toISOString(),
     };
@@ -317,7 +399,8 @@ export class ClaudeAgentProvider implements AgentProvider {
     model: string,
     system: string,
     messages: AnthropicMessage[],
-    options: SpawnOptions
+    options: SpawnOptions,
+    toolCtx: ToolContext
   ): AsyncIterable<StreamEvent> {
     const response = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
@@ -332,7 +415,9 @@ export class ClaudeAgentProvider implements AgentProvider {
         system,
         messages,
         stream: true,
-        tools: this.getAvailableTools(options),
+        // Rebuilt every request: a "no" to the consent question removes
+        // run_command from the next turn.
+        tools: toolDefinitions(toolCtx),
       }),
     });
 
@@ -372,89 +457,9 @@ export class ClaudeAgentProvider implements AgentProvider {
     }
   }
 
-  private getAvailableTools(options: SpawnOptions): unknown[] {
-    // Define tools available to agents
-    // In a full implementation, these would be actual Claude Code tools
-    const tools: Array<{
-      name: string;
-      description: string;
-      input_schema: {
-        type: string;
-        properties: Record<string, { type: string; description: string }>;
-        required: string[];
-      };
-    }> = [
-      {
-        name: 'read_file',
-        description: 'Read a file from the filesystem',
-        input_schema: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: 'Path to the file' },
-          },
-          required: ['path'],
-        },
-      },
-      {
-        name: 'write_file',
-        description: 'Write content to a file',
-        input_schema: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: 'Path to the file' },
-            content: { type: 'string', description: 'Content to write' },
-          },
-          required: ['path', 'content'],
-        },
-      },
-      {
-        name: 'search_files',
-        description: 'Search for files matching a pattern',
-        input_schema: {
-          type: 'object',
-          properties: {
-            pattern: { type: 'string', description: 'Glob pattern' },
-            path: { type: 'string', description: 'Directory to search in' },
-          },
-          required: ['pattern'],
-        },
-      },
-      {
-        name: 'run_command',
-        description: 'Run a shell command',
-        input_schema: {
-          type: 'object',
-          properties: {
-            command: { type: 'string', description: 'Command to run' },
-            cwd: { type: 'string', description: 'Working directory' },
-          },
-          required: ['command'],
-        },
-      },
-    ];
-
-    // Add MCP tools if configured
-    if (options.mcpServerPath) {
-      tools.push({
-        name: 'mcp_call',
-        description: 'Call an MCP tool',
-        input_schema: {
-          type: 'object',
-          properties: {
-            tool: { type: 'string', description: 'MCP tool name' },
-            args: { type: 'object', description: 'Tool arguments' },
-          },
-          required: ['tool'],
-        },
-      });
-    }
-
-    return tools;
-  }
-
   private async executeTools(
     content: ContentBlock[],
-    options: SpawnOptions
+    toolCtx: ToolContext
   ): Promise<ContentBlock[]> {
     const results: ContentBlock[] = [];
 
@@ -463,7 +468,7 @@ export class ClaudeAgentProvider implements AgentProvider {
         let result: string;
 
         try {
-          result = await this.executeTool(block.name, block.input || {}, options);
+          result = await executeTool(block.name, block.input || {}, toolCtx);
         } catch (error) {
           result = `Error: ${error instanceof Error ? error.message : String(error)}`;
         }
@@ -477,58 +482,5 @@ export class ClaudeAgentProvider implements AgentProvider {
     }
 
     return results;
-  }
-
-  private async executeTool(
-    name: string,
-    input: Record<string, unknown>,
-    options: SpawnOptions
-  ): Promise<string> {
-    const cwd = options.workingDirectory || process.cwd();
-    const { execSync } = await import('child_process');
-    const fs = await import('fs');
-    const path = await import('path');
-    const { glob } = await import('glob');
-
-    switch (name) {
-      case 'read_file': {
-        const filePath = path.resolve(cwd, input.path as string);
-        return fs.readFileSync(filePath, 'utf-8');
-      }
-
-      case 'write_file': {
-        const filePath = path.resolve(cwd, input.path as string);
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(filePath, input.content as string);
-        return `Written to ${filePath}`;
-      }
-
-      case 'search_files': {
-        const searchPath = input.path ? path.resolve(cwd, input.path as string) : cwd;
-        const files = await glob(input.pattern as string, { cwd: searchPath });
-        return files.join('\n');
-      }
-
-      case 'run_command': {
-        const cmdCwd = input.cwd ? path.resolve(cwd, input.cwd as string) : cwd;
-        const output = execSync(input.command as string, {
-          cwd: cmdCwd,
-          encoding: 'utf-8',
-          timeout: options.timeout || 30000,
-        });
-        return output;
-      }
-
-      case 'mcp_call': {
-        // Placeholder for MCP integration
-        return `MCP tool ${input.tool} called with ${JSON.stringify(input.args)}`;
-      }
-
-      default:
-        return `Unknown tool: ${name}`;
-    }
   }
 }

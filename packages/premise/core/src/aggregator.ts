@@ -43,6 +43,13 @@ export interface AggregateOptions {
 }
 
 /**
+ * Discovery options for the symbol index (T-2026-10-27-003): gitignored build
+ * and release output (e.g. a packages/gnomon/release/Gnomon.app copy of a
+ * .purpose) is never indexed, so it can never win duplicate-symbol resolution.
+ */
+export const INDEX_DISCOVERY = Object.freeze({ respectGitignore: true });
+
+/**
  * Aggregate all symbols from a premise configuration
  */
 export async function aggregateFromPremise(
@@ -50,7 +57,8 @@ export async function aggregateFromPremise(
   rootDir: string,
   options: AggregateOptions = {},
 ): Promise<AggregationResult> {
-  const loadPurposeFiles = options.loadPurposeFiles ?? getAllPurposeFiles;
+  const loadPurposeFiles =
+    options.loadPurposeFiles ?? ((sourcePath: string) => getAllPurposeFiles(sourcePath, INDEX_DISCOVERY));
   const findPortalFiles = options.findPortalFiles ?? findGateFiles;
   const symbols: SymbolEntry[] = [];
   const errors: AggregationError[] = [];

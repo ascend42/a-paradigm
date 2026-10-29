@@ -27,6 +27,18 @@ components:
       - src/tools/family-op-annotations.test.ts
       - src/tools/staged-ops.test.ts
       - src/utils/staged-guard.test.ts
+  purpose-coverage-queue:
+    description: >-
+      #purpose-coverage-queue: purpose-coverage-queue.ts (T-2026-10-27-003).
+      queueCoverageGapTask(rootDir, dirs, {source, placeholders, tags}) files
+      directories no .purpose documents as ONE open paradigm task tagged
+      purpose-coverage (createTask, the writer paradigm_task_create uses),
+      skipping dirs an active purpose-coverage task already names. Shared by
+      #captain's debrief and `paradigm purpose coverage --queue` (the Stop
+      hook under PARADIGM_AUTO_FIX=1). Replaces every .purpose stub writer.
+    path: purpose-coverage-queue.ts
+    type: utility
+    tags: [coverage, tasks]
   plugin-update-checker:
     description: >-
       #plugin-update-checker: detects stale Claude Code plugins (marketplace clones vs remote, cached
@@ -127,7 +139,7 @@ components:
     tags:
       - orchestration
   notebook-loader:
-    description: 'CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count. The Classroom (TD-2026-06-19-007): reviseDown is the fail-side mutation (bumps appliedAndBrokeCount, lowers confidence, captures the "X except Y" refinement exception mechanically — prose authored at gated /paradigm:class refine, dedup by sourceFailureId); listAllAgentNotebookEntries + decayUnusedEntry are the decay-pass enumerate/mutate seams.'
+    description: 'CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count. The Classroom (TD-2026-06-19-007): reviseDown is the fail-side mutation (bumps appliedAndBrokeCount, lowers confidence, captures the "X except Y" refinement exception mechanically — prose authored at gated /paradigm:class refine, dedup by sourceFailureId); listAllAgentNotebookEntries + decayUnusedEntry are the decay-pass enumerate/mutate seams. S4: findLearningConflicts(root) reports repo and user entries of one agent on the same concept key (pickSlugConcept, the key ids derive from) with different ids and different snippets, for Loid; report only, never resolves.'
     type: loader
     tags:
       - feature
@@ -146,7 +158,7 @@ components:
       - classroom
       - learning-loop
   classroom-fail-side:
-    description: 'The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios.'
+    description: 'The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios. S2: certificationsByHome splits certs into one population per home plus legacy repo rows; the doctor repeat-failure rate is computed per population, never pooled.'
     type: service
     anchors:
       - field-failures.ts:1-290
@@ -294,7 +306,7 @@ components:
       - decisions
       - v6.0
   nomination-engine:
-    description: 'Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. 7.12.0: `work-completed` events never nominate (NON_NOMINATING_EVENT_TYPES, D1 — they stay in stream.jsonl). Journal-to-notebook promotion (autoPromoteJournalEntries — pattern_discovered + human_feedback) is gated by the BELIEF-DELTA gate decidePromotion() with configurable bands loadPromotionBands() (config.yaml learning.promotion.{floor,deltaMin,epsilon,novelBar}; defaults 0.7/0.10/0.05/0.8, uncalibrated) — prior from notebookPrior (never journal confidence_before); absolute 0.8 survives only as the novel-concept fallback; human_feedback is floor-only; each candidate appends a promotion-decisions.jsonl row with gate:belief-delta-v1, reason, shadow absoluteWouldPromote, after:null when missing (kills the ?? 0 artifact); a small rise (epsilon <= delta < deltaMin) is reason below-delta, distinct from hold-silence (|delta| < epsilon); the shadow bar is LEGACY_ABSOLUTE_BAR; certifiedBy:gate, or certifiedBy:human for human_feedback promotions. The GATED single-entry path (gatedPromoteJournalEntry — /class sign-off, human ruling IS the gate, NEVER the delta gate, certifiedBy:peer|quorum, no instrument row; TD-2026-06-25-044), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.'
+    description: 'Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. 7.12.0: `work-completed` events never nominate (NON_NOMINATING_EVENT_TYPES, D1 — they stay in stream.jsonl). Journal-to-notebook promotion (autoPromoteJournalEntries — pattern_discovered + human_feedback) is gated by the BELIEF-DELTA gate decidePromotion() with configurable bands loadPromotionBands() (config.yaml learning.promotion.{floor,deltaMin,epsilon,novelBar}; defaults 0.7/0.10/0.05/0.8, uncalibrated) — prior from notebookPrior (never journal confidence_before); absolute 0.8 survives only as the novel-concept fallback; human_feedback is floor-only; each candidate appends a promotion-decisions.jsonl row with gate:belief-delta-v1, reason, shadow absoluteWouldPromote, after:null when missing (kills the ?? 0 artifact); a small rise (epsilon <= delta < deltaMin) is reason below-delta, distinct from hold-silence (|delta| < epsilon); the shadow bar is LEGACY_ABSOLUTE_BAR; certifiedBy:gate, or certifiedBy:human for human_feedback promotions. The GATED single-entry path (gatedPromoteJournalEntry — /class sign-off, human ruling IS the gate, NEVER the delta gate, certifiedBy:peer|quorum, no instrument row; TD-2026-06-25-044), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config. S4: getNominationStats tags every rate (headline, byHome, legacy) with population: repo, user, machine or legacy-prior; getNeverlandMetrics labels each agent and aggregate.population (avgAcceptRate is over that one population) and counts notebooks per home (notebooksByHome, repo included).'
     type: engine
     anchors:
       - nomination-engine.ts:1
@@ -367,7 +379,7 @@ components:
       - team-funnel
     file: packages/paradigm-mcp/src/utils/orchestration-marker.ts
   yaml-validator:
-    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.
+    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod (v4, ZodType) schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.
     type: utility
     tags:
       - security
@@ -409,12 +421,47 @@ components:
       - v6.0
     file: packages/paradigm-mcp/src/utils/wisdom-loader.ts
   learning-stores:
-    description: 'Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec''s three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid''s must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated. Used by the doctor census and migrate learning-stores.'
+    description: 'Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec''s three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid''s must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated; its dir is ~/.claude/projects/<nativeMemorySlug(root)>/memory, where the slug is Claude Code''s project key (every non-alphanumeric character → -, so C:\Users\x → C--Users-x on Windows; the Stop hook''s Check 15 uses the same rule). Used by the doctor census and migrate learning-stores.'
     type: registry
     tags:
       - learning
       - v7.12
+      - scoped-learning
     file: packages/paradigm-mcp/src/utils/learning-stores.ts
+  learning-home-resolver:
+    description: 'Scoped learning S0+S1+S2 (TD-2026-10-28-820), in learning-stores.ts. Every learning record has a home, repo (committed, <root>/.paradigm), user (~/.paradigm, per repo under projects/<repoId>; journals, global notebooks and global wisdom stay at ~/.paradigm/<rel>) or machine (<learning home>/machine/<repoId>). homeOf(artifact, entry?, config?) resolves entry home > config learning.default_home.<artifact> > the ARTIFACTS registry default. pathFor(artifact, home, root) computes the path and runs assertHomePlacement, which throws LearningHomeError when user or machine data would land under the repo root or repo data outside it. $PARADIGM_LEARNING_HOME overrides the per-repo user and machine root (tests). appendLearningRows stamps home on each row; readLearningRows takes the union of every home, tags a legacy row (no home, no author) with the home it was read from plus legacy:true (a separate calibration population, used only as a labelled cold-start prior), dedupes by id with the repo row winning; hasRepoHome(root) is false when the root is the home dir (or an ancestor of it) or not inside a git repo, and then repo maps to user with the guard skipped ($PARADIGM_LEARNING_ASSUME_REPO=1 skips the git check; a test/CI setting only, set by the vitest setups because temp roots are not git repos; documented here only, never in user guides); rewriteLearningRows edits whichever home holds a row. promotionHomeOf(journal) gives the home a promotion carries (transferable:false → repo); groupByHome keeps calibration populations apart; currentAuthor stamps verdict authorship. S2: the machine home is the OS state dir (machineStateDir: macOS ~/Library/Application Support/paradigm/state, Linux $XDG_STATE_HOME/paradigm or ~/.local/state/paradigm, Windows %LOCALAPPDATA%\paradigm\state) plus the repo id, overridden by $PARADIGM_LEARNING_HOME (<it>/machine/<repoId>); safeHomeDir never returns empty (no HOME falls back to the passwd entry, else throws); hasRepoHome is cached per root for the process (resetLearningStoreCaches for tests); currentAuthor(root) is $PARADIGM_AUTHOR, else ue: + 12 hex of sha256(lowercased git user.email), else uh: + a hash of the OS username, never raw; union reads skip rows stamped migrated:true. S3: isOwnAuthor matches the hashed author only (the raw-username shim is gone; s1RawAuthor feeds the migration that restamps S1 rows); rewriteLearningRows takes dryRun. S4: learningCensus(root) counts every scoped store per physical home (repo/user/machine) with legacy rows, last write and learn-path skips (learnPathSkipCounts); formatCensusRow renders the doctor line; CalibrationPopulation and populationOf (legacy, legacy-repo -> legacy-prior) label every rate.'
+    type: utility
+    tags:
+      - learning
+      - scoped-learning
+    file: packages/paradigm-mcp/src/utils/learning-stores.ts
+  repo-id:
+    description: 'repoIdOf(root): the id per-repo user and machine learning stores are keyed by (S2). .gnomon/project.yaml repoId (root, else the main checkout), else path: + 16 hex of sha256 of the realpath of the MAIN CHECKOUT (git rev-parse --path-format=absolute --git-common-dir, relative form for git < 2.31) plus the root''s prefix, so every linked worktree shares its main checkout''s id and a subfolder project keeps its own. Never the root commit (template repos and forks share one). For a plain checkout it equals gnomon''s repoIdOf (parity test in scoped-learning.test.ts); gnomon does not resolve worktrees yet. repoIdSegment makes it one filesystem-safe segment prefixed h- (hash) or g- (gnomon). mainCheckoutPathOf is cached per root for the process.'
+    type: utility
+    tags:
+      - learning
+      - scoped-learning
+    file: packages/paradigm-mcp/src/utils/repo-id.ts
+  learning-commit-guard:
+    description: 'Scoped learning S2 pre-commit guard (learning-commit-guard.ts, schema learning-guard:v3), shaped like warpline stake-guard. Scope: learning stores only, from the registry (listLearningStores pipeline/knowledge rows, project scope, minus decisions, protocols, skills and the event stream) plus agent-state/ and learned/; never decisions, lore, specs, docs, config, remediations, research, graphs or indexes. Only added content is judged: JSONL added lines (git diff --cached -U0), YAML/JSON new files or entries not in HEAD. Rules: home-not-repo (home user/machine), machine-path (this machine''s own home, learning home and state dir only) and, with learning.visibility public (default), human-feedback-public: S3 keys it on an added entry tagged human-taught with home_source inferred (repo notebooks never carry the journal trigger), refused with "confirm this lesson belongs to the repo (paradigm teach --home repo)"; explicit entries pass. PARADIGM_OVERRIDE=learning-guard is the logged escape.'
+    type: utility
+    tags:
+      - scoped-learning
+      - guard
+    file: packages/paradigm-mcp/src/utils/learning-commit-guard.ts
+  teach-home:
+    description: 'Scoped learning S3 (teach-home.ts). inferTeachHome(text) reads a lesson''s home from the human''s words: location words name it explicitly ("for this repo" / "in this project" -> repo; "for me" / "everywhere" / "every project" -> user); a named repo symbol (# $ ^ ! ~) or repo path alone only infers repo; bare "here" and "always" are ignored; words on both sides or none give null. resolveJournalHome gives the home and home_source, or { ask: "This repo or just you?" } when the words do not settle it OR when only an inferred repo home is left in a public repo (visibility unset = public), so teach never causes a commit-time refusal; the guard then catches only entries that never went through teach. teachConfirmationLine always names the home picked. Used by paradigm_journal record (args home, home_source, taught_text); promotion copies home_source to the notebook entry, and a class sign-off (paradigm_classroom promote home / homeConfirmed) records explicit.'
+    type: utility
+    tags:
+      - scoped-learning
+      - learning
+    file: packages/paradigm-mcp/src/utils/teach-home.ts
+  no-repo-only-cert-reader-guard:
+    description: 'Test guard (no-repo-only-cert-reader.test.ts): fails if any paradigm or paradigm-mcp source imports or re-exports premise-core''s deprecated repo-only readClassroomCertifications. Certifications are read through field-failures.readClassroomCertifications (the union of every home).'
+    type: test
+    tags:
+      - scoped-learning
+    file: packages/paradigm-mcp/src/utils/no-repo-only-cert-reader.test.ts
   protocol-loader:
     description: 'Loads/validates .paradigm/protocols/*.protocol and rebuilds the protocol index. 7.12.0 (D4): lintProtocol emits PROTOCOL_IS_SKILL (warn only, never changes status; surfaced in validateProtocol issues) when no step names a repo path — the reverse of skill-loader''s SKILL_IS_PROTOCOL, reusing its exported repoPathTokens detector.'
     type: loader
@@ -433,7 +480,7 @@ components:
     file: packages/paradigm-mcp/src/utils/arch-loader.ts
     type: loader
   calibration-aggregate:
-    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.'
+    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals as the union of their homes (scoped learning S1), learns bands from one population (the home new actuals land in), reports other homes in otherHomes without pooling them, and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package. S2: a table learned from the legacy population is written with meta: { population, legacyPrior: true }; the planner (loadLearnedTokenTable strips meta, learnedTableMeta reads it) resolves those bands as source prior with legacyPrior and labels the plan estimatedTokens basis legacy-prior.'
     file: packages/paradigm-mcp/src/utils/calibration-aggregate.ts
     type: utility
     tags: [feature, calibration, learning-loop]

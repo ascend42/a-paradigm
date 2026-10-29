@@ -6,7 +6,7 @@
  */
 
 import initSqlJs, { type SqlJsDatabase, type SqlValue } from 'sql.js';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import type {
@@ -748,7 +748,7 @@ export class SentinelStorage {
     if (!incident) return;
 
     const newNote: IncidentNote = {
-      id: uuidv4(),
+      id: randomUUID(),
       ...note,
     };
 
@@ -999,7 +999,7 @@ export class SentinelStorage {
 
   createGroup(input: CreateGroupInput): string {
     this.initializeSync();
-    const id = `GRP-${uuidv4().substring(0, 8)}`;
+    const id = `GRP-${randomUUID().substring(0, 8)}`;
     const now = new Date().toISOString();
 
     this.db!.run(
@@ -1086,7 +1086,7 @@ export class SentinelStorage {
     notes?: string;
   }): void {
     this.initializeSync();
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
 
     this.db!.run(
@@ -1632,7 +1632,7 @@ export class SentinelStorage {
 
   recordPracticeEvent(input: PracticeEventInput): string {
     this.initializeSync();
-    const id = `PE-${uuidv4().substring(0, 8)}`;
+    const id = `PE-${randomUUID().substring(0, 8)}`;
     const now = new Date().toISOString();
 
     this.db!.run(
@@ -1869,7 +1869,7 @@ export class SentinelStorage {
 
   insertLog(input: LogEntryInput): string {
     this.initializeSync();
-    const id = input.id || uuidv4();
+    const id = input.id || randomUUID();
     const timestamp = input.timestamp || new Date().toISOString();
     const symbolType = input.symbolType || this.inferSymbolType(input.symbol);
 
@@ -1905,7 +1905,7 @@ export class SentinelStorage {
 
     for (const input of entries) {
       try {
-        const id = input.id || uuidv4();
+        const id = input.id || randomUUID();
         const timestamp = input.timestamp || new Date().toISOString();
         const symbolType = input.symbolType || this.inferSymbolType(input.symbol);
 
@@ -2221,7 +2221,7 @@ export class SentinelStorage {
 
   insertMetric(input: MetricInput): string {
     this.initializeSync();
-    const id = uuidv4();
+    const id = randomUUID();
     const timestamp = input.timestamp || new Date().toISOString();
 
     this.db!.run(
@@ -2251,7 +2251,7 @@ export class SentinelStorage {
 
     for (const input of entries) {
       try {
-        const id = uuidv4();
+        const id = randomUUID();
         const timestamp = input.timestamp || new Date().toISOString();
 
         this.db!.run(
@@ -2474,7 +2474,7 @@ export class SentinelStorage {
 
   insertSpan(input: TraceSpanInput): string {
     this.initializeSync();
-    const spanId = input.spanId || uuidv4();
+    const spanId = input.spanId || randomUUID();
     const startTime = input.startTime || new Date().toISOString();
 
     this.db!.run(
@@ -2724,7 +2724,7 @@ export class SentinelStorage {
 
     for (const input of inputs) {
       try {
-        const id = input.id || uuidv4();
+        const id = input.id || randomUUID();
         const timestamp = input.timestamp || new Date().toISOString();
         const resolved = typeMap.get(input.type);
         const category = resolved?.category || 'unknown';

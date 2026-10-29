@@ -6,6 +6,11 @@
  *   .paradigm/notebooks/{agent-id}/      (project-level)
  *
  * Each entry is a YAML file: nb-{concept}.yaml
+ *
+ * Scoped learning (TD-2026-10-28-820): the project dir is the 'repo' home and
+ * the global dir the 'user' home. Loaders tag every entry with the home it was
+ * read from; addNotebookEntry resolves the home (entry.home > scope arg) and
+ * writes through the learning-stores resolver and its guard.
  */
 
 import * as fs from 'fs';
@@ -14,6 +19,7 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import type { NotebookEntry, NotebookProvenance, NotebookScope } from '../types/notebooks.js';
+import { assertHomePlacement, effectiveHome, hasRepoHome, isLearningHome, pathFor, type LearningHome } from './learning-stores.js';
 
 // ────────────────────────────────────────────────────────
 // Constants
@@ -71,7 +77,7 @@ function slugify(s: string): string {
  * normalized concept that is neither a structured tag (contains ':') nor a known
  * grouping word. Falls back to the first concept, then '' (caller uses context).
  */
-function pickSlugConcept(concepts: string[]): string {
+export function pickSlugConcept(concepts: string[]): string {
   const normalized = (concepts || []).map(normalizeConcept).filter(Boolean);
   const topical = normalized.find(c => !c.includes(':') && !NON_TOPICAL_CONCEPTS.has(c));
   return topical || normalized[0] || '';
@@ -120,11 +126,15 @@ export function loadNotebookEntries(
 
   // Load global entries first
   const globalDir = path.join(GLOBAL_NOTEBOOKS_DIR, agentId);
-  loadEntriesFromDir(globalDir, entries);
+  loadEntriesFromDir(globalDir, entries, 'user');
 
   // Load project entries (override global with same id)
   const projectDir = path.join(rootDir, PROJECT_NOTEBOOKS_DIR, agentId);
-  loadEntriesFromDir(projectDir, entries);
+  // With no repo home (root is the home dir, or not a git repo) a project dir
+  // is user data, and may BE the global dir (review F4).
+  if (path.resolve(projectDir) !== path.resolve(globalDir)) {
+    loadEntriesFromDir(projectDir, entries, hasRepoHome(rootDir) ? 'repo' : 'user');
+  }
 
   let result = Array.from(entries.values());
 
@@ -148,7 +158,7 @@ export function loadNotebookEntries(
   return result.sort((a, b) => b.appliedCount - a.appliedCount);
 }
 
-function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>): void {
+function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>, home: LearningHome): void {
   if (!fs.existsSync(dir)) return;
 
   try {
@@ -161,7 +171,8 @@ function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>): v
         const content = fs.readFileSync(path.join(dir, file), 'utf-8');
         const entry = yaml.load(content) as NotebookEntry;
         if (entry?.id) {
-          entries.set(entry.id, entry);
+          // The physical home wins over a stale field: the file is where it is.
+          entries.set(entry.id, { ...entry, home });
         }
       } catch { /* skip invalid */ }
     }
@@ -274,6 +285,65 @@ export function classifyNotebookScope(entry: {
 }
 
 // ────────────────────────────────────────────────────────
+// Conflict report (scoped learning S4)
+// ────────────────────────────────────────────────────────
+
+export interface LearningConflict {
+  agent: string;
+  /** The concept key both entries are filed under (pickSlugConcept, the key notebook ids derive from). */
+  concept: string;
+  repo: { id: string; snippet: string; home_source?: string };
+  user: { id: string; snippet: string; home_source?: string };
+}
+
+/**
+ * Repo and user notebook entries that conflict, for Loid (S4): the same agent
+ * and the same concept key (the topical concept a notebook id is derived from),
+ * different ids, and different guidance (snippets differ). The same id in both
+ * homes is not a conflict: the repo row wins on read. Report only; never
+ * resolves, rewrites or deletes. Never throws.
+ */
+export function findLearningConflicts(rootDir: string): LearningConflict[] {
+  const repoBase = path.join(rootDir, PROJECT_NOTEBOOKS_DIR);
+  if (!hasRepoHome(rootDir) || path.resolve(repoBase) === path.resolve(GLOBAL_NOTEBOOKS_DIR)) return [];
+  const agentsIn = (dir: string): string[] => {
+    try {
+      return fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
+    } catch {
+      return [];
+    }
+  };
+  const keyOf = (e: NotebookEntry): string =>
+    pickSlugConcept(e.concepts || []) || normalizeConcept((e.context || '').split(' ').slice(0, 4).join(' '));
+  const out: LearningConflict[] = [];
+  const userAgents = new Set(agentsIn(GLOBAL_NOTEBOOKS_DIR));
+  for (const agent of agentsIn(repoBase).filter(a => userAgents.has(a)).sort()) {
+    const repo = new Map<string, NotebookEntry>();
+    const user = new Map<string, NotebookEntry>();
+    loadEntriesFromDir(path.join(repoBase, agent), repo, 'repo');
+    loadEntriesFromDir(path.join(GLOBAL_NOTEBOOKS_DIR, agent), user, 'user');
+    const userByKey = new Map<string, NotebookEntry[]>();
+    for (const u of user.values()) {
+      const k = keyOf(u);
+      if (k) (userByKey.get(k) ?? userByKey.set(k, []).get(k)!).push(u);
+    }
+    for (const r of repo.values()) {
+      const k = keyOf(r);
+      for (const u of userByKey.get(k) ?? []) {
+        if (u.id === r.id || (u.snippet || '').trim() === (r.snippet || '').trim()) continue;
+        out.push({
+          agent,
+          concept: k,
+          repo: { id: r.id, snippet: r.snippet, ...(r.home_source ? { home_source: r.home_source } : {}) },
+          user: { id: u.id, snippet: u.snippet, ...(u.home_source ? { home_source: u.home_source } : {}) },
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// ────────────────────────────────────────────────────────
 // Write Operations
 // ────────────────────────────────────────────────────────
 
@@ -297,9 +367,20 @@ export function addNotebookEntry(
   const agentSlug = slugify(agentId);
   const baseId = `nb-${agentSlug}-${conceptSlug}`;
 
-  const dir = scope === 'global'
-    ? path.join(GLOBAL_NOTEBOOKS_DIR, agentId)
-    : path.join(rootDir || process.cwd(), PROJECT_NOTEBOOKS_DIR, agentId);
+  // Precedence: the entry's own home > the scope argument (global → user, project → repo).
+  // A root with no repo home (the home dir itself, or not a git repo) writes to user (review F4).
+  const root = rootDir || process.cwd();
+  const home: LearningHome = effectiveHome(
+    isLearningHome(entry.home) ? entry.home : scope === 'global' ? 'user' : 'repo',
+    root,
+  );
+  let dir: string;
+  if (home === 'user') {
+    dir = path.join(GLOBAL_NOTEBOOKS_DIR, agentId);
+    if (rootDir && hasRepoHome(rootDir)) assertHomePlacement('user', dir, rootDir);
+  } else {
+    dir = path.join(pathFor('notebooks', home, root), agentId);
+  }
 
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -341,6 +422,7 @@ export function addNotebookEntry(
     concepts: normalizedConcepts,
     id,
     scope: resolvedScope,
+    home,
     publishable: entry.publishable ?? true,
     // Persist confidence explicitly. The NotebookEntry type requires a number,
     // but callers (e.g. autoPromoteJournalEntries before the open-loop fix) could

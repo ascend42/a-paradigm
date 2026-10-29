@@ -15,6 +15,9 @@ import { recordWorkLog, loadWorkLogEntries, getWorkLogSummary } from '../utils/w
 import { recordJournalEntry, loadJournalEntries, getJournalStats, loadAllJournalEntries } from '../utils/journal-loader.js';
 import { recordDecision, loadDecisions, getDecisionSummary, writeCompanionLoreEntry } from '../utils/decision-loader.js';
 import { loadDataPolicy, filterContent } from '../utils/data-policy-loader.js';
+import { resolveJournalHome, teachConfirmationLine } from '../utils/teach-home.js';
+import { promotionHomeOf, readLearningHomeConfig } from '../utils/learning-stores.js';
+import { visibilityOf } from '../utils/learning-commit-guard.js';
 
 export function getStreamsToolsList() {
   return [
@@ -99,6 +102,9 @@ export function getStreamsToolsList() {
               sourceSet: { type: 'array', items: { type: 'string' }, description: 'Source refs (e.g., foraged URLs) this entry was distilled from' },
             },
           },
+          home: { type: 'string', enum: ['repo', 'user', 'machine'], description: 'Where the lesson lives (scoped learning). repo = committed, shared; user = just this person. Omit to infer from taught_text, else from transferable.' },
+          home_source: { type: 'string', enum: ['explicit', 'inferred'], description: 'explicit when the human chose or confirmed home; inferred when it came from wording. Defaults to explicit when home is given.' },
+          taught_text: { type: 'string', description: "Teach only: the human's own words. With no home, the home is inferred from them; when they do not settle it, nothing is recorded and the reply carries ask: \"This repo or just you?\"." },
         },
         required: ['agent', 'trigger', 'insight', 'project', 'transferable'],
       },
@@ -256,6 +262,20 @@ export async function handleStreamsTool(
     }
 
     case 'paradigm_journal_record': {
+      // Scoped learning S3: resolve the lesson's home before recording. When the
+      // human's words do not settle it, record nothing and ask once.
+      const homeRes = resolveJournalHome({
+        home: args.home,
+        home_source: args.home_source,
+        taught_text: args.taught_text,
+        visibility: visibilityOf(readLearningHomeConfig(ctx.rootDir)),
+      });
+      if ('ask' in homeRes) {
+        return {
+          text: json({ recorded: false, ask: homeRes.ask, repoSignals: homeRes.inference.repoSignals, userSignals: homeRes.inference.userSignals }),
+          handled: true,
+        };
+      }
       const journalPolicy = loadDataPolicy(ctx.rootDir);
       const { filtered: filteredInsight } = filterContent(args.insight as string, journalPolicy, 'learning_journal');
       const entry = recordJournalEntry(args.agent as string, {
@@ -274,9 +294,20 @@ export async function handleStreamsTool(
         ...(args.provenance
           ? { provenance: args.provenance as { source?: string; trust?: 'certified' | 'provisional' | 'external'; sourceSet?: string[] } }
           : {}),
+        ...(homeRes.home ? { home: homeRes.home } : {}),
+        home_source: homeRes.home_source,
       });
+      const home = promotionHomeOf(entry);
       return {
-        text: json({ recorded: true, id: entry.id, agent: entry.agent, timestamp: entry.timestamp }),
+        text: json({
+          recorded: true,
+          id: entry.id,
+          agent: entry.agent,
+          timestamp: entry.timestamp,
+          home,
+          home_source: entry.home_source,
+          ...(entry.trigger === 'human_feedback' ? { confirmation: teachConfirmationLine(entry.agent, home, homeRes.home_source) } : {}),
+        }),
         handled: true,
       };
     }

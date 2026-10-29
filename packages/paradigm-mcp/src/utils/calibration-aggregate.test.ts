@@ -8,11 +8,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-import { rebuildLearnedTable, aggregateActuals, MIN_SAMPLES } from './calibration-aggregate.js';
+import { rebuildLearnedTable, aggregateActuals, MIN_SAMPLES, learnedTablePath } from './calibration-aggregate.js';
 
 let root: string;
 const ACTUALS = (r: string) => path.join(r, '.paradigm', 'events', 'estimate-actuals.jsonl');
-const LEARNED = (r: string) => path.join(r, '.paradigm', 'learned', 'token-estimates.json');
+// Scoped learning (F3): the table is written in the actuals' home (user by default).
+const LEARNED = (r: string) => learnedTablePath(r);
 
 function writeActuals(r: string, records: Array<{ archetype: string; taskType: string; total: number }>): void {
   fs.mkdirSync(path.dirname(ACTUALS(r)), { recursive: true });

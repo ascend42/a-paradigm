@@ -5,9 +5,11 @@
  * agents above threshold generate nominations → overlapping nominations
  * form debates → nominations surface to the human.
  *
- * Storage:
- *   .paradigm/events/nominations.jsonl  (bounded at 500)
- *   .paradigm/events/debates.jsonl      (bounded at 200)
+ * Storage (scoped learning S1, TD-2026-10-28-820 — through the learning-stores
+ * resolver; default USER home, legacy repo rows still read):
+ *   nominations.jsonl          (bounded at 500)
+ *   debates.jsonl              (bounded at 200)
+ *   promotion-decisions.jsonl  (in the home of the journal it measures)
  */
 
 import * as fs from 'fs';
@@ -30,12 +32,22 @@ import { loadJournalEntries } from './journal-loader.js';
 import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
 import { appendClassroomCertification } from './field-failures.js';
 import { log } from './mcp-logger.js';
-import type { PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
+import type { HomeSource, PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
+import {
+  appendLearningRows,
+  groupByHome,
+  homeOf,
+  promotionHomeOf,
+  readLearningHomeConfig,
+  readLearningRows,
+  rewriteLearningRows,
+  hasRepoHome,
+  populationOf,
+  type CalibrationPopulation,
+  type LearningHome,
+} from './learning-stores.js';
 
 const EVENTS_DIR = '.paradigm/events';
-const NOMINATIONS_FILE = 'nominations.jsonl';
-const PROMOTION_DECISIONS_FILE = 'promotion-decisions.jsonl';
-const DEBATES_FILE = 'debates.jsonl';
 const MAX_NOMINATIONS = 500;
 const MAX_DEBATES = 200;
 const DEFAULT_NOMINATION_TTL_DAYS = 7;
@@ -249,22 +261,9 @@ export function detectDebates(_rootDir: string, newNominations: Nomination[]): D
 
 // ── Persistence ──
 
-function getNominationsPath(rootDir: string): string {
-  return path.join(rootDir, EVENTS_DIR, NOMINATIONS_FILE);
-}
-
-function getDebatesPath(rootDir: string): string {
-  return path.join(rootDir, EVENTS_DIR, DEBATES_FILE);
-}
-
 export function persistNominations(rootDir: string, nominations: Nomination[]): void {
   try {
-    const dir = path.join(rootDir, EVENTS_DIR);
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = getNominationsPath(rootDir);
-    const lines = nominations.map(n => JSON.stringify(n)).join('\n') + '\n';
-    fs.appendFileSync(filePath, lines, 'utf8');
-    pruneFile(filePath, MAX_NOMINATIONS);
+    const filePath = appendLearningRows('nominations', rootDir, nominations, { maxLines: MAX_NOMINATIONS });
 
     // TTL-based pruning: remove stale entries when file grows large
     const { nominationTtlDays } = loadAmbientConfig(rootDir);
@@ -276,12 +275,7 @@ export function persistNominations(rootDir: string, nominations: Nomination[]): 
 
 function persistDebates(rootDir: string, debates: Debate[]): void {
   try {
-    const dir = path.join(rootDir, EVENTS_DIR);
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = getDebatesPath(rootDir);
-    const lines = debates.map(d => JSON.stringify(d)).join('\n') + '\n';
-    fs.appendFileSync(filePath, lines, 'utf8');
-    pruneFile(filePath, MAX_DEBATES);
+    const filePath = appendLearningRows('debates', rootDir, debates, { maxLines: MAX_DEBATES });
 
     // TTL-based pruning: remove stale entries when file grows large
     const { debateTtlDays } = loadAmbientConfig(rootDir);
@@ -391,29 +385,13 @@ export function decidePromotion(
  */
 function appendPromotionDecision(rootDir: string, row: PromotionDecision): void {
   try {
-    const dir = path.join(rootDir, EVENTS_DIR);
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, PROMOTION_DECISIONS_FILE);
-    fs.appendFileSync(filePath, JSON.stringify(row) + '\n', 'utf8');
-    pruneFile(filePath, MAX_NOMINATIONS);
+    // The row lives in the home of the journal it measures (row.home).
+    appendLearningRows('promotion-decisions', rootDir, [row], { home: row.home, maxLines: MAX_NOMINATIONS });
   } catch (err) {
     log.component('#promotion-decisions').warn('failed to record promotion decision', {
       agent: row.agent,
       error: err instanceof Error ? err.message : String(err),
     });
-  }
-}
-
-function pruneFile(filePath: string, maxLines: number): void {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.trim().split('\n').filter(l => l.trim());
-    if (lines.length > maxLines) {
-      const kept = lines.slice(-maxLines);
-      fs.writeFileSync(filePath, kept.join('\n') + '\n', 'utf8');
-    }
-  } catch {
-    // Non-fatal
   }
 }
 
@@ -507,18 +485,9 @@ export function loadNominations(
     limit?: number;
   }
 ): Nomination[] {
-  const filePath = getNominationsPath(rootDir);
-  if (!fs.existsSync(filePath)) return [];
-
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    let nominations = content.trim().split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as Nomination; }
-        catch { return null; }
-      })
-      .filter((n): n is Nomination => n !== null);
+    // Union of homes, deduped by id (repo wins); each row tagged with its home.
+    let nominations: Nomination[] = readLearningRows<Nomination>('nominations', rootDir, { idOf: n => n.id });
 
     if (filter?.agent) nominations = nominations.filter(n => n.agent === filter.agent);
     if (filter?.urgency) nominations = nominations.filter(n => n.urgency === filter.urgency);
@@ -537,21 +506,7 @@ export function loadNominations(
 }
 
 export function loadDebates(rootDir: string): Debate[] {
-  const filePath = getDebatesPath(rootDir);
-  if (!fs.existsSync(filePath)) return [];
-
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    return content.trim().split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as Debate; }
-        catch { return null; }
-      })
-      .filter((d): d is Debate => d !== null);
-  } catch {
-    return [];
-  }
+  return readLearningRows<Debate>('debates', rootDir, { idOf: d => d.id });
 }
 
 // ── Engagement ──
@@ -565,49 +520,24 @@ export function engageNomination(
   response: 'accepted' | 'dismissed' | 'deferred',
   reason?: string
 ): boolean {
-  const filePath = getNominationsPath(rootDir);
-  if (!fs.existsSync(filePath)) return false;
-
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.trim().split('\n');
-    let found = false;
+    const found = rewriteLearningRows<Nomination>('nominations', rootDir, nom => {
+      if (nom.id !== nominationId) return undefined;
+      return { ...nom, engaged: true, response, ...(reason ? { reason } : {}) };
+    }) > 0;
 
-    const updated = lines.map(line => {
-      try {
-        const nom = JSON.parse(line) as Nomination;
-        if (nom.id === nominationId) {
-          nom.engaged = true;
-          nom.response = response;
-          if (reason) nom.reason = reason;
-          found = true;
-          return JSON.stringify(nom);
-        }
-        return line;
-      } catch {
-        return line;
-      }
-    });
-
-    if (found) {
-      fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
-
-      // Emit learning feedback if agent has it configured
-      if (response === 'accepted' || response === 'dismissed') {
-        const nom = JSON.parse(lines.find(l => {
-          try { return JSON.parse(l).id === nominationId; } catch { return false; }
-        })!) as Nomination;
-
-        const profile = loadAllAgentProfiles(rootDir).find(p => p.id === nom.agent);
-        if (profile?.learning?.intrinsic?.feedback?.after_recommendation) {
-          emitEvent(rootDir, {
-            type: 'work-completed',
-            source: 'agent-action',
-            agent: nom.agent,
-            context: `Nomination ${nominationId} ${response} — feedback for learning`,
-            data: { nomination_id: nominationId, response },
-          });
-        }
+    // Emit learning feedback if agent has it configured
+    if (found && (response === 'accepted' || response === 'dismissed')) {
+      const nom = loadNominations(rootDir).find(n => n.id === nominationId);
+      const profile = nom && loadAllAgentProfiles(rootDir).find(p => p.id === nom.agent);
+      if (nom && profile?.learning?.intrinsic?.feedback?.after_recommendation) {
+        emitEvent(rootDir, {
+          type: 'work-completed',
+          source: 'agent-action',
+          agent: nom.agent,
+          context: `Nomination ${nominationId} ${response} — feedback for learning`,
+          data: { nomination_id: nominationId, response },
+        });
       }
     }
 
@@ -626,54 +556,38 @@ export function resolveDebate(
   chosenNominationId: string,
   reason?: string
 ): boolean {
-  const filePath = getDebatesPath(rootDir);
-  if (!fs.existsSync(filePath)) return false;
-
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.trim().split('\n');
-    let found = false;
+    const target = loadDebates(rootDir).find(d => d.id === debateId);
+    if (!target) return false;
+    const found = rewriteLearningRows<Debate>('debates', rootDir, debate => {
+      if (debate.id !== debateId) return undefined;
+      return {
+        ...debate,
+        resolution: {
+          chosen: chosenNominationId,
+          reason,
+          resolved_by: 'human',
+          resolved_at: new Date().toISOString(),
+        },
+      };
+    }) > 0;
+    if (!found) return false;
 
-    const updated = lines.map(line => {
-      try {
-        const debate = JSON.parse(line) as Debate;
-        if (debate.id === debateId) {
-          debate.resolution = {
-            chosen: chosenNominationId,
-            reason,
-            resolved_by: 'human',
-            resolved_at: new Date().toISOString(),
-          };
-          found = true;
-
-          // Emit debate-loss signal for non-chosen agents
-          const nonChosen = debate.nominations.filter(id => id !== chosenNominationId);
-          for (const loserId of nonChosen) {
-            const loserNom = loadNominations(rootDir).find(n => n.id === loserId);
-            if (loserNom) {
-              emitEvent(rootDir, {
-                type: 'work-completed',
-                source: 'agent-action',
-                agent: loserNom.agent,
-                context: `Debate ${debateId} resolved — nomination ${loserId} not chosen`,
-                data: { debate_id: debateId, chosen: chosenNominationId, reason },
-              });
-            }
-          }
-
-          return JSON.stringify(debate);
-        }
-        return line;
-      } catch {
-        return line;
+    // Emit debate-loss signal for non-chosen agents
+    const nominations = loadNominations(rootDir);
+    for (const loserId of target.nominations.filter(id => id !== chosenNominationId)) {
+      const loserNom = nominations.find(n => n.id === loserId);
+      if (loserNom) {
+        emitEvent(rootDir, {
+          type: 'work-completed',
+          source: 'agent-action',
+          agent: loserNom.agent,
+          context: `Debate ${debateId} resolved — nomination ${loserId} not chosen`,
+          data: { debate_id: debateId, chosen: chosenNominationId, reason },
+        });
       }
-    });
-
-    if (found) {
-      fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
     }
-
-    return found;
+    return true;
   } catch {
     return false;
   }
@@ -791,7 +705,7 @@ export function emitAndProcess(
 export function adjustAttentionFromFeedback(
   rootDir: string,
   agentId: string
-): { adjusted: boolean; oldThreshold: number; newThreshold: number; reason: string } {
+): { adjusted: boolean; oldThreshold: number; newThreshold: number; reason: string; population?: NominationPopulation } {
   const profile = loadAgentProfile(rootDir, agentId);
   if (!profile?.attention) {
     return { adjusted: false, oldThreshold: 0.6, newThreshold: 0.6, reason: 'No attention config' };
@@ -802,14 +716,24 @@ export function adjustAttentionFromFeedback(
   // Load engagement history for this agent (exclude stale pending nominations)
   const { nominationTtlDays } = loadAmbientConfig(rootDir);
   const staleThresholdMs = nominationTtlDays * 24 * 60 * 60 * 1000;
-  const allNominations = loadNominations(rootDir, { agent: agentId });
-  const active = allNominations.filter(n =>
-    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs)
-  );
-  const engaged = active.filter(n => n.engaged);
-
+  // Scoped learning: rates are computed per home and never pooled silently. The
+  // threshold is driven by the home new nominations land in; other homes are
+  // reported alongside (byHome) but never mixed into the rate.
+  // Legacy rows (no home, no author) are their own population: used only as a
+  // LABELLED cold-start prior when the scope has too little data (review F2).
+  const nominationHome = nominationScope(rootDir);
+  const isFresh = (n: Nomination) =>
+    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs);
+  const forAgent = loadNominations(rootDir, { agent: agentId });
+  let population: NominationPopulation = nominationHome;
+  let engaged = forAgent.filter(n => n.home === nominationHome && !n.legacy && isFresh(n) && n.engaged);
   if (engaged.length < 5) {
-    return { adjusted: false, oldThreshold, newThreshold: oldThreshold, reason: `Insufficient data (${engaged.length}/5 engaged nominations)` };
+    const legacyEngaged = forAgent.filter(n => n.legacy && isFresh(n) && n.engaged);
+    if (legacyEngaged.length < 5) {
+      return { adjusted: false, oldThreshold, newThreshold: oldThreshold, reason: `Insufficient data (${engaged.length}/5 engaged nominations)`, population };
+    }
+    engaged = legacyEngaged;
+    population = 'legacy-repo';
   }
 
   const accepted = engaged.filter(n => n.response === 'accepted').length;
@@ -830,8 +754,10 @@ export function adjustAttentionFromFeedback(
     reason = `High accept rate (${(acceptRate * 100).toFixed(0)}%) — lowering threshold to contribute more`;
   }
 
+  if (population === 'legacy-repo') reason = `[cold-start prior: legacy repo population] ${reason}`;
+
   if (newThreshold === oldThreshold) {
-    return { adjusted: false, oldThreshold, newThreshold, reason };
+    return { adjusted: false, oldThreshold, newThreshold, reason, population };
   }
 
   // Apply the adjustment
@@ -848,10 +774,10 @@ export function adjustAttentionFromFeedback(
     source: 'agent-action',
     agent: agentId,
     context: `Attention threshold adjusted: ${oldThreshold.toFixed(2)} → ${newThreshold.toFixed(2)} (${reason})`,
-    data: { old_threshold: oldThreshold, new_threshold: newThreshold, accept_rate: acceptRate, dismiss_rate: dismissRate },
+    data: { old_threshold: oldThreshold, new_threshold: newThreshold, accept_rate: acceptRate, dismiss_rate: dismissRate, home: nominationHome, population },
   });
 
-  return { adjusted: true, oldThreshold, newThreshold, reason };
+  return { adjusted: true, oldThreshold, newThreshold, reason, population };
 }
 
 /**
@@ -860,21 +786,53 @@ export function adjustAttentionFromFeedback(
 export function getNominationStats(
   rootDir: string,
   agentId: string
-): { total: number; accepted: number; dismissed: number; deferred: number; pending: number; acceptRate: number } {
+): NominationRateStats & {
+  home: LearningHome;
+  byHome: Partial<Record<LearningHome, NominationRateStats>>;
+  /** Pre-scoping rows (no home, no author): reported apart, never pooled. */
+  legacy?: NominationRateStats;
+} {
   const { nominationTtlDays } = loadAmbientConfig(rootDir);
   const staleThresholdMs = nominationTtlDays * 24 * 60 * 60 * 1000;
-  const allNominations = loadNominations(rootDir, { agent: agentId });
   // Filter out stale pending nominations (older than TTL, not engaged) to prevent diluting stats
-  const nominations = allNominations.filter(n =>
+  const nominations = loadNominations(rootDir, { agent: agentId }).filter(n =>
     n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs)
   );
+  // Scoped learning: one rate per home; the headline numbers are the scope new
+  // nominations land in, never a silent pool of every home.
+  const scope = nominationScope(rootDir);
+  const legacy = nominations.filter(n => n.legacy);
+  const groups = groupByHome(nominations.filter(n => !n.legacy), scope);
+  const byHome: Partial<Record<LearningHome, NominationRateStats>> = {};
+  for (const h of Object.keys(groups) as LearningHome[]) {
+    if (groups[h].length > 0) byHome[h] = rateStats(groups[h], h);
+  }
+  // S4: every rate names its population (repo, user, machine or legacy-prior).
+  return { ...rateStats(groups[scope], scope), home: scope, byHome, ...(legacy.length > 0 ? { legacy: rateStats(legacy, 'legacy-prior') } : {}) };
+}
+
+/** A calibration population: one home, or the legacy repo rows used as a labelled cold-start prior. */
+export type NominationPopulation = LearningHome | 'legacy-repo';
+
+export interface NominationRateStats {
+  /** S4: the population this rate is computed over; populations are never pooled. */
+  population: CalibrationPopulation;
+  total: number;
+  accepted: number;
+  dismissed: number;
+  deferred: number;
+  pending: number;
+  acceptRate: number;
+}
+
+function rateStats(nominations: Nomination[], population: CalibrationPopulation): NominationRateStats {
   const accepted = nominations.filter(n => n.response === 'accepted').length;
   const dismissed = nominations.filter(n => n.response === 'dismissed').length;
   const deferred = nominations.filter(n => n.response === 'deferred').length;
   const pending = nominations.filter(n => !n.engaged).length;
   const engaged = accepted + dismissed + deferred;
-
   return {
+    population,
     total: nominations.length,
     accepted,
     dismissed,
@@ -882,6 +840,11 @@ export function getNominationStats(
     pending,
     acceptRate: engaged > 0 ? accepted / engaged : 0,
   };
+}
+
+/** The home new nominations land in: the calibration population thresholds use. */
+function nominationScope(rootDir: string): LearningHome {
+  return homeOf('nominations', null, readLearningHomeConfig(rootDir));
 }
 
 /**
@@ -902,10 +865,16 @@ export function getNeverlandMetrics(
     threshold: number;
     expertiseCount: number;
     notebookCount: number;
+    /** S4: notebook entries per home (repo included). */
+    notebooksByHome: { repo: number; user: number };
+    /** S4: the population acceptRate is computed over. */
+    population: CalibrationPopulation;
     transferableCount: number;
     totalNominations: number;
   }>;
   aggregate: {
+    /** S4: the population avgAcceptRate is computed over (never pooled across homes). */
+    population: CalibrationPopulation;
     avgAcceptRate: number;
     avgThreshold: number;
     totalExpertise: number;
@@ -920,21 +889,30 @@ export function getNeverlandMetrics(
     .map(p => {
       const stats = getNominationStats(rootDir, p.id);
 
-      // Count notebook entries (check file existence)
-      let notebookCount = 0;
-      try {
-        const nbDir = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
-        if (fs.existsSync(nbDir)) {
-          notebookCount = fs.readdirSync(nbDir).filter(f => f.endsWith('.yaml')).length;
+      // Count notebook entries per home (S4): the repo notebooks and the user's.
+      const countIn = (dir: string): number => {
+        try {
+          return fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.yaml')).length : 0;
+        } catch {
+          return 0;
         }
-      } catch { /* skip */ }
+      };
+      const userNb = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
+      const repoNb = path.join(rootDir, '.paradigm', 'notebooks', p.id);
+      const notebooksByHome = {
+        repo: hasRepoHome(rootDir) && path.resolve(repoNb) !== path.resolve(userNb) ? countIn(repoNb) : 0,
+        user: countIn(userNb),
+      };
+      const notebookCount = notebooksByHome.repo + notebooksByHome.user;
 
       return {
         id: p.id,
+        population: stats.population,
         acceptRate: stats.acceptRate,
         threshold: p.attention?.threshold ?? 0.5,
         expertiseCount: (p.expertise || []).length,
         notebookCount,
+        notebooksByHome,
         transferableCount: (p.transferable || []).length,
         totalNominations: stats.total,
       };
@@ -963,6 +941,9 @@ export function getNeverlandMetrics(
   return {
     agents: agentMetrics,
     aggregate: {
+      // S4: every agent's headline rate is the nominations scope's population;
+      // the average is over that one population, never pooled across homes.
+      population: populationOf(nominationScope(rootDir)),
       avgAcceptRate,
       avgThreshold,
       totalExpertise,
@@ -1050,6 +1031,9 @@ export function autoPromoteJournalEntries(
     pattern?: { id: string; applies_when: string; correct_approach: string };
     tags?: string[];
     project: string;
+    transferable?: boolean;
+    home?: LearningHome;
+    home_source?: HomeSource;
   }>;
 
   const promoted: Array<{ journalId: string; notebookId: string }> = [];
@@ -1084,7 +1068,13 @@ export function autoPromoteJournalEntries(
       { value: before, found: priorFound },
       bands,
     );
+    // Scoped learning: the promotion, its notebook entry, its cert and this
+    // decision row all carry the JOURNAL's home (transferable:false → repo).
+    const home = promotionHomeOf(entry);
+    // S3: the notebook entry says whether the human chose that home.
+    const homeSource: HomeSource = entry.home_source === 'explicit' ? 'explicit' : 'inferred';
     appendPromotionDecision(rootDir, {
+      home,
       ts: new Date().toISOString(),
       agent: agentId,
       concepts,
@@ -1126,8 +1116,10 @@ export function autoPromoteJournalEntries(
             loreEntryId: entry.id,
             createdBy: agentId,
           },
+          home,
+          home_source: homeSource,
         },
-        'global',
+        home === 'user' ? 'global' : 'project',
         rootDir
       );
 
@@ -1139,6 +1131,7 @@ export function autoPromoteJournalEntries(
       // falsifier — a cert is meaningless until the field tests it.
       try {
         appendClassroomCertification(rootDir, {
+          home,
           ts: new Date().toISOString(),
           agent: agentId,
           entryId: nbEntry.id,
@@ -1218,8 +1211,15 @@ export function gatedPromoteJournalEntry(
   rootDir: string,
   agentId: string,
   journalId: string,
-  opts: { certifiedBy?: 'peer' | 'quorum'; refinedForm?: string } = {}
-): { promoted: boolean; journalId: string; notebookId?: string; reason?: string } {
+  opts: {
+    certifiedBy?: 'peer' | 'quorum';
+    refinedForm?: string;
+    /** S3: the home the human picked at sign-off (a flip). Recorded as explicit. */
+    home?: LearningHome;
+    /** S3: the human saw the home at sign-off and kept it. Recorded as explicit. */
+    homeConfirmed?: boolean;
+  } = {}
+): { promoted: boolean; journalId: string; notebookId?: string; reason?: string; home?: LearningHome; home_source?: HomeSource } {
   // Load all of the agent's journal entries (all triggers) and find the target.
   const journal = loadJournalEntries(agentId, { limit: 500 }) as Array<{
     id: string;
@@ -1228,6 +1228,9 @@ export function gatedPromoteJournalEntry(
     promoted_to_notebook?: string;
     pattern?: { id: string; applies_when: string; correct_approach: string };
     tags?: string[];
+    transferable?: boolean;
+    home?: LearningHome;
+    home_source?: HomeSource;
   }>;
 
   const entry = journal.find(e => e.id === journalId);
@@ -1248,6 +1251,12 @@ export function gatedPromoteJournalEntry(
     .map(normalizeConcept)
     .filter(Boolean);
 
+  // Scoped learning: the promotion carries the journal's home (transferable:false → repo),
+  // unless the human flipped it at sign-off (S3). A flip or a confirm is explicit.
+  const home = opts.home ?? promotionHomeOf(entry);
+  const homeSource: HomeSource = opts.home !== undefined || opts.homeConfirmed || entry.home_source === 'explicit'
+    ? 'explicit'
+    : 'inferred';
   const { entry: nbEntry } = addNotebookEntry(
     agentId,
     {
@@ -1263,8 +1272,10 @@ export function gatedPromoteJournalEntry(
         loreEntryId: entry.id,
         createdBy: agentId,
       },
+      home,
+      home_source: homeSource,
     },
-    'global',
+    home === 'user' ? 'global' : 'project',
     rootDir
   );
 
@@ -1272,6 +1283,7 @@ export function gatedPromoteJournalEntry(
   // fail-side reducer later-binds outcome to `overturned`/`survived`.
   try {
     appendClassroomCertification(rootDir, {
+      home,
       ts: new Date().toISOString(),
       agent: agentId,
       entryId: nbEntry.id,
@@ -1284,7 +1296,7 @@ export function gatedPromoteJournalEntry(
 
   markJournalPromoted(agentId, entry.id, nbEntry.id);
 
-  return { promoted: true, journalId, notebookId: nbEntry.id };
+  return { promoted: true, journalId, notebookId: nbEntry.id, home, home_source: homeSource };
 }
 
 // ── Surfacing Config ──

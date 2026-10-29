@@ -15,12 +15,17 @@ components:
     tags:
       - doctor
       - hooks
+  doctor-learning-guard:
+    description: 'Scoped learning S2 doctor lines (hook-health.ts): learningGuardChecks reports learning guard installed / not installed / foreign pre-commit hook; learnPathSkipChecks counts hook writes skipped because learn-path could not resolve (.paradigm/.sessions/learn-path-skips, written by _pm_learn_skip), per artifact, so lost data is told apart from no data.'
+    type: handler
+    file: packages/paradigm/src/commands/doctor/hook-health.ts
   doctor-handler:
-    description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).
+    description: 'Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. Warns on each Paradigm-owned git hook (.git/hooks/post-commit, pre-push) that #git-hook-state classes as outdated (below paradigm-hook-version 3, or still running `npx paradigm`), fix `paradigm hooks install`. v6.0.4 added ''info'' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it). Scoped learning S2: the classroom repeat-failure rate is grouped by home (certificationsByHome), one warn per home; liveness reads the union of the machine home and the frozen repo logs. Scoped learning S4: a Learning census info line per store (repo / user / machine counts, legacy, last write, learn-path skips), a Learning conflicts info line for Loid (repo vs user, never resolved), and the repeat-failure scoreboard labelled [population: repo|user|machine|legacy-prior].'
     type: handler
     file: index.ts
     components:
       - '#gap-narrator'
+      - '#git-hook-state'
   info-status:
     description: |
       v6.0.4 CheckResult status added to the existing ok/warn/error/missing
@@ -34,7 +39,7 @@ components:
       - status
       - v6.0.4
   context-audit:
-    description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
+    description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md). purpose-coverage skips gitignored source dirs (purpose-core filterGitIgnored; release/ by name outside git) so build and release output never counts, and counts a dir as covered only by the shared #purpose-coverage rule (own .purpose or a documenting ancestor; placeholders never count) (T-2026-10-27-003).
     type: utility
     tags:
       - feature

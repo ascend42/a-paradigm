@@ -39,6 +39,8 @@ vi.mock('os', async (importOriginal) => {
 import { addNotebookEntry, loadNotebookEntries, notebookPrior } from './notebook-loader.js';
 import { recordJournalEntry } from './journal-loader.js';
 import { autoPromoteJournalEntries } from './nomination-engine.js';
+import { readLearningRows } from './learning-stores.js';
+import { readClassroomCertifications } from './field-failures.js';
 import type { JournalEntry } from '../types/knowledge-streams.js';
 
 const mockHome = shared.mockHome;
@@ -84,15 +86,10 @@ function makeJournalEntry(agentId: string, overrides: Partial<JournalEntry>): Jo
   });
 }
 
+// Scoped learning: rows live in the home of the journal they measure (these
+// journals are transferable → user home), so read the union, not a raw path.
 function readDecisions(): Array<Record<string, unknown>> {
-  const filePath = path.join(rootDir, '.paradigm', 'events', 'promotion-decisions.jsonl');
-  if (!fs.existsSync(filePath)) return [];
-  return fs
-    .readFileSync(filePath, 'utf8')
-    .trim()
-    .split('\n')
-    .filter(Boolean)
-    .map(l => JSON.parse(l));
+  return readLearningRows<Record<string, unknown>>('promotion-decisions', rootDir);
 }
 
 // ────────────────────────────────────────────────────────
@@ -344,9 +341,7 @@ describe('belief-delta gate (autoPromoteJournalEntries)', () => {
     makeJournalEntry('kit', { confidence_after: 0.72, tags: ['human-said'], trigger: 'human_feedback' });
     makeJournalEntry('kit', { confidence_after: 0.85, tags: ['novel-thing'] });
     expect(autoPromoteJournalEntries(rootDir, 'kit').promoted).toBe(2);
-    const certs = fs
-      .readFileSync(path.join(rootDir, '.paradigm', 'events', 'classroom-certifications.jsonl'), 'utf8')
-      .trim().split('\n').map(l => JSON.parse(l));
+    const certs = readClassroomCertifications(rootDir);
     const by = Object.fromEntries(certs.map(c => [c.concepts[0], c.certifiedBy]));
     expect(by['human-said']).toBe('human');
     expect(by['novel-thing']).toBe('gate');

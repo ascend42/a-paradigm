@@ -28,6 +28,17 @@ if [ ! -d "$CWD/.paradigm" ]; then
   exit 0
 fi
 
+# Fresh clone: the generated indexes are gitignored (#session-markers-gitignore).
+# When scan-index.json or navigator.yaml is missing, run `paradigm index`
+# FULLY detached (never hold this hook's pipes open).
+if [ ! -f "$CWD/.paradigm/scan-index.json" ] || [ ! -f "$CWD/.paradigm/navigator.yaml" ]; then
+  case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
+  [ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+  if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$CWD"; then
+    ( cd "$CWD" && $PARADIGM_BIN index --quiet ) </dev/null >/dev/null 2>&1 &
+  fi
+fi
+
 # Build the additional_context payload
 # This is injected as a system-level context that survives context compaction.
 

@@ -35,6 +35,7 @@ function normalizeItemsToEntries(
   }
 }
 import { parsePurposeFile } from './parser.js';
+import { filterGitIgnored } from './coverage.js';
 
 /**
  * Parsed purpose file with its path
@@ -176,16 +177,48 @@ export const DEFAULT_PURPOSE_IGNORE: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Extra globs used by findPurposeFiles({ respectGitignore: true }) when git
+ * cannot answer (not a work tree, git missing): release output such as
+ * packages/gnomon/release/Gnomon.app carries copies of .purpose files.
+ */
+export const NON_GIT_RELEASE_IGNORE: readonly string[] = Object.freeze(['**/release/**']);
+
+export interface FindPurposeFilesOptions {
+  /**
+   * Drop .purpose files git ignores (`git check-ignore`), so build and release
+   * output is never read as a symbol source. Outside a git work tree falls back
+   * to NON_GIT_RELEASE_IGNORE. Default false (discovery order and set are
+   * load-bearing for the premise index; callers opt in).
+   */
+  respectGitignore?: boolean;
+}
+
+/**
  * Find all .purpose files in a directory tree, sorted by depth
  */
-export async function findPurposeFiles(rootDir: string): Promise<string[]> {
+export async function findPurposeFiles(rootDir: string, options: FindPurposeFilesOptions = {}): Promise<string[]> {
   const absoluteRoot = path.resolve(rootDir);
 
-  const files = await glob('**/.purpose', {
+  let files = await glob('**/.purpose', {
     cwd: absoluteRoot,
     absolute: true,
     ignore: [...DEFAULT_PURPOSE_IGNORE],
   });
+
+  if (options.respectGitignore) {
+    const ignored = filterGitIgnored(absoluteRoot, files);
+    if (ignored) {
+      files = files.filter((f) => !ignored.has(path.resolve(f)));
+    } else {
+      const fallback = await glob('**/.purpose', {
+        cwd: absoluteRoot,
+        absolute: true,
+        ignore: [...DEFAULT_PURPOSE_IGNORE, ...NON_GIT_RELEASE_IGNORE],
+      });
+      const keep = new Set(fallback.map((f) => path.resolve(f)));
+      files = files.filter((f) => keep.has(path.resolve(f)));
+    }
+  }
 
   // Sort by depth (shallowest first for proper aggregation), then break ties by
   // the REPO-RELATIVE path with a stable string compare.
@@ -249,8 +282,11 @@ export async function aggregateForPath(targetPath: string): Promise<AggregatedPu
 /**
  * Get all parsed purpose files from a root directory
  */
-export async function getAllPurposeFiles(rootDir: string): Promise<ParsedPurposeFile[]> {
-  const files = await findPurposeFiles(rootDir);
+export async function getAllPurposeFiles(
+  rootDir: string,
+  options: FindPurposeFilesOptions = {},
+): Promise<ParsedPurposeFile[]> {
+  const files = await findPurposeFiles(rootDir, options);
   const parsed: ParsedPurposeFile[] = [];
 
   for (const filePath of files) {

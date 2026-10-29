@@ -711,6 +711,10 @@ export async function initCommand(options: InitOptions) {
   // Keep hook session markers (.purpose-paths, .orchestrated, ...) out of git
   ensureSessionMarkersGitignore(paradigmDir);
 
+  // Scoped learning S2: ask once whether the repo is public (the commit guard
+  // then refuses human-taught entries whose home was only inferred). Unset = public.
+  if (!options.quick && !options.dryRun) await askLearningVisibility(paradigmDir);
+
   // Create .premise file
   const premisePath = path.join(cwd, '.premise');
   if (!fs.existsSync(premisePath) || options.force) {
@@ -779,6 +783,35 @@ export async function initCommand(options: InitOptions) {
   writeInitReport(cwd, projectName, targetIDE, detection);
 
   tracker.success('Paradigm initialized', { project: projectName, ide: targetIDE });
+}
+
+/**
+ * Write `learning.visibility` into config.yaml (scoped learning S2). Returns
+ * false when it is already set (asked once) or there is no config.
+ */
+export function setLearningVisibility(paradigmDir: string, visibility: 'public' | 'private'): boolean {
+  const configPath = path.join(paradigmDir, 'config.yaml');
+  if (!fs.existsSync(configPath)) return false;
+  const content = fs.readFileSync(configPath, 'utf8');
+  if (/^learning:\s*$[\s\S]*?^\s+visibility:/m.test(content) && /^\s+visibility:\s*(public|private)\b/m.test(content)) return false;
+  const next = /^learning:\s*$/m.test(content)
+    ? content.replace(/^learning:\s*$/m, `learning:\n  visibility: ${visibility}`)
+    : `${content.replace(/\n*$/, '\n')}learning:\n  visibility: ${visibility}\n`;
+  fs.writeFileSync(configPath, next, 'utf8');
+  return true;
+}
+
+/** Ask once (TTY only) whether this repository is public; no TTY leaves it unset (= public). */
+async function askLearningVisibility(paradigmDir: string): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return;
+  const configPath = path.join(paradigmDir, 'config.yaml');
+  if (!fs.existsSync(configPath) || /^\s+visibility:\s*(public|private)\b/m.test(fs.readFileSync(configPath, 'utf8'))) return;
+  const { createInterface } = await import('readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>(resolve =>
+    rl.question('  Is this repository public? Learning records then need an explicit home before they are committed. [Y/n] ', resolve));
+  rl.close();
+  setLearningVisibility(paradigmDir, /^n(o)?$/i.test(answer.trim()) ? 'private' : 'public');
 }
 
 /**

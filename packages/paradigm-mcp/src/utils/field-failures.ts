@@ -22,10 +22,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { log } from './mcp-logger.js';
 import type { ExerciseIntensity } from '@a-company/premise-core';
+import {
+  appendLearningRows,
+  readLearningRows,
+  rewriteLearningRows,
+  type LearningHome,
+} from './learning-stores.js';
 
 const EVENTS_DIR = '.paradigm/events';
 const FIELD_FAILURES_FILE = 'field-failures.jsonl';
-const CLASSROOM_CERTS_FILE = 'classroom-certifications.jsonl';
 /**
  * Append-only ledger of exercise events (docs/specs/classroom-falsifiable-loop.md).
  * The rebuild source-of-truth for a cert's `exercise` counters; the survival
@@ -82,6 +87,11 @@ export interface FieldFailureRow {
  * `overturned` by the failure loop when an attributed break lands on `entryId`.
  */
 export interface ClassroomCertRow {
+  /**
+   * Scoped learning: the home of the notebook entry this cert measures (repo for
+   * a project notebook, user for a global one). Absent → registry default 'repo'.
+   */
+  home?: LearningHome;
   ts: string;
   agent: string;
   entryId: string;
@@ -207,11 +217,7 @@ export function makeFailureId(orchestrationId: string, entryId: string): string 
  */
 export function appendClassroomCertification(rootDir: string, row: ClassroomCertRow): void {
   try {
-    const dir = path.join(rootDir, EVENTS_DIR);
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, CLASSROOM_CERTS_FILE);
-    fs.appendFileSync(filePath, JSON.stringify(row) + '\n', 'utf8');
-    pruneFile(filePath, MAX_ENTRIES);
+    appendLearningRows('classroom-certifications', rootDir, [row], { home: row.home, maxLines: MAX_ENTRIES });
   } catch (err) {
     log.component('#classroom-certifications').warn('failed to record certification', {
       agent: row.agent,
@@ -221,9 +227,13 @@ export function appendClassroomCertification(rootDir: string, row: ClassroomCert
   }
 }
 
-/** Read all classroom-certification rows. */
+// certificationsByHome lives in learning-stores.ts (logger-free, so doctor can
+// load it without @a-company/paradigm-logger); re-exported here.
+export { certificationsByHome, type CertPopulation } from './learning-stores.js';
+
+/** Read all classroom-certification rows (union of homes, each tagged with its home). */
 export function readClassroomCertifications(rootDir: string): ClassroomCertRow[] {
-  return readJsonl<ClassroomCertRow>(path.join(rootDir, EVENTS_DIR, CLASSROOM_CERTS_FILE));
+  return readLearningRows<ClassroomCertRow>('classroom-certifications', rootDir);
 }
 
 /**
@@ -239,31 +249,17 @@ export function overturnCertification(
   overturnedByFailureId: string
 ): boolean {
   try {
-    const filePath = path.join(rootDir, EVENTS_DIR, CLASSROOM_CERTS_FILE);
-    if (!fs.existsSync(filePath)) return false;
-    const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());
     let flipped = false;
-    const updated = lines.map(line => {
-      if (flipped) return line;
-      try {
-        const row = JSON.parse(line) as ClassroomCertRow;
-        if (row.entryId === entryId && row.outcome === 'pending') {
-          flipped = true;
-          return JSON.stringify({
-            ...row,
-            outcome: 'overturned',
-            overturnedByFailureId,
-            boundAt: new Date().toISOString(),
-          } satisfies ClassroomCertRow);
-        }
-        return line;
-      } catch {
-        return line;
-      }
+    rewriteLearningRows<ClassroomCertRow>('classroom-certifications', rootDir, row => {
+      if (flipped || row.entryId !== entryId || row.outcome !== 'pending') return undefined;
+      flipped = true;
+      return {
+        ...row,
+        outcome: 'overturned',
+        overturnedByFailureId,
+        boundAt: new Date().toISOString(),
+      } satisfies ClassroomCertRow;
     });
-    if (flipped) {
-      fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
-    }
     return flipped;
   } catch (err) {
     log.component('#classroom-certifications').warn('failed to overturn certification', {
@@ -288,32 +284,18 @@ export function surviveCertification(
   entryId: string
 ): boolean {
   try {
-    const filePath = path.join(rootDir, EVENTS_DIR, CLASSROOM_CERTS_FILE);
-    if (!fs.existsSync(filePath)) return false;
-    const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());
     let flipped = false;
-    const updated = lines.map(line => {
-      if (flipped) return line;
-      try {
-        const row = JSON.parse(line) as ClassroomCertRow;
-        // Only a still-pending cert flips. An overturned row stays overturned
-        // (overturn wins); an already-survived row is left untouched (idempotent).
-        if (row.entryId === entryId && row.outcome === 'pending') {
-          flipped = true;
-          return JSON.stringify({
-            ...row,
-            outcome: 'survived',
-            survivedAt: new Date().toISOString(),
-          } satisfies ClassroomCertRow);
-        }
-        return line;
-      } catch {
-        return line;
-      }
+    // Only a still-pending cert flips. An overturned row stays overturned
+    // (overturn wins); an already-survived row is left untouched (idempotent).
+    rewriteLearningRows<ClassroomCertRow>('classroom-certifications', rootDir, row => {
+      if (flipped || row.entryId !== entryId || row.outcome !== 'pending') return undefined;
+      flipped = true;
+      return {
+        ...row,
+        outcome: 'survived',
+        survivedAt: new Date().toISOString(),
+      } satisfies ClassroomCertRow;
     });
-    if (flipped) {
-      fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
-    }
     return flipped;
   } catch (err) {
     log.component('#classroom-certifications').warn('failed to survive certification', {

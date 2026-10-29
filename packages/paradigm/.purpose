@@ -11,7 +11,9 @@ features:
       (every dependency bundled, node: prefixes kept, a require/__dirname shim), the wasm sql.js loads beside it, and
       a manifest {schema paradigm-mcp-bundle:v1, entry, files [{relativePath, mode, sha256, size}]}. The Gnomon kernel
       stages exactly these files (it hashes its own copy and never trusts the manifest's hashes); an install without
-      the bundle is staged as the dereferenced package tree.
+      the bundle is staged as the dereferenced package tree. With zod 4 the bare `zod/v4` specifier is resolved to
+      the `zod` root (the zod-v4-root esbuild plugin): esbuild 0.28 drops the lazy init behind `zod/v4`'s re-export,
+      and the bundle would throw "ZodCustom is not a constructor" at load.
     type: build
     tags: [mcp, gnomon, build]
   shift-command:
@@ -281,9 +283,28 @@ features:
     type: command
     components:
       - '#audit-logger'
+  test-shell-utils:
+    description: |
+      src/test-shell-utils.ts: test-only helpers for running the shell hooks as Claude Code does on each OS. BASH / SH
+      are Git Bash on Windows (PARADIGM_TEST_BASH overrides C:\Program Files\Git\bin\bash.exe), bash / sh
+      elsewhere; SYS_PATH is the tools-only PATH (POSIX /usr/bin:/bin; Windows Git usr\bin + cmd + System32);
+      baseEnv() carries SystemRoot/ComSpec/PATHEXT that Windows children need; shellPath / msysPath embed paths in
+      scripts; realPath / tempDir avoid 8.3 names; nodeOnlyDir puts only node on PATH (symlink, or a Git Bash
+      wrapper on Windows); SHELL_TEST_TIMEOUT is longer on Windows. Not imported by shipped code. (Moved here
+      from the Cid placeholder stub at src/.purpose, T-2026-10-27-003.)
+    file: src/test-shell-utils.ts
+    type: utility
+    tags: [test, windows]
   mcp-setup-command:
-    description: Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue, Cline)
+    description: >-
+      Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue,
+      Cline): src/commands/mcp/setup.ts. src/commands/mcp/switch.ts is
+      `paradigm mcp use-dev | use-prod`, which points MCP configs at the local
+      working tree's built packages or back at the global paradigm-mcp binary.
     type: command
+    files:
+      - src/commands/mcp/setup.ts
+      - src/commands/mcp/switch.ts
     signals:
       - '!mcp-configured'
     components:
@@ -349,7 +370,7 @@ features:
     components:
       - '#tutorial-handler'
   path-containment:
-    description: "resolveInsideRoot(baseDir, p) — the real path (symlinks followed) of an existing file strictly inside baseDir, or null for anything outside, baseDir itself or missing. Used for paths read from repo content by #drift-command and #tutorial-command."
+    description: "resolveInsideRoot(baseDir, p) — the real path (symlinks followed) of an existing file strictly inside baseDir, or null for anything outside, baseDir itself or missing. Used for paths read from repo content by #drift-command and #tutorial-command. resolveContained(baseDir, p, {allowRoot, allowMissing}) does the same for a path that may not exist yet: realpath of the longest existing prefix plus the missing tail; a dangling symlink or NUL byte is null. Used by #claude-provider for model-supplied paths, the run_command cwd and its command log."
     type: utility
     file: src/utils/path-containment.ts
     tags: [security, paths]
@@ -570,7 +591,7 @@ components:
     description: Validates project setup
     type: utility
   config-schema-validator:
-    description: Zod-based schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys
+    description: Zod-based (zod 4) schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys
     type: utility
   integrity-checker:
     description: CLI integrity check implementation — broken references, duplicate symbols, orphaned symbols, missing anchors
@@ -647,7 +668,7 @@ components:
     file: src/core/calibration.ts
     type: utility
   calibrate-command:
-    description: v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.
+    description: 'v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing. Scoped learning S4: every band and count is tagged [population: repo|user|machine|legacy-prior]; the planner''s estimatedTokens carries population and a note naming it.'
     file: src/commands/calibrate.ts
     type: command
   routing-backfill:
@@ -655,7 +676,7 @@ components:
     file: src/core/routing-backfill.ts
     type: utility
   learn-routing-command:
-    description: `paradigm learn routing --backfill` — runs #routing-backfill and reports areas via cli-output helpers.
+    description: '`paradigm learn routing --backfill` — runs #routing-backfill and reports areas via cli-output helpers.'
     file: src/commands/learn-routing.ts
     type: command
 signals:

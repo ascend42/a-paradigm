@@ -1,12 +1,28 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
-name: purpose
-description: "TODO: describe what this directory/module does"
-context:
-  - "Stub created by Cid during coverage audit — update with real context"
-# Key files touched:
-# - validate.ts
+version: 2.0.0
+description: >-
+  `paradigm purpose` subcommands. validate.ts is #purpose-validate-command: it
+  validates one .purpose file, or every .purpose under a directory found with
+  purpose-core getAllPurposeFiles({ respectGitignore: true }), so gitignored
+  build and release output (e.g. packages/gnomon/release/Gnomon.app) is never
+  validated as a symbol source; outside a git work tree release/ is skipped by
+  name, and dist/, build/, node_modules/ are always skipped (DEFAULT_PURPOSE_IGNORE).
+  remember.ts is #purpose-remember-command (aggregate and print purpose context).
+  Both symbols are declared in packages/paradigm/.purpose.
 components:
-  purpose:
-    description: "TODO: describe this component"
-    tags: []
+  purpose-coverage-command:
+    description: >-
+      `paradigm purpose coverage [dirs...] [--json] [--root]` (coverage.ts,
+      T-2026-10-27-003): the shared #purpose-coverage rule as a CLI. Prints
+      "<dir>\t(covered|uncovered)\t<covering .purpose|->" per directory (deduped)
+      or the PurposeCoverage records as JSON. The Stop hook's Checks 1 and 2 call
+      it once per run so they score directories exactly like Cid's debrief and
+      doctor. --require-own counts only a dir's own .purpose; --queue [--source]
+      files uncovered dirs via #purpose-coverage-queue and prints "#queued\t<id>".
+    type: command
+    path: coverage.ts
+    components:
+      - '#purpose-coverage'
+    tests:
+      - packages/paradigm/tests/purpose-coverage-command.test.ts
+context:
+  - "Tests: packages/paradigm/tests/purpose-validate-path.test.ts (path shapes, release/gitignore skip)."

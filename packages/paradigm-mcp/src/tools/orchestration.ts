@@ -18,6 +18,8 @@ import { resolveDispatchableAgents, formatUndispatchableNote } from '../utils/ag
 import { handleCaptainTool } from './captain.js';
 import { log } from '../utils/mcp-logger.js';
 import type { AgentRelay } from '../utils/agent-relay.js';
+import { learnedTablePath } from '../utils/calibration-aggregate.js';
+import { appendLearningRows, homeOf, readLearningHomeConfig, type CalibrationPopulation } from '../utils/learning-stores.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 export type TaskClassification = {
@@ -171,6 +173,17 @@ export interface OrchestrationPlan {
   estimatedTokens: {
     min: number;
     max: number;
+    /**
+     * S2: present when the learned bands are a cold-start prior from legacy
+     * repo actuals: the estimate is labelled as a prior, not measured fact.
+     */
+    basis?: 'legacy-prior';
+    /**
+     * S4: the population the learned bands come from (repo, user, machine or
+     * legacy-prior). Absent when every band is the hardcoded constant.
+     */
+    population?: CalibrationPopulation;
+    note?: string;
   };
   /** Agents requested (override / classification / roster) but not dispatchable */
   undispatchable?: UndispatchableAgent[];
@@ -367,6 +380,19 @@ type LearnedTokenTable = Record<string, Record<string, LearnedBand>>;
  */
 let _learnedTableCache: { path: string; mtimeMs: number; table: LearnedTokenTable } | null = null;
 
+/** The learned table's `meta` (S2): set when the bands are a legacy cold-start prior. */
+export interface LearnedTableMeta {
+  population?: string;
+  legacyPrior?: boolean;
+}
+
+const _learnedTableMeta = new WeakMap<LearnedTokenTable, LearnedTableMeta>();
+
+/** The `meta` loadLearnedTokenTable read with `table`, if any. */
+export function learnedTableMeta(table: LearnedTokenTable): LearnedTableMeta | undefined {
+  return _learnedTableMeta.get(table);
+}
+
 /**
  * Load the learned token-estimate table (#calibration, v7.1). Best-effort: a
  * missing or malformed file returns `{}` so the planner falls back cleanly to
@@ -374,20 +400,34 @@ let _learnedTableCache: { path: string; mtimeMs: number; table: LearnedTokenTabl
  */
 export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
   try {
-    const filePath = path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json');
-    let stat: fs.Stats;
+    // Scoped learning (review F3): the scoped copy (user home by default) first,
+    // then the legacy repo copy written before scoping.
+    const candidates: string[] = [];
     try {
-      stat = fs.statSync(filePath);
-    } catch {
-      return {}; // missing file → cold-start constant
+      candidates.push(learnedTablePath(rootDir));
+    } catch { /* a misplaced home is skipped; the legacy copy still serves */ }
+    candidates.push(path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json'));
+    let filePath = '';
+    let stat: fs.Stats | null = null;
+    for (const c of candidates) {
+      try {
+        stat = fs.statSync(c);
+        filePath = c;
+        break;
+      } catch { /* try the next */ }
     }
+    if (!stat) return {}; // missing file → cold-start constant
     if (_learnedTableCache && _learnedTableCache.path === filePath && _learnedTableCache.mtimeMs === stat.mtimeMs) {
       return _learnedTableCache.table;
     }
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    _learnedTableCache = { path: filePath, mtimeMs: stat.mtimeMs, table: parsed as LearnedTokenTable };
-    return parsed as LearnedTokenTable;
+    // `meta` (S2) is not an archetype row: strip it, keep it beside the table.
+    const { meta, ...rows } = parsed as LearnedTokenTable & { meta?: LearnedTableMeta };
+    const table = rows as LearnedTokenTable;
+    if (meta && typeof meta === 'object') _learnedTableMeta.set(table, meta);
+    _learnedTableCache = { path: filePath, mtimeMs: stat.mtimeMs, table };
+    return table;
   } catch (err) {
     log.component('#calibration').warn('learned token table load failed; using constant prior', {
       error: err instanceof Error ? err.message : String(err),
@@ -408,6 +448,11 @@ export interface TaskEstimate {
   max: number;
   n: number;
   source: 'learned' | 'prior';
+  /**
+   * S2: the band came from the learned table, but that table was learned from
+   * legacy repo rows (a labelled cold-start prior), so `source` is 'prior'.
+   */
+  legacyPrior?: true;
 }
 
 /**
@@ -427,7 +472,10 @@ export function resolveAgentEstimate(
   if (taskType) {
     const cell = learned[agentName]?.[taskType];
     if (cell && typeof cell.min === 'number' && typeof cell.max === 'number') {
-      return { min: cell.min, max: cell.max, n: typeof cell.n === 'number' ? cell.n : 0, source: 'learned' };
+      const n = typeof cell.n === 'number' ? cell.n : 0;
+      // A table learned from legacy repo rows is a labelled prior, not fact (S2).
+      if (learnedTableMeta(learned)?.legacyPrior) return { min: cell.min, max: cell.max, n, source: 'prior', legacyPrior: true };
+      return { min: cell.min, max: cell.max, n, source: 'learned' };
     }
   }
   const prior = AGENT_TOKEN_ESTIMATES[agentName] || { min: 5000, max: 20000 };
@@ -649,14 +697,11 @@ async function handleOrchestrateInline(
 
   // Team-funnel telemetry: record that orchestration actually ran (Pillar 0 —
   // the invocation-rate metric counts these against bypasses/solo declarations)
+  // Machine home (scoped learning S2), through the learning-stores resolver.
   try {
-    const eventsDir = path.join(ctx.rootDir, '.paradigm', 'events');
-    if (!fs.existsSync(eventsDir)) fs.mkdirSync(eventsDir, { recursive: true });
-    fs.appendFileSync(
-      path.join(eventsDir, 'team-funnel.jsonl'),
-      JSON.stringify({ timestamp: new Date().toISOString(), type: 'orchestrated', source: 'orchestrate_inline', mode }) + '\n',
-      'utf8',
-    );
+    appendLearningRows('team-funnel', ctx.rootDir, [
+      { timestamp: new Date().toISOString(), type: 'orchestrated', source: 'orchestrate_inline', mode },
+    ]);
   } catch { /* best-effort */ }
 
   // Resolve the dispatchable agent set (TD-2026-09-26-846): roster.yaml + .agent
@@ -1554,7 +1599,8 @@ async function handleAgentPrompt(
           try {
             const { recordNotebookReference } = await import('../utils/session-work-log.js');
             // The Classroom: carry the join key (previously omitted here).
-            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => e.id), orchestrationId);
+            // Scoped learning: each receipt lands in the home of the entry it measures.
+            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => ({ id: e.id, home: e.home })), orchestrationId);
           } catch { /* non-fatal */ }
         }
       } catch { /* notebook loading is non-fatal */ }
@@ -2067,10 +2113,21 @@ export function planAgentSequence(
   const taskType = classification?.type;
   let minTokens = 0;
   let maxTokens = 0;
+  let usedLegacyPrior = false;
+  let usedLearned = false;
   for (const agent of plannedAgents) {
     const estimate = resolveAgentEstimate(learnedTable, agent.name, taskType);
     minTokens += estimate.min;
     maxTokens += estimate.max;
+    if (estimate.legacyPrior) usedLegacyPrior = true;
+    if (estimate.source === 'learned') usedLearned = true;
+  }
+  // S4: name the population the learned bands come from; never pooled.
+  let learnedPopulation: CalibrationPopulation | undefined;
+  if (usedLearned) {
+    try {
+      learnedPopulation = homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir || '.'));
+    } catch { /* population label is best-effort */ }
   }
   // Add documentor estimate if included
   if (documentorAdded) {
@@ -2087,7 +2144,17 @@ export function planAgentSequence(
     stages,
     symbols,
     estimatedAgents: plannedAgents.length + (documentorAdded ? 1 : 0),
-    estimatedTokens: { min: minTokens, max: maxTokens },
+    estimatedTokens: usedLegacyPrior
+      ? {
+        min: minTokens,
+        max: maxTokens,
+        basis: 'legacy-prior',
+        population: 'legacy-prior',
+        note: 'Prior [population: legacy-prior]: bands learned from legacy repo actuals (cold start), not yet measured in this home',
+      }
+      : learnedPopulation
+        ? { min: minTokens, max: maxTokens, population: learnedPopulation, note: `Learned [population: ${learnedPopulation}]: bands from this home's actuals only` }
+        : { min: minTokens, max: maxTokens },
     ...(undispatchable.length > 0 ? { undispatchable } : {}),
   };
 }

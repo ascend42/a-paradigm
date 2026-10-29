@@ -4,6 +4,24 @@ description: |
   framework infrastructure. Not user-facing; commands here surface under
   `paradigm internal <name>`.
 components:
+  learn-path-command:
+    description: 'Scoped learning S2 (TD-2026-10-28-820). `paradigm internal learn-path <artifact> [--root] [--home]` prints the absolute file a learning-store row of <artifact> goes to (learning-stores homeOf + effectiveHome + pathFor, so the write guard runs). On any failure it prints nothing and exits 1, so a hook skips its write instead of landing a row in the wrong home. Called by the hooks through _pm_learn_path (paradigm-resolve.sh), which caches the answer.'
+    type: tool
+    parent: '#InternalCommands'
+    file: packages/paradigm/src/commands/internal/learn-path.ts
+    tags:
+      - internal
+      - hooks
+      - scoped-learning
+  learning-guard-command:
+    description: 'Scoped learning S2. `paradigm internal learning-guard --staged`, run by the git pre-commit hook `paradigm hooks install` writes: reads what the commit adds to learning-store files (#learning-commit-guard) and exits 1 ONLY on a real violation, with the refusal line on stderr; 2 on an internal error. The hook blocks only on exit 1 with that line and fails open on anything else (a crash, a YAML error, an older CLI). PARADIGM_OVERRIDE=learning-guard lets the commit through and logs an override row.'
+    type: tool
+    parent: '#InternalCommands'
+    file: packages/paradigm/src/commands/internal/learning-guard.ts
+    tags:
+      - internal
+      - hooks
+      - scoped-learning
   active-remediations:
     description: Reads .paradigm/remediations/*.yaml, filters expired, outputs JSON array. Backs Stop hook Check 14 to avoid YAML parsing in bash.
     type: tool

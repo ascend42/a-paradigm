@@ -54,7 +54,7 @@
 import { Router, type Request, type Response } from 'express';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import simpleGit, { type SimpleGit } from 'simple-git';
+import { simpleGit, type SimpleGit } from 'simple-git';
 
 import type { PlatformWsContext } from '../ws/index.js';
 

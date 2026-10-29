@@ -1,0 +1,39 @@
+id: L-2026-10-24-ascend-181635-001
+type: agent-session
+timestamp: '2026-10-24T18:16:35.287Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0.1 release closure: Ubuntu/macOS CI flakes fixed, orchestration gate false positive fixed'
+summary: 'Recovered checkpoint and pushed the git-verbs worldBase fix (Ubuntu green). macos-14 then flaked on loop-act-e2e: rig setup commits started detached git auto-maintenance whose transient maintenance.lock landed in one byte-identical snapshot; fixed in rigs and hardened the kernel (HARDENED_GIT_FLAGS maintenance.auto=false). Fixed the Stop hook Check 13 false positive properly (Arky design, Builder build): delegation hook writes .orchestrated for returned roster agents, marker expires by TTL. PR #49 blocked only by Core ruleset 1-review rule; founder approved admin squash-merge.'
+symbols_touched:
+  - '#git-verbs'
+  - '#loop-git'
+  - '#loop-act'
+  - '#orchestration-marker'
+  - '#delegation-hook'
+  - '#team-gate'
+  - '#prompt-gate'
+symbols_created:
+  - '#delegation-hook'
+  - '!delegation-recorded'
+learnings:
+  - 'Byte-identical .git snapshot tests must disable maintenance.auto as well as gc.auto: git''s detached auto-maintenance writes .git/objects/maintenance.lock asynchronously'
+  - Gate markers read per-turn must expire by TTL, never be cleared by the per-turn Stop hook
+  - Hook tests that spawn scripts must run from the temp fixture cwd, or the hook monitor writes into the repo's tracked events files
+verification:
+  status: pass
+  details:
+    gnomon: 75/75 targeted
+    paradigm-hooks: 67/67
+    orchestration-marker: 7/7
+    tsc: clean
+linked_commits:
+  - ba4c08e7
+  - 7d39b415
+  - '32898075'
+git_context:
+  ref: 32898075cb003f3d3bade54c9efcdbd7ce09bc92
+  branch: feat/gnomon
+  dirty: true

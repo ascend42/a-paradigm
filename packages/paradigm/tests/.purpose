@@ -4,6 +4,35 @@ description: |
   as regression protection for the fail-closed portal.yaml auth-bypass class
   (see docs/private/plans/portal-yaml-release-split.md).
 components:
+  plugin-launch-windows-tests:
+    description: |
+      PR #63 cross-OS suites, run on windows-latest and ubuntu-latest by
+      .github/workflows/paradigm-plugin-windows.yml. plugin-mcp-launch.test.ts
+      drives #paradigm-mcp-launch with one stub npx (npx-stub.cjs) that behaves
+      like npm 11 per OS (devEngines walk-up, --script-shell / default shell
+      looked up on the built PATH, ancestors' node_modules/.bin first, cmd
+      /d /s /c verbatim); on Windows the launcher starts it as npx-cli.js beside
+      a node.exe copied into a path with spaces, so --call quoting goes through
+      real cmd.exe. Windows-only cases: no npx-cli.js beside node, % ^ !
+      refused, npx folder under %TEMP%, package beside the .cmd shim. POSIX-only
+      cases (skipIf, with reasons): owner/mode bits, symlinks, sticky /tmp.
+      hooks-missing-cli.test.ts runs the hooks through Git Bash on Windows
+      (src/test-shell-utils.ts). e2e/plugin-mcp-launch-e2e.mjs: real npx, the
+      published @a-company/paradigm pinned through a temp plugin copy
+      (E2E_VERSION), devEngines pnpm/onFail error and planted node/sh/cmd shims
+      above the npx folder; expects an MCP initialize reply and no marker.
+    type: test
+    anchors:
+      - plugin-mcp-launch.test.ts
+      - hooks-missing-cli.test.ts
+      - e2e/plugin-mcp-launch-e2e.mjs
+    components:
+      - '#paradigm-mcp-launch'
+      - '#paradigm-resolve'
+    tags:
+      - test
+      - windows
+      - plugin
   portal-compliance-tests:
     description: Regression suite covering the 5 auth-bypass scenarios (A-E) from the 2026-04-22 security audit — prefix mismatch, duplicate-key, Gate[] Array shape, stop-hook exit propagation, valid-portal regression.
     type: test

@@ -135,3 +135,6 @@ enforcement:
       - ".paradigm/**"
       - "*.purpose"
       - "portal.yaml"
+
+learning:
+  visibility: public   # a public GitHub repo; teach asks "this repo or just you?" when unsure (TD-2026-10-28-820)

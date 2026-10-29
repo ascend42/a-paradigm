@@ -84,24 +84,35 @@ describe('#release-darwin pins', () => {
   });
 
   describe('assertReleaseKernel (TD-2026-10-24-447: the shipped kernel is a release build with loops off)', () => {
-    const kernel = (mode: string, loopsOn: boolean, withGate = true): string => {
+    // The in-app kernel has no appZips (it can't pin the zip of the app that carries it); that is the real shape.
+    const NATIVE = "artifacts: [{ name: 'gnomon-helper', arch: 'arm64' }, { name: 'gnomon-voice-io', arch: 'universal' }]";
+    const kernel = (mode: string, loopsOn: boolean, withGate = true, appZips = false, artifacts = NATIVE): string => {
       const d = tmp();
       const dist = path.join(d, 'kernel', 'dist');
       mkdirSync(dist, { recursive: true });
       writeFileSync(path.join(dist, 'index.js'), [
-        `export const releasePins = { loadedReleasePins: () => ({ mode: ${JSON.stringify(mode)}, why: 'test', manifest: { release: '8.0.1', appZips: [{ arch: 'arm64' }] } }) };`,
+        `export const releasePins = { loadedReleasePins: () => ({ mode: ${JSON.stringify(mode)}, why: 'test', manifest: { release: '8.0.1', ${artifacts}${appZips ? ", appZips: [{ arch: 'arm64' }]" : ''} } }) };`,
         withGate ? `export const loopsGate = { resolveLoopsEnabled: () => ${loopsOn} };` : '',
       ].join('\n'));
       return path.join(d, 'kernel');
     };
-    it('accepts a release kernel whose loops gate stays off', async () => {
-      await expect(rel.assertReleaseKernel(kernel('release', false), '8.0.1')).resolves.toBeUndefined();
+    it('accepts a release kernel whose loops gate stays off, with or without appZips', async () => {
+      await expect(rel.assertReleaseKernel(kernel('release', false), '8.0.1', 'arm64')).resolves.toBeUndefined();
+      await expect(rel.assertReleaseKernel(kernel('release', false, true, true), '8.0.1', 'arm64')).resolves.toBeUndefined();
+    });
+    it('the npm dist check still requires the app zip pin (prepack / gate-gnomon-publish)', async () => {
+      const { checkReleaseDist } = await import('../scripts/prepack.mjs');
+      const noZip = path.join(kernel('release', false), 'dist');
+      expect((await checkReleaseDist(noZip, '8.0.1')).problems).toContain('dist pins no Gnomon.app zip for arm64');
+      expect((await checkReleaseDist(path.join(kernel('release', false, true, true), 'dist'), '8.0.1')).problems).toEqual([]);
     });
     it('refuses a dev kernel, a wrong version, a missing gate and a kernel with loops on', async () => {
-      await expect(rel.assertReleaseKernel(kernel('dev', false), '8.0.1')).rejects.toThrow(/REFUSING TO SHIP.*not a release/);
-      await expect(rel.assertReleaseKernel(kernel('release', false), '9.9.9')).rejects.toThrow(/REFUSING TO SHIP/);
-      await expect(rel.assertReleaseKernel(kernel('release', false, false), '8.0.1')).rejects.toThrow(/no loops gate/);
-      await expect(rel.assertReleaseKernel(kernel('release', true), '8.0.1')).rejects.toThrow(/loops are ON/);
+      await expect(rel.assertReleaseKernel(kernel('dev', false), '8.0.1', 'arm64')).rejects.toThrow(/REFUSING TO SHIP.*not a release/);
+      await expect(rel.assertReleaseKernel(kernel('release', false), '9.9.9', 'arm64')).rejects.toThrow(/REFUSING TO SHIP/);
+      await expect(rel.assertReleaseKernel(kernel('release', false, false), '8.0.1', 'arm64')).rejects.toThrow(/no loops gate/);
+      await expect(rel.assertReleaseKernel(kernel('release', true), '8.0.1', 'arm64')).rejects.toThrow(/loops are ON/);
+      await expect(rel.assertReleaseKernel(kernel('release', false, true, false, "artifacts: [{ name: 'gnomon-helper', arch: 'arm64' }]"), '8.0.1', 'arm64')).rejects.toThrow(/pins no gnomon-voice-io for arm64/);
+      await expect(rel.assertReleaseKernel(kernel('release', false, true, false, "artifacts: [{ name: 'gnomon-helper', arch: 'x64' }, { name: 'gnomon-voice-io', arch: 'universal' }]"), '8.0.1', 'arm64')).rejects.toThrow(/pins no gnomon-helper for arm64/);
     });
   });
 
@@ -157,6 +168,10 @@ describe('#release-darwin --dry-run --unsigned', () => {
     expect(s.zip).toBeNull();
     const lock = rel.nodeLockFor(process.arch === 'x64' ? 'x64' : 'arm64');
     expect(s.plan).toContain(`fetch ${lock.url} (sha256 ${lock.sha256})`);
+    // build-voice-io.mjs imports gnomon-contracts' dist: a fresh checkout must build it before the native helpers
+    const contracts = s.plan.indexOf('npm run build -w @a-company/gnomon-contracts');
+    expect(contracts).toBeGreaterThanOrEqual(0);
+    expect(contracts).toBeLessThan(s.plan.indexOf('build GnomonVoiceIO.app'));
     expect(s.plan.indexOf('cargo tauri build --bundles app --no-sign (GNOMON_WRAPPER_BUNDLE_STAGE)')).toBeGreaterThan(s.plan.findIndex((p) => p.startsWith('codesign ') && p.includes('node')));
     // the kernel ships zero runtime deps: no node_modules beside it; the voice client carries its own
     expect(existsSync(path.join(s.app, 'Contents/Resources/kernel/node_modules'))).toBe(false);

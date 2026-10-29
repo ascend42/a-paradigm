@@ -12,11 +12,15 @@
 INPUT=$(cat)
 
 # Extract workspace root from Cursor's input (try jq first, fallback to grep)
+# loop_count: how many times this stop hook already continued the conversation.
 if command -v jq >/dev/null 2>&1; then
   CWD=$(echo "$INPUT" | jq -r '.workspace_roots[0] // empty' 2>/dev/null)
+  LOOP_COUNT=$(echo "$INPUT" | jq -r '.loop_count // empty' 2>/dev/null)
 else
   CWD=$(echo "$INPUT" | grep -o '"workspace_roots"[[:space:]]*:[[:space:]]*\["[^"]*"' | head -1 | sed 's/.*\["//' | sed 's/"$//')
+  LOOP_COUNT=$(echo "$INPUT" | grep -o '"loop_count"[[:space:]]*:[[:space:]]*[0-9][0-9]*' | head -1 | sed 's/.*:[[:space:]]*//')
 fi
+case "$LOOP_COUNT" in ''|*[!0-9]*) LOOP_COUNT="" ;; esac
 
 if [ -z "$CWD" ]; then
   CWD="$(pwd)"
@@ -30,23 +34,30 @@ fi
 cd "$CWD" || exit 0
 
 # --- Loop guard: prevent infinite retry loops ---
-# Cursor's stop hook with loop_limit fires repeatedly. Cap retries at 3.
+# Cursor's stop hook with loop_limit fires repeatedly. RETRY_COUNT is the
+# number of blocks already in this loop: Cursor's loop_count when the input
+# carries it, else the file counter. Capped at 3; an unchanged violation set
+# after a retry ends the loop sooner (see the verdict below).
 LOOP_GUARD_FILE=".paradigm/.stop-hook-active"
-if [ -f "$LOOP_GUARD_FILE" ]; then
-  RETRY_COUNT=$(cat "$LOOP_GUARD_FILE" 2>/dev/null | tr -d '[:space:]')
+STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
+if [ -n "$LOOP_COUNT" ]; then
+  RETRY_COUNT=$LOOP_COUNT
+elif [ -f "$LOOP_GUARD_FILE" ]; then
+  RETRY_COUNT=$(cat "$LOOP_GUARD_FILE" 2>/dev/null | tr -cd '0-9')
   RETRY_COUNT=${RETRY_COUNT:-0}
-  if [ "$RETRY_COUNT" -ge 3 ]; then
-    # Max retries reached — allow session to end to avoid infinite loop
-    echo "[paradigm] Stop hook: max retries (3) reached. Allowing session to end." >&2
-    rm -f "$LOOP_GUARD_FILE"
-    rm -f ".paradigm/.pending-review"
-    rm -f ".paradigm/.habits-blocking"
-    exit 0
-  fi
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-  echo "$RETRY_COUNT" > "$LOOP_GUARD_FILE"
 else
-  echo "1" > "$LOOP_GUARD_FILE"
+  RETRY_COUNT=0
+fi
+if [ "$RETRY_COUNT" -ge 3 ]; then
+  # Max retries reached — allow session to end to avoid infinite loop
+  echo "[paradigm] Stop hook: max retries (3) reached. Allowing session to end." >&2
+  rm -f "$LOOP_GUARD_FILE"
+  rm -f ".paradigm/.pending-review"
+  rm -f ".paradigm/.habits-blocking"
+  exit 0
+fi
+if [ -z "$LOOP_COUNT" ]; then
+  echo "$((RETRY_COUNT + 1))" > "$LOOP_GUARD_FILE"
 fi
 
 # Get modified files (uncommitted changes)
@@ -55,6 +66,7 @@ if [ -z "$MODIFIED" ]; then
   # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
   rm -f ".paradigm/.session-started"
+  rm -f "$STOP_FP_FILE"
   exit 0
 fi
 
@@ -71,6 +83,22 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
+  # Fingerprint rule (same as the Claude Code hook): on a retry, an unchanged
+  # violation set means the fix attempt changed nothing — end the loop, log
+  # stop-block-unresolved, keep the marker; the next turn blocks again.
+  STOP_FP=$(_pm_violation_fp)
+  PREV_FP=""
+  [ -f "$STOP_FP_FILE" ] && PREV_FP=$(sed -n 1p "$STOP_FP_FILE" 2>/dev/null)
+  if [ "$RETRY_COUNT" -gt 0 ] && [ "$STOP_FP" = "$PREV_FP" ]; then
+    echo "" >&2
+    echo "Paradigm: unresolved after a fix attempt — ending the turn; these will block again next turn ($VIOLATION_COUNT violation(s)):" >&2
+    echo "$VIOLATIONS" >&2
+    _pm_record_unresolved "$STOP_FP" "$RETRY_COUNT"
+    rm -f "$LOOP_GUARD_FILE"
+    exit 0
+  fi
+  printf '%s\n%s\n' "$STOP_FP" "$((RETRY_COUNT + 1))" > "$STOP_FP_FILE" 2>/dev/null
+
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
   echo "$VIOLATIONS" >&2
@@ -129,6 +157,7 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
+rm -f "$STOP_FP_FILE"
 # NOTE: .orchestrated / .solo-declared / .team-prompted / .team-reminded /
 # .team-bypass-recorded are deliberately NOT cleared here — stop fires per turn; they expire by age
 # instead (PARADIGM_GATE_TTL_HOURS, default 4h).

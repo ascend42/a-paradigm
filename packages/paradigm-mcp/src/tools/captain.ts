@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { searchSymbols } from '@a-company/premise-core';
+import { resolvePurposeCoverage, type PurposeCoverage } from '@a-company/purpose-core';
 import { loadArchMap } from '../utils/arch-loader.js';
 import { log } from '../utils/mcp-logger.js';
 import { trackToolCall } from './context.js';
@@ -40,6 +41,8 @@ import type {
   RunStatus,
 } from '../types/captain.js';
 import type { Task, Claimant } from '../utils/task-loader.js';
+import { queueCoverageGapTask, PURPOSE_COVERAGE_TASK_TAG } from '../utils/purpose-coverage-queue.js';
+import { readLearningRows } from '../utils/learning-stores.js';
 
 // ────────────────────────────────────────────────────────
 // Tool Definitions
@@ -76,7 +79,7 @@ export function getCaptainToolsList(): ToolDefinition[] {
     {
       name: 'paradigm_captain_debrief',
       description:
-        'Cid\'s post-task maintenance pass. Audits .purpose coverage for touched directories, creates stubs for gaps, queues rich doc areas to Documentor, records lore, and writes the .cid-briefed marker that clears the stop hook. Call after all agents complete. ~200 tokens.',
+        'Cid\'s post-task maintenance pass. Audits .purpose coverage for touched directories (own or documenting-ancestor .purpose; placeholder stubs never count), queues uncovered directories as a paradigm task plus Documentor pending-review entries (never writes .purpose files), records lore, and writes the .cid-briefed marker that clears the stop hook. Call after all agents complete. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -465,14 +468,12 @@ async function handleCaptainBrief(
   const allDirs = Array.from(dirSet);
   let coveredCount = 0;
   for (const dir of allDirs) {
-    const purposePath = path.join(ctx.rootDir, dir, '.purpose');
-    if (fs.existsSync(purposePath)) {
-      try {
-        const content = fs.readFileSync(purposePath, 'utf8').trim();
-        if (content.length > 50) coveredCount++;
-      } catch {
-        // Non-fatal
-      }
+    // Same definition as the debrief: own or documenting-ancestor .purpose,
+    // placeholders excluded (#purpose-coverage).
+    try {
+      if (resolvePurposeCoverage(ctx.rootDir, dir).covered) coveredCount++;
+    } catch {
+      // Non-fatal
     }
   }
 
@@ -549,99 +550,84 @@ async function handleCaptainDebrief(
   const pendingReviewPath = path.join(paradigmDir, '.pending-review');
 
   // ── Step 1: Check .purpose coverage for touched dirs ─
+  // Coverage is real coverage (#purpose-coverage, shared with purpose-core):
+  // the directory's own .purpose, or an ancestor .purpose that documents it.
+  // Placeholder stubs (Cid's old header, the stop hook's auto-fix, all-TODO
+  // descriptions) never count.
   const touchedDirs = new Set<string>();
   for (const f of touchedFiles) {
     const d = path.dirname(f);
     if (d && d !== '.') touchedDirs.add(d);
   }
 
-  // Compute coverage before
-  let coveredBefore = 0;
-  const totalDirs = touchedDirs.size;
+  const coverage = new Map<string, PurposeCoverage>();
   for (const dir of touchedDirs) {
-    const purposePath = path.join(ctx.rootDir, dir, '.purpose');
-    if (fs.existsSync(purposePath)) {
-      try {
-        const content = fs.readFileSync(purposePath, 'utf8').trim();
-        if (content.length > 50) coveredBefore++;
-      } catch {}
-    }
+    // A directory that no longer exists (all its files deleted) is not scored.
+    if (!fs.existsSync(path.join(ctx.rootDir, dir))) continue;
+    coverage.set(dir, resolvePurposeCoverage(ctx.rootDir, dir));
   }
-  const scoreBefore = totalDirs > 0 ? coveredBefore / totalDirs : 1.0;
+  const scoredDirs = Array.from(coverage.values());
+  const totalDirs = scoredDirs.length;
+  const coveredCount = scoredDirs.filter(c => c.covered).length;
+  // The debrief writes nothing into the working tree, so coverage cannot change
+  // between "before" and "after"; both report the same real score.
+  const scoreBefore = totalDirs > 0 ? coveredCount / totalDirs : 1.0;
+  const scoreAfter = scoreBefore;
+  const placeholderPurposes = Array.from(new Set(scoredDirs.flatMap(c => c.placeholders))).sort();
 
-  // ── Step 2: Create stubs for uncovered directories ───
-  const coverageAdded: string[] = [];
+  // ── Step 2: Queue uncovered directories (never write stubs) ──
+  // Cid used to write a TODO .purpose stub declaring `components: <basename>`
+  // into every uncovered dir. That counted itself as coverage and minted
+  // generic, colliding symbols (#cli, #core, #test...). Uncovered dirs are now
+  // surfaced as ONE purpose-coverage task — the only record of the gap. They
+  // are not appended to .pending-review: the Stop hook deletes that file at the
+  // end of every turn and reads it as a list of edited file paths.
   const delegatedToDocumentor: string[] = [];
+  const uncoveredDirs = scoredDirs.filter(c => !c.covered).map(c => c.dir).sort();
+  delegatedToDocumentor.push(...uncoveredDirs);
 
-  for (const dir of touchedDirs) {
-    const purposePath = path.join(ctx.rootDir, dir, '.purpose');
-    const absoluteDir = path.join(ctx.rootDir, dir);
-
-    let hasCoverage = false;
-    if (fs.existsSync(purposePath)) {
-      try {
-        const content = fs.readFileSync(purposePath, 'utf8').trim();
-        hasCoverage = content.length > 50;
-      } catch {}
+  const appendPending = (entry: Record<string, unknown>) => {
+    try {
+      fs.mkdirSync(paradigmDir, { recursive: true });
+      fs.appendFileSync(pendingReviewPath, JSON.stringify(entry) + '\n', 'utf8');
+    } catch {
+      // Pending review append is non-fatal
     }
+  };
 
-    if (!hasCoverage) {
-      // Create stub .purpose file
-      try {
-        if (!fs.existsSync(absoluteDir)) continue;
-        const dirBasename = path.basename(dir);
-        const stubContent = buildPurposeStub(dirBasename, dir, touchedFiles);
-        fs.writeFileSync(purposePath, stubContent, 'utf8');
-        coverageAdded.push(dir);
-
-        // Queue for rich documentation by Documentor
-        delegatedToDocumentor.push(dir);
-        try {
-          const pendingEntry = JSON.stringify({
-            path: dir,
-            reason: 'captain-debrief',
-            priority: 'high',
-            context: `Touched during orchestration ${orchestrationId}. Files: ${touchedFiles.filter(f => path.dirname(f) === dir).join(', ')}`,
-            timestamp: new Date().toISOString(),
-          });
-          fs.appendFileSync(pendingReviewPath, pendingEntry + '\n', 'utf8');
-        } catch {
-          // Pending review append is non-fatal
-        }
-      } catch {
-        // Stub creation is non-fatal
-      }
-    } else {
-      // Has coverage but may need rich docs if it's a new area
-      const isNewArea = touchedFiles.some(f => path.dirname(f) === dir && newSymbols.length > 0);
-      if (isNewArea) {
-        delegatedToDocumentor.push(dir);
-        try {
-          const pendingEntry = JSON.stringify({
-            path: dir,
-            reason: 'captain-debrief-new-symbols',
-            priority: 'medium',
-            context: `New symbols added during orchestration ${orchestrationId}: ${newSymbols.join(', ')}`,
-            timestamp: new Date().toISOString(),
-          });
-          fs.appendFileSync(pendingReviewPath, pendingEntry + '\n', 'utf8');
-        } catch {}
-      }
+  for (const c of scoredDirs) {
+    if (!c.covered) continue;
+    // Has coverage but may need rich docs if it's a new area
+    const isNewArea = newSymbols.length > 0 && touchedFiles.some(f => path.dirname(f) === c.dir);
+    if (isNewArea) {
+      delegatedToDocumentor.push(c.dir);
+      appendPending({
+        path: c.dir,
+        reason: 'captain-debrief-new-symbols',
+        priority: 'medium',
+        context: `New symbols added during orchestration ${orchestrationId}: ${newSymbols.join(', ')}`,
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 
-  // Compute coverage after
-  let coveredAfter = 0;
-  for (const dir of touchedDirs) {
-    const purposePath = path.join(ctx.rootDir, dir, '.purpose');
-    if (fs.existsSync(purposePath)) {
-      try {
-        const content = fs.readFileSync(purposePath, 'utf8').trim();
-        if (content.length > 50) coveredAfter++;
-      } catch {}
+  let coverageTaskId: string | undefined;
+  if (uncoveredDirs.length > 0) {
+    try {
+      coverageTaskId = await queueCoverageGapTask(ctx.rootDir, uncoveredDirs, {
+        source: `orchestration ${orchestrationId}`,
+        placeholders: placeholderPurposes,
+        tags: ['captain-debrief'],
+      });
+    } catch (err) {
+      log.component('#captain').warn('Could not create purpose-coverage task', {
+        orchestrationId, error: err instanceof Error ? err.message : String(err),
+      });
     }
+    log.signal('!coverage-gap-queued').info('Uncovered directories queued for Documentor', {
+      orchestrationId, dirs: uncoveredDirs, taskId: coverageTaskId,
+    });
   }
-  const scoreAfter = totalDirs > 0 ? coveredAfter / totalDirs : 1.0;
 
   // ── Step 4: Record lore entry ────────────────────────
   let loreEntryId = '';
@@ -658,7 +644,8 @@ async function handleCaptainDebrief(
         meta: {
           orchestrationId,
           coverageScore: { before: scoreBefore, after: scoreAfter },
-          coverageAdded,
+          uncoveredDirs,
+          ...(coverageTaskId ? { coverageTaskId } : {}),
           ...(notes ? { notes } : {}),
         },
       },
@@ -844,7 +831,10 @@ async function handleCaptainDebrief(
 
   // ── Assemble debrief report ───────────────────────────
   const report: DebriefReport = {
-    coverageAdded,
+    coverageAdded: [],
+    uncoveredDirs,
+    ...(coverageTaskId ? { coverageTaskId } : {}),
+    placeholderPurposes,
     delegatedToDocumentor,
     loreEntryId,
     coverageScore: {
@@ -878,9 +868,10 @@ async function handleCaptainDebrief(
 // Postflight liveness check (v7 §3 — Cid session-close self-heal)
 // ────────────────────────────────────────────────────────
 
-const LIVENESS_REL = path.join('events', 'settlement-liveness.jsonl');
 /** Window for "this session ran postflight" — recent settlements only. */
 const POSTFLIGHT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
+
+export { PURPOSE_COVERAGE_TASK_TAG };
 
 /**
  * Did the learning chain's postflight stage actually run for this session?
@@ -892,25 +883,17 @@ const POSTFLIGHT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
  * self-heals. No file at all (no settlement happened) also returns false.
  */
 function sessionPostflightRan(paradigmDir: string): boolean {
-  const filePath = path.join(paradigmDir, LIVENESS_REL);
-  if (!fs.existsSync(filePath)) return false;
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n').filter(l => l.trim().length > 0);
+    // Union of the machine home and the frozen legacy repo log (scoped learning S2).
+    const rows = readLearningRows<{ ts?: string; stages?: { runPostflightLearning?: string } }>(
+      'settlement-liveness', path.dirname(paradigmDir),
+    ).sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')));
     const cutoff = Date.now() - POSTFLIGHT_WINDOW_MS;
     // Scan recent records (last 50) for a live postflight stage.
-    for (const line of lines.slice(-50)) {
-      try {
-        const rec = JSON.parse(line) as {
-          ts?: string;
-          stages?: { runPostflightLearning?: string };
-        };
-        const ts = rec.ts ? new Date(rec.ts).getTime() : NaN;
-        if (Number.isNaN(ts) || ts < cutoff) continue;
-        if (rec.stages?.runPostflightLearning === 'ok') return true;
-      } catch {
-        // Malformed line — skip.
-      }
+    for (const rec of rows.slice(-50)) {
+      const ts = rec.ts ? new Date(rec.ts).getTime() : NaN;
+      if (Number.isNaN(ts) || ts < cutoff) continue;
+      if (rec.stages?.runPostflightLearning === 'ok') return true;
     }
   } catch {
     // Read failure → treat as "did not run" so Cid self-heals rather than
@@ -1467,22 +1450,4 @@ function renderContextBrief(brief: ContextBrief): string {
   lines.push(`${divider}`);
 
   return lines.join('\n');
-}
-
-function buildPurposeStub(dirBasename: string, dirPath: string, touchedFiles: string[]): string {
-  const relevant = touchedFiles.filter(f => path.dirname(f) === dirPath);
-  const fileList = relevant.slice(0, 3).map(f => `# - ${path.basename(f)}`).join('\n');
-
-  return `# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
-name: ${dirBasename}
-description: "TODO: describe what this directory/module does"
-context:
-  - "Stub created by Cid during coverage audit — update with real context"
-${fileList ? `# Key files touched:\n${fileList}` : ''}
-components:
-  ${dirBasename}:
-    description: "TODO: describe this component"
-    tags: []
-`;
 }

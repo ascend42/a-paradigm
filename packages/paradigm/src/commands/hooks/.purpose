@@ -10,7 +10,7 @@ components:
       - hooks
       - skills
   delegation-hook:
-    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates: when tool_input.subagent_type is a roster agent (`paradigm:*`, or $CWD/.claude/agents/<type>.md exists) AND tool_response is non-empty, writes .paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent). Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
+    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates (TD-2026-10-28-956): when tool_input.subagent_type is a team agent (`paradigm:*`, a project agent in <root>/.claude/agents, or a user-global agent in ~/.claude/agents such as atelier-mika; matched by <type>.md or `name:` frontmatter) AND tool_response is non-empty, writes only <root>/.paradigm/.sessions/<session_id>.orchestrated (lasts for that session) when the input has a session id, else <root>/.paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent; honoured by age). Frontmatter names are matched as fixed strings. Markers go to the project root (#paradigm-resolve _pm_project_root), never a linked worktree. Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
     type: hook
     file: scripts/claude-code-delegation.sh
     components:
@@ -23,14 +23,30 @@ components:
       - hooks
       - orchestration
       - team-funnel
+  precommit-hooks:
+    description: 'Retired pre-commit hooks (scripts/claude-code-precommit.sh PreToolUse Bash, scripts/cursor-precommit.sh beforeShellExecution). They used to rebuild the index on `git commit` and `git add` scan-index.json, navigator.yaml and flow-index.json, whose generatedAt stamp gave every commit an index diff (T-2026-10-28-002). Now no-ops that drain stdin and exit 0; the files stay because existing settings.json / hooks.json entries call them. The generated files are gitignored (#session-markers-gitignore); the MCP server serves a live index and SessionStart rebuilds on a fresh clone.'
+    type: hook
+    file: scripts/claude-code-precommit.sh
+    tags:
+      - hooks
+  touched-files-ledger:
+    description: 'Claude Code PostToolUse hook (matcher: Write|Edit|MultiEdit|NotebookEdit) — scripts/claude-code-postwrite.sh, copied to the plugin as paradigm-postwrite.sh and installed by `paradigm hooks install --claude-code` (the installer, via POSTWRITE_MATCHER, upgrades any other matcher in place, including the never-matching ''Edit,Write''). Appends the edited file (tool_input.file_path or notebook_path; backslashes normalised), relative to the project root (_pm_rel: logical, physical or Git Bash pwd -W form), to <root>/.paradigm/.sessions/<session_id>.touched, deduped. The Claude Code Stop hook reads `git -c core.quotePath=false diff --name-only --relative HEAD` line by line and judges the files in this ledger; other changed files (Bash edits, other sessions, worktrees) are listed as an advisory and never block. A session with no ledger is judged on the changed files newer than .sessions/<id>.started (written by SessionStart or the first hook, via _pm_session_started), or on the whole tree when the start is unknown. Without a session id the Stop hook judges the whole tree. Always exit 0, no output. Hook-monitor label PostToolUse-Write.'
+    type: hook
+    file: scripts/claude-code-postwrite.sh
+    tags:
+      - hooks
+      - stop-hook
   paradigm-hooks:
-    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing .purpose stubs, missing lore entries). Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
+    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing lore entries); uncovered directories are filed as a purpose-coverage task (#purpose-coverage-queue) and still named in the block message, and no .purpose stub is ever written. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     type: command
     signals:
       - '!compliance-violation'
       - '!hook-installed'
   hook-monitor:
     description: |
+      S2: the ring (hook-timings.jsonl) and stop-timing.jsonl live in the
+      project's machine home (OS state dir), resolved by _pm_learn_path; the
+      legacy .paradigm/events copy is frozen and read by doctor only as a fallback.
       7.15.2 hook self-monitoring (scripts/paradigm-hook-monitor.sh, sourced by
       every Claude Code hook via _pm_begin <Hook> <timeoutMs> <budgetMs>).
       Appends a start record and, from an EXIT trap, an end record (wall ms,
@@ -68,6 +84,10 @@ components:
       (.paradigm/.hook-health-warned = "<session_id> <ms>"); also trims the
       ring to its cap. Always exits 0. Registered by the plugin hooks.json AND by
       the project-level `paradigm hooks install --claude-code` (.claude/settings.json).
+      Fresh-clone rebuild (T-2026-10-28-002): when .paradigm/scan-index.json or
+      navigator.yaml is missing (generated state is gitignored by
+      #session-markers-gitignore) it starts `paradigm index --quiet` through
+      #paradigm-resolve, fully detached; cursor-session-start.sh does the same.
     type: hook
     file: scripts/claude-code-session-start.sh
     tags:
@@ -86,6 +106,73 @@ components:
     tags:
       - hooks
       - windows
+  git-hook-state:
+    description: |
+      git-hook-state.ts: classes .git/hooks/post-commit and pre-push as absent,
+      foreign (no "# Paradigm <name> hook" + "# Installed by: paradigm hooks
+      install" header: never touched), outdated (paradigm-hook-version below
+      GIT_HOOK_VERSION = 3, no marker = v1, or still running `npx paradigm`) or
+      current. `paradigm hooks install` upgrades an outdated Paradigm hook
+      without --force, keeping the old file as <name>.paradigm-v<N>.bak so
+      local edits survive; a current one is left alone; `hooks status` and
+      `paradigm doctor` report outdated ones. Free of chalk/generated-hooks so
+      doctor loads it cheaply. Bump GIT_HOOK_VERSION with the hook bodies'
+      marker in index.ts.
+    type: utility
+    file: git-hook-state.ts
+    tags:
+      - hooks
+      - git
+  paradigm-resolve:
+    description: |
+      S2: _pm_learn_path <artifact> [<root>] prints where a hook appends a
+      learning row (`paradigm internal learn-path`), cached in
+      .paradigm/.sessions/learn-paths keyed by the physical root and
+      $PARADIGM_LEARNING_HOME (a moved repo misses and its stale lines are
+      dropped); _pm_learn_append writes the row. The team-funnel, overrides,
+      compliance-history and hook-timings writers go through it; when it
+      cannot resolve, the write is skipped (legacy repo logs stay frozen).
+      Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
+      plugins and written by `paradigm hooks install` beside paradigm-common.sh;
+      the git post-commit / pre-push hooks embed it, hook version 3) that is the
+      one place the hooks find the paradigm CLI. Used by paradigm-common.sh
+      (Stop hooks, project root = the caller's $CWD), both pre-commit hooks
+      (project root = CLAUDE_PROJECT_DIR / Cursor input cwd, then the git
+      toplevel, then pwd; the hook cd's there before indexing) and the git hooks
+      (git toplevel). `_pm_resolve_paradigm <root>` normalises the root with
+      `CDPATH= cd -P -- root && pwd -P` and sets PARADIGM_BIN to a single
+      command word: (1) the project's own @a-company/paradigm: node runs the
+      `paradigm` bin entry read from
+      <root>/node_modules/@a-company/paradigm/package.json (never whatever
+      another package put at node_modules/.bin/paradigm), the root only (never
+      a parent or the subdirectory the hook ran from), never a copy committed to
+      git (`git ls-files` non-empty), and not when the root has a .git that git
+      fails on (dubious ownership, no git): it cannot be checked; quiet outside
+      a repo. No npx, because npm 11 applies the project's devEngines to npx
+      and a pnpm-only repo fails EBADDEVENGINES; (2) `paradigm` on PATH. No npx
+      step (Aegis P1). The plugin's MCP launcher (#paradigm-mcp-launch) uses the
+      same order. Aegis L3 is narrowed, not dropped: only @a-company/paradigm
+      at the project root runs (the trust of the workspace itself);
+      paradigm-skill-used.sh stays PATH-only (no project root).
+      Project root and session state (T-2026-10-27-005): `_pm_project_root
+      <cwd>` sets PM_ROOT to $CLAUDE_PROJECT_DIR (when it holds .paradigm/),
+      else the outermost .paradigm/ from the main checkout (parent of `git
+      rev-parse --path-format=absolute --git-common-dir`, relative form on old
+      git) down to the cwd's --show-prefix, else <cwd>; a linked worktree the
+      session did not start in is judged at the root and a project in a repo
+      subfolder is found. Backslashes are normalised (_pm_slashes). The Cursor
+      stop hook does not use it (workspace_roots[0]). `_pm_session_id` reads session_id (sanitised) into PM_SID.
+      Per-session files live in <root>/.paradigm/.sessions/<id>.<kind>
+      (touched ledger, orchestrated, stop-fp, team-prompted, team-reminded);
+      `_pm_gate_resolved` honours the session's orchestrated file or a fresh
+      shared .orchestrated / .solo-declared (TTL); `_pm_once` caps a reminder
+      to once per session (per TTL window without a session id).
+    type: utility
+    file: scripts/paradigm-resolve.sh
+    components:
+      - '#paradigm-mcp-launch'
+    tags:
+      - hooks
   stop-hook-timing:
     description: |
       7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on
@@ -94,20 +181,79 @@ components:
       (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
-      Check 4 anchors); (3) no network (npx --no-install); (4) generated-state
-      scope (8.0): when every modified file is .paradigm/* or .warpline/* (the
+      Check 4 anchors); (3) no network: the CLI resolves through
+      scripts/paradigm-resolve.sh (#paradigm-resolve), never a fetch; (4) generated-state
+      scope (8.0): when every modified file is .paradigm/* or .warpline/*,
+      at the root or nested in a package (packages/x/.paradigm/events; the
       hooks, post-commit and MCP tools write these on every turn) no code
       changed, so purpose discovery (Checks 4/6) and the compliance-check CLI
       are skipped (~0.35 s instead of ~1.2-1.9 s); remediations, purpose-required
-      patterns and the memory nudge still run. .warpline/* never counts as a
-      source file (it inflated the orchestration magnitude). Enforced by
-      tests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a
-      lint check on background jobs) and tests/hooks-monitor.test.ts.
+      patterns and the memory nudge still run. Generated state (root or nested)
+      never counts as a source file (it inflated the orchestration magnitude).
+      Enforced by tests/hooks-timing.test.ts (each hook under 2 s through a
+      pipe, plus a lint check on background jobs) and tests/hooks-monitor.test.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:
       - hooks
       - performance
+  stop-loop-guard:
+    description: |
+      8.0.2 Stop-hook loop guard (claude-code-stop.sh, cursor-stop.sh; helpers
+      _pm_violation_fp and _pm_record_unresolved in paradigm-common.sh). A
+      violation the agent cannot fix inside the turn used to block every stop
+      forever. Claude Code: the hook reads stop_hook_active (jq, grep
+      fallback); on a blocked Stop it fingerprints the violation set (headline
+      "  - " lines, digits stripped, sorted, cksum) and keeps it in the marker
+      .paradigm/.sessions/<session_id>.stop-fp (.paradigm/.stop-block-fingerprint
+      without a session id; line 1 fingerprint, line 2 consecutive blocks).
+      Loop cap (T-2026-10-27-005): a violation set blocks once. When
+      stop_hook_active is true AND the fingerprint matches (the fix attempt
+      changed nothing) OR the count is already 3, it prints the violations
+      under "unresolved after a fix attempt — ending the turn", appends a
+      stop-block-unresolved row (fingerprint, violations, consecutive) to
+      .paradigm/events/team-funnel.jsonl and exits 0, leaving the marker. On a
+      later turn the identical set is advisory ("already reported this
+      session"), exit 0. A changed set writes the marker (count+1 when active,
+      else 1) and exits 2. Cursor: RETRY_COUNT comes from
+      the input's loop_count when present, else the .stop-hook-active file
+      counter; the same fingerprint rule runs before the 3-retry cap. Every
+      pass (including no modifications) removes the marker. PARADIGM_OVERRIDE
+      is unchanged (overridden remediations never reach VIOLATIONS). The marker
+      is in the #session-markers-gitignore block. Tests:
+      tests/hooks-stop-loop-guard.test.ts.
+    type: utility
+    file: scripts/claude-code-stop.sh
+    signals:
+      - '!team-funnel'
+    tags:
+      - hooks
+      - stop-hook
+      - team-funnel
+  stop-hook-purpose-coverage:
+    description: >-
+      Stop hook Checks 1 and 2 (paradigm-common.sh, section
+      purpose-coverage-resolve) use the shared #purpose-coverage rule (T-2026-10-27-003):
+      one `paradigm purpose coverage <dirs...>` call (~150 ms) scores every
+      modified source directory; _covering_purpose reads the tab-separated
+      answer. Covered = own .purpose or an ancestor that documents the dir;
+      placeholder stubs never count. Check 1 flags a covered dir whose
+      covering .purpose was not updated; Check 2 flags dirs no .purpose
+      documents. When the CLI cannot answer (missing, or an older CLI) it falls
+      back to the nearest-.purpose walk; the coverage_shared counter records
+      which rule ran. Under PARADIGM_AUTO_FIX=1 the same call adds --queue
+      (and Check 11 purpose-required calls --require-own --queue): uncovered dirs
+      become one deduped purpose-coverage task, the block message names the dirs
+      and the task id, and nothing is written into the tree. Check 5 skips the
+      JSON lines Cid appends to .pending-review for new-symbol areas (they are not
+      file paths). Coverage gaps are never written there; the purpose-coverage
+      task is their only record.
+      Tests: tests/hooks-stop.test.ts (shared rule and auto-fix cases).
+    type: utility
+    file: scripts/paradigm-common.sh
+    components:
+      - '#purpose-coverage'
+    tags: [hooks, stop-hook, coverage]
   has-compliance-claimant:
     description: |
       v6.0.4 POSIX sh helper in paradigm-common.sh that reads
@@ -129,11 +275,17 @@ components:
       injects a decision-time orchestration directive into model context, once
       per TTL window, telemetry on every match) and team-gate (PreToolUse
       Write|Edit; one-time stderr advisory before source edits in unresolved
-      sessions). Both honor fresh .orchestrated / .solo-declared markers and
-      the PARADIGM_TEAM_GATE=off kill switch. All gate markers, .orchestrated
-      included, are honored by AGE (PARADIGM_GATE_TTL_HOURS, default 4h) and
-      never stop-cleared, because Stop fires per assistant turn (Check 13 uses
-      the same TTL test). Check 13 in paradigm-common.sh records deduped
+      sessions). Both read markers at the project root (#paradigm-resolve) and
+      honour a team-agent delegation this session
+      (.paradigm/.sessions/<id>.orchestrated, lasts for the session), fresh
+      shared .orchestrated / .solo-declared markers (by AGE,
+      PARADIGM_GATE_TTL_HOURS, default 4h), and the PARADIGM_TEAM_GATE=off kill
+      switch. Each reminder fires once per session (.sessions/<id>.team-prompted
+      / .team-reminded; per TTL window without a session id). The copy
+      recommends delegating to a team agent with the Agent tool, or `paradigm
+      solo`; paradigm_orchestrate_inline does not satisfy the gate (T-2026-10-27-005).
+      Markers are never stop-cleared, because Stop fires per assistant turn
+      (Check 13 reads the same markers). Check 13 in paradigm-common.sh records deduped
       bypass events to team-funnel telemetry at both warn and block severity.
     type: utility
     components:
@@ -173,6 +325,12 @@ components:
       since .paradigm/.memory-last-review > 30, or never-reviewed + entries > 15)
       — NO LLM, NO scan, NO content reads. Appends at most one line to ADVISORY;
       NEVER touches VIOLATIONS. Fail-open on missing HOME/dir/stat: emits nothing.
+      <slug> is Claude Code's project key: every character of $CWD other than
+      A-Z a-z 0-9 becomes '-' (Windows C:\Users\me\repo -> C--Users-me-repo;
+      under Git Bash a /c/... $CWD is first converted with cygpath -w). Before
+      PR #63 only '/' was replaced, so Windows paths (and POSIX paths with '.',
+      '_' or spaces) never found the memory dir. Same rule as nativeMemorySlug
+      in paradigm-mcp learning-stores.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:

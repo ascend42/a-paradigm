@@ -45,13 +45,30 @@ components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from .purpose files'
   zod-schemas:
-    description: '#zod-schemas: Zod schemas for PurposeFile, PurposeItem, etc.'
+    description: '#zod-schemas: Zod schemas (zod 4) for PurposeFile, PurposeItem, etc. Every z.record declares its string key schema.'
   validator:
     description: '#validator: Validates parsed purpose data — includes cross-file validation (validateCrossFile) for parent refs, symbol list refs, and flow step refs across all .purpose files'
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
   aggregator:
-    description: '#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses.'
+    description: '#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses. findPurposeFiles/getAllPurposeFiles take an opt-in { respectGitignore } (T-2026-10-27-003): drops .purpose files git check-ignore reports (build and release output such as a gitignored packages/gnomon/release/Gnomon.app copy), falling back to NON_GIT_RELEASE_IGNORE (**/release/**) outside a git work tree. Default off; the premise index (INDEX_DISCOVERY), the MCP purpose validate and symbol rename, and `paradigm purpose validate` opt in. getAllPurposeFilesCached passes the same options through.'
+  purpose-coverage:
+    description: >-
+      #purpose-coverage: src/coverage.ts (T-2026-10-27-003). One definition of
+      directory coverage for Cid's brief and debrief. resolvePurposeCoverage(root,
+      dir) walks the own-then-ancestor chain (the doctor/stop-hook walk) and returns
+      covered when the dir's own .purpose is real documentation, or the nearest
+      non-placeholder ancestor documents it (purposeDocumentsDir: a symbol's path /
+      paths / file / files / tests / anchors points into or contains the dir, or the
+      non-comment text mentions a path inside it). isPlaceholderPurposeContent: under
+      50 chars, a generated-stub marker (PURPOSE_PLACEHOLDER_MARKERS), or every
+      description TODO; placeholders never count and are listed. filterGitIgnored:
+      git check-ignore --stdin, null outside a work tree. Pure, no logging.
+    path: src/coverage.ts
+    type: module
+    tags: [core, coverage]
+    tests:
+      - src/coverage.test.ts
   purpose-parse-cache:
     description: >-
       #purpose-parse-cache: src/parse-cache.ts (7.13.0) — PurposeParseCache,

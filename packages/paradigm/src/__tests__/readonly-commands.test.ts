@@ -9,9 +9,9 @@
  * the roster, no notice marker), a legacy root-level lore entry and a git repo.
  *
  * Tools that auto-approve shell commands (Gnomon's auto-edits classifier) rely
- * on this test. By default it runs the CLI from source (vite-node, shipped with
- * vitest). Set PARADIGM_CLI_UNDER_TEST=/abs/path/dist/index.js to run it
- * against a built bundle instead.
+ * on this test. By default it runs the CLI from source with tsx (a devDependency;
+ * vitest 4+ no longer ships vite-node). Set PARADIGM_CLI_UNDER_TEST=/abs/path/dist/index.js
+ * to run it against a built bundle instead.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -30,9 +30,7 @@ function runnerArgv(): string[] {
   const underTest = process.env.PARADIGM_CLI_UNDER_TEST;
   if (underTest) return [underTest];
   const req = createRequire(path.join(PKG_DIR, 'package.json'));
-  const vitestDir = path.dirname(req.resolve('vitest/package.json'));
-  const viteNodeDir = path.dirname(createRequire(path.join(vitestDir, 'package.json')).resolve('vite-node/package.json'));
-  return [path.join(viteNodeDir, 'vite-node.mjs'), '--root', PKG_DIR, ENTRY];
+  return [req.resolve('tsx/cli'), ENTRY];
 }
 
 /** One invocation per case; the first words must name a READ_ONLY_COMMANDS entry (aliases allowed via `as`). */

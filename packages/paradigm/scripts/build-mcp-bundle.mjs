@@ -33,6 +33,17 @@ const SHIM = [
   'const __dirname = __pgDirname(__filename);',
 ].join(' ');
 
+// zod 4 + esbuild 0.28: the dynamic imports (sentinel, gnomon/agent) make zod's modules lazy (__esm), and esbuild then
+// drops the init call behind `zod/v4`'s `export * from './classic/index.js'`, so the MCP SDK's top-level schemas run
+// before ZodCustom exists ("is not a constructor" at load). `zod` (the root) is the same v4 classic API and keeps its
+// init call, so the bare `zod/v4` specifier is resolved to it.
+const ZOD_V4_ROOT = {
+  name: 'zod-v4-root',
+  setup(b) {
+    b.onResolve({ filter: /^zod\/v4$/ }, (args) => b.resolve('zod', { resolveDir: args.resolveDir, kind: args.kind, importer: args.importer }));
+  },
+};
+
 fs.rmSync(OUT, { recursive: true, force: true });
 await build({
   entry: { 'paradigm-mcp': path.join(PKG, '..', 'paradigm-mcp', 'src', 'index.ts') },
@@ -48,6 +59,7 @@ await build({
   config: false,
   silent: true,
   noExternal: [/.*/],
+  esbuildPlugins: [ZOD_V4_ROOT],
   // keep node: prefixes (node:sqlite exists only under its prefix)
   removeNodeProtocol: false,
   outExtension: () => ({ js: '.mjs' }),

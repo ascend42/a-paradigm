@@ -34,6 +34,32 @@ describe('doctorCommand', () => {
     expect(result).toBe(true);
   });
 
+  it('reports an outdated Paradigm git hook (still running npx paradigm)', async () => {
+    const { rootDir, cleanup: c } = createTempProject({
+      withSpecs: true,
+      withDocs: true,
+      withPurpose: true,
+      withScanIndex: true,
+      withGit: true,
+    });
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, '.paradigm', 'prompts'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'specs', '.index.yaml'), 'version: 1.0.0\ndescription: stub\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'prompts', '.index.yaml'), 'version: 1.0.0\ndescription: stub\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, '.premise'), '', 'utf8');
+    fs.mkdirSync(path.join(rootDir, 'plugins', 'paradigm'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'plugins', 'paradigm', 'hooks.json'), '{}', 'utf8');
+    const hook = path.join(rootDir, '.git', 'hooks', 'pre-push');
+    fs.writeFileSync(hook, '#!/bin/sh\n# Paradigm pre-push hook - reindex history before pushing\n# Installed by: paradigm hooks install\nnpx paradigm history reindex\n');
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { lines.push(a.join(' ')); });
+    expect(await doctorCommand({ rootDir })).toBe(false);
+    expect(lines.join('\n')).toMatch(/Git pre-push hook[\s\S]*Outdated \(v1, current v3\) and still runs `npx paradigm`/);
+    // Without the hook the same project is healthy.
+    fs.rmSync(hook);
+    expect(await doctorCommand({ quiet: true, rootDir })).toBe(true);
+  });
+
   it('detects missing .paradigm/', async () => {
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
@@ -170,6 +196,10 @@ describe('doctorCommand', () => {
     expect(allOutput).toContain('Classroom / learning health');
     expect(allOutput).toContain('repeat-failure-rate');
     expect(allOutput).toMatch(/0\.5/);
+    // S4: the rate names its population (these rows have no home or author: legacy).
+    expect(allOutput).toContain('repeat-failure-rate [population: legacy-prior]');
+    // S4: the census line per home, with the legacy count.
+    expect(allOutput).toMatch(/Learning census\s+classroom-certifications: repo 2 \(legacy 2\) · user 0 · machine 0 · last write/);
     // The healthy "loop is correcting" advisory fires on the overturned cert.
     expect(allOutput).toMatch(/loop is correcting/i);
   });

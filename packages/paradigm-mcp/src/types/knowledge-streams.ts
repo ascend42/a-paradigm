@@ -18,6 +18,22 @@
 // Stream 1: Work Log
 // ────────────────────────────────────────────────────────
 
+/**
+ * Where a learning record lives (scoped learning, TD-2026-10-28-820). Named
+ * `home`, not `scope`: notebook `scope` already means content class.
+ * - 'repo'    — committed under <root>/.paradigm, shared with the team
+ * - 'user'    — ~/.paradigm (per repo under projects/<repoId>), follows the person
+ * - 'machine' — local to this machine, never synced or committed
+ * Precedence: entry home > config `learning.default_home.<artifact>` > registry default.
+ */
+export type LearningHome = 'repo' | 'user' | 'machine';
+
+/**
+ * How a record's home was set (scoped learning S3): `explicit` when the human
+ * chose or confirmed it, `inferred` otherwise (from wording or transferable).
+ */
+export type HomeSource = 'explicit' | 'inferred';
+
 export type WorkOutcome = 'pass' | 'fail' | 'partial' | 'blocked';
 
 export interface WorkLogEntry {
@@ -50,6 +66,8 @@ export interface WorkLogEntry {
   lines_removed?: number;
   /** Linked lore entry ID (backward compat) */
   linked_lore?: string;
+  /** Where this record lives. Absent on legacy rows (registry default applies). */
+  home?: LearningHome;
 }
 
 // ────────────────────────────────────────────────────────
@@ -125,6 +143,14 @@ export interface JournalEntry {
    * Omitted entirely for ordinary learning-journal entries.
    */
   provenance?: JournalProvenance;
+  /**
+   * The scope this learning belongs to, i.e. where its promotion lands. The
+   * journal FILE always lives in the user home (~/.paradigm/agents); this field
+   * is carried to the notebook and the promotion-decision row. Absent: derived
+   * from `transferable` (false → 'repo', true → 'user'); see promotionHomeOf.
+   */
+  home?: LearningHome;  /** S3: whether the human chose/confirmed `home` (explicit) or it was inferred. Carried to the notebook entry. */
+  home_source?: HomeSource;
 }
 
 // ────────────────────────────────────────────────────────
@@ -198,6 +224,8 @@ export interface TeamDecision {
    * the decision chain without a separate index. D2 Loid addendum.
    */
   supersedes?: string[];
+  /** Where this decision lives. Absent on legacy rows (registry default 'repo'). */
+  home?: LearningHome;
 }
 
 // ────────────────────────────────────────────────────────
@@ -316,4 +344,10 @@ export interface PromotionDecision {
   reason?: PromotionReason;
   /** belief-delta-v1 only: shadow verdict of the retired absolute >= 0.8 gate. */
   absoluteWouldPromote?: boolean;
+  /**
+   * Calibration population tag: the home of the journal this row measures
+   * (same home as the promotion it decides). Legacy rows lack it; readers apply
+   * the registry default. Rates are computed per home, never pooled silently.
+   */
+  home?: LearningHome;
 }

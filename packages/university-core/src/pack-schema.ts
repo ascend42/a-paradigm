@@ -39,11 +39,11 @@ export const SectionSchema = z
     name: z.string().min(1).max(120),
     order: z.number().int().min(0).max(9999),
     style: z.enum(SECTION_STYLES, {
-      errorMap: () => ({ message: `section.style must be one of ${SECTION_STYLES.join('|')}` }),
+      error: () => `section.style must be one of ${SECTION_STYLES.join('|')}`,
     }),
     description: z.string().max(1000).optional(),
     // Strict boolean — rejects "true"/"false" strings and 0/1 numerics.
-    default: z.boolean({ invalid_type_error: 'section.default must be a boolean' }).optional(),
+    default: z.boolean({ error: 'section.default must be a boolean' }).optional(),
   })
   .strict();
 

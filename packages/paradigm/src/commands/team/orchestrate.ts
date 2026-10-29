@@ -27,6 +27,7 @@ import {
   BackgroundOrchestration,
 } from '../../core/background-orchestrator.js';
 import { loadAgentsManifest } from './loader.js';
+import { holdWhilePrompting, stripTerminalEscapes } from '../../core/providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -49,6 +50,8 @@ export interface OrchestrateCommandOptions {
   notify?: string;
   /** Enable PM governance */
   pm?: boolean;
+  /** --allow-commands / --no-allow-commands; undefined = use the saved choice. */
+  allowCommands?: boolean;
 }
 
 // ============================================================================
@@ -136,6 +139,7 @@ export async function teamOrchestrateCommand(
 
     const bgOrch = await bgOrchestrator.startBackground(task, {
       mode,
+      commandPolicy: { allowCommands: options.allowCommands, interactive: false },
       orchestratorModel: options.model,
       budget,
       notify: true,
@@ -164,6 +168,11 @@ export async function teamOrchestrateCommand(
 
     const comparison = await orchestrator.compare(task, {
       orchestratorModel: options.model,
+      commandPolicy: {
+        allowCommands: options.allowCommands,
+        onBeforePrompt: () => spinner.stop(),
+        onAfterPrompt: () => spinner.start(),
+      },
       budget,
       checkpoints: options.checkpoint ? {
         beforeAgentSpawn: true,
@@ -195,10 +204,18 @@ export async function teamOrchestrateCommand(
     spinner.text = `Orchestrating (${modeLabel} mode)...`;
   }
 
+  // Allowed-but-sensitive writes (#write-guard) the user should look at.
+  const reviewWrites = new Set<string>();
+
   // Callbacks for live output
   const result = await orchestrator.orchestrate(task, {
     mode,
     orchestratorModel: options.model,
+    commandPolicy: {
+      allowCommands: options.allowCommands,
+      onBeforePrompt: () => spinner.stop(),
+      onAfterPrompt: () => { if (!options.live) spinner.start(); },
+    },
     budget,
     checkpoints: options.checkpoint ? {
       beforeAgentSpawn: true,
@@ -208,11 +225,12 @@ export async function teamOrchestrateCommand(
       blockOnViolations: true,
     } : undefined,
     onMessage: (source, message) => {
+      for (const file of message.reviewWrites ?? []) reviewWrites.add(`${file} (${source})`);
       if (options.json || options.quiet) return;
 
       if (options.live && message.type === 'text') {
-        // Live streaming mode
-        process.stdout.write(chalk.gray(`[${source}] `) + message.content);
+        // Live streaming mode. Held while the consent question is on screen.
+        holdWhilePrompting(() => process.stdout.write(chalk.gray(`[${source}] `) + stripTerminalEscapes(message.content)));
       }
     },
     onAgentStart: (agent, subtask, model) => {
@@ -220,7 +238,7 @@ export async function teamOrchestrateCommand(
 
       const agentLabel = `${agent} (${model})`;
       if (options.live) {
-        console.log(chalk.cyan(`\n▶ ${agentLabel}: ${subtask}`));
+        holdWhilePrompting(() => console.log(chalk.cyan(`\n▶ ${agentLabel}: ${subtask}`)));
       } else {
         spinner.text = `${agentLabel}: ${subtask.slice(0, 50)}...`;
       }
@@ -232,7 +250,7 @@ export async function teamOrchestrateCommand(
         const status = agentResult.success ? chalk.green('✓') : chalk.red('✗');
         const tokens = agentResult.relay ? formatTokens(agentResult.relay.metrics.tokens_used.total) : '0';
         const agentLabel = `${agent} (${model})`;
-        console.log(`${status} ${agentLabel} completed (${tokens})`);
+        holdWhilePrompting(() => console.log(`${status} ${agentLabel} completed (${tokens})`));
       }
     },
     onCheckpoint: async (description) => {
@@ -255,11 +273,16 @@ export async function teamOrchestrateCommand(
 
   // Output results
   if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({ ...result, reviewWrites: [...reviewWrites] }, null, 2));
     return;
   }
 
   displayResult(result);
+  if (reviewWrites.size > 0) {
+    console.log(chalk.yellow('  Review these writes:'));
+    for (const file of reviewWrites) console.log(chalk.yellow(`    ${file}`));
+    console.log();
+  }
 }
 
 // ============================================================================

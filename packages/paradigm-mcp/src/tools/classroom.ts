@@ -37,10 +37,10 @@ import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 // (TD-2026-06-19-007) — shared with `paradigm doctor` so the metric never
 // drifts between the MCP tool and the CLI. The cert WRITER stays in
 // field-failures.ts; only the read + rollup is shared.
-import {
-  readClassroomCertifications,
-  computeRepeatFailureRate,
-} from '@a-company/premise-core';
+// Scoped learning: certifications are read through field-failures (the union of
+// every home), so a transferable:true promotion's user-home cert is counted.
+import { computeRepeatFailureRate } from '@a-company/premise-core';
+import { readClassroomCertifications } from '../utils/field-failures.js';
 
 export function getClassroomToolsList() {
   return [
@@ -179,6 +179,15 @@ export function getClassroomToolsList() {
             type: 'string',
             description: 'Optional refined snippet to store instead of the raw correct_approach/insight',
           },
+          home: {
+            type: 'string',
+            enum: ['repo', 'user'],
+            description: "Scoped learning S3: the home the human picked at sign-off (repo = committed and shared, user = just them). Given = home_source explicit. Omit to keep the journal's home.",
+          },
+          homeConfirmed: {
+            type: 'boolean',
+            description: "The human saw the candidate's home at sign-off and kept it: records home_source explicit.",
+          },
         },
         required: ['agent', 'journalId'],
       },
@@ -304,7 +313,7 @@ export async function handleClassroomTool(
       // (shared with `paradigm doctor`). We map its per-agent { resolved,
       // overturned, rate } onto this tool's stable output shape (which also
       // reports pending/survived counts + field-failures).
-      const rollup = computeRepeatFailureRate(certs);
+      const rollup = computeRepeatFailureRate(certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
 
       // Per-agent rollup.
       const agents = new Set<string>();
@@ -349,6 +358,8 @@ export async function handleClassroomTool(
         {
           certifiedBy: args.certifiedBy as 'peer' | 'quorum' | undefined,
           refinedForm: args.refinedForm as string | undefined,
+          home: args.home === 'repo' || args.home === 'user' ? args.home : undefined,
+          homeConfirmed: args.homeConfirmed === true,
         },
       );
       return { handled: true, text: JSON.stringify(result, null, 2) };

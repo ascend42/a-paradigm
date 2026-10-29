@@ -40,7 +40,7 @@
     "@types/react-dom": "^18.2.18",
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^4.2.1",
-    "tsup": "^8.0.1",
+    "tsup": "^9.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vite": "^7.3.1"

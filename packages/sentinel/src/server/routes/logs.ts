@@ -6,7 +6,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { SentinelStorage } from '../../storage.js';
 import type {
   LogEntryInput,
@@ -147,7 +147,7 @@ export function createLogsRouter(options: LogsRouterOptions): Router {
       // Post-insert processing for each accepted entry
       for (const input of entries) {
         const entry: LogEntry = {
-          id: input.id || uuidv4(),
+          id: input.id || randomUUID(),
           timestamp: input.timestamp || new Date().toISOString(),
           level: input.level,
           symbol: input.symbol,

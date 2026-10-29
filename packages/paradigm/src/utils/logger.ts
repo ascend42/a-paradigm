@@ -53,9 +53,10 @@ class SymbolLogger {
     }
   }
 
+  /** Debug goes to stderr, never stdout: stdout carries --json output and MCP protocol frames. */
   debug(message: string, data?: LogData): void {
     if (process.env.DEBUG) {
-      console.log(this.format('debug', message, data));
+      console.error(this.format('debug', message, data));
     }
   }
 

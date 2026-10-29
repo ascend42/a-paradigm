@@ -12,7 +12,7 @@
 # Exit 0 = always (advisory only — never blocks)
 #
 # Telemetry: every eligible prompt appends an `eligible` event to
-# .paradigm/events/team-funnel.jsonl (even when the directive is capped),
+# the machine-home team-funnel.jsonl (even when the directive is capped),
 # so the classifier's false-positive rate and the team-invocation rate are
 # measurable from day one. Loid calibrates the gate from this data.
 #
@@ -42,22 +42,21 @@ if [ -z "$CWD" ]; then
   CWD="$(pwd)"
 fi
 
-# Not a paradigm project — pass
-if [ ! -d "$CWD/.paradigm" ]; then
-  exit 0
-fi
+# Project root + session (paradigm-resolve.sh): markers live at the root, so a
+# delegation credited from a worktree counts here too. Not a paradigm project — pass.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+command -v _pm_project_root >/dev/null 2>&1 || exit 0
+_pm_project_root "$CWD" || exit 0
+CWD=$PM_ROOT
+_pm_session_id "$INPUT"
+_pm_session_started
 
-# Markers expire by age, NOT by Stop-hook clearing — the Stop hook fires per
-# assistant turn, so clearing there would erase solo declarations mid-session
-# and turn the once-per-session cap into once-per-turn nagging. TTL default 4h.
-TTL_MIN=$(( ${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
-marker_fresh() {
-  [ -f "$1" ] || return 1
-  [ -n "$(find "$1" -mmin "-$TTL_MIN" 2>/dev/null)" ]
-}
-
+# Markers are not cleared by the Stop hook (it fires per assistant turn, so
+# clearing there would erase solo declarations mid-session and turn the
+# once-per-session cap into once-per-turn nagging). A team-agent delegation
+# lasts for the session; shared markers expire by age (TTL default 4h).
 # Session already resolved the gate (team ran, or solo was declared) — pass
-if marker_fresh "$CWD/.paradigm/.orchestrated" || marker_fresh "$CWD/.paradigm/.solo-declared"; then
+if _pm_gate_resolved; then
   exit 0
 fi
 
@@ -83,24 +82,19 @@ if [ -z "$MATCHED" ]; then
 fi
 
 # Record the eligible event (telemetry fires every time, even when the
-# directive itself is capped)
-EVENTS_DIR="$CWD/.paradigm/events"
-mkdir -p "$EVENTS_DIR" 2>/dev/null
+# directive itself is capped). Machine home, via _pm_learn_append.
 MATCHED_CLEAN=$(printf '%s' "$MATCHED" | tr -cd 'a-zA-Z ' | head -c 40)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "{\"timestamp\":\"$TS\",\"type\":\"eligible\",\"source\":\"prompt-gate\",\"matched\":\"$MATCHED_CLEAN\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+_pm_learn_append team-funnel "{\"timestamp\":\"$TS\",\"type\":\"eligible\",\"source\":\"prompt-gate\",\"matched\":\"$MATCHED_CLEAN\"}" || true
 
-# Inject the directive at most once per TTL window (age-based, see above)
-MARKER="$CWD/.paradigm/.team-prompted"
-if marker_fresh "$MARKER"; then
-  exit 0
-fi
-touch "$MARKER" 2>/dev/null
+# Inject the directive at most once per session (per TTL window without a
+# session id)
+_pm_once team-prompted || exit 0
 
 # stdout on UserPromptSubmit = injected into the model's context
 echo "[paradigm] This task looks orchestration-eligible (matched: \"$MATCHED_CLEAN\")."
 echo "Standing opt-in for team orchestration exists in this project. Before editing source:"
-echo "  - Run paradigm_orchestrate_inline (mode=\"plan\") to engage the agent team, OR"
+echo "  - Delegate to a team agent with the Agent tool (a paradigm:* agent, or one in .claude/agents or ~/.claude/agents), OR"
 echo "  - Declare solo explicitly: \`paradigm solo <trivial|hotfix|user-directed|exploratory> [note]\`"
 echo "Solo work on eligible tasks without a declaration is recorded as a bypass at session end."
 

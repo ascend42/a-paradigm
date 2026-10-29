@@ -70,7 +70,7 @@ esac
 
 # Skip .paradigm, .claude, and .cursor directories
 case "$REL_PATH" in
-  .paradigm/*|.claude/*|.cursor/*) exit 0 ;;
+  .paradigm/*|*/.paradigm/*|.claude/*|.cursor/*) exit 0 ;;
 esac
 
 # Track: append to .paradigm/.pending-review (deduplicated)

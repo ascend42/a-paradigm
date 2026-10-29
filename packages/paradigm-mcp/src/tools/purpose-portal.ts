@@ -1449,7 +1449,7 @@ async function handleValidate(
     }
   } else {
     // Validate all .purpose files
-    const files = await findPurposeFiles(ctx.rootDir);
+    const files = await findPurposeFiles(ctx.rootDir, { respectGitignore: true });
     for (const filePath of files) {
       const parseResult = parsePurposeFileDetailed(filePath);
 

@@ -205,6 +205,19 @@ purposeCmd
     await purposeValidateCommand(path);
   });
 
+purposeCmd
+  .command('coverage [dirs...]')
+  .description('Is each directory covered? Own .purpose, or an ancestor that documents it; stubs never count')
+  .option('--json', 'Print the coverage records as JSON')
+  .option('--root <dir>', 'Project root the directories are relative to (default: cwd)')
+  .option('--require-own', 'Count a directory as covered only by its own .purpose')
+  .option('--queue', 'File uncovered directories as one purpose-coverage task (deduped; writes no files in the tree)')
+  .option('--source <text>', 'Who found the gap, for the task text')
+  .action(async (dirs: string[] = [], opts: { json?: boolean; root?: string; requireOwn?: boolean; queue?: boolean; source?: string }) => {
+    const { purposeCoverageCommand } = await import('./commands/purpose/coverage.js');
+    await purposeCoverageCommand(dirs, opts);
+  });
+
 // paradigm portal <command>
 const portalCmd = program
   .command('portal')
@@ -398,7 +411,14 @@ migrateCmd
   .option('--dry-run', 'Print the per-step plan without writing anything')
   .option('--apply', 'Also move habits that reference removed University paths into the backup')
   .option('--json', 'Emit the result as JSON')
+  .option('--scopes', 'Scoped learning: copy your own legacy repo rows to your user home (dry run unless --apply)')
+  .option('--yes', 'With --scopes: answer the confirm prompts with yes')
   .action(async (options) => {
+    if (options.scopes) {
+      const { migrateLearningScopesCommand } = await import('./commands/migrate-learning-scopes.js');
+      await migrateLearningScopesCommand({ apply: options.apply, yes: options.yes, json: options.json });
+      return;
+    }
     const { migrateLearningStoresCommand } = await import('./commands/migrate-learning-stores.js');
     await migrateLearningStoresCommand(options);
   });
@@ -753,6 +773,8 @@ teamCmd
   .option('--budget <budget>', 'Budget limits (e.g., "tokens=100000,cost=2")')
   .option('--timeout <ms>', 'Timeout in milliseconds')
   .option('--checkpoint', 'Pause for approval before writes/deletes')
+  .option('--allow-commands', 'Let API-run agents use run_command this run, without asking (not saved)')
+  .option('--no-allow-commands', 'Do not offer run_command to API-run agents this run')
   .option('-q, --quiet', 'Suppress output')
   .option('--json', 'Output as JSON')
   .action(async (agent, path, options) => {
@@ -775,6 +797,8 @@ teamCmd
   .option('--checkpoint', 'Pause for approval between agents')
   .option('--live', 'Stream agent output live')
   .option('--pm', 'Enable PM governance (compliance checks before/after)')
+  .option('--allow-commands', 'Let API-run agents use run_command this run, without asking (not saved)')
+  .option('--no-allow-commands', 'Do not offer run_command to API-run agents this run')
   .option('-q, --quiet', 'Suppress output')
   .option('--json', 'Output as JSON')
   .action(async (task, path, options) => {
@@ -2892,6 +2916,18 @@ program
     await calibrateCommand(options);
   });
 
+// paradigm teach --home <repo|user> — confirm or flip the home of taught lessons (scoped learning S3)
+program
+  .command('teach [entryIds...]')
+  .description('Confirm (--home repo) or flip (--home user) the home of taught lessons. With no ids, every human-taught repo notebook entry whose home was only inferred. Records home_source: explicit, which the commit guard accepts.')
+  .requiredOption('--home <home>', 'repo (committed, shared) or user (just you)')
+  .option('--json', 'Output as JSON')
+  .action(async (entryIds: string[], options) => {
+    const { teachHomeCommand } = await import('./commands/teach.js');
+    const ok = await teachHomeCommand({ home: options.home, ids: entryIds, json: options.json });
+    if (!ok) process.exitCode = 1;
+  });
+
 // paradigm learn routing --backfill — cold-start the routing store from git history
 const learnCmd = program
   .command('learn')
@@ -3208,35 +3244,6 @@ agentCmd
     await agentScopesCommand(id, options);
   });
 
-// --- nevr.land registry commands ---
-
-agentCmd
-  .command('install <source>')
-  .description('Install an agent from nevr.land registry')
-  .option('--global', 'Install globally to ~/.paradigm/agents/')
-  .action(async (source: string, options: { global?: boolean }) => {
-    const { agentInstallCommand } = await import('./commands/agent/registry.js');
-    await agentInstallCommand(source, options);
-  });
-
-agentCmd
-  .command('search <query>')
-  .description('Search nevr.land registry for agents')
-  .option('--limit <n>', 'Limit results', '10')
-  .action(async (query: string, options: { limit?: string }) => {
-    const { agentSearchCommand } = await import('./commands/agent/registry.js');
-    await agentSearchCommand(query, options);
-  });
-
-agentCmd
-  .command('publish')
-  .description('Publish agent to nevr.land registry')
-  .option('--namespace <ns>', 'Organization namespace')
-  .action(async (options: { namespace?: string }) => {
-    const { agentPublishCommand } = await import('./commands/agent/registry.js');
-    await agentPublishCommand(options);
-  });
-
 // Default agent action (list)
 agentCmd
   .action(async () => {
@@ -3325,6 +3332,25 @@ internalCmd
   .action(async (options) => {
     const { activeRemediationsCommand } = await import('./commands/internal/active-remediations.js');
     await activeRemediationsCommand(options);
+  });
+
+internalCmd
+  .command('learning-guard', { hidden: true })
+  .description('Refuse a commit whose staged .paradigm data carries user/machine rows or machine paths (git pre-commit)')
+  .option('--staged', 'Check the staged files (default and only mode)')
+  .action(async (options) => {
+    const { learningGuardCommand } = await import('./commands/internal/learning-guard.js');
+    await learningGuardCommand(options);
+  });
+
+internalCmd
+  .command('learn-path <artifact>', { hidden: true })
+  .description('Print the file a learning-store row is appended to (hook writers, scoped learning)')
+  .option('--root <dir>', 'Project root (default: cwd)')
+  .option('--home <home>', 'Explicit home: repo, user or machine')
+  .action(async (artifact: string, options) => {
+    const { learnPathCommand } = await import('./commands/internal/learn-path.js');
+    await learnPathCommand(artifact, options);
   });
 
 // paradigm override — public CLI to clear active soft-block remediations (v6.1 Wave 3)

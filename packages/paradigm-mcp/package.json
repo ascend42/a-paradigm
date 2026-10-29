@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm-mcp",
-  "version": "8.0.1",
+  "version": "8.0.4",
   "private": true,
   "description": "MCP server for Paradigm - exposes symbols, gates, flows to AI assistants",
   "type": "module",
@@ -23,7 +23,7 @@
     "context"
   ],
   "dependencies": {
-    "@a-company/gnomon": "8.0.1",
+    "@a-company/gnomon": "8.0.2",
     "@a-company/paradigm-logger": "*",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
@@ -31,17 +31,17 @@
     "@a-company/purpose-core": "*",
     "@a-company/sentinel": "*",
     "@a-company/university-core": "*",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "js-yaml": "^4.1.0",
     "sql.js": "^1.10.3",
     "ws": "^8.19.0",
-    "zod": "^3.23.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "tsup": "^8.0.0",
+    "tsup": "^9.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^4.1.0"
+    "vitest": "^5.0.5"
   },
   "author": "ascend42",
   "license": "MIT",

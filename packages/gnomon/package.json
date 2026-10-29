@@ -1,6 +1,6 @@
 {
   "name": "@a-company/gnomon",
-  "version": "8.0.1",
+  "version": "8.0.2",
   "description": "Gnomon — the Paradigm 8.0 kernel: one daemon per user owning sessions, identity, the hash-chained log, approvals and the localhost web endpoint (docs/specs/gnomon.md). ZERO runtime dependencies (G-SEC-01).",
   "type": "module",
   "main": "./dist/index.js",
@@ -49,12 +49,12 @@
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",
     "@types/node": "^24.0.0",
-    "tsup": "^8.0.1",
+    "tsup": "^9.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "vitest": "^5.0.5"
   },
   "optionalDependencies": {
-    "@a-company/gnomon-darwin-arm64": "8.0.1"
+    "@a-company/gnomon-darwin-arm64": "8.0.2"
   },
   "publishConfig": {
     "access": "public"

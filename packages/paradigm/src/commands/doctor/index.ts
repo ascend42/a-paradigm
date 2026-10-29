@@ -10,15 +10,31 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { log } from '../../utils/logger.js';
+import { GIT_HOOK_VERSION, outdatedGitHooks } from '../hooks/git-hook-state.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
 import {
-  readClassroomCertifications,
   computeRepeatFailureRate,
 } from '@a-company/premise-core';
 // Relative-path import into bundled paradigm-mcp source (same pattern as core/task-bridge.ts).
-import { listLearningStores } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+// Doctor's static graph stays logger-free: learning-stores pulls in no
+// @a-company/paradigm-logger, so the doctor suite runs without a logger build.
+// Certifications are read as the union of every home with readLearningRows,
+// the same read field-failures.readClassroomCertifications does (that module
+// loads the MCP logger for its writers), never premise-core's repo-only reader.
+import {
+  certificationsByHome,
+  formatCensusRow,
+  learningCensus,
+  listLearningStores,
+  populationOf,
+  readLearningRows,
+  type CertPopulation,
+} from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+// notebook-loader is logger-free too (it imports only learning-stores).
+import { findLearningConflicts } from '../../../../paradigm-mcp/src/utils/notebook-loader.js';
+import type { ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 
 interface CheckResult {
   name: string;
@@ -137,14 +153,6 @@ export function summarizeLearningLiveness(
   return { completions, journalsWritten, flatline, windowSize: window, level, probeSilent, postflightRows, settlementRows };
 }
 
-function readJsonlRows(file: string): Array<Record<string, unknown>> {
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8')
-    .split('\n').filter(l => l.trim())
-    .map(l => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } })
-    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object');
-}
-
 /**
  * Read BOTH liveness probe files and return the union, ordered by ts. A row
  * without ts inherits the ts of the nearest preceding row in its OWN file
@@ -153,7 +161,6 @@ function readJsonlRows(file: string): Array<Record<string, unknown>> {
  * consistent even when only some rows carry ts. Exported for tests.
  */
 export function readLearningLivenessRecords(rootDir: string): LearningLivenessRecord[] {
-  const ev = path.join(rootDir, '.paradigm', 'events');
   const tag = (source: 'postflight' | 'settlement') => (r: Record<string, unknown>): LearningLivenessRecord => ({
     journalsWritten: typeof r.journalsWritten === 'number' ? r.journalsWritten : undefined,
     ts: typeof r.ts === 'string' ? r.ts : undefined,
@@ -166,8 +173,9 @@ export function readLearningLivenessRecords(rootDir: string): LearningLivenessRe
     return rows.map(r => ({ r, key: (last = r.ts ?? last) }));
   };
   const rows = [
-    ...withSortKey(readJsonlRows(path.join(ev, 'postflight-liveness.jsonl')).map(tag('postflight'))),
-    ...withSortKey(readJsonlRows(path.join(ev, 'settlement-liveness.jsonl')).map(tag('settlement'))),
+    // Union of the machine home and the frozen legacy repo logs (scoped learning S2).
+    ...withSortKey(readLearningRows<Record<string, unknown>>('postflight-liveness', rootDir).map(tag('postflight'))),
+    ...withSortKey(readLearningRows<Record<string, unknown>>('settlement-liveness', rootDir).map(tag('settlement'))),
   ];
   return rows
     .map((x, i) => ({ ...x, i }))
@@ -862,6 +870,19 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       });
     }
 
+    // Git hooks written by `paradigm hooks install` that are outdated (below the
+    // current paradigm-hook-version, or still calling `npx paradigm`, which can
+    // fetch and run the unrelated public "paradigm" package). Upgraded in place
+    // by `paradigm hooks install`, no --force needed.
+    for (const hook of outdatedGitHooks(cwd)) {
+      results.push({
+        name: `Git ${hook.name} hook`,
+        status: 'warn',
+        message: `Outdated (v${hook.version}, current v${GIT_HOOK_VERSION})${hook.npx ? ' and still runs `npx paradigm`' : ''}`,
+        fix: 'paradigm hooks install',
+      });
+    }
+
     // Check habits config validity
     const habitsPath = path.join(cwd, '.paradigm', 'habits.yaml');
     if (fs.existsSync(habitsPath)) {
@@ -1035,7 +1056,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       // Chain sub-detail from settlement rows (severed stages).
       type Chain = { status: CheckResult['status']; text: string; fix?: string };
       let chain: Chain | undefined;
-      const settlementRows = readJsonlRows(path.join(cwd, '.paradigm', 'events', 'settlement-liveness.jsonl')) as Array<{
+      const settlementRows = readLearningRows<Record<string, unknown>>('settlement-liveness', cwd) as Array<{
         chainLive?: boolean; stages?: Record<string, string>;
       }>;
       if (settlementRows.length > 0) {
@@ -1131,6 +1152,33 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     } catch {
       // Census is advisory.
     }
+
+    // Scoped learning S4: the census per home (repo / user / machine), the
+    // legacy rows, the last write and the learn-path skips, one line per store.
+    try {
+      for (const row of learningCensus(cwd)) {
+        results.push({ name: 'Learning census', status: 'info', message: formatCensusRow(row) });
+      }
+    } catch {
+      // Census is advisory.
+    }
+
+    // Scoped learning S4: repo and user lessons that conflict on one concept,
+    // reported for Loid. Never resolved here.
+    try {
+      const conflicts = findLearningConflicts(cwd);
+      if (conflicts.length > 0) {
+        const shown = conflicts.slice(0, 5).map(c => `${c.agent}/${c.concept} (repo ${c.repo.id} vs user ${c.user.id})`);
+        results.push({
+          name: 'Possible learning conflicts',
+          status: 'info',
+          message: `${conflicts.length} possible repo/user conflict(s) for Loid (they may disagree; review them): ${shown.join('; ')}${conflicts.length > 5 ? '; ...' : ''}`,
+          fix: 'Nothing is resolved automatically. Review with Loid; keep, refine or retire one side.',
+        });
+      }
+    } catch {
+      // Conflict report is advisory.
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -1144,24 +1192,23 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // Rendered as its own block (below), but we push a CheckResult here for the
   // WARN case so a high/rising repeat-failure-rate counts toward exit health.
   // ──────────────────────────────────────────────────────────────────────
+  // Scoped learning S2: the rate is computed PER HOME (repo, user, machine, and
+  // legacy repo rows on their own). Homes are never pooled.
   const classroom = (() => {
     try {
-      const certs = readClassroomCertifications(cwd);
-      const rollup = computeRepeatFailureRate(certs);
-      const resolvedTotal = Object.values(rollup.perAgent).reduce(
-        (n, a) => n + a.resolved,
-        0,
-      );
-      const overturnedTotal = Object.values(rollup.perAgent).reduce(
-        (n, a) => n + a.overturned,
-        0,
-      );
+      const certs = readLearningRows<ClassroomCertRow & { legacy?: true }>('classroom-certifications', cwd);
+      const populations = Object.entries(certificationsByHome(certs)).map(([home, rows]) => {
+        const rollup = computeRepeatFailureRate(rows!.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
+        const resolvedTotal = Object.values(rollup.perAgent).reduce((n, a) => n + a.resolved, 0);
+        const overturnedTotal = Object.values(rollup.perAgent).reduce((n, a) => n + a.overturned, 0);
+        return { home, certCount: rows!.length, rollup, resolvedTotal, overturnedTotal };
+      });
       return {
         present: certs.length > 0,
         certCount: certs.length,
-        rollup,
-        resolvedTotal,
-        overturnedTotal,
+        populations,
+        resolvedTotal: populations.reduce((n, p) => n + p.resolvedTotal, 0),
+        overturnedTotal: populations.reduce((n, p) => n + p.overturnedTotal, 0),
       };
     } catch {
       // Advisory metric — a read failure must never break doctor.
@@ -1169,20 +1216,19 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     }
   })();
 
-  // Thresholds (MVP): warn if the global rate is high once enough certs have
-  // resolved to be meaningful. Floor avoids screaming over a single unlucky cert.
+  // Thresholds (MVP): warn if a home's rate is high once enough of its certs
+  // have resolved to be meaningful. Floor avoids screaming over a single unlucky cert.
   const REPEAT_FAILURE_WARN_THRESHOLD = 0.5;
   const REPEAT_FAILURE_RESOLVED_FLOOR = 3;
-  if (
-    classroom &&
-    classroom.rollup.overall !== null &&
-    classroom.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR &&
-    classroom.rollup.overall > REPEAT_FAILURE_WARN_THRESHOLD
-  ) {
+  const highHomes = (classroom?.populations ?? []).filter(p =>
+    p.rollup.overall !== null &&
+    p.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR &&
+    p.rollup.overall > REPEAT_FAILURE_WARN_THRESHOLD);
+  for (const p of highHomes) {
     results.push({
       name: 'Repeat-failure-rate',
       status: 'warn',
-      message: `High: ${classroom.rollup.overall} of resolved certs were overturned (${classroom.overturnedTotal}/${classroom.resolvedTotal})`,
+      message: `High in the ${populationOf(p.home as CertPopulation)} population: ${p.rollup.overall} of resolved certs were overturned (${p.overturnedTotal}/${p.resolvedTotal})`,
       fix: 'Learnings are breaking repeatedly — review refinements via /paradigm:class review',
     });
   }
@@ -1266,39 +1312,28 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (!classroom.present) {
       dim('  No certifications yet — the learning loop has not turned. This is normal for a fresh project.');
     } else {
-      const { overall } = classroom.rollup;
-      const rateLabel = overall === null
-        ? 'n/a (no certs resolved yet)'
-        : String(overall);
-      kv('repeat-failure-rate (global)', rateLabel);
-      kv('resolved / overturned', `${classroom.resolvedTotal} / ${classroom.overturnedTotal}`);
-
-      // Per-agent split — only agents with at least one resolved cert.
-      const agents = Object.keys(classroom.rollup.perAgent).sort();
-      if (agents.length > 0) {
-        out('  ' + chalk.dim('per-agent:'));
-        for (const agent of agents) {
-          const a = classroom.rollup.perAgent[agent];
+      for (const p of classroom.populations) {
+        const { overall } = p.rollup;
+        const rateLabel = overall === null ? 'n/a (no certs resolved yet)' : String(overall);
+        kv(`repeat-failure-rate [population: ${populationOf(p.home as CertPopulation)}]`, rateLabel);
+        kv('  resolved / overturned', `${p.resolvedTotal} / ${p.overturnedTotal}`);
+        // Per-agent split — only agents with at least one resolved cert.
+        for (const agent of Object.keys(p.rollup.perAgent).sort()) {
+          const a = p.rollup.perAgent[agent];
           const rate = a.rate === null ? 'n/a' : String(a.rate);
           out(`    ${chalk.dim(agent + ':')} rate ${rate} (${a.overturned}/${a.resolved} overturned)`);
         }
+        if (overall !== null && p.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR && overall > REPEAT_FAILURE_WARN_THRESHOLD) {
+          warn(`  Repeat-failure-rate is high in the ${populationOf(p.home as CertPopulation)} population (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
+        } else if (overall !== null) {
+          success(`  ${populationOf(p.home as CertPopulation)} population: repeat-failure-rate within healthy range.`);
+        }
       }
-
+      if (classroom.populations.length > 1) dim('  Populations are reported separately, never pooled.');
       // Healthy advisory: an overturned cert means the field caught a learning
       // and the loop is correcting — NOT a red flag on its own.
       if (classroom.overturnedTotal > 0) {
         dim(`  ${classroom.overturnedTotal} learning${classroom.overturnedTotal > 1 ? 's were' : ' was'} overturned by the field — the loop is correcting (healthy).`);
-      }
-
-      // High-rate WARN echoes the CheckResult so the block is self-contained.
-      if (
-        overall !== null &&
-        classroom.resolvedTotal >= 3 &&
-        overall > 0.5
-      ) {
-        warn(`  Repeat-failure-rate is high (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
-      } else if (overall !== null) {
-        success('  Repeat-failure-rate within healthy range.');
       }
     }
   }

@@ -11,7 +11,7 @@
 import { type Request, type Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import * as yaml from 'js-yaml';
 
 interface ActivityItem {
