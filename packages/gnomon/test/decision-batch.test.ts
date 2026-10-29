@@ -29,6 +29,23 @@ describe('helper 1.11.0 row tables (TD-2026-10-29-746 / -894, G-HLP-03/04)', () 
   });
 });
 
+describe('click decisions (Aegis S1 M1): the kind and class are in the approve:v2 preimage', async () => {
+  const { clickDecisionRefusal, clickKeyedRefusal, clickApproveMessage } = await import('../src/kernel/identity/decision-batch.js');
+  const CV = JSON.parse(readFileSync(new URL('../../gnomon-contracts/test/fixtures/click-approve-vectors.json', import.meta.url), 'utf8')) as { vectors: Array<{ name: string; message: string; refused: string | null }> };
+  it('the shared click vectors (also read by the Swift ClickKeyTests)', () => {
+    expect(CV.vectors.length).toBeGreaterThanOrEqual(20);
+    for (const v of CV.vectors) expect(clickDecisionRefusal(Buffer.from(v.message, 'utf8')), v.name).toBe(v.refused);
+  });
+  it('FALSIFIER: a click-keyed root row or root-kind decision never verifies; a presence-key signature is not judged here', () => {
+    const ok = clickApproveMessage({ cardId: 'card:x', cardKind: 'permission', cardClass: 'reversible', decision: 'allow', contentHash: 'sha256:00', approver: 'p:abcdefgh/matt' });
+    expect(clickKeyedRefusal('click:abc', ok)).toBeNull();
+    expect(clickKeyedRefusal('click:abc', Buffer.from('gnomon:row-sig:v1\n{}'))).toMatch(/root row/);
+    expect(clickKeyedRefusal('click:abc', clickApproveMessage({ cardId: 'card:x', cardKind: 'install', cardClass: 'reversible', decision: 'install', contentHash: 'sha256:00', approver: 'p:abcdefgh/matt' }))).toMatch(/root card/);
+    expect(clickKeyedRefusal('click:abc', clickApproveMessage({ cardId: 'card:x', cardKind: 'permission', cardClass: 'destructive', decision: 'always', contentHash: 'sha256:00', approver: 'p:abcdefgh/matt' }))).toMatch(/always/);
+    expect(clickKeyedRefusal('gkey:v1:abc', Buffer.from('gnomon:row-sig:v1\n{}'))).toBeNull();
+  });
+});
+
 type Vector = { name: string; approvals: string[]; root: string[]; intent: string | null; error: string | null; shown?: string };
 const V = JSON.parse(readFileSync(new URL('../../gnomon-contracts/test/fixtures/decision-batch-vectors.json', import.meta.url), 'utf8')) as { vectors: Vector[] };
 

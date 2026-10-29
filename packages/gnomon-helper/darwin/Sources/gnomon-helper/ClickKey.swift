@@ -8,9 +8,13 @@
 //     mismatched mode issues nothing. Creates a NON-permanent Secure Enclave P-256 key (never in the keychain); the
 //     key object lives only in this process. Its attributes and token blob are never read, written, logged or sent
 //     (the source guard in ClickKeyTests fails the build otherwise; S0 P2: a token blob reloads in another process).
-//   click.sign {connId, keyId, cardKind, messages[]}
-//     `gnomon:approve:v1` ONLY: never presence:v1, approve-voice:v1 or row-sig:v1, and never for a root card kind
-//     (clickRootKinds). At most 60 a minute (all keys) and 512 per key.
+//   click.sign {connId, keyId, messages[]}
+//     `gnomon:approve:v2` ONLY (Aegis S1 M1): the preimage itself names the card kind and class —
+//     gnomon:approve:v2\n<cardId>\n<cardKind>\n<cardClass>\n<decision>\n<contentHash>\n<approver>[\n<answerDigest>] —
+//     so the refusal never trusts a request field: never a root card kind (clickRootKinds), never `always` on a
+//     destructive or irreversible card, never presence:v1, approve-voice:v1, row-sig:v1 or approve:v1 (the presence
+//     domain). A verifier refuses the same (decision-batch.ts clickDecisionRefusal, shared click-approve vectors).
+//     At most 60 a minute (all keys) and 512 per key.
 //   Revoked on conn.close of its connId, on every session event (lock, screensaver, display or system sleep, user
 //   switch: Custody.invalidateAll, before the push), after 12 h (Bounds.unlockAbsoluteSeconds), when the mode goes
 //   back on, and when this process exits.
@@ -22,7 +26,7 @@ import Security
 /// is not here: an ordinary permission card is a click when Touch ID is off, and its destructive Always is a root
 /// row that only decision.sign (one presence) can sign.
 let clickRootKinds: Set<String> = ["install", "uninstall", "voice.enrol", "mod.mcp.config", "api-token", "peer-pair", "grant", "loop-trust",
-                                   "local.config", "presence.mode", "kernel-custody", "repin", "root-grant"]
+                                   "local.config", "presence.mode", "kernel-custody", "log.quarantine", "repin", "root-grant"]
 let maxClickKeys = 8
 let clickPerMinute = 60
 
@@ -130,14 +134,40 @@ final class ClickKeys {
     }
 }
 
-/// click.sign's domain rule, checked before any key is touched: approve:v1 decision preimages only.
+let clickApproveDomain = "gnomon:approve:v2\n"
+let cardClasses: Set<String> = ["reversible", "destructive", "irreversible"]
+
+struct ClickApprove: Equatable {
+    let cardId: String
+    let cardKind: String
+    let cardClass: String
+    let decision: String
+    let contentHash: String
+}
+
+func parseClickApprove(_ m: Data) -> ClickApprove? {
+    let d = Data(clickApproveDomain.utf8)
+    guard m.starts(with: d) else { return nil }
+    let f = String(decoding: m[(m.startIndex + d.count)...], as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard f.count == 6 || f.count == 7, !f.contains(where: { $0.isEmpty }), f.allSatisfy({ $0.utf8.count <= 256 }) else { return nil }
+    return ClickApprove(cardId: f[0], cardKind: f[1], cardClass: f[2], decision: f[3], contentHash: f[4])
+}
+
+/// THE click rule (mirror of clickDecisionRefusal in decision-batch.ts; shared click-approve vectors). nil = signable.
+func clickApproveRefusal(_ m: Data) -> String? {
+    guard let a = parseClickApprove(m) else { return "a click key signs only gnomon:approve:v2 decisions" }
+    guard cardClasses.contains(a.cardClass) else { return "an approve:v2 names its card class" }
+    guard !clickRootKinds.contains(a.cardKind) else { return "a root card is never approved by a click" }
+    guard !(a.decision == "always" && a.cardClass != "reversible") else { return "an always on a destructive or irreversible card is never a click" }
+    return nil
+}
+
+/// click.sign's domain rule, checked before any key is touched.
 func clickMessages(_ req: Json) throws -> [Data] {
-    guard let kind = req["cardKind"] as? String, !kind.isEmpty, kind.count <= 64 else { throw bad("click.sign names the card kind") }
-    guard !clickRootKinds.contains(kind) else { throw HelperError("domain-refused", "a root card is never approved by a click") }
     guard let arr = req["messages"] as? [Any], !arr.isEmpty, arr.count <= Bounds.maxMessages else { throw bad("messages must be 1..\(Bounds.maxMessages) base64 strings") }
     return try arr.map { item in
         guard let s = item as? String, let d = Data(base64Encoded: s), !d.isEmpty, d.count <= Bounds.maxMessageBytes else { throw bad("each message must be base64 of 1..\(Bounds.maxMessageBytes) bytes") }
-        guard d.starts(with: Data(approveDomain.utf8)), parseApprove(d) != nil else { throw HelperError("domain-refused", "a click key signs only gnomon:approve:v1 decisions") }
+        if let why = clickApproveRefusal(d) { throw HelperError("domain-refused", why) }
         return d
     }
 }

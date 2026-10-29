@@ -195,6 +195,41 @@ export function logQuarantineRowRefusal(r: Row): string | null {
   return null;
 }
 
+/**
+ * Aegis S1 M1 (helper 1.11.0, G-HLP-04): the CLICK decision preimage names its card kind and class, so neither the
+ * helper nor a verifier trusts a side field: gnomon:approve:v2\n<cardId>\n<cardKind>\n<cardClass>\n<decision>\n
+ * <contentHash>\n<approver>[\n<answerDigest>]. Mirror of ClickKey.swift clickApproveRefusal; shared vectors
+ * gnomon-contracts test/fixtures/click-approve-vectors.json.
+ */
+export const CLICK_APPROVE_DOMAIN = 'gnomon:approve:v2\n';
+export const CLICK_KEY_PREFIX = 'click:';
+export const CLICK_ROOT_KINDS: readonly string[] = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'presence.mode', 'kernel-custody', 'log.quarantine', 'repin', 'root-grant']);
+const CARD_CLASSES = ['reversible', 'destructive', 'irreversible'];
+export function clickApproveMessage(f: { cardId: string; cardKind: string; cardClass: string; decision: string; contentHash: string; approver: string; answerDigest?: string }): Buffer {
+  return Buffer.from(`${CLICK_APPROVE_DOMAIN}${[f.cardId, f.cardKind, f.cardClass, f.decision, f.contentHash, f.approver, ...(f.answerDigest ? [f.answerDigest] : [])].join('\n')}`, 'utf8');
+}
+/** The click rule on the bytes: null = a click key may sign it (and a verifier may accept it). */
+export function clickDecisionRefusal(m: Buffer): string | null {
+  const d = Buffer.from(CLICK_APPROVE_DOMAIN, 'utf8');
+  if (m.length < d.length || !m.subarray(0, d.length).equals(d)) return 'a click key signs only gnomon:approve:v2 decisions';
+  const f = m.subarray(d.length).toString('utf8').split('\n');
+  if ((f.length !== 6 && f.length !== 7) || f.some((x) => x === '' || Buffer.byteLength(x) > 256)) return 'a click key signs only gnomon:approve:v2 decisions';
+  const [, kind, cls, decision] = f as [string, string, string, string];
+  if (!CARD_CLASSES.includes(cls)) return 'an approve:v2 names its card class';
+  if (CLICK_ROOT_KINDS.includes(kind)) return 'a root card is never approved by a click';
+  if (decision === 'always' && cls !== 'reversible') return 'an always on a destructive or irreversible card is never a click';
+  return null;
+}
+/**
+ * Verifier side (Aegis S1 M1): a signature by a click key (keyId click:…) verifies only over a click-signable approve:v2
+ * message; a click-keyed ROOT row (row-sig, or any root card kind) never verifies, whatever the signature.
+ */
+export function clickKeyedRefusal(signerKeyId: string, message: Buffer): string | null {
+  if (!signerKeyId.startsWith(CLICK_KEY_PREFIX)) return null;
+  if (message.subarray(0, 18).toString('utf8') === 'gnomon:row-sig:v1\n') return 'a click key never signs a root row';
+  return clickDecisionRefusal(message);
+}
+
 const B64_STRICT = /^[A-Za-z0-9+/]+={0,2}$/;
 /** helper 1.11.0: the kernel-custody rows [cert-key row, legacy row] (mirror of kernelCustodyRefusal). null = allowed. */
 export function kernelCustodyRefusal(rows: readonly Row[]): string | null {

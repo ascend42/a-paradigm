@@ -14,7 +14,10 @@ final class SoftClick: ClickSigner {
 
 private let rowHash = "sha256:" + String(repeating: "c", count: 64)
 private let conn = "conn:01HZZZZZZZZZZZZZZZZZZZZZZA"
-private let approveMsg = "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:\(String(repeating: "a", count: 64))\np:abcdefgh/matt"
+private func clickMsg(kind: String = "permission", cls: String = "reversible", decision: String = "allow") -> String {
+    "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\n\(kind)\n\(cls)\n\(decision)\nsha256:\(String(repeating: "a", count: 64))\np:abcdefgh/matt"
+}
+private let approveMsg = clickMsg()
 
 final class ClickRig {
     let probe = FixedCaller()
@@ -36,6 +39,7 @@ final class ClickRig {
     func open(_ hash: String = rowHash, appBound: Bool = true) -> Json { call(["op": "click.open", "connId": conn, "appBound": appBound, "modeRowHash": hash]) }
 
     func sign(_ keyId: String?, _ msgs: [String] = [approveMsg], kind: String = "permission") -> Json {
+        // Aegis S1 M1: a request cardKind is ignored; the preimage names the kind
         call(["op": "click.sign", "connId": conn, "keyId": keyId ?? "", "cardKind": kind, "messages": msgs.map { Data($0.utf8).base64EncodedString() }])
     }
 }
@@ -77,12 +81,16 @@ final class ClickKeyTests: XCTestCase {
     func testClickSignRefusesEveryOtherDomainAndEveryRootCard() {
         let r = ClickRig()
         let id = r.open()["keyId"] as? String
-        for m in ["gnomon:presence:v1\nmod.install\nsha256:00\nconn:x\nchallenge", "gnomon:approve-voice:v1\nx", "gnomon:row-sig:v1\n{}", "gnomon:approve:v1\n", "anything"] {
+        let v1 = "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:\(String(repeating: "a", count: 64))\np:abcdefgh/matt"
+        for m in ["gnomon:presence:v1\nmod.install\nsha256:00\nconn:x\nchallenge", "gnomon:approve-voice:v1\nx", "gnomon:row-sig:v1\n{}", "gnomon:approve:v1\n", v1, "anything"] {
             XCTAssertEqual(r.sign(id, [m])["error"] as? String, "domain-refused", m)
         }
-        for k in ["install", "uninstall", "voice.enrol", "mod.mcp.config", "api-token", "peer-pair", "grant", "loop-trust", "local.config", "presence.mode", "kernel-custody"] {
-            XCTAssertEqual(r.sign(id, kind: k)["error"] as? String, "domain-refused", k)
+        for k in ["install", "uninstall", "voice.enrol", "mod.mcp.config", "api-token", "peer-pair", "grant", "loop-trust", "local.config", "presence.mode", "kernel-custody", "log.quarantine"] {
+            XCTAssertEqual(r.sign(id, [clickMsg(kind: k)], kind: "permission")["error"] as? String, "domain-refused", "the preimage's kind, not the request's: \(k)")
         }
+        XCTAssertEqual(r.sign(id, [clickMsg(cls: "destructive", decision: "always")])["error"] as? String, "domain-refused", "a destructive always")
+        XCTAssertEqual(r.sign(id, [clickMsg(cls: "irreversible", decision: "always")])["error"] as? String, "domain-refused")
+        XCTAssertEqual(r.sign(id, [clickMsg(cls: "destructive")])["ok"] as? Bool, true, "a destructive allow is a click")
         XCTAssertEqual(r.sign(id, [approveMsg, "gnomon:row-sig:v1\n{}"])["error"] as? String, "domain-refused", "one bad message refuses the batch")
         XCTAssertEqual(r.sign(id)["ok"] as? Bool, true)
     }
@@ -141,6 +149,19 @@ final class ClickKeyTests: XCTestCase {
         let id = r.open()["keyId"] as? String
         XCTAssertEqual(r.sign("click:" + String(repeating: "0", count: 32))["error"] as? String, "no-click")
         XCTAssertEqual(r.call(["op": "click.sign", "connId": "conn:other", "keyId": id!, "cardKind": "permission", "messages": [Data(approveMsg.utf8).base64EncodedString()]])["error"] as? String, "no-click")
+    }
+
+    /// Aegis S1 M1: the Swift rule equals the TS clickDecisionRefusal on every shared click-approve vector.
+    func testSharedClickApproveVectors() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("gnomon-contracts/test/fixtures/click-approve-vectors.json")
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? Json)
+        let vs = try XCTUnwrap(doc["vectors"] as? [Json])
+        XCTAssertGreaterThanOrEqual(vs.count, 20)
+        for v in vs {
+            let m = Data((v["message"] as! String).utf8)
+            XCTAssertEqual(clickApproveRefusal(m), v["refused"] as? String, v["name"] as? String ?? "?")
+        }
     }
 
     /// G-HLP-04: the click key's attributes and token blob are never read (S0 P2: a blob reloads in another process).
