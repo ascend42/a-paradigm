@@ -120,6 +120,18 @@ describe.skipIf(!RUN)('#kernel-sea built binary (ad-hoc)', () => {
     }
   }, 60_000);
 
+  it('FALSIFIER (Aegis M1): a variable node reads before the prelude makes the kernel refuse to start (exit 78)', () => {
+    for (const [k, v] of [['NODE_EXTRA_CA_CERTS', '/tmp/ca.pem'], ['NODE_ICU_DATA', '/tmp/icu'], ['SSL_CERT_FILE', '/tmp/c.pem'], ['SSL_CERT_DIR', '/tmp/certs'], ['OPENSSL_CONF', '/tmp/o.cnf'], ['NODE_TLS_REJECT_UNAUTHORIZED', '0']] as const) {
+      const r = spawnSync(built.kernel, ['--version'], { env: ENV(root, { [k]: v }), encoding: 'utf8' });
+      expect(r.status, k).toBe(78);
+      expect(r.stderr, k).toContain(`${k} is set`);
+      expect(r.stdout, k).toBe('');
+    }
+    // other NODE_* / OPENSSL_* variables are stripped, not refused
+    const ok = spawnSync(built.kernel, ['--version'], { env: ENV(root, { NODE_DEBUG: 'fs', OPENSSL_ia32cap: '0', NODE_PENDING_DEPRECATION: '1' }), encoding: 'utf8' });
+    expect(ok.status, ok.stderr).toBe(0);
+  });
+
   it('FALSIFIER: NODE_OPTIONS=--require=<x.js> has no effect (CLI)', () => {
     const inj = injector(root);
     for (const opt of [`--require=${inj.file}`, `--import=${inj.file}`]) {

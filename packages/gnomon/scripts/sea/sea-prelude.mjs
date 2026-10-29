@@ -9,10 +9,10 @@
  *    NODE_OPTIONS: no `--require`, `--import`, `--inspect` or loader can be injected through the environment
  *    (measured by test/sea-kernel.test.ts and probe p15). The variables are also DELETED here so nothing the kernel
  *    spawns inherits them and the kernel's own unsafe-env guard (launch-tty.ts unsafeRuntime) sees a clean env.
- *    NODE_PATH has no effect on a SEA (its require() loads built-ins only) and is deleted for the children.
- *    NODE_EXTRA_CA_CERTS is read by node's TLS at process start, before any JS: it is deleted here so no child
- *    inherits it; the kernel's own launch paths (the wrapper's env allowlist, gnomond's clean re-exec) never pass
- *    it. It changes TLS trust, not the code the helper certifies.
+ *    NODE_PATH has no effect on a SEA (its require() loads built-ins only). Aegis S0 M1: every NODE_*, OPENSSL_* and
+ *    SSL_CERT_* variable is deleted so no child inherits it, and the variables read BEFORE this code runs
+ *    (REFUSED_ENV: NODE_EXTRA_CA_CERTS, NODE_ICU_DATA, SSL_CERT_FILE, SSL_CERT_DIR, OPENSSL_CONF,
+ *    NODE_TLS_REJECT_UNAUTHORIZED) make the kernel refuse to start (exit 78).
  * 2. argv. A SEA's argv is [execPath, argv0, ...args] (argv0 as typed, possibly relative). The first user arg
  *    `--gnomond` selects the daemon entry (env.ts SEA_GNOMOND_ARG); anything else runs the `gnomon` CLI. argv is
  *    rewritten to [execPath, execPath, ...args] so the kernel's existing "argv[1] is execPath ⇒ SEA" checks hold.
@@ -39,7 +39,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const STRIPPED_ENV = Object.freeze(['NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS']);
+/**
+ * Aegis S0 M1: variables node or OpenSSL read at process start, BEFORE this prelude runs (TLS trust roots, ICU data,
+ * the OpenSSL config, certificate verification). Stripping them here is too late, so the kernel refuses to start when
+ * any is set, fail closed like launch-tty.ts unsafeRuntime. The wrapper's env allowlist and gnomond's clean re-exec
+ * never pass them.
+ */
+export const REFUSED_ENV = Object.freeze(['NODE_EXTRA_CA_CERTS', 'NODE_ICU_DATA', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'OPENSSL_CONF', 'NODE_TLS_REJECT_UNAUTHORIZED']);
+/** Every variable matching this is deleted before any kernel code runs, so no child inherits it (Aegis S0 M1). */
+export const STRIPPED_ENV_PATTERN = /^(NODE_|OPENSSL_|SSL_CERT_)/;
 const KERNEL_TREE_DOMAIN = 'gnomon-wrapper-kernel-tree:v1';
 const MAX_FILES = 4096;
 const MAX_BYTES = 256 * 1024 * 1024;
@@ -54,7 +62,9 @@ function refuse(why) {
 const BUILD = typeof __GNOMON_SEA_BUILD__ === 'string' ? JSON.parse(__GNOMON_SEA_BUILD__) : null;
 if (!BUILD || typeof BUILD.distTree !== 'string' || typeof BUILD.childNodeRequirement !== 'string') refuse('this SEA carries no build pins (dist tree, child node requirement): rebuild it with scripts/build-sea.mjs');
 
-for (const k of STRIPPED_ENV) delete process.env[k];
+const refusedSet = REFUSED_ENV.filter((k) => process.env[k] !== undefined);
+if (refusedSet.length) refuse(`${refusedSet.join(', ')} ${refusedSet.length === 1 ? 'is' : 'are'} set: node reads ${refusedSet.length === 1 ? 'it' : 'them'} before any kernel code runs (TLS trust, ICU or OpenSSL config); unset ${refusedSet.length === 1 ? 'it' : 'them'}`);
+for (const k of Object.keys(process.env)) if (STRIPPED_ENV_PATTERN.test(k)) delete process.env[k];
 
 const args = process.argv.slice(2);
 const entry = args[0] === '--gnomond' ? 'gnomond' : 'gnomon';

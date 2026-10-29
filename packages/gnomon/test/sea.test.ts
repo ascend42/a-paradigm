@@ -106,7 +106,9 @@ describe('#kernel-sea re-exec argv', () => {
     // Aegis H1: the prelude checks the kernel tree with the release script's algorithm before any kernel code runs
     expect(prelude).toContain("const KERNEL_TREE_DOMAIN = 'gnomon-wrapper-kernel-tree:v1';");
     expect(prelude.indexOf('checkDist();\n} catch')).toBeGreaterThan(0);
-    for (const k of ['NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS']) expect(prelude).toContain(`'${k}'`);
+    // Aegis S0 M1: the pre-JS variables are refused, every NODE_*, OPENSSL_*, SSL_CERT_* stripped
+    for (const k of ['NODE_EXTRA_CA_CERTS', 'NODE_ICU_DATA', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'OPENSSL_CONF', 'NODE_TLS_REJECT_UNAUTHORIZED']) expect(prelude).toContain(`'${k}'`);
+    expect(prelude).toContain('STRIPPED_ENV_PATTERN = /^(NODE_|OPENSSL_|SSL_CERT_)/');
   });
 });
 
