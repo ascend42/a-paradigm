@@ -1,0 +1,68 @@
+id: TD-2026-10-29-894
+timestamp: '2026-10-29T20:58:04.366Z'
+title: 'Terminal parity path: move Gnomon''s keys into the helper first; Touch ID off means every approval is a click'
+decision: >-
+  Amends TD-2026-10-29-340 after Aegis's review.
+
+
+  **Keys move into the helper first.** Gnomon's device and kernel signing keys (today plain 0600 files in
+  ~/.gnomon/keys) move into the signed helper as Secure Enclave or keychain-held keys before the terminal profile ships.
+  A same-user session can then no longer read them to forge approvals.
+
+
+  **Then the terminal profile ships with minimal restrictions.** The ssh agent, launchctl/open/osascript, tmux and
+  rc-file writes all work. The integrity layer keeps only what still matters once the keys are out of reach: kernel and
+  app code writes, the log, and other sessions' state.
+
+
+  **Touch ID off: everything is a click.** While the global switch is off, every approval is a click, including peer,
+  declassify, cloud fallback, run-mode loosening and voice. The only exception is Gnomon's own root key actions:
+  install/repin, API token, peer pair, root grant, loop trust, voice enrol, and the switch-off itself.
+
+
+  **Click-made Always rules keep working** when Touch ID is switched back on. They are marked click-made in the log and
+  in the Rules view.
+
+
+  **Aegis's other required fixes stand:**
+
+  - sandboxed, bounded env capture;
+
+  - a click key bound to the GUI connection, revoked on lock, sleep or restart, and fail-closed;
+
+  - kernel-built native Always (localSettings, scoped rules only, never setMode or addDirectories, a signed row, and
+  protected settings files stay ask);
+
+  - an explicit permission mode with a bypassPermissions ban;
+
+  - the trust card before the first project-layer spawn;
+
+  - a migration notice for existing repos.
+rationale: >-
+  The founder wants real terminal parity without Gnomon's keys being forgeable. Moving the keys into the helper removes
+  the reason for most sandbox denies. The founder chose maximal flow with Touch ID off, and accepts that a hijacked
+  bound GUI connection could approve by click until revoked.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: security
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Ship parity now with Aegis's escape blocks
+    rejected_because: Blocks the ssh agent, launchctl and tmux, which keeps the friction
+  - option: Ship parity now and accept key exposure
+    rejected_because: A session could forge approvals
+  - option: Keep presence for peer, cloud and voice when Touch ID is off
+    rejected_because: 'Founder: everything is a click'
+status: active
+tags:
+  - gnomon
+  - parity
+  - presence
+  - helper
+  - security
