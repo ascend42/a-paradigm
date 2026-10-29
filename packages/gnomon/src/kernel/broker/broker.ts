@@ -676,10 +676,11 @@ export class ApprovalBroker {
    * approval.auto (§9.1, B3): a request answered allow with NO card because a
    * kernel-derived standing rule matched it exactly. Carries the inputHash
    * (a sensitive FIELD label), never the tool input. Must reject if the row
-   * was not written (the caller answers only after it).
+   * was not written (the caller answers only after it). Slice C6'a2-4: a brokered call names its author when the human
+   * started it ("/"; absent: the model's) and the callId its tool.brokered row carries too.
    */
-  async auto(p: { hsid: string; tool: string; inputHash: string; modeRef: string; path?: string }): Promise<void> {
-    await this.#o.log('approval.auto', { hsid: p.hsid, tool: p.tool, ...(p.path !== undefined ? { path: p.path } : {}), inputHash: p.inputHash, modeRef: p.modeRef }, { session: p.hsid });
+  async auto(p: { hsid: string; tool: string; inputHash: string; modeRef: string; path?: string; author?: 'human'; callId?: string }): Promise<void> {
+    await this.#o.log('approval.auto', { hsid: p.hsid, tool: p.tool, ...(p.path !== undefined ? { path: p.path } : {}), inputHash: p.inputHash, modeRef: p.modeRef, ...(p.author === 'human' ? { author: 'human' } : {}), ...(p.callId !== undefined ? { callId: p.callId } : {}) }, { session: p.hsid });
   }
 
   /**

@@ -8,7 +8,7 @@
  * helper is offered no Always.
  */
 import { describe, expect, it } from 'vitest';
-import { RefusedError, validateKindPayload } from '@a-company/gnomon-contracts';
+import { RefusedError, TOOL_CALL_ID_PATTERN, validateKindPayload } from '@a-company/gnomon-contracts';
 import { ApprovalBroker } from '../src/kernel/broker/index.js';
 import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
 import { ROW_TABLE_MIN_HELPER, rowTableRefusal } from '../src/kernel/identity/decision-batch.js';
@@ -228,6 +228,54 @@ describe('G-LCL-22 (amended): destructive Always', () => {
     await waitFor(() => r.pending().length === 0).catch(() => r.broker.expire(c.cardId, 'cancelled'));
     await out;
     expect(r.book().get(c.cardId)).toBeNull();
+  });
+});
+
+describe("G-LCL-22 (C6'a2-4): who started a call an Always rule passed", () => {
+  const autoRows = (r: ReturnType<typeof rig>) => r.rows.filter((x) => x.kind === 'approval.auto').map((x) => x.payload);
+  const brokeredRows = (r: ReturnType<typeof rig>) => r.rows.filter((x) => x.kind === 'tool.brokered').map((x) => x.payload);
+  const learnWrite = async (r: ReturnType<typeof rig>): Promise<void> => {
+    const out = r.call('write');
+    await waitFor(() => r.pending().length === 1);
+    await r.broker.approve(gui(), { cardId: r.pending()[0]!.cardId, decision: 'always', scope: { kind: 'tool' } });
+    expect(await out).toMatchObject({ decision: 'approved' });
+  };
+
+  it('a "/" run that passes by rule writes approval.auto{author:human} with a callId its tool.brokered row carries too', async () => {
+    const r = rig();
+    await learnWrite(r);
+    expect(autoRows(r)).toEqual([]);
+    // the learning call took a card: its row carries no callId
+    expect(brokeredRows(r).at(-1)).not.toHaveProperty('callId');
+    expect(await r.run('write', { t: 'from-slash' })).toMatchObject({ decision: 'approved' });
+    expect(r.pending()).toEqual([]);
+    const auto = autoRows(r).at(-1)!;
+    const row = brokeredRows(r).at(-1)!;
+    expect(auto).toMatchObject({ author: 'human', modeRef: expect.stringMatching(/^rule:card:/), callId: expect.stringMatching(TOOL_CALL_ID_PATTERN) });
+    expect(row).toMatchObject({ author: 'human', decision: 'approved', callId: auto.callId });
+    expect(validateKindPayload('tool.brokered', row)).toEqual([]);
+    // the id is random, never an args digest
+    expect(auto.callId).not.toBe(auto.inputHash);
+    expect(auto.callId).not.toBe(row.argsHash);
+  });
+
+  it('a model call that passes by rule writes no author and its own callId', async () => {
+    const r = rig();
+    await learnWrite(r);
+    expect(await r.run('write', { t: 'same' })).toMatchObject({ decision: 'approved' });
+    expect(await r.call('write', { t: 'same' })).toMatchObject({ decision: 'approved' });
+    const [human, model] = autoRows(r);
+    const rows = brokeredRows(r);
+    expect(model).not.toHaveProperty('author');
+    expect(model!.callId).toMatch(TOOL_CALL_ID_PATTERN);
+    expect(model!.callId).not.toBe(human!.callId);
+    // the same args: same hashes, so only the callId tells the two calls apart
+    expect(model!.inputHash).toBe(human!.inputHash);
+    const modelRow = rows.find((x) => x.callId === model!.callId)!;
+    expect(modelRow).not.toHaveProperty('author');
+    expect(modelRow).toMatchObject({ decision: 'approved' });
+    expect(rows.filter((x) => x.callId === human!.callId)).toHaveLength(1);
+    expect(validateKindPayload('tool.brokered', modelRow)).toEqual([]);
   });
 });
 

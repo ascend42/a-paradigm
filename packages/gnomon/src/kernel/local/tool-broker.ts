@@ -90,7 +90,7 @@
  * notice is the tool.brokered row (no GUI notice yet); control characters are
  * refused outright (no newline in brokered args).
  */
-import { canonicalJson, sha256Tagged, TOOL_BROKER_TOOL_PATTERN, type ToolBrokerClass, type ToolBrokeredDecision } from '@a-company/gnomon-contracts';
+import { canonicalJson, sha256Tagged, TOOL_BROKER_TOOL_PATTERN, ulid, type ToolBrokerClass, type ToolBrokeredDecision } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { blockOf } from '../broker/card.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
@@ -795,10 +795,13 @@ export class LocalToolBroker {
     const target = tool?.target ?? o.target;
     // slice C5'a1: the class the kernel treats the call as (a read narrow tool of a server no longer believed: mutate)
     let cls: ToolBrokerClass | undefined = tool?.class;
+    // slice C6'a2-4: a call an Always rule passed carries one random call id on its approval.auto row and its
+    // tool.brokered row (never derived from the args: the two rows' hashes and tool names may differ)
+    let callId: string | undefined;
     const done = async (decision: ToolBrokeredDecision, content: string, isError: boolean, cardId?: string): Promise<ToolResponseOut> => {
       // a human-only entry's name may not fit the row's tool pattern: then the row names no tool (and no class)
       const named = tool !== undefined && TOOL_BROKER_TOOL_PATTERN.test(tool.name);
-      await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool && named ? { tool: tool.name, class: cls ?? tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}), ...(human ? { author: 'human' } : {}) }, { session: o.hsid }).catch(() => undefined);
+      await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool && named ? { tool: tool.name, class: cls ?? tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}), ...(human ? { author: 'human' } : {}), ...(callId ? { callId } : {}) }, { session: o.hsid }).catch(() => undefined);
       return { id: req.id, content, isError, provenance: target.provenance, decision, ...(cardId ? { cardId } : {}) };
     };
     if (o.loop) return done('loop-session', 'Loop sessions never run brokered tools.', true);
@@ -881,8 +884,10 @@ export class LocalToolBroker {
       let allowed = false;
       if (ruleId !== null) {
         // slice C5'a2: log-before-effect: no approval.auto row, no run (the call is refused, never left unanswered)
+        const id = `call:${ulid()}`;
         try {
-          await o.broker!.auto!({ hsid: o.hsid, tool: ruleName!, inputHash: inputHash(callArgs), modeRef: `rule:${ruleId}` });
+          await o.broker!.auto!({ hsid: o.hsid, tool: ruleName!, inputHash: inputHash(callArgs), modeRef: `rule:${ruleId}`, ...(human ? { author: 'human' as const } : {}), callId: id });
+          callId = id;
         } catch {
           return done('refused', `${tool.name}: not run: the kernel could not record the Always rule that would pass it.`, true);
         }

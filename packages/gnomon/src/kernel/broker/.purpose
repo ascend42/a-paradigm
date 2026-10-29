@@ -91,6 +91,8 @@ components:
       TD-2026-10-20-086; path = the anchored root's realpath, inputHash the
       request's) or rule:<cardId>. Not built (would move clientApiId, founder
       gate): approval.auto.miss and an anchoredInputHash field.
+      Slice C6'a2-4: auto() also takes author ('human' only: a brokered "/"
+      run) and callId (call:<ULID>, the call's tool.brokered row's too).
       PREFIX SCOPE (TD-2026-10-20-294 part 3): approve{decision:'always',
       scope} — {kind:'exact'} is the v1 exact rule; {kind:'prefix', prefix}
       (1-3 words) is accepted only on a Bash permission card whose SHOWN

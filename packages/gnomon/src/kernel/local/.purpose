@@ -266,6 +266,10 @@ components:
       until a signed 1.10.0 ships in Gnomon.app no destructive Always is
       offered. GAPS: skills are slice a2-2; the Revoke toast and "/"
       menu are C6'b2; a one-off send under policy ask is not built.
+      Slice C6'a2-4: a rule-passed call's approval.auto carries author
+      'human' for a "/" run (absent: the model's) and a random callId
+      (call:<ULID>, never from the args) that its tool.brokered row carries
+      too, so readers pair the two rows (G-LCL-22).
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]

@@ -541,7 +541,9 @@
       "tool",
       "path",
       "inputHash",
-      "modeRef"
+      "modeRef",
+      "author",
+      "callId"
     ],
     "request.strictness.set": [
       "repo",
@@ -958,7 +960,8 @@
       "bytes",
       "isError",
       "cardId",
-      "author"
+      "author",
+      "callId"
     ],
     "tool.result.policy": [
       "hsid",
