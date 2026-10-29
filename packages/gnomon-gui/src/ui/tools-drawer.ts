@@ -33,6 +33,7 @@ import {
   pinKeyOf,
   pinLive,
   pinRequest,
+  policyRequest,
   refusalWords,
   restartRequest,
   selectionHintsOf,
@@ -201,7 +202,8 @@ export class ToolsFlow {
     const s = this.#s;
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
     if (!s || !p || p.hsid !== s.hsid) return;
-    if (r.kind === 'tool.selection') void this.readTools('selection');
+    // C6'b2-2: a sent result or a skill's text taints the session; a policy row moves a tool's words: re-read
+    if (r.kind === 'tool.selection' || r.kind === 'tool.result.sent' || r.kind === 'skill.run' || r.kind === 'tool.result.policy') void this.readTools('selection');
     else if (r.kind === 'session.mcp') void this.readTools('server');
     else if (r.kind === 'session.memory' && !s.memory.deleting && s.memory.phase !== 'reading') void this.readMemory();
   }
@@ -255,6 +257,38 @@ export class ToolsFlow {
     this.#d.live(pinLive(name, pinned, c?.pins.find((p) => p.name === name) ?? null, { tier: c?.tier ?? null, k: c?.k ?? null }));
     // focus stays on the same tool's key (now Unpin or Pin); an unpin from the Pins list loses its row: its heading
     this.#focus = from === 'pins' && !pinned ? { heading: 'pins' } : { act: pinned ? 'unpin' : 'pin', value: name };
+    this.#d.repaint();
+  }
+
+  /**
+   * C6'b2-2: Stop sending — request.session.tools.policy{policy:'ask'} for a tool that sends, once per trusted press
+   * (aria-busy while it runs). Focus stays on the tool's row (its Pin key) once the tools are read again.
+   */
+  async stopSending(id: string, trusted: boolean): Promise<void> {
+    const s = this.#s;
+    if (!trusted || !s || !s.caps || s.policyBusy || s.access !== 'owner') return;
+    const t = s.caps.tools.find((x) => x.id === id);
+    if (!t || t.policy !== 'send') return;
+    s.policyBusy = id;
+    s.policyResult = null;
+    this.#d.repaint();
+    const gen = this.#gen;
+    try {
+      await this.#d.call(policyRequest(s.hsid, id, 'ask'));
+    } catch (err) {
+      if (gen !== this.#gen || this.#s !== s) return;
+      s.policyBusy = null;
+      s.policyResult = { id, text: refusalWords('stop', reasonOf(err)) };
+      this.#d.live(s.policyResult.text);
+      this.#focus = { act: 'stop-sending', value: id };
+      return this.#d.repaint();
+    }
+    if (gen !== this.#gen || this.#s !== s) return;
+    await this.readTools('selection');
+    if (gen !== this.#gen || this.#s !== s) return;
+    s.policyBusy = null;
+    this.#d.live(TOOLS_COPY.stopped(t.name));
+    this.#focus = { act: s.caps?.pins.some((p) => p.name === t.name) ? 'unpin' : 'pin', value: t.name };
     this.#d.repaint();
   }
 
@@ -476,6 +510,8 @@ function sectionOf(doc: MiniDoc, id: string, title: string, rows: SettingRow[], 
 export function toolsEls(doc: MiniDoc, v: ToolsView): MiniEl[] {
   const out: MiniEl[] = [];
   if (v.notice) out.push(noticeEl(doc, v.notice));
+  // C6'b2-2: the injection pause, said once at the top of Tools (the transcript has its one note too)
+  if (v.taint) out.push(h(doc, 'div', { class: 'settings-sec td-taint' }, h(doc, 'p', { class: 'sf-result' }, v.taint)));
   for (const s of v.sections) out.push(sectionOf(doc, s.id, s.title, s.rows, s.result));
   if (v.all) {
     const box = h(doc, 'div', { class: 'settings-row rules-block' });
@@ -498,7 +534,7 @@ export function toolsEls(doc: MiniDoc, v: ToolsView): MiniEl[] {
         : h(doc, 'ul', { class: 'rules-list', role: 'list' }, ...g.rows.map((r) => {
             const whyId = r.why ? `td-why-${n++}` : null;
             const key: FormKey | null = r.key ? { ...r.key, ...(whyId ? { describedBy: whyId } : {}) } : null;
-            return h(doc, 'li', { class: 'rule-row' }, h(doc, 'span', { class: 'rule-what' }, r.name), h(doc, 'span', { class: 'rule-meta' }, r.meta), r.description ? h(doc, 'span', { class: 'rule-meta' }, r.description) : null, whyId ? setId(h(doc, 'span', { class: 'rule-meta why-off' }, r.why!), whyId) : null, key ? h(doc, 'span', { class: 'rule-keys' }, keyEl(doc, key)) : null);
+            return h(doc, 'li', { class: 'rule-row' }, h(doc, 'span', { class: 'rule-what' }, r.name), h(doc, 'span', { class: 'rule-meta' }, r.meta), r.description ? h(doc, 'span', { class: 'rule-meta' }, r.description) : null, whyId ? setId(h(doc, 'span', { class: 'rule-meta why-off' }, r.why!), whyId) : null, r.stopNote ? h(doc, 'span', { class: 'rule-meta td-stop-note', role: 'alert' }, r.stopNote) : null, key || r.stop ? h(doc, 'span', { class: 'rule-keys' }, r.stop ? keyEl(doc, r.stop) : null, key ? keyEl(doc, key) : null) : null);
           }));
       box.appendChild(h(doc, 'section', { class: `rules-group${g.folded ? ' is-folded' : ''}`, 'aria-label': `${g.label}, ${g.count} tools` }, head, list));
     }
@@ -675,6 +711,7 @@ export function mountToolsDrawer(doc: Document, d: ToolsDrawerDeps): ToolsDrawer
     if (act === 'pin') void flow.pin(value, true, trusted);
     else if (act === 'unpin') void flow.pin(value, false, trusted, inPins ? 'pins' : 'all');
     else if (act === 'restart') void flow.restart(value, trusted);
+    else if (act === 'stop-sending') void flow.stopSending(value, trusted);
     else if (act === 'fold') flow.fold(value, trusted);
     else if (act === 'again') void (s.seg === 'tools' ? flow.readTools() : flow.readMemory());
     else if (act === 'seg-memory') {

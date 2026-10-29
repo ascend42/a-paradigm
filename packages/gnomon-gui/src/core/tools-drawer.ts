@@ -17,8 +17,12 @@
  *   - Memory: "From you and Gnomon" (goal, facts, your pins) and "Data the model and tools wrote" (notes, file-refs, the
  *     last failing tool; model-text-control's dashed edge and the label "data"). All text is text nodes (render.ts h()).
  *   - Every server-written string (a label, a tool name, a description, an error) passes displayText and is capped.
+ *   - C6'b2-2 (Mika): each server tool's row names its "/" result policy, "results: send · ask · not chosen"; a tool that
+ *     sends has a quiet Stop sending key (request.session.tools.policy{policy:'ask'}: moving to ask is always allowed).
+ *     A tainted session (capabilities.tainted) shows the injection-pause line at the top of Tools.
  */
 import { displayText } from './render.js';
+import { TAINT_LINE } from './slash-runs.js';
 import { trustChipOf } from './mcp-servers.js';
 import { FILTER_AT, FOLD_AT } from './rules.js';
 import type { FormKey, ResultView, SettingRow } from './settings.js';
@@ -29,6 +33,8 @@ export const TOOLS_PIN_REQUEST = 'request.session.tools.pin' as const;
 export const MEMORY_READ_REQUEST = 'request.session.memory.read' as const;
 export const MEMORY_LIST_REQUEST = 'request.session.memory.list' as const;
 export const MEMORY_DELETE_REQUEST = 'request.session.memory.delete' as const;
+/** C6'b2-2: a tool's "/" result policy (Stop sending moves it to ask). */
+export const TOOLS_POLICY_REQUEST = 'request.session.tools.policy' as const;
 /** The kernel's MAX_TOOL_PINS and MAX_MODEL_NOTES (working-memory.ts). */
 export const MAX_PINS = 8;
 export const MAX_MODEL_NOTES = 16;
@@ -77,6 +83,11 @@ export const TOOLS_COPY = Object.freeze({
   /** Mika C6'b1 #4: said once, in the Pins heading; every disabled Pin points at it */
   pinsFullHead: 'unpin one to pin another',
   noClasses: 'no tools listed',
+  /** C6'b2-2 (Mika): the policy word of a tool row, and its quiet key */
+  results: Object.freeze({ send: 'results: send', ask: 'results: ask', none: 'results: not chosen' }),
+  stopSending: 'Stop sending',
+  stopping: 'Stopping…',
+  stopped: (name: string): string => `${name}: its results stay here now; Send this one sends one`,
   memory: Object.freeze({
     empty: 'No working memory yet. It fills when you send a prompt.',
     yours: 'From you and Gnomon',
@@ -441,6 +452,9 @@ export interface DrawerUi {
   serverResult: { label: string; result: ResultView } | null;
   /** a pin's refusal under the Pins heading */
   pinResult: ResultView | null;
+  /** C6'b2-2: the tool id whose Stop sending is in flight, and a refused one's words under its row */
+  policyBusy?: string | null;
+  policyResult?: { id: string; text: string } | null;
   memory: MemoryUi;
 }
 export const emptyMemoryUi = (): MemoryUi => ({ phase: 'reading', entries: [], confirm: false, deleting: null, result: null });
@@ -459,6 +473,9 @@ export interface ToolRowView {
   key: FormKey | null;
   /** the visible why of an aria-disabled Pin (linked by aria-describedby) */
   why: string | null;
+  /** C6'b2-2: Stop sending (a tool whose results go to the model), and a refused one's words */
+  stop?: FormKey | null;
+  stopNote?: string | null;
 }
 export interface ToolGroupView {
   label: string;
@@ -470,6 +487,8 @@ export interface ToolGroupView {
 export interface ToolsView {
   /** a line above everything (tier 0, ended, not the owner, unreachable, reading) and its key */
   notice: Notice | null;
+  /** C6'b2-2: the injection-pause line of a tainted session, or null */
+  taint?: string | null;
   sections: Array<{ id: string; title: string; rows: SettingRow[]; result?: ResultView | null }>;
   all: { title: string; filter: { shown: boolean; value: string }; groups: ToolGroupView[]; noMatch: string | null } | null;
 }
@@ -486,6 +505,9 @@ export function pinKeyOf(t: CapTool, ui: Pick<DrawerUi, 'pinBusy'>, pins: readon
   else if (pins.length >= MAX_PINS) return { key: { act: 'pin', value: t.name, label: TOOLS_COPY.pin, quiet: true, pressed: false, ariaDisabled: true, describedBy: PINS_HEADING_ID }, why: null };
   return { key: { act: 'pin', value: t.name, label: TOOLS_COPY.pin, quiet: true, pressed: false, ...(why ? { ariaDisabled: true } : busy) }, why };
 }
+
+/** C6'b2-2: a tool's "/" result policy as its row says it. */
+export const resultsWord = (p: 'send' | 'ask' | null): string => (p === 'send' ? TOOLS_COPY.results.send : p === 'ask' ? TOOLS_COPY.results.ask : TOOLS_COPY.results.none);
 
 /** Mika C6'b1 #5: the readout form, label then number, zero classes left out: "reads 4 · changes 1"; none: "no tools listed". */
 export const countsWords = (c: CapServer['counts']): string => (['read', 'mutate', 'destructive'] as const).filter((k) => c[k] > 0).map((k) => `${CLASS_WORD[k]} ${c[k]}`).join(' · ') || TOOLS_COPY.noClasses;
@@ -563,7 +585,8 @@ export function toolsView(ui: DrawerUi, hints: { found: Set<string>; recent: Set
   const srvRows: SettingRow[] = c.servers.map((s, n) => serverRow(s, ui, n));
   if (!srvRows.length) srvRows.push({ kind: 'readonly', id: 'td-server-none', label: '', value: TOOLS_COPY.noServers, how: TOOLS_COPY.noServersHow });
   sections.push({ id: 'servers', title: 'Servers', rows: srvRows, result: ui.serverResult?.result ?? null });
-  if (zero) return { notice: { text: TOOLS_COPY.tier0, key: { act: 'tier', label: TOOLS_COPY.changeTier } }, sections, all: null };
+  const taint = c.tainted ? TAINT_LINE : null;
+  if (zero) return { notice: { text: TOOLS_COPY.tier0, key: { act: 'tier', label: TOOLS_COPY.changeTier } }, taint, sections, all: null };
   // 4. All tools: Gnomon's verbs first, then each server's tools
   const total = c.verbs.length + c.tools.length;
   const shownFilter = total >= TOOLS_FILTER_AT;
@@ -576,12 +599,14 @@ export function toolsView(ui: DrawerUi, hints: { found: Set<string>; recent: Set
     const all = c.tools.filter((t) => t.server === sv);
     const rows = all.filter((t) => matches(q, t.name, t.server, t.description)).map((t) => {
       const k = pinKeyOf(t, ui, c.pins);
-      return { name: t.name, meta: `${CLASS_WORD[t.class]} · ${availabilityWord(t.availability, c.tier)}`, description: t.description, key: k.key, why: k.why };
+      const busy = ui.policyBusy === t.id;
+      const stop: FormKey | null = t.policy === 'send' ? { act: 'stop-sending', value: t.id, label: busy ? TOOLS_COPY.stopping : TOOLS_COPY.stopSending, quiet: true, ...(busy ? { busy: true, ariaDisabled: true } : {}) } : null;
+      return { name: t.name, meta: `${CLASS_WORD[t.class]} · ${availabilityWord(t.availability, c.tier)} · ${resultsWord(t.policy)}`, description: t.description, key: k.key, why: k.why, stop, stopNote: ui.policyResult?.id === t.id ? ui.policyResult.text : null };
     });
     groups.push(groupOf(sv, all.length, rows, ui, q));
   }
   const shownGroups = groups.filter((g) => !q || g.rows.length);
-  return { notice: null, sections, all: { title: `All tools · ${total}`, filter: { shown: shownFilter, value: ui.filter }, groups: shownGroups, noMatch: q && !shownGroups.length ? TOOLS_COPY.noMatch : null } };
+  return { notice: null, taint, sections, all: { title: `All tools · ${total}`, filter: { shown: shownFilter, value: ui.filter }, groups: shownGroups, noMatch: q && !shownGroups.length ? TOOLS_COPY.noMatch : null } };
 }
 
 function groupOf(label: string, count: number, rows: ToolRowView[], ui: Pick<DrawerUi, 'folds'>, q: string): ToolGroupView {
@@ -647,7 +672,7 @@ export const drawerMeta = (ui: Pick<DrawerUi, 'updatedAt' | 'title'>): string =>
 /* ── outcomes ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 /** A refusal (code, reason, data) in plain words with next: for a pin, a restart or a memory delete. Never the code. */
-export function refusalWords(what: 'pin' | 'restart' | 'delete', r: { reason: string | null; data: Record<string, unknown> | null } | null): string {
+export function refusalWords(what: 'pin' | 'restart' | 'delete' | 'stop', r: { reason: string | null; data: Record<string, unknown> | null } | null): string {
   const reason = r?.reason ?? null;
   if (what === 'restart' && reason === 'refused') {
     const w = fitWords(typeof r?.data?.fit === 'string' ? r.data.fit : null);
@@ -655,7 +680,9 @@ export function refusalWords(what: 'pin' | 'restart' | 'delete', r: { reason: st
   }
   if (what === 'restart' && reason === 'busy') return 'Not restarted: it is already starting · next: wait for it, then look again';
   if (what === 'pin' && reason === 'full') return `Not pinned: ${TOOLS_COPY.pinsFull}`;
-  const lead = what === 'pin' ? 'Not pinned' : what === 'restart' ? 'Not restarted' : 'Not deleted';
+  if (what === 'stop' && reason === 'not-found') return 'Still sending: this tool isn’t in this session any more · next: Read again';
+  if (what === 'stop' && reason === 'untrusted') return 'Its results aren’t sent: its server isn’t trusted now · next: Read again';
+  const lead = what === 'pin' ? 'Not pinned' : what === 'restart' ? 'Not restarted' : what === 'stop' ? 'Still sending' : 'Not deleted';
   if (reason === 'not-found') return what === 'delete' ? `${lead}: Gnomon holds no memory for this session any more · next: close this and look again` : `${lead}: this session isn’t running any more · next: open a new session`;
   if (r === null) return `${lead}: nothing was sent, the connection dropped · next: try again once Gnomon is connected`;
   return `${lead}: the kernel refused it · next: close this and try again`;
@@ -676,6 +703,8 @@ export const restartRequest = (hsid: string, server: string): DrawerRequest => (
 export const pinRequest = (hsid: string, name: string, pinned: boolean): DrawerRequest => ({ kind: TOOLS_PIN_REQUEST, payload: { hsid, name, pinned } });
 export const memoryReadRequest = (hsid: string): DrawerRequest => ({ kind: MEMORY_READ_REQUEST, payload: { hsid } });
 export const memoryListRequest = (): DrawerRequest => ({ kind: MEMORY_LIST_REQUEST, payload: {} });
+/** C6'b2-2: Stop sending (ask). */
+export const policyRequest = (hsid: string, id: string, policy: 'send' | 'ask'): DrawerRequest => ({ kind: TOOLS_POLICY_REQUEST, payload: { hsid, id, policy } });
 export const memoryDeleteRequest = (hsid: string, stop: boolean): DrawerRequest => ({ kind: MEMORY_DELETE_REQUEST, payload: stop ? { hsid, stop: true } : { hsid } });
 
 /* ── Settings › Local model: Kept memory ─────────────────────────────────────────────────────────────────────────── */

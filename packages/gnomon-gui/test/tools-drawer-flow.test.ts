@@ -121,6 +121,40 @@ describe('#gui-capability-browser: opening and reading', () => {
   });
 });
 
+describe("#gui-capability-browser: C6'b2-2 Stop sending", () => {
+  it('a trusted press sends tools.policy{ask} once, re-reads and says so; focus goes to the tool’s Pin key', async () => {
+    const sends = caps({ tools: [tool('grep', { policy: 'send' })] });
+    const r = rig({ 'request.session.capabilities': [sends, caps({ generation: 2, tools: [tool('grep', { policy: 'ask' })] })], 'request.session.tools.policy': [{ hsid: H, id: 'fs/grep@0123abcd', policy: 'ask', previous: 'send', queued: false }] });
+    await open(r);
+    r.flow.takeFocus();
+    await r.flow.stopSending('fs/grep@0123abcd', false);
+    expect(r.kinds()).not.toContain('request.session.tools.policy');
+    const a = r.flow.stopSending('fs/grep@0123abcd', true);
+    const b = r.flow.stopSending('fs/grep@0123abcd', true);
+    await Promise.all([a, b]);
+    expect(r.calls.filter((c) => c.kind === 'request.session.tools.policy')).toEqual([{ kind: 'request.session.tools.policy', payload: { hsid: H, id: 'fs/grep@0123abcd', policy: 'ask' } }]);
+    expect(r.lives.at(-1)).toBe('grep: its results stay here now; Send this one sends one');
+    expect(r.flow.takeFocus()).toEqual({ act: 'pin', value: 'grep' });
+    expect(r.flow.tools()!.all!.groups[0]!.rows[0]!.stop).toBeNull();
+  });
+  it('a refusal says so under the row; a sent result or skill text re-reads (taint)', async () => {
+    const r = rig({ 'request.session.capabilities': [caps({ tools: [tool('grep', { policy: 'send' })] })], 'request.session.tools.policy': [() => { throw refusal('not-found'); }] });
+    await open(r);
+    await r.flow.stopSending('fs/grep@0123abcd', true);
+    expect(r.flow.tools()!.all!.groups[0]!.rows[0]!.stopNote).toBe('Still sending: this tool isn’t in this session any more · next: Read again');
+    const n = r.kinds().filter((k) => k === 'request.session.capabilities').length;
+    r.flow.row({ kind: 'tool.result.sent', payload: { hsid: H } });
+    r.flow.row({ kind: 'skill.run', payload: { hsid: H, decision: 'ran' } });
+    await tick();
+    expect(r.kinds().filter((k) => k === 'request.session.capabilities').length).toBe(n + 2);
+  });
+  it('the painted row: Stop sending beside Pin; the taint line at the top', () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'ui', 'tools-drawer.ts'), 'utf8');
+    expect(src).toContain("else if (act === 'stop-sending') void flow.stopSending(value, trusted);");
+    expect(src).toContain("h(doc, 'div', { class: 'settings-sec td-taint' }");
+  });
+});
+
 describe('#gui-capability-browser: Pin', () => {
   it('a trusted press pins once (a double press sends one), re-reads and says so; focus stays on the tool\'s key', async () => {
     const r = rig({ 'request.session.capabilities': [caps(), caps({ generation: 2, pins: [{ name: 'glob', offered: true }] })], 'request.session.tools.pin': [{ hsid: H, name: 'glob', pinned: true, offered: true }] });

@@ -1725,6 +1725,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .tools-sheet .agent-claimed .settings-readonly .settings-label::after { content: none; }
 .tools-sheet .agent-claimed .settings-row > .settings-label { align-self: start; }
 .tools-sheet .rule-row .why-off { grid-column: 1; }
+/* C6'b2-2: a refused Stop sending under its row; the injection-pause line at the top of Tools */
+.tools-sheet .rule-row .td-stop-note { grid-column: 1; color: var(--fail); }
+.tools-sheet .td-taint .sf-result { color: var(--ink2); }
 .tools-sheet .td-foot { border-bottom: 0; }
 
 /* #gui-slash-menu (C6'b2-1; design-system slash-menu): the "/" menu, a menu variant hung ABOVE the composer. The
