@@ -8,7 +8,7 @@
  *   - `argv`: per run check, argv0 as the runner resolves it (resolveArgv0: a path word against the repo root, a
  *     bare name in `<repo>/node_modules/.bin` then the session PATH), its realpath and sha256, and the shebang
  *     interpreter's realpath and sha256 when argv0 is a script (`#!/usr/bin/env node` resolves `node` the way the
- *     runner will: the kernel's own node, process.execPath); plus the realpath and sha256 of every file an argv word
+ *     runner will: the kernel's child node, childNodePath()); plus the realpath and sha256 of every file an argv word
  *     names, in or out of the repo (a directory by its realpath; a missing path-like word as `missing`, so a file
  *     that appears later changes the hash);
  *   - `closure`: the config closure, a digest of the gate-class files a check reads (closureOf: test config,
@@ -31,6 +31,7 @@ import { defaultSessionPath, sessionNodeDir } from '../runner/env.js';
 import { readShebang, resolveShebangInterpreter } from './shebang.js';
 import { repoEnvFiles } from './loop-env.js';
 import { isClosureName } from '../manifest/layers.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export { readShebang, shebangProgram } from './shebang.js';
 
@@ -68,7 +69,7 @@ export function createFileHashCache(max = 4096): FileHashCache {
 export interface HashContext {
   /** The repo root the loop runs in (realpath'd by the caller). Relative argv words resolve against it. */
   repoRoot: string;
-  /** The node a `#!/usr/bin/env node` script runs under (the runner's node). Default process.execPath. */
+  /** The node a `#!/usr/bin/env node` script runs under (the runner's node). Default childNodePath() (#kernel-sea). */
   execPath?: string;
   /** Where a bare argv0 is looked up after `<repo>/node_modules/.bin` (the session PATH). Default defaultSessionPath. */
   pathDirs?: readonly string[];
@@ -77,7 +78,7 @@ export interface HashContext {
 }
 
 /** The default PATH a bare argv0 is looked up on (the kernel's session PATH; never process.env). */
-export function defaultLoopPathDirs(platform: NodeJS.Platform = process.platform, execPath: string = process.execPath): string[] {
+export function defaultLoopPathDirs(platform: NodeJS.Platform = process.platform, execPath: string = childNodePath()): string[] {
   const nodeDir = sessionNodeDir(execPath, { platform }) ?? undefined;
   return defaultSessionPath({ platform, ...(nodeDir ? { nodeDir } : {}) }) ?? (nodeDir ? [nodeDir] : []);
 }

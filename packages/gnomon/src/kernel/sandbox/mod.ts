@@ -25,6 +25,7 @@ import { modProfileSbpl, ModSbplError, MOD_PROFILE_VERSION } from '../../platfor
 import type { MacosProbe, SipProbe } from '../../platform/darwin/macos.js';
 import { darwinFloor } from './session.js';
 import { assertNoProtectedGrant, nodeRuntimeDirs, type ChildLaunchPlan } from './transport.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 /** The `mod` row of §15.5 as data (versioned; logged in mod.sandbox as profileHash). */
 export const MOD_PROFILE = Object.freeze({
@@ -84,7 +85,7 @@ function darwinMod(i: ModLaunchInput, probe?: MacosProbe, sip?: SipProbe): Child
     throw new LifecycleRefusal('sandbox-unavailable', floor.floor === 'sip' ? `the mod profile needs System Integrity Protection enabled (have ${floor.have})` : `the mod profile needs macOS ${floor.need}+ (have ${floor.have ?? 'unknown'})`, { profile: 'mod', floor: floor.floor, have: floor.have, need: floor.need });
   }
   if (!existsSync(SANDBOX_EXEC)) throw new LifecycleRefusal('sandbox-unavailable', `${SANDBOX_EXEC} is missing`, { profile: 'mod' });
-  const nodeReal = realpathSync(i.nodePath ?? process.execPath);
+  const nodeReal = realpathSync(i.nodePath ?? childNodePath());
   const snapshotReal = realpathSync(i.snapshotDir);
   const entryReal = realpathSync(i.entry);
   if (!within(entryReal, snapshotReal)) throw new LifecycleRefusal('sandbox-unavailable', `the mod entry ${entryReal} is outside its snapshot`, { profile: 'mod' });

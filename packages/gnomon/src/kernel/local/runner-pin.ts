@@ -34,6 +34,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { refuse, RefusedError } from '@a-company/gnomon-contracts';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export interface LocalRunnerPin {
   /** absolute path of the node binary */
@@ -96,7 +97,7 @@ export function treeHash(dir: string): string {
 const safeEntry = (e: string): boolean => e.length > 0 && !e.startsWith('/') && !/^[A-Za-z]:/.test(e) && !e.split(/[\\/]/).some((c) => c === '..' || c === '');
 
 /** A test/root-act helper: the pin of a runner as it is on disk now. */
-export function pinOf(dir: string, entry: string, node: string = process.execPath): LocalRunnerPin {
+export function pinOf(dir: string, entry: string, node: string = childNodePath()): LocalRunnerPin {
   return { node, nodeSha256: sha256File(node), dir, treeSha256: treeHash(dir), entry };
 }
 

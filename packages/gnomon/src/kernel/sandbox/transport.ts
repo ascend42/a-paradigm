@@ -48,6 +48,7 @@ import path from 'node:path';
 import { helperOp, helperOpSync, kernelWin32Helper } from '../../platform/win32/helper-client.js';
 import { win32SystemRoot } from '../../platform/win32/system-root.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export const SANDBOX_PROFILE_NAMES = ['gnomon-oracle', 'gnomon-reviewer', 'git', 'session', 'mod', 'transport', 'voice', 'link'] as const;
 export type SandboxProfileName = (typeof SANDBOX_PROFILE_NAMES)[number];
@@ -64,7 +65,7 @@ export interface TransportLaunchInput {
   /** The child entry (dist/transport/gnomon-web.js of the kernel's own package). */
   scriptPath: string;
   bundleDir: string;
-  /** The Node binary (default process.execPath). */
+  /** The Node binary (default childNodePath(): process.execPath, or gnomon.node under the SEA kernel, #kernel-sea). */
   nodePath?: string;
   /** Directories no granted read subpath may equal or contain (the Gnomon home, its keys dir); $HOME is always added. */
   protectedDirs?: string[];
@@ -163,7 +164,7 @@ const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 
 function darwinTransport(input: TransportLaunchInput): ChildLaunchPlan {
   if (!existsSync(SANDBOX_EXEC)) throw new LifecycleRefusal('sandbox-unavailable', `${SANDBOX_EXEC} is missing`);
-  const nodeReal = realpathSync(input.nodePath ?? process.execPath);
+  const nodeReal = realpathSync(input.nodePath ?? childNodePath());
   const scriptReal = realpathSync(input.scriptPath);
   const bundleReal = realpathSync(input.bundleDir);
   const profile = transportProfileSbpl({ nodeReal, scriptReal, bundleReal, ...(input.protectedDirs ? { protectedDirs: input.protectedDirs } : {}), ...(input.forbiddenTrees ? { forbiddenTrees: input.forbiddenTrees } : {}) });
@@ -187,7 +188,7 @@ function darwinTransport(input: TransportLaunchInput): ChildLaunchPlan {
  */
 function win32Transport(input: TransportLaunchInput): ChildLaunchPlan {
   const pin = kernelWin32Helper();
-  const nodeReal = realpathSync.native(input.nodePath ?? process.execPath);
+  const nodeReal = realpathSync.native(input.nodePath ?? childNodePath());
   const scriptReal = realpathSync.native(input.scriptPath);
   const bundleReal = realpathSync.native(input.bundleDir);
   const r = helperOpSync(pin, 'acl.session', { entries: [{ path: bundleReal, mode: 'label-readable', match: 'subpath' }] });

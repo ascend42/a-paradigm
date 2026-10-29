@@ -21,6 +21,7 @@ import { loopCheckProfileSbpl, LoopCheckSbplError, LOOP_CHECK_PROFILE_VERSION } 
 import type { MacosProbe, SipProbe } from '../../platform/darwin/macos.js';
 import { darwinFloor } from './session.js';
 import { assertNoProtectedGrant, nodeRuntimeDirs, type ChildLaunchPlan } from './transport.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 /** Check run dirs live in `<home>/loop-work/` (kernel-owned, 0700): never inside the repo, never under ~/.gnomon/loops. */
 export const LOOP_WORK_DIR = 'loop-work';
@@ -66,7 +67,7 @@ export interface LoopCheckLaunchInput {
   /** extra read-only subpaths (the paradigm CLI package for builtins) */
   readPaths?: readonly string[];
   env: Record<string, string>;
-  /** the kernel's node (default process.execPath) */
+  /** the kernel's child node (default childNodePath(): process.execPath, or gnomon.node under the SEA kernel) */
   nodePath?: string;
   /** TD-2026-10-23-268: the loop's `network: on`: outbound IP connects allowed (default: no network at all) */
   network?: boolean;
@@ -85,7 +86,7 @@ function darwinLoopCheck(i: LoopCheckLaunchInput, probe?: MacosProbe, sip?: SipP
   }
   if (!existsSync(SANDBOX_EXEC)) throw new LifecycleRefusal('sandbox-unavailable', `${SANDBOX_EXEC} is missing`, { profile: 'loop-check' });
   if (!i.argv.length || !path.isAbsolute(i.argv[0]!)) throw new LifecycleRefusal('sandbox-unavailable', 'a loop check execs an absolute, resolved argv0', { profile: 'loop-check' });
-  const nodeReal = realpathSync.native(i.nodePath ?? process.execPath);
+  const nodeReal = realpathSync.native(i.nodePath ?? childNodePath());
   const copyReal = realpathSync.native(i.copyDir);
   const argv0Real = realpathSync.native(i.argv[0]!);
   const execReal = [argv0Real, ...(i.exec ?? []).map((e) => realpathSync.native(e))];
