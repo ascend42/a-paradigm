@@ -1,6 +1,6 @@
 {
   "schema": "gnomon-decision-batch-vectors:v2",
-  "note": "TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).",
+  "note": "TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).",
   "vectors": [
     {
       "name": "install: approve + presence, the decision row and all five grant rows",
@@ -1302,6 +1302,224 @@
       "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen\\u0007\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
       "error": "batch-refused",
       "why": "a root row holds a character the dialog cannot show"
+    },
+    {
+      "name": "presence.mode: switch Touch ID off",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"presence.mode\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:6723e2e51020f2024829ca3cf6d040e02f2770916dceae82372632a48b732df6\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on presence.mode card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; Touch ID OFF: every approval becomes a click (root actions keep Touch ID); digests 86df9d57b51c 1a09afa1106a c53fb085db38 e9ddd52b37b5"
+    },
+    {
+      "name": "presence.mode: switch Touch ID on",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"presence.mode\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:639f37bb360279cfac255fb438fd13b65414bf111b1b7f27a3e55c9ad7387bcf\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"mode\":\"on\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"mode\":\"on\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on presence.mode card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; Touch ID ON; digests 86df9d57b51c 1a09afa1106a 82dcd30dbce0 55266e856a49"
+    },
+    {
+      "name": "C3: a presence.mode with no row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"presence.mode\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": "batch-refused",
+      "why": "a presence.mode signs exactly one gnomon-presence-mode:v1 row"
+    },
+    {
+      "name": "C3: a presence.mode never signs a grant row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"presence.mode\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:dc20476d4d95b9a9e16b4edb1541e6557211334d9e5c652404f67c9a8a996959\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}]",
+      "error": "batch-refused",
+      "why": "a presence.mode signs exactly one gnomon-presence-mode:v1 row"
+    },
+    {
+      "name": "C3: a presence.mode row names on or off",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"presence.mode\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:e9bc5e8f477e188f49d5f43ed6d38668bb5fb060c5ee7fe9afe98f5db86fd4ac\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"mode\":\"sometimes\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"mode\":\"sometimes\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}]",
+      "error": "batch-refused",
+      "why": "a presence mode row names on or off"
+    },
+    {
+      "name": "C3: a presence.mode row field outside the closed set",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"presence.mode\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:daf54b77b02bd7f15faae08756bce3d0e0c884e815b4a4a6726841e6469e117b\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\",\"scope\":\"all\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\",\"scope\":\"all\"}]",
+      "error": "batch-refused",
+      "why": "a presence mode row never carries scope"
+    },
+    {
+      "name": "kernel-custody: register the kernel-cert key and seal the legacy keys",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:994c5c87827e1afa5b79c2e6f5ff6ba547be1ae3e924bd21996c920ae3350788\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on kernel-custody card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; register the kernel-cert key sha256:ee5c8300cd17; seal 2 legacy kernel keys of log:01HZZZZZZZZZZZZZZZZZZZZZZA at seq 812 sha256:bbbbbbbbbbbb; digests 86df9d57b51c 1a09afa1106a 392b04867886 141d19afa1e0 dce154d68492"
+    },
+    {
+      "name": "C3: a kernel-custody in the wrong order",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:f0c1724af00af57d376fa0b16fff8c44a683f4a242e6a7870893ec6805f49584\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row"
+    },
+    {
+      "name": "C3: a kernel-custody without the legacy seal",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:92660bbc6d8ade8483f53e345786e3f9de5c5042263927b3b359bdf78c9574e1\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row"
+    },
+    {
+      "name": "C3: a kernel-cert key id that is not the key hash",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:a35c1493ce83760502a83923d24951a103c069f66ba819f45ef526868f659603\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel-cert key row's certKeyId is sha256 of its key"
+    },
+    {
+      "name": "C3: a kernel-cert key that is not X9.63",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:b160cd902507719f991e962f162e2387fd734e95b501c597939ac5e80145233d\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel-cert key row names a P-256 X9.63 public key"
+    },
+    {
+      "name": "C3: a legacy seal with a repeated key id",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:5b4ab125f4bc2faaaf5144d82a01ceba9937877f5e119f6160df762ab65c12c6\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel legacy key id is a unique gkey:v1:<64 hex>"
+    },
+    {
+      "name": "C3: a legacy seal with no key id",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:9718247856a45076d0ae2a53af8cd789f8099face4d3ff2847c236087a0cc1cd\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel legacy row seals 1..64 key ids"
+    },
+    {
+      "name": "C3: a legacy seal with a fractional head seq",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:9de618febab0c6fbb39cb0f16d375c28e6f33b7378f90c35fbd0f24c127e7062\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":1.5,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":1.5,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel legacy row names its head seq (a whole number)"
+    },
+    {
+      "name": "C3: a legacy seal field outside the closed set",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"kernel-custody\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:f00ac20a8734fcc0e95d275552ac4a3649ba1801f7d50a2abf83ed6023cb9094\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"partial\":false,\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"partial\":false,\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
+      "error": "batch-refused",
+      "why": "a kernel legacy row never carries partial"
     }
   ]
 }

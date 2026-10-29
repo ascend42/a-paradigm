@@ -30,13 +30,29 @@ export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
  * row only and first ships in helper 1.10.0 (Protocol.swift rowTableRefusal, slice a2-h, G-HLP-02). #local-tool-broker asks
  * ApprovalBroker.rootTableReady first, so an older helper is offered allow | deny only (never a raise-time refusal).
  */
-export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.freeze({ 'loop-trust': '1.9.0', 'local.config': '1.9.0', permission: '1.10.0' });
+export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.freeze({
+  'loop-trust': '1.9.0',
+  'local.config': '1.9.0',
+  permission: '1.10.0',
+  // TD-2026-10-29-746 / -894 (helper 1.11.0, G-HLP-03/04): the Touch ID switch and the kernel key migration card
+  'presence.mode': '1.11.0',
+  'kernel-custody': '1.11.0',
+});
+
+export const PRESENCE_MODE_SCHEMA = 'gnomon-presence-mode:v1';
+export const KERNEL_CERT_KEY_SCHEMA = 'gnomon-kernel-cert-key:v1';
+export const KERNEL_LEGACY_SCHEMA = 'gnomon-kernel-legacy:v1';
+export const KERNEL_LEGACY_MAX_KEYS = 64;
+/** The helper's presence-mode row hash (click.open): sha256 of the EXACT signed root message, domain included. */
+export function presenceModeRowHash(rootMessage: Buffer): string {
+  return sha256Tag(rootMessage);
+}
 
 /** Mirrors Bounds in Protocol.swift. */
 export const DECISION_BOUNDS = Object.freeze({ maxMessages: 10, maxApprovals: 2, maxRootRows: 8, maxMessageBytes: 65_536, maxBytes: 256 * 1024, maxLineChars: 1200, maxReasonChars: 160 });
 
 /** The card kinds that have a row table (C3). A root-class card's decision row names one of these. */
-export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'permission'] as const);
+export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'permission', 'presence.mode', 'kernel-custody'] as const);
 export type RowTableKind = (typeof ROW_TABLE_KINDS)[number];
 
 export interface DecisionRowV2 {
@@ -152,6 +168,42 @@ export function localRowRefusal(r: Row): string | null {
   return null;
 }
 
+const onlyFields = (r: Row, fields: readonly string[], what: string): string | null => {
+  for (const k of Object.keys(r).sort()) if (!fields.includes(k)) return `a ${what} row never carries ${k.slice(0, 40)}`;
+  return null;
+};
+
+/** helper 1.11.0: the presence.mode row (mirror of presenceModeRowRefusal in Protocol.swift). null = allowed. */
+export function presenceModeRowRefusal(r: Row): string | null {
+  const e = onlyFields(r, ['schemaVersion', 'mode', 'cardId', 'createdAt'], 'presence mode');
+  if (e) return e;
+  return r.mode === 'on' || r.mode === 'off' ? null : 'a presence mode row names on or off';
+}
+
+const B64_STRICT = /^[A-Za-z0-9+/]+={0,2}$/;
+/** helper 1.11.0: the kernel-custody rows [cert-key row, legacy row] (mirror of kernelCustodyRefusal). null = allowed. */
+export function kernelCustodyRefusal(rows: readonly Row[]): string | null {
+  const [k, l] = [rows[0]!, rows[1]!];
+  let e = onlyFields(k, ['schemaVersion', 'certKey', 'certKeyId', 'cardId', 'createdAt'], 'kernel-cert key');
+  if (e) return e;
+  const b64 = k.certKey;
+  const raw = typeof b64 === 'string' && b64.length === 88 && B64_STRICT.test(b64) ? Buffer.from(b64, 'base64') : null;
+  if (!raw || raw.length !== 65 || raw[0] !== 0x04 || raw.toString('base64') !== b64) return 'a kernel-cert key row names a P-256 X9.63 public key';
+  if (k.certKeyId !== sha256Tag(raw)) return "a kernel-cert key row's certKeyId is sha256 of its key";
+  e = onlyFields(l, ['schemaVersion', 'keyIds', 'logId', 'headSeq', 'headHash', 'cardId', 'createdAt'], 'kernel legacy');
+  if (e) return e;
+  if (!Array.isArray(l.keyIds) || l.keyIds.length < 1 || l.keyIds.length > KERNEL_LEGACY_MAX_KEYS) return `a kernel legacy row seals 1..${KERNEL_LEGACY_MAX_KEYS} key ids`;
+  const seen = new Set<string>();
+  for (const v of l.keyIds as unknown[]) {
+    if (typeof v !== 'string' || !/^gkey:v1:[0-9a-f]{64}$/.test(v) || seen.has(v)) return 'a kernel legacy key id is a unique gkey:v1:<64 hex>';
+    seen.add(v);
+  }
+  if (typeof l.logId !== 'string' || !/^log:[0-9A-HJKMNP-TV-Z]{26}$/.test(l.logId)) return 'a kernel legacy row names its log';
+  if (typeof l.headSeq !== 'number' || !Number.isSafeInteger(l.headSeq) || l.headSeq < 0) return 'a kernel legacy row names its head seq (a whole number)';
+  if (typeof l.headHash !== 'string' || !SHA256_TAG.test(l.headHash)) return 'a kernel legacy row names its head hash';
+  return null;
+}
+
 /** C3: the closed per-cardKind row table (rows after the decision row). null = allowed. */
 export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string | null {
   const kinds = rows.map(rowKind);
@@ -195,6 +247,14 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       if (kinds.length !== 1 || kinds[0] !== LOCAL_ROOT_SCHEMA) return 'a local.config signs exactly one gnomon-root-local:v1 row';
       return localRowRefusal(rows[0]!);
     }
+    case 'presence.mode':
+      // helper 1.11.0 (TD-2026-10-29-340/-894, G-HLP-04): the global Touch ID switch signs exactly one mode row
+      if (kinds.length !== 1 || kinds[0] !== PRESENCE_MODE_SCHEMA) return 'a presence.mode signs exactly one gnomon-presence-mode:v1 row';
+      return presenceModeRowRefusal(rows[0]!);
+    case 'kernel-custody':
+      // helper 1.11.0 (TD-2026-10-29-746): register the kernel-cert key, then seal the legacy kernel keys
+      if (kinds.length !== 2 || kinds[0] !== KERNEL_CERT_KEY_SCHEMA || kinds[1] !== KERNEL_LEGACY_SCHEMA) return 'a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row';
+      return kernelCustodyRefusal(rows);
     case 'permission':
     case 'mod.mcp.config':
     case 'api-token':
@@ -299,6 +359,16 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
     }
     case LOCAL_ROOT_SCHEMA:
       return localRowShown(r);
+    case PRESENCE_MODE_SCHEMA:
+      return s('mode') === null ? null : s('mode') === 'off' ? 'Touch ID OFF: every approval becomes a click (root actions keep Touch ID)' : 'Touch ID ON';
+    case KERNEL_CERT_KEY_SCHEMA:
+      return s('certKeyId') === null ? null : `register the kernel-cert key ${s('certKeyId')!.slice(0, 19)}`;
+    case KERNEL_LEGACY_SCHEMA: {
+      const [log, h] = [s('logId'), s('headHash')];
+      const seq = r.headSeq;
+      if (!Array.isArray(r.keyIds) || log === null || h === null || typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
+      return `seal ${r.keyIds.length} legacy kernel keys of ${log} at seq ${seq} ${h.slice(0, 19)}`;
+    }
     default:
       return null;
   }

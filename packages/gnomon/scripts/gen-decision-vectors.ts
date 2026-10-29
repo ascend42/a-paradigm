@@ -1,5 +1,6 @@
 // TD-2026-10-20-514: regenerate the shared decision.sign vectors from the TS mirror (node >= 23 strips the types):
 //   node --no-warnings scripts/gen-decision-vectors.ts ../gnomon-contracts/test/fixtures/decision-batch-vectors.json
+import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { checkDecisionBatch, decisionRowV2, intentOf, BatchRefusal } from '../src/kernel/identity/decision-batch.ts';
@@ -146,9 +147,31 @@ add('C3: a fractional version', LA, batch('local.config', 'allow', [lrow({ versi
 add('C3: a boolean version', LA, batch('local.config', 'allow', [lrow({ version: true })]));
 add('C3: a loops flag that is not a boolean', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ loops: 1 })] })]));
 add('C2: a model with a control character cannot be shown', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ model: 'qwen\u0007' })] })]));
+// helper 1.11.0 (TD-2026-10-29-340/-894/-746, G-HLP-03/04): presence.mode and kernel-custody
+const modeRow = (o: R = {}) => ({ schemaVersion: 'gnomon-presence-mode:v1', mode: 'off', cardId: C, createdAt: T, ...o });
+const PM = [approve(C, 'allow'), presence];
+add('presence.mode: switch Touch ID off', PM, batch('presence.mode', 'allow', [modeRow()]));
+add('presence.mode: switch Touch ID on', PM, batch('presence.mode', 'allow', [modeRow({ mode: 'on' })]));
+add('C3: a presence.mode with no row', PM, batch('presence.mode', 'allow', []));
+add('C3: a presence.mode never signs a grant row', PM, batch('presence.mode', 'allow', [modeRow(), trust()]));
+add('C3: a presence.mode row names on or off', PM, batch('presence.mode', 'allow', [modeRow({ mode: 'sometimes' })]));
+add('C3: a presence.mode row field outside the closed set', PM, batch('presence.mode', 'allow', [modeRow({ scope: 'all' })]));
+const CERT_PUB = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]);
+const sha = (b: Buffer) => `sha256:${createHash('sha256').update(b).digest('hex')}`;
+const certKeyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-cert-key:v1', certKey: CERT_PUB.toString('base64'), certKeyId: sha(CERT_PUB), cardId: C, createdAt: T, ...o });
+const legacyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-legacy:v1', keyIds: [`gkey:v1:${'1'.repeat(64)}`, `gkey:v1:${'2'.repeat(64)}`], logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', headSeq: 812, headHash: H2, cardId: C, createdAt: T, ...o });
+add('kernel-custody: register the kernel-cert key and seal the legacy keys', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow()]));
+add('C3: a kernel-custody in the wrong order', PM, batch('kernel-custody', 'allow', [legacyRow(), certKeyRow()]));
+add('C3: a kernel-custody without the legacy seal', PM, batch('kernel-custody', 'allow', [certKeyRow()]));
+add('C3: a kernel-cert key id that is not the key hash', PM, batch('kernel-custody', 'allow', [certKeyRow({ certKeyId: H }), legacyRow()]));
+add('C3: a kernel-cert key that is not X9.63', PM, batch('kernel-custody', 'allow', [certKeyRow({ certKey: Buffer.alloc(65, 7).toString('base64') }), legacyRow()]));
+add('C3: a legacy seal with a repeated key id', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ keyIds: [`gkey:v1:${'1'.repeat(64)}`, `gkey:v1:${'1'.repeat(64)}`] })]));
+add('C3: a legacy seal with no key id', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ keyIds: [] })]));
+add('C3: a legacy seal with a fractional head seq', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ headSeq: 1.5 })]));
+add('C3: a legacy seal field outside the closed set', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ partial: false })]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
-  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
+  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
   vectors: v,
 };
 writeFileSync(process.argv[2]!, JSON.stringify(out, null, 2) + '\n');

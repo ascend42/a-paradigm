@@ -51,6 +51,7 @@ final class Server {
     let items: ItemStore
     let issuer: CertIssuer
     let anchor: Anchor
+    let modes: ModeStore
     let clock: () -> Date
 
     init(custody: Custody = Custody(),
@@ -71,6 +72,7 @@ final class Server {
         self.clock = clock
         self.issuer = CertIssuer(key: certKey, items: items, boot: boot, clock: clock)
         self.anchor = Anchor(items: items, clock: clock)
+        self.modes = ModeStore(items: items)
     }
 
     func handle(_ req: Json) throws -> Json {
@@ -185,6 +187,12 @@ final class Server {
             let g = try generation(req)
             _ = try connId(req) // validated (the kernel's connection, informational)
             let batch = try decisionBatch(req)
+            if batch.cardKind == "kernel-custody" {
+                // 1.11.0: the migration card registers THIS helper's kernel-cert key, never another
+                guard batch.rows[1]["certKey"] as? String == (try issuer.key.publicKey()).base64EncodedString() else {
+                    throw HelperError("batch-refused", "the kernel-cert key row names another key than this helper's")
+                }
+            }
             let why = try reason(req)
             let line = try decisionLine(batch)
             let ctx = try presence(decisionPromptText(line, why))
@@ -192,7 +200,12 @@ final class Server {
             let approvalSigs = batch.approvals.isEmpty ? [] : try signer(.approvals, g, ctx, batch.approvals)
             let rootSigs = try signer(.root, g, ctx, batch.root)
             guard approvalSigs.count == batch.approvals.count, rootSigs.count == batch.root.count else { throw HelperError("sign", "a signature is missing") }
-            return ["approvalSigs": approvalSigs, "rootSigs": rootSigs, "shown": line, "kept": false]
+            var out: Json = ["approvalSigs": approvalSigs, "rootSigs": rootSigs, "shown": line, "kept": false]
+            if let m = storedModeOf(batch) {
+                // 1.11.0 (G-HLP-04): the helper's own copy of the switch, stored only after the row was signed
+                out["mode"] = setMode(m)
+            }
+            return out
 
         case "arm.open":
             // §14.7: a FRESH presence evaluation, bound to {humanConnId, voiceConnId}, kept per armId
@@ -283,6 +296,13 @@ final class Server {
             let r = custody.sync { (custody.unlocks.drop(c), custody.arms.closeReferencing(c)) }
             return ["dropped": r.0, "arms": r.1]
 
+        case "presence.mode":
+            _ = try caller.require()
+            let m = try modes.read()
+            var out: Json = ["mode": m.mode]
+            if let h = m.rowHash { out["rowHash"] = h }
+            return out
+
         case "kernel.cert":
             // 1.11.0 (G-HLP-03): no presence; only the signed kernel instance that spawned this helper
             let who = try caller.require()
@@ -307,6 +327,20 @@ final class Server {
             throw bad("unknown op")
         }
     }
+
+    /// Store the switch; switching ON revokes every click key first (fail closed: an unstored OFF stays ON).
+    func setMode(_ m: StoredMode) -> Json {
+        if m.mode == "on" { revokeClicks(cause: "mode-on") }
+        do {
+            try modes.store(m)
+            return ["stored": true, "mode": m.mode]
+        } catch {
+            return ["stored": false, "mode": m.mode]
+        }
+    }
+
+    /// Click keys (ClickKey.swift, 1.11.0); a no-op until they exist.
+    func revokeClicks(cause: String) {}
 
     private func armRoom(_ p: Arms.Put) throws {
         switch p {

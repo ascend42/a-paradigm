@@ -11,6 +11,24 @@ import { BatchRefusal, checkDecisionBatch, decisionRowV2, HardwarePresenceDenied
 import { decisionMessage } from '../src/kernel/log/signer.js';
 import { CountingFakeHelper, FakeHelper } from './helper-fake.js';
 
+import { createHash } from 'node:crypto';
+import { presenceModeRowHash, ROW_TABLE_KINDS, ROW_TABLE_MIN_HELPER } from '../src/kernel/identity/decision-batch.js';
+
+describe('helper 1.11.0 row tables (TD-2026-10-29-746 / -894, G-HLP-03/04)', () => {
+  it('presence.mode and kernel-custody need helper 1.11.0 and are in the closed table', () => {
+    expect(ROW_TABLE_MIN_HELPER['presence.mode']).toBe('1.11.0');
+    expect(ROW_TABLE_MIN_HELPER['kernel-custody']).toBe('1.11.0');
+    expect(ROW_TABLE_KINDS).toEqual(expect.arrayContaining(['presence.mode', 'kernel-custody']));
+  });
+
+  it('the presence.mode row hash is sha256 of the exact signed root message (what click.open presents)', () => {
+    const v = V.vectors.find((x) => x.name === 'presence.mode: switch Touch ID off')!;
+    expect(v.error).toBeNull();
+    const msg = Buffer.from(v.root[1]!, 'utf8');
+    expect(presenceModeRowHash(msg)).toBe(`sha256:${createHash('sha256').update(msg).digest('hex')}`);
+  });
+});
+
 type Vector = { name: string; approvals: string[]; root: string[]; intent: string | null; error: string | null; shown?: string };
 const V = JSON.parse(readFileSync(new URL('../../gnomon-contracts/test/fixtures/decision-batch-vectors.json', import.meta.url), 'utf8')) as { vectors: Vector[] };
 

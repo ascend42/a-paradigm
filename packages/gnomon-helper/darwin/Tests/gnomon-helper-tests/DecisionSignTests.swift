@@ -42,7 +42,16 @@ private final class Rig {
             if k == .root && self.failRoot { throw HelperError("sign", "the root key did not sign") }
             return msgs.map { _ in "c2ln" }
         },
-        session: FakeProbe(true))
+        session: FakeProbe(true),
+        items: items,
+        certKey: VectorCertKey())
+    let items = MemoryItemStore()
+}
+
+/// The shared vectors' kernel-cert key (0x04 + 64 x 0x07): the kernel-custody card must name THIS helper's key.
+final class VectorCertKey: CertKey {
+    func publicKey() throws -> Data { Data([4] + [UInt8](repeating: 7, count: 64)) }
+    func sign(_ message: Data) throws -> Data { throw HelperError("sign", "not used") }
 }
 
 private func request(_ v: Json) -> Json {
@@ -166,6 +175,25 @@ final class DecisionSignTests: XCTestCase {
         let r = Rig()
         XCTAssertEqual(errorCode { try r.server.handle(request(try vector("C3: an unknown card kind"))) }, "batch-refused")
         XCTAssertTrue(r.prompts.isEmpty)
+    }
+
+    func testKernelCustodyRegistersOnlyThisHelpersKey() throws {
+        let r = Rig()
+        r.server = Server(presence: { _ in SpyContext() }, signer: { _, _, _, m in m.map { _ in "c2ln" } }, session: FakeProbe(true), items: r.items, certKey: SoftCertKey())
+        XCTAssertEqual(errorCode { try r.server.handle(request(try vector("kernel-custody: register the kernel-cert key and seal the legacy keys"))) }, "batch-refused")
+    }
+
+    func testAPresenceModeDecisionStoresTheModeAndItsRowHash() throws {
+        let r = Rig()
+        let v = try vector("presence.mode: switch Touch ID off")
+        let out = try r.server.handle(request(v))
+        XCTAssertEqual((out["mode"] as? Json)?["stored"] as? Bool, true)
+        let m = try ModeStore(items: r.items).read()
+        XCTAssertEqual(m.mode, "off")
+        XCTAssertEqual(m.rowHash, sha256Tag(Data(((v["root"] as! [String])[1]).utf8)))
+        let on = try r.server.handle(request(try vector("presence.mode: switch Touch ID on")))
+        XCTAssertEqual((on["mode"] as? Json)?["mode"] as? String, "on")
+        XCTAssertEqual(try ModeStore(items: r.items).read().mode, "on")
     }
 
     /// The ONE shared fixture, also read by packages/gnomon/test/decision-batch.test.ts (the TS mirror).
