@@ -134,7 +134,32 @@ final class AnchorTests: XCTestCase {
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logA, "seq": 9, "hash": h2])["error"] as? String, "anchor-rollback")
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logA, "seq": 10, "hash": h2])["error"] as? String, "anchor-fork")
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2])["error"] as? String, "anchor-log")
-        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true])["written"] as? Bool, true)
+        // Aegis S1 H2: newLog alone never moves a non-empty anchor
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true])["error"] as? String, "anchor-log")
+    }
+
+    private func genesis(_ prevSeq: Int, _ prevHash: String, log: String = logB) -> String {
+        let g: Json = ["schemaVersion": "gnomon-log-genesis:v1", "logId": log, "prev": ["logId": logA, "seq": prevSeq, "hash": prevHash]]
+        return canonicalJSON(g).base64EncodedString()
+    }
+
+    func testNewLogOnlyWhenEmptyWithAGenesisNamingTheHeadOrAfterAQuarantine() throws {
+        let e = Rig11()
+        XCTAssertEqual(e.call(["op": "anchor.write", "logId": logA, "seq": 1, "hash": h1, "newLog": true])["written"] as? Bool, true, "empty: allowed")
+        let r = Rig11()
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logA, "seq": 10, "hash": h1])["written"] as? Bool, true)
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(9, h1)])["error"] as? String, "anchor-log", "a genesis naming another head")
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(10, h1, log: logA)])["error"] as? String, "anchor-log", "a genesis for another log")
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(10, h1)])["written"] as? Bool, true)
+        // (c) a quarantine decision allows ONE move from exactly the stored head
+        let q = Rig11()
+        XCTAssertEqual(q.call(["op": "anchor.write", "logId": logA, "seq": 10, "hash": h1])["written"] as? Bool, true)
+        try q.server.anchor.allowMove(from: AnchorHead(logId: logA, seq: 9, hash: h1), to: logB)
+        XCTAssertEqual(q.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true])["error"] as? String, "anchor-log", "a quarantine of another head")
+        try q.server.anchor.allowMove(from: AnchorHead(logId: logA, seq: 10, hash: h1), to: logB)
+        XCTAssertEqual(q.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true])["written"] as? Bool, true)
+        q.now = q.now.addingTimeInterval(2)
+        XCTAssertEqual(q.call(["op": "anchor.write", "logId": logA, "seq": 1, "hash": h2, "newLog": true])["error"] as? String, "anchor-log", "the allowance is spent")
     }
 
     func testTenWritesASecondAndCallerChecked() {

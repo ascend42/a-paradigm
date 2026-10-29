@@ -1520,6 +1520,77 @@
       "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"certKey\":\"BAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=\",\"certKeyId\":\"sha256:ee5c8300cd173089ebd4088c09e55c00142c6ef3a91d68831b199b2d9383e595\",\"schemaVersion\":\"gnomon-kernel-cert-key:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"headHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"headSeq\":812,\"keyIds\":[\"gkey:v1:1111111111111111111111111111111111111111111111111111111111111111\",\"gkey:v1:2222222222222222222222222222222222222222222222222222222222222222\"],\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"partial\":false,\"schemaVersion\":\"gnomon-kernel-legacy:v1\"}]",
       "error": "batch-refused",
       "why": "a kernel legacy row never carries partial"
+    },
+    {
+      "name": "log.quarantine: move the anchor from the anchored head to a new log",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"log.quarantine\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:3def9e8384a78bec14540d58f5792845f64af6c8b2d2a4a28694feab4cbf1d02\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"from\":{\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"from\":{\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on log.quarantine card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; QUARANTINE log log:01HZZZZZZZZZZZZZZZZZZZZZZA at seq 812 sha256:bbbbbbbbbbbb and anchor the new log log:01HZZZZZZZZZZZZZZZZZZZZZZB; digests 86df9d57b51c 1a09afa1106a 2165c3b237f7 14a1299b691b"
+    },
+    {
+      "name": "C3: a log.quarantine to the same log",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"log.quarantine\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:f3e92b9b288b8751e18d3c6dfb64356c47651cc96f333fb5c2b35a4fbf1bd5a6\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"from\":{\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"from\":{\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\"}]",
+      "error": "batch-refused",
+      "why": "a log quarantine row names the new log"
+    },
+    {
+      "name": "C3: a log.quarantine whose head carries an extra field",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"log.quarantine\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:3fe72603f413a8b2886e8f5b8ad1d1378d2cd7e520b8cd88a4477c68cad83fea\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"from\":{\"extra\":1,\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"from\":{\"extra\":1,\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}]",
+      "error": "batch-refused",
+      "why": "a log quarantine row names the anchored head {logId, seq, hash}"
+    },
+    {
+      "name": "C3: a log.quarantine with no head hash",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"log.quarantine\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:d1b25d9307db97687a8e6a4228b1fbd561ad64fb6e8a058d0b4bacd5aa8f949f\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"from\":{\"hash\":\"x\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"from\":{\"hash\":\"x\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}]",
+      "error": "batch-refused",
+      "why": "a log quarantine row names the anchored head {logId, seq, hash}"
+    },
+    {
+      "name": "C3: a log.quarantine never signs a second row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"log.quarantine\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:f9beb5631af6912f8631b6adebf24fad1881e18bb6e36f5c3342ea10c33f948c\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"from\":{\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"from\":{\"hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"logId\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZA\",\"seq\":812},\"schemaVersion\":\"gnomon-log-quarantine:v1\",\"to\":\"log:01HZZZZZZZZZZZZZZZZZZZZZZB\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"mode\":\"off\",\"schemaVersion\":\"gnomon-presence-mode:v1\"}]",
+      "error": "batch-refused",
+      "why": "a log.quarantine signs exactly one gnomon-log-quarantine:v1 row"
     }
   ]
 }

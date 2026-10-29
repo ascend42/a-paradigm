@@ -374,6 +374,10 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
         // 1.11.0 (TD-2026-10-29-340/-894, G-HLP-04): the global Touch ID switch signs exactly one mode row
         guard kinds == [presenceModeSchema] else { return "a presence.mode signs exactly one gnomon-presence-mode:v1 row" }
         return presenceModeRowRefusal(rows[0])
+    case "log.quarantine":
+        // 1.11.0 (Aegis S1 H2): moving the anchor to another log with no genesis row takes a root decision
+        guard kinds == [logQuarantineSchema] else { return "a log.quarantine signs exactly one gnomon-log-quarantine:v1 row" }
+        return logQuarantineRowRefusal(rows[0])
     case "kernel-custody":
         // 1.11.0 (TD-2026-10-29-746): the migration card registers the kernel-cert key, then seals the legacy kernel keys
         guard kinds == [kernelCertKeySchema, kernelLegacySchema] else { return "a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row" }
@@ -463,6 +467,14 @@ private func onlyFields(_ r: Json, _ fields: Set<String>, _ what: String) -> Str
 func presenceModeRowRefusal(_ r: Json) -> String? {
     if let e = onlyFields(r, ["schemaVersion", "mode", "cardId", "createdAt"], "presence mode") { return e }
     guard let m = r["mode"] as? String, m == "on" || m == "off" else { return "a presence mode row names on or off" }
+    return nil
+}
+
+/// 1.11.0 (Aegis S1 H2): the log.quarantine row (mirror of logQuarantineRowRefusal). nil = allowed.
+func logQuarantineRowRefusal(_ r: Json) -> String? {
+    if let e = onlyFields(r, ["schemaVersion", "from", "to", "cardId", "createdAt"], "log quarantine") { return e }
+    guard let f = r["from"] as? Json, f.count == 3, (try? anchorHead(f)) != nil else { return "a log quarantine row names the anchored head {logId, seq, hash}" }
+    guard let to = r["to"] as? String, fullMatch(to, "^log:[0-9A-HJKMNP-TV-Z]{26}$"), to != f["logId"] as? String else { return "a log quarantine row names the new log" }
     return nil
 }
 
@@ -654,6 +666,9 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
     case presenceModeSchema:
         guard let m = s("mode") else { return nil }
         return m == "off" ? "Touch ID OFF: every approval becomes a click (root actions keep Touch ID)" : "Touch ID ON"
+    case logQuarantineSchema:
+        guard let f = r["from"] as? Json, let fl = f["logId"] as? String, let fs = jsonWhole(f["seq"]), let fh = f["hash"] as? String, let to = s("to") else { return nil }
+        return "QUARANTINE log \(fl) at seq \(fs) \(fh.prefix(19)) and anchor the new log \(to)"
     case kernelCertKeySchema:
         guard let id = s("certKeyId") else { return nil }
         return "register the kernel-cert key \(id.prefix(19))"

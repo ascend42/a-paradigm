@@ -37,7 +37,10 @@ export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.fre
   // TD-2026-10-29-746 / -894 (helper 1.11.0, G-HLP-03/04): the Touch ID switch and the kernel key migration card
   'presence.mode': '1.11.0',
   'kernel-custody': '1.11.0',
+  // Aegis S1 H2: moving the helper's log anchor to another log with no genesis row
+  'log.quarantine': '1.11.0',
 });
+export const LOG_QUARANTINE_SCHEMA = 'gnomon-log-quarantine:v1';
 
 export const PRESENCE_MODE_SCHEMA = 'gnomon-presence-mode:v1';
 export const KERNEL_CERT_KEY_SCHEMA = 'gnomon-kernel-cert-key:v1';
@@ -52,7 +55,7 @@ export function presenceModeRowHash(rootMessage: Buffer): string {
 export const DECISION_BOUNDS = Object.freeze({ maxMessages: 10, maxApprovals: 2, maxRootRows: 8, maxMessageBytes: 65_536, maxBytes: 256 * 1024, maxLineChars: 1200, maxReasonChars: 160 });
 
 /** The card kinds that have a row table (C3). A root-class card's decision row names one of these. */
-export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'permission', 'presence.mode', 'kernel-custody'] as const);
+export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'permission', 'presence.mode', 'kernel-custody', 'log.quarantine'] as const);
 export type RowTableKind = (typeof ROW_TABLE_KINDS)[number];
 
 export interface DecisionRowV2 {
@@ -180,6 +183,18 @@ export function presenceModeRowRefusal(r: Row): string | null {
   return r.mode === 'on' || r.mode === 'off' ? null : 'a presence mode row names on or off';
 }
 
+const LOG_ID = /^log:[0-9A-HJKMNP-TV-Z]{26}$/;
+/** helper 1.11.0 (Aegis S1 H2): the log.quarantine row (mirror of logQuarantineRowRefusal). null = allowed. */
+export function logQuarantineRowRefusal(r: Row): string | null {
+  const e = onlyFields(r, ['schemaVersion', 'from', 'to', 'cardId', 'createdAt'], 'log quarantine');
+  if (e) return e;
+  const f = r.from;
+  const head = isObjRow(f) && Object.keys(f).length === 3 && typeof f.logId === 'string' && LOG_ID.test(f.logId) && typeof f.seq === 'number' && Number.isSafeInteger(f.seq) && f.seq >= 0 && typeof f.hash === 'string' && SHA256_TAG.test(f.hash);
+  if (!head) return 'a log quarantine row names the anchored head {logId, seq, hash}';
+  if (typeof r.to !== 'string' || !LOG_ID.test(r.to) || r.to === (f as Row).logId) return 'a log quarantine row names the new log';
+  return null;
+}
+
 const B64_STRICT = /^[A-Za-z0-9+/]+={0,2}$/;
 /** helper 1.11.0: the kernel-custody rows [cert-key row, legacy row] (mirror of kernelCustodyRefusal). null = allowed. */
 export function kernelCustodyRefusal(rows: readonly Row[]): string | null {
@@ -251,6 +266,9 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       // helper 1.11.0 (TD-2026-10-29-340/-894, G-HLP-04): the global Touch ID switch signs exactly one mode row
       if (kinds.length !== 1 || kinds[0] !== PRESENCE_MODE_SCHEMA) return 'a presence.mode signs exactly one gnomon-presence-mode:v1 row';
       return presenceModeRowRefusal(rows[0]!);
+    case 'log.quarantine':
+      if (kinds.length !== 1 || kinds[0] !== LOG_QUARANTINE_SCHEMA) return 'a log.quarantine signs exactly one gnomon-log-quarantine:v1 row';
+      return logQuarantineRowRefusal(rows[0]!);
     case 'kernel-custody':
       // helper 1.11.0 (TD-2026-10-29-746): register the kernel-cert key, then seal the legacy kernel keys
       if (kinds.length !== 2 || kinds[0] !== KERNEL_CERT_KEY_SCHEMA || kinds[1] !== KERNEL_LEGACY_SCHEMA) return 'a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row';
@@ -361,6 +379,11 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
       return localRowShown(r);
     case PRESENCE_MODE_SCHEMA:
       return s('mode') === null ? null : s('mode') === 'off' ? 'Touch ID OFF: every approval becomes a click (root actions keep Touch ID)' : 'Touch ID ON';
+    case LOG_QUARANTINE_SCHEMA: {
+      const f = r.from;
+      if (!isObjRow(f) || typeof f.logId !== 'string' || typeof f.seq !== 'number' || !Number.isSafeInteger(f.seq) || f.seq < 0 || typeof f.hash !== 'string' || s('to') === null) return null;
+      return `QUARANTINE log ${f.logId} at seq ${f.seq} ${f.hash.slice(0, 19)} and anchor the new log ${s('to')}`;
+    }
     case KERNEL_CERT_KEY_SCHEMA:
       return s('certKeyId') === null ? null : `register the kernel-cert key ${s('certKeyId')!.slice(0, 19)}`;
     case KERNEL_LEGACY_SCHEMA: {

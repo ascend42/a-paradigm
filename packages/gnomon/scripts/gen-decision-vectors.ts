@@ -169,6 +169,13 @@ add('C3: a legacy seal with a repeated key id', PM, batch('kernel-custody', 'all
 add('C3: a legacy seal with no key id', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ keyIds: [] })]));
 add('C3: a legacy seal with a fractional head seq', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ headSeq: 1.5 })]));
 add('C3: a legacy seal field outside the closed set', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow({ partial: false })]));
+// Aegis S1 H2: log.quarantine (a root decision moves the helper's log anchor to another log)
+const qRow = (o: R = {}) => ({ schemaVersion: 'gnomon-log-quarantine:v1', from: { logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', seq: 812, hash: H2 }, to: 'log:01HZZZZZZZZZZZZZZZZZZZZZZB', cardId: C, createdAt: T, ...o });
+add('log.quarantine: move the anchor from the anchored head to a new log', PM, batch('log.quarantine', 'allow', [qRow()]));
+add('C3: a log.quarantine to the same log', PM, batch('log.quarantine', 'allow', [qRow({ to: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA' })]));
+add('C3: a log.quarantine whose head carries an extra field', PM, batch('log.quarantine', 'allow', [qRow({ from: { logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', seq: 812, hash: H2, extra: 1 } })]));
+add('C3: a log.quarantine with no head hash', PM, batch('log.quarantine', 'allow', [qRow({ from: { logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', seq: 812, hash: 'x' } })]));
+add('C3: a log.quarantine never signs a second row', PM, batch('log.quarantine', 'allow', [qRow(), modeRow()]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
   note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',

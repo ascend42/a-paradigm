@@ -204,6 +204,15 @@ final class Server {
             let rootSigs = try signer(.root, g, ctx, batch.root)
             guard approvalSigs.count == batch.approvals.count, rootSigs.count == batch.root.count else { throw HelperError("sign", "a signature is missing") }
             var out: Json = ["approvalSigs": approvalSigs, "rootSigs": rootSigs, "shown": line, "kept": false]
+            if batch.cardKind == "log.quarantine", let f = batch.rows[1]["from"] as? Json, let from = try? anchorHead(f), let to = batch.rows[1]["to"] as? String {
+                // Aegis S1 H2: the signed quarantine allows ONE anchor move from that head to that log
+                do {
+                    try anchor.allowMove(from: from, to: to)
+                    out["anchorMove"] = ["stored": true]
+                } catch {
+                    out["anchorMove"] = ["stored": false]
+                }
+            }
             if let m = storedModeOf(batch) {
                 // 1.11.0 (G-HLP-04): the helper's own copy of the switch, stored only after the row was signed
                 out["mode"] = setMode(m)
