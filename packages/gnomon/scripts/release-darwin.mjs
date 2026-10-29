@@ -45,6 +45,11 @@
  *      NodeEntitlements.plist = allow-jit only, hardened runtime + timestamp; --unsigned: ad-hoc, no runtime), then
  *      `codesign -R` against the requirement the wrapper checks at spawn. Signing rewrites node, so this precedes 6;
  *      staged trees hold no symlink (refused, never dereferenced);
+ *   5b. #kernel-sea (TD-2026-10-29-746): the signed SEA kernel Resources/kernel/gnomon.kernel, built from the SAME
+ *      pristine pinned node (scripts/build-sea.mjs: identifier gnomon.kernel, KernelEntitlements.plist = allow-jit,
+ *      hardened runtime, no get-task-allow; Developer ID + timestamp, or ad-hoc with --unsigned), `codesign -R` against
+ *      the kernel requirement, and the self-test (answers --version; a NODE_OPTIONS --require never runs). The wrapper
+ *      spawns it; the kernel's node children run Resources/node/bin/node;
  *   6. `cargo tauri build --bundles app --no-sign` with GNOMON_WRAPPER_BUNDLE_STAGE=<stage> and
  *      GNOMON_WRAPPER_BUNDLE_SIGNING: build.rs pins the BUNDLE-RELATIVE paths, the hashes of the staged (signed) node
  *      and kernel, and the node's code requirement (src/layout.rs); the built binary must answer `--build-mode`
@@ -90,6 +95,8 @@ export const LAYOUT = Object.freeze({
   wrapper: `MacOS/${WRAPPER_EXE}`,
   node: 'Resources/node/bin/node',
   kernel: 'Resources/kernel',
+  /** #kernel-sea: the signed SEA kernel (layout.rs KERNEL_EXE_REL) */
+  kernelExe: 'Resources/kernel/gnomon.kernel',
   voice: 'Resources/gnomon-voice',
   mods: 'Resources/gnomon-mods',
   helper: 'Helpers/GnomonHelper.app',
@@ -288,21 +295,23 @@ export function assembleApp({ skeletonApp, stage, helperApp, voiceIoApp, outApp,
   cp(voiceIoApp, path.join(c, LAYOUT.voiceIo));
   const pins = bundlePins(c);
   const want = bundlePins(stage);
-  if (pins.nodeSha256 !== want.nodeSha256 || pins.kernelTree !== want.kernelTree) throw new Error('the assembled app does not re-hash to the staged pins');
+  if (pins.nodeSha256 !== want.nodeSha256 || pins.kernelTree !== want.kernelTree || pins.kernelExeSha256 !== want.kernelExeSha256) throw new Error('the assembled app does not re-hash to the staged pins');
   return pins;
 }
 
-/** The two values build.rs compiles (layout.rs bundle_hashes), for a Contents-shaped dir. */
+/** The values build.rs compiles (layout.rs bundle_hashes + kernel_exe_hash), for a Contents-shaped dir. */
 export function bundlePins(contents) {
   const node = path.join(contents, LAYOUT.node);
   if (!lstatSync(node).isFile()) throw new Error(`${LAYOUT.node} is not a regular file`);
-  return { nodeSha256: sha256File(node), kernelTree: kernelTreeHash(path.join(contents, LAYOUT.kernel)) };
+  const kexe = path.join(contents, LAYOUT.kernelExe);
+  if (!lstatSync(kexe).isFile()) throw new Error(`${LAYOUT.kernelExe} is not a regular file`);
+  return { nodeSha256: sha256File(node), kernelTree: kernelTreeHash(path.join(contents, LAYOUT.kernel)), kernelExeSha256: sha256File(kexe) };
 }
 
 /** The relative paths a release app must contain (tests and the final check). */
 export function missingFromLayout(app) {
   const c = path.join(app, 'Contents');
-  const need = [LAYOUT.wrapper, LAYOUT.node, `${LAYOUT.kernel}/package.json`, `${LAYOUT.kernel}/dist/cli/gnomon.js`, `${LAYOUT.voice}/package.json`, `${LAYOUT.voice}/dist/cli.js`, LAYOUT.mods, `${LAYOUT.helper}/Contents/MacOS/gnomon-helper`, `${LAYOUT.voiceIo}/Contents/MacOS/gnomon-voice-io`, 'Info.plist'];
+  const need = [LAYOUT.wrapper, LAYOUT.node, LAYOUT.kernelExe, `${LAYOUT.kernel}/package.json`, `${LAYOUT.kernel}/dist/cli/gnomon.js`, `${LAYOUT.voice}/package.json`, `${LAYOUT.voice}/dist/cli.js`, LAYOUT.mods, `${LAYOUT.helper}/Contents/MacOS/gnomon-helper`, `${LAYOUT.voiceIo}/Contents/MacOS/gnomon-voice-io`, 'Info.plist'];
   return need.filter((r) => !existsSync(path.join(c, r)));
 }
 
@@ -466,6 +475,22 @@ export async function release(argv) {
       if (rq.status !== 0) throw new Error(`the signed bundled node does not meet the requirement the wrapper will check: ${String(rq.stderr).slice(0, 300)}`);
       const v = capture(stagedNode, ['--version']);
       if (v.stdout.trim() !== `v${lock.version}`) throw new Error(`the signed bundled node answers ${v.stdout.trim() || v.stderr.trim()}, not v${lock.version}`);
+    }
+    // 5b. #kernel-sea: the signed SEA kernel, from the same pristine pinned node (fetched.node is never signed by us)
+    const stagedKernelExe = path.join(stage, LAYOUT.kernelExe);
+    plan.push(`build + codesign Resources/kernel/gnomon.kernel (SEA, identifier gnomon.kernel, ${o.unsigned ? 'ad-hoc' : 'Developer ID'}, KernelEntitlements.plist; verify -R ${signing}; self-test)`);
+    if (!o.dryRun) {
+      const sea = await import('./build-sea.mjs');
+      const seaWork = path.join(work, 'sea');
+      mkdirSync(seaWork, { recursive: true });
+      const main = await sea.bundleSeaMain(path.join(seaWork, 'sea-main.cjs'));
+      await sea.buildSeaBinary({ baseNode: fetched.node, main, out: stagedKernelExe, identity, work: seaWork });
+      const kq = capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${sea.kernelRequirement(signing)}`, stagedKernelExe]);
+      if (kq.status !== 0) throw new Error(`the signed SEA kernel does not meet the requirement the wrapper and helper check: ${String(kq.stderr).slice(0, 300)}`);
+      sea.selfTest(stagedKernelExe, version);
+    } else {
+      writeFileSync(stagedKernelExe, `placeholder gnomon.kernel v${version} darwin-${o.arch}\n`);
+      chmodSync(stagedKernelExe, 0o755);
     }
     const pins = bundlePins(stage);
     // 6. the wrapper, pinning the stage (bundle-relative paths, these hashes)
