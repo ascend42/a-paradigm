@@ -133,10 +133,10 @@ export interface LoopStartRefusal {
 
 export const NO_LOCAL_MODEL = 'no local model is configured for this loop (the root-signed local config marks no endpoint loops: true, or none matches model.profile)';
 /** The runner's backstop for a write check (the validator refuses `effect: write` with LANDS_IN_8_1 first). */
-export const ACT_NODES_LATER = 'write checks (effect: write) land in 8.1';
+export const ACT_NODES_LATER = 'write checks (effect: write) are not in this release yet';
 /** 8.0 is approve-to-land (founder decision): no loop change lands without the human accepting its card. */
 export const LOOP_AUTO_LAND = false;
-export const AUTO_LAND_LATER = 'auto-land lands in 8.1';
+export const AUTO_LAND_LATER = 'auto-land is not in this release yet';
 /** Paths an act node never edits beyond the loop's protected set: loop definitions (LL5) and the repo's Gnomon dir. */
 export const ACT_ALWAYS_PROTECTED: readonly string[] = Object.freeze(['.paradigm/loops/**', '.gnomon/**', '**/node_modules/**']);
 const KERNEL_PAUSES_NEED_PRESENCE = new Set(['kill-switch', 'thrash', 'strictness', 'budget', 'node-exit', 'unavailable', 'timeout']);

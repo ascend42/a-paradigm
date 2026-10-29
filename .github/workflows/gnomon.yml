@@ -11,11 +11,15 @@ on:
     branches: [main, feat/gnomon]
     paths:
       - 'packages/gnomon*/**'
+      - 'packages/paradigm-mcp/**'
+      - 'packages/paradigm/scripts/build-mcp-bundle.mjs'
       - 'docs/specs/gnomon*.md'
       - '.github/**'
   pull_request:
     paths:
       - 'packages/gnomon*/**'
+      - 'packages/paradigm-mcp/**'
+      - 'packages/paradigm/scripts/build-mcp-bundle.mjs'
       - 'docs/specs/gnomon*.md'
       - '.github/**'
 
@@ -61,6 +65,18 @@ jobs:
       # skips) when dist/ is missing.
       - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
         run: npm run build:gnomon
+
+      # test/paradigm-staged-lane.test.ts (darwin, linux) runs a local session against the REAL single-file Paradigm
+      # MCP bundle (packages/paradigm/dist/mcp-bundle). build:mcp-bundle compiles paradigm-mcp from source but resolves
+      # its workspace imports through their dist: build:core (logger, university-core, purpose-core, portal-core,
+      # probe-core), premise-core and sentinel's library (not its UI); gnomon is built above.
+      - name: Build the Paradigm MCP bundle (paradigm-staged-lane e2e)
+        if: runner.os != 'Windows'
+        run: |
+          npm run build:core
+          npm run build --workspace=@a-company/premise-core
+          npm run build:core --workspace=@a-company/sentinel
+          npm run build:mcp-bundle --workspace=@a-company/paradigm
 
       - name: Test (contracts, kernel fence G-KRN-02, G-SEC-01, G-WIN-05)
         run: npm run test:gnomon

@@ -189,7 +189,7 @@ describe('#loop-land: the kill switch and the restart (Aegis M3, M4)', () => {
 describe('8.0 approve-to-land and the land rules kept for 8.1', () => {
   it('the 8.0 seam: nothing auto-lands', () => {
     expect(LOOP_AUTO_LAND).toBe(false);
-    expect(AUTO_LAND_LATER).toBe('auto-land lands in 8.1');
+    expect(AUTO_LAND_LATER).toBe('auto-land is not in this release yet');
   });
 
   it('landDecision: L0 act lands; gate-class needs a card; L1 sends gate-class or high-risk to the second reviewer; L2 proposes; L3 pauses', () => {

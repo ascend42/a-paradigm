@@ -80,7 +80,7 @@ describe('#dev-launch: gnomon dev local', () => {
     for (const base of ['http://192.168.1.20:11434', 'http://10.0.0.5:8080', 'http://[fd00::1]:8080']) {
       const x = io();
       expect(await runDevCommand(['local', '--home', w.devHome, '--model', 'm', '--runner', w.runner, '--base', base], x, { userHome: w.userHome })).toBe(1);
-      expect(x.e.join('')).toMatch(/LAN endpoints land in 8\.1/);
+      expect(x.e.join('')).toMatch(/LAN endpoints are not supported yet/);
     }
     expect(fs.existsSync(path.join(w.devHome, LOCAL_CONFIG_FILE))).toBe(false);
   });

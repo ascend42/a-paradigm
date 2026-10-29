@@ -60,7 +60,7 @@ export const DEFAULT_LOCAL_COMPAT = 'ollama';
 export const MAX_LOCAL_BASE = 256;
 /** A local.config card waits this long for the human (then it expires; nothing changes). */
 export const LOCAL_CONFIG_CARD_TTL_MS = 24 * 3600 * 1000;
-export const LAN_LATER = 'LAN endpoints land in 8.1';
+export const LAN_LATER = 'LAN endpoints are not supported yet';
 export const CHANGED_WHILE_OPEN = 'the config changed while the card was open: ask again';
 const WRAP = 480;
 
@@ -218,7 +218,7 @@ export function localConfigCardLines(f: { endpoint: LocalEndpointConfig; others:
     ...f.others.map((o) => `endpoint ${o.id} · unchanged (${o.base} · ${o.model})`),
     `runner gnomon-local ${r.version ?? '(version unknown)'} · ${src} · tree ${mid(r.pin.treeSha256)} · node ${r.nodeVersion ?? 'binary'} · sha ${r.pin.nodeSha256.slice(0, 8)}…`,
     `runner folder ${r.pin.dir}/${r.pin.entry} · node ${r.pin.node}`,
-    `Loopback only in 8.0; ${LAN_LATER}`,
+    `Loopback only; ${LAN_LATER}`,
     'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny or no answer changes nothing',
     ...(f.platform === 'win32' ? ['Not on Windows in 8.0: a root-class decision needs the Windows root key, which is not built (refused UNSUPPORTED); deny changes nothing'] : []),
   ].flatMap((l) => wrap(l));

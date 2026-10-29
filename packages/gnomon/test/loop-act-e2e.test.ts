@@ -289,13 +289,13 @@ describe('Example B (green-typecheck) against a fake local endpoint: the act ste
     expect(card.lines[0]).toBe('Raised by loop green-typecheck (from the loop file)');
     expect(card.lines).toContain('Goal check tsc: pass (goal met)');
     expect(card.lines).toContain('M src/a.ts');
-    expect(card.lines).toContain('Proposed because auto-land lands in 8.1');
+    expect(card.lines).toContain('Proposed because auto-land is not in this release yet');
     expect(card.lines).toContain('Accept lands it on main (Touch ID; it waits while you are editing those files); reject drops it');
     expect(card.handOnly).toBe(true);
     expect(card.lines).toContain("-export const x: number = 'oops';");
     expect(card.lines).toContain('+export const x: number = 1;');
     expect(r.of(runId, 'loop.parked')[0]).toMatchObject({ ref: card.detail.ref, reason: 'propose' });
-    expect(r.of(runId, 'loop.proposed')[0]).toMatchObject({ cardId: card.cardId, paths: ['src/a.ts'], why: 'land-blocked', blockers: ['auto-land lands in 8.1'] });
+    expect(r.of(runId, 'loop.proposed')[0]).toMatchObject({ cardId: card.cardId, paths: ['src/a.ts'], why: 'land-blocked', blockers: ['auto-land is not in this release yet'] });
     const park = parkRepoDir(fs.realpathSync.native(r.home), root);
     expect(hardenedGit(['rev-parse', card.detail.ref], { gitDir: park }).stdout.toString('utf8').trim()).toBe(card.detail.sha);
     // the scratch is gone; the founder's real checkout (and .git) is byte-identical; nothing ran from repo config
@@ -350,7 +350,7 @@ describe('Example B lands only through its card in 8.0 (build plan step 11, G-LO
     // 8.0: nothing lands alone, whatever the level (founder decision)
     expect(r.of(runId, 'loop.landed')).toEqual([]);
     expect(r.cards).toHaveLength(1);
-    expect(r.cards[0].lines).toContain('Proposed because auto-land lands in 8.1');
+    expect(r.cards[0].lines).toContain('Proposed because auto-land is not in this release yet');
     expect(r.of(runId, 'loop.parked')[0]).toMatchObject({ reason: 'propose' });
     expect(git(root, 'rev-parse', 'HEAD').trim()).toBe(base);
     await r.cards[0].effect('accept', {});

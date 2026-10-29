@@ -348,7 +348,7 @@ describe('model nodes in a run', () => {
     for (const model of [{ use: 'claude' }, { use: 'any' }, { use: 'local', escalate: 'on-unsure' }, { use: 'local', escalate: 'both' }]) {
       const v = validateLoop({ ...base, nodes: [{ id: 'v', type: 'model', role: 'summarize', model, on: { any: '@stop' } }] });
       expect(v.ok, JSON.stringify(model)).toBe(false);
-      expect(JSON.stringify(v.errors)).toMatch(/8\.1/);
+      expect(JSON.stringify(v.errors)).toMatch(/not in this release yet/);
     }
   });
 

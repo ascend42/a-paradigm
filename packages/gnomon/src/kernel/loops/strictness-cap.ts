@@ -81,7 +81,7 @@ export function landDecision(eff: EffectiveAutonomy, change: { gateClass?: boole
   if (eff.paused) return { land: false, as: 'none', reason: 'strictness-paused' };
   if (eff.autonomy !== 'act') return { land: false, as: 'propose', reason: eff.capReason ?? `autonomy ${eff.autonomy}` };
   if (eff.secondReviewer && (change.gateClass || change.highRisk)) {
-    return { land: false, as: 'propose', reason: `second reviewer required at ${eff.level} (the reviewer profile lands in 8.1)`, secondReviewer: true };
+    return { land: false, as: 'propose', reason: `second reviewer required at ${eff.level} (the reviewer profile is not in this release yet)`, secondReviewer: true };
   }
   if (change.gateClass) return { land: false, as: 'propose', reason: 'gate-class paths never land without a card' };
   return { land: true };

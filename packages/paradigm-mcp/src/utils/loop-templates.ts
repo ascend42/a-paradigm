@@ -18,7 +18,7 @@ export type LoopTemplateName = (typeof LOOP_TEMPLATE_NAMES)[number];
 export const LOOP_TEMPLATES: Readonly<Record<LoopTemplateName, { example: string; summary: string }>> = Object.freeze({
   'flow-health': { example: 'A', summary: 'read-only checks on one flow (flow, .purpose, drift); a local model summarizes a failure' },
   green: { example: 'B', summary: 'fix until tsc passes with a local act step; every change comes to you as a propose card' },
-  watch: { example: 'C', summary: 'a local judge classifies file changes on one flow (sentinel triggers land in 8.1)' },
+  watch: { example: 'C', summary: 'a local judge classifies file changes on one flow (sentinel triggers are not available yet)' },
   tidy: { example: 'D', summary: 'evening report: rebuild the index and validate .purpose files on a private copy; changes no file' },
 });
 
@@ -113,7 +113,7 @@ nodes:
 `;
     }
     case 'watch':
-      return `# Watcher (spec Example C on a file trigger; the sentinel trigger lands in 8.1). A local judge classifies
+      return `# Watcher (spec Example C on a file trigger; the sentinel trigger is not available yet). A local judge classifies
 # the change. It changes no file. To hand off to a fix loop add a call node: { id: fix, type: call, loop: <loop-id>@<hash8> }.
 schema: loop:v2
 id: ${id}

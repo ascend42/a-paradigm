@@ -16,7 +16,7 @@ describe('gnomon local', () => {
     const x = io();
     expect(await runLocalCommand(['--help'], x)).toBe(LOCAL_EXIT_OK);
     const t = x.o.join('');
-    for (const w of ['gnomon local set --model', 'status', 'remove', 'LAN endpoints land in 8.1', 'Settings → Local model']) expect(t).toContain(w);
+    for (const w of ['gnomon local set --model', 'status', 'remove', 'LAN endpoints are not supported yet', 'Settings → Local model']) expect(t).toContain(w);
     expect(LOCAL_USAGE).toContain('--runner <abs dir>');
   });
   it('refuses usage errors before any connection', async () => {
@@ -30,7 +30,7 @@ describe('gnomon local', () => {
     const x = io();
     printStatus(x.stdout, { configured: true, version: 2, endpoints: [{ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen3.5:9b', compat: 'ollama', loops: true }], runner: { dir: '/x/gnomon-local', treeSha256: 'a'.repeat(64) }, defaultRunner: { source: 'bundled', dir: '/x/gnomon-local' }, pendingCardId: null });
     const t = x.o.join('');
-    for (const w of ['version 2 applied', 'ollama http://127.0.0.1:11434 model qwen3.5:9b (ollama), trusted loops may use it', '/x/gnomon-local (tree aaaaaaaaaaaa…)', 'loopback only in 8.0']) expect(t).toContain(w);
+    for (const w of ['version 2 applied', 'ollama http://127.0.0.1:11434 model qwen3.5:9b (ollama), trusted loops may use it', '/x/gnomon-local (tree aaaaaaaaaaaa…)', 'loopback only; LAN endpoints are not supported yet']) expect(t).toContain(w);
     const y = io();
     printStatus(y.stdout, { configured: false, endpoints: [], runner: null, defaultRunner: { source: null, why: 'none' } });
     expect(y.o.join('')).toContain('gnomon local set --model <id>');

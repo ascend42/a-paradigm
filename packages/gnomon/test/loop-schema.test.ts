@@ -135,7 +135,7 @@ describe('#loop-schema: the spec examples (8.0 subset)', () => {
     expect(r.errors.map((e) => e.path).sort()).toEqual(['claude', 'nodes[1].model.escalate', 'nodes[1].tools[2].bash']);
     for (const e of r.errors) {
       expect(e.code).toBe(LANDS_IN_8_1);
-      expect(e.message).toMatch(/lands in 8\.1$/);
+      expect(e.message).toMatch(/is not in this release yet$/);
     }
     const c = mut(EXAMPLE_C, (d) => { d.triggers = [{ event: { kind: 'sentinel.incident.opened', severity: ['high'] }, debounce: '1m' }]; });
     expect(issue(c, LANDS_IN_8_1)?.path).toBe('triggers[0].event.kind');
@@ -145,7 +145,7 @@ describe('#loop-schema: the spec examples (8.0 subset)', () => {
     const d = mut(EXAMPLE_D, (x) => { x.nodes[0].effect = 'write'; });
     const e = issue(d, LANDS_IN_8_1);
     expect(e?.path).toBe('nodes[0].effect');
-    expect(e?.message).toBe('effect: write (a write check) lands in 8.1');
+    expect(e?.message).toBe('effect: write (a write check) is not in this release yet');
     expect(validateLoop(mut(EXAMPLE_D, (x) => { x.nodes[0].effect = 'read'; })).ok).toBe(true);
     expect(issue(mut(EXAMPLE_D, (x) => { x.nodes[0].effect = 'append'; }), LANDS_IN_8_1)).toBeUndefined();
   });
@@ -244,7 +244,7 @@ describe('#loop-schema: the rule table', () => {
     const hit = r.errors.find((e) => e.code === code);
     expect(hit, JSON.stringify(r.errors)).toBeTruthy();
     if (path !== undefined) expect(hit!.path).toBe(path);
-    if (code === LANDS_IN_8_1) expect(hit!.message).toContain('lands in 8.1');
+    if (code === LANDS_IN_8_1) expect(hit!.message).toContain('is not in this release yet');
   });
 
   const GOOD: Array<[string, Def]> = [

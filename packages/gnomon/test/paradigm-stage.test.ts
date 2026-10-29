@@ -98,8 +98,15 @@ describe('Aegis M4: no check-to-copy gap', () => {
     const sel = selectStageFiles(src);
     const f = sel.files.find((x) => x.rel === 'dist/mcp.js')!;
     expect(readChecked(f).toString()).toBe('console.log(1)\n');
-    fs.rmSync(f.abs);
-    fs.writeFileSync(f.abs, 'console.log("swapped")\n');
+    // The new file is written BESIDE the original and renamed over it, so it is a different live inode. Removing the
+    // original first and writing a new file lets ext4 and tmpfs (Linux) hand the freed inode number straight back,
+    // and then nothing was "replaced" by (dev, ino). That is not a gap: a file created after the removal holds bytes
+    // the writer could have put in the tree anyway, and the copy is what gets hashed and pinned. What (dev, ino)
+    // must catch is a swap to a DIFFERENT existing file (an intermediate directory swapped for a link elsewhere),
+    // and two live files never share (dev, ino).
+    const swap = `${f.abs}.swap`;
+    fs.writeFileSync(swap, 'console.log("swapped")\n');
+    fs.renameSync(swap, f.abs);
     expect(() => readChecked(f)).toThrow(/replaced/);
     fs.rmSync(f.abs);
     fs.symlinkSync('/etc/hosts', f.abs);

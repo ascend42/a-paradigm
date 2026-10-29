@@ -95,7 +95,7 @@ export function validateLocalEndpoints(cfg: LocalLaneConfig, forbiddenPorts: rea
     if (!v.ok) throw refused('BILLING_REFUSED', `local endpoint ${ep.id} refused: ${v.why} (loopback/LAN only, law 7)`, { dimension: 'local-endpoint', endpoint: ep.id, why: v.why });
     if (!LOCAL_COMPAT_NAMES.includes(ep.compat)) throw refused('BILLING_REFUSED', `compat ${String(ep.compat).slice(0, 32)} is not a local transport`, { dimension: 'local-compat', endpoint: ep.id, why: 'compat' });
     // Aegis L3 (TD-2026-10-22-769): 8.0 serves loopback endpoints only, whoever signed the config; LAN lands in 8.1
-    if (loopbackPort(v.base) === null) throw refused('BILLING_REFUSED', `local endpoint ${ep.id} is not on this machine: loopback only in 8.0; LAN endpoints land in 8.1`, { dimension: 'local-endpoint', endpoint: ep.id, why: 'lan-8.1' });
+    if (loopbackPort(v.base) === null) throw refused('BILLING_REFUSED', `local endpoint ${ep.id} is not on this machine: loopback only; LAN endpoints are not supported yet`, { dimension: 'local-endpoint', endpoint: ep.id, why: 'lan-8.1' });
     out.push({ ep, v });
   }
   return out;
