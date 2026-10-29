@@ -132,6 +132,19 @@ describe.skipIf(!RUN)('#kernel-sea built binary (ad-hoc)', () => {
     expect(ok.status, ok.stderr).toBe(0);
   });
 
+  it('FALSIFIER (Aegis L3): --inspect=0, -e and --eval in argv are kernel CLI args, never node flags', () => {
+    const inj = injector(root);
+    const code = `require('fs').writeFileSync(${JSON.stringify(inj.marker)}, 'x')`;
+    for (const argv of [['--inspect=0', '--version'], ['--inspect-brk=0', '--version'], ['-e', code], ['--eval', code], ['--eval=' + code], ['-p', code]]) {
+      const r = spawnSync(built.kernel, argv, { env: ENV(root), encoding: 'utf8', timeout: 20_000 });
+      expect(r.error, argv.join(' ')).toBeUndefined(); // it exits on its own: no inspector waiting for a debugger
+      expect(r.stderr, argv.join(' ')).not.toMatch(/Debugger listening|ws:\/\/127\.0\.0\.1/);
+      expect(existsSync(inj.marker), argv.join(' ')).toBe(false);
+    }
+    // --inspect=0 before --version is not a node flag: the CLI still sees --inspect=0 as its first argument
+    expect(spawnSync(built.kernel, ['--inspect=0', '--version'], { env: ENV(root), encoding: 'utf8' }).stdout).not.toBe(`gnomon ${VERSION}\n`);
+  });
+
   it('FALSIFIER: NODE_OPTIONS=--require=<x.js> has no effect (CLI)', () => {
     const inj = injector(root);
     for (const opt of [`--require=${inj.file}`, `--import=${inj.file}`]) {

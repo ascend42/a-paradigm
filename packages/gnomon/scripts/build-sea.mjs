@@ -130,6 +130,14 @@ export function inspectSignature(file) {
   };
 }
 
+/** The one entitlement the kernel and its child node carry (KernelEntitlements.plist, NodeEntitlements.plist). */
+export const SIGNED_ENTITLEMENTS = Object.freeze(['com.apple.security.cs.allow-jit']);
+
+/** True only when `keys` is exactly SIGNED_ENTITLEMENTS. */
+export function entitlementsAreExactly(keys) {
+  return Array.isArray(keys) && keys.length === SIGNED_ENTITLEMENTS.length && SIGNED_ENTITLEMENTS.every((k, i) => keys[i] === k);
+}
+
 /** Sign `file` with identity ('-' = ad-hoc), identifier, entitlements, hardened runtime; Developer ID adds --timestamp. */
 export function signBinary(file, { identity, identifier, entitlements }) {
   const args = ['--force', '--options', 'runtime', ...(identity === '-' ? [] : ['--timestamp']), '--identifier', identifier, '--entitlements', entitlements, '--sign', identity, file];
@@ -138,6 +146,8 @@ export function signBinary(file, { identity, identifier, entitlements }) {
   if (sig.identifier !== identifier) throw new Error(`${file} signed as ${sig.identifier}, not ${identifier}`);
   if (!sig.runtime) throw new Error(`${file} is not signed with the hardened runtime`);
   if (sig.getTaskAllow) throw new Error(`${file} carries get-task-allow; refused`);
+  // Aegis S0 L1: exactly allow-jit, nothing more and nothing less (no library-validation opt-out, no DYLD env)
+  if (!entitlementsAreExactly(sig.entitlements)) throw new Error(`${file} is signed with entitlements ${JSON.stringify(sig.entitlements)}, not exactly ${JSON.stringify(SIGNED_ENTITLEMENTS)}; refused`);
   return sig;
 }
 

@@ -169,8 +169,11 @@ describe('#kernel-sea build constants (scripts/build-sea.mjs)', () => {
 describe('#kernel-sea FENCE: children never spawn process.execPath', () => {
   // the kernel's own re-execs (the gnomond activator, the upgrade successor), the SEA module and gnomond's argv fallback
   const ALLOWED = new Set(['src/kernel/lifecycle/sea.ts', 'src/kernel/lifecycle/successor.ts', 'src/cli/daemon-cli.ts', 'src/cli/gnomond.ts']);
-  it('FALSIFIER: every other process.execPath use in src is gone (routed through childNodePath)', () => {
-    const offenders: string[] = [];
+  // Aegis S0 L2: under the SEA process.argv[0] and process.argv0 are the kernel too, and argv[1] is (the prelude makes
+  // it) execPath: any of them used as a child's command spawns the kernel
+  const SELF = /process\.execPath|process\.argv\s*\[\s*[01]\s*\]|process\.argv0\b|process\[['"](execPath|argv0)['"]\]/;
+  const offenders = (): string[] => {
+    const out: string[] = [];
     for (const f of walk(path.join(PKG_ROOT, 'src'), (n) => n.endsWith('.ts'))) {
       const rel = path.relative(PKG_ROOT, f).split(path.sep).join('/');
       if (ALLOWED.has(rel)) continue;
@@ -179,9 +182,20 @@ describe('#kernel-sea FENCE: children never spawn process.execPath', () => {
         .forEach((line, i) => {
           const code = line.trim();
           if (code.startsWith('*') || code.startsWith('//') || code.startsWith('/*')) return;
-          if (code.replace(/\/\/.*$/, '').includes('process.execPath')) offenders.push(`${rel}:${i + 1}`);
+          if (SELF.test(code.replace(/\/\/.*$/, ''))) out.push(`${rel}:${i + 1}`);
         });
     }
-    expect(offenders).toEqual([]);
+    return out;
+  };
+  it('FALSIFIER: every other process.execPath / process.argv[0|1] / process.argv0 use in src is gone (routed through childNodePath)', () => {
+    expect(offenders()).toEqual([]);
+  });
+  it('the fence pattern catches each self reference (and not a plain argv0 variable)', () => {
+    for (const s of ['spawn(process.execPath, a)', 'spawn(process.argv[0], a)', 'x = process.argv[ 1 ]', 'spawn(process.argv0)', "process['execPath']", 'process["argv0"]']) expect(SELF.test(s), s).toBe(true);
+    for (const s of ['resolveArgv0(argv0, ctx)', 'process.argv.slice(2)', 'process.argv[2]']) expect(SELF.test(s), s).toBe(false);
+  });
+  it('FALSIFIER (Aegis L1): a signature passes only with exactly [allow-jit]', () => {
+    expect(sea.entitlementsAreExactly(['com.apple.security.cs.allow-jit'])).toBe(true);
+    for (const e of [[], ['com.apple.security.cs.allow-jit', 'com.apple.security.cs.disable-library-validation'], ['com.apple.security.get-task-allow'], ['com.apple.security.cs.allow-unsigned-executable-memory'], undefined]) expect(sea.entitlementsAreExactly(e), JSON.stringify(e)).toBe(false);
   });
 });
