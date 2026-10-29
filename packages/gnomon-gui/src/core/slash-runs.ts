@@ -8,7 +8,14 @@
  *   running   added at the press, before the kernel answers: a spinner and a clock.
  *   ran       the result in a data fold (model-text-control's dashed edge, the label "data", mono, folded past
  *             DATA_FOLD_AT lines, text nodes only); an isError result adds "✕ the tool returned an error". The policy
- *             word: send "goes with your next message" · ask or not chosen "kept here; not sent".
+ *             word: send "goes with your next message" · ask or not chosen "kept here; not sent". C6'b2-2: under ask a
+ *             Send this one key (request.session.tools.send{hsid, runId}) sends THIS result once, the tool staying ask;
+ *             then the word reads "sent with your next message". Its refusals in words: already sent, held 10 min and
+ *             gone (not-found), the binding changed, the tool already sends.
+ *   asked     C6'b2-2 (founder: inline, not a stack card): after a result of a tool whose policy is not chosen, the row
+ *             adds "Send {tool}'s results to the model? · [Always send] [Keep to me]". Always send (its note: "sends
+ *             this result now") is request.session.tools.policy{policy:'send'}, a trusted press; the reply's `queued`
+ *             is said in the polite live line. Keep to me sets ask, and Send this one appears.
  *   refused   plain words and next:, never the code. The human limit is said here only: "10 runs a minute from /; try
  *             again in Ns".
  *   carded    "waiting for your card", its key Decide in the stack (it focuses the card, never its Allow). When the
@@ -55,10 +62,20 @@ export interface RunView {
   read: boolean;
   /** the data fold is open */
   open: boolean;
+  /** C6'b2-2: this result goes (or went) with the next message: it ran under send, or Always send queued it */
+  goes: boolean;
+  /** C6'b2-2: Send this one (request.session.tools.send): idle, in flight, sent, or refused (sendNote) */
+  send: 'idle' | 'sending' | 'sent' | 'refused';
+  /** C6'b2-2: a refused send in words; `retry`: pressing again may work (the connection dropped) */
+  sendNote: { text: string; next: string | null; retry: boolean } | null;
+  /** C6'b2-2: the first-use question's press in flight (Always send / Keep to me) */
+  choosing: 'send' | 'ask' | null;
+  /** C6'b2-2: the first-use choice was refused, in words */
+  chooseNote: string | null;
 }
 
 export function startRun(o: { key: string; hsid: string; tool: string; server: string; toolId: string; cls: ToolClass; policy: 'send' | 'ask' | null; at: string }): RunView {
-  return { ...o, phase: 'running', runId: null, cardId: null, content: null, isError: false, refusal: null, read: false, open: false };
+  return { ...o, phase: 'running', runId: null, cardId: null, content: null, isError: false, refusal: null, read: false, open: false, goes: o.policy === 'send', send: 'idle', sendNote: null, choosing: null, chooseNote: null };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -127,7 +144,19 @@ export type RunEvent =
   | { type: 'result'; v: unknown }
   /** the tools.result request failed */
   | { type: 'result-failed'; reason: string | null; network: boolean }
-  | { type: 'fold'; open: boolean };
+  | { type: 'fold'; open: boolean }
+  /** C6'b2-2: Send this one is going out */
+  | { type: 'sending' }
+  /** C6'b2-2: the tools.send reply */
+  | { type: 'sent'; v: unknown }
+  /** C6'b2-2: the tools.send request failed: an RpcError's reason, or the network */
+  | { type: 'send-failed'; reason: string | null; network: boolean }
+  /** C6'b2-2: the tool's policy moved (`queued`: the kernel queued THIS row's result as it moved to send) */
+  | { type: 'policy'; policy: 'send' | 'ask'; queued?: boolean }
+  /** C6'b2-2: the first-use question was answered (its tools.policy request is going out) */
+  | { type: 'choosing'; policy: 'send' | 'ask' }
+  /** C6'b2-2: the tools.policy request failed: an RpcError's reason, or the network */
+  | { type: 'choose-failed'; reason: string | null; network: boolean };
 
 /** The ran / refused outcome of a reply body ({status, content, isError, why}). */
 function outcome(r: RunView, v: Record<string, unknown>, waitSecs?: number): RunView {
@@ -170,6 +199,22 @@ export function runReducer(r: RunView, e: RunEvent): RunView {
       if (v.status === 'carded') return r; // still pending: not consumed (the flow may ask once more)
       return outcome(r, v);
     }
+    case 'sending':
+      return canSend(r) ? { ...r, send: 'sending', sendNote: null } : r;
+    case 'sent': {
+      if (r.send !== 'sending') return r;
+      const v = isObj(e.v) ? e.v : null;
+      if (v?.queued === true) return { ...r, send: 'sent', sendNote: null };
+      return { ...r, send: 'refused', sendNote: { text: 'the kernel’s answer was not one this page reads', next: 'look in Tools', retry: false } };
+    }
+    case 'send-failed':
+      return r.send === 'sending' ? { ...r, send: 'refused', sendNote: sendRefusalWords(e.reason, e.network, r.tool) } : r;
+    case 'policy':
+      return { ...r, policy: e.policy, choosing: null, chooseNote: null, ...(e.queued && r.phase === 'ran' && r.send !== 'sent' ? { goes: true } : {}) };
+    case 'choosing':
+      return askedOf(r) && r.choosing === null ? { ...r, choosing: e.policy, chooseNote: null } : r;
+    case 'choose-failed':
+      return r.choosing !== null ? { ...r, choosing: null, chooseNote: chooseRefusalWords(e.reason, e.network, r.server) } : r;
     case 'result-failed':
       if (r.phase !== 'reading') return r;
       if (!e.network && e.reason === 'not-found') return { ...r, phase: 'gone' };
@@ -188,9 +233,78 @@ export function settledDecisionOf(row: { kind: string; payload?: unknown }, card
 
 /* ── words ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** The policy word under a ran row (b2-1: the word only; the first-use question and Send this one are b2-2). */
+/** The policy word of a tool's policy alone (a row's own line is policyLine: it knows whether THIS result went). */
 export function policyWord(policy: 'send' | 'ask' | null): string {
-  return policy === 'send' ? 'goes with your next message' : 'kept here; not sent';
+  return policy === 'send' ? SEND_COPY.goes : SEND_COPY.kept;
+}
+
+/** C6'b2-2 (Mika): the run row's send words. */
+export const SEND_COPY = Object.freeze({
+  goes: 'goes with your next message',
+  kept: 'kept here; not sent',
+  sent: 'sent with your next message',
+  key: 'Send this one',
+  sending: 'Sending…',
+  live: (tool: string): string => `${tool}: this result goes with your next message`,
+});
+
+/** C6'b2-2: the row's policy line: whether THIS result went, goes, or stays. */
+export function policyLine(r: Pick<RunView, 'goes' | 'send'>): string {
+  if (r.send === 'sent') return SEND_COPY.sent;
+  return r.goes ? SEND_COPY.goes : SEND_COPY.kept;
+}
+
+/**
+ * C6'b2-2: Send this one is offered on a ran row with a run id whose result did not go, while its tool is ask (the
+ * kernel refuses it under send: already-sending), and not after a refusal that cannot change (a dropped connection
+ * may be pressed again: the kernel's already-sent keeps it once).
+ */
+export function canSend(r: RunView): boolean {
+  return r.phase === 'ran' && r.runId !== null && !r.goes && r.policy === 'ask' && (r.send === 'idle' || (r.send === 'refused' && r.sendNote?.retry === true));
+}
+
+/** C6'b2-2: the first-use question (Mika): its words and keys. */
+export const ASK_COPY = Object.freeze({
+  question: (tool: string): string => `Send ${tool}’s results to the model?`,
+  always: 'Always send',
+  alwaysNote: 'sends this result now',
+  keep: 'Keep to me',
+  saving: 'Saving…',
+  liveSend: (tool: string, queued: boolean): string => `${tool}’s results go to the model from now on; ${queued ? 'this result goes with your next message' : `this result is past ${RESULT_HELD_MIN} min and stays here`}`,
+  liveAsk: (tool: string): string => `${tool}’s results stay here; Send this one sends one`,
+});
+
+/** C6'b2-2: the row asks the first-use question: a ran row of a tool whose policy is not chosen, whose result did not go. */
+export function askedOf(r: RunView): boolean {
+  return r.phase === 'ran' && r.policy === null && !r.goes && r.send !== 'sent';
+}
+
+/** C6'b2-2: a refused request.session.tools.policy in words, never the code. */
+export function chooseRefusalWords(reason: string | null, network: boolean, server: string): string {
+  if (network) return 'not known whether your choice was saved: the connection dropped · next: choose again once Gnomon is connected';
+  if (reason === 'untrusted') return `${server} isn’t trusted, so its results are never sent · next: trust it in Settings › MCP servers`;
+  if (reason === 'not-found') return 'this tool isn’t in this session any more · next: open / again';
+  if (reason === 'matrix') return 'only the person who opened this session can choose where its results go';
+  return 'Gnomon didn’t save your choice · next: choose again';
+}
+
+/** C6'b2-2: a refused request.session.tools.send in words, never the code. */
+export function sendRefusalWords(reason: string | null, network: boolean, tool: string): { text: string; next: string | null; retry: boolean } {
+  if (network) return { text: 'not known whether it was sent: the connection dropped', next: 'press Send this one again once Gnomon is connected', retry: true };
+  switch (reason) {
+    case 'already-sent':
+      return { text: 'this result was already sent', next: null, retry: false };
+    case 'not-found':
+      return { text: `held ${RESULT_HELD_MIN} min; it’s gone`, next: 'run it again', retry: false };
+    case 'changed':
+      return { text: 'the tool or its server’s trust changed since it ran, so it isn’t sent', next: 'run it again', retry: false };
+    case 'already-sending':
+      return { text: `${tool} already sends its results; this one ran before that`, next: 'run it again to send it', retry: false };
+    case 'matrix':
+      return { text: 'only the person who opened this session can send its results', next: null, retry: false };
+    default:
+      return { text: 'the kernel didn’t send it', next: 'run it again', retry: false };
+  }
 }
 
 export interface DataFold {
@@ -225,6 +339,13 @@ export interface RunWords {
   data: DataFold | null;
   /** the policy word (ran only) */
   policy: string | null;
+  /** C6'b2-2: the Send this one key: shown, in flight, or absent */
+  sendKey: 'idle' | 'busy' | null;
+  /** C6'b2-2: a refused send: "not sent: … · next: …" */
+  sendNote: string | null;
+  /** C6'b2-2: the first-use question (busy: the press in flight), and a refused choice in words */
+  question: { text: string; busy: 'send' | 'ask' | null } | null;
+  questionNote: string | null;
 }
 
 export const RUN_COPY = Object.freeze({
@@ -245,7 +366,7 @@ export const RUN_COPY = Object.freeze({
 /** A run row in words. */
 export function runWords(r: RunView): RunWords {
   const head = RUN_COPY.head(r.tool, r.server);
-  const base = { head, next: null, key: null, tone: null, live: false, data: null, policy: null } as const;
+  const base = { head, next: null, key: null, tone: null, live: false, data: null, policy: null, sendKey: null, sendNote: null, question: null, questionNote: null } as const;
   switch (r.phase) {
     case 'running':
       return { ...base, state: RUN_COPY.running, live: true };
@@ -254,7 +375,17 @@ export function runWords(r: RunView): RunWords {
     case 'carded':
       return { ...base, state: RUN_COPY.carded, key: 'decide' };
     case 'ran':
-      return { ...base, state: r.isError ? RUN_COPY.error : RUN_COPY.ran, tone: r.isError ? 'fail' : null, data: dataFoldOf(r.content ?? '', r.open), policy: policyWord(r.policy) };
+      return {
+        ...base,
+        state: r.isError ? RUN_COPY.error : RUN_COPY.ran,
+        tone: r.isError ? 'fail' : null,
+        data: dataFoldOf(r.content ?? '', r.open),
+        policy: policyLine(r),
+        sendKey: r.send === 'sending' ? 'busy' : canSend(r) ? 'idle' : null,
+        sendNote: r.send === 'refused' && r.sendNote ? `not sent: ${r.sendNote.text}${r.sendNote.next ? ` · next: ${r.sendNote.next}` : ''}` : null,
+        question: askedOf(r) ? { text: ASK_COPY.question(r.tool), busy: r.choosing } : null,
+        questionNote: askedOf(r) ? r.chooseNote : null,
+      };
     case 'denied':
       return { ...base, state: RUN_COPY.denied, tone: 'quiet' };
     case 'gone':
@@ -262,6 +393,23 @@ export function runWords(r: RunView): RunWords {
     default:
       return { ...base, state: `not run: ${r.refusal?.text ?? 'Gnomon refused it'}`, next: r.refusal?.next ?? null, tone: 'fail', data: r.content ? dataFoldOf(r.content, r.open) : null };
   }
+}
+
+/* ── taint (C6'b2-2, founder: the drawer and one transcript note, not the header) ─────────────────────────────────── */
+
+/**
+ * The injection pause in words (Mika): the session took in a sent tool result or skill text, so a destructive Always rule
+ * no longer passes a MODEL call (it takes the card); the human's "/" runs are not affected. One transcript system row
+ * where it first happened (the session's first kernel tool.result.sent or skill.run{decision:'ran'} row), and the
+ * Tools drawer's line (capabilities.tainted).
+ */
+export const TAINT_LINE = 'Always rules for tools that can’t be undone are paused for the model in this session: it has read tool results or skill text. Your / runs are not affected.';
+
+/** Is this kernel row the kind that taints its session (a sent tool result, a skill's text)? */
+export function taintsSession(row: { kind: string; payload?: unknown; principal?: string }): boolean {
+  if (typeof row.principal !== 'string' || !/^p:[0-9a-z]{8}\/kernel$/.test(row.principal)) return false;
+  if (row.kind === 'tool.result.sent') return true;
+  return row.kind === 'skill.run' && isObj(row.payload) && row.payload.decision === 'ran';
 }
 
 /* ── history: the kernel's row of a run this page did not start (or before a reload) ─────────────────────────────── */
@@ -274,7 +422,7 @@ export function runRowOf(row: { kind: string; payload?: unknown }): { tool: stri
   const server = displayText(p.server).slice(0, 64);
   const d = typeof p.decision === 'string' ? p.decision : null;
   const head = RUN_COPY.head(tool ?? 'a tool', server);
-  const base = { head, next: null, key: null, live: false, data: null, policy: null } as const;
+  const base = { head, next: null, key: null, live: false, data: null, policy: null, sendKey: null, sendNote: null, question: null, questionNote: null } as const;
   if (d === 'ran' || d === 'approved') return { tool, server, words: { ...base, state: p.isError === true ? `${RUN_COPY.error} · ${RUN_COPY.history}` : `${RUN_COPY.ran} · ${RUN_COPY.history}`, tone: p.isError === true ? 'fail' : null } };
   if (d === 'denied') return { tool, server, words: { ...base, state: RUN_COPY.denied, tone: 'quiet' } };
   // a busy row carries no text: the history cannot tell the minute limit from a waiting card, so it says neither

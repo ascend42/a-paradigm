@@ -39,7 +39,9 @@ import {
   SLASH_COPY,
   startFailWords,
   toolsResultRequest,
+  toolsPolicyRequest,
   toolsRunRequest,
+  toolsSendRequest,
   toolsStartRequest,
   type ArgField,
   type SkillListing,
@@ -47,7 +49,7 @@ import {
   type SlashItem,
   type SlashRequest,
 } from '../core/slash-menu.js';
-import { rateWaitSecs, RUN_COPY, runReducer, runWords, settledDecisionOf, startRun, type RunEvent, type RunView, type RunWords } from '../core/slash-runs.js';
+import { ASK_COPY, askedOf, canSend, rateWaitSecs, RUN_COPY, runReducer, runWords, SEND_COPY, settledDecisionOf, startRun, type RunEvent, type RunView, type RunWords } from '../core/slash-runs.js';
 import { capabilitiesOf, type Capabilities } from '../core/tools-drawer.js';
 import { trapTab } from './tier-picker.js';
 
@@ -199,6 +201,7 @@ export class SlashFlow {
   run(key: string): RunView | null {
     return this.#runs.get(key) ?? null;
   }
+
 
   /** Open the menu on a session (typing "/" is the human's own input; the palette and a slip key are trusted presses). */
   open(hsid: string, query: string, trusted: boolean): boolean {
@@ -406,6 +409,54 @@ export class SlashFlow {
     if (this.#runs.has(key)) this.#apply(key, { type: 'fold', open });
   }
 
+  /**
+   * C6'b2-2: the first-use question — Always send (request.session.tools.policy{policy:'send'}: its latest result goes
+   * with the next message, `queued` said in the live line) or Keep to me (ask: Send this one appears). One trusted
+   * press; every row of the same tool takes the new policy, the latest ran one the kernel's `queued`.
+   */
+  async choosePolicy(key: string, policy: 'send' | 'ask', trusted: boolean): Promise<void> {
+    const v = this.#runs.get(key);
+    if (!trusted || !v || !askedOf(v) || v.choosing !== null || !this.#d.access(v.hsid)?.tools) return; // G-GUI-04
+    this.#apply(key, { type: 'choosing', policy });
+    let out: unknown;
+    try {
+      out = await this.#d.call(toolsPolicyRequest(v.hsid, v.toolId, policy));
+    } catch (err) {
+      const r = this.#apply(key, { type: 'choose-failed', reason: reasonOf(err)?.reason ?? null, network: !(err instanceof RpcError) });
+      if (r?.chooseNote) this.#d.live(`${r.tool}: ${r.chooseNote}`);
+      return;
+    }
+    const o = out && typeof out === 'object' ? (out as Record<string, unknown>) : {};
+    const set = o.policy === 'send' || o.policy === 'ask' ? o.policy : policy;
+    const queued = set === 'send' && o.queued === true;
+    // the kernel queues the tool's LATEST "/" result of this session: the last ran row of it on this page
+    const same = [...this.#runs.values()].filter((x) => x.hsid === v.hsid && x.toolId === v.toolId);
+    const latest = [...same].reverse().find((x) => x.phase === 'ran')?.key ?? null;
+    for (const x of same) this.#apply(x.key, { type: 'policy', policy: set, ...(queued && x.key === latest ? { queued: true } : {}) });
+    this.#d.live(set === 'send' ? ASK_COPY.liveSend(v.tool, queued) : ASK_COPY.liveAsk(v.tool));
+  }
+
+  /**
+   * C6'b2-2: Send this one — request.session.tools.send{hsid, runId}, ONE trusted press while the row offers it (a
+   * press while it is in flight, or on a row that does not offer it, sends nothing). The tool's policy stays ask.
+   */
+  async sendOne(key: string, trusted: boolean): Promise<void> {
+    const v = this.#runs.get(key);
+    if (!trusted || !v || !canSend(v) || !this.#d.access(v.hsid)?.tools) return; // G-GUI-04
+    const runId = v.runId!;
+    this.#apply(key, { type: 'sending' });
+    let out: unknown;
+    try {
+      out = await this.#d.call(toolsSendRequest(v.hsid, runId));
+    } catch (err) {
+      const r = this.#apply(key, { type: 'send-failed', reason: reasonOf(err)?.reason ?? null, network: !(err instanceof RpcError) });
+      if (r) this.#d.live(`${r.tool}: ${runWords(r).sendNote ?? ''}`);
+      return;
+    }
+    const r = this.#apply(key, { type: 'sent', v: out });
+    if (r) this.#d.live(r.send === 'sent' ? SEND_COPY.live(r.tool) : `${r.tool}: ${runWords(r).sendNote ?? ''}`);
+  }
+
   /* ── runs ── */
 
   #apply(key: string, e: RunEvent): RunView | null {
@@ -562,7 +613,35 @@ export function renderRunRow(doc: MiniDoc, w: RunWords, o: { key: string | null;
     w.next ? h(doc, 'div', { class: 'run-next' }, `next: ${w.next}`) : null,
     w.key === 'decide' && k ? h(doc, 'div', { class: 'run-keys' }, h(doc, 'button', { class: 'key quiet', type: 'button', 'data-run-act': 'decide', 'data-run-key': k }, RUN_COPY.decide)) : null,
     data,
-    w.policy ? h(doc, 'div', { class: 'run-policy' }, w.policy) : null,
+    // C6'b2-2: the policy line (tabindex -1: where focus lands when its key goes) and, under ask, Send this one
+    w.policy
+      ? h(
+          doc,
+          'div',
+          { class: 'run-policy', tabindex: '-1' },
+          h(doc, 'span', { class: 'run-policy-word' }, w.policy),
+          w.sendKey && k ? h(doc, 'button', { class: 'key quiet run-send', type: 'button', 'data-run-act': 'send', 'data-run-key': k, ...(w.sendKey === 'busy' ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : {}) }, w.sendKey === 'busy' ? SEND_COPY.sending : SEND_COPY.key) : null,
+        )
+      : null,
+    w.sendNote ? h(doc, 'div', { class: 'run-send-note' }, w.sendNote) : null,
+    // C6'b2-2 (founder: inline, not a stack card): the first-use question, two quiet keys; Always send names what it does
+    w.question && k
+      ? h(
+          doc,
+          'div',
+          { class: 'run-ask', role: 'group', 'aria-label': w.question.text },
+          h(doc, 'span', { class: 'run-ask-q' }, w.question.text),
+          h(
+            doc,
+            'span',
+            { class: 'run-ask-keys' },
+            h(doc, 'button', { class: 'key quiet', type: 'button', 'data-run-act': 'always-send', 'data-run-key': k, 'aria-label': `${ASK_COPY.always}: ${ASK_COPY.alwaysNote}`, ...(w.question.busy ? { 'aria-disabled': 'true', ...(w.question.busy === 'send' ? { 'aria-busy': 'true' } : {}) } : {}) }, w.question.busy === 'send' ? ASK_COPY.saving : ASK_COPY.always),
+            h(doc, 'span', { class: 'run-ask-note' }, ASK_COPY.alwaysNote),
+            h(doc, 'button', { class: 'key quiet', type: 'button', 'data-run-act': 'keep', 'data-run-key': k, ...(w.question.busy ? { 'aria-disabled': 'true', ...(w.question.busy === 'ask' ? { 'aria-busy': 'true' } : {}) } : {}) }, w.question.busy === 'ask' ? ASK_COPY.saving : ASK_COPY.keep),
+          ),
+          w.questionNote ? h(doc, 'span', { class: 'run-send-note' }, w.questionNote) : null,
+        )
+      : null,
   );
 }
 

@@ -4,7 +4,7 @@
  * after allow; gone; denied), and the kernel's tool.brokered{author:'human'} row as history.
  */
 import { describe, expect, it } from 'vitest';
-import { DATA_FOLD_AT, dataFoldOf, policyWord, rateWaitSecs, runReducer, runRefusalWords, runRowOf, runWords, settledDecisionOf, startRun, type RunView } from '../src/core/slash-runs.js';
+import { canSend, DATA_FOLD_AT, dataFoldOf, policyLine, policyWord, rateWaitSecs, sendRefusalWords, runReducer, runRefusalWords, runRowOf, runWords, settledDecisionOf, startRun, type RunView } from '../src/core/slash-runs.js';
 
 const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
 const RUN = `run-${'a'.repeat(24)}`;
@@ -113,5 +113,68 @@ describe('#gui-slash-runs: history (runRowOf)', () => {
     expect(runRowOf({ kind: 'tool.brokered', payload: { server: 'fs', decision: 'busy', author: 'human' } })!.words.state).toBe('not run: too many at once');
     expect(runRowOf({ kind: 'tool.brokered', payload: { server: 'fs', tool: 'grep', decision: 'ran' } })).toBeNull();
     expect(runRowOf({ kind: 'turn.sent', payload: {} })).toBeNull();
+  });
+});
+
+describe("#gui-slash-runs: Send this one (C6'b2-2)", () => {
+  const ran = (policy: 'send' | 'ask' | null) => runReducer(base({ policy, goes: policy === 'send' }), { type: 'reply', v: { status: 'ran', runId: RUN, content: 'x', isError: false } });
+
+  it('under ask a ran row offers Send this one; under send or not chosen it does not', () => {
+    expect(runWords(ran('ask'))).toMatchObject({ policy: 'kept here; not sent', sendKey: 'idle', sendNote: null });
+    expect(runWords(ran('send'))).toMatchObject({ policy: 'goes with your next message', sendKey: null });
+    expect(runWords(ran(null)).sendKey).toBeNull();
+    expect(canSend(runReducer(base({ policy: 'ask' }), { type: 'failed', reason: null, network: true }))).toBe(false);
+  });
+
+  it('sending → sent: "sent with your next message", and no key again', () => {
+    const s1 = runReducer(ran('ask'), { type: 'sending' });
+    expect(runWords(s1).sendKey).toBe('busy');
+    expect(runReducer(s1, { type: 'sending' })).toBe(s1);
+    const s2 = runReducer(s1, { type: 'sent', v: { hsid: H, runId: RUN, policy: 'once', queued: true, tainted: true } });
+    expect(runWords(s2)).toMatchObject({ policy: 'sent with your next message', sendKey: null });
+    expect(policyLine(s2)).toBe('sent with your next message');
+  });
+
+  it('refusals in words: already sent, expired (not-found), changed, already sending; the network may be pressed again', () => {
+    expect(sendRefusalWords('already-sent', false, 'grep')).toMatchObject({ text: 'this result was already sent', retry: false });
+    expect(sendRefusalWords('not-found', false, 'grep')).toMatchObject({ text: 'held 10 min; it’s gone', next: 'run it again' });
+    expect(sendRefusalWords('changed', false, 'grep').text).toBe('the tool or its server’s trust changed since it ran, so it isn’t sent');
+    expect(sendRefusalWords('already-sending', false, 'grep').text).toBe('grep already sends its results; this one ran before that');
+    const gone = runReducer(runReducer(ran('ask'), { type: 'sending' }), { type: 'send-failed', reason: 'not-found', network: false });
+    expect(runWords(gone)).toMatchObject({ sendKey: null, sendNote: 'not sent: held 10 min; it’s gone · next: run it again', policy: 'kept here; not sent' });
+    const net = runReducer(runReducer(ran('ask'), { type: 'sending' }), { type: 'send-failed', reason: null, network: true });
+    expect(runWords(net).sendKey).toBe('idle');
+    for (const w of Object.values(runWords(gone))) if (typeof w === 'string') expect(w).not.toMatch(/not-found|already-sent|RpcError/);
+  });
+
+  it('an answer that is not one the page reads is no "sent"', () => {
+    const r = runReducer(runReducer(ran('ask'), { type: 'sending' }), { type: 'sent', v: { queued: false } });
+    expect(r.send).toBe('refused');
+    expect(runWords(r).policy).toBe('kept here; not sent');
+  });
+});
+
+describe("#gui-slash-runs: the first-use question (C6'b2-2)", () => {
+  const ran = () => runReducer(base({ policy: null }), { type: 'reply', v: { status: 'ran', runId: RUN, content: 'x', isError: false } });
+
+  it('a ran row of a tool not chosen asks inline: "Send grep’s results to the model?"', () => {
+    expect(runWords(ran()).question).toEqual({ text: 'Send grep’s results to the model?', busy: null });
+    expect(runWords(base({ policy: null })).question).toBeNull(); // still running
+    expect(runWords(runReducer(base({ policy: 'ask' }), { type: 'reply', v: { status: 'ran', runId: RUN, content: 'x' } })).question).toBeNull();
+  });
+
+  it('Always send: busy, then the policy with queued: the row goes; Keep to me: ask and Send this one', () => {
+    const busy = runReducer(ran(), { type: 'choosing', policy: 'send' });
+    expect(runWords(busy).question!.busy).toBe('send');
+    expect(runReducer(busy, { type: 'choosing', policy: 'ask' })).toBe(busy);
+    const sent = runReducer(busy, { type: 'policy', policy: 'send', queued: true });
+    expect(runWords(sent)).toMatchObject({ question: null, policy: 'goes with your next message', sendKey: null });
+    const kept = runReducer(runReducer(ran(), { type: 'choosing', policy: 'ask' }), { type: 'policy', policy: 'ask' });
+    expect(runWords(kept)).toMatchObject({ question: null, policy: 'kept here; not sent', sendKey: 'idle' });
+  });
+
+  it('a refused choice reads in words and the question stays', () => {
+    const r = runReducer(runReducer(ran(), { type: 'choosing', policy: 'send' }), { type: 'choose-failed', reason: 'untrusted', network: false });
+    expect(runWords(r)).toMatchObject({ question: { busy: null }, questionNote: 'fs isn’t trusted, so its results are never sent · next: trust it in Settings › MCP servers' });
   });
 });

@@ -152,7 +152,7 @@ describe('#gui-capability-browser: the Tools segment in every state', () => {
     expect(v.all?.groups.map((g) => g.label)).toEqual(['Gnomon', 'fs']); // Gnomon's own verbs first
     // Mika #6: a Gnomon verb repeats no description (its group heading says Gnomon)
     expect(v.all?.groups[0]!.rows[0]).toMatchObject({ name: 'gnomon_edit', description: '' });
-    expect(v.all?.groups[1]!.rows.map((r) => r.meta)).toEqual(['reads · offered now', 'reads · offered now', 'changes · findable', 'can’t be undone · / only']);
+    expect(v.all?.groups[1]!.rows.map((r) => r.meta)).toEqual(['reads · offered now · results: not chosen', 'reads · offered now · results: not chosen', 'changes · findable · results: not chosen', 'can’t be undone · / only · results: not chosen']);
     expect(texts(v)).not.toMatch(RAW);
   });
   it('the Now offered word: pinned beats found beats recent beats ranked', () => {
@@ -380,5 +380,29 @@ describe("#gui-capability-browser: C6'b2-1 fields (run, params, fullSchema, poli
     expect(c.tools[1]).toMatchObject({ run: { runnable: false, why: 'untrusted', detail: null }, params: [], fullSchema: null, policy: null });
     expect(capabilitiesOf(answer(), H)!.tainted).toBe(false);
     expect(capabilitiesOf(answer(), H)!.tools[0]!.run.runnable).toBe(false);
+  });
+});
+
+describe("#gui-capability-browser: C6'b2-2 the policy word, Stop sending, the taint line", () => {
+  it('each server tool says "results: send · ask · not chosen"; a tool that sends has a quiet Stop sending', () => {
+    const c = capabilitiesOf(answer({ tools: [{ ...tool({ name: 'grep' }), policy: 'send' }, { ...tool({ name: 'glob' }), policy: 'ask' }, tool({ name: 'cat' })] }), H)!;
+    const rows = toolsView(ui({ caps: c })).all!.groups[1]!.rows;
+    expect(rows.map((r) => r.meta.split(' · ').at(-1))).toEqual(['results: send', 'results: ask', 'results: not chosen']);
+    expect(rows[0]!.stop).toMatchObject({ act: 'stop-sending', value: 'fs/grep@0123abcd', label: 'Stop sending', quiet: true });
+    expect(rows[1]!.stop).toBeNull();
+    const busy = toolsView(ui({ caps: c, policyBusy: 'fs/grep@0123abcd' })).all!.groups[1]!.rows[0]!.stop;
+    expect(busy).toMatchObject({ label: 'Stopping…', busy: true, ariaDisabled: true });
+    // Gnomon's own verbs have no "/" policy
+    expect(toolsView(ui({ caps: c })).all!.groups[0]!.rows[0]!.meta).not.toContain('results:');
+  });
+  it('a tainted session shows the injection-pause line, also at tier 0; else none', () => {
+    expect(toolsView(ui({ caps: capabilitiesOf(answer({ tainted: true }), H) })).taint).toBe('Always rules for tools that can’t be undone are paused for the model in this session: it has read tool results or skill text. Your / runs are not affected.');
+    expect(toolsView(ui({ caps: capabilitiesOf(answer({ tainted: true, tier: 0 }), H) })).taint).toMatch(/^Always rules/);
+    expect(toolsView(ui()).taint).toBeNull();
+  });
+  it('a refused Stop sending in words', () => {
+    expect(refusalWords('stop', { reason: 'not-found', data: null })).toBe('Still sending: this tool isn’t in this session any more');
+    expect(refusalWords('stop', { reason: 'untrusted', data: null })).toBe('Its results aren’t sent: its server isn’t trusted now');
+    expect(refusalWords('stop', null)).toBe('Still sending: nothing was sent, the connection dropped · next: try again once Gnomon is connected');
   });
 });
