@@ -119,6 +119,12 @@ fn bundle_pins(stage: &Path) {
 /// DEV mode #kernel-sea: `<pkg>/gnomon.kernel` and its children's `<pkg>/node/bin/node` (npm run build:sea), when
 /// both exist: (kernel path, kernel sha256, node path, node sha256). None ⇒ the legacy node + script dev app.
 fn dev_sea(pkg: &Path) -> Option<(String, String, String, String)> {
+    // Aegis S0 M2: `build-darwin.mjs --no-sea` sets GNOMON_WRAPPER_NO_SEA=1, so a stale <pkg>/gnomon.kernel is never pinned
+    println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_NO_SEA");
+    if std::env::var("GNOMON_WRAPPER_NO_SEA").as_deref() == Ok("1") {
+        println!("cargo:warning=gnomon-wrapper dev build: GNOMON_WRAPPER_NO_SEA=1: node + dist/cli/gnomon.js, guarded only");
+        return None;
+    }
     let kexe = pkg.join("gnomon.kernel");
     let knode = pkg.join("node/bin/node");
     println!("cargo:rerun-if-changed={}", kexe.display());

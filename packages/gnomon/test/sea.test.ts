@@ -149,6 +149,17 @@ describe('#kernel-sea build constants (scripts/build-sea.mjs)', () => {
     await expect(sea.bundleSeaMain('/nonexistent/out.cjs', { build: { profile: 'dev', distTree: 'sha256:' + '0'.repeat(64), childNodeRequirement: 'identifier "gnomon.node.dev"' } })).rejects.toThrow(/cdhash-pinned/);
   });
 
+  it('FALSIFIER (Aegis M2): --no-sea reaches build.rs, which then pins no SEA (a stale gnomon.kernel is never pinned)', () => {
+    const wrapper = path.join(PKG_ROOT, '..', 'gnomon-wrapper');
+    const script = readFileSync(path.join(wrapper, 'scripts', 'build-darwin.mjs'), 'utf8');
+    expect(script).toContain("GNOMON_WRAPPER_NO_SEA: process.argv.includes('--no-sea') ? '1' : ''");
+    const rs = readFileSync(path.join(wrapper, 'build.rs'), 'utf8');
+    const fn = rs.slice(rs.indexOf('fn dev_sea('), rs.indexOf('let kexe = pkg.join("gnomon.kernel");'));
+    expect(fn).toContain('if std::env::var("GNOMON_WRAPPER_NO_SEA").as_deref() == Ok("1")');
+    expect(fn).toContain('return None;');
+    expect(fn).toContain('cargo:rerun-if-env-changed=GNOMON_WRAPPER_NO_SEA');
+  });
+
   it('the kernel entitlements are allow-jit only: no get-task-allow, no library-validation opt-out', () => {
     const ent = readFileSync(sea.KERNEL_ENTITLEMENTS, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
     expect([...ent.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1])).toEqual(['com.apple.security.cs.allow-jit']);
