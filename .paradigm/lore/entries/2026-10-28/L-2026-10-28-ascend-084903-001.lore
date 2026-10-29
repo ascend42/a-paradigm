@@ -1,0 +1,46 @@
+id: L-2026-10-28-ascend-084903-001
+type: agent-session
+timestamp: '2026-10-28T08:49:03.850Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C4''b: tool tier GUI plus re-measure, reset and rememberable'
+summary: |-
+  Mika designed the tier GUI from the model-picker pattern: a header tier key, a menu and a confirm sheet, plus a Settings Tool tier row.
+
+  Founder answers:
+  - "in new sessions too" starts unticked;
+  - add the three kernel gaps now (request.local.tier.remeasure, request.local.tier.clear, and preview.rememberable/rememberWhy).
+
+  Builder commits: 841187a1..e4d4b1e7.
+
+  Aegis signed off on the kernel, with L1 (no remeasure rate limit), L2 (a measurement running against the old config gen) and the forced-join no-op; all fixed in 5e6c6b17. Mika reviewed it rendered (harness: real index.html and styles, fake kernel, Playwright Chromium) and approved with fixes F1-F12 (focus loss twice, copy, the disabled quiet key in the system, live region, Tab wrap, long lists), fixed in bc3a9bac. Her live re-check caught R1: the shared trapTab broke Tab in the model-switch dialog because of a hidden input inside a hidden row. Fixed in e4d4b1e7.
+
+  Merged into feat/gnomon and pushed. tsc is clean in 4 packages; gnomon-gui has 1091 passing, the full gnomon suite 4144 passing with 0 failures.
+symbols_touched:
+  - '#gui-tool-tier'
+  - '#local-tool-tier'
+  - '#gnomon-gui'
+symbols_created:
+  - '#gui-tool-tier'
+learnings:
+  - A shared focus trap must skip controls inside a hidden ancestor (closest('[hidden]') and getClientRects), not just controls with .hidden.
+  - The atelier UI gate parses the Rendered section for real .png paths. Brace patterns and bare names fail it, so reviews must list absolute capture paths.
+  - 'Rendered harness reviews catch what source review can''t: Mika''s live re-check found a regression that the builder''s unit tests passed.'
+verification:
+  status: pass
+  details:
+    tsc: clean x4
+    gnomon_gui: 1091 passed
+    gnomon_full: 4144 passed, 0 failed
+tags:
+  - gnomon
+  - local-model
+  - c4
+  - gui
+  - atelier
+git_context:
+  ref: ee947e1851ada3d1422ecb7c73b9e4f4c13c55bb
+  branch: feat/gnomon
+  dirty: true

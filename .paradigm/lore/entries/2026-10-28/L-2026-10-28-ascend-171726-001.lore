@@ -1,0 +1,54 @@
+id: L-2026-10-28-ascend-171726-001
+type: agent-session
+timestamp: '2026-10-28T17:17:26.946Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C5''a3 and C5''b: kernel GUI support, and the trust and brokered-rules GUI'
+summary: |-
+  Mika's C5'b design found a live bug (a plain Always key on brokered cards that the kernel refuses) and two kernel gaps.
+
+  C5'a3:
+  - K1: a tool-scope card node in the contentHash.
+  - K2: status.rules[].paused, judged across every listing under a label after Aegis L1, and omitted when unknown.
+  - K3: tool rule words.
+  - An interim GUI guard.
+  - Aegis and Mika signed off.
+
+  C5'b:
+  - a trust chip, keys and an inline preview panel on MCP server rows;
+  - a request row for the pending card, and the outcomes;
+  - the trust grant card face;
+  - scoped "Always: this tool, any arguments" only when the K1 node checks out (a forged node offers none);
+  - the drop toast;
+  - paused rules and counts.
+
+  Mika's rendered review called for rework: the contradictory chip, dead keys, the duplicated reads, Esc while committing, copy fixes, disabled-key styling (system-wide), the reads list size, the trust k-line, and a Tab trap in the Settings dialog. Her re-check approved the fixes after one more (.key[disabled]).
+
+  Merged and pushed. tsc is clean x4; gnomon-gui has 1128 passing, and the full gnomon suite 4210 passing with 0 failures.
+symbols_touched:
+  - '#gui-mcp-servers'
+  - '#local-tool-broker'
+  - '#always-rules'
+  - '#gnomon-gui'
+  - ^local-tool-grant
+learnings:
+  - 'A designer''s pass over the kernel''s output can find a live bug: Mika found the unscoped Always key before any GUI work.'
+  - The GUI must verify the kernel node against the contentHash before offering a scoped action; a forged node must offer nothing.
+  - 'Per-label status must judge every listing and say nothing when unsure: a wrong ''paused'' is worse than none.'
+verification:
+  status: pass
+  details:
+    gnomon_gui: 1128 passed
+    gnomon_full: 4210 passed, 0 failed
+tags:
+  - gnomon
+  - local-model
+  - c5
+  - gui
+  - atelier
+git_context:
+  ref: 026e37adec592493ca7267b4d13984a3f49ee802
+  branch: feat/gnomon
+  dirty: true

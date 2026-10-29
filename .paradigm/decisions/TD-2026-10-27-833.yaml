@@ -1,0 +1,59 @@
+id: TD-2026-10-27-833
+timestamp: '2026-10-27T18:08:12.256Z'
+title: 'Gnomon local lane: global capability access (index, per-step selection, tiers, class grants) and working memory'
+decision: >-
+  Local sessions reach capabilities through a GLOBAL mechanism, not hand-curated packs. Shared pieces: two-way child RPC
+  (S1), context budget ledger (S2), result shaping with spill handles (S3), kernel capability registry (S4). C: a kernel
+  capability index generates narrow tools from every enabled source's tools/list (split op-multiplexed tools per op with
+  the op kernel-fixed, flatten to depth 2, trim params, schema-hash ids; calls validated against the full schema); each
+  step offers core tools + find_tool (kernel-resolved) + K tools picked by deterministic BM25 over the goal, with
+  stickiness and human-only pins; a graded probe (T1-T4) sets tiers 0-3 by window and skill; grants by class
+  (read/mutate/destructive) and per-server trust. B: retrieval tools (grep, outline, read_section, edit), kernel-owned
+  working memory with model notes as capped labelled data. Founder answers: Paradigm MCP trust = first-party; marking a
+  third-party server trusted = one click + notice; all MCP servers enabled for Claude are available to local sessions
+  (remote http/sse still refused); human may raise the tier above measured (notify, labelled); tool pins human-only;
+  tier-3 models get full schemas for complex tools, others use the '/' form; working memory kept until deleted;
+  summarise defaults to deterministic; Claude '/skill' probed with a templated-prompt fallback. GUI: error results in
+  the --fail colour for Claude and local; 'stopped: step limit N' shows the limit.
+rationale: >-
+  Most local models people run lack the context for curated tool lists (Paradigm's tools/list alone is ~8k tokens, the
+  whole local target); a generated, selected, tiered surface scales to any server and model without per-server work,
+  while kernel-fixed ops, full-schema validation and class/trust grants keep the local model an untrusted author of
+  arguments.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: designer
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Hand-curated per-server lane packs (e.g. a 5-tool Paradigm pack)
+    rejected_because: 'Founder: needs a global, encompassing approach; packs don''t scale'
+  - option: Raw or compact tools/list to every model
+    rejected_because: Exceeds small windows; flattening destroys op-multiplexed tools
+  - option: find/call meta-tool with model-filled arguments
+    rejected_because: Model fills schemas it never saw; replaced by kernel-resolved find_tool
+  - option: Embedding-based tool selection
+    rejected_because: Needs a second model, not deterministic; BM25 first
+symbols_affected:
+  - '#gnomon-local'
+  - '#local-runner'
+  - '#capability-index'
+  - '#tool-selector'
+  - '#local-tool-tier'
+  - '#local-working-memory'
+  - '#local-tool-broker'
+  - ^local-tool-grant
+  - '#gui-capability-browser'
+  - '#gui-slash-menu'
+status: active
+tags:
+  - gnomon
+  - local-model
+  - capabilities
+  - slash-commands
+  - working-memory

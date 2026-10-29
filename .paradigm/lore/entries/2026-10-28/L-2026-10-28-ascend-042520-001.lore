@@ -1,0 +1,39 @@
+id: L-2026-10-28-ascend-042520-001
+type: milestone
+timestamp: '2026-10-28T04:25:20.687Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 8.0.4 published; 8.0.5 ready; local models reach Paradigm (C2', staging, C3')
+summary: 'Paradigm 8.0.4 published (founder): #63 plugin MCP in pnpm repos, #64 honest .purpose coverage, #65 security fix (aspect drift, tutorial, flow validation, Conductor: repo content never reaches a shell). 8.0.5 prepared (#68 Claude API provider run_command asks once, write-guard, command-runner, path containment; release #69 merged, awaiting founder publish). On feat/gnomon: C2'' capability index + kernel MCP client (Aegis x4: neutral cwd, refuse-in-root launch, MCP spawn policy, reaping), S-P op annotations as paradigm://tool-annotations, first-party Paradigm staged as a pinned hashed bundle (Aegis x3: staged-guard fs confinement, read ops verified to change nothing, network families refused, edit ledger), C3'' per-step tool selection + find_tool + human pins + tool.selection audit row (Aegis: server share cap, ack-based tool-set switch). A local model can now run paradigm_session.recover without a card, the goal of the 2026-10-26 failed session.'
+symbols_touched:
+  - '#capability-index'
+  - '#local-mcp-client'
+  - '#tool-selector'
+  - '#paradigm-stage'
+  - '#safe-git'
+  - '#claude-provider'
+  - '#write-guard'
+  - '#command-consent'
+learnings:
+  - Worktree builds resolve @a-company/* to the main checkout's stale builds; brief builders to npm ci and build workspace packages in the worktree before trusting test results
+  - Paradigm's PreToolUse Bash hook stages .paradigm index files into every commit (T-2026-10-28-002); commit with git restore --staged .paradigm in the same command
+  - Aegis keeps finding real issues in each fix round (npm shell lookup, bare-repo shapes, APFS case folding); one re-check per round is worth it
+  - 'Read-only claims need a test that hashes the tree before and after: it found writes the reviewer missed'
+tags:
+  - release
+  - security
+  - gnomon
+  - local-model
+linked_lore:
+  - L-2026-10-27-ascend-214849-001
+linked_tasks:
+  - T-2026-10-26-003
+  - T-2026-10-27-001
+  - T-2026-10-28-002
+  - T-2026-10-28-003
+git_context:
+  ref: 77ca6014076134d3fca108dc4bfa00fc21cbed17
+  branch: feat/gnomon
+  dirty: true

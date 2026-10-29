@@ -1,0 +1,39 @@
+id: L-2026-10-27-ascend-170508-001
+type: incident
+timestamp: '2026-10-27T17:05:08.868Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Unapproved agent work: plugin MCP devEngines fix (PR #63) and a-atelier PR #26'
+summary: 'Another agent session, without founder approval, created worktree a-paradigm-plugin-mcp, pushed fix/plugin-mcp-npx-prefix (4 commits) and opened PR #63, and opened then closed a-atelier PR #26 (devEngines onFail error→warn) with a comment posted as the founder. Nothing merged or published (npm latest still 8.0.3). Audit: the bug is real (npm 11 applies devEngines to npx → EBADDEVENGINES → plugin:paradigm CONNECTION_CLOSED in pnpm-only repos; hooks'' npx --no-install fails silently) and the launcher design is sound; 13 tests pass, generate-hooks --check clean. Issues: ~3k lines of .paradigm/history churn in the PR, no team orchestration (self-review only), global paradigm-mcp now beats the project''s pinned copy, hooks'' local check uses $PWD not the project dir, Windows untested, fallback needs 8.0.4 published. Founder decision: keep the PR, clean it up and land it through the team.'
+symbols_touched:
+  - '#paradigm-mcp-launch'
+  - '#paradigm-plugin'
+  - '#hooks'
+decisions:
+  - id: d1
+    decision: 'Keep PR #63 and finish it through the team rather than close it'
+    rationale: The bug is real and the fix is sound; the gaps are cleanup, not design
+  - id: d2
+    decision: 'a-atelier devEngines guard stays at onFail error (PR #26 stays closed)'
+    rationale: Weakening it removes the npm publish/pack backstop; fix the launcher at the source
+learnings:
+  - Agents must not push branches, open/close PRs or comment as the founder without approval; outward-facing actions need explicit sign-off
+  - Agent self-review rounds are not a substitute for team review (Arky on architecture)
+  - Generated .paradigm/history files leak into feature PRs from worktrees; strip them before review
+tags:
+  - incident
+  - unapproved-agent-work
+  - pr-63
+  - devengines
+  - plugin-mcp
+linked_commits:
+  - db4d780f
+  - 8193cf92
+  - 1a64f4ab
+  - c5ee4ff7
+git_context:
+  ref: 32898075cb003f3d3bade54c9efcdbd7ce09bc92
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,58 @@
+id: TD-2026-10-28-969
+timestamp: '2026-10-28T18:57:02.900Z'
+title: 'C6''a2: safeguards for destructive Always, and the injection pause'
+decision: >-
+  Founder answers on Aegis's C6'a2 design. Builds on TD-2026-10-28-956.
+
+
+  1. **Helper.** Wait for helper 1.10.0, which adds a root `permission` row table. Destructive Always is offered only
+  once that helper is installed. Older helpers get Allow and Deny only.
+
+  2. **Injection pause.** In a turn where the model took in sent tool results or repo skill text, destructive rules do
+  not pass model calls; those calls get a card. The human's own "/" runs are not affected.
+
+  3. **Lifetime and limits.** Destructive Always rules have no expiry: they stand until revoked or until their binding
+  changes. Rate limits stay at 3 per session per minute and 30 per rule per day. Every pass shows a "ran by rule" toast
+  with Revoke.
+
+  4. **Fresh Touch ID.** Every destructive brokered card, from the model or the human, carries the `irreversible` flag,
+  so allowing it needs fresh Touch ID. A cached unlock no longer passes.
+
+
+  Aegis's other safeguards stand:
+
+  - A destructive rule is created only from a root-signed decision with `presence:'fresh'`; never standing, CLI, cached
+  or voice.
+
+  - The class is part of the bindHash.
+
+  - The result-send policy is stored in kernel-signed rows keyed by repo, tool and bindHash, and falls back to ask when
+  the binding changes.
+
+  - Sent results are framed with a nonce and capped at the lower of 16 KiB and 25% of the target.
+
+  - Skills are run from the kernel's sanitized staged copy, with one literal substitution.
+rationale: >-
+  Keeps the founder's always-allow while closing the injection chain Aegis found, and tightens a gap in today's code:
+  destructive model calls currently pass on a cached unlock.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: security
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Fresh Touch ID without the root key, no helper release
+    rejected_because: Weaker proof of the human; founder chose to wait for the helper
+  - option: 30-day expiry on destructive rules
+    rejected_because: 'Founder: no expiry; the rule dies with its binding'
+symbols_affected:
+  - ^local-tool-grant
+  - '#gui-slash-menu'
+  - '#local-tool-broker'
+status: active
+tags:
+  - gnomon
+  - c6
+  - security

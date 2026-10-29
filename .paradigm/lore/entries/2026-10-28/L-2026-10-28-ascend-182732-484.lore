@@ -1,0 +1,16 @@
+id: L-2026-10-28-ascend-182732-484
+type: insight
+timestamp: '2026-10-28T18:27:32.851Z'
+author: ascend
+title: Decision TD-2026-10-28-956 recorded
+summary: Companion lore entry for decision record TD-2026-10-28-956. See .paradigm/decisions/TD-2026-10-28-956.yaml.
+symbols_touched:
+  - '#gui-capability-browser'
+  - '#gui-slash-menu'
+  - ^local-tool-grant
+  - '#local-working-memory'
+references:
+  decision_id: TD-2026-10-28-956
+tags:
+  - companion-lore
+  - decision-reference

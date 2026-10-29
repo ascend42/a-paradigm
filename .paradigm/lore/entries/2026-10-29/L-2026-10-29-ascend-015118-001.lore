@@ -1,0 +1,50 @@
+id: L-2026-10-29-ascend-015118-001
+type: milestone
+timestamp: '2026-10-29T01:51:18.272Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.1.0 released: Gnomon local lane, scoped learning, hook fixes'
+summary: |-
+  **Path to the release.** feat/gnomon (C1–C6') was integrated with main in PR #75 (173 conflicts; main's post-#49 fixes and the #65/#68 security fixes kept byte-identical; zod/v4 bundle alias). The 8.1.0 release PR was #76:
+  - versions: paradigm, plugin, paradigm-mcp and gnomon set to 8.1.0;
+  - one CHANGELOG entry;
+  - the CI gap closed (the mcp bundle is now built, so paradigm-staged-lane runs in CI);
+  - the paradigm-stage inode test fixed;
+  - loops and local copy no longer promises "8.1".
+
+  **Publishing.** The founder signed and notarised Gnomon.app (helper 1.10.0) and published gnomon-darwin-arm64, gnomon and paradigm 8.1.0. npm staged publishing needed the founder's approval on npmjs.com before each version went live.
+
+  **Verified from an empty folder:** the install works, the audit finds 0 vulnerabilities, `--version` prints 8.1.0, the MCP handshake lists 32 tools, and gnomon is 8.1.0.
+
+  **Post-release PR #77:** the platform lock is refreshed, the signed checksums are committed, and the e2e pin is 8.1.0 (passing).
+
+  **Known and tracked:**
+  - 15 Gnomon Windows test failures;
+  - the p12 probe on macOS 14;
+  - the warpline fresh-clone test;
+  - tsc errors in paradigm-vscode, platform-ui and premise-core;
+  - the MCP serverInfo reports version 0.1.0.
+symbols_touched:
+  - '#paradigm-cli'
+  - '#publish-gnomon'
+  - '#gnomon-helper'
+  - '#release-darwin'
+learnings:
+  - 'npm staged publishing: a publish can 409 with ''previously staged version'' and stays invisible until approved on npmjs.com; check for a pending stage before retrying.'
+  - 'When main holds an old squash of a long-lived branch, integrate with a rule: files touched only by the squash take the branch, files touched after it get a 3-way merge on the squash base.'
+  - Always verify the release path from a fresh clone; it caught the CI bundle gap and an inode-reuse test bug.
+verification:
+  status: pass
+  details:
+    npm: paradigm, gnomon and gnomon-darwin-arm64 at 8.1.0, latest
+    empty_install: 0 vulns, MCP 32 tools
+tags:
+  - release
+  - 8.1.0
+  - gnomon
+git_context:
+  ref: b1f2b8818946ad1626d22867b6ef1409f7412af6
+  branch: feat/gnomon
+  dirty: true

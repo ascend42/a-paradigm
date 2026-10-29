@@ -1,0 +1,38 @@
+id: L-2026-10-27-ascend-185858-001
+type: agent-session
+timestamp: '2026-10-27T18:58:58.030Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Local-lane fixes, PR #63 hardened and Windows-verified, slice B1 built through Aegis'
+summary: 'Plan A (b842ddeb, f313f060, 7a0a63d8, 0b1d8fd6, 5af1f901 on feat/gnomon, pushed): paged read_file, goal-pinned compaction with tool-result excerpts, a final answer at max_steps, an honest turn result line (step limit N, failed runs in --fail, Claude cap stops amber), atelier-mika reviewed twice. PR #63: Arky review, two Aegis reviews (npx ancestor .bin hijack of node and sh, temp-folder checks, project-copy trust, git hooks'' unpinned npx, outdated hook upgrade, umask 002), a Windows CI job with real-npm e2e (green on windows-latest and ubuntu-latest), Windows fixes (LF pins, install without bash, Claude project key rule). Design TD-2026-10-27-833 (global capability index). Slice B1 (feat/gnomon-local-b1: 6c952bbc, 95b9c603, f8487f4a, local): retrieval tools, result shaping, context ledger, hardened through two Aegis passes (linear globs/outline, bounded grep, locked edits, lexical path gate, provenance framing, chat-template token neutralising).'
+symbols_touched:
+  - '#gnomon-local'
+  - '#local-retrieval-tools'
+  - '#gui'
+  - '#local-runner'
+  - '#paradigm-mcp-launch'
+  - '#hooks'
+learnings:
+  - 'Security fix suggestions need verifying against the real tool''s source: Aegis''s first H1 fix (quoting execPath) would not have worked with npm 11; the builder found it and Aegis''s re-check then found npm also resolves its shell by bare name'
+  - 'Tests that ''run on Windows'' must actually run there: the first Windows CI run surfaced a real product bug (Claude project key) hidden behind test-only failures'
+  - 'A builder''s end-to-end only proves what it plants: planting node but not sh missed H1-R'
+  - 'Claude Code project dir key: every non-alphanumeric char becomes ''-'', names over 200 chars truncated + hash (code.claude.com/docs/en/sessions.md)'
+tags:
+  - gnomon
+  - local-model
+  - pr-63
+  - windows
+  - security
+  - session
+linked_lore:
+  - L-2026-10-27-ascend-170508-001
+linked_tasks:
+  - T-2026-10-26-003
+  - T-2026-10-27-001
+  - T-2026-10-27-002
+git_context:
+  ref: 5af1f901d49cf4ae39063829b290aa99c2967f3b
+  branch: feat/gnomon
+  dirty: true

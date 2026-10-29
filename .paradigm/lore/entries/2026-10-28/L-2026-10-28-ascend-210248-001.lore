@@ -1,0 +1,58 @@
+id: L-2026-10-28-ascend-210248-001
+type: agent-session
+timestamp: '2026-10-28T21:02:48.052Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C6'' so far, plus hook fixes: drawer, capabilities, "/" runs, result policy, destructive safeguards; PR #70'
+summary: |-
+  **Hook fixes (#70, merged to main dcc669ba).** The Stop hook now resolves the project root, keeps a per-session touched-files ledger, judges by mtime when there is no ledger, caps loops, credits delegation (including global agents), and no longer stages .paradigm at pre-commit. Machine-churn logs are gitignored; learning logs stay committed. Fixed on Windows and Ubuntu. Two reviewer passes. The Atelier UI gate's 'review pending' fix is committed in a-atelier fix/ui-gate-pending, awaiting the founder.
+
+  **C6'a1 (capabilities, session.mcp rows, restart).** Aegis signed off after L1 (refuse to restart a server that was turned off) and L2 (cleaned ids).
+
+  **C6'b1 (the Tools and memory drawer).** Mika approved it after 6 fixes, with design-system patterns recorded.
+
+  **C6'a2-1:**
+  - / runs, tools.start/result/policy;
+  - irreversible on every destructive card, and on every untrusted-server card (founder);
+  - destructive Always only with fresh presence + rootSig + helper 1.10.0, no expiry, rate-limited;
+  - the result-send policy book;
+  - framed data as separate child messages;
+  - a whole-queue cap;
+  - a session-wide taint (founder), proven by a lane test;
+  - startup rebuild of rule counts;
+  - a helper-swift CI job.
+
+  Aegis signed off after H1, M1-M3, L1-L3.
+
+  Decisions TD-2026-10-28-956, -969, -820 (scoped learning; build started).
+
+  Merged feat/gnomon 01f18398. Suites: gnomon 4242 passed, 0 failed; gui 1194 passed.
+symbols_touched:
+  - '#gui-capability-browser'
+  - ^local-tool-grant
+  - '#local-result-policy'
+  - '#local-tool-broker'
+  - '#paradigm-hooks'
+  - '#session-markers-gitignore'
+learnings:
+  - 'A one-turn taint is not enough: injected text persists in history and notes, so taint for the whole session.'
+  - Data frames must travel as separate messages, never glued to the human prompt, or compaction calls them the user's request.
+  - Hook tests run under dash on Ubuntu, where BASH_SOURCE is missing; callers must set SCRIPT_DIR.
+  - Builders on kernel slices with more than 8 files reliably hit the 100-turn limit; plan for a resume.
+verification:
+  status: pass
+  details:
+    gnomon_full: 4242 passed, 0 failed
+    gui: 1194 passed
+    pr70_ci: green except known main failures
+tags:
+  - gnomon
+  - c6
+  - hooks
+  - security
+git_context:
+  ref: 01f183987f1e256521838c5e5f7f9498f70238f3
+  branch: feat/gnomon
+  dirty: true

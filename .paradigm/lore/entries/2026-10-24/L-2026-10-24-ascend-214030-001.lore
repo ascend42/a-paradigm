@@ -1,0 +1,43 @@
+id: L-2026-10-24-ascend-214030-001
+type: agent-session
+timestamp: '2026-10-24T21:40:30.329Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0.1 release prep: Stop hook loop guard, dependency security, nevr.land removed, vitest 5 / tsup 9'
+summary: 'After merging PR #49, found and fixed three Stop hook bugs (PR #54: nested .paradigm/.warpline state counted as source; no stop_hook_active loop guard causing infinite blocks). Founder chose to fix audit findings before shipping: PR #55 simple-git 4, zod 4, uuid removed, Aegis fixes (stage route option injection, browser UUID fallback, MCP SDK floor), logger added to build:core, and nevr.land registry commands + registry-client removed at founder request. PR #56 vitest 5 and tsup 9 / esbuild 0.28 declared once at root, root engines >=24.11; production and dev audits down to next/postcss in the unpublished site. All merged; founder publishing from the release checkout via checklist artifact.'
+symbols_touched:
+  - '#paradigm-common'
+  - '#stop-loop-guard'
+  - '#GitRouter'
+  - '#SentinelClient'
+  - '#agent-registry'
+  - '#paradigm-logger'
+  - '#dev-tooling'
+  - '#gui-bundle'
+symbols_created:
+  - '#stop-loop-guard'
+learnings:
+  - A Stop hook must honour stop_hook_active or any violation unfixable within a turn loops forever
+  - Hook classification must skip generated state at any depth (*/.paradigm/*), not just the repo root
+  - npm ignores a newly added override when a lockfile exists; prefer an in-range or major upgrade over overrides plus hand-edited locks
+  - Declaring a workspace build tool once at the root lets npm hoist it instead of nesting a copy per package
+  - A fresh worktree build exposes packages missing from the build chain that stale dist folders hide
+verification:
+  status: pass
+  details:
+    paradigm: 925 passed
+    paradigm-mcp: '858'
+    gnomon: '3918'
+    gnomon-gui: '1039'
+    audit: only next/postcss (site)
+    windows: 14 known failures, none new
+linked_commits:
+  - b23f8e2e
+  - b89d6470
+  - 62af1aae
+git_context:
+  ref: 32898075cb003f3d3bade54c9efcdbd7ce09bc92
+  branch: feat/gnomon
+  dirty: true

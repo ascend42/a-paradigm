@@ -1,0 +1,38 @@
+id: L-2026-10-27-ascend-214849-001
+type: agent-session
+timestamp: '2026-10-27T21:48:49.103Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'PR #63/#64 merged; C1 broker, backend-adapter, .purpose split and B2 working memory land on feat/gnomon'
+summary: 'Merged to main: PR #63 (plugin MCP launcher + hooks for pnpm repos, two Aegis passes, Windows CI green) and PR #64 (Cid coverage: one shared rule, no placeholder stubs, coverage gaps as a purpose-coverage task, gitignored build output skipped, ~30 placeholders replaced). On feat/gnomon: S1/C1 tool broker (Aegis x2: one gate per verb, deadlines/abort reach the push, card spam limits, honest rows), #backend-adapter interface (Arky design + review; spec §2.2 = shared wire codec, capabilities, no normalized events), packages/gnomon/.purpose split into 28 nested files (same 156 symbols), B2 working memory (kernel-owned store, model notes as data, file-refs kernel-resolved and rendered as data, byte budget + overflow retry, atomic rewrite, human-only compact/context/read/list/delete, Aegis x2), symbol audit and spec reconcile with precise oracle links, then decision TD-2026-10-27-632 to stop oracle-id bookkeeping. Gnomon cross-OS CI now runs on feat/gnomon pushes; Windows failures equal main''s 14 known ones.'
+symbols_touched:
+  - '#local-tool-broker'
+  - '#backend-adapter'
+  - '#local-working-memory'
+  - '#paradigm-mcp-launch'
+  - '#captain'
+  - '#purpose-coverage'
+  - '#gnomon'
+learnings:
+  - Builders on big slices hit the 100-turn limit; brief them to commit after each step and stop at a coherent point
+  - Contracts changes make the embedded GUI bundle stale; always re-embed in the main checkout after merging contracts work
+  - Aegis re-checks keep finding real issues in fixes (npm shell lookup, offer titles as trusted goal); budget a re-check after every security fix round
+  - Founder pushes back on bookkeeping nothing consumes (TD-2026-10-27-632)
+tags:
+  - gnomon
+  - local-model
+  - security
+  - session
+linked_lore:
+  - L-2026-10-27-ascend-185858-001
+linked_tasks:
+  - T-2026-10-26-003
+  - T-2026-10-27-003
+  - T-2026-10-27-004
+  - T-2026-10-27-007
+git_context:
+  ref: 7d580bc9bfda950c01ea716b10d4fe2c82db8265
+  branch: feat/gnomon
+  dirty: true

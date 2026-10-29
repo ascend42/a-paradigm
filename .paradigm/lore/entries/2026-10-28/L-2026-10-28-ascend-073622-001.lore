@@ -1,0 +1,56 @@
+id: L-2026-10-28-ascend-073622-001
+type: agent-session
+timestamp: '2026-10-28T07:36:22.096Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C4''a: local tool tiers (graded probe, tiers 0-3, a live human tier change)'
+summary: |-
+  Arky designed C4' (TD-2026-10-27-833). The founder's answers changed two parts of the design: tier 3 offers FULL schemas for every tool, and a human raise or lower applies live after a confirm. A builder built C4'a in a worktree (6dc192de..768224e8):
+  - tool-tier.ts and a per-model store, with effective tier = min(human ?? skill, window);
+  - probe T2-T4 and fingerprintOf;
+  - full form in the capability index (fullOfferable, reassembleFull, tokenShape);
+  - a tier-aware selector (K 0/4/12/12, slot 0/10%/15%/25%);
+  - request.session.tier, a two-phase preview/commit with a single-use 60 s token, human-only;
+  - tools_set{surface} with the ack-gated switch;
+  - the contracts trigger 'tier'.
+
+  Aegis found no High. M1: unchecked server text in full schemas (required, pattern). Three Lows: the surface change lost on a later reselect, a commit race, and the directory mode. All fixed and re-checked, then the remaining Low was closed: tekken, fullwidth and describe() token shapes. The work was merged into feat/gnomon and pushed (af532886). tsc is clean. The full suite ran 4141 passed and 1 failed: a load timeout in always-edit-scopes, which passes on its own.
+symbols_touched:
+  - '#local-tool-tier'
+  - '#capability-index'
+  - '#tool-selector'
+  - '#local-tool-broker'
+  - '#gnomon-local'
+  - '#local-runner'
+symbols_created:
+  - '#local-tool-tier'
+commit: af532886
+decisions:
+  - id: c4-full-all
+    decision: Tier 3 offers every tool in its full original schema (K 12, slot min(4000, 25%)); tiers 0-2 stay compact
+    rationale: 'Founder: full schemas for all'
+  - id: c4-live-raise
+    decision: A human tier change applies live after a kernel-enforced preview/commit; the old set stays callable until tools_applied
+    rationale: 'Founder: right away, but the user confirms what will happen'
+  - id: c4-human-replaces
+    decision: effective = min(human ?? skill, window), so a human can lower a tier as well as raise it
+    rationale: max() would block lowering; lowering is the safer direction
+learnings:
+  - The neutraliser for tool results must stay narrow (code like `a << 2` or </div>), but third-party schema text needs a broader refuse-shape check. These are two separate lists on purpose.
+  - Run the workspace build before `npm run embed`. Embedding against a stale contracts build changes the bundle hash.
+verification:
+  status: pass
+  details:
+    tsc: clean
+    full_suite: 4141 passed, 1 load-timeout flake
+tags:
+  - gnomon
+  - local-model
+  - c4
+  - security-review
+git_context:
+  ref: af532886895da75fda92453fcc4f70b30a2e6772
+  branch: feat/gnomon
+  dirty: true

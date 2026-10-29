@@ -1,0 +1,29 @@
+id: TD-2026-10-27-632
+timestamp: '2026-10-27T20:00:09.153Z'
+title: 'Gnomon spec oracle ids: stop at precise links; no further id passes'
+decision: >-
+  Keep .purpose coverage and the symbol-drift test (enforced, cheap, keeps code findable). Keep the precise oracle links
+  already landed (4b1f8682). Do not add spec ids for the 36 shipped symbols left without oracles, and park the
+  threat-table orphanTests pass. Instead, check which of those symbols have no test at all and file tasks only for
+  those. If the oracle layer should earn its keep later, the rule is one CI check: a shipped symbol needs at least one
+  test, independent of spec ids.
+rationale: >-
+  Founder questioned the value ('is this symbolicating really needed or is this overengineering'). Nothing consumes spec
+  oracle ids to make a decision (no CI gate, release check or agent routing), so further precision is bookkeeping that
+  costs agent time and upkeep on every spec edit; the real signal is untested shipped code.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+alternatives_considered:
+  - option: Give all 36 symbols spec ids
+    rejected_because: Renames checks tests already make; no consumer of the ids
+  - option: Map threat tables to symbols with Aegis now
+    rejected_because: Founder chose later
+status: active
+tags:
+  - gnomon
+  - spec
+  - symbols
+  - oracles
+  - scope
