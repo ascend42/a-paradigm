@@ -25,12 +25,12 @@
  *    build-sea.mjs bundleSeaMain):
  *    - distTree: the gnomon-wrapper-kernel-tree:v1 hash of dist/ + package.json (release-darwin.mjs kernelTreeHash,
  *      gnomon-wrapper src/tree.rs). Checked HERE, before any kernel code: a mismatch refuses to start (exit 78).
- *      Checked again before every child spawn (checkDist; re-hashed whenever any file's dev/ino/size/mtime/ctime
+ *      Checked again before every child spawn (checkDist; re-hashed whenever any file's dev/ino/size/mtimeNs/ctimeNs (BigInt stats)
  *      changed);
  *    - childNodeRequirement: the code requirement of the node the children run, pinned to its cdhash
  *      (identifier gnomon.node, or gnomon.node.dev for a dev SEA, + the Developer ID anchor and team when signed).
  *      checkChildNode runs `/usr/bin/codesign --verify --strict -R=<it>` before every spawn (re-run whenever the
- *      file's dev/ino/size/mtime/ctime changed).
+ *      file's dev/ino/size/mtimeNs/ctimeNs changed).
  *    Both are exposed, frozen and non-writable, as globalThis.__gnomonSea (src/kernel/lifecycle/sea.ts seaGuard).
  */
 import { spawnSync } from 'node:child_process';
@@ -87,11 +87,11 @@ function treeFiles() {
     for (const name of fs.readdirSync(abs)) {
       const full = path.join(abs, name);
       const r = `${rel}/${name}`;
-      const st = fs.lstatSync(full);
+      const st = fs.lstatSync(full, { bigint: true });
       if (st.isSymbolicLink()) throw new Error(`symlink in the kernel tree: ${r}`);
       if (st.isDirectory()) walk(full, r);
       else if (st.isFile()) {
-        total += st.size;
+        total += Number(st.size);
         if (out.length >= MAX_FILES || total > MAX_BYTES) throw new Error('the kernel tree is too large');
         out.push([r, full, st]);
       } else throw new Error(`not a regular file in the kernel tree: ${r}`);
@@ -99,13 +99,20 @@ function treeFiles() {
   };
   walk(path.join(root, 'dist'), 'dist');
   const pj = path.join(root, 'package.json');
-  const st = fs.lstatSync(pj);
+  const st = fs.lstatSync(pj, { bigint: true });
   if (!st.isFile()) throw new Error('package.json is not a regular file');
   out.push(['package.json', pj, st]);
   return out;
 }
 
-const fp = (st) => `${st.dev}:${st.ino}:${st.size}:${st.mtimeMs}:${st.ctimeMs}`;
+/**
+ * The stat fingerprint the cache keys on (Aegis S0 merge hardening): BigInt stats, nanosecond mtime and ctime, never
+ * the *Ms doubles, which round two writes within the same microsecond-ish window to one value.
+ */
+export const fp = (st) => {
+  if (typeof st.ctimeNs !== 'bigint' || typeof st.mtimeNs !== 'bigint') throw new Error('the kernel tree cache needs BigInt stats (statSync(p, { bigint: true }))');
+  return `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}`;
+};
 let distVerified = null;
 let nodeVerified = null;
 
@@ -125,7 +132,7 @@ function checkDist() {
 
 /** Throws unless `node` meets the build's child-node requirement (codesign, cdhash-pinned). */
 function checkChildNode(node) {
-  const st = fs.statSync(node);
+  const st = fs.statSync(node, { bigint: true });
   const print = `${node}:${fp(st)}`;
   if (print === nodeVerified) return;
   const r = spawnSync('/usr/bin/codesign', ['--verify', '--strict', `-R=${BUILD.childNodeRequirement}`, node], { encoding: 'utf8', timeout: 60_000 });

@@ -137,6 +137,27 @@ describe('#kernel-sea build constants (scripts/build-sea.mjs)', () => {
     expect(layout).toContain('pub const KERNEL_IDENTIFIER: &str = "gnomon.kernel";');
   });
 
+  it('FALSIFIER (Aegis merge hardening): the stat cache keys on BigInt nanosecond mtime/ctime, never the *Ms doubles', () => {
+    const prelude = readFileSync(path.join(PKG_ROOT, 'scripts', 'sea', 'sea-prelude.mjs'), 'utf8');
+    // every stat the caches read is a BigInt stat
+    const stats = [...prelude.matchAll(/fs\.(l?statSync)\(([^)]*)\)/g)].map((m) => m[2]);
+    expect(stats.length).toBe(3);
+    for (const a of stats) expect(a, a).toContain('{ bigint: true }');
+    // the fingerprint itself (importing the prelude would run it, so its source is evaluated alone)
+    const src = /export const fp = (\(st\) => \{[\s\S]*?\n\});/.exec(prelude)?.[1];
+    expect(src).toBeDefined();
+    expect(src).not.toMatch(/Ms\b/);
+    const fp = new Function(`return ${src!}`)() as (st: unknown) => string;
+    const base = { dev: 1n, ino: 2n, size: 3n, mtimeNs: 1_700_000_000_000_000_001n, ctimeNs: 1_700_000_000_000_000_001n };
+    // one nanosecond apart: the same *Ms double (1700000000000.000001 rounds), different fingerprints
+    expect(Number(base.ctimeNs) / 1e6).toBe(Number(base.ctimeNs + 1n) / 1e6);
+    expect(fp({ ...base, ctimeNs: base.ctimeNs + 1n })).not.toBe(fp(base));
+    expect(fp({ ...base, mtimeNs: base.mtimeNs + 1n })).not.toBe(fp(base));
+    expect(fp({ ...base })).toBe(fp(base));
+    // a non-BigInt stat is refused, never silently keyed on doubles
+    expect(() => fp({ dev: 1, ino: 2, size: 3, mtimeMs: 1, ctimeMs: 1 })).toThrow(/BigInt stats/);
+  });
+
   it('FALSIFIER (Aegis H1): the child-node requirement is cdhash-pinned (+ the Developer ID anchor and team when signed)', () => {
     const cd = 'ab'.repeat(20);
     expect(sea.childNodeRequirement({ signing: 'adhoc', identifier: 'gnomon.node.dev', cdhash: cd })).toBe(`identifier "gnomon.node.dev" and cdhash H"${cd}"`);
