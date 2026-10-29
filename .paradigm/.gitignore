@@ -6,6 +6,7 @@
 /.session-started
 /.solo-declared
 /.stop-hook-active
+/.stop-block-fingerprint
 /.team-prompted
 /.team-reminded
 /.team-bypass-recorded
@@ -15,7 +16,27 @@
 /.cid-session
 /.graduation-failures/
 /.memory-last-review
+/.sessions/
 /events/hook-timings.jsonl
 /events/stop-timing.jsonl
 /.hook-health-warned
+# generated state: rebuilt by `paradigm index` / the MCP server, never committed.
+# machine telemetry below now goes to the machine home; legacy repo learning logs
+# (verdicts, nominations, ...) are frozen, still read, and not listed: new rows go to the user home
+/scan-index.json
+/flow-index.json
+/navigator.yaml
+/manifest.consistency.json
+/session-breadcrumbs.prev.json
+/events/team-funnel.jsonl
+/events/compliance-history.jsonl
+/events/postflight-liveness.jsonl
+/events/settlement-liveness.jsonl
+/events/hook-timings.jsonl.tmp.*
+/lore/timeline.yaml
+/protocols/index.yaml
+/personas/index.yaml
+/curriculum/index.yaml
+/curriculum/scenarios/index.yaml
+/university/index.yaml
 # <<< paradigm session markers <<<
