@@ -47,17 +47,30 @@ final class Server {
     let session: SessionProbe
     /// 1.11.0 (G-HLP-03): the caller check for the ops that need no presence (Caller.swift).
     let caller: CallerGate
+    /// 1.11.0: the helper's own items (anchor, presence mode, cert rate), the kernel-cert issuer and the anchor.
+    let items: ItemStore
+    let issuer: CertIssuer
+    let anchor: Anchor
+    let clock: () -> Date
 
     init(custody: Custody = Custody(),
          presence: @escaping (String) throws -> LAContext = evaluatePresence,
          signer: @escaping (KeyClass, String, LAContext, [Data]) throws -> [String] = { k, g, ctx, msgs in try signAll(try loadPrivateKey(k, g, context: ctx), msgs) },
          session: SessionProbe = CGSessionProbe(),
-         caller: CallerGate = CallerGate(probe: SystemCallerProbe())) {
+         caller: CallerGate = CallerGate(probe: SystemCallerProbe()),
+         items: ItemStore = KeychainItemStore(),
+         certKey: CertKey = SecureEnclaveCertKey(),
+         boot: @escaping () -> String = bootSessionId,
+         clock: @escaping () -> Date = Date.init) {
         self.custody = custody
         self.presence = presence
         self.signer = signer
         self.session = session
         self.caller = caller
+        self.items = items
+        self.clock = clock
+        self.issuer = CertIssuer(key: certKey, items: items, boot: boot, clock: clock)
+        self.anchor = Anchor(items: items, clock: clock)
     }
 
     func handle(_ req: Json) throws -> Json {
@@ -269,6 +282,19 @@ final class Server {
             guard let c = try connId(req) else { throw bad("conn.close needs a connId") }
             let r = custody.sync { (custody.unlocks.drop(c), custody.arms.closeReferencing(c)) }
             return ["dropped": r.0, "arms": r.1]
+
+        case "kernel.cert":
+            // 1.11.0 (G-HLP-03): no presence; only the signed kernel instance that spawned this helper
+            let who = try caller.require()
+            return try issuer.issue(try certRequest(req), caller: who)
+
+        case "anchor.read":
+            _ = try caller.require()
+            return try anchor.read(req)
+
+        case "anchor.write":
+            _ = try caller.require()
+            return try anchor.write(req)
 
         case "unlock.drop":
             guard let c = try connId(req) else { throw bad("unlock.drop needs a connId") }
