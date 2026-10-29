@@ -42,6 +42,14 @@ pub fn node_requirement(signing: &str) -> Result<String, String> {
 pub const KERNEL_EXE_REL: &str = "Resources/kernel/gnomon.kernel";
 /// The code-signing identifier of the SEA kernel (build-sea.mjs KERNEL_IDENTIFIER; what the helper certifies).
 pub const KERNEL_IDENTIFIER: &str = "gnomon.kernel";
+/// A DEV SEA's identifier (npm run build:sea; Aegis S0 H2). A dev app accepts only this; a release only
+/// KERNEL_IDENTIFIER, so a dev build never passes as the production kernel.
+pub const KERNEL_DEV_IDENTIFIER: &str = "gnomon.kernel.dev";
+
+/// The requirement a DEV app checks on its pinned dev SEA right before the spawn (on top of the sha256 pin).
+pub fn kernel_dev_requirement() -> String {
+    format!("identifier \"{KERNEL_DEV_IDENTIFIER}\"")
+}
 
 /// The designated requirement the SEA kernel must meet at spawn, by how the release was signed (as node_requirement):
 /// `developer-id` (Apple anchor, Developer ID CA + leaf, our team, identifier gnomon.kernel) or `adhoc` (identifier only).

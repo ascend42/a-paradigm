@@ -56,11 +56,20 @@ describe.skipIf(!RUN)('#kernel-sea built binary (ad-hoc)', () => {
   it('FALSIFIER (ad-hoc fallback): identifier gnomon.kernel, hardened runtime, allow-jit only, no get-task-allow; guarded-only note', () => {
     expect(built.signing).toBe('adhoc');
     expect(built.note).toContain('unsigned → guarded only');
-    expect(built.signature).toMatchObject({ identifier: 'gnomon.kernel', runtime: true, getTaskAllow: false });
+    expect(built.signature).toMatchObject({ identifier: 'gnomon.kernel.dev', runtime: true, getTaskAllow: false });
     expect(built.signature.entitlements).toEqual(['com.apple.security.cs.allow-jit']);
     expect(built.childNode.path).toBe(path.join(root, 'node', 'bin', 'node'));
-    expect(built.childNode.signature.identifier).toBe('gnomon.node');
-    expect(sea.inspectSignature(built.kernel)).toMatchObject({ identifier: 'gnomon.kernel', getTaskAllow: false });
+    expect(built.childNode.signature.identifier).toBe('gnomon.node.dev');
+    expect(sea.inspectSignature(built.kernel)).toMatchObject({ identifier: 'gnomon.kernel.dev', getTaskAllow: false });
+  });
+
+  it('FALSIFIER (Aegis H2): a dev SEA never meets the release requirement; buildSeaBinary refuses gnomon.kernel outside a release', async () => {
+    const ok = spawnSync('/usr/bin/codesign', ['--verify', '--strict', `-R=${sea.kernelRequirement('adhoc', 'dev')}`, built.kernel]);
+    expect(ok.status).toBe(0);
+    const prod = spawnSync('/usr/bin/codesign', ['--verify', '--strict', `-R=${sea.kernelRequirement('adhoc', 'release')}`, built.kernel]);
+    expect(prod.status).not.toBe(0);
+    await expect(sea.buildSeaBinary({ baseNode: '/nonexistent', main: '/x', out: '/x', identifier: 'gnomon.kernel', work: root })).rejects.toThrow(/only release-darwin/);
+    await expect(sea.buildSeaBinary({ baseNode: '/nonexistent', main: '/x', out: '/x', work: root })).rejects.toThrow(/explicit identifier/);
   });
 
   it('FALSIFIER: NODE_OPTIONS=--require=<x.js> has no effect (CLI)', () => {

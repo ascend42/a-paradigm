@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error -- a plain .mjs script, no declarations
 import * as sea from '../scripts/build-sea.mjs';
 import { reexecArgs } from '../src/kernel/lifecycle/env.js';
-import { childNodePath, DEV_CHILD_NODE_REL, gnomondEntryOf, KERNEL_IDENTIFIER, KERNEL_SEA_NAME, runningAsSea, SEA_GNOMOND_ARG, SeaChildNodeMissing, seaChildNodeCandidates, CHILD_NODE_IDENTIFIER } from '../src/kernel/lifecycle/sea.js';
+import { childNodePath, DEV_CHILD_NODE_REL, gnomondEntryOf, KERNEL_DEV_IDENTIFIER, KERNEL_IDENTIFIER, KERNEL_SEA_NAME, runningAsSea, SEA_GNOMOND_ARG, SeaChildNodeMissing, seaChildNodeCandidates, CHILD_NODE_DEV_IDENTIFIER, CHILD_NODE_IDENTIFIER } from '../src/kernel/lifecycle/sea.js';
 import type { AppBundle } from '../src/kernel/lifecycle/app-bundle.js';
 import { PKG_ROOT, walk } from './helpers.js';
 
@@ -86,6 +86,12 @@ describe('#kernel-sea build constants (scripts/build-sea.mjs)', () => {
     expect(sea.CHILD_NODE_REL).toBe(DEV_CHILD_NODE_REL);
     expect(sea.kernelRequirement('developer-id')).toBe('anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "SW4BMQ8PNL" and identifier "gnomon.kernel"');
     expect(sea.kernelRequirement('adhoc')).toBe('identifier "gnomon.kernel"');
+    // Aegis H2: dev builds sign gnomon.kernel.dev / gnomon.node.dev and never meet the release requirement
+    expect(sea.KERNEL_DEV_IDENTIFIER).toBe(KERNEL_DEV_IDENTIFIER);
+    expect(sea.NODE_DEV_IDENTIFIER).toBe(CHILD_NODE_DEV_IDENTIFIER);
+    expect(sea.kernelRequirement('developer-id', 'dev')).toMatch(/subject\.OU\] = "SW4BMQ8PNL" and identifier "gnomon\.kernel\.dev"$/);
+    expect(sea.kernelRequirement('adhoc', 'dev')).toBe('identifier "gnomon.kernel.dev"');
+    expect(() => sea.kernelRequirement('adhoc', 'staging')).toThrow();
     expect(() => sea.kernelRequirement('other')).toThrow();
     const layout = readFileSync(path.join(PKG_ROOT, '..', 'gnomon-wrapper', 'src', 'layout.rs'), 'utf8');
     expect(layout).toContain('pub const KERNEL_EXE_REL: &str = "Resources/kernel/gnomon.kernel";');

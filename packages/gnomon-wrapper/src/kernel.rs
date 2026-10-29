@@ -47,7 +47,7 @@ pub const BUILD_KERNEL_TREE: &str = env!("GNOMON_BUILD_KERNEL_TREE");
 /// absolute `<pkg>/gnomon.kernel`, or empty (no dev SEA: node + script, guarded only).
 pub const BUILD_KERNEL_EXE: &str = env!("GNOMON_BUILD_KERNEL_EXE");
 pub const BUILD_KERNEL_EXE_SHA256: &str = env!("GNOMON_BUILD_KERNEL_EXE_SHA256");
-/// bundle: layout::kernel_requirement (identifier gnomon.kernel, + team for developer-id); dev: empty (hash only).
+/// bundle: layout::kernel_requirement (identifier gnomon.kernel, + team for developer-id); dev: layout::kernel_dev_requirement.
 pub const BUILD_KERNEL_EXE_REQUIREMENT: &str = env!("GNOMON_BUILD_KERNEL_EXE_REQUIREMENT");
 
 /// What a bundle-mode refusal tells the user: the signed app was modified, so it is replaced, never rebuilt.
@@ -83,7 +83,7 @@ pub fn check_trust_root() -> Result<TrustRoot, String> {
     if BUILD_KERNEL_EXE.is_empty() {
         return Ok(t);
     }
-    check_dev_sea_with(t, Path::new(BUILD_KERNEL_EXE), BUILD_KERNEL_EXE_SHA256)
+    check_dev_sea_with(t, Path::new(BUILD_KERNEL_EXE), BUILD_KERNEL_EXE_SHA256, BUILD_KERNEL_EXE_REQUIREMENT)
 }
 
 /// #kernel-sea BUNDLE mode over explicit pins (tests): [`check_bundle_trust_root_with`] (node + kernel tree + node
@@ -106,13 +106,19 @@ pub fn check_bundle_sea_with(exe: &Path, node_sha: &str, tree: &str, node_requir
     Ok(t)
 }
 
-/// #kernel-sea DEV mode: the dev SEA (`<pkg>/gnomon.kernel`, npm run build:sea) must still hash to the build's pin.
-pub fn check_dev_sea_with(mut t: TrustRoot, kernel: &Path, kernel_sha: &str) -> Result<TrustRoot, String> {
+/// #kernel-sea DEV mode: the dev SEA (`<pkg>/gnomon.kernel`, npm run build:sea) must still hash to the build's pin,
+/// and then meet `requirement` (Aegis H2: identifier gnomon.kernel.dev, layout::kernel_dev_requirement; a dev app never
+/// spawns a production gnomon.kernel).
+pub fn check_dev_sea_with(mut t: TrustRoot, kernel: &Path, kernel_sha: &str, requirement: &str) -> Result<TrustRoot, String> {
+    if requirement.is_empty() {
+        return Err(format!("this Gnomon.app pins a dev SEA kernel without its code requirement. Rebuild the app: {REBUILD}"));
+    }
     let real = std::fs::canonicalize(kernel).map_err(|_| format!("Gnomon.app was built against a dev SEA kernel that is gone ({}). Rebuild the app: {REBUILD}", kernel.display()))?;
     let now = sha256_file(&real).map_err(|e| format!("Gnomon.app cannot read its SEA kernel ({e}). Rebuild the app: {REBUILD}"))?;
     if now != kernel_sha {
         return Err(format!("Gnomon.app was built against a different SEA kernel: {} changed since the build (npm run build:sea). Rebuild the app: {REBUILD}", kernel.display()));
     }
+    verify_static_code(&real, requirement).map_err(|e| format!("the dev SEA kernel {} failed its code-signature check ({e}). Rebuild the app: {REBUILD}", real.display()))?;
     t.kernel = Some(real);
     Ok(t)
 }
@@ -617,27 +623,44 @@ mod tests {
     }
 
     #[test]
-    fn sea_dev_kernel_is_hash_pinned_and_the_cli_passes_args_only() {
-        let (d, pkg, node) = rig("sea-dev");
-        let sha = sha256_file(&d.join("bin/node-26")).unwrap();
-        let tree = kernel_tree_hash(&pkg).unwrap();
+    fn sea_the_cli_passthrough_passes_args_only_with_the_scrubbed_env() {
+        let (d, _pkg, node) = rig("sea-cli");
         // a fake SEA that prints its env and argv
-        let k = pkg.join("gnomon.kernel");
+        let k = d.join("gnomon.kernel");
         std::fs::write(&k, b"#!/bin/sh\n/usr/bin/env\necho \"ARGS $*\"\n").unwrap();
         std::fs::set_permissions(&k, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
-        let ksha = sha256_file(&k).unwrap();
-        let t = check_trust_root_with(node.to_str().unwrap(), &sha, "sea-dev", &pkg, &tree).unwrap();
-        let t = check_dev_sea_with(t, &k, &ksha).unwrap();
-        assert_eq!(t.kernel.as_deref(), Some(k.as_path()));
-        let out = sea_cli_command(t.kernel.as_ref().unwrap(), &t.node, &argv(&["identity", "status"]), &env()).output().unwrap();
+        let out = sea_cli_command(&k, &node, &argv(&["identity", "status"]), &env()).output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout).to_string();
         assert!(text.contains("ARGS identity status\n"), "{text}");
         assert!(!text.contains("NODE_OPTIONS") && !text.contains("GNOMON_HOME") && !text.contains("DYLD_"), "{text}");
-        std::fs::write(&k, b"#!/bin/sh\necho changed\n").unwrap();
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn falsifier_sea_dev_app_accepts_only_a_hash_pinned_gnomon_kernel_dev() {
+        let (d, pkg, node) = rig("sea-dev");
+        let sha = sha256_file(&d.join("bin/node-26")).unwrap();
+        let tree = kernel_tree_hash(&pkg).unwrap();
+        let dev = crate::layout::kernel_dev_requirement();
+        assert_eq!(dev, "identifier \"gnomon.kernel.dev\"");
+        let k = pkg.join("gnomon.kernel");
+        signed_copy(Path::new("/usr/bin/true"), &k, crate::layout::KERNEL_DEV_IDENTIFIER);
+        let ksha = sha256_file(&k).unwrap();
         let t = check_trust_root_with(node.to_str().unwrap(), &sha, "sea-dev", &pkg, &tree).unwrap();
-        assert!(check_dev_sea_with(t.clone(), &k, &ksha).unwrap_err().contains("different SEA kernel"));
+        assert_eq!(check_dev_sea_with(t.clone(), &k, &ksha, &dev).unwrap().kernel.as_deref(), Some(k.as_path()));
+        // no requirement compiled: refused
+        assert!(check_dev_sea_with(t.clone(), &k, &ksha, "").unwrap_err().contains("without its code requirement"));
+        // a production-identified kernel in a dev app: refused by the requirement, even with its hash pinned
+        signed_copy(Path::new("/usr/bin/true"), &k, crate::layout::KERNEL_IDENTIFIER);
+        let prod = sha256_file(&k).unwrap();
+        assert!(check_dev_sea_with(t.clone(), &k, &prod, &dev).unwrap_err().contains("code-signature check"));
+        // changed bytes, then gone
+        assert!(check_dev_sea_with(t.clone(), &k, &ksha, &dev).unwrap_err().contains("different SEA kernel"));
         std::fs::remove_file(&k).unwrap();
-        assert!(check_dev_sea_with(t, &k, &ksha).unwrap_err().contains("is gone"));
+        assert!(check_dev_sea_with(t, &k, &ksha, &dev).unwrap_err().contains("is gone"));
+        // a release requirement never accepts the dev identifier
+        signed_copy(Path::new("/usr/bin/true"), &k, crate::layout::KERNEL_DEV_IDENTIFIER);
+        assert!(verify_static_code(&k, &crate::layout::kernel_requirement("adhoc").unwrap()).is_err());
         std::fs::remove_dir_all(&d).unwrap();
     }
 
@@ -653,8 +676,13 @@ mod tests {
             assert_eq!(BUILD_KERNEL_EXE, KERNEL_EXE_REL);
             assert!(BUILD_KERNEL_EXE_SHA256.len() == 64 && BUILD_KERNEL_EXE_REQUIREMENT.contains("identifier \"gnomon.kernel\""));
         } else {
-            assert!(BUILD_NODE_REQUIREMENT.is_empty() && BUILD_KERNEL_EXE_REQUIREMENT.is_empty());
+            assert!(BUILD_NODE_REQUIREMENT.is_empty());
             assert_eq!(BUILD_KERNEL_EXE.is_empty(), BUILD_KERNEL_EXE_SHA256.is_empty());
+            // Aegis H2: a dev app pins only a gnomon.kernel.dev SEA
+            assert_eq!(BUILD_KERNEL_EXE_REQUIREMENT.is_empty(), BUILD_KERNEL_EXE.is_empty());
+            if !BUILD_KERNEL_EXE.is_empty() {
+                assert_eq!(BUILD_KERNEL_EXE_REQUIREMENT, crate::layout::kernel_dev_requirement());
+            }
         }
     }
 

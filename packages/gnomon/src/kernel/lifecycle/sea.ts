@@ -27,8 +27,12 @@ import { appBundleOf, type AppBundle } from './app-bundle.js';
 /** The SEA's file name and code-signing identifier (scripts/build-sea.mjs, gnomon-wrapper src/layout.rs). */
 export const KERNEL_SEA_NAME = 'gnomon.kernel';
 export const KERNEL_IDENTIFIER = 'gnomon.kernel';
+/** A dev SEA's identifier (npm run build:sea; Aegis S0 H2): never meets the release requirement. */
+export const KERNEL_DEV_IDENTIFIER = 'gnomon.kernel.dev';
 /** The code-signing identifier of the node the kernel's children run (release-darwin.mjs NODE_IDENTIFIER). */
 export const CHILD_NODE_IDENTIFIER = 'gnomon.node';
+/** A dev SEA's children's node identifier. */
+export const CHILD_NODE_DEV_IDENTIFIER = 'gnomon.node.dev';
 /** A dev SEA's children's node, relative to the directory holding gnomon.kernel. */
 export const DEV_CHILD_NODE_REL = path.join('node', 'bin', 'node');
 /** The SEA's first argument that selects the gnomond entry (scripts/sea/sea-prelude.mjs); anything else is the CLI. */

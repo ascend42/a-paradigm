@@ -149,15 +149,17 @@ fn dev_pins(manifest: &Path) {
         Some((kexe, ksha, knode, nsha)) => {
             println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE={kexe}");
             println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_SHA256={ksha}");
+            // Aegis H2: a dev app accepts only a gnomon.kernel.dev SEA (checked at spawn on top of the hash)
+            println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_REQUIREMENT={}", layout::kernel_dev_requirement());
             (knode, nsha, "sea-dev")
         }
         None => {
             println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE=");
             println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_SHA256=");
+            println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_REQUIREMENT=");
             build_node()
         }
     };
-    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_REQUIREMENT=");
     println!("cargo:rustc-env=GNOMON_BUILD_NODE={node}");
     println!("cargo:rustc-env=GNOMON_BUILD_NODE_SHA256={node_sha}");
     println!("cargo:rustc-env=GNOMON_BUILD_NODE_SOURCE={source}");
