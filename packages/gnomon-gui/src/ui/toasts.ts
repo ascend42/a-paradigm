@@ -42,6 +42,8 @@ export interface ToastOptions {
   tag?: string;
   /** C6'b2-2: a variant class (toast `rule-ran`) */
   variant?: string;
+  /** C6'a2-4 (Mika): the whole words when the shown text shortens names: announced, and the text's hover title */
+  said?: string;
 }
 
 export interface ToastHandle {
@@ -55,7 +57,7 @@ export interface ToastHandle {
    * C6'b2-2 (variant rule-ran): the same toast says something new (its text, announced politely; its time starts
    * again). `dropKey`: its key goes (focus on it moves to the toast text). Nothing moves, no new toast is made.
    */
-  update(text: string, o?: { dropKey?: boolean }): void;
+  update(text: string, o?: { dropKey?: boolean; said?: string }): void;
 }
 
 export interface Toasts {
@@ -163,9 +165,9 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
     body.textContent = main;
     if (toastMayClip(main) && kind !== 'fail') {
       // clamped to 4 lines: the full text is in title= (hover), opens on focus (tabindex) and is announced whole
-      body.title = main;
+      body.title = o.said ?? main;
       body.tabIndex = 0;
-    }
+    } else if (o.said !== undefined && o.said !== text) body.title = o.said;
     el.appendChild(body);
     if (next) {
       const n = doc.createElement('span');
@@ -227,9 +229,11 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
       get keyEl() {
         return keyEl;
       },
-      update: (text2: string, u: { dropKey?: boolean } = {}) => {
+      update: (text2: string, u: { dropKey?: boolean; said?: string } = {}) => {
         if (!live.includes(t)) return;
         body.textContent = splitToastText(text2).main;
+        if (u.said !== undefined && u.said !== text2) body.title = u.said;
+        else if (body.tabIndex !== 0) body.title = ''; // a shortened name's whole words go with it
         if (u.dropKey && keyEl) {
           const had = keyEl === doc.activeElement;
           keyEl.remove();
@@ -242,14 +246,16 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
         stopTimer(t);
         t.remaining = toastTtl(kind, persistent);
         startTimer(t);
-        announce(kind, tag ? `${tag}: ${text2}` : text2);
+        const say2 = u.said ?? text2;
+        announce(kind, tag ? `${tag}: ${say2}` : say2);
       },
     };
     live.push(t);
     // newest on top: a new toast goes in at the top and nothing else moves (focus stays where it is)
     region.insertBefore(el, region.firstChild);
     layout();
-    announce(kind, tag ? `${tag}: ${text}` : text);
+    const say = o.said ?? text;
+    announce(kind, tag ? `${tag}: ${say}` : say);
     return t.handle;
   }
 

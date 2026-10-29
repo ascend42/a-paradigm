@@ -160,13 +160,26 @@ export const ruleRanByMerge = (a: RuleRanBy, b: RuleRanBy): RuleRanBy => (a === 
 
 const RULE_RAN_BY: Readonly<Record<RuleRanBy, string>> = Object.freeze({ human: 'by you from /', model: 'by the model', both: 'by you and the model' });
 
+/** Mika (C6'a2-4): the most characters of a tool or server name the rule-ran toast SHOWS (longer: cut, ending in …). */
+export const RULE_RAN_NAME_SHOWN = 28;
+
+/** A name cut to `max` code points, its last one `…` when it was longer (never splits a surrogate pair). */
+export function capName(s: string, max: number = RULE_RAN_NAME_SHOWN): string {
+  const cps = Array.from(s);
+  return cps.length <= max ? s : `${cps.slice(0, max - 1).join('')}…`;
+}
+
 /**
  * "ran by rule · write on fs · by the model"; repeated passes of one rule: "ran 4 times by rule · … · by you and the
  * model" once both authors' calls passed it. WHO it ran for is the kernel's own approval.auto{author} (C6'a2-4): 'human'
- * a "/" run ("by you from /"), absent the model's call; the page never guesses.
+ * a "/" run ("by you from /"), absent the model's call; the page never guesses. Mika (C6'a2-4): the SHOWN text cuts each
+ * name at RULE_RAN_NAME_SHOWN so the who always shows inside the toast's 4 lines; `{ full: true }` keeps the whole names
+ * (the announcement and the hover title; Revoke's accessible name is RULE_RAN_TOAST.keyName, whole too).
  */
-export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number, by: RuleRanBy): string {
-  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${t.tool} on ${t.server} · ${RULE_RAN_BY[by]}`;
+export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number, by: RuleRanBy, o: { full?: boolean } = {}): string {
+  const tool = o.full ? t.tool : capName(t.tool);
+  const server = o.full ? t.server : capName(t.server);
+  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${tool} on ${server} · ${RULE_RAN_BY[by]}`;
 }
 
 /** The Revoke key's request: remove the rule (it only tightens: no presence). */

@@ -2930,12 +2930,13 @@ function ruleRanRow(r: { kind: string; payload?: unknown; principal?: string }):
   if (had?.handle.present) {
     had.n++;
     had.by = ruleRanByMerge(had.by, t.by);
-    if (had.handle.keyEl) had.handle.update(ruleRanText(t, had.n, had.by)); // a Revoke in flight or done keeps its words
+    if (had.handle.keyEl) had.handle.update(ruleRanText(t, had.n, had.by), { said: ruleRanText(t, had.n, had.by, { full: true }) }); // a Revoke in flight or done keeps its words
     return;
   }
   const cls = rulesStatusOf(status).rules.find((x) => x.ruleId === t.ruleId)?.class ?? null;
   const entry = { n: 1, by: t.by as RuleRanBy, handle: null as unknown as ToastHandle };
   entry.handle = toasts().show(ruleRanText(t, 1, entry.by), {
+    said: ruleRanText(t, 1, entry.by, { full: true }),
     kind: RULE_RAN_TOAST.kind(cls),
     variant: 'rule-ran',
     key: {

@@ -1754,7 +1754,10 @@ components:
       mcp: tool of a session this human opened is 'ran by rule · {tool} on
       {server} · by you from / | by the model' (C6'a2-4: who it ran for is
       the row's own author: 'human' a "/" run, absent the model's call; a
-      toast that saw both says 'by you and the model', ruleRanByMerge);
+      toast that saw both says 'by you and the model', ruleRanByMerge;
+      Mika: shown names cut at 28 with … (capName, RULE_RAN_NAME_SHOWN), the
+      whole names in the announcement and title via ToastOptions.said and
+      in Revoke's accessible name);
       warn for a destructive
       rule, else info; one toast per rule updated in place by
       ToastHandle.update ('ran 4 times by rule'); its Revoke key removes the
