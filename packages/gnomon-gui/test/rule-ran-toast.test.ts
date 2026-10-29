@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { cardContentHash, isBrokeredCard, renderCard, toolScopesOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { TAINT_LINE, taintsSession } from '../src/core/slash-runs.js';
 import { chatItems, type Row } from '../src/core/store.js';
-import { RULE_RAN_TOAST, ruleRanOf, ruleRanText, ruleRevokeFailWords, ruleRevokeRequest, TOAST_MAX } from '../src/core/toasts.js';
+import { RULE_RAN_TOAST, ruleRanByMerge, ruleRanOf, ruleRanText, ruleRevokeFailWords, ruleRevokeRequest, TOAST_MAX } from '../src/core/toasts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
@@ -21,19 +21,31 @@ const KERNEL = 'p:0123abcd/kernel';
 
 describe("C6'b2-2: the ran-by-rule toast (core/toasts.ts)", () => {
   it('ruleRanOf reads only approval.auto{modeRef rule:…} for an mcp: tool', () => {
-    expect(ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'mcp:fs/write', inputHash: 'sha256:x', modeRef: 'rule:card:01J' } })).toEqual({ ruleId: 'card:01J', hsid: H, server: 'fs', tool: 'write' });
+    expect(ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'mcp:fs/write', inputHash: 'sha256:x', modeRef: 'rule:card:01J' } })).toEqual({ ruleId: 'card:01J', hsid: H, server: 'fs', tool: 'write', by: 'model' });
     expect(ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'Edit', path: 'a.ts', modeRef: 'mode:auto-edits' } })).toBeNull();
     expect(ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'kernel:gnomon_note', modeRef: 'rule:card:1' } })).toBeNull();
     expect(ruleRanOf({ kind: 'approval.auto.miss', payload: { hsid: H, tool: 'mcp:fs/write', modeRef: 'rule:card:1' } })).toBeNull();
     expect(ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'mcp:f‮s/write', modeRef: 'rule:card:1' } })!.server).not.toContain('‮');
   });
 
-  it('the words: repeated passes in ONE toast; WHO it ran for is never guessed (the kernel names no author)', () => {
+  it("C6'a2-4: WHO it ran for is the row's author: human is a / run, no author the model, anything else never human", () => {
+    const row = (p: Record<string, unknown>) => ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'mcp:fs/write', inputHash: 'sha256:x', modeRef: 'rule:card:01J', callId: 'call:01HZZZZZZZZZZZZZZZZZZZZZZZ', ...p } })!;
+    expect(row({ author: 'human' }).by).toBe('human');
+    expect(row({}).by).toBe('model');
+    expect(row({ author: 'Human' }).by).toBe('model');
+    expect(row({ author: 'model' }).by).toBe('model');
+  });
+
+  it('the words: repeated passes in ONE toast; by you from / | by the model | by you and the model', () => {
     const t = { tool: 'write', server: 'fs' };
-    expect(ruleRanText(t, 1)).toBe('ran by rule · write on fs');
-    expect(ruleRanText(t, 4)).toBe('ran 4 times by rule · write on fs');
-    expect(APP).not.toMatch(/humanRunning|by you from \//);
-    expect(RULE_RAN_TOAST.keyName(t)).toBe('Revoke the rule for write on fs'); // Mika #6
+    expect(ruleRanText(t, 1, 'human')).toBe('ran by rule · write on fs · by you from /');
+    expect(ruleRanText(t, 1, 'model')).toBe('ran by rule · write on fs · by the model');
+    expect(ruleRanText(t, 4, 'both')).toBe('ran 4 times by rule · write on fs · by you and the model');
+    expect(ruleRanByMerge('model', 'model')).toBe('model');
+    expect(ruleRanByMerge('human', 'human')).toBe('human');
+    expect(ruleRanByMerge('model', 'human')).toBe('both');
+    expect(ruleRanByMerge('both', 'model')).toBe('both');
+    expect(RULE_RAN_TOAST.keyName(t)).toBe('Revoke the rule for write on fs'); // Mika #6: the Revoke name never changes
   });
 
   it('a destructive rule (or one not placed) is warn; a mutate rule is info', () => {
@@ -52,7 +64,11 @@ describe("C6'b2-2: the ran-by-rule toast (core/toasts.ts)", () => {
   it('app.ts: one toast per rule, updated in place (never a flood past TOAST_MAX); Revoke once per trusted press', () => {
     expect(TOAST_MAX).toBe(3);
     expect(APP).toContain('ruleRanRow(r); // C6\'b2-2');
-    expect(APP).toContain('const ruleToasts = new Map<string, { n: number; handle: ToastHandle }>()');
+    expect(APP).toContain('const ruleToasts = new Map<string, { n: number; by: RuleRanBy; handle: ToastHandle }>()');
+    // C6'a2-4: a deduped toast folds each pass's author in, so one that saw both says "by you and the model"
+    expect(APP).toContain('had.by = ruleRanByMerge(had.by, t.by);');
+    expect(APP).toContain('had.handle.update(ruleRanText(t, had.n, had.by))');
+    expect(APP).toContain('toasts().show(ruleRanText(t, 1, entry.by), {');
     expect(APP).toContain('ariaLabel: RULE_RAN_TOAST.keyName(t),');
     expect(TOASTS_UI).toContain("if (o.key.ariaLabel) keyEl.setAttribute('aria-label', o.key.ariaLabel);");
     expect(APP).toContain('if (had?.handle.present) {');

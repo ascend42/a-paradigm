@@ -1752,9 +1752,10 @@ components:
       Slice C6'b2-2: variant rule-ran (ruleRanOf, ruleRanText,
       RULE_RAN_TOAST, ruleRevokeRequest): approval.auto{modeRef rule:} for an
       mcp: tool of a session this human opened is 'ran by rule · {tool} on
-      {server}' (who it ran for is not said: approval.auto names no author
-      and shares no call id with its tool.brokered row; it waits on a kernel
-      author field); warn for a destructive
+      {server} · by you from / | by the model' (C6'a2-4: who it ran for is
+      the row's own author: 'human' a "/" run, absent the model's call; a
+      toast that saw both says 'by you and the model', ruleRanByMerge);
+      warn for a destructive
       rule, else info; one toast per rule updated in place by
       ToastHandle.update ('ran 4 times by rule'); its Revoke key removes the
       rule (request.rules.apply{remove}, no presence), named 'Revoke the
