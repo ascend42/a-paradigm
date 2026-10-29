@@ -90,8 +90,12 @@ export function findIdentity() {
   return unique[0];
 }
 
-/** The provisioning profile: decoded, checked for this App ID, the access group and expiry. */
-export function checkProfile(file = PROFILE_PATH) {
+/**
+ * The provisioning profile: decoded, checked for the flavor's App ID, access group and expiry (Aegis S1 L-1: a dev
+ * helper's profile is checked against gnomon.helper.dev / SW4BMQ8PNL.gnomon.dev, never the release values).
+ */
+export function checkProfile(file = PROFILE_PATH, F = helperFlavor(false)) {
+  const { appId: APP_ID, accessGroup: ACCESS_GROUP } = F;
   if (!existsSync(file)) fail(`no provisioning profile at ${file.replace(os.homedir(), '~')}`);
   const cms = run('/usr/bin/security', ['cms', '-D', '-i', file]);
   if (cms.status !== 0) fail('security cms could not decode the provisioning profile');

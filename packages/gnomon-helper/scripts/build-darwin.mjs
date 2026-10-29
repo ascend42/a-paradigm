@@ -82,7 +82,7 @@ writeFileSync(
 let signing = { signed: false };
 if (!unsigned) {
   const identity = findIdentity();
-  const profile = checkProfile(profilePath);
+  const profile = checkProfile(profilePath, F);
   copyFileSync(profile.path, path.join(app, 'Contents', 'embedded.provisionprofile'));
   const ent = path.join(stage, 'helper.entitlements');
   writeFileSync(
