@@ -171,13 +171,13 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops | LoopsHandle {
   const registry = new LoopRegistry({
     home: o.home,
     kernelPrincipal: o.kernelPrincipal,
-    isKernelKey: (k) => o.log.isKernelKey(k),
+    isKernelKey: (k, s) => o.log.isKernelKey(k, s),
     ...(o.root ? { verifyRootRow: (signer: string, row: unknown, sig: string) => o.root!.verifyRow(signer, row, sig) } : {}),
     append: (kind, payload) => append(kind, payload),
     ...(o.diag ? { diag: o.diag } : {}),
     ...(o.rescanMs !== undefined ? { rescanMs: o.rescanMs } : {}),
   });
-  const ledger = new LoopLedger({ kernelPrincipal: o.kernelPrincipal, isKernelKey: (k) => o.log.isKernelKey(k) });
+  const ledger = new LoopLedger({ kernelPrincipal: o.kernelPrincipal, isKernelKey: (k, s) => o.log.isKernelKey(k, s) });
   const rowOf = (e: { kind: string; principal: string; keyId?: string; at?: string; payload?: unknown }): LoopRow => ({ kind: e.kind, principal: e.principal, ...(typeof e.keyId === 'string' ? { keyId: e.keyId } : {}), ...(e.at ? { at: e.at } : {}), payload: e.payload });
   try {
     const seed: LoopRow[] = [];
@@ -210,7 +210,7 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops | LoopsHandle {
     ...(o.strictness ? { strictness: o.strictness } : {}),
     ...(o.model ? { model: o.model } : {}),
     ...(o.humanTurns ? { humanBusy: (repo: string) => humanBusyIn(repo, o.humanTurns!()) } : {}),
-    isKernelKey: (k: string) => o.log.isKernelKey(k),
+    isKernelKey: (k: string, s?: number) => o.log.isKernelKey(k, s),
   });
   // ── #loop-land (step 11): landed shas, undone lands and reported reverts fold from kernel rows ──
   try {
@@ -245,7 +245,7 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops | LoopsHandle {
   // ── #loop-events (build plan step 7, LP4b): event triggers, registered with the trust state like the timers ──
   const closers: Array<() => void> = []; // run by close()
   const events = new LoopEvents({
-    home: o.home, registry, runner, kernelPrincipal: o.kernelPrincipal, isKernelKey: (k) => o.log.isKernelKey(k),
+    home: o.home, registry, runner, kernelPrincipal: o.kernelPrincipal, isKernelKey: (k, s) => o.log.isKernelKey(k, s),
     append: (kind, payload) => append(kind, payload), watch: o.start !== false,
     ...(o.clock ? { clock: o.clock } : {}), ...(o.diag ? { diag: o.diag } : {}),
   });

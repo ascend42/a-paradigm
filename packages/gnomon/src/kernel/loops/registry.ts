@@ -473,7 +473,11 @@ export class LoopRegistry {
   /** One committed row. Only the kernel's own rows count (LL6); a malformed row is ignored. */
   observe(r: LoopRow): void {
     if (r.principal !== this.#o.kernelPrincipal) return;
-    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId, r.seq))) return;
+    // Aegis S2 re-check H-2: a row from a key the kernel no longer trusts (a certless session after the seal) counts
+    // only when it narrows against the current state: a pause of a running loop, the kill switch, a tightening of the
+    // caps already in force. Everything else needs a kernel key.
+    const trusted = !this.#o.isKernelKey || (typeof r.keyId === 'string' && this.#o.isKernelKey(r.keyId, r.seq));
+    if (!trusted && (typeof r.keyId !== 'string' || (r.kind !== 'loop.paused' && r.kind !== 'loop.budget.tightened'))) return;
     const p = r.payload;
     if (!isObj(p)) return;
     if (r.kind === 'session.open') {
@@ -499,6 +503,7 @@ export class LoopRegistry {
       const b = parseTightened(p.budgets);
       if (!contentHash || !CONTENT_HASH.test(contentHash) || !b) return;
       const prev = this.#tightened.get(key);
+      if (!trusted && prev && prev.contentHash !== contentHash) return; // would replace caps in force: not a narrowing
       this.#tightened.set(key, { contentHash, budgets: prev && prev.contentHash === contentHash ? minTightened(prev.budgets, b) : b });
       this.#changed();
       return;
@@ -517,6 +522,7 @@ export class LoopRegistry {
       return;
     }
     const f = this.#fold(key);
+    if (!trusted && f.paused) return; // re-pausing could change a pause's reason (and when it clears): not a narrowing
     const contentHash = str(p.contentHash);
     const ev: TrustEvent = { event: r.kind.slice('loop.'.length) as TrustEvent['event'], loopId, scope, repoKey, ...(contentHash ? { contentHash } : {}), ...(str(p.by) ? { by: str(p.by)! } : {}), ...(str(p.cardId) ? { cardId: str(p.cardId)! } : {}), ...(str(p.reason) ? { reason: str(p.reason)! } : {}), ...(r.at ? { at: r.at } : {}) };
     switch (r.kind) {

@@ -68,3 +68,41 @@ describe('H-3: narrowing rows from any key in the chain', () => {
     for (const [k, p] of [['tool.trust', { op: 'set' }], ['approval.rule.learned', {}], ['approval.rule.enabled', {}], ['approval.strictness.lowered', {}], ['grant.standing', {}], ['permit.grant', {}], ['approval.mode.set', {}]] as const) expect(isNarrowingRow(k, p), k).toBe(false);
   });
 });
+
+describe('re-check H-2: loop rows keep their seq; a loop pause or tightening narrows from any key', () => {
+  const KP2 = 'p:abcdefgh/kernel';
+  const L = 'gkey:v1:' + 'b'.repeat(64); // a sealed legacy key, bounded to seq <= 10
+  const CH = `sha256:${'c'.repeat(64)}`;
+  const CH2 = `sha256:${'d'.repeat(64)}`;
+  const ids = { loopId: 'nightly', scope: 'repo', repoKey: REPO };
+  const mk = async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { LoopRegistry, loopKeyOf } = await import('../src/kernel/loops/registry.js');
+    const home = mkdtempSync(path.join(os.tmpdir(), 'gnomon-narrow-'));
+    const reg = new LoopRegistry({ home, kernelPrincipal: KP2, append: async () => undefined, watch: false, rescanMs: 0, isKernelKey: (k: string, s?: number) => k === A || (k === L && s !== undefined && s <= 10) } as never);
+    return { reg, key: loopKeyOf('repo', REPO, 'nightly') };
+  };
+  it('a pre-seal pause and tightening under a bounded legacy key survive the seal (the seq reaches the check)', async () => {
+    const { reg, key } = await mk();
+    reg.observe({ kind: 'loop.paused', principal: KP2, keyId: L, seq: 5, payload: { ...ids, reason: 'human', by: 'p:abcdefgh/matt' } } as never);
+    reg.observe({ kind: 'loop.budget.tightened', principal: KP2, keyId: L, seq: 6, payload: { ...ids, contentHash: CH, budgets: { run: { rounds: 3 } } } } as never);
+    expect(reg.pauseOf(key)?.reason).toBe('human');
+    expect(reg.tightenedBudgets(key, CH)?.run.rounds).toBe(3);
+  });
+  it('FALSIFIER: from an untrusted key a pause of a running loop and a lower cap count; replacing caps, re-pausing or resuming does not', async () => {
+    const { reg, key } = await mk();
+    reg.observe({ kind: 'loop.budget.tightened', principal: KP2, keyId: A, seq: 20, payload: { ...ids, contentHash: CH, budgets: { run: { rounds: 3 } } } } as never);
+    reg.observe({ kind: 'loop.budget.tightened', principal: KP2, keyId: X, seq: 21, payload: { ...ids, contentHash: CH2, budgets: { run: { rounds: 99 } } } } as never);
+    expect(reg.tightenedBudgets(key, CH)?.run.rounds).toBe(3);
+    reg.observe({ kind: 'loop.budget.tightened', principal: KP2, keyId: X, seq: 22, payload: { ...ids, contentHash: CH, budgets: { run: { rounds: 2 } } } } as never);
+    expect(reg.tightenedBudgets(key, CH)?.run.rounds).toBe(2);
+    reg.observe({ kind: 'loop.paused', principal: KP2, keyId: X, seq: 23, payload: { ...ids, reason: 'human', by: 'p:abcdefgh/matt' } } as never);
+    expect(reg.pauseOf(key)?.reason).toBe('human');
+    reg.observe({ kind: 'loop.paused', principal: KP2, keyId: X, seq: 24, payload: { ...ids, reason: 'content-changed', by: 'kernel' } } as never);
+    expect(reg.pauseOf(key)?.reason).toBe('human');
+    reg.observe({ kind: 'loop.resumed', principal: KP2, keyId: X, seq: 25, payload: { ...ids } } as never);
+    expect(reg.pauseOf(key)).not.toBeNull();
+  });
+});
