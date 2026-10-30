@@ -1,0 +1,91 @@
+{
+  "probe": "p15-sea-peertoken",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "signed": true,
+    "signingNote": null,
+    "seaSignature": {
+      "signed": true,
+      "identifier": "gnomon.kernel.probe",
+      "teamIdentifier": "SW4BMQ8PNL",
+      "adhoc": false,
+      "runtime": true,
+      "entitlements": [
+        "com.apple.security.cs.allow-jit"
+      ],
+      "getTaskAllow": false
+    },
+    "requirement": "identifier \"gnomon.kernel.probe\" and anchor apple generic and certificate leaf[subject.OU] = SW4BMQ8PNL",
+    "positive": {
+      "family": "unix",
+      "ok": true,
+      "peerPid": 33266,
+      "peerSigning": {
+        "identifier": "gnomon.kernel.probe",
+        "team": "SW4BMQ8PNL"
+      },
+      "pid": 33281,
+      "ppid": 33266,
+      "requirement": "identifier \"gnomon.kernel.probe\" and anchor apple generic and certificate leaf[subject.OU] = SW4BMQ8PNL",
+      "soType": "stream",
+      "stdinIsSocket": true,
+      "tokenPid": 33266,
+      "valid": true,
+      "validity": 0
+    },
+    "negativeNode": {
+      "family": "unix",
+      "ok": true,
+      "peerPid": 33282,
+      "peerSigning": {
+        "identifier": "node",
+        "team": "HX7739G8FX"
+      },
+      "pid": 33284,
+      "ppid": 33282,
+      "requirement": "identifier \"gnomon.kernel.probe\" and anchor apple generic and certificate leaf[subject.OU] = SW4BMQ8PNL",
+      "soType": "stream",
+      "stdinIsSocket": true,
+      "tokenPid": 33282,
+      "valid": false,
+      "validity": -67050
+    },
+    "notTheKernel": {
+      "family": "unix",
+      "ok": true,
+      "peerPid": 33285,
+      "peerSigning": {
+        "identifier": "gnomon.kernel.probe",
+        "team": "SW4BMQ8PNL"
+      },
+      "pid": 33286,
+      "ppid": 33285,
+      "requirement": "identifier \"gnomon.kernel\" and anchor apple generic and certificate leaf[subject.OU] = SW4BMQ8PNL",
+      "soType": "stream",
+      "stdinIsSocket": true,
+      "tokenPid": 33285,
+      "valid": false,
+      "validity": -67050
+    },
+    "claims": {
+      "a_stdinIsUnixSocket": true,
+      "b_peerTokenIsTheSea": true,
+      "c_seaPassesRequirement": true,
+      "d_plainNodeFails": true,
+      "d_probeSeaIsNotTheKernel": true
+    },
+    "summary": "P1 PASS: a_stdinIsUnixSocket=true b_peerTokenIsTheSea=true c_seaPassesRequirement=true d_plainNodeFails=true d_probeSeaIsNotTheKernel=true"
+  },
+  "specRefs": [
+    "P8-D68",
+    "TD-2026-10-29-746 S0 P1",
+    "G-ID-13"
+  ],
+  "at": "2026-10-29T22:45:12.818Z"
+}
