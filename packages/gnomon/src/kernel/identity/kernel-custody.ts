@@ -315,8 +315,11 @@ export interface KernelCustodyStatus {
 }
 
 /** The custody verdict from its three inputs. */
-export function custodyOf(cert: KernelCertResult, seal: SealRead, anchorQuarantined: boolean, tampered?: string): Pick<KernelCustodyStatus, 'custody' | 'partialBecause'> {
+export function custodyOf(cert: KernelCertResult, seal: SealRead, anchorQuarantined: boolean, tampered?: string, o: { anchorState?: string; now?: number } = {}): Pick<KernelCustodyStatus, 'custody' | 'partialBecause'> {
   const because: string[] = [];
+  // Aegis S2 L-1: full needs the anchor TRACKING (not merely "not quarantined") and a cert still unexpired at read time
+  if (o.anchorState !== undefined && o.anchorState !== 'tracking' && !anchorQuarantined) because.push(`the log anchor is ${o.anchorState}`);
+  if (cert.cert && o.now !== undefined && cert.expiresAt && !(o.now < Date.parse(cert.expiresAt))) because.push('the kernel cert has expired (restart Gnomon to renew it)');
   if (tampered) because.push(`the seal is missing or tampered (${tampered})`);
   if (!cert.cert) because.push(`no kernel cert (${cert.why ?? 'none'})`);
   if (seal.state !== 'sealed') because.push(seal.state === 'none' ? 'kernel-pub.jsonl is not sealed yet (the one-time card)' : `the seal does not verify (${seal.why})`);

@@ -218,6 +218,10 @@ describe('the seal (G-ID-14): kernel-pub.jsonl after the migration card', () => 
     expect(custodyOf({ cert: null, why: 'not-sea' }, seal, false).custody).toBe('partial');
     expect(custodyOf({ cert }, { state: 'none' }, false).custody).toBe('partial');
     expect(custodyOf({ cert: issue(certKey(), SoftwareEd25519Signer.generate()) }, seal, false).custody).toBe('partial');
+    // Aegis S2 L-1: the anchor must be tracking, and the cert unexpired when status is read
+    expect(custodyOf({ cert, expiresAt: new Date(Date.now() + 1000).toISOString() }, seal, false, undefined, { anchorState: 'tracking', now: Date.now() }).custody).toBe('full');
+    expect(custodyOf({ cert }, seal, false, undefined, { anchorState: 'unavailable' }).custody).toBe('partial');
+    expect(custodyOf({ cert, expiresAt: new Date(Date.now() - 1).toISOString() }, seal, false, undefined, { anchorState: 'tracking', now: Date.now() }).custody).toBe('partial');
   });
 });
 

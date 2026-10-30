@@ -583,7 +583,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     return { state: a.state, ...(a.verdict ? { verdict: a.verdict } : {}), ...(a.why ? { why: a.why } : {}), ...(a.resolve ? { resolve: a.resolve } : {}) };
   };
   const custodyStatus = (): KernelCustodyStatus => {
-    const c = custodyOf(certResult, sealRead, logAnchor.quarantined, custody.mode === 'tampered' ? custody.why : undefined);
+    const c = custodyOf(certResult, sealRead, logAnchor.quarantined, custody.mode === 'tampered' ? custody.why : undefined, { anchorState: logAnchor.status().state, now: Date.now() });
     return {
       ...c,
       cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
