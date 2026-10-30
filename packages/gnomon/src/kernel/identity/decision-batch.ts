@@ -239,6 +239,56 @@ export function clickKeyedRefusal(signerKeyId: string, message: Buffer): string 
   return clickDecisionRefusal(message);
 }
 
+/** The parsed fields of a gnomon:approve:v2 click preimage, or null when it is not one. */
+export function parseClickApprove(m: Buffer): { cardId: string; cardKind: string; cardClass: string; decision: string; contentHash: string; approver: string; answerDigest?: string } | null {
+  const d = Buffer.from(CLICK_APPROVE_DOMAIN, 'utf8');
+  if (m.length < d.length || !m.subarray(0, d.length).equals(d)) return null;
+  const f = m.subarray(d.length).toString('utf8').split('\n');
+  if ((f.length !== 6 && f.length !== 7) || f.some((x) => x === '' || Buffer.byteLength(x) > 256)) return null;
+  return { cardId: f[0]!, cardKind: f[1]!, cardClass: f[2]!, decision: f[3]!, contentHash: f[4]!, approver: f[5]!, ...(f[6] !== undefined ? { answerDigest: f[6] } : {}) };
+}
+
+/** What a card record says about itself, as the click verifier reads it (the logged approval.request card). */
+export interface ClickCardRecord {
+  cardId: string;
+  kind: string;
+  contentHash?: string;
+  flags?: readonly string[];
+  detail?: Record<string, unknown>;
+}
+
+/**
+ * Aegis S2 M-1: the kind a click preimage must name for this card record: its kind, or the root kind a grant or
+ * strictness card's detail makes it (broker.ts rootKindOf), so a voice enrolment raised on a strictness card can never
+ * pass as a strictness click.
+ */
+export function clickKindOf(card: Pick<ClickCardRecord, 'kind' | 'detail'>): string {
+  const d = card.detail ?? {};
+  if (card.kind === 'grant') return d.action === 'mod.uninstall' ? 'uninstall' : d.action === 'mod.mcp.config' ? 'mod.mcp.config' : d.action === 'local.config' ? 'local.config' : d.action === 'kernel-custody' ? 'kernel-custody' : d.action === 'log.quarantine' ? 'log.quarantine' : 'grant';
+  if (card.kind === 'strictness' && d.op === 'voice.enrol') return 'voice.enrol';
+  return card.kind;
+}
+
+/** Aegis S2 M-1: the class a card record carries (an irreversible flag, which a destructive card also sets, else reversible). */
+export function clickClassOf(card: Pick<ClickCardRecord, 'flags'>): 'reversible' | 'irreversible' {
+  return (card.flags ?? []).includes('irreversible') ? 'irreversible' : 'reversible';
+}
+
+/**
+ * Aegis S2 M-1: a click decision verifies only when its approve:v2 preimage names THIS card: its id, its content hash,
+ * the kind clickKindOf gives and the class clickClassOf gives, and passes the click rule. null = it does.
+ */
+export function clickCardRefusal(message: Buffer, card: ClickCardRecord): string | null {
+  const why = clickDecisionRefusal(message);
+  if (why) return why;
+  const a = parseClickApprove(message)!;
+  if (a.cardId !== card.cardId) return 'the click decision names another card';
+  if (card.contentHash !== undefined && a.contentHash !== card.contentHash) return "the click decision names another content hash than the card's";
+  if (a.cardKind !== clickKindOf(card)) return "the click decision's card kind is not the card's";
+  if (a.cardClass !== clickClassOf(card)) return "the click decision's card class is not the card's";
+  return null;
+}
+
 const B64_STRICT = /^[A-Za-z0-9+/]+={0,2}$/;
 /** helper 1.11.0: the kernel-custody rows [cert-key row, legacy row] (mirror of kernelCustodyRefusal). null = allowed. */
 export function kernelCustodyRefusal(rows: readonly Row[]): string | null {

@@ -55,6 +55,7 @@ import {
   decisionMessageV2,
   KEY_ID_PATTERN,
 } from '@a-company/gnomon-contracts';
+import { clickKeyedRefusal } from '../identity/decision-batch.js';
 
 /** The §3.1 signature domains (the prefix before the first `\n`). */
 export const SIGNATURE_DOMAINS = {
@@ -87,6 +88,18 @@ export const SIGNATURE_DOMAINS = {
    * verified one. Kernel-internal (not in clientApiId).
    */
   presence: 'gnomon:presence:v1',
+  /**
+   * TD-2026-10-29-894 / Aegis S1 M1 (helper 1.11.0): a CLICK decision — `gnomon:approve:v2` names the card kind and
+   * class in its preimage (decision-batch.ts clickApproveMessage). Only the helper's click key signs it (no key class
+   * here may); verifiers read it through KeyRing.verify, which runs clickKeyedRefusal on every click-keyed signature.
+   */
+  approveClick: 'gnomon:approve:v2',
+  /**
+   * Aegis S2 M-2 (helper 1.11.1): the kernel key signs the genesis row that moves the helper's log anchor to its new
+   * log (`gnomon:log-genesis:v1\n` + canonical JSON of the gnomon-log-genesis:v1 row); the helper checks it against the
+   * key it certified. Kernel-internal.
+   */
+  logGenesis: 'gnomon:log-genesis:v1',
 } as const;
 export type SignatureDomain = keyof typeof SIGNATURE_DOMAINS;
 
@@ -95,7 +108,7 @@ export type KeyClass = 'kernel' | 'root' | 'approvals' | 'device' | 'agent' | 'r
 
 /** Which domains each key class may sign (§3.1 "Signs:" per class). */
 export const DOMAINS_BY_KEY_CLASS: Readonly<Record<KeyClass, readonly SignatureDomain[]>> = Object.freeze({
-  kernel: Object.freeze(['event', 'authServer', 'brief', 'cardAction', 'presencePrompt', 'permit'] as const),
+  kernel: Object.freeze(['event', 'authServer', 'brief', 'cardAction', 'presencePrompt', 'permit', 'logGenesis'] as const),
   root: Object.freeze(['row', 'event'] as const), // round 2 M1: the root never attests presence
   approvals: Object.freeze(['approve', 'approveVoice', 'event', 'presence'] as const),
   device: Object.freeze(['auth', 'event'] as const),
@@ -183,6 +196,12 @@ export function ed25519KeyId(publicKeyPem: string): string {
   return `gkey:v1:${createHash('sha256').update(normalizePem(publicKeyPem), 'utf8').digest('hex')}`;
 }
 
+/** TD-2026-10-29-894 (helper ClickKeys.put): a click key's id, `click:` + the first 32 hex of sha256(X9.63 public key). */
+export const CLICK_KEY_ID_PATTERN = /^click:[0-9a-f]{32}$/;
+export function clickKeyId(x963: Uint8Array): string {
+  return `click:${createHash('sha256').update(x963).digest('hex').slice(0, 32)}`;
+}
+
 /** keyId for a P-256 public key: `gkey-p256:v1:` + sha256(spki DER). */
 export function p256KeyId(publicKey: KeyObject): string {
   const der = publicKey.export({ type: 'spki', format: 'der' });
@@ -253,11 +272,42 @@ export class KeyRing {
     return keyId;
   }
 
+  /**
+   * A helper click key (X9.63 P-256, 65 bytes; TD-2026-10-29-894). Its signatures are DER ECDSA (SecKeyCreateSignature)
+   * and verify ONLY through the click rule (verify below).
+   */
+  addClick(x963: Uint8Array): string {
+    const raw = Buffer.from(x963);
+    if (raw.length !== 65 || raw[0] !== 0x04) throw new Error('#kernel-log: a click key is a P-256 X9.63 public key');
+    const key = createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: raw.subarray(1, 33).toString('base64url'), y: raw.subarray(33).toString('base64url') }, format: 'jwk' });
+    const keyId = clickKeyId(raw);
+    this.#keys.set(keyId, key);
+    return keyId;
+  }
+
   has(keyId: string): boolean {
     return this.#keys.has(keyId);
   }
 
+  /**
+   * Aegis S2 M-1: EVERY signature check in the kernel goes through here, so the click rule runs on every approval and
+   * row verify path: a click-keyed signature verifies only over a click-signable gnomon:approve:v2 message
+   * (decision-batch.ts clickKeyedRefusal), never over a row-sig, approve:v1, presence, voice or event message, whatever
+   * the signature. A caller that holds the card record checks it with clickCardRefusal too.
+   */
   verify(keyId: string, domain: SignatureDomain, message: string, sig: Uint8Array): 'ok' | 'bad' | 'unknown-key' {
+    if (keyId.startsWith('click:')) {
+      if (!CLICK_KEY_ID_PATTERN.test(keyId)) return 'unknown-key';
+      const key = this.#keys.get(keyId);
+      if (!key) return 'unknown-key';
+      const data = signaturePreimage(domain, message);
+      if (clickKeyedRefusal(keyId, data) !== null) return 'bad';
+      try {
+        return cryptoVerify('sha256', data, { key, dsaEncoding: 'der' }, sig) ? 'ok' : 'bad';
+      } catch {
+        return 'bad';
+      }
+    }
     if (!KEY_ID_PATTERN.test(keyId)) return 'unknown-key';
     const key = this.#keys.get(keyId);
     if (!key) return 'unknown-key';

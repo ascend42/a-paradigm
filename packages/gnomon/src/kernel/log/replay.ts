@@ -73,7 +73,7 @@
 import { canonicalJson, EVENT_KINDS, isPlainObject, parseApproveScope, scopeDigest, sha256Tagged } from '@a-company/gnomon-contracts';
 import { verifyLog, type VerifiedRow, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
 import { contentHashOf } from '../broker/card.js';
-import { decisionRowV2, rowsDigestOf } from '../identity/decision-batch.js';
+import { clickApproveMessage, clickCardRefusal, clickClassOf, clickKindOf, decisionRowV2, rowsDigestOf, type ClickCardRecord } from '../identity/decision-batch.js';
 import { LOOP_REPLAY_KINDS, replayLoopRuns, type LoopReplayRun } from '../loops/ledger.js';
 import { answerDigest, approveMessage, decisionMessage, usesDecisionV2, type KeyRing } from './signer.js';
 
@@ -183,7 +183,7 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
 }
 
 /** Divergences of the decisionSig check (P8-D98). */
-export type DecisionSigDivergence = 'decision-sig-bad' | 'decision-sig-v1-after-cutover' | 'decision-sig-unverifiable';
+export type DecisionSigDivergence = 'decision-sig-bad' | 'decision-sig-v1-after-cutover' | 'decision-sig-unverifiable' | 'decision-sig-click-refused';
 
 /** The P8-D98 reservation tag: a kind carrying it is written only by a P8-D98 kernel (a cutover marker). */
 const D98_TAG = '8.0:P8-D98';
@@ -201,8 +201,22 @@ export interface DecisionKeys {
 export function checkDecisionSigs(rows: Iterable<Row>, keyRing: KeyRing, keys: DecisionKeys): { divergences: ReplayDivergence[]; cutoverSeq?: number } {
   const divergences: ReplayDivergence[] = [];
   let cutoverSeq: number | undefined;
+  /** Aegis S2 M-1: the logged card records, so a click decision is checked against the card it names */
+  const cards = new Map<string, ClickCardRecord>();
   for (const r of rows) {
     if (cutoverSeq === undefined && isD98Kind(r.kind)) cutoverSeq = r.seq;
+    if (r.kind === 'approval.request') {
+      try {
+        const e = JSON.parse(r.envelope) as Record<string, unknown>;
+        const c = isPlainObject(e.payload) && isPlainObject((e.payload as Record<string, unknown>).card) ? ((e.payload as Record<string, unknown>).card as Record<string, unknown>) : null;
+        if (c && typeof c.cardId === 'string' && typeof c.kind === 'string') {
+          cards.set(c.cardId, { cardId: c.cardId, kind: c.kind, ...(typeof c.contentHash === 'string' ? { contentHash: c.contentHash } : {}), ...(Array.isArray(c.flags) ? { flags: c.flags.filter((x): x is string => typeof x === 'string') } : {}), ...(isPlainObject(c.detail) ? { detail: c.detail as Record<string, unknown> } : {}) });
+        }
+      } catch {
+        // foldReplay reports a malformed envelope
+      }
+      continue;
+    }
     if (r.kind !== 'approval.decide') continue;
     const div = (reason: DecisionSigDivergence, detail: string): void => void divergences.push({ seq: r.seq, reason, detail });
     let pl: Record<string, unknown>;
@@ -220,6 +234,30 @@ export function checkDecisionSigs(rows: Iterable<Row>, keyRing: KeyRing, keys: D
     const sigB64 = str(pl.decisionSig);
     if (!cardId || !decision || !by || !contentHash || !sigB64) {
       div('decision-sig-unverifiable', 'approval.decide lacks cardId, decision, by, contentHash or decisionSig');
+      continue;
+    }
+    if (typeof pl.clickKeyId === 'string') {
+      // Aegis S2 M-1 (TD-2026-10-29-894): a click decision verifies only over the approve:v2 preimage rebuilt from the
+      // LOGGED card (its kind and class, never a row field), only through the click rule, and only under that click key
+      const card = cards.get(cardId);
+      if (!card) {
+        div('decision-sig-unverifiable', `a click decision for ${cardId} has no logged card`);
+        continue;
+      }
+      if ((pl.cardKind !== undefined && pl.cardKind !== clickKindOf(card)) || (pl.cardClass !== undefined && pl.cardClass !== clickClassOf(card))) {
+        div('decision-sig-click-refused', "the click decision's card kind or class is not the logged card's");
+        continue;
+      }
+      const digest = str(pl.noteHash) ?? (typeof pl.note === 'string' ? answerDigest(pl.note) : undefined);
+      const m = clickApproveMessage({ cardId, cardKind: clickKindOf(card), cardClass: clickClassOf(card), decision, contentHash, approver: by, ...(digest !== undefined ? { answerDigest: digest } : {}) });
+      const why = clickCardRefusal(m, card);
+      if (why) {
+        div('decision-sig-click-refused', why);
+        continue;
+      }
+      const v = keyRing.verify(pl.clickKeyId, 'approveClick', m.subarray('gnomon:approve:v2\n'.length).toString('utf8'), Buffer.from(sigB64, 'base64'));
+      if (v === 'unknown-key') div('decision-sig-unverifiable', `no click key ${pl.clickKeyId.slice(0, 40)}`);
+      else if (v !== 'ok') div('decision-sig-bad', 'a click decisionSig does not verify over its approve:v2 message');
       continue;
     }
     const keyIds = keys.keyIdsFor(by).filter((k) => keyRing.has(k));
