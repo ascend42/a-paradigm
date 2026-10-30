@@ -59,7 +59,7 @@ export class StrictnessBook {
 
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId)) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId, r.seq)) return;
     if (r.kind !== 'approval.strictness.raised' && r.kind !== 'approval.strictness.lowered') return;
     const p = obj(r.payload);
     if (!p || typeof p.repo !== 'string' || !('to' in p)) return;

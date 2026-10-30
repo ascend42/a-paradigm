@@ -45,7 +45,7 @@ const keyOf = (repoKey: string, tool: string, bindHash: string): string => `${re
 
 export interface PolicySigner {
   principal: string;
-  isKernelKey: (keyId: string) => boolean;
+  isKernelKey: (keyId: string, seq?: number) => boolean;
 }
 
 /** The result policy of each (repo, tool, binding), DERIVED from kernel-signed tool.result.policy rows only. */
@@ -61,7 +61,7 @@ export class ResultPolicyBook {
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
     if (r.kind !== 'tool.result.policy') return;
-    if (r.principal !== this.#k.principal || typeof r.keyId !== 'string' || !this.#k.isKernelKey(r.keyId)) return;
+    if (r.principal !== this.#k.principal || typeof r.keyId !== 'string' || !this.#k.isKernelKey(r.keyId, r.seq)) return;
     const p = isObj(r.payload) ? r.payload : null;
     if (!p || typeof p.repoKey !== 'string' || !SHA256_TAGGED_PATTERN.test(p.repoKey) || typeof p.tool !== 'string' || !BROKERED_TOOL.test(p.tool) || typeof p.bindHash !== 'string' || !SHA256_TAGGED_PATTERN.test(p.bindHash)) return;
     if (!(TOOL_RESULT_POLICIES as readonly unknown[]).includes(p.policy)) return;

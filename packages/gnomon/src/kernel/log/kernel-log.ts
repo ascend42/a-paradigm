@@ -312,6 +312,14 @@ export interface KernelLogOptions {
   keystoreTimeoutMs?: number;
   /** Earlier kernel key ids (rotated keys) accepted on kernel-principal rows at verify; the signer's own key is added. */
   kernelKeyIds?: readonly string[];
+  /**
+   * Aegis S2 H-2 (#kernel-custody): a sealed LEGACY kernel key is kernel-authored only up to the seal: rows of log
+   * `logId` with seq <= `maxSeq`. Past it, or in another log, its rows are not kernel-authored (verify flags
+   * kernel-key; isKernelKey is false). Keys not listed are unbounded.
+   */
+  kernelKeyBounds?: Readonly<Record<string, { maxSeq: number; logId: string }>>;
+  /** Aegis S2 H-2: the custody label per kernel key id (rowCustody); history before the seal is `legacy` (partial). */
+  kernelKeyLabels?: Readonly<Record<string, 'certified' | 'legacy' | 'partial'>>;
   clock?: () => number;
   /** PASSIVE WAL checkpoint after this many ms without an append (default 250). */
   checkpointIdleMs?: number;
@@ -739,8 +747,18 @@ export class KernelLog {
   }
 
   /** Is this one of the kernel's signing keys (current or recorded)? */
-  isKernelKey(keyId: string): boolean {
-    return this.#kernelKeyIds().includes(keyId);
+  isKernelKey(keyId: string, seq?: number): boolean {
+    if (!this.#kernelKeyIds().includes(keyId)) return false;
+    // Aegis S2 H-2: a legacy key is kernel-authored only within its seal bound (fail closed without a seq)
+    const b = this.#opts.kernelKeyBounds?.[keyId];
+    return !b || (b.logId === this.#meta.log && seq !== undefined && seq <= b.maxSeq);
+  }
+
+  /** Aegis S2 H-2: the custody label of a row signed by `keyId` at `seq`: certified, legacy (partial), partial, or null (not kernel-authored). */
+  rowCustody(keyId: string, seq: number): 'certified' | 'legacy' | 'partial' | null {
+    if (!this.isKernelKey(keyId, seq)) return null;
+    if (this.#opts.signer && keyId === this.#opts.signer.keyId) return this.#opts.kernelKeyLabels?.[keyId] ?? 'partial';
+    return this.#opts.kernelKeyLabels?.[keyId] ?? 'partial';
   }
 
   /**
@@ -2063,7 +2081,7 @@ export class KernelLog {
   /** `gnomon log verify`: the full chain (every segment + both anchors), or one segment. */
   verify(opts: { segment?: number } = {}): VerifyReport {
     const kernelKeyIds = this.#kernelKeyIds();
-    return verifyLogWith(this.home, { keyRing: this.#keyRing, segment: opts.segment, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds }, this.#keystoreAnchor);
+    return verifyLogWith(this.home, { keyRing: this.#keyRing, segment: opts.segment, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds, ...(this.#opts.kernelKeyBounds ? { kernelKeyBounds: this.#opts.kernelKeyBounds } : {}) }, this.#keystoreAnchor);
   }
 
   /**
@@ -2194,6 +2212,8 @@ export interface VerifyLogOptions {
   segment?: number;
   kernelPrincipal?: string;
   kernelKeyIds?: readonly string[];
+  /** Aegis S2 H-2: legacy kernel keys bounded to their seal (see KernelLogOptions.kernelKeyBounds). */
+  kernelKeyBounds?: Readonly<Record<string, { maxSeq: number; logId: string }>>;
   /**
    * Called once per row, in seq order, with the exact bytes this pass checked
    * (M1.12 replay folds inside verify's single pass, Aegis C2). A consumer
@@ -2226,7 +2246,7 @@ export function verifyLog(
  */
 function verifyLogWith(home: string, opts: VerifyLogOptions, keystoreAnchor: AnchorStore): VerifyReport {
   // S34-06: rows by the kernel principal must be signed by a kernel key (checked when the kernel key ids are known)
-  const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds) } : undefined;
+  const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds), bounds: opts.kernelKeyBounds } : undefined;
   const failures: VerifyFailure[] = [];
   const fail = (f: VerifyFailure): void => {
     if (failures.length < 1000) failures.push(f);
@@ -2306,7 +2326,7 @@ function verifyRows(
   meta: Meta,
   keyRing: KeyRing,
   fail: (f: VerifyFailure) => void,
-  kernel?: { principal: string; keyIds: ReadonlySet<string> },
+  kernel?: { principal: string; keyIds: ReadonlySet<string>; bounds?: Readonly<Record<string, { maxSeq: number; logId: string }>> },
   onRow?: (row: VerifiedRow) => void,
 ): { rows: number; lastSeq: number; lastHash: string; lastKind: string | null; ok: boolean } {
   let expectSeq = meta.baseSeq;
@@ -2368,7 +2388,9 @@ function verifyRows(
       const v = keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64'));
       if (v === 'unknown-key') bad('unknown-key', r.seq, `signature by unknown key ${keyId || '(none)'}`);
       else if (v === 'bad') bad('sig', r.seq, 'signature does not verify');
-      if (kernel && r.principal === kernel.principal && !kernel.keyIds.has(keyId)) bad('kernel-key', r.seq, `kernel-principal row signed by ${keyId || '(none)'}, not a kernel key`);
+      const bound = kernel?.bounds?.[keyId];
+      if (kernel && bound && (r.seq > bound.maxSeq || meta.log !== bound.logId)) bad('kernel-key', r.seq, `row signed by legacy kernel key ${keyId} past its seal (seq ${bound.maxSeq} of ${bound.logId})`);
+      else if (kernel && r.principal === kernel.principal && !kernel.keyIds.has(keyId)) bad('kernel-key', r.seq, `kernel-principal row signed by ${keyId || '(none)'}, not a kernel key`);
       else if (kernel && RESERVED_KINDS.includes(r.kind) && (r.principal !== kernel.principal || !kernel.keyIds.has(keyId))) {
         bad('reserved-binding', r.seq, `${r.kind} must be appended by the kernel principal with a kernel key`);
       }

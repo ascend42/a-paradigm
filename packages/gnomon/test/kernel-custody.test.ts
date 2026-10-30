@@ -276,6 +276,34 @@ describe('H-1: the seal on the anchored log cannot be rolled back', () => {
   });
 });
 
+describe('H-2: a legacy key is kernel-authored only up to the seal', () => {
+  const KP = 'p:00000000/kernel';
+  it('FALSIFIER: a legacy-key row past headSeq, or under another log id, is not kernel-authored; labels per row', async () => {
+    const h = home();
+    const a = SoftwareEd25519Signer.generate('kernel');
+    const ring = new KeyRing();
+    ring.addEd25519(a.publicKeyPem);
+    const l1 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: a, keyRing: ring, kernelKeyIds: [a.keyId] });
+    for (let i = 0; i < 4; i++) await l1.append({ kind: 'session.open', principal: KP });
+    const logId = l1.logId;
+    await l1.close();
+    const b = SoftwareEd25519Signer.generate('kernel');
+    const l2 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: b, keyRing: ring, kernelKeyIds: [a.keyId], kernelKeyBounds: { [a.keyId]: { maxSeq: 2, logId } }, kernelKeyLabels: { [a.keyId]: 'legacy', [b.keyId]: 'certified' } });
+    expect(l2.isKernelKey(a.keyId, 2)).toBe(true);
+    expect(l2.isKernelKey(a.keyId, 3)).toBe(false);
+    expect(l2.isKernelKey(a.keyId)).toBe(false); // no seq: fail closed
+    expect(l2.rowCustody(a.keyId, 1)).toBe('legacy');
+    expect(l2.rowCustody(a.keyId, 4)).toBeNull();
+    expect(l2.rowCustody(b.keyId, 9)).toBe('certified');
+    const v = l2.verify();
+    expect(v.failures.filter((f) => f.code === 'kernel-key').map((f) => f.seq)).toEqual([3, 4]);
+    await l2.close();
+    const l3 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: b, keyRing: ring, kernelKeyIds: [a.keyId], kernelKeyBounds: { [a.keyId]: { maxSeq: 99, logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZB' } } });
+    expect(l3.isKernelKey(a.keyId, 1)).toBe(false);
+    await l3.close();
+  });
+});
+
 describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog on its own', () => {
   const KP = 'p:00000000/kernel';
   async function logWith(rows: number): Promise<{ log: KernelLog; h: string }> {

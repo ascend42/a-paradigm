@@ -262,7 +262,7 @@ export type KernelClock = () => number;
 
 export interface KernelTrust {
   principal: string;
-  isKernelKey: (keyId: string) => boolean;
+  isKernelKey: (keyId: string, seq?: number) => boolean;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -299,7 +299,7 @@ export class RuleBook {
   /** Fold one chain row. Rows not signed by the kernel are ignored. */
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId)) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId, r.seq)) return;
     const p = obj(r.payload);
     if (!p) return;
     if (r.kind === 'approval.request') {

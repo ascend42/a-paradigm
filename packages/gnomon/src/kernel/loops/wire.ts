@@ -54,7 +54,7 @@ export interface LoopsLog {
   append(input: { kind: string; principal: string; payload: unknown; connId?: string }): Promise<unknown>;
   read(q: { reader: { class: 'human' }; kinds: string[] }): Iterable<{ view: string; event?: { kind: string; principal: string; keyId?: string; at?: string; payload?: unknown } }>;
   onCommit(listener: (e: { kind: string; principal: string; keyId?: string; at?: string; payload?: unknown }) => void): unknown;
-  isKernelKey(keyId: string): boolean;
+  isKernelKey(keyId: string, seq?: number): boolean;
 }
 
 export interface WireLoopsOptions {

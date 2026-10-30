@@ -141,7 +141,7 @@ const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeo
 
 export interface KernelTrustLike {
   principal: string;
-  isKernelKey: (keyId: string) => boolean;
+  isKernelKey: (keyId: string, seq?: number) => boolean;
 }
 
 /**
@@ -161,7 +161,7 @@ export class RunModeBook {
 
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId)) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId, r.seq)) return;
     const p = obj(r.payload);
     if (!p) return;
     if (r.kind === 'approval.mode.set') {

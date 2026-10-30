@@ -67,7 +67,7 @@ export function bindingOf(b: { id: string; launchHash: string; pluginVersion: st
 
 export interface KernelSigner {
   principal: string;
-  isKernelKey: (keyId: string) => boolean;
+  isKernelKey: (keyId: string, seq?: number) => boolean;
 }
 
 /** The trust of each server, DERIVED from kernel-signed tool.trust rows only. */
@@ -85,7 +85,7 @@ export class TrustBook {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
     if (r.kind !== 'tool.trust') return;
     // a row not signed by the kernel's principal AND one of its keys widens nothing (a forged row is ignored)
-    if (r.principal !== this.#k.principal || typeof r.keyId !== 'string' || !this.#k.isKernelKey(r.keyId)) return;
+    if (r.principal !== this.#k.principal || typeof r.keyId !== 'string' || !this.#k.isKernelKey(r.keyId, r.seq)) return;
     const p = isObj(r.payload) ? r.payload : null;
     if (!p || typeof p.id !== 'string' || !TOOL_TRUST_ID_PATTERN.test(p.id)) return;
     if (p.op === 'set') {

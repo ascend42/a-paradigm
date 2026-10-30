@@ -544,7 +544,14 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const keyRing = new KeyRing();
     const pubs = readKernelPubs(home, { seal: custody.seal });
     for (const k of pubs) keyRing.addEd25519(k.publicKeyPem);
-    log = KernelLog.open({ home, kernelPrincipal, signer: kernelSigner, keyRing, kernelKeyIds: pubs.map((k) => k.keyId) });
+    // Aegis S2 H-2: legacy keys are kernel-authored only up to the seal; each key carries its custody label
+    const bounds: Record<string, { maxSeq: number; logId: string }> = {};
+    const labels: Record<string, 'certified' | 'legacy' | 'partial'> = {};
+    for (const k of pubs) {
+      if (k.custody) labels[k.keyId] = k.custody;
+      if (k.custody === 'legacy' && custody.seal) bounds[k.keyId] = { maxSeq: custody.seal.headSeq, logId: custody.seal.logId };
+    }
+    log = KernelLog.open({ home, kernelPrincipal, signer: kernelSigner, keyRing, kernelKeyIds: pubs.map((k) => k.keyId), kernelKeyBounds: bounds, kernelKeyLabels: labels });
   } catch (err) {
     releaseDaemonLock(home, pidfile);
     throw err;
@@ -991,7 +998,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         if (v.view === 'full') yield { kind: v.event.kind, at: v.event.at, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), payload: (v.event.payload ?? {}) as Record<string, unknown> };
       }
     })(),
-    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
+    { principals: kernelPrincipals, isKernelKey: (k, seq) => log.isKernelKey(k, seq) },
   );
   // P8-D91: an agent's spend lands in its human's user bucket. Its parent is not known at dispatch before
   // M1.7, so it is attributed to the root's human principal (8.0 is single-human: the founder).
@@ -1022,7 +1029,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const localRemoved = (): number => localChainRemoved(localRows());
   const localEmit = (kind: string, payload: Record<string, unknown>): void => void appendRow(kind, payload).catch(() => undefined);
   let localCfg: LoadedLocalConfig = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), chainRemoved: localRemoved() });
-  const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   // S-L1: fold the KERNEL-signed approval.* rows appended since the last catch-up (rules.ts); shared by the
   // supervisor's exact-match check and the rules.revoke handler, so both read one book
   const syncRuleBook = (): RuleBook => {
@@ -1032,17 +1039,17 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   };
   // slice C5'a1 (#mcp-servers trust, Arky 8): the TrustBook folds KERNEL-signed tool.trust rows; it catches up HERE,
   // before any local session can index or start a pool, and every later read catches up again (a fold re-narrows)
-  const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
+  const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
   mcpTrust.sync();
   // slice C6'a2-1 (#local-result-policy): the human's "/" result policy, folded from KERNEL-signed tool.result.policy rows
-  const resultPolicy = new ResultPolicy({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: resultPolicySourceOf(log), append: (kind, payload) => appendRow(kind, payload) });
+  const resultPolicy = new ResultPolicy({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq), source: resultPolicySourceOf(log), append: (kind, payload) => appendRow(kind, payload) });
   resultPolicy.sync();
   // slice C5'a1: the one tools/list cache (LocalLane's sessions list into it; request.mcp.trust reads its newest per id)
   const mcpListCache = new McpListCache();
   // P8-D86/D87 run modes: folded from KERNEL-signed approval.mode.set / session.open{runMode} rows (a repo's mode
   // persists across sessions and restarts); strictness levels are not built (no level source ⇒ the ceiling permits
   // every mode). The control is the request.mode.set handler (dispatcher `requests`) and the session port's runMode.
-  const modeBook = new RunModeBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const modeBook = new RunModeBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   const syncModeBook = (): RunModeBook => {
     catchUp(modeBook, modeSourceOf(log));
     return modeBook;
@@ -1050,7 +1057,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // M2.11-lite (#strictness-levels): per-repo levels folded from KERNEL-signed approval.strictness.* rows (default
   // L0); the human's request.strictness.set tightens at once and loosens through a fresh-presence card. The level
   // feeds the run-mode ceiling below and the loops' effective autonomy; a raise is the repo brake (loops pause).
-  const strictnessBook = new StrictnessBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const strictnessBook = new StrictnessBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   const syncStrictnessBook = (): StrictnessBook => {
     catchUp(strictnessBook, strictnessSourceOf(log));
     return strictnessBook;
@@ -1083,7 +1090,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // TD-2026-10-20-086 F6 (#standing-grant): the daily standing grant, folded from KERNEL-signed grant.standing* rows
   // only; the broker asks it before any presence prompt and writes its notify row after approval.decide.
-  const standingBook = new StandingGrantBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const standingBook = new StandingGrantBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   const standingGrants = new StandingGrants({
     broker,
     book: () => {
@@ -1201,7 +1208,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         (function* () {
           for (const v of log.read({ reader: { class: 'human' }, kinds: ['gate-class.decided'] })) if (v.view === 'full') yield { principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
         })(),
-        { principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) },
+        { principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) },
         repoKey,
         setHash,
       ),
@@ -1777,7 +1784,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), at: v.event.at, payload: v.event.payload };
       }
     })(),
-    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
+    { principals: kernelPrincipals, isKernelKey: (k, seq) => log.isKernelKey(k, seq) },
   );
   let orphanSweep: { orphans: number; stopped: number };
   try {

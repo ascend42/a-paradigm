@@ -87,7 +87,7 @@ export interface LoopLanderOptions {
   /** the Gnomon home (the park repo lives under it) */
   home: string;
   kernelPrincipal: string;
-  isKernelKey?: (keyId: string) => boolean;
+  isKernelKey?: (keyId: string, seq?: number) => boolean;
   append: (kind: string, payload: Record<string, unknown>) => Promise<void>;
   registry: Pick<LoopRegistry, 'entry' | 'entries' | 'canRun' | 'trustOf' | 'authoredBy'>;
   /** the loop's effective autonomy with the repo cap re-read (runner.effective) */
@@ -143,6 +143,8 @@ interface Landed {
 
 /** A committed row as the lander reads it. */
 export interface LandRow {
+  /** Aegis S2 H-2: the row seq, so a sealed legacy kernel key is trusted only up to its seal */
+  seq?: number;
   kind: string;
   principal?: string;
   keyId?: string;
@@ -178,7 +180,7 @@ export class LoopLander {
 
   observe(r: LandRow): void {
     if (r.principal !== this.#o.kernelPrincipal || !isObj(r.payload)) return;
-    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId))) return;
+    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId, r.seq))) return;
     const p = r.payload;
     const at = r.at && Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : this.#now();
     const runId = str(p.runId);

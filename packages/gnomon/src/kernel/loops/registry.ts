@@ -102,6 +102,8 @@ export function loopRunRefInfo(ref: unknown): Readonly<LoopRunRefInfo> | null {
 }
 
 export interface LoopRow {
+  /** Aegis S2 H-2: the row seq, so a sealed legacy kernel key is trusted only up to its seal */
+  seq?: number;
   kind: string;
   principal?: string;
   keyId?: string;
@@ -281,7 +283,7 @@ export interface LoopRegistryOptions {
   personalDir?: string;
   kernelPrincipal: string;
   /** a row counts only when signed by a kernel key (absent ⇒ the principal check alone) */
-  isKernelKey?: (keyId: string) => boolean;
+  isKernelKey?: (keyId: string, seq?: number) => boolean;
   /** append a kernel row; the committed row comes back through observe() */
   append: (kind: string, payload: Record<string, unknown>) => Promise<void>;
   /** hashing inputs (the runner's node and PATH); tests pin them */
@@ -471,7 +473,7 @@ export class LoopRegistry {
   /** One committed row. Only the kernel's own rows count (LL6); a malformed row is ignored. */
   observe(r: LoopRow): void {
     if (r.principal !== this.#o.kernelPrincipal) return;
-    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId))) return;
+    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId, r.seq))) return;
     const p = r.payload;
     if (!isObj(p)) return;
     if (r.kind === 'session.open') {

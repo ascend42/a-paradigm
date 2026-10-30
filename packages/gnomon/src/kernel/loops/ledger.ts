@@ -91,7 +91,7 @@ export function dayKeyOf(iso: string | number | undefined): string {
 
 export interface LoopLedgerOptions {
   kernelPrincipal: string;
-  isKernelKey?: (keyId: string) => boolean;
+  isKernelKey?: (keyId: string, seq?: number) => boolean;
   max?: number;
 }
 
@@ -117,7 +117,7 @@ export class LoopLedger {
     const tokenRow = LOOP_TOKEN_KINDS.includes(r.kind);
     if (!LOOP_RUN_KINDS.includes(r.kind) && !tokenRow) return;
     if (r.principal !== this.#o.kernelPrincipal) return;
-    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId))) return;
+    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId, r.seq))) return;
     const p = r.payload;
     if (!isObj(p)) return;
     if (tokenRow) return this.#token(r.kind, p, r.at);
