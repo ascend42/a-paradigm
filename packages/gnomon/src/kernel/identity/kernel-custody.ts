@@ -429,6 +429,8 @@ export interface CustodyResolution {
   logged: LoggedSeal | null;
   /** Aegis S2 C-1: seal rows ignored as unauthenticated */
   ignoredRows?: IgnoredSealRow[];
+  /** Aegis S2 M-2: the root-verified file is the logged seal's decision, but the logged digest differs (reported only) */
+  digestMismatch?: boolean;
 }
 
 /**
@@ -458,7 +460,11 @@ function resolveWith(read: SealRead, logged: LoggedSeal | null, home: string): C
   });
   if (logged) {
     if (read.state !== 'sealed') return tampered(read.state === 'none' ? 'the seal file is missing but the log holds the seal' : `the seal file does not verify (${read.why})`, logged.certKey, logged.certKeyId);
-    if (sealDigestOf(home) !== logged.sealDigest || read.seal.certKeyId !== logged.certKeyId) return tampered('the seal file is not the one the log names', logged.certKey, logged.certKeyId);
+    if (read.seal.certKeyId !== logged.certKeyId || read.seal.cardId !== logged.cardId) return tampered('the seal file is not the one the log names', logged.certKey, logged.certKeyId);
+    // Aegis S2 M-2: the file verifies under the root and is the same decision (cardId, certKeyId) as the newest
+    // authenticated row; a digest that differs (a genuine cert-key row copied into a row with a bogus digest) is
+    // reported, never a reason to drop to tampered
+    if (sealDigestOf(home) !== logged.sealDigest) return { mode: 'sealed', seal: read.seal, read, logged, digestMismatch: true };
     return { mode: 'sealed', seal: read.seal, read, logged };
   }
   if (read.state === 'invalid') return tampered(`the seal file does not verify (${read.why})`, '', '');

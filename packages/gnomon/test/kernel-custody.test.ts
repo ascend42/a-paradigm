@@ -293,6 +293,21 @@ describe('H-1: the seal on the anchored log cannot be rolled back', () => {
     expect(resolveCustody(h, root, ['p:00000000/someone']).ignoredRows?.[0]?.why).toBe('not written by the kernel principal');
   });
 
+  it('FALSIFIER (Aegis S2 M-2): a genuine cert-key row copied into a seal row with a bogus digest cannot force tampered', async () => {
+    const { kernelCustodyPath, KERNEL_SEAL_ROW_KIND } = await import('../src/kernel/identity/index.js');
+    const { readFileSync } = await import('node:fs');
+    const { h, root, resolveCustody } = await sealedHome();
+    const doc = JSON.parse(readFileSync(kernelCustodyPath(h), 'utf8'));
+    const k = doc.certKey.row;
+    const a = SoftwareEd25519Signer.generate('kernel');
+    const l = KernelLog.open({ home: h, kernelPrincipal: KP, signer: a, keyRing: new KeyRing(), kernelKeyIds: [a.keyId] });
+    await l.append({ kind: KERNEL_SEAL_ROW_KIND, principal: KP, payload: { custody: 'sealed', cardId: k.cardId, certKeyId: k.certKeyId, certKey: k.certKey, sealDigest: 'sha256:' + '0'.repeat(64), certKeyRow: doc.certKey } });
+    await l.close();
+    const r = resolveCustody(h, root, [KP]);
+    expect(r.mode).toBe('sealed');
+    expect(r.digestMismatch).toBe(true);
+  });
+
   it('FALSIFIER: a replaced seal file (another valid seal) or an invalid one is tampered, never all-partial', async () => {
     const { kernelCustodyPath } = await import('../src/kernel/identity/index.js');
     const { h, root, resolveCustody } = await sealedHome();

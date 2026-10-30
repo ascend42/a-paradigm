@@ -589,6 +589,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
       seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
       ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
+      ...(custody.digestMismatch ? { sealDigestMismatch: true } : {}),
       ...(custody.ignoredRows?.length ? { sealRowsIgnored: custody.ignoredRows.map((r) => r.why) } : {}),
       ...(pubRefused || logAnchor.unanchoredNarrowing
         ? { custody: 'partial' as const, partialBecause: [...c.partialBecause, ...(pubRefused ? ['kernel-pub.jsonl is sealed and this start has no cert'] : []), ...(logAnchor.unanchoredNarrowing ? ['a revocation was acknowledged before the helper anchor held it'] : [])] }
