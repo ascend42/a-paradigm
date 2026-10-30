@@ -26,7 +26,7 @@
  *     every member) as a short child with the same allow-list env, and turns its progress lines into the GUI phase
  *     "Downloading voice models (N MB)…". First start therefore needs no terminal step.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -415,7 +415,7 @@ export function parseFetchProgress(line: string): { total: number; bytes: number
 }
 
 /** Run the client's `models fetch --json`; reports the download size once bytes are moving. */
-export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: number) => void; execPath?: string }): Promise<void> {
+export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: number) => void; execPath?: string; /** tests: the running-child gate (default gateRunningChild) */ gate?: (child: ChildProcess) => Promise<boolean> | null }): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!o.execPath) {
       try {
@@ -427,7 +427,9 @@ export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: 
     }
     const command = o.execPath ?? childNodePath();
     const child = spawn(command, [DISABLE_SIGUSR1, o.entry, 'models', 'fetch', '--json', '--home', o.home], { stdio: ['ignore', 'pipe', 'pipe'], env: voiceChildEnv(process.env, o.home) });
-    if (!o.execPath) void gateRunningChild(child); // Aegis S1 M2
+    // Aegis S1 M2 + S2 L-2: the gate's verdict is awaited and must be true; a child that never passed it (a silent
+    // exit 0 included: nothing it said was ever verified) is a failed fetch
+    const gate = (o.gate ? o.gate(child) : o.execPath ? null : gateRunningChild(child))?.then((ok) => ok === true, () => false) ?? null;
     let buf = '';
     let err = '';
     let reported = false;
@@ -445,7 +447,12 @@ export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: 
     });
     child.stderr.on('data', (b: Buffer) => void (err = `${err}${b.toString('utf8')}`.slice(-1000)));
     child.once('error', reject);
-    child.once('exit', (code) => (code === 0 ? resolve() : reject(new Error(`The voice models could not be downloaded and verified. ${err.trim().split('\n').at(-1) ?? ''}`.trim()))));
+    child.once('exit', (code) => {
+      const failed = (): void => reject(new Error(`The voice models could not be downloaded and verified. ${err.trim().split('\n').at(-1) ?? ''}`.trim()));
+      if (code !== 0) return failed();
+      if (!gate) return resolve();
+      void gate.then((ok) => (ok ? resolve() : reject(new Error('The voice model fetch was not verified as the signed gnomon.node (it failed the check or exited before it passed); reinstall Gnomon.'))));
+    });
   });
 }
 

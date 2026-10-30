@@ -180,9 +180,16 @@ export function checkVoiceClient(entry: string, f: Pick<SeaFacts, 'sea' | 'guard
 
 /** Runs `codesign --verify -R=<req> <pid>`; resolves to the exit status (tests stub it). */
 export type RunningChildVerifier = (pid: number, requirement: string) => Promise<number>;
+/**
+ * Aegis S2 L-3: the running-child codesign check gives up (a failure: SIGKILL) before the voice client's 15 s RPC
+ * timeout (gnomon-voice kernel-link.ts FdRpc), so a stalled check never outlives the call waiting on it.
+ */
+export const RUNNING_CHILD_CODESIGN_TIMEOUT_MS = 10_000;
+/** Aegis S2 L-3: the bytes a gated child may write before its check passes; past it the child is killed, nothing delivered. */
+export const GATE_MAX_HELD_BYTES = 1 << 20;
 const codesignPid: RunningChildVerifier = (pid, requirement) =>
   new Promise((resolve) => {
-    execFile('/usr/bin/codesign', ['--verify', `-R=${requirement}`, String(pid)], { timeout: 60_000 }, (err) => {
+    execFile('/usr/bin/codesign', ['--verify', `-R=${requirement}`, String(pid)], { timeout: RUNNING_CHILD_CODESIGN_TIMEOUT_MS }, (err) => {
       resolve(err ? (typeof (err as { code?: unknown }).code === 'number' ? ((err as { code: number }).code) : 1) : 0);
     });
   });
@@ -197,7 +204,7 @@ const codesignPid: RunningChildVerifier = (pid, requirement) =>
  * Only for children whose program is gnomon.node (voice client, model fetch, gnomon-web, mods); never for loop checks
  * or sessions, which run other programs. Resolves true (verified) or false (killed).
  */
-export function gateRunningChild(child: Pick<ChildProcess, 'pid' | 'kill' | 'stdout' | 'stdio'>, f: Pick<SeaFacts, 'sea' | 'guard'> & { verify?: RunningChildVerifier } = {}): Promise<boolean> | null {
+export function gateRunningChild(child: Pick<ChildProcess, 'pid' | 'kill' | 'stdout' | 'stdio'>, f: Pick<SeaFacts, 'sea' | 'guard'> & { verify?: RunningChildVerifier; maxHeldBytes?: number } = {}): Promise<boolean> | null {
   const sea = f.sea ?? runningAsSea();
   if (!sea) return null;
   const guard = 'guard' in f ? (f.guard ?? null) : seaGuard();
@@ -225,6 +232,8 @@ export function gateRunningChild(child: Pick<ChildProcess, 'pid' | 'kill' | 'std
   const pid = child.pid;
   const requirement = guard.childNodeRequirement;
   const buf: Buffer[] = [];
+  let heldBytes = 0;
+  let overflow = false;
   let ended = false;
   let verdict: Promise<boolean> | null = null;
   let settle!: (ok: boolean) => void;
@@ -233,6 +242,7 @@ export function gateRunningChild(child: Pick<ChildProcess, 'pid' | 'kill' | 'std
     if (verdict) return;
     verdict = (f.verify ?? codesignPid)(pid, requirement).then((code) => code === 0, () => false);
     void verdict.then((ok) => {
+      if (overflow) return; // already killed and settled false
       if (!ok) {
         kill();
         src.removeAllListeners('data');
@@ -248,12 +258,26 @@ export function gateRunningChild(child: Pick<ChildProcess, 'pid' | 'kill' | 'std
     });
   };
   const onData = (c: Buffer): void => {
+    if (overflow) return;
+    heldBytes += c.length;
+    if (heldBytes > (f.maxHeldBytes ?? GATE_MAX_HELD_BYTES)) {
+      // Aegis S2 L-3: an unverified child cannot grow the kernel's memory: kill it, drop what it wrote
+      overflow = true;
+      buf.length = 0;
+      kill();
+      src.removeAllListeners('data');
+      src.resume();
+      held.destroy();
+      settle(false);
+      return;
+    }
     buf.push(c);
     start();
   };
   src.on('data', onData);
   src.once('end', () => {
     ended = true;
+    if (overflow) return;
     if (!verdict) {
       // it said nothing and exited: nothing to deliver, nothing to trust
       held.end();
