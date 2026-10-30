@@ -191,7 +191,7 @@ export interface LoopRunnerOptions {
   /** TEST seam for the 8.1 auto path (default LOOP_AUTO_LAND, false in 8.0) */
   autoLand?: boolean;
   /** only rows signed by a kernel key fold (the lander's landed set, L6) */
-  isKernelKey?: (keyId: string) => boolean;
+  isKernelKey?: (keyId: string, seq?: number) => boolean;
   /** TD-2026-10-23-268: the kernel's own loopback ports (its web transport), never reachable from a `network: on` check */
   kernelPorts?: () => readonly number[];
   /** TEST seam: the OS user home `~/` env files resolve under (default osUserHome()) */

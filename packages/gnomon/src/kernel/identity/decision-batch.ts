@@ -36,7 +36,8 @@ export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.fre
   permission: '1.10.0',
   // TD-2026-10-29-746 / -894 (helper 1.11.0, G-HLP-03/04): the Touch ID switch and the kernel key migration card
   'presence.mode': '1.11.0',
-  'kernel-custody': '1.11.0',
+  // Aegis S2 M-4: the legacy row is v2 (keysDigest + keyCount) from helper 1.11.1
+  'kernel-custody': '1.11.1',
   // Aegis S1 H2: moving the helper's log anchor to another log with no genesis row
   'log.quarantine': '1.11.0',
 });
@@ -44,8 +45,13 @@ export const LOG_QUARANTINE_SCHEMA = 'gnomon-log-quarantine:v1';
 
 export const PRESENCE_MODE_SCHEMA = 'gnomon-presence-mode:v1';
 export const KERNEL_CERT_KEY_SCHEMA = 'gnomon-kernel-cert-key:v1';
-export const KERNEL_LEGACY_SCHEMA = 'gnomon-kernel-legacy:v1';
-export const KERNEL_LEGACY_MAX_KEYS = 64;
+/** Aegis S2 M-4 (helper 1.11.1): every legacy key sealed by digest; the full list is in the kernel's seal file. */
+export const KERNEL_LEGACY_SCHEMA = 'gnomon-kernel-legacy:v2';
+export const KERNEL_LEGACY_MAX_COUNT = 1_000_000;
+/** keysDigest: sha256 of the sorted, unique key ids joined by \n. */
+export function legacyKeysDigest(keyIds: readonly string[]): string {
+  return sha256Tag(Buffer.from([...new Set(keyIds)].sort().join('\n'), 'utf8'));
+}
 /** The helper's presence-mode row hash (click.open): sha256 of the EXACT signed root message, domain included. */
 export function presenceModeRowHash(rootMessage: Buffer): string {
   return sha256Tag(rootMessage);
@@ -203,7 +209,15 @@ export function logQuarantineRowRefusal(r: Row): string | null {
  */
 export const CLICK_APPROVE_DOMAIN = 'gnomon:approve:v2\n';
 export const CLICK_KEY_PREFIX = 'click:';
+/** The root card kinds, named in the refusal text only (the rule is the allowlist below). */
 export const CLICK_ROOT_KINDS: readonly string[] = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'presence.mode', 'kernel-custody', 'log.quarantine', 'repin', 'root-grant']);
+/**
+ * Aegis S2 M-3 (helper 1.11.1, ClickKey.swift clickApprovableKinds): the card kinds a click may approve, an ALLOWLIST.
+ * A kind not listed (a root kind, voice-arm, a kind added later, a typo) is never a click. TD-2026-10-29-894: every
+ * approval is a click while Touch ID is off except Gnomon's own root actions; voice-arm stays off the list because it
+ * opens a standing helper-held unlock rather than deciding one card (conservative, S2 design choice).
+ */
+export const CLICK_APPROVABLE_KINDS: readonly string[] = Object.freeze(['permission', 'budget', 'knot', 'tend', 'verdict', 'merge-conflict', 'gate-class', 'fallback', 'ask-user', 'plan', 'voice-share', 'handoff', 'declassify', 'reconsider', 'strictness', 'incident', 'daemon-stop', 'loop-choice']);
 const CARD_CLASSES = ['reversible', 'destructive', 'irreversible'];
 export function clickApproveMessage(f: { cardId: string; cardKind: string; cardClass: string; decision: string; contentHash: string; approver: string; answerDigest?: string }): Buffer {
   return Buffer.from(`${CLICK_APPROVE_DOMAIN}${[f.cardId, f.cardKind, f.cardClass, f.decision, f.contentHash, f.approver, ...(f.answerDigest ? [f.answerDigest] : [])].join('\n')}`, 'utf8');
@@ -217,6 +231,7 @@ export function clickDecisionRefusal(m: Buffer): string | null {
   const [, kind, cls, decision] = f as [string, string, string, string];
   if (!CARD_CLASSES.includes(cls)) return 'an approve:v2 names its card class';
   if (CLICK_ROOT_KINDS.includes(kind)) return 'a root card is never approved by a click';
+  if (!CLICK_APPROVABLE_KINDS.includes(kind)) return 'a click approves only the click-approvable card kinds';
   if (decision === 'always' && cls !== 'reversible') return 'an always on a destructive or irreversible card is never a click';
   return null;
 }
@@ -230,6 +245,56 @@ export function clickKeyedRefusal(signerKeyId: string, message: Buffer): string 
   return clickDecisionRefusal(message);
 }
 
+/** The parsed fields of a gnomon:approve:v2 click preimage, or null when it is not one. */
+export function parseClickApprove(m: Buffer): { cardId: string; cardKind: string; cardClass: string; decision: string; contentHash: string; approver: string; answerDigest?: string } | null {
+  const d = Buffer.from(CLICK_APPROVE_DOMAIN, 'utf8');
+  if (m.length < d.length || !m.subarray(0, d.length).equals(d)) return null;
+  const f = m.subarray(d.length).toString('utf8').split('\n');
+  if ((f.length !== 6 && f.length !== 7) || f.some((x) => x === '' || Buffer.byteLength(x) > 256)) return null;
+  return { cardId: f[0]!, cardKind: f[1]!, cardClass: f[2]!, decision: f[3]!, contentHash: f[4]!, approver: f[5]!, ...(f[6] !== undefined ? { answerDigest: f[6] } : {}) };
+}
+
+/** What a card record says about itself, as the click verifier reads it (the logged approval.request card). */
+export interface ClickCardRecord {
+  cardId: string;
+  kind: string;
+  contentHash?: string;
+  flags?: readonly string[];
+  detail?: Record<string, unknown>;
+}
+
+/**
+ * Aegis S2 M-1: the kind a click preimage must name for this card record: its kind, or the root kind a grant or
+ * strictness card's detail makes it (broker.ts rootKindOf), so a voice enrolment raised on a strictness card can never
+ * pass as a strictness click.
+ */
+export function clickKindOf(card: Pick<ClickCardRecord, 'kind' | 'detail'>): string {
+  const d = card.detail ?? {};
+  if (card.kind === 'grant') return d.action === 'mod.uninstall' ? 'uninstall' : d.action === 'mod.mcp.config' ? 'mod.mcp.config' : d.action === 'local.config' ? 'local.config' : d.action === 'kernel-custody' ? 'kernel-custody' : d.action === 'log.quarantine' ? 'log.quarantine' : 'grant';
+  if (card.kind === 'strictness' && d.op === 'voice.enrol') return 'voice.enrol';
+  return card.kind;
+}
+
+/** Aegis S2 M-1: the class a card record carries (an irreversible flag, which a destructive card also sets, else reversible). */
+export function clickClassOf(card: Pick<ClickCardRecord, 'flags'>): 'reversible' | 'irreversible' {
+  return (card.flags ?? []).includes('irreversible') ? 'irreversible' : 'reversible';
+}
+
+/**
+ * Aegis S2 M-1: a click decision verifies only when its approve:v2 preimage names THIS card: its id, its content hash,
+ * the kind clickKindOf gives and the class clickClassOf gives, and passes the click rule. null = it does.
+ */
+export function clickCardRefusal(message: Buffer, card: ClickCardRecord): string | null {
+  const why = clickDecisionRefusal(message);
+  if (why) return why;
+  const a = parseClickApprove(message)!;
+  if (a.cardId !== card.cardId) return 'the click decision names another card';
+  if (card.contentHash !== undefined && a.contentHash !== card.contentHash) return "the click decision names another content hash than the card's";
+  if (a.cardKind !== clickKindOf(card)) return "the click decision's card kind is not the card's";
+  if (a.cardClass !== clickClassOf(card)) return "the click decision's card class is not the card's";
+  return null;
+}
+
 const B64_STRICT = /^[A-Za-z0-9+/]+={0,2}$/;
 /** helper 1.11.0: the kernel-custody rows [cert-key row, legacy row] (mirror of kernelCustodyRefusal). null = allowed. */
 export function kernelCustodyRefusal(rows: readonly Row[]): string | null {
@@ -240,14 +305,10 @@ export function kernelCustodyRefusal(rows: readonly Row[]): string | null {
   const raw = typeof b64 === 'string' && b64.length === 88 && B64_STRICT.test(b64) ? Buffer.from(b64, 'base64') : null;
   if (!raw || raw.length !== 65 || raw[0] !== 0x04 || raw.toString('base64') !== b64) return 'a kernel-cert key row names a P-256 X9.63 public key';
   if (k.certKeyId !== sha256Tag(raw)) return "a kernel-cert key row's certKeyId is sha256 of its key";
-  e = onlyFields(l, ['schemaVersion', 'keyIds', 'logId', 'headSeq', 'headHash', 'cardId', 'createdAt'], 'kernel legacy');
+  e = onlyFields(l, ['schemaVersion', 'keysDigest', 'keyCount', 'logId', 'headSeq', 'headHash', 'cardId', 'createdAt'], 'kernel legacy');
   if (e) return e;
-  if (!Array.isArray(l.keyIds) || l.keyIds.length < 1 || l.keyIds.length > KERNEL_LEGACY_MAX_KEYS) return `a kernel legacy row seals 1..${KERNEL_LEGACY_MAX_KEYS} key ids`;
-  const seen = new Set<string>();
-  for (const v of l.keyIds as unknown[]) {
-    if (typeof v !== 'string' || !/^gkey:v1:[0-9a-f]{64}$/.test(v) || seen.has(v)) return 'a kernel legacy key id is a unique gkey:v1:<64 hex>';
-    seen.add(v);
-  }
+  if (typeof l.keysDigest !== 'string' || !SHA256_TAG.test(l.keysDigest)) return 'a kernel legacy row names its keys digest';
+  if (typeof l.keyCount !== 'number' || !Number.isSafeInteger(l.keyCount) || l.keyCount < 1 || l.keyCount > KERNEL_LEGACY_MAX_COUNT) return `a kernel legacy row seals 1..${KERNEL_LEGACY_MAX_COUNT} keys`;
   if (typeof l.logId !== 'string' || !/^log:[0-9A-HJKMNP-TV-Z]{26}$/.test(l.logId)) return 'a kernel legacy row names its log';
   if (typeof l.headSeq !== 'number' || !Number.isSafeInteger(l.headSeq) || l.headSeq < 0) return 'a kernel legacy row names its head seq (a whole number)';
   if (typeof l.headHash !== 'string' || !SHA256_TAG.test(l.headHash)) return 'a kernel legacy row names its head hash';
@@ -306,7 +367,7 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       return logQuarantineRowRefusal(rows[0]!);
     case 'kernel-custody':
       // helper 1.11.0 (TD-2026-10-29-746): register the kernel-cert key, then seal the legacy kernel keys
-      if (kinds.length !== 2 || kinds[0] !== KERNEL_CERT_KEY_SCHEMA || kinds[1] !== KERNEL_LEGACY_SCHEMA) return 'a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row';
+      if (kinds.length !== 2 || kinds[0] !== KERNEL_CERT_KEY_SCHEMA || kinds[1] !== KERNEL_LEGACY_SCHEMA) return 'a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v2 row';
       return kernelCustodyRefusal(rows);
     case 'permission':
     case 'mod.mcp.config':
@@ -424,8 +485,9 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
     case KERNEL_LEGACY_SCHEMA: {
       const [log, h] = [s('logId'), s('headHash')];
       const seq = r.headSeq;
-      if (!Array.isArray(r.keyIds) || log === null || h === null || typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
-      return `seal ${r.keyIds.length} legacy kernel keys of ${log} at seq ${seq} ${h.slice(0, 19)}`;
+      const [n, d] = [r.keyCount, s('keysDigest')];
+      if (typeof n !== 'number' || !Number.isSafeInteger(n) || d === null || log === null || h === null || typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
+      return `seal ${n} legacy kernel keys ${d.slice(0, 19)} of ${log} at seq ${seq} ${h.slice(0, 19)}`;
     }
     default:
       return null;

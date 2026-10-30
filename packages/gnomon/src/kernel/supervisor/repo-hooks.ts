@@ -231,6 +231,8 @@ export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: Rep
 
 /** A chain row as the decision reader sees it (a full-view event). */
 export interface DecisionRow {
+  /** Aegis S2 H-2: the row seq, so a sealed legacy kernel key is trusted only up to its seal */
+  seq?: number;
   principal: string;
   keyId?: unknown;
   payload?: unknown;
@@ -241,10 +243,10 @@ export interface DecisionRow {
  * rows count (principal === the kernel principal AND keyId a kernel key): a forged `gate-class.decided` from
  * any other principal or key is ignored. The last decision per hook wins.
  */
-export function repoHookDecisionsFrom(rows: Iterable<DecisionRow>, kernel: { principal: string; isKernelKey: (keyId: string) => boolean }, repoKey: string, setHash: string): Map<string, 'allow' | 'deny'> {
+export function repoHookDecisionsFrom(rows: Iterable<DecisionRow>, kernel: { principal: string; isKernelKey: (keyId: string, seq?: number) => boolean }, repoKey: string, setHash: string): Map<string, 'allow' | 'deny'> {
   const out = new Map<string, 'allow' | 'deny'>();
   for (const r of rows) {
-    if (r.principal !== kernel.principal || typeof r.keyId !== 'string' || !kernel.isKernelKey(r.keyId)) continue;
+    if (r.principal !== kernel.principal || typeof r.keyId !== 'string' || !kernel.isKernelKey(r.keyId, r.seq)) continue;
     const p = r.payload as { what?: unknown; repoKey?: unknown; setHash?: unknown; hookId?: unknown; decision?: unknown } | undefined;
     if (p?.what !== 'repo-hook' || p.repoKey !== repoKey || p.setHash !== setHash || typeof p.hookId !== 'string') continue;
     if (p.decision !== 'allow' && p.decision !== 'deny') continue;

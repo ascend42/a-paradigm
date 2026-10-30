@@ -312,6 +312,14 @@ export interface KernelLogOptions {
   keystoreTimeoutMs?: number;
   /** Earlier kernel key ids (rotated keys) accepted on kernel-principal rows at verify; the signer's own key is added. */
   kernelKeyIds?: readonly string[];
+  /**
+   * Aegis S2 H-2 (#kernel-custody): a sealed LEGACY kernel key is kernel-authored only up to the seal: rows of log
+   * `logId` with seq <= `maxSeq`. Past it, or in another log, its rows are not kernel-authored (verify flags
+   * kernel-key; isKernelKey is false). Keys not listed are unbounded.
+   */
+  kernelKeyBounds?: Readonly<Record<string, { maxSeq: number; logId: string }>>;
+  /** Aegis S2 H-2: the custody label per kernel key id (rowCustody); history before the seal is `legacy` (partial). */
+  kernelKeyLabels?: Readonly<Record<string, 'certified' | 'legacy' | 'partial'>>;
   clock?: () => number;
   /** PASSIVE WAL checkpoint after this many ms without an append (default 250). */
   checkpointIdleMs?: number;
@@ -739,8 +747,103 @@ export class KernelLog {
   }
 
   /** Is this one of the kernel's signing keys (current or recorded)? */
-  isKernelKey(keyId: string): boolean {
-    return this.#kernelKeyIds().includes(keyId);
+  isKernelKey(keyId: string, seq?: number): boolean {
+    if (!this.#kernelKeyIds().includes(keyId)) return false;
+    // Aegis S2 H-2: a legacy key is kernel-authored only within its seal bound (fail closed without a seq)
+    const b = this.#opts.kernelKeyBounds?.[keyId];
+    return !b || (b.logId === this.#meta.log && seq !== undefined && seq <= b.maxSeq);
+  }
+
+  /** Aegis S2 H-2: the custody label of a row signed by `keyId` at `seq`: certified, legacy (partial), partial, or null (not kernel-authored). */
+  rowCustody(keyId: string, seq: number): 'certified' | 'legacy' | 'partial' | null {
+    if (!this.isKernelKey(keyId, seq)) return null;
+    if (this.#opts.signer && keyId === this.#opts.signer.keyId) return this.#opts.kernelKeyLabels?.[keyId] ?? 'partial';
+    return this.#opts.kernelKeyLabels?.[keyId] ?? 'partial';
+  }
+
+  /**
+   * #log-anchor (TD-2026-10-29-746, S2): does THIS log's hash chain run, unbroken, from its genesis to `target`?
+   * Every segment (sealed, then the active one) is read in order: the log id, the segment links, contiguous seqs, each
+   * envelope hashing to its stored hash and naming the previous hash as its prev, up to `target.seq`, whose hash must be
+   * `target.hash`. A matching hash there then commits to every earlier row's bytes (the chain), which is what "the log
+   * extends the anchored head and verifies up to it" means. Signatures are not re-checked here (they were at append;
+   * `verify()` checks them); linear in the rows up to `target.seq`, run once per start.
+   */
+  chainVerifiesTo(target: { logId: string; seq: number; hash: string }): { ok: true } | { ok: false; why: 'other-log' | 'behind' | 'fork' | 'broken'; detail: string } {
+    if (target.logId !== this.#meta.log) return { ok: false, why: 'other-log', detail: `the anchor names ${target.logId}, this log is ${this.#meta.log}` };
+    if (target.seq > this.#tip.seq) return { ok: false, why: 'behind', detail: `the log ends at seq ${this.#tip.seq}, the anchor is at ${target.seq}` };
+    if (target.seq === 0) return target.hash === genesisPrev(this.#meta.log) ? { ok: true } : { ok: false, why: 'fork', detail: 'seq 0 names another genesis' };
+    let expect: { seq: number; prev: string; segment: number } | undefined;
+    for (const seg of this.segments()) {
+      if (expect && seg.baseSeq > target.seq) break;
+      const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+      try {
+        const meta = readMeta(db);
+        if (meta.log !== target.logId) return { ok: false, why: 'broken', detail: `segment ${meta.segment} belongs to another log` };
+        const first = !expect;
+        if (first ? meta.segment !== 1 || meta.baseSeq !== 1 || meta.basePrev !== genesisPrev(meta.log) : meta.segment !== expect!.segment || meta.baseSeq !== expect!.seq || meta.basePrev !== expect!.prev) {
+          return { ok: false, why: 'broken', detail: `segment ${meta.segment} does not continue the chain` };
+        }
+        let seq = meta.baseSeq;
+        let prev = meta.basePrev;
+        const it = db.prepare('SELECT seq, envelope, hash FROM chain WHERE seq <= ? ORDER BY seq').iterate(target.seq) as Iterable<{ seq: number; envelope: string; hash: string }>;
+        for (const r of it) {
+          if (r.seq !== seq) return { ok: false, why: 'broken', detail: `expected seq ${seq}, found ${r.seq}` };
+          if (sha256TaggedFast(r.envelope) !== r.hash) return { ok: false, why: 'broken', detail: `row ${r.seq} does not hash to its stored hash` };
+          let e: { prev?: unknown };
+          try {
+            e = JSON.parse(r.envelope) as { prev?: unknown };
+          } catch {
+            return { ok: false, why: 'broken', detail: `row ${r.seq} is not JSON` };
+          }
+          if (e.prev !== prev) return { ok: false, why: 'broken', detail: `row ${r.seq} does not chain to the previous row` };
+          if (r.seq === target.seq) return r.hash === target.hash ? { ok: true } : { ok: false, why: 'fork', detail: `seq ${r.seq} has another hash than the anchor` };
+          prev = r.hash;
+          seq = r.seq + 1;
+        }
+        expect = { seq, prev, segment: meta.segment + 1 };
+      } finally {
+        if (seg.sealed) db.close();
+      }
+    }
+    return { ok: false, why: 'behind', detail: `seq ${target.seq} is not in the log` };
+  }
+
+  /**
+   * Aegis S2 M-6 (#log-anchor): every row AFTER `afterSeq` up to the tip verifies under this log's key ring, a
+   * kernel-principal row only under a kernel key within its seal bound (isKernelKey with the row's seq), and an
+   * unsigned row only where the kind may be unsigned. Checked before the helper anchor advances past an older head.
+   */
+  signaturesVerifyAfter(afterSeq: number): { ok: true } | { ok: false; detail: string } {
+    for (const seg of this.segments()) {
+      if (seg.lastSeq <= afterSeq) continue;
+      const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+      try {
+        const it = db.prepare('SELECT seq, kind, principal, envelope, hash, sig FROM chain WHERE seq > ? ORDER BY seq').iterate(afterSeq) as Iterable<{ seq: number; kind: string; principal: string; envelope: string; hash: string; sig: string | null }>;
+        for (const r of it) {
+          if (r.sig === null) {
+            if (!mayBeUnsigned(r.kind)) return { ok: false, detail: `row ${r.seq} (${r.kind}) is unsigned` };
+            continue;
+          }
+          let keyId = '';
+          try {
+            const e = JSON.parse(r.envelope) as { keyId?: unknown };
+            keyId = typeof e.keyId === 'string' ? e.keyId : '';
+          } catch {
+            return { ok: false, detail: `row ${r.seq} is not JSON` };
+          }
+          const v = this.#keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64'));
+          // Aegis S2 re-check M-1: a row under a key this start does not know (a certless session after the seal) is
+          // labelled partial and not trusted — only the narrowing path honours it — but it is no tamper evidence
+          if (v === 'unknown-key') continue;
+          if (v !== 'ok') return { ok: false, detail: `row ${r.seq} has a bad signature under a known key` };
+          if (r.principal === this.#opts.kernelPrincipal && !this.isKernelKey(keyId, r.seq)) return { ok: false, detail: `kernel row ${r.seq} is not signed by a kernel key within its seal` };
+        }
+      } finally {
+        if (seg.sealed) db.close();
+      }
+    }
+    return { ok: true };
   }
 
   /** `{log, segment, seq, hash}` of the chain head. */
@@ -1390,6 +1493,7 @@ export class KernelLog {
       // a halt here rejects ENGINE{rotation-failed} although this bulk row IS
       // committed — harmless for bulk kinds (no effect is gated on them).
       this.#maybeRotate();
+      await this.#afterCommitHook(e);
       return { seq: e.seq, hash: e.hash, anchored: false, event: e };
     }
     this.#counts.forcedAnchors++;
@@ -1424,7 +1528,23 @@ export class KernelLog {
     } catch (err) {
       this.#diag(this.#halted ? 'rotation.halted.after-critical' : 'rotation.deferred', { seq: e.seq, error: (err as Error)?.message ?? String(err) });
     }
+    await this.#afterCommitHook(e);
     return { seq: e.seq, hash: e.hash, anchored: this.#anchoring, event: e };
+  }
+
+  #anchorHook: ((e: { seq: number; kind: string; payload?: unknown }) => Promise<unknown> | null) | null = null;
+  /**
+   * Aegis S2 M-7 (#log-anchor): a hook the append AWAITS after commit, before it resolves (the helper anchor write for
+   * a narrowing row, so a revocation is anchored before it is acknowledged). It never fails the append: the row is
+   * committed, and a failed write is retried on the anchor's next tick.
+   */
+  setAnchorHook(fn: ((e: { seq: number; kind: string; payload?: unknown }) => Promise<unknown> | null) | null): void {
+    this.#anchorHook = fn;
+  }
+
+  async #afterCommitHook(e: { seq: number; kind: string; payload?: unknown }): Promise<void> {
+    const p = this.#anchorHook?.(e);
+    if (p) await p.catch(() => undefined);
   }
 
   #maybeRotate(): void {
@@ -2015,7 +2135,7 @@ export class KernelLog {
   /** `gnomon log verify`: the full chain (every segment + both anchors), or one segment. */
   verify(opts: { segment?: number } = {}): VerifyReport {
     const kernelKeyIds = this.#kernelKeyIds();
-    return verifyLogWith(this.home, { keyRing: this.#keyRing, segment: opts.segment, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds }, this.#keystoreAnchor);
+    return verifyLogWith(this.home, { keyRing: this.#keyRing, segment: opts.segment, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds, ...(this.#opts.kernelKeyBounds ? { kernelKeyBounds: this.#opts.kernelKeyBounds } : {}) }, this.#keystoreAnchor);
   }
 
   /**
@@ -2146,6 +2266,8 @@ export interface VerifyLogOptions {
   segment?: number;
   kernelPrincipal?: string;
   kernelKeyIds?: readonly string[];
+  /** Aegis S2 H-2: legacy kernel keys bounded to their seal (see KernelLogOptions.kernelKeyBounds). */
+  kernelKeyBounds?: Readonly<Record<string, { maxSeq: number; logId: string }>>;
   /**
    * Called once per row, in seq order, with the exact bytes this pass checked
    * (M1.12 replay folds inside verify's single pass, Aegis C2). A consumer
@@ -2178,7 +2300,7 @@ export function verifyLog(
  */
 function verifyLogWith(home: string, opts: VerifyLogOptions, keystoreAnchor: AnchorStore): VerifyReport {
   // S34-06: rows by the kernel principal must be signed by a kernel key (checked when the kernel key ids are known)
-  const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds) } : undefined;
+  const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds), bounds: opts.kernelKeyBounds } : undefined;
   const failures: VerifyFailure[] = [];
   const fail = (f: VerifyFailure): void => {
     if (failures.length < 1000) failures.push(f);
@@ -2258,7 +2380,7 @@ function verifyRows(
   meta: Meta,
   keyRing: KeyRing,
   fail: (f: VerifyFailure) => void,
-  kernel?: { principal: string; keyIds: ReadonlySet<string> },
+  kernel?: { principal: string; keyIds: ReadonlySet<string>; bounds?: Readonly<Record<string, { maxSeq: number; logId: string }>> },
   onRow?: (row: VerifiedRow) => void,
 ): { rows: number; lastSeq: number; lastHash: string; lastKind: string | null; ok: boolean } {
   let expectSeq = meta.baseSeq;
@@ -2320,7 +2442,9 @@ function verifyRows(
       const v = keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64'));
       if (v === 'unknown-key') bad('unknown-key', r.seq, `signature by unknown key ${keyId || '(none)'}`);
       else if (v === 'bad') bad('sig', r.seq, 'signature does not verify');
-      if (kernel && r.principal === kernel.principal && !kernel.keyIds.has(keyId)) bad('kernel-key', r.seq, `kernel-principal row signed by ${keyId || '(none)'}, not a kernel key`);
+      const bound = kernel?.bounds?.[keyId];
+      if (kernel && bound && (r.seq > bound.maxSeq || meta.log !== bound.logId)) bad('kernel-key', r.seq, `row signed by legacy kernel key ${keyId} past its seal (seq ${bound.maxSeq} of ${bound.logId})`);
+      else if (kernel && r.principal === kernel.principal && !kernel.keyIds.has(keyId)) bad('kernel-key', r.seq, `kernel-principal row signed by ${keyId || '(none)'}, not a kernel key`);
       else if (kernel && RESERVED_KINDS.includes(r.kind) && (r.principal !== kernel.principal || !kernel.keyIds.has(keyId))) {
         bad('reserved-binding', r.seq, `${r.kind} must be appended by the kernel principal with a kernel key`);
       }

@@ -173,7 +173,12 @@ import { DeskTally } from '../desk/desk-stats.js';
 import { EconomyTally } from '../desk/turn-economy.js';
 import { FolderPicker, type ChooserRunner, type FolderAsker, type FolderRow } from '../folders/folders.js';
 import { spawn as spawnChild } from 'node:child_process';
-import { childNodePath } from './sea.js';
+import { childNodePath, runningAsSea } from './sea.js';
+import { custodyOf, KERNEL_SEAL_ROW_KIND, KernelPubSealed, migrationCardLines, migrationRows, readKernelSeal, requestKernelCert, resolveCustody, sealFilePresent, sealRowPayload, tamperCardLines, writeKernelSeal, type CustodyResolution, type KernelCertResult, type KernelCustodyStatus, type SealRead } from '../identity/index.js';
+import { HelperLogAnchor } from '../identity/log-anchor.js';
+import { LOG_QUARANTINE_SCHEMA } from '../identity/decision-batch.js';
+import { beginRootDecision } from '../manifest/grant-lock.js';
+import { mintId } from '@a-company/gnomon-contracts';
 
 /**
  * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
@@ -230,6 +235,11 @@ export interface DaemonOptions {
   approvalsKey?: ApprovalsKey & { onHelperExit?(cb: () => void): void; onHelperPush?(cb: (p: HelperPush) => void): void; closeArm?(armId: string): Promise<void> };
   /** M1.3: the helper child the keys live behind; closed (EOF: every unlock dies) at shutdown. */
   helper?: HelperTransport;
+  /**
+   * #kernel-custody test seam (TD-2026-10-29-746 S2): treat this process as the signed SEA for the kernel cert.
+   * Default: runningAsSea(). Production never passes it.
+   */
+  custodySea?: boolean;
   /** Test seam: the auth clock (nonce expiry). */
   clock?: () => number;
   /** Coalesced diagnostic row window (default 10 s). */
@@ -521,17 +531,71 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // home) can look dead, be reclaimed, and two kernels would open one log.
   // Sharing a home across pid namespaces is unsupported.
   let log: KernelLog;
+  let sealRead: SealRead = { state: 'none' };
+  let custody: CustodyResolution = { mode: 'unsealed', seal: null, read: { state: 'none' }, logged: null };
   try {
     const pem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
-    if (typeof pem === 'string') recordKernelPub(home, pem);
+    // #kernel-custody (S2): the seal, verified against the root; before it, today's behaviour (record, all partial).
+    // After it, only certified and sealed legacy keys join the ring, and this start's key is recorded with its cert.
+    // Aegis S2 H-1: the seal is resolved against the anchored log too; missing, invalid or replaced fails closed
+    custody = resolveCustody(home, authority, kernelPrincipals); // C-1: only kernel-principal, root-authenticated seal rows
+    sealRead = custody.read;
+    if (typeof pem === 'string' && custody.mode === 'unsealed' && !sealFilePresent(home)) recordKernelPub(home, pem);
     const keyRing = new KeyRing();
-    const pubs = readKernelPubs(home);
+    const pubs = readKernelPubs(home, { seal: custody.seal });
     for (const k of pubs) keyRing.addEd25519(k.publicKeyPem);
-    log = KernelLog.open({ home, kernelPrincipal, signer: kernelSigner, keyRing, kernelKeyIds: pubs.map((k) => k.keyId) });
+    // Aegis S2 H-2: legacy keys are kernel-authored only up to the seal; each key carries its custody label
+    const bounds: Record<string, { maxSeq: number; logId: string }> = {};
+    const labels: Record<string, 'certified' | 'legacy' | 'partial'> = {};
+    for (const k of pubs) {
+      if (k.custody) labels[k.keyId] = k.custody;
+      if (k.custody === 'legacy' && custody.seal) bounds[k.keyId] = { maxSeq: custody.seal.headSeq, logId: custody.seal.logId };
+    }
+    log = KernelLog.open({ home, kernelPrincipal, signer: kernelSigner, keyRing, kernelKeyIds: pubs.map((k) => k.keyId), kernelKeyBounds: bounds, kernelKeyLabels: labels });
   } catch (err) {
     releaseDaemonLock(home, pidfile);
     throw err;
   }
+  // #kernel-custody (TD-2026-10-29-746 S2): the kernel cert for this start (signed SEA + helper >= 1.11.0), recorded
+  // on this key's kernel-pub line; no cert is custody partial, never a failed start.
+  const kernelPem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
+  const certResult: KernelCertResult =
+    typeof kernelPem === 'string'
+      ? await requestKernelCert({ helper: opts.helper ?? null, signer: { keyId: kernelSigner.keyId, publicKeyPem: kernelPem }, logId: log.logId, sea: opts.custodySea ?? runningAsSea() })
+      : { cert: null, why: 'not-sea', detail: 'the kernel key has no public PEM' };
+  let pubRefused = false;
+  if (typeof kernelPem === 'string' && (certResult.cert || custody.mode !== 'unsealed' || sealFilePresent(home))) {
+    try {
+      recordKernelPub(home, kernelPem, new Date(), certResult.cert ? { cert: certResult.cert } : { sealed: true });
+    } catch (e) {
+      if (!(e instanceof KernelPubSealed)) throw e;
+      pubRefused = true; // sealed and no cert: this start's rows are not kernel-authored later (custody partial)
+    }
+  }
+  // #log-anchor (S2): read, compare and (while tracking) advance the helper's anchor; never newLog on its own
+  const logAnchor = new HelperLogAnchor({ helper: opts.helper ?? null, log });
+  await logAnchor.start();
+  log.setAnchorHook((e) => logAnchor.hookFor(e)); // Aegis S2 M-7: narrowing rows are anchored before they resolve
+  let migrationCardId: string | null = null;
+  /** status view of the anchor: words only (G-HON-03: no bare numbers in status; the heads are in daemon.start and the log) */
+  const anchorView = (): Record<string, unknown> => {
+    const a = logAnchor.status();
+    return { state: a.state, ...(a.verdict ? { verdict: a.verdict } : {}), ...(a.why ? { why: a.why } : {}), ...(a.resolve ? { resolve: a.resolve } : {}), unanchoredNarrowing: logAnchor.unanchoredNarrowing };
+  };
+  const custodyStatus = (): KernelCustodyStatus => {
+    const c = custodyOf(certResult, sealRead, logAnchor.quarantined, custody.mode === 'tampered' ? custody.why : undefined, { anchorState: logAnchor.status().state, now: Date.now() });
+    return {
+      ...c,
+      cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
+      seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
+      ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
+      ...(custody.digestMismatch ? { sealDigestMismatch: true } : {}),
+      ...(custody.ignoredRows?.length ? { sealRowsIgnored: custody.ignoredRows.map((r) => r.why) } : {}),
+      ...(pubRefused || logAnchor.unanchoredNarrowing
+        ? { custody: 'partial' as const, partialBecause: [...c.partialBecause, ...(pubRefused ? ['kernel-pub.jsonl is sealed and this start has no cert'] : []), ...(logAnchor.unanchoredNarrowing ? ['a revocation was acknowledged before the helper anchor held it'] : [])] }
+        : {}),
+    };
+  };
   // TD-2026-10-19-063 #gui-resume: take (read + unlink) the predecessor's GUI resume hand-off at once, under the lock
   const resumeGate = new ResumeGate({
     record: opts.resumeHandoff ?? null,
@@ -670,6 +734,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         await flushDiagnostics();
         await appendRow('daemon.exit', { reason, liveChildren }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
+        log.setAnchorHook(null);
+        await logAnchor.stop().catch(() => undefined); // #log-anchor: the last head, before the log closes
         await log.close();
         await opts.helper?.close().catch(() => undefined);
       } finally {
@@ -759,7 +825,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const statusSource = {
     daemon: () => ({ ...status() }),
     log: () => ({ ...log.head() }),
-    kernelKey: () => ({ keyId: kernelSigner.keyId, custody: 'partial' as const, source: kernelKeySource }),
+    kernelKey: () => {
+      const c = custodyStatus();
+      return { keyId: kernelSigner.keyId, custody: c.custody, source: kernelKeySource, detail: { ...c, anchor: anchorView() } };
+    },
     root: () => ({ state: authority.state, rootKeyId: authority.rootKeyId }),
     web: () => {
       const st = (web?.status() ?? { listening: false }) as Record<string, unknown> & { guiSessions?: { n: number; sessions: Array<Record<string, unknown> & { connId: string }> } };
@@ -780,6 +849,86 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     guiSessions: () => ((web?.status() as { guiSessions?: { n?: number } } | undefined)?.guiSessions?.n ?? 0),
   });
   void broker.refreshHelperBatch(); // Q2: status.helper.batch from the start (re-probed before every root decision)
+  /**
+   * #kernel-custody + #log-anchor (TD-2026-10-29-746 S2): the two root cards, raised after daemon.start.
+   *   - the one-time migration card (grant, action kernel-custody) while this start holds a cert and no seal names its
+   *     cert key; dismissed or expired, it is offered again at the next start;
+   *   - the log.quarantine card while the anchor is quarantined on ANOTHER log; allowed, the helper holds a one-time
+   *     move and only then the kernel sends newLog (logAnchor.afterQuarantineDecision).
+   * Each needs a root (authority.rootKeyId) and a helper whose row table knows the kind (broker.rootTableReady).
+   */
+  async function offerCustodyCards(): Promise<void> {
+    if (!authority.rootKeyId) return;
+    const cert = certResult.cert;
+    // Aegis S2 H-1: the migration card only for an UNSEALED home whose anchor is tracking (a quarantined or absent anchor
+    // could be a rolled-back home); a tampered seal raises the tamper card, which reseals with no legacy key
+    const tamperedSeal = custody.mode === 'tampered';
+    const offerMigration = custody.mode === 'unsealed' && logAnchor.status().state === 'tracking';
+    if (cert && (offerMigration || tamperedSeal) && (await broker.rootTableReady('grant', { action: 'kernel-custody' }))) {
+      const cardId = mintId('card');
+      const all = readKernelPubs(home);
+      const legacy = tamperedSeal ? [] : all.filter((e) => !(e.keyId === kernelSigner.keyId && e.cert)).map((e) => e.keyId);
+      const { rows, keyIds: sealedIds } = migrationRows({ cert, legacyKeyIds: legacy, currentKeyId: kernelSigner.keyId, head: log.head(), cardId });
+      const sealedN = sealedIds.length;
+      migrationCardId = cardId;
+      await broker.raise({
+        kind: 'grant',
+        cardId,
+        requestedBy: kernelPrincipal,
+        attended: true,
+        detail: { action: 'kernel-custody', certKeyId: cert.certKeyId, legacyKeys: sealedN, logId: rows[1].logId, headSeq: rows[1].headSeq, rootRows: rows },
+        lines: tamperedSeal ? tamperCardLines(custody.why ?? 'the seal does not verify') : migrationCardLines({ legacyKeys: sealedN, certKeyId: cert.certKeyId }),
+        decisions: ['allow', 'deny'],
+        handOnly: true,
+        timeoutMs: 12 * 3600_000,
+        prepare: (decision: string) => {
+          if (decision !== 'allow') return null;
+          const createdAt = new Date().toISOString();
+          return { rows: rows.map((r) => ({ ...r, createdAt })), release: beginRootDecision(home) };
+        },
+        effect: async (decision, ctx) => {
+          migrationCardId = null;
+          if (decision !== 'allow') return;
+          const [k, l] = ctx.prepared?.rows ?? [];
+          const [ks, ls] = ctx.rowSigs ?? [];
+          if (!k || !l || !ks || !ls) throw new Error('#kernel-custody: the seal commits only its prepared, root-signed rows');
+          writeKernelSeal(home, { row: k, signer: ks.signer, sig: ks.sig }, { row: l, signer: ls.signer, sig: ls.sig }, sealedIds);
+          sealRead = readKernelSeal(home, authority);
+          if (sealRead.state === 'sealed') {
+            await appendRow(KERNEL_SEAL_ROW_KIND, sealRowPayload(home, sealRead.seal)); // H-1: the anchored log names the seal
+            custody = { mode: 'sealed', seal: sealRead.seal, read: sealRead, logged: null };
+          }
+        },
+      }).catch(() => {
+        migrationCardId = null;
+      });
+    }
+    const q = logAnchor.quarantineRow();
+    if (q && (await broker.rootTableReady('grant', { action: 'log.quarantine' }))) {
+      const cardId = mintId('card');
+      const row = { schemaVersion: LOG_QUARANTINE_SCHEMA, from: q.from, to: q.to, cardId };
+      await broker.raise({
+        kind: 'grant',
+        cardId,
+        requestedBy: kernelPrincipal,
+        attended: true,
+        detail: { action: 'log.quarantine', from: q.from, to: q.to, rootRows: [row] },
+        lines: [
+          "Gnomon's log does not match the helper's anchor",
+          `The helper last anchored log ${q.from.logId} at entry ${q.from.seq}. This Gnomon home now has another log (${q.to}): the old one is missing or was replaced.`,
+          'If you moved, restored or quarantined this home yourself, approve to anchor the new log. If not, deny and check the home first.',
+          'Until then Gnomon keeps running with custody partial and does not advance the anchor.',
+        ],
+        decisions: ['allow', 'deny'],
+        handOnly: true,
+        timeoutMs: 12 * 3600_000,
+        prepare: (decision: string) => (decision === 'allow' ? { rows: [{ ...row, createdAt: new Date().toISOString() }], release: beginRootDecision(home) } : null),
+        effect: async (decision) => {
+          if (decision === 'allow') await logAnchor.afterQuarantineDecision();
+        },
+      }).catch(() => undefined);
+    }
+  }
   // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
   opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
   // helper 1.6.0 (§14.7, S29-K5): voice-arm references. A helper exit or a session push (lock, sleep, user
@@ -855,7 +1004,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         if (v.view === 'full') yield { kind: v.event.kind, at: v.event.at, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), payload: (v.event.payload ?? {}) as Record<string, unknown> };
       }
     })(),
-    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
+    { principals: kernelPrincipals, isKernelKey: (k, seq) => log.isKernelKey(k, seq) },
   );
   // P8-D91: an agent's spend lands in its human's user bucket. Its parent is not known at dispatch before
   // M1.7, so it is attributed to the root's human principal (8.0 is single-human: the founder).
@@ -886,7 +1035,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const localRemoved = (): number => localChainRemoved(localRows());
   const localEmit = (kind: string, payload: Record<string, unknown>): void => void appendRow(kind, payload).catch(() => undefined);
   let localCfg: LoadedLocalConfig = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), chainRemoved: localRemoved() });
-  const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   // S-L1: fold the KERNEL-signed approval.* rows appended since the last catch-up (rules.ts); shared by the
   // supervisor's exact-match check and the rules.revoke handler, so both read one book
   const syncRuleBook = (): RuleBook => {
@@ -896,17 +1045,17 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   };
   // slice C5'a1 (#mcp-servers trust, Arky 8): the TrustBook folds KERNEL-signed tool.trust rows; it catches up HERE,
   // before any local session can index or start a pool, and every later read catches up again (a fold re-narrows)
-  const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
+  const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
   mcpTrust.sync();
   // slice C6'a2-1 (#local-result-policy): the human's "/" result policy, folded from KERNEL-signed tool.result.policy rows
-  const resultPolicy = new ResultPolicy({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: resultPolicySourceOf(log), append: (kind, payload) => appendRow(kind, payload) });
+  const resultPolicy = new ResultPolicy({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq), source: resultPolicySourceOf(log), append: (kind, payload) => appendRow(kind, payload) });
   resultPolicy.sync();
   // slice C5'a1: the one tools/list cache (LocalLane's sessions list into it; request.mcp.trust reads its newest per id)
   const mcpListCache = new McpListCache();
   // P8-D86/D87 run modes: folded from KERNEL-signed approval.mode.set / session.open{runMode} rows (a repo's mode
   // persists across sessions and restarts); strictness levels are not built (no level source ⇒ the ceiling permits
   // every mode). The control is the request.mode.set handler (dispatcher `requests`) and the session port's runMode.
-  const modeBook = new RunModeBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const modeBook = new RunModeBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   const syncModeBook = (): RunModeBook => {
     catchUp(modeBook, modeSourceOf(log));
     return modeBook;
@@ -914,7 +1063,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // M2.11-lite (#strictness-levels): per-repo levels folded from KERNEL-signed approval.strictness.* rows (default
   // L0); the human's request.strictness.set tightens at once and loosens through a fresh-presence card. The level
   // feeds the run-mode ceiling below and the loops' effective autonomy; a raise is the repo brake (loops pause).
-  const strictnessBook = new StrictnessBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const strictnessBook = new StrictnessBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   const syncStrictnessBook = (): StrictnessBook => {
     catchUp(strictnessBook, strictnessSourceOf(log));
     return strictnessBook;
@@ -947,7 +1096,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // TD-2026-10-20-086 F6 (#standing-grant): the daily standing grant, folded from KERNEL-signed grant.standing* rows
   // only; the broker asks it before any presence prompt and writes its notify row after approval.decide.
-  const standingBook = new StandingGrantBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const standingBook = new StandingGrantBook({ principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) });
   const standingGrants = new StandingGrants({
     broker,
     book: () => {
@@ -1065,7 +1214,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         (function* () {
           for (const v of log.read({ reader: { class: 'human' }, kinds: ['gate-class.decided'] })) if (v.view === 'full') yield { principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
         })(),
-        { principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) },
+        { principal: kernelPrincipal, isKernelKey: (k, seq) => log.isKernelKey(k, seq) },
         repoKey,
         setHash,
       ),
@@ -1588,7 +1737,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     'daemon.stop': createDaemonStopHandler({ requestStop: (connId, reason) => requestStop(connId, reason) }),
   };
   const dispatcher = createKernelDispatcher({ authenticator, ...dispatcherOptionsFor('unix', dispatcherCommon, { humanVerbs }) });
-  const kernelPem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
   const requestStop = (connId: string, reason: DaemonStopReason = 'stop'): Promise<CardV1> => {
     const c = dispatcher.clients().find((x) => x.connId === connId && x.phase === 'authenticated');
     const cls = c?.credential === 'read-token' ? 'readToken' : (c?.principalKind ?? 'none');
@@ -1642,7 +1790,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), at: v.event.at, payload: v.event.payload };
       }
     })(),
-    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
+    { principals: kernelPrincipals, isKernelKey: (k, seq) => log.isKernelKey(k, seq) },
   );
   let orphanSweep: { orphans: number; stopped: number };
   try {
@@ -1703,9 +1851,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     idleMs,
     kernelKeyId: kernelSigner.keyId,
     kernelKeySource,
-    kernelKeyCustody: 'partial',
+    kernelKeyCustody: custodyStatus().custody,
+    // #kernel-custody (S2): the helper's cert of this key, on the signed log (verifiable without kernel-pub.jsonl)
+    ...(certResult.cert ? { kernelCert: { ...certResult.cert } } : {}),
+    kernelCustody: { cert: certResult.cert ? 'valid' : (certResult.why ?? 'none'), seal: sealRead.state, anchor: logAnchor.status().state, ...(logAnchor.status().verdict ? { anchorVerdict: logAnchor.status().verdict } : {}) },
     root: authority.state,
   });
+  logAnchor.startTimer();
+  if (custody.mode === 'sealed' && custody.heal && custody.seal) await appendRow(KERNEL_SEAL_ROW_KIND, sealRowPayload(home, custody.seal)).catch(() => undefined);
+  if (custody.mode === 'tampered') await appendRow(KERNEL_SEAL_ROW_KIND, { custody: 'tampered', reason: custody.why ?? 'unknown', certKeyId: custody.seal?.certKeyId ?? null }).catch(() => undefined);
+  void offerCustodyCards().catch(() => undefined);
   try {
     // before idle.start(): a timer due inside the horizon holds the daemon from its first instant
     await scheduler.start();

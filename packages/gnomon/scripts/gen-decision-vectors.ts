@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { canonicalJson } from '@a-company/gnomon-contracts';
-import { checkDecisionBatch, clickApproveMessage, clickDecisionRefusal, decisionRowV2, intentOf, BatchRefusal } from '../src/kernel/identity/decision-batch.ts';
+import { checkDecisionBatch, CLICK_APPROVABLE_KINDS, clickApproveMessage, clickDecisionRefusal, decisionRowV2, intentOf, BatchRefusal } from '../src/kernel/identity/decision-batch.ts';
 const C = 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', C2 = 'card:01HZZZZZZZZZZZZZZZZZZZZZZY';
 const H = 'sha256:' + 'a'.repeat(64), H2 = 'sha256:' + 'b'.repeat(64), MH = 'sha256:' + 'c'.repeat(64), MH2 = 'sha256:' + 'd'.repeat(64), PK = 'sha256:' + 'e'.repeat(64);
 const ME = 'p:abcdefgh/matt', T = '2026-10-20T12:00:00.000Z';
@@ -159,7 +159,7 @@ add('C3: a presence.mode row field outside the closed set', PM, batch('presence.
 const CERT_PUB = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]);
 const sha = (b: Buffer) => `sha256:${createHash('sha256').update(b).digest('hex')}`;
 const certKeyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-cert-key:v1', certKey: CERT_PUB.toString('base64'), certKeyId: sha(CERT_PUB), cardId: C, createdAt: T, ...o });
-const legacyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-legacy:v1', keyIds: [`gkey:v1:${'1'.repeat(64)}`, `gkey:v1:${'2'.repeat(64)}`], logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', headSeq: 812, headHash: H2, cardId: C, createdAt: T, ...o });
+const legacyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-legacy:v2', keysDigest: 'sha256:' + 'f'.repeat(64), keyCount: 37, logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', headSeq: 812, headHash: H2, cardId: C, createdAt: T, ...o });
 add('kernel-custody: register the kernel-cert key and seal the legacy keys', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow()]));
 add('C3: a kernel-custody in the wrong order', PM, batch('kernel-custody', 'allow', [legacyRow(), certKeyRow()]));
 add('C3: a kernel-custody without the legacy seal', PM, batch('kernel-custody', 'allow', [certKeyRow()]));
@@ -178,7 +178,7 @@ add('C3: a log.quarantine with no head hash', PM, batch('log.quarantine', 'allow
 add('C3: a log.quarantine never signs a second row', PM, batch('log.quarantine', 'allow', [qRow(), modeRow()]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
-  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
+  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04; 1.11.1 seals the legacy keys by digest, Aegis S2 M-4). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
   vectors: v,
 };
 writeFileSync(process.argv[2]!, JSON.stringify(out, null, 2) + '\n');
@@ -188,7 +188,7 @@ const cv: R[] = [];
 const addc = (name: string, message: string) => cv.push({ name, message, refused: clickDecisionRefusal(Buffer.from(message, 'utf8')) });
 addc('a permission allow', cm());
 addc('a reversible always', cm({ decision: 'always' }));
-addc('an answer with its digest', cm({ cardKind: 'question', decision: 'answer', answerDigest: H2 }));
+addc('an answer with its digest', cm({ cardKind: 'ask-user', decision: 'answer', answerDigest: H2 }));
 addc('a destructive allow is a click', cm({ cardClass: 'destructive' }));
 addc('a destructive always is never a click', cm({ cardClass: 'destructive', decision: 'always' }));
 addc('an irreversible always is never a click', cm({ cardClass: 'irreversible', decision: 'always' }));
@@ -199,5 +199,8 @@ addc('a presence:v1', presence);
 addc('a row-sig:v1', row(modeRow()));
 addc('an approve-voice:v1', 'gnomon:approve-voice:v1\nx');
 addc('an empty field', cm({ cardKind: '' }));
+// Aegis S2 M-3 (helper 1.11.1): the click-approvable kinds are an allowlist; anything else is refused
+for (const k of CLICK_APPROVABLE_KINDS) addc(`allowlist: a ${k} allow is a click`, cm({ cardKind: k }));
+for (const k of ['question', 'voice-arm', 'repin', 'root-grant', 'Permission', 'permission ', 'future-kind']) addc(`allowlist: ${JSON.stringify(k)} is not click-approvable`, cm({ cardKind: k }));
 writeFileSync(process.argv[2]!.replace('decision-batch-vectors.json', 'click-approve-vectors.json'), JSON.stringify({ schema: 'gnomon-click-approve-vectors:v1', note: 'Aegis S1 M1: the click-key rule on the approve:v2 bytes. Generated by packages/gnomon/scripts/gen-decision-vectors.ts from decision-batch.ts clickDecisionRefusal; read by packages/gnomon/test/decision-batch.test.ts and the Swift ClickKeyTests. refused null = a click key signs it.', vectors: cv }, null, 2) + '\n');
 console.log(v.map((x) => `${x.error ?? 'ok'}\t${x.name}\t${x.why ?? ''}`).join('\n'));

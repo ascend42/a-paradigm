@@ -1,4 +1,4 @@
-// gnomon-helper (darwin) 1.11.0 — the log anchor `gnomon-head` (TD-2026-10-29-746, G-HLP-03): the kernel's log head
+// gnomon-helper (darwin) 1.11.0 (genesis signature 1.11.1) — the log anchor `gnomon-head` (TD-2026-10-29-746, G-HLP-03): the kernel's log head
 // {logId, seq, hash} in a keychain item only this helper writes (Items.swift). No presence; at most 10 writes a second.
 // The kernel writes it as the log grows and reads it at start: a log on disk BEHIND the anchor (a truncated or
 // rolled-back log), or a different hash at the anchored seq (a rewritten one), is detected (anchorVerdict).
@@ -12,8 +12,13 @@
 //                                            move from exactly the stored head to that logId; the allowance is spent once.
 //                                            The kernel (S2) never sends newLog on its own: only at first start (empty),
 //                                            with the genesis row it wrote naming the old head, or after the quarantine card.
+//                                            1.11.1 (Aegis S2 M-2): (b) also needs `genesisSig`, an Ed25519 signature
+//                                            over `gnomon:log-genesis:v1\n` + the genesis bytes by the kernel key this
+//                                            helper process certified (kernel.cert); no cert issued here, or another
+//                                            key, refuses anchor-log. A genesis row alone proves nothing.
 //   anchor.read  {seq?, hash?}               → {head | empty, verdict?}: the verdict for the kernel's own head
 
+import CryptoKit
 import Foundation
 
 let anchorAccount = "gnomon-head"
@@ -54,15 +59,40 @@ func genesisRefusal(_ genesis: Data, stored: AnchorHead, newLogId: String) -> St
     return nil
 }
 
+let logGenesisSigDomain = "gnomon:log-genesis:v1\n"
+/// The DER prefix of an Ed25519 SubjectPublicKeyInfo (RFC 8410): 12 bytes, then the 32-byte raw key.
+let ed25519SpkiPrefix = Data([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00])
+
+/// The raw Ed25519 key of a PEM SubjectPublicKeyInfo (the kernel's key, as kernel.cert received it), or nil.
+func ed25519RawKey(pem: String) -> Data? {
+    let body = pem.replacingOccurrences(of: "-----BEGIN PUBLIC KEY-----", with: "").replacingOccurrences(of: "-----END PUBLIC KEY-----", with: "")
+        .components(separatedBy: .whitespacesAndNewlines).joined()
+    guard let der = Data(base64Encoded: body), der.count == 44, der.prefix(12) == ed25519SpkiPrefix else { return nil }
+    return der.suffix(32)
+}
+
+/// 1.11.1 (Aegis S2 M-2): the genesis row is signed by the kernel key this helper certified. nil = it is.
+func genesisSigRefusal(_ genesis: Data, sig: Any?, certifiedPub: String?) -> String? {
+    guard let pem = certifiedPub, let raw = ed25519RawKey(pem: pem), let pk = try? Curve25519.Signing.PublicKey(rawRepresentation: raw) else {
+        return "a genesis row moves the anchor only after this helper certified the kernel's key"
+    }
+    guard let b = sig as? String, let s = Data(base64Encoded: b), s.count == 64 else { return "a genesis row needs genesisSig (base64 Ed25519)" }
+    guard pk.isValidSignature(s, for: Data(logGenesisSigDomain.utf8) + genesis) else { return "the genesis row is not signed by the certified kernel key" }
+    return nil
+}
+
 final class Anchor {
     let items: ItemStore
     let clock: () -> Date
+    /// 1.11.1: the kernel key this helper process certified (CertIssuer.certifiedPub); nil before kernel.cert.
+    let certifiedPub: () -> String?
     private var window = RateWindow(limit: anchorWritesPerSecond, seconds: 1)
     private let lock = NSLock()
 
-    init(items: ItemStore, clock: @escaping () -> Date = Date.init) {
+    init(items: ItemStore, clock: @escaping () -> Date = Date.init, certifiedPub: @escaping () -> String? = { nil }) {
         self.items = items
         self.clock = clock
+        self.certifiedPub = certifiedPub
     }
 
     func stored() throws -> AnchorHead? {
@@ -89,6 +119,7 @@ final class Anchor {
         if let g = req["genesis"] {
             guard let b = g as? String, let d = Data(base64Encoded: b) else { throw bad("genesis is base64 of the new log's genesis row") }
             if let why = genesisRefusal(d, stored: s, newLogId: h.logId) { throw HelperError("anchor-log", why) }
+            if let why = genesisSigRefusal(d, sig: req["genesisSig"], certifiedPub: certifiedPub()) { throw HelperError("anchor-log", why) }
             return true
         }
         guard let d = try items.read(anchorMoveAccount), let o = (try? JSONSerialization.jsonObject(with: d)) as? Json,

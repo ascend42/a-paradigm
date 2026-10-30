@@ -180,6 +180,14 @@ final class CertIssuer {
         try items.write(kernelCertRateAccount, canonicalJSON(["boot": b, "issued": w.stamps.map { $0.timeIntervalSince1970 }] as Json))
     }
 
+    /// 1.11.1 (Aegis S2 M-2): the Ed25519 public key PEM this helper certified (nil before the first cert). A genesis
+    /// row moves the anchor only when this key signed it (Anchor.swift genesisSigRefusal).
+    var certifiedPub: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return bound?.pub
+    }
+
     func issue(_ r: CertRequest, caller: Caller) throws -> Json {
         lock.lock()
         defer { lock.unlock() }

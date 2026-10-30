@@ -173,7 +173,7 @@ final class SessionWatchTests: XCTestCase {
     }
 
     func testVersionAndProtocol() {
-        XCTAssertEqual(gnomonHelperVersion, "1.11.0")
+        XCTAssertEqual(gnomonHelperVersion, "1.11.1")
         XCTAssertEqual(helperProtocol, "gnomon-helper:v2")
     }
 }

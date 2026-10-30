@@ -37,6 +37,8 @@ export { INTERRUPTED_NOTE } from './supervisor.js';
 
 /** One chain row, as the daemon reads it back (full view). */
 export interface ResumeRow {
+  /** Aegis S2 H-2: the row seq, so a sealed legacy kernel key is trusted only up to its seal */
+  seq?: number;
   id: string;
   kind: string;
   principal: string;
@@ -49,7 +51,7 @@ export interface ResumeRow {
 
 export interface ResumeTrust {
   principals: readonly string[];
-  isKernelKey(keyId: string): boolean;
+  isKernelKey(keyId: string, seq?: number): boolean;
 }
 
 export interface ResumeCandidate extends ResumeInput {
@@ -96,7 +98,7 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
     return x;
   };
   for (const r of rows) {
-    if (!trust.principals.includes(r.principal) || typeof r.keyId !== 'string' || !trust.isKernelKey(r.keyId)) continue;
+    if (!trust.principals.includes(r.principal) || typeof r.keyId !== 'string' || !trust.isKernelKey(r.keyId, r.seq)) continue;
     const p = obj(r.payload);
     const hsid = typeof r.session === 'string' ? r.session : typeof p.hsid === 'string' ? p.hsid : null;
     switch (r.kind) {

@@ -98,8 +98,10 @@ describe('8.0:rules-view fold and match: disabled, timed, re-enabled', () => {
     for (const r of learnRows(card(6))) b.fold(r);
     expect(b.match(REPO, 'Bash', H(6))?.ruleId).toBe(card(6));
     b.fold(off(card(6), null, { principal: 'p:abcdefgh/founder' }));
-    b.fold(off(card(6), null, { keyId: 'device-key' }));
     expect(b.match(REPO, 'Bash', H(6))?.ruleId).toBe(card(6));
+    // Aegis S2 H-3: an off row only narrows, so it is honoured from any key in the chain (a certless start after the seal)
+    b.fold(off(card(6), null, { keyId: 'device-key' }));
+    expect(b.match(REPO, 'Bash', H(6))).toBeNull();
   });
 
   it('Aegis L2: the mode chip (repoEditsRule) skips an off "edits in this repo" rule', () => {

@@ -99,6 +99,49 @@ describe('gateRunningChild / gateRunningSocket (Aegis S1 M2: nothing a child say
     expect(c.kill).toHaveBeenCalledWith('SIGKILL');
   });
 
+  it('FALSIFIER (Aegis S2 L-3): a child that writes more than the cap before its check passes is killed; nothing is delivered', async () => {
+    const c = mk();
+    const raw = c.stdout!;
+    let release!: (n: number) => void;
+    const p = gateRunningChild(c, { sea: true, guard: guard(), maxHeldBytes: 8, verify: () => new Promise<number>((r) => (release = r)) })!;
+    const chunks: string[] = [];
+    c.stdout!.on('data', (b: Buffer) => chunks.push(b.toString()));
+    raw.write('12345');
+    raw.write('67890');
+    expect(await p).toBe(false);
+    expect(c.kill).toHaveBeenCalledWith('SIGKILL');
+    release(0); // a late pass changes nothing
+    await new Promise((r) => setImmediate(r));
+    expect(chunks).toEqual([]);
+  });
+
+  it('Aegis S2 L-3: the codesign timeout is below the voice client\'s 15 s RPC timeout and the default cap is 1 MiB', async () => {
+    const { RUNNING_CHILD_CODESIGN_TIMEOUT_MS, GATE_MAX_HELD_BYTES } = await import('../src/kernel/lifecycle/sea.js');
+    expect(RUNNING_CHILD_CODESIGN_TIMEOUT_MS).toBeLessThan(15_000);
+    expect(GATE_MAX_HELD_BYTES).toBe(1 << 20);
+  });
+
+  it('FALSIFIER (Aegis S2 L-2): a model fetch whose gate is not true fails, a silent exit 0 included', async () => {
+    const { fetchVoiceModels } = await import('../src/kernel/voice/voice-install.js');
+    const d = tmp();
+    const entry = path.join(d, 'fetch.mjs');
+    writeFileSync(entry, 'process.exit(0)\n'); // says nothing, exits 0
+    const run = (gate: () => Promise<boolean> | null) => fetchVoiceModels({ home: d, entry, report: () => undefined, execPath: process.execPath, gate });
+    await expect(run(() => Promise.resolve(false))).rejects.toThrow(/not verified/);
+    await expect(run(() => Promise.reject(new Error('x')))).rejects.toThrow(/not verified/);
+    await expect(run(() => Promise.resolve(true))).resolves.toBeUndefined();
+    await expect(run(() => null)).resolves.toBeUndefined(); // not a SEA: no gate
+  });
+
+  it('Aegis S2 L-4: the dev helper profile needs the SEA AND a dev guard', async () => {
+    const { kernelHelperProfile, helperRequirements, HELPER_DEV_REQUIREMENT } = await import('../src/kernel/identity/helper.js');
+    expect(kernelHelperProfile(true, { profile: 'dev' })).toBe('dev');
+    expect(kernelHelperProfile(false, { profile: 'dev' })).toBeNull(); // a plain-node process with a planted global
+    expect(kernelHelperProfile(true, { profile: 'release' })).toBeNull();
+    expect(kernelHelperProfile(true, null)).toBeNull();
+    expect(helperRequirements()).not.toContain(HELPER_DEV_REQUIREMENT); // the test process is not a SEA
+  });
+
   it('the duplex link (voice fd 3) is handed over only after the first bytes and a passing pid; the bytes stay unread', async () => {
     const c = mk();
     const sock = new PassThrough();

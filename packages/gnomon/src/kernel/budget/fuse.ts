@@ -59,6 +59,7 @@ import type { Signer } from '../log/signer.js';
 import type { ApiTokenBilling } from '../broker/api-token.js';
 import { scanApiBilling, type BillingScanSource } from './billing.js';
 import { DEFAULT_FUSE, type FuseConfig, type ScopeName } from './config.js';
+import { isNarrowingRow } from '../log/narrowing.js'; // Aegis S2 H-3: narrowing rows from any key in the chain
 
 export const PERMIT_KINDS = Object.freeze(['session.spawn', 'turn', 'tool.permission', 'tend.llm', 'oracle.reviewer', 'teacher.draft', 'mod.spend'] as const);
 export type PermitKind = (typeof PERMIT_KINDS)[number];
@@ -125,6 +126,8 @@ export interface StreamUsage {
 
 /** A chain row the fuse restores from (#kernel-log full view). */
 export interface FuseRow {
+  /** Aegis S2 H-2: the row seq, so a sealed legacy kernel key is trusted only up to its seal */
+  seq?: number;
   kind: string;
   at: string;
   /** who wrote the row, and the key that signed it (restore counts only the kernel's rows, Aegis C1) */
@@ -136,7 +139,7 @@ export interface FuseRow {
 /** Who the kernel is, for restore: its principals (continuity across root provisioning) and its keys. */
 export interface FuseRowTrust {
   principals: readonly string[];
-  isKernelKey(keyId: string): boolean;
+  isKernelKey(keyId: string, seq?: number): boolean;
 }
 
 /** A chain time later than the wall clock by more than this is not trusted for the day key (Aegis low). */
@@ -448,7 +451,7 @@ export class BudgetFuse {
     let untrusted = 0;
     for (const row of rows) {
       // Aegis C1: only the kernel's own signed rows count — these kinds are not reserved, so anyone could write one
-      if (!trust.principals.includes(row.principal) || typeof row.keyId !== 'string' || !trust.isKernelKey(row.keyId)) {
+      if (!trust.principals.includes(row.principal) || typeof row.keyId !== 'string' || !(trust.isKernelKey(row.keyId, row.seq) || isNarrowingRow(row.kind, row.payload))) {
         untrusted++;
         continue;
       }

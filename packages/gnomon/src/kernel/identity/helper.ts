@@ -41,7 +41,7 @@ import * as fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { helperVerifierFor } from '../../platform/helper-verifier.js';
 import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
-import { seaGuard } from '../lifecycle/sea.js';
+import { runningAsSea, seaGuard } from '../lifecycle/sea.js';
 
 export const HELPER_TEAM = 'SW4BMQ8PNL';
 export const HELPER_IDENTIFIER = 'gnomon.helper';
@@ -68,7 +68,11 @@ export const HELPER_OP_MIN: Readonly<Record<string, string>> = Object.freeze({
   'presence.mode': '1.11.0',
   'presence.mode.on': '1.11.0',
   'click.open': '1.11.0',
-  'click.sign': '1.11.0',
+  // Aegis S2 M-3: click.sign only to a helper whose click rule is the allowlist (1.11.1); a 1.11.0 helper keeps the rest
+  'click.sign': '1.11.1',
+  // Aegis S2 M-2: anchor.write with a genesis row only to a helper that checks the genesis signature (1.11.1). With a
+  // 1.11.0 helper the kernel never sends a genesis: a new log goes through the log.quarantine card instead.
+  'anchor.genesis': '1.11.1',
 });
 export const MIN_HELPER_VERSION = '1.6.0'; // 1.6.0: protocol v2, voice arms (own store), approve-voice under an arm only, lock/sleep observer push; 1.5.0: root fresh signs return `shown` (setup's helper-line check), decisionSig v2 prompt line; 1.4.0: presence.available
 // was 1.3.0: // 1.3.0: T-2026-10-18-028 M2 (absolute unlock TTL + signature cap in the helper)
@@ -83,8 +87,16 @@ export const HELPER_REQUIREMENT =
  */
 export const HELPER_DEV_IDENTIFIER = 'gnomon.helper.dev';
 export const HELPER_DEV_REQUIREMENT = HELPER_REQUIREMENT.replace(`identifier "${HELPER_IDENTIFIER}"`, `identifier "${HELPER_DEV_IDENTIFIER}"`);
+/**
+ * Aegis S2 L-4: the dev profile counts only when THIS process is the SEA and its baked guard says dev. A plain-node
+ * process never takes the dev helper, whatever a global named __gnomonSea claims.
+ */
+export function kernelHelperProfile(sea: boolean = runningAsSea(), guard: { profile: 'release' | 'dev' } | null = seaGuard()): 'dev' | null {
+  return sea && guard?.profile === 'dev' ? 'dev' : null;
+}
+
 /** The requirements this kernel accepts for its helper, in order. */
-export function helperRequirements(profile: 'release' | 'dev' | null = seaGuard()?.profile ?? null): readonly string[] {
+export function helperRequirements(profile: 'release' | 'dev' | null = kernelHelperProfile()): readonly string[] {
   return profile === 'dev' ? [HELPER_REQUIREMENT, HELPER_DEV_REQUIREMENT] : [HELPER_REQUIREMENT];
 }
 
@@ -178,7 +190,7 @@ export interface HelperVerifier {
 }
 
 /** Production: the platform backend's code-signing check against HELPER_REQUIREMENT (platform/helper-verifier.ts). */
-export function productionHelperVerifier(platform: string = process.platform, profile: 'release' | 'dev' | null = seaGuard()?.profile ?? null): HelperVerifier {
+export function productionHelperVerifier(platform: string = process.platform, profile: 'release' | 'dev' | null = kernelHelperProfile()): HelperVerifier {
   const v = helperVerifierFor(platform);
   const reqs = helperRequirements(profile);
   return Object.freeze({

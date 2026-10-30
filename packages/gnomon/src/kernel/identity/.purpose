@@ -187,3 +187,36 @@ components:
     tests:
       - test/identity-cli.test.ts
       - test/setup.test.ts
+  kernel-custody:
+    description: >-
+      TD-2026-10-29-746 slice S2 (spec §3.1 kernel key, P8-D68 as amended, G-ID-14). At every start a
+      signed SEA kernel with helper >= 1.11.0 asks kernel.cert to certify its ephemeral Ed25519 key;
+      kernelCertRefusal (TS mirror of KernelCert.swift) checks the P-256 DER signature, this key, this
+      boot, this log and expiry. The cert goes on the key's kernel-pub.jsonl line and in the signed
+      daemon.start row. The one-time migration card (grant, detail.action kernel-custody, one Touch ID)
+      registers the helper's kernel-cert key and seals up to 64 legacy kernel keys plus the log head in
+      keys/kernel-custody.json (root-signed rows, re-verified every start). After the seal only certified
+      and sealed legacy keys are trusted and an uncertified append is refused (KernelPubSealed). Dismissed,
+      nothing breaks and the card returns next start. status.kernelKeyCustody is full only with a cert, a
+      seal of that cert key and no anchor quarantine; status.kernelCustody carries the reasons.
+    path: src/kernel/identity/kernel-custody.ts
+    type: module
+    tags: [gnomon, kernel, identity, custody, helper, s2]
+    related: ["#identity", "#gnomon-helper", "#kernel-sea", "#log-anchor", "#approval-broker"]
+    tests:
+      - test/kernel-custody.test.ts
+  log-anchor:
+    description: >-
+      TD-2026-10-29-746 slice S2, Aegis S1 H2 / S2 M-2 (G-ID-15). HelperLogAnchor reads the helper's
+      gnomon-head anchor at start: empty is written, ok tracks, ahead tracks only when
+      KernelLog.chainVerifiesTo reaches the anchored head, and rollback / fork / another log is
+      quarantine (no anchor writes, custody partial; another log raises the log.quarantine root card,
+      a same-log rollback says run gnomon log quarantine). While tracking the head is written at most
+      once a second and at stop. newLog is sent only after the allowed card or from moveToNewLog (the
+      rotation path: helper >= 1.11.1, old log verified, genesis signed by the certified kernel key).
+    path: src/kernel/identity/log-anchor.ts
+    type: module
+    tags: [gnomon, kernel, identity, log, anchor, helper, s2]
+    related: ["#kernel-log", "#gnomon-helper", "#kernel-custody"]
+    tests:
+      - test/kernel-custody.test.ts

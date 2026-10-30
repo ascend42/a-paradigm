@@ -59,6 +59,8 @@ const REF_HEADS = /^refs\/heads\/[^\0\s]+$/;
 const HANDOFF_FIELDS = ['sha', 'hsid', 'cardId', 'loop', 'node'] as const;
 
 export interface LoopEventRow {
+  /** Aegis S2 H-2: the row seq, so a sealed legacy kernel key is trusted only up to its seal */
+  seq?: number;
   id?: string;
   kind: string;
   principal: string;
@@ -73,7 +75,7 @@ export interface LoopEventsOptions {
   registry: Pick<LoopRegistry, 'entries' | 'entry' | 'canRun' | 'onChange'>;
   runner: Pick<LoopRunner, 'start' | 'isHeld' | 'running' | 'onEvent'>;
   kernelPrincipal: string;
-  isKernelKey?: (keyId: string) => boolean;
+  isKernelKey?: (keyId: string, seq?: number) => boolean;
   /** writes a kernel row */
   append: (kind: string, payload: Record<string, unknown>) => Promise<unknown>;
   /** false: no fs.watch (tests drive handleFsEvent / checkRefs) */
@@ -499,7 +501,7 @@ export class LoopEvents {
 
   #isKernel(r: LoopEventRow): boolean {
     if (r.principal !== this.#o.kernelPrincipal) return false;
-    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId))) return false;
+    if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId, r.seq))) return false;
     return true;
   }
 

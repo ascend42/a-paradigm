@@ -99,6 +99,7 @@ import { inputHash } from './permission.js';
 import { pushRuleWords } from '../git/verbs.js';
 import { simpleArgv } from './shell-readonly.js';
 import { prefixMatchRefusal, prefixRefusal } from './prefix-policy.js';
+import { isNarrowingRow } from '../log/narrowing.js'; // Aegis S2 H-3: narrowing rows from any key in the chain
 
 /** Input keys a prefix rule tolerates besides `command` (anything else, e.g. run_in_background, raises the card). */
 export const PREFIX_RULE_INPUT_KEYS: ReadonlySet<string> = new Set(['command', 'description', 'timeout']);
@@ -262,7 +263,7 @@ export type KernelClock = () => number;
 
 export interface KernelTrust {
   principal: string;
-  isKernelKey: (keyId: string) => boolean;
+  isKernelKey: (keyId: string, seq?: number) => boolean;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -299,7 +300,10 @@ export class RuleBook {
   /** Fold one chain row. Rows not signed by the kernel are ignored. */
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId)) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string') return;
+    const trusted = this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload);
+    // Aegis S2 re-check H-1: from a key the kernel does not trust only a pure revoke, or an off that EXTENDS the off period
+    if (!trusted && r.kind !== 'approval.rule.disabled') return;
     const p = obj(r.payload);
     if (!p) return;
     if (r.kind === 'approval.request') {
@@ -428,6 +432,11 @@ export class RuleBook {
         if (typeof p.until !== 'string' || !RULE_ISO_TIME.test(p.until)) return;
         until = Date.parse(p.until);
         if (!Number.isFinite(until)) return;
+      }
+      if (!trusted) {
+        const cur = this.#off.get(p.ruleId);
+        const extends_ = !cur || (cur.until !== null && (until === null || until > cur.until));
+        if (!extends_) return;
       }
       this.#off.set(p.ruleId, { until, untilIso: until === null ? null : (p.until as string), since: typeof r.at === 'string' ? r.at : null });
     } else if (r.kind === 'approval.rule.enabled') {
