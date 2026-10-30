@@ -80,7 +80,7 @@ import { consumeBoundPresence, PresenceToken, presenceBindingDigest, requestPres
 import type { RootAuthority } from '../identity/root-authority.js';
 import { RootUnavailableError } from '../identity/root-authority.js';
 import { HardwarePresenceDenied, HelperUnlockGone, type DecisionBatchRequest, type DecisionBatchResult, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
-import { decisionRowV2, intentOf, ROW_TABLE_MIN_HELPER, type DecisionRowV2 } from '../identity/decision-batch.js';
+import { clickKindOf, decisionRowV2, intentOf, ROW_TABLE_MIN_HELPER, type DecisionRowV2 } from '../identity/decision-batch.js';
 import { versionAtLeast } from '../identity/helper.js';
 import { baseClass, CLICK_KINDS, KIND_DECISIONS, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
@@ -229,9 +229,8 @@ function rootBlock(block: Record<string, unknown>, detail: Record<string, unknow
 
 /** The row-table kind (decision-batch.ts ROW_TABLE_KINDS) of a root-class card: its kind, or a grant/strictness card's action. */
 export function rootKindOf(kind: string, detail: Record<string, unknown>): string {
-  if (kind === 'grant') return detail.action === 'mod.uninstall' ? 'uninstall' : detail.action === 'mod.mcp.config' ? 'mod.mcp.config' : detail.action === 'local.config' ? 'local.config' : 'grant';
-  if (kind === 'strictness' && detail.op === 'voice.enrol') return 'voice.enrol';
-  return kind;
+  // one mapping for the row tables and the click verifier (S2: grant actions kernel-custody and log.quarantine)
+  return clickKindOf({ kind, detail });
 }
 
 export interface RaiseInput {

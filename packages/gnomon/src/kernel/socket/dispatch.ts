@@ -244,7 +244,7 @@ export function nextLegalVerbs(facts: ReadonlySet<string>): string[] {
 export interface KernelStatusSource {
   daemon(): Record<string, unknown>;
   log(): Record<string, unknown>;
-  kernelKey(): { keyId: string; custody: 'full' | 'partial'; source: string };
+  kernelKey(): { keyId: string; custody: 'full' | 'partial'; source: string; /** S2 #kernel-custody: cert, seal, anchor */ detail?: Record<string, unknown> };
   root(): { state: string; rootKeyId: string | null };
   /** The web endpoint's status block (#web-endpoint; absent ⇒ `{listening:false}`). */
   web?(): Record<string, unknown>;
@@ -656,6 +656,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...voiceStatusFor({ ...o.voice.status(), ...(cls === 'human' && s.credential === 'gui' && o.voice.unverifiedFor ? { unverified: o.voice.unverifiedFor(s.principal) } : {}) }, s.credential, cls), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
+      ...(key.detail && cls === 'human' ? { kernelCustody: key.detail } : {}),
       kernelKeySource: key.source,
       root: o.status.root(),
       web: o.status.web?.() ?? { listening: false },
