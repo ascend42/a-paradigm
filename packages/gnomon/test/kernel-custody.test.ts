@@ -362,6 +362,29 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     await log.close();
   });
 
+  it('FALSIFIER (M-6): ahead, but a row after the anchored head is not signed by a trusted key: quarantine fork, no write', async () => {
+    const h = home();
+    const a = SoftwareEd25519Signer.generate('kernel');
+    const ring = new KeyRing();
+    const l1 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: a, keyRing: ring, kernelKeyIds: [a.keyId] });
+    for (let i = 0; i < 2; i++) await l1.append({ kind: 'session.open', principal: KP });
+    const anchored = ref(l1);
+    await l1.close();
+    const x = SoftwareEd25519Signer.generate('kernel'); // a key the next start does not trust
+    const l2 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: x, keyRing: new KeyRing(), kernelKeyIds: [x.keyId] });
+    await l2.append({ kind: 'session.open', principal: KP });
+    await l2.close();
+    const b = SoftwareEd25519Signer.generate('kernel');
+    const r3 = new KeyRing();
+    r3.addEd25519(a.publicKeyPem);
+    const l3 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: b, keyRing: r3, kernelKeyIds: [a.keyId] });
+    const f = fakeHelper({ anchor: anchored });
+    expect(await new HelperLogAnchor({ helper: f.t, log: l3 }).start()).toMatchObject({ state: 'quarantine', verdict: 'fork' });
+    expect(f.stored()).toEqual(anchored);
+    expect(l3.signaturesVerifyAfter(l3.head().seq)).toEqual({ ok: true });
+    await l3.close();
+  });
+
   it('no helper, or one older than 1.11.0: unavailable, nothing sent', async () => {
     const { log } = await logWith(1);
     expect((await new HelperLogAnchor({ helper: null, log }).start()).state).toBe('unavailable');

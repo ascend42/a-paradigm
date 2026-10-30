@@ -57,6 +57,8 @@ export interface LogAnchorStatus {
 export interface AnchoredLog {
   head(): { log: string; seq: number; hash: string };
   chainVerifiesTo(t: AnchorHeadRef): { ok: true } | { ok: false; why: string; detail: string };
+  /** Aegis S2 M-6: the rows after `seq` verify under the sealed ring (H-2 bounds); absent = not checked (tests only) */
+  signaturesVerifyAfter?(seq: number): { ok: true } | { ok: false; detail: string };
 }
 
 const headOf = (l: AnchoredLog): AnchorHeadRef => {
@@ -119,6 +121,12 @@ export class HelperLogAnchor {
       const v = this.#log.chainVerifiesTo(anchored!);
       if (!v.ok) {
         this.#quarantine('fork', anchored, local, `the log does not verify to the anchored head: ${v.detail}`);
+        return this.status();
+      }
+      // Aegis S2 M-6: the rows past the anchored head must verify under the sealed ring before the anchor advances
+      const sv = this.#log.signaturesVerifyAfter?.(anchored!.seq);
+      if (sv && !sv.ok) {
+        this.#quarantine('fork', anchored, local, `the rows after the anchored head do not verify: ${sv.detail}`);
         return this.status();
       }
       this.#written = anchored!;

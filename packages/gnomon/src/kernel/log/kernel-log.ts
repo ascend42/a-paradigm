@@ -809,6 +809,39 @@ export class KernelLog {
     return { ok: false, why: 'behind', detail: `seq ${target.seq} is not in the log` };
   }
 
+  /**
+   * Aegis S2 M-6 (#log-anchor): every row AFTER `afterSeq` up to the tip verifies under this log's key ring, a
+   * kernel-principal row only under a kernel key within its seal bound (isKernelKey with the row's seq), and an
+   * unsigned row only where the kind may be unsigned. Checked before the helper anchor advances past an older head.
+   */
+  signaturesVerifyAfter(afterSeq: number): { ok: true } | { ok: false; detail: string } {
+    for (const seg of this.segments()) {
+      if (seg.lastSeq <= afterSeq) continue;
+      const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+      try {
+        const it = db.prepare('SELECT seq, kind, principal, envelope, hash, sig FROM chain WHERE seq > ? ORDER BY seq').iterate(afterSeq) as Iterable<{ seq: number; kind: string; principal: string; envelope: string; hash: string; sig: string | null }>;
+        for (const r of it) {
+          if (r.sig === null) {
+            if (!mayBeUnsigned(r.kind)) return { ok: false, detail: `row ${r.seq} (${r.kind}) is unsigned` };
+            continue;
+          }
+          let keyId = '';
+          try {
+            const e = JSON.parse(r.envelope) as { keyId?: unknown };
+            keyId = typeof e.keyId === 'string' ? e.keyId : '';
+          } catch {
+            return { ok: false, detail: `row ${r.seq} is not JSON` };
+          }
+          if (this.#keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64')) !== 'ok') return { ok: false, detail: `row ${r.seq} does not verify under a known key` };
+          if (r.principal === this.#opts.kernelPrincipal && !this.isKernelKey(keyId, r.seq)) return { ok: false, detail: `kernel row ${r.seq} is not signed by a kernel key within its seal` };
+        }
+      } finally {
+        if (seg.sealed) db.close();
+      }
+    }
+    return { ok: true };
+  }
+
   /** `{log, segment, seq, hash}` of the chain head. */
   head(): { log: string; segment: number; seq: number; hash: string } {
     return { log: this.logId, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash };
