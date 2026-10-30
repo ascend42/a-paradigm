@@ -743,6 +743,54 @@ export class KernelLog {
     return this.#kernelKeyIds().includes(keyId);
   }
 
+  /**
+   * #log-anchor (TD-2026-10-29-746, S2): does THIS log's hash chain run, unbroken, from its genesis to `target`?
+   * Every segment (sealed, then the active one) is read in order: the log id, the segment links, contiguous seqs, each
+   * envelope hashing to its stored hash and naming the previous hash as its prev, up to `target.seq`, whose hash must be
+   * `target.hash`. A matching hash there then commits to every earlier row's bytes (the chain), which is what "the log
+   * extends the anchored head and verifies up to it" means. Signatures are not re-checked here (they were at append;
+   * `verify()` checks them); linear in the rows up to `target.seq`, run once per start.
+   */
+  chainVerifiesTo(target: { logId: string; seq: number; hash: string }): { ok: true } | { ok: false; why: 'other-log' | 'behind' | 'fork' | 'broken'; detail: string } {
+    if (target.logId !== this.#meta.log) return { ok: false, why: 'other-log', detail: `the anchor names ${target.logId}, this log is ${this.#meta.log}` };
+    if (target.seq > this.#tip.seq) return { ok: false, why: 'behind', detail: `the log ends at seq ${this.#tip.seq}, the anchor is at ${target.seq}` };
+    if (target.seq === 0) return target.hash === genesisPrev(this.#meta.log) ? { ok: true } : { ok: false, why: 'fork', detail: 'seq 0 names another genesis' };
+    let expect: { seq: number; prev: string; segment: number } | undefined;
+    for (const seg of this.segments()) {
+      if (expect && seg.baseSeq > target.seq) break;
+      const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+      try {
+        const meta = readMeta(db);
+        if (meta.log !== target.logId) return { ok: false, why: 'broken', detail: `segment ${meta.segment} belongs to another log` };
+        const first = !expect;
+        if (first ? meta.segment !== 1 || meta.baseSeq !== 1 || meta.basePrev !== genesisPrev(meta.log) : meta.segment !== expect!.segment || meta.baseSeq !== expect!.seq || meta.basePrev !== expect!.prev) {
+          return { ok: false, why: 'broken', detail: `segment ${meta.segment} does not continue the chain` };
+        }
+        let seq = meta.baseSeq;
+        let prev = meta.basePrev;
+        const it = db.prepare('SELECT seq, envelope, hash FROM chain WHERE seq <= ? ORDER BY seq').iterate(target.seq) as Iterable<{ seq: number; envelope: string; hash: string }>;
+        for (const r of it) {
+          if (r.seq !== seq) return { ok: false, why: 'broken', detail: `expected seq ${seq}, found ${r.seq}` };
+          if (sha256TaggedFast(r.envelope) !== r.hash) return { ok: false, why: 'broken', detail: `row ${r.seq} does not hash to its stored hash` };
+          let e: { prev?: unknown };
+          try {
+            e = JSON.parse(r.envelope) as { prev?: unknown };
+          } catch {
+            return { ok: false, why: 'broken', detail: `row ${r.seq} is not JSON` };
+          }
+          if (e.prev !== prev) return { ok: false, why: 'broken', detail: `row ${r.seq} does not chain to the previous row` };
+          if (r.seq === target.seq) return r.hash === target.hash ? { ok: true } : { ok: false, why: 'fork', detail: `seq ${r.seq} has another hash than the anchor` };
+          prev = r.hash;
+          seq = r.seq + 1;
+        }
+        expect = { seq, prev, segment: meta.segment + 1 };
+      } finally {
+        if (seg.sealed) db.close();
+      }
+    }
+    return { ok: false, why: 'behind', detail: `seq ${target.seq} is not in the log` };
+  }
+
   /** `{log, segment, seq, hash}` of the chain head. */
   head(): { log: string; segment: number; seq: number; hash: string } {
     return { log: this.logId, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash };

@@ -4,6 +4,8 @@ export * from './root-authority.js';
 export * from './device-key.js';
 export * from './registry.js';
 export * from './kernel-pub.js';
+export * from './kernel-custody.js';
+export * from './log-anchor.js';
 export * from './presence.js';
 export * from './read-token.js';
 export * from './helper.js';
