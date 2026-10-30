@@ -1489,6 +1489,7 @@ export class KernelLog {
       // a halt here rejects ENGINE{rotation-failed} although this bulk row IS
       // committed — harmless for bulk kinds (no effect is gated on them).
       this.#maybeRotate();
+      await this.#afterCommitHook(e);
       return { seq: e.seq, hash: e.hash, anchored: false, event: e };
     }
     this.#counts.forcedAnchors++;
@@ -1523,7 +1524,23 @@ export class KernelLog {
     } catch (err) {
       this.#diag(this.#halted ? 'rotation.halted.after-critical' : 'rotation.deferred', { seq: e.seq, error: (err as Error)?.message ?? String(err) });
     }
+    await this.#afterCommitHook(e);
     return { seq: e.seq, hash: e.hash, anchored: this.#anchoring, event: e };
+  }
+
+  #anchorHook: ((e: { seq: number; kind: string; payload?: unknown }) => Promise<unknown> | null) | null = null;
+  /**
+   * Aegis S2 M-7 (#log-anchor): a hook the append AWAITS after commit, before it resolves (the helper anchor write for
+   * a narrowing row, so a revocation is anchored before it is acknowledged). It never fails the append: the row is
+   * committed, and a failed write is retried on the anchor's next tick.
+   */
+  setAnchorHook(fn: ((e: { seq: number; kind: string; payload?: unknown }) => Promise<unknown> | null) | null): void {
+    this.#anchorHook = fn;
+  }
+
+  async #afterCommitHook(e: { seq: number; kind: string; payload?: unknown }): Promise<void> {
+    const p = this.#anchorHook?.(e);
+    if (p) await p.catch(() => undefined);
   }
 
   #maybeRotate(): void {

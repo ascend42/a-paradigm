@@ -22,13 +22,15 @@
  * (test/log-anchor.test.ts).
  *
  * CADENCE. While tracking, the head is written when it moved, at most once per LOG_ANCHOR_CADENCE_MS (1 s, an unref'd
- * timer; the helper allows 10 writes a second), and once more at a clean stop. So the anchor lags the log by at most
+ * timer; the helper allows 10 writes a second), and once more at a clean stop. A narrowing row (Aegis S2 M-7) is
+ * anchored at once and its append awaits the write (hookFor). So the anchor lags the log by at most
  * about a second of rows; a same-user process that rolls the log back further than that is caught at the next start.
  * Writes are serialized; a helper refusal of rollback / fork / another log puts the anchor in quarantine.
  */
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { HELPER_OP_MIN, versionAtLeast, type HelperTransport } from './helper.js';
 import type { Signer } from '../log/signer.js';
+import { isNarrowingRow } from '../log/narrowing.js';
 
 export const LOG_ANCHOR_CADENCE_MS = 1000;
 export const LOG_GENESIS_SCHEMA = 'gnomon-log-genesis:v1';
@@ -156,6 +158,15 @@ export class HelperLogAnchor {
       }
     });
     return this.#chain;
+  }
+
+  /**
+   * Aegis S2 M-7: a narrowing row (revocation, denial of trust, fuse rung, strictness raise) is anchored NOW, and the
+   * append awaits it (KernelLog.setAnchorHook), so a same-user rollback cannot quietly drop a revocation that was
+   * already acknowledged. Every other row keeps the 1 s cadence. null = nothing to await.
+   */
+  hookFor(e: { kind: string; payload?: unknown }): Promise<void> | null {
+    return this.#status.state === 'tracking' && isNarrowingRow(e.kind, e.payload) ? this.tick() : null;
   }
 
   startTimer(): void {

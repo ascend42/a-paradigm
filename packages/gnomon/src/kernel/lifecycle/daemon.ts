@@ -575,6 +575,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #log-anchor (S2): read, compare and (while tracking) advance the helper's anchor; never newLog on its own
   const logAnchor = new HelperLogAnchor({ helper: opts.helper ?? null, log });
   await logAnchor.start();
+  log.setAnchorHook((e) => logAnchor.hookFor(e)); // Aegis S2 M-7: narrowing rows are anchored before they resolve
   let migrationCardId: string | null = null;
   /** status view of the anchor: words only (G-HON-03: no bare numbers in status; the heads are in daemon.start and the log) */
   const anchorView = (): Record<string, unknown> => {
@@ -729,6 +730,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         await flushDiagnostics();
         await appendRow('daemon.exit', { reason, liveChildren }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
+        log.setAnchorHook(null);
         await logAnchor.stop().catch(() => undefined); // #log-anchor: the last head, before the log closes
         await log.close();
         await opts.helper?.close().catch(() => undefined);

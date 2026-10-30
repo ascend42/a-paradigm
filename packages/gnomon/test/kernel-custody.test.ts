@@ -385,6 +385,21 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     await l3.close();
   });
 
+  it('M-7: a narrowing row is anchored before its append resolves; any other row waits for the cadence', async () => {
+    const { log } = await logWith(1);
+    const f = fakeHelper();
+    const a = new HelperLogAnchor({ helper: f.t, log, cadenceMs: 60_000 });
+    await a.start();
+    log.setAnchorHook((e) => a.hookFor(e));
+    const r1 = await log.append({ kind: 'session.open', principal: KP });
+    expect(f.stored()!.seq).toBeLessThan(r1.seq);
+    const r2 = await log.append({ kind: 'approval.rule.revoked', principal: KP, payload: { ruleId: 'card:01J00000000000000000000001', repoKey: `sha256:${'a'.repeat(64)}`, tool: 'Bash', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA' } });
+    expect(f.stored()!.seq).toBe(r2.seq);
+    log.setAnchorHook(null);
+    await a.stop();
+    await log.close();
+  });
+
   it('no helper, or one older than 1.11.0: unavailable, nothing sent', async () => {
     const { log } = await logWith(1);
     expect((await new HelperLogAnchor({ helper: null, log }).start()).state).toBe('unavailable');
