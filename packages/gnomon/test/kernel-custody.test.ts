@@ -437,6 +437,17 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     expect(f.stored()!.seq).toBeLessThan(r1.seq);
     const r2 = await log.append({ kind: 'approval.rule.revoked', principal: KP, payload: { ruleId: 'card:01J00000000000000000000001', repoKey: `sha256:${'a'.repeat(64)}`, tool: 'Bash', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA' } });
     expect(f.stored()!.seq).toBe(r2.seq);
+    expect(a.unanchoredNarrowing).toBe(false);
+    // the helper keeps refusing (rate limit): one retry, then the acknowledgement goes on within the bound, flagged
+    const orig = f.t.request.bind(f.t);
+    f.t.request = async (req) => (req.op === 'anchor.write' ? Promise.reject(Object.assign(new Error('rate-limited'), { code: 'rate-limited' })) : orig(req));
+    const t0 = Date.now();
+    await log.append({ kind: 'approval.rule.revoked', principal: KP, payload: { ruleId: 'card:01J00000000000000000000002', repoKey: `sha256:${'a'.repeat(64)}`, tool: 'Bash', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA' } });
+    expect(Date.now() - t0).toBeLessThan(2500);
+    expect(a.unanchoredNarrowing).toBe(true);
+    f.t.request = orig;
+    await a.tick();
+    expect(a.unanchoredNarrowing).toBe(false);
     log.setAnchorHook(null);
     await a.stop();
     await log.close();

@@ -580,7 +580,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   /** status view of the anchor: words only (G-HON-03: no bare numbers in status; the heads are in daemon.start and the log) */
   const anchorView = (): Record<string, unknown> => {
     const a = logAnchor.status();
-    return { state: a.state, ...(a.verdict ? { verdict: a.verdict } : {}), ...(a.why ? { why: a.why } : {}), ...(a.resolve ? { resolve: a.resolve } : {}) };
+    return { state: a.state, ...(a.verdict ? { verdict: a.verdict } : {}), ...(a.why ? { why: a.why } : {}), ...(a.resolve ? { resolve: a.resolve } : {}), unanchoredNarrowing: logAnchor.unanchoredNarrowing };
   };
   const custodyStatus = (): KernelCustodyStatus => {
     const c = custodyOf(certResult, sealRead, logAnchor.quarantined, custody.mode === 'tampered' ? custody.why : undefined, { anchorState: logAnchor.status().state, now: Date.now() });
@@ -590,7 +590,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
       ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
       ...(custody.ignoredRows?.length ? { sealRowsIgnored: custody.ignoredRows.map((r) => r.why) } : {}),
-      ...(pubRefused ? { partialBecause: [...c.partialBecause, 'kernel-pub.jsonl is sealed and this start has no cert'] } : {}),
+      ...(pubRefused || logAnchor.unanchoredNarrowing
+        ? { custody: 'partial' as const, partialBecause: [...c.partialBecause, ...(pubRefused ? ['kernel-pub.jsonl is sealed and this start has no cert'] : []), ...(logAnchor.unanchoredNarrowing ? ['a revocation was acknowledged before the helper anchor held it'] : [])] }
+        : {}),
     };
   };
   // TD-2026-10-19-063 #gui-resume: take (read + unlink) the predecessor's GUI resume hand-off at once, under the lock

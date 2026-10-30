@@ -33,6 +33,9 @@ import type { Signer } from '../log/signer.js';
 import { isNarrowingRow } from '../log/narrowing.js';
 
 export const LOG_ANCHOR_CADENCE_MS = 1000;
+/** M-7 follow-ups: the one quick retry of a narrowing row's anchor write, and how long its acknowledgement may wait. */
+export const LOG_ANCHOR_RETRY_MS = 100;
+export const LOG_ANCHOR_ACK_BOUND_MS = 2000;
 export const LOG_GENESIS_SCHEMA = 'gnomon-log-genesis:v1';
 
 export type AnchorVerdict = 'ok' | 'ahead' | 'rollback' | 'fork' | 'other-log' | 'empty';
@@ -150,6 +153,7 @@ export class HelperLogAnchor {
       try {
         await this.#helper.request({ op: 'anchor.write', logId: head.logId, seq: head.seq, hash: head.hash });
         this.#written = head;
+        this.#unanchoredNarrowing = false; // the head now covers every earlier row
         this.#status = { ...this.#status, lastWrittenSeq: head.seq };
       } catch (e) {
         const code = (e as { code?: string }).code;
@@ -165,8 +169,26 @@ export class HelperLogAnchor {
    * append awaits it (KernelLog.setAnchorHook), so a same-user rollback cannot quietly drop a revocation that was
    * already acknowledged. Every other row keeps the 1 s cadence. null = nothing to await.
    */
-  hookFor(e: { kind: string; payload?: unknown }): Promise<void> | null {
-    return this.#status.state === 'tracking' && isNarrowingRow(e.kind, e.payload) ? this.tick() : null;
+  hookFor(e: { seq?: number; kind: string; payload?: unknown }): Promise<void> | null {
+    if (this.#status.state !== 'tracking' || !isNarrowingRow(e.kind, e.payload)) return null;
+    const landed = (): boolean => e.seq === undefined || (this.#written !== null && this.#written.seq >= e.seq);
+    // M-7 follow-ups: one quick retry (~100 ms) and a bound (~2 s) on how long the acknowledgement waits
+    const attempt = async (): Promise<void> => {
+      await this.tick();
+      if (!landed()) {
+        await new Promise((r) => setTimeout(r, LOG_ANCHOR_RETRY_MS).unref?.());
+        await this.tick();
+      }
+      if (!landed()) this.#unanchoredNarrowing = true;
+      else if (e.seq !== undefined && this.#unanchoredNarrowing && this.#written && this.#written.seq >= e.seq) this.#unanchoredNarrowing = false;
+    };
+    return Promise.race([attempt(), new Promise<void>((r) => setTimeout(() => { if (!landed()) this.#unanchoredNarrowing = true; r(); }, LOG_ANCHOR_ACK_BOUND_MS).unref?.())]);
+  }
+
+  #unanchoredNarrowing = false;
+  /** M-7 follow-up: a narrowing row was acknowledged before the helper anchor held it (until a later write covers it). */
+  get unanchoredNarrowing(): boolean {
+    return this.#unanchoredNarrowing;
   }
 
   startTimer(): void {
