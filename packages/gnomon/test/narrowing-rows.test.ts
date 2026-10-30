@@ -44,8 +44,25 @@ describe('H-3: narrowing rows from any key in the chain', () => {
     expect(matches(fold(learned(X)))).toBeNull();
   });
 
-  it('the narrowing set: revocations, denials of trust, fuse rungs, strictness raises; never a grant or a lowering', () => {
-    for (const k of ['approval.rule.revoked', 'approval.rule.disabled', 'grant.standing.revoked', 'approval.strictness.raised', 'budget.ladder']) expect(isNarrowingRow(k, {}), k).toBe(true);
+  it('FALSIFIER (re-check H-1): an untrusted off row that SHORTENS an indefinite off never turns the rule back on early', () => {
+    const offNull = { principal: K, keyId: A, seq: 4, kind: 'approval.rule.disabled', payload: { ruleId: CARD, until: null } } as RuleRow;
+    const shorter = { principal: K, keyId: X, seq: 5, kind: 'approval.rule.disabled', payload: { ruleId: CARD, until: '2000-01-01T00:00:00.000Z' } } as RuleRow;
+    expect(matches(fold([...learned(A), offNull, shorter]))).toBeNull(); // still off (indefinitely), not expired in 2000
+  });
+
+  it('FALSIFIER (re-check H-1): an untrusted strictness row only ever raises', async () => {
+    const { StrictnessBook } = await import('../src/kernel/broker/strictness.js');
+    const b = new StrictnessBook({ principal: K, isKernelKey: (k) => k === A });
+    b.fold({ seq: 1, kind: 'approval.strictness.raised', principal: K, keyId: A, payload: { repo: REPO, from: 'L0', to: 'L2' } });
+    b.fold({ seq: 2, kind: 'approval.strictness.raised', principal: K, keyId: X, payload: { repo: REPO, from: 'L2', to: 'L1' } }); // a "raise" that loosens
+    expect(b.level(REPO)).toBe('L2');
+    b.fold({ seq: 3, kind: 'approval.strictness.raised', principal: K, keyId: X, payload: { repo: REPO, from: 'L2', to: 'L3' } });
+    expect(b.level(REPO)).toBe('L3');
+  });
+
+  it('the narrowing set: pure revocations and trust drops; never a grant, a lowering or a fuse rung', () => {
+    for (const k of ['approval.rule.revoked', 'grant.standing.revoked']) expect(isNarrowingRow(k, {}), k).toBe(true);
+    for (const k of ['budget.ladder', 'approval.strictness.raised', 'approval.rule.disabled']) expect(isNarrowingRow(k, {}), k).toBe(false); // decided per row in their books
     expect(isNarrowingRow('tool.trust', { op: 'cleared' })).toBe(true);
     expect(isNarrowingRow('tool.trust', { op: 'dropped' })).toBe(true);
     for (const [k, p] of [['tool.trust', { op: 'set' }], ['approval.rule.learned', {}], ['approval.rule.enabled', {}], ['approval.strictness.lowered', {}], ['grant.standing', {}], ['permit.grant', {}], ['approval.mode.set', {}]] as const) expect(isNarrowingRow(k, p), k).toBe(false);

@@ -60,11 +60,15 @@ export class StrictnessBook {
 
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !(this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload))) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string') return;
+    const trusted = this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload);
     if (r.kind !== 'approval.strictness.raised' && r.kind !== 'approval.strictness.lowered') return;
     const p = obj(r.payload);
     if (!p || typeof p.repo !== 'string' || !('to' in p)) return;
-    this.apply(p.repo, failSafeStrictnessLevel(p.to));
+    const to = failSafeStrictnessLevel(p.to);
+    // Aegis S2 H-3 + re-check H-1: from a key the kernel does not trust, only a level STRICTER than the current one
+    if (!trusted && !(r.kind === 'approval.strictness.raised' && LEVEL_RANK[to] > LEVEL_RANK[this.level(p.repo)])) return;
+    this.apply(p.repo, to);
   }
 
   /** Apply a change now (the writer calls this right after its row is written; the fold reaches the same state). */

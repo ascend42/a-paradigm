@@ -8,16 +8,17 @@
  * take something away, never add it. The daemon never refuses to start over custody (founder: no stoppages).
  */
 
-/** Kinds that only narrow, whatever their payload. */
+/**
+ * Kinds that only narrow, whatever their payload (pure revocations). Rows that narrow only against the CURRENT state
+ * (a strictness raise, a rule's off period, a loop pause or tightening) are decided per row inside their book
+ * (Aegis S2 re-check H-1): StrictnessBook, RuleBook, the loop ledger. budget.ladder is not here: a rung can loosen.
+ */
 const ALWAYS_NARROWING = new Set([
   'approval.rule.revoked', // an Always rule revoked
-  'approval.rule.disabled', // an Always rule turned off
   'grant.standing.revoked', // the daily standing grant ended
-  'approval.strictness.raised', // a stricter level
-  'budget.ladder', // a fuse rung announced (a trip warning only narrows)
 ]);
 
-/** Does this row only take something away (revocation, denial, fuse trip, strictness raise, trust cleared)? */
+/** Does this row only take something away whatever the current state (a pure revocation, a trust cleared)? */
 export function isNarrowingRow(kind: string, payload: unknown): boolean {
   if (ALWAYS_NARROWING.has(kind)) return true;
   const p = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};

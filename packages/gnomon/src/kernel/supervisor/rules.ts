@@ -300,7 +300,10 @@ export class RuleBook {
   /** Fold one chain row. Rows not signed by the kernel are ignored. */
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !(this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload))) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string') return;
+    const trusted = this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload);
+    // Aegis S2 re-check H-1: from a key the kernel does not trust only a pure revoke, or an off that EXTENDS the off period
+    if (!trusted && r.kind !== 'approval.rule.disabled') return;
     const p = obj(r.payload);
     if (!p) return;
     if (r.kind === 'approval.request') {
@@ -429,6 +432,11 @@ export class RuleBook {
         if (typeof p.until !== 'string' || !RULE_ISO_TIME.test(p.until)) return;
         until = Date.parse(p.until);
         if (!Number.isFinite(until)) return;
+      }
+      if (!trusted) {
+        const cur = this.#off.get(p.ruleId);
+        const extends_ = !cur || (cur.until !== null && (until === null || until > cur.until));
+        if (!extends_) return;
       }
       this.#off.set(p.ruleId, { until, untilIso: until === null ? null : (p.until as string), since: typeof r.at === 'string' ? r.at : null });
     } else if (r.kind === 'approval.rule.enabled') {
