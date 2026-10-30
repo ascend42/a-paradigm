@@ -36,7 +36,8 @@ export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.fre
   permission: '1.10.0',
   // TD-2026-10-29-746 / -894 (helper 1.11.0, G-HLP-03/04): the Touch ID switch and the kernel key migration card
   'presence.mode': '1.11.0',
-  'kernel-custody': '1.11.0',
+  // Aegis S2 M-4: the legacy row is v2 (keysDigest + keyCount) from helper 1.11.1
+  'kernel-custody': '1.11.1',
   // Aegis S1 H2: moving the helper's log anchor to another log with no genesis row
   'log.quarantine': '1.11.0',
 });
@@ -44,8 +45,13 @@ export const LOG_QUARANTINE_SCHEMA = 'gnomon-log-quarantine:v1';
 
 export const PRESENCE_MODE_SCHEMA = 'gnomon-presence-mode:v1';
 export const KERNEL_CERT_KEY_SCHEMA = 'gnomon-kernel-cert-key:v1';
-export const KERNEL_LEGACY_SCHEMA = 'gnomon-kernel-legacy:v1';
-export const KERNEL_LEGACY_MAX_KEYS = 64;
+/** Aegis S2 M-4 (helper 1.11.1): every legacy key sealed by digest; the full list is in the kernel's seal file. */
+export const KERNEL_LEGACY_SCHEMA = 'gnomon-kernel-legacy:v2';
+export const KERNEL_LEGACY_MAX_COUNT = 1_000_000;
+/** keysDigest: sha256 of the sorted, unique key ids joined by \n. */
+export function legacyKeysDigest(keyIds: readonly string[]): string {
+  return sha256Tag(Buffer.from([...new Set(keyIds)].sort().join('\n'), 'utf8'));
+}
 /** The helper's presence-mode row hash (click.open): sha256 of the EXACT signed root message, domain included. */
 export function presenceModeRowHash(rootMessage: Buffer): string {
   return sha256Tag(rootMessage);
@@ -299,14 +305,10 @@ export function kernelCustodyRefusal(rows: readonly Row[]): string | null {
   const raw = typeof b64 === 'string' && b64.length === 88 && B64_STRICT.test(b64) ? Buffer.from(b64, 'base64') : null;
   if (!raw || raw.length !== 65 || raw[0] !== 0x04 || raw.toString('base64') !== b64) return 'a kernel-cert key row names a P-256 X9.63 public key';
   if (k.certKeyId !== sha256Tag(raw)) return "a kernel-cert key row's certKeyId is sha256 of its key";
-  e = onlyFields(l, ['schemaVersion', 'keyIds', 'logId', 'headSeq', 'headHash', 'cardId', 'createdAt'], 'kernel legacy');
+  e = onlyFields(l, ['schemaVersion', 'keysDigest', 'keyCount', 'logId', 'headSeq', 'headHash', 'cardId', 'createdAt'], 'kernel legacy');
   if (e) return e;
-  if (!Array.isArray(l.keyIds) || l.keyIds.length < 1 || l.keyIds.length > KERNEL_LEGACY_MAX_KEYS) return `a kernel legacy row seals 1..${KERNEL_LEGACY_MAX_KEYS} key ids`;
-  const seen = new Set<string>();
-  for (const v of l.keyIds as unknown[]) {
-    if (typeof v !== 'string' || !/^gkey:v1:[0-9a-f]{64}$/.test(v) || seen.has(v)) return 'a kernel legacy key id is a unique gkey:v1:<64 hex>';
-    seen.add(v);
-  }
+  if (typeof l.keysDigest !== 'string' || !SHA256_TAG.test(l.keysDigest)) return 'a kernel legacy row names its keys digest';
+  if (typeof l.keyCount !== 'number' || !Number.isSafeInteger(l.keyCount) || l.keyCount < 1 || l.keyCount > KERNEL_LEGACY_MAX_COUNT) return `a kernel legacy row seals 1..${KERNEL_LEGACY_MAX_COUNT} keys`;
   if (typeof l.logId !== 'string' || !/^log:[0-9A-HJKMNP-TV-Z]{26}$/.test(l.logId)) return 'a kernel legacy row names its log';
   if (typeof l.headSeq !== 'number' || !Number.isSafeInteger(l.headSeq) || l.headSeq < 0) return 'a kernel legacy row names its head seq (a whole number)';
   if (typeof l.headHash !== 'string' || !SHA256_TAG.test(l.headHash)) return 'a kernel legacy row names its head hash';
@@ -365,7 +367,7 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       return logQuarantineRowRefusal(rows[0]!);
     case 'kernel-custody':
       // helper 1.11.0 (TD-2026-10-29-746): register the kernel-cert key, then seal the legacy kernel keys
-      if (kinds.length !== 2 || kinds[0] !== KERNEL_CERT_KEY_SCHEMA || kinds[1] !== KERNEL_LEGACY_SCHEMA) return 'a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row';
+      if (kinds.length !== 2 || kinds[0] !== KERNEL_CERT_KEY_SCHEMA || kinds[1] !== KERNEL_LEGACY_SCHEMA) return 'a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v2 row';
       return kernelCustodyRefusal(rows);
     case 'permission':
     case 'mod.mcp.config':
@@ -483,8 +485,9 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
     case KERNEL_LEGACY_SCHEMA: {
       const [log, h] = [s('logId'), s('headHash')];
       const seq = r.headSeq;
-      if (!Array.isArray(r.keyIds) || log === null || h === null || typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
-      return `seal ${r.keyIds.length} legacy kernel keys of ${log} at seq ${seq} ${h.slice(0, 19)}`;
+      const [n, d] = [r.keyCount, s('keysDigest')];
+      if (typeof n !== 'number' || !Number.isSafeInteger(n) || d === null || log === null || h === null || typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
+      return `seal ${n} legacy kernel keys ${d.slice(0, 19)} of ${log} at seq ${seq} ${h.slice(0, 19)}`;
     }
     default:
       return null;

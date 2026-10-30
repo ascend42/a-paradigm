@@ -17,7 +17,7 @@ import { presenceModeRowHash, ROW_TABLE_KINDS, ROW_TABLE_MIN_HELPER } from '../s
 describe('helper 1.11.0 row tables (TD-2026-10-29-746 / -894, G-HLP-03/04)', () => {
   it('presence.mode and kernel-custody need helper 1.11.0 and are in the closed table', () => {
     expect(ROW_TABLE_MIN_HELPER['presence.mode']).toBe('1.11.0');
-    expect(ROW_TABLE_MIN_HELPER['kernel-custody']).toBe('1.11.0');
+    expect(ROW_TABLE_MIN_HELPER['kernel-custody']).toBe('1.11.1'); // Aegis S2 M-4: the v2 legacy row
     expect(ROW_TABLE_KINDS).toEqual(expect.arrayContaining(['presence.mode', 'kernel-custody']));
   });
 

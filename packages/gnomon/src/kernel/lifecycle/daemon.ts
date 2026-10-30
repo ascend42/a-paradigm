@@ -848,8 +848,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       const cardId = mintId('card');
       const all = readKernelPubs(home);
       const legacy = all.filter((e) => !(e.keyId === kernelSigner.keyId && e.cert)).map((e) => e.keyId);
-      const rows = migrationRows({ cert, legacyKeyIds: legacy, currentKeyId: kernelSigner.keyId, head: log.head(), cardId });
-      const sealedN = (rows[1].keyIds as string[]).length;
+      const { rows, keyIds: sealedIds } = migrationRows({ cert, legacyKeyIds: legacy, currentKeyId: kernelSigner.keyId, head: log.head(), cardId });
+      const sealedN = sealedIds.length;
       migrationCardId = cardId;
       await broker.raise({
         kind: 'grant',
@@ -857,7 +857,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         requestedBy: kernelPrincipal,
         attended: true,
         detail: { action: 'kernel-custody', certKeyId: cert.certKeyId, legacyKeys: sealedN, logId: rows[1].logId, headSeq: rows[1].headSeq, rootRows: rows },
-        lines: migrationCardLines({ legacyKeys: sealedN, dropped: Math.max(0, legacy.length - sealedN), certKeyId: cert.certKeyId }),
+        lines: migrationCardLines({ legacyKeys: sealedN, certKeyId: cert.certKeyId }),
         decisions: ['allow', 'deny'],
         handOnly: true,
         timeoutMs: 12 * 3600_000,
@@ -872,7 +872,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           const [k, l] = ctx.prepared?.rows ?? [];
           const [ks, ls] = ctx.rowSigs ?? [];
           if (!k || !l || !ks || !ls) throw new Error('#kernel-custody: the seal commits only its prepared, root-signed rows');
-          writeKernelSeal(home, { row: k, signer: ks.signer, sig: ks.sig }, { row: l, signer: ls.signer, sig: ls.sig });
+          writeKernelSeal(home, { row: k, signer: ks.signer, sig: ks.sig }, { row: l, signer: ls.signer, sig: ls.sig }, sealedIds);
           sealRead = readKernelSeal(home, authority);
         },
       }).catch(() => {

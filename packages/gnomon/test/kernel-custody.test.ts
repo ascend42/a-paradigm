@@ -135,9 +135,9 @@ describe('kernel cert (G-ID-14): the TS mirror of the helper verifier, bound to 
 describe('the seal (G-ID-14): kernel-pub.jsonl after the migration card', () => {
   const sealed = (h: string, ck: { priv: KeyObject; x963: Buffer }, legacy: string[], root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK)) => {
     const s0 = SoftwareEd25519Signer.generate();
-    const rows = migrationRows({ cert: issue(ck, s0), legacyKeyIds: legacy, currentKeyId: s0.keyId, head: { log: LOG, seq: 9, hash: `sha256:${'1'.repeat(64)}` }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
-    const [k, l] = rows.map((r) => ({ ...r, createdAt: '2026-10-29T00:00:00.000Z' }));
-    writeKernelSeal(h, { row: k!, ...root.signRow(k) }, { row: l!, ...root.signRow(l) });
+    const m = migrationRows({ cert: issue(ck, s0), legacyKeyIds: legacy, currentKeyId: s0.keyId, head: { log: LOG, seq: 9, hash: `sha256:${'1'.repeat(64)}` }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
+    const [k, l] = m.rows.map((r) => ({ ...r, createdAt: '2026-10-29T00:00:00.000Z' }));
+    writeKernelSeal(h, { row: k!, ...root.signRow(k) }, { row: l!, ...root.signRow(l) }, m.keyIds);
     return root;
   };
 
@@ -179,21 +179,34 @@ describe('the seal (G-ID-14): kernel-pub.jsonl after the migration card', () => 
     expect(readKernelSeal(home(), new DevTestRootAuthority(DEV_TEST_ROOT_ACK)).state).toBe('none');
   });
 
-  it('the migration rows pass the kernel-custody row table; at most 64 legacy keys, newest kept, never empty; the card says it plainly', async () => {
-    const { rowTableRefusal } = await import('../src/kernel/identity/decision-batch.js');
+  it('M-4: the migration rows seal EVERY legacy key by digest and count, pass the row table, never empty; the card says it plainly', async () => {
+    const { rowTableRefusal, legacyKeysDigest } = await import('../src/kernel/identity/decision-batch.js');
     const ck = certKey();
     const s = SoftwareEd25519Signer.generate();
-    const ids = Array.from({ length: 70 }, (_, i) => `gkey:v1:${i.toString(16).padStart(64, '0')}`);
-    const rows = migrationRows({ cert: issue(ck, s), legacyKeyIds: ids, currentKeyId: s.keyId, head: { log: LOG, seq: 3, hash: `sha256:${'2'.repeat(64)}` }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
-    expect((rows[1].keyIds as string[]).length).toBe(64);
-    expect((rows[1].keyIds as string[]).at(-1)).toBe(ids.at(-1));
-    expect(rowTableRefusal('kernel-custody', rows.map((r) => ({ ...r, createdAt: '2026-10-29T00:00:00.000Z' })))).toBeNull();
-    expect(migrationRows({ cert: issue(ck, s), legacyKeyIds: [], currentKeyId: s.keyId, head: { log: LOG, seq: 0, hash: `sha256:${'2'.repeat(64)}` }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' })[1].keyIds).toEqual([s.keyId]);
-    const lines = migrationCardLines({ legacyKeys: 64, dropped: 6, certKeyId: tag(ck.x963) }).join('\n');
+    const ids = Array.from({ length: 200 }, (_, i) => `gkey:v1:${i.toString(16).padStart(64, '0')}`);
+    const m = migrationRows({ cert: issue(ck, s), legacyKeyIds: ids, currentKeyId: s.keyId, head: { log: LOG, seq: 3, hash: `sha256:${'2'.repeat(64)}` }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
+    expect(m.keyIds.length).toBe(200);
+    expect(m.rows[1]).toMatchObject({ schemaVersion: 'gnomon-kernel-legacy:v2', keyCount: 200, keysDigest: legacyKeysDigest(ids) });
+    expect(rowTableRefusal('kernel-custody', m.rows.map((r) => ({ ...r, createdAt: '2026-10-29T00:00:00.000Z' })))).toBeNull();
+    expect(migrationRows({ cert: issue(ck, s), legacyKeyIds: [], currentKeyId: s.keyId, head: { log: LOG, seq: 0, hash: `sha256:${'2'.repeat(64)}` }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }).keyIds).toEqual([s.keyId]);
+    const lines = migrationCardLines({ legacyKeys: 200, certKeyId: tag(ck.x963), sinceLastVerified: 2 }).join('\n');
     expect(lines).toMatch(/one time/);
     expect(lines).toMatch(/partial/);
     expect(lines).toMatch(/Not now/);
-    expect(lines).toMatch(/6 older kernel keys/);
+    expect(lines).toMatch(/2 of them were recorded since the last verified start/);
+  });
+
+  it('FALSIFIER (M-4): a seal file whose key list is not the signed digest or count does not verify', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { kernelCustodyPath } = await import('../src/kernel/identity/index.js');
+    const h = home();
+    const a = `gkey:v1:${'a'.repeat(64)}`;
+    const root = sealed(h, certKey(), [a]);
+    expect(readKernelSeal(h, root).state).toBe('sealed');
+    const doc = JSON.parse(readFileSync(kernelCustodyPath(h), 'utf8'));
+    doc.legacyKeyIds = [a, `gkey:v1:${'b'.repeat(64)}`].sort();
+    writeFileSync(kernelCustodyPath(h), JSON.stringify(doc));
+    expect(readKernelSeal(h, root)).toMatchObject({ state: 'invalid', why: expect.stringMatching(/digest or count/) });
   });
 
   it('custody is full only with a cert, a seal of that cert key and no anchor quarantine', () => {

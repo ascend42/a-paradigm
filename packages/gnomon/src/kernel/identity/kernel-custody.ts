@@ -14,7 +14,7 @@
  * THE SEAL (the migration card). kernel-pub.jsonl is same-user appendable, so on its own it proves nothing. The first
  * start that holds a cert while no seal exists raises ONE root card (`grant`, detail.action `kernel-custody`, row
  * table kernel-custody: helper ≥ 1.11.0) whose single Touch ID signs [the kernel-cert key row, the legacy row]: the
- * helper's cert key is registered, and the kernel keys used before it (≤ KERNEL_LEGACY_MAX_KEYS, newest first) are
+ * helper's cert key is registered, and the kernel keys used before it (every one, by digest; Aegis S2 M-4) are
  * sealed as legacy together with the log head at the seal. The signed rows live in `<home>/keys/kernel-custody.json`
  * (0600) and are re-verified against the root at every start (`readKernelSeal`). After the seal:
  *   - a kernel-pub entry is trusted as kernel-authored only with a cert that verifies under the registered cert key
@@ -33,7 +33,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { normalizeBootId, readBootSession } from '../log/boot.js';
 import { ed25519KeyId, type SoftwareEd25519Signer } from '../log/signer.js';
-import { KERNEL_CERT_KEY_SCHEMA, KERNEL_LEGACY_MAX_KEYS, KERNEL_LEGACY_SCHEMA, kernelCustodyRefusal } from './decision-batch.js';
+import { KERNEL_CERT_KEY_SCHEMA, KERNEL_LEGACY_SCHEMA, kernelCustodyRefusal, legacyKeysDigest } from './decision-batch.js';
 import { ensureKeysDir, keysDir } from './device-key.js';
 import { HELPER_OP_MIN, versionAtLeast, type HelperTransport } from './helper.js';
 
@@ -186,6 +186,8 @@ export interface KernelCustodyDoc {
   schemaVersion: typeof KERNEL_CUSTODY_DOC_SCHEMA;
   certKey: SignedRow;
   legacy: SignedRow;
+  /** Aegis S2 M-4: EVERY sealed legacy key id, sorted; the root-signed legacy row carries their digest and count */
+  legacyKeyIds: string[];
 }
 
 /** A verified seal: the registered cert key and the sealed legacy keys. */
@@ -240,18 +242,20 @@ export function readKernelSeal(home: string, root: { readonly rootKeyId: string 
   const why = kernelCustodyRefusal([k, l]);
   if (why) return { state: 'invalid', why };
   if (k.cardId !== l.cardId || typeof k.cardId !== 'string') return { state: 'invalid', why: 'the seal rows come from different decisions' };
+  const ids = Array.isArray(doc.legacyKeyIds) && doc.legacyKeyIds.every((v) => typeof v === 'string' && /^gkey:v1:[0-9a-f]{64}$/.test(v)) ? doc.legacyKeyIds : null;
+  if (!ids || ids.length !== l.keyCount || new Set(ids).size !== ids.length || legacyKeysDigest(ids) !== l.keysDigest) return { state: 'invalid', why: "the seal's key list is not the one the root signed (digest or count)" };
   return {
     state: 'sealed',
-    seal: { certKey: k.certKey as string, certKeyId: k.certKeyId as string, legacyKeyIds: new Set(l.keyIds as string[]), logId: l.logId as string, headSeq: l.headSeq as number, headHash: l.headHash as string, cardId: k.cardId },
+    seal: { certKey: k.certKey as string, certKeyId: k.certKeyId as string, legacyKeyIds: new Set(ids), logId: l.logId as string, headSeq: l.headSeq as number, headHash: l.headHash as string, cardId: k.cardId },
   };
 }
 
 /** Write the seal (0600, tmp + rename) from the migration card's root-signed rows. */
-export function writeKernelSeal(home: string, certKey: SignedRow, legacy: SignedRow): void {
+export function writeKernelSeal(home: string, certKey: SignedRow, legacy: SignedRow, legacyKeyIds: readonly string[]): void {
   ensureKeysDir(home);
   const file = kernelCustodyPath(home);
   const tmp = `${file}.tmp`;
-  const doc: KernelCustodyDoc = { schemaVersion: KERNEL_CUSTODY_DOC_SCHEMA, certKey, legacy };
+  const doc: KernelCustodyDoc = { schemaVersion: KERNEL_CUSTODY_DOC_SCHEMA, certKey, legacy, legacyKeyIds: [...new Set(legacyKeyIds)].sort() };
   const fd = fs.openSync(tmp, 'w', 0o600);
   try {
     fs.writeSync(fd, `${JSON.stringify(doc)}\n`);
@@ -264,25 +268,30 @@ export function writeKernelSeal(home: string, certKey: SignedRow, legacy: Signed
 }
 
 /**
- * The migration card's rows (createdAt is added at prepare): register `cert`'s key, seal `legacyKeyIds` (the newest
- * KERNEL_LEGACY_MAX_KEYS; never empty — a home whose only key is certified seals that key) and the log head.
+ * The migration card's rows (createdAt is added at prepare): register `cert`'s key and seal EVERY legacy key by digest
+ * (Aegis S2 M-4; never empty — a home whose only key is certified seals that key) and the log head. `keyIds` is the
+ * sorted list the seal file keeps beside the rows.
  */
-export function migrationRows(o: { cert: KernelCertRecord; legacyKeyIds: readonly string[]; currentKeyId: string; head: { log: string; seq: number; hash: string }; cardId: string }): [Record<string, unknown>, Record<string, unknown>] {
-  const ids = [...new Set(o.legacyKeyIds)].slice(-KERNEL_LEGACY_MAX_KEYS);
+export function migrationRows(o: { cert: KernelCertRecord; legacyKeyIds: readonly string[]; currentKeyId: string; head: { log: string; seq: number; hash: string }; cardId: string }): { rows: [Record<string, unknown>, Record<string, unknown>]; keyIds: string[] } {
+  const ids = [...new Set(o.legacyKeyIds)].sort();
   if (ids.length === 0) ids.push(o.currentKeyId);
-  return [
-    { schemaVersion: KERNEL_CERT_KEY_SCHEMA, certKey: o.cert.certKey, certKeyId: o.cert.certKeyId, cardId: o.cardId },
-    { schemaVersion: KERNEL_LEGACY_SCHEMA, keyIds: ids, logId: o.head.log, headSeq: o.head.seq, headHash: o.head.hash, cardId: o.cardId },
-  ];
+  return {
+    keyIds: ids,
+    rows: [
+      { schemaVersion: KERNEL_CERT_KEY_SCHEMA, certKey: o.cert.certKey, certKeyId: o.cert.certKeyId, cardId: o.cardId },
+      { schemaVersion: KERNEL_LEGACY_SCHEMA, keysDigest: legacyKeysDigest(ids), keyCount: ids.length, logId: o.head.log, headSeq: o.head.seq, headHash: o.head.hash, cardId: o.cardId },
+    ],
+  };
 }
 
 /** The migration card's words (TD-2026-10-29-746): one clear, one-time move. */
-export function migrationCardLines(o: { legacyKeys: number; dropped: number; certKeyId: string }): string[] {
+export function migrationCardLines(o: { legacyKeys: number; certKeyId: string; sinceLastVerified?: number }): string[] {
   return [
     "Protect Gnomon's log with the helper (one time)",
     "From now on the signed Gnomon helper vouches for the kernel's key at every start, so nothing else on this Mac can sign log entries as Gnomon.",
     `This one Touch ID registers the helper's certifying key (${o.certKeyId.slice(7, 19)}) and seals the ${o.legacyKeys} kernel key${o.legacyKeys === 1 ? '' : 's'} Gnomon used before today.`,
-    ...(o.dropped > 0 ? [`${o.dropped} older kernel key${o.dropped === 1 ? ' is' : 's are'} past the ${KERNEL_LEGACY_MAX_KEYS}-key limit and will no longer verify.`] : []),
+    // Aegis S2 L-4: what was appended since the last start that verified, so a planted key is visible before the touch
+    ...(o.sinceLastVerified !== undefined ? [`${o.sinceLastVerified} of them ${o.sinceLastVerified === 1 ? 'was' : 'were'} recorded since the last verified start.`] : []),
     'History from before today stays labelled partial. After this, only kernel keys the helper certified are trusted.',
     'Not now: Gnomon keeps working as today (custody partial) and asks again at the next start.',
   ];

@@ -159,7 +159,7 @@ add('C3: a presence.mode row field outside the closed set', PM, batch('presence.
 const CERT_PUB = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]);
 const sha = (b: Buffer) => `sha256:${createHash('sha256').update(b).digest('hex')}`;
 const certKeyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-cert-key:v1', certKey: CERT_PUB.toString('base64'), certKeyId: sha(CERT_PUB), cardId: C, createdAt: T, ...o });
-const legacyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-legacy:v1', keyIds: [`gkey:v1:${'1'.repeat(64)}`, `gkey:v1:${'2'.repeat(64)}`], logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', headSeq: 812, headHash: H2, cardId: C, createdAt: T, ...o });
+const legacyRow = (o: R = {}) => ({ schemaVersion: 'gnomon-kernel-legacy:v2', keysDigest: 'sha256:' + 'f'.repeat(64), keyCount: 37, logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZA', headSeq: 812, headHash: H2, cardId: C, createdAt: T, ...o });
 add('kernel-custody: register the kernel-cert key and seal the legacy keys', PM, batch('kernel-custody', 'allow', [certKeyRow(), legacyRow()]));
 add('C3: a kernel-custody in the wrong order', PM, batch('kernel-custody', 'allow', [legacyRow(), certKeyRow()]));
 add('C3: a kernel-custody without the legacy seal', PM, batch('kernel-custody', 'allow', [certKeyRow()]));
@@ -178,7 +178,7 @@ add('C3: a log.quarantine with no head hash', PM, batch('log.quarantine', 'allow
 add('C3: a log.quarantine never signs a second row', PM, batch('log.quarantine', 'allow', [qRow(), modeRow()]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
-  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
+  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769; 1.10.0 adds permission, G-HLP-02; 1.11.0 adds presence.mode and kernel-custody, G-HLP-03/04; 1.11.1 seals the legacy keys by digest, Aegis S2 M-4). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
   vectors: v,
 };
 writeFileSync(process.argv[2]!, JSON.stringify(out, null, 2) + '\n');

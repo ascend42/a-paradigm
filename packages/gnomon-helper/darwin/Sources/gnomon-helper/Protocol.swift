@@ -384,7 +384,7 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
         return logQuarantineRowRefusal(rows[0])
     case "kernel-custody":
         // 1.11.0 (TD-2026-10-29-746): the migration card registers the kernel-cert key, then seals the legacy kernel keys
-        guard kinds == [kernelCertKeySchema, kernelLegacySchema] else { return "a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v1 row" }
+        guard kinds == [kernelCertKeySchema, kernelLegacySchema] else { return "a kernel-custody signs a gnomon-kernel-cert-key:v1 row, then a gnomon-kernel-legacy:v2 row" }
         return kernelCustodyRefusal(rows)
     case "permission", "mod.mcp.config", "api-token", "peer-pair", "grant":
         // 1.10.0 (G-HLP-02): a destructive brokered Always (`permission`) signs its decision row only, like these
@@ -458,8 +458,10 @@ func localRowRefusal(_ r: Json) -> String? {
 
 let presenceModeSchema = "gnomon-presence-mode:v1"
 let kernelCertKeySchema = "gnomon-kernel-cert-key:v1"
-let kernelLegacySchema = "gnomon-kernel-legacy:v1"
-let kernelLegacyMaxKeys = 64
+/// 1.11.1 (Aegis S2 M-4): the legacy row seals EVERY legacy key by digest (keysDigest = sha256 of the sorted key ids
+/// joined by \n, keyCount = how many); the full list lives beside it in the kernel's seal file.
+let kernelLegacySchema = "gnomon-kernel-legacy:v2"
+let kernelLegacyMaxCount = 1_000_000
 
 /// A closed field set: nil = only these keys.
 private func onlyFields(_ r: Json, _ fields: Set<String>, _ what: String) -> String? {
@@ -489,12 +491,9 @@ func kernelCustodyRefusal(_ rows: [Json]) -> String? {
     guard let b64 = k["certKey"] as? String, b64.count == 88, let raw = Data(base64Encoded: b64), raw.count == 65, raw.first == 0x04,
           raw.base64EncodedString() == b64 else { return "a kernel-cert key row names a P-256 X9.63 public key" }
     guard k["certKeyId"] as? String == sha256Tag(raw) else { return "a kernel-cert key row's certKeyId is sha256 of its key" }
-    if let e = onlyFields(l, ["schemaVersion", "keyIds", "logId", "headSeq", "headHash", "cardId", "createdAt"], "kernel legacy") { return e }
-    guard let ids = l["keyIds"] as? [Any], ids.count >= 1, ids.count <= kernelLegacyMaxKeys else { return "a kernel legacy row seals 1..\(kernelLegacyMaxKeys) key ids" }
-    var seen = Set<String>()
-    for v in ids {
-        guard let s = v as? String, fullMatch(s, "^gkey:v1:[0-9a-f]{64}$"), seen.insert(s).inserted else { return "a kernel legacy key id is a unique gkey:v1:<64 hex>" }
-    }
+    if let e = onlyFields(l, ["schemaVersion", "keysDigest", "keyCount", "logId", "headSeq", "headHash", "cardId", "createdAt"], "kernel legacy") { return e }
+    guard let d = l["keysDigest"] as? String, fullMatch(d, "^sha256:[0-9a-f]{64}$") else { return "a kernel legacy row names its keys digest" }
+    guard let n = jsonWhole(l["keyCount"]), n >= 1, n <= kernelLegacyMaxCount else { return "a kernel legacy row seals 1..\(kernelLegacyMaxCount) keys" }
     guard let log = l["logId"] as? String, fullMatch(log, "^log:[0-9A-HJKMNP-TV-Z]{26}$") else { return "a kernel legacy row names its log" }
     guard jsonWhole(l["headSeq"]) != nil else { return "a kernel legacy row names its head seq (a whole number)" }
     guard let h = l["headHash"] as? String, fullMatch(h, "^sha256:[0-9a-f]{64}$") else { return "a kernel legacy row names its head hash" }
@@ -677,8 +676,8 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
         guard let id = s("certKeyId") else { return nil }
         return "register the kernel-cert key \(id.prefix(19))"
     case kernelLegacySchema:
-        guard let ids = r["keyIds"] as? [Any], let log = s("logId"), let seq = jsonWhole(r["headSeq"]), let h = s("headHash") else { return nil }
-        return "seal \(ids.count) legacy kernel keys of \(log) at seq \(seq) \(h.prefix(19))"
+        guard let n = jsonWhole(r["keyCount"]), let d = s("keysDigest"), let log = s("logId"), let seq = jsonWhole(r["headSeq"]), let h = s("headHash") else { return nil }
+        return "seal \(n) legacy kernel keys \(d.prefix(19)) of \(log) at seq \(seq) \(h.prefix(19))"
     default:
         return nil
     }
