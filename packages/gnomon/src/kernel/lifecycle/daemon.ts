@@ -538,7 +538,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // #kernel-custody (S2): the seal, verified against the root; before it, today's behaviour (record, all partial).
     // After it, only certified and sealed legacy keys join the ring, and this start's key is recorded with its cert.
     // Aegis S2 H-1: the seal is resolved against the anchored log too; missing, invalid or replaced fails closed
-    custody = resolveCustody(home, authority);
+    custody = resolveCustody(home, authority, kernelPrincipals); // C-1: only kernel-principal, root-authenticated seal rows
     sealRead = custody.read;
     if (typeof pem === 'string' && custody.mode === 'unsealed' && !sealFilePresent(home)) recordKernelPub(home, pem);
     const keyRing = new KeyRing();
@@ -589,6 +589,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
       seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
       ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
+      ...(custody.ignoredRows?.length ? { sealRowsIgnored: custody.ignoredRows.map((r) => r.why) } : {}),
       ...(pubRefused ? { partialBecause: [...c.partialBecause, 'kernel-pub.jsonl is sealed and this start has no cert'] } : {}),
     };
   };

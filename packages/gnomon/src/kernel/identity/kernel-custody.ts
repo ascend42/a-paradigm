@@ -202,6 +202,8 @@ export interface KernelSeal {
   headSeq: number;
   headHash: string;
   cardId: string;
+  /** Aegis S2 C-1: the root-signed kernel-cert key row, embedded in the log's seal row so it can be authenticated */
+  certKeyRow?: SignedRow;
 }
 
 export type SealRead = { state: 'none' } | { state: 'sealed'; seal: KernelSeal } | { state: 'invalid'; why: string };
@@ -249,7 +251,7 @@ export function readKernelSeal(home: string, root: { readonly rootKeyId: string 
   if (!ids || ids.length !== l.keyCount || new Set(ids).size !== ids.length || legacyKeysDigest(ids) !== l.keysDigest) return { state: 'invalid', why: "the seal's key list is not the one the root signed (digest or count)" };
   return {
     state: 'sealed',
-    seal: { certKey: k.certKey as string, certKeyId: k.certKeyId as string, legacyKeyIds: new Set(ids), logId: l.logId as string, headSeq: l.headSeq as number, headHash: l.headHash as string, cardId: k.cardId },
+    seal: { certKey: k.certKey as string, certKeyId: k.certKeyId as string, legacyKeyIds: new Set(ids), logId: l.logId as string, headSeq: l.headSeq as number, headHash: l.headHash as string, cardId: k.cardId, certKeyRow: doc.certKey },
   };
 }
 
@@ -357,21 +359,41 @@ export interface LoggedSeal {
   sealDigest: string;
 }
 
+type RootLike = { readonly rootKeyId: string | null; verifyRow(signer: string, row: unknown, sigB64: string): boolean };
+
+/** Aegis S2 C-1: why a seal row was ignored (status.kernelCustody.sealRowsIgnored). */
+export interface IgnoredSealRow {
+  seq: number;
+  why: string;
+}
+
 /**
- * The latest `custody: 'sealed'` row of this home's log, read BEFORE the log opens (read-only, every segment). The row
- * is trusted because the log is hash-chained and helper-anchored (#log-anchor): removing it forks the chain.
+ * The latest AUTHENTICATED `custody: 'sealed'` row of this home's log, read BEFORE the log opens (read-only, every
+ * segment). Aegis S2 C-1: a row is accepted only when its principal is the kernel's and its payload embeds the
+ * ROOT-SIGNED kernel-cert key row (verified with the root, schema, the same certKey / certKeyId and cardId). A row
+ * anyone appended with a self-made cert key never verifies under the root, so it is ignored (and reported). Removing
+ * a genuine row forks the anchored chain.
  */
-export function loggedSeal(home: string): LoggedSeal | null {
+export function loggedSeal(home: string, root?: RootLike, kernelPrincipals: readonly string[] = [], ignored: IgnoredSealRow[] = []): LoggedSeal | null {
   const files = [...listSealedSegments(home).map((s) => s.file), path.join(home, ACTIVE_DB)].filter((f) => fs.existsSync(f));
   let best: LoggedSeal | null = null;
   for (const f of files) {
     let db: DatabaseSync | undefined;
     try {
       db = new DatabaseSync(f, { readOnly: true });
-      const rows = db.prepare('SELECT seq, envelope FROM chain WHERE kind = ? ORDER BY seq').all(KERNEL_SEAL_ROW_KIND) as Array<{ seq: number; envelope: string }>;
+      const rows = db.prepare('SELECT seq, principal, envelope FROM chain WHERE kind = ? ORDER BY seq').all(KERNEL_SEAL_ROW_KIND) as Array<{ seq: number; principal: string; envelope: string }>;
       for (const r of rows) {
         const p = (JSON.parse(r.envelope) as { payload?: Record<string, unknown> }).payload ?? {};
-        if (p.custody !== 'sealed' || typeof p.certKeyId !== 'string' || typeof p.certKey !== 'string' || typeof p.sealDigest !== 'string' || typeof p.cardId !== 'string') continue;
+        if (p.custody !== 'sealed') continue;
+        if (typeof p.certKeyId !== 'string' || typeof p.certKey !== 'string' || typeof p.sealDigest !== 'string' || typeof p.cardId !== 'string') {
+          ignored.push({ seq: r.seq, why: 'malformed seal row' });
+          continue;
+        }
+        const why = sealRowRefusal(r.principal, p, root, kernelPrincipals);
+        if (why) {
+          ignored.push({ seq: r.seq, why });
+          continue;
+        }
         if (!best || r.seq > best.seq) best = { seq: r.seq, cardId: p.cardId, certKeyId: p.certKeyId, certKey: p.certKey, sealDigest: p.sealDigest };
       }
     } catch {
@@ -381,6 +403,18 @@ export function loggedSeal(home: string): LoggedSeal | null {
     }
   }
   return best;
+}
+
+/** Aegis S2 C-1: null = the seal row is the kernel's and carries the root-signed cert-key row it names. */
+export function sealRowRefusal(principal: string, p: Record<string, unknown>, root: RootLike | undefined, kernelPrincipals: readonly string[]): string | null {
+  if (!kernelPrincipals.includes(principal)) return 'not written by the kernel principal';
+  if (!root?.rootKeyId) return 'no root to authenticate it';
+  const s = p.certKeyRow as SignedRow | undefined;
+  if (!s || typeof s !== 'object' || typeof s.signer !== 'string' || typeof s.sig !== 'string' || !s.row || typeof s.row !== 'object') return 'no root-signed cert-key row';
+  if (s.signer !== root.rootKeyId || !root.verifyRow(s.signer, s.row, s.sig)) return 'the cert-key row is not signed by the root';
+  const k = s.row;
+  if (k.schemaVersion !== KERNEL_CERT_KEY_SCHEMA || k.certKey !== p.certKey || k.certKeyId !== p.certKeyId || k.cardId !== p.cardId) return 'the cert-key row names another key or decision';
+  return null;
 }
 
 /** How this start trusts kernel-pub.jsonl. */
@@ -393,6 +427,8 @@ export interface CustodyResolution {
   /** the file is sealed and verified but the log holds no row yet (a crash right after the card): append one */
   heal?: boolean;
   logged: LoggedSeal | null;
+  /** Aegis S2 C-1: seal rows ignored as unauthenticated */
+  ignoredRows?: IgnoredSealRow[];
 }
 
 /**
@@ -404,9 +440,15 @@ export interface CustodyResolution {
  *   - no logged seal and a verified file: sealed, and the row is appended now (heal);
  *   - neither: unsealed (today's behaviour; the migration card may be offered).
  */
-export function resolveCustody(home: string, root: { readonly rootKeyId: string | null; verifyRow(signer: string, row: unknown, sigB64: string): boolean }): CustodyResolution {
+export function resolveCustody(home: string, root: RootLike, kernelPrincipals: readonly string[] = []): CustodyResolution {
   const read = readKernelSeal(home, root);
-  const logged = loggedSeal(home);
+  const ignoredRows: IgnoredSealRow[] = [];
+  const logged = loggedSeal(home, root, kernelPrincipals, ignoredRows);
+  const r0 = resolveWith(read, logged, home);
+  return ignoredRows.length ? { ...r0, ignoredRows } : r0;
+}
+
+function resolveWith(read: SealRead, logged: LoggedSeal | null, home: string): CustodyResolution {
   const tampered = (why: string, certKey: string, certKeyId: string): CustodyResolution => ({
     mode: 'tampered',
     why,
@@ -426,7 +468,7 @@ export function resolveCustody(home: string, root: { readonly rootKeyId: string 
 
 /** The seal row's payload for the current seal file. */
 export function sealRowPayload(home: string, seal: KernelSeal): Record<string, unknown> {
-  return { custody: 'sealed', cardId: seal.cardId, certKeyId: seal.certKeyId, certKey: seal.certKey, sealDigest: sealDigestOf(home) };
+  return { custody: 'sealed', cardId: seal.cardId, certKeyId: seal.certKeyId, certKey: seal.certKey, sealDigest: sealDigestOf(home), ...(seal.certKeyRow ? { certKeyRow: seal.certKeyRow } : {}) };
 }
 
 /** Lines of the root card a tampered seal raises (it re-seals with NO legacy key: fail closed). */
