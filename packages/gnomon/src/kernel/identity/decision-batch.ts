@@ -203,7 +203,15 @@ export function logQuarantineRowRefusal(r: Row): string | null {
  */
 export const CLICK_APPROVE_DOMAIN = 'gnomon:approve:v2\n';
 export const CLICK_KEY_PREFIX = 'click:';
+/** The root card kinds, named in the refusal text only (the rule is the allowlist below). */
 export const CLICK_ROOT_KINDS: readonly string[] = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config', 'presence.mode', 'kernel-custody', 'log.quarantine', 'repin', 'root-grant']);
+/**
+ * Aegis S2 M-3 (helper 1.11.1, ClickKey.swift clickApprovableKinds): the card kinds a click may approve, an ALLOWLIST.
+ * A kind not listed (a root kind, voice-arm, a kind added later, a typo) is never a click. TD-2026-10-29-894: every
+ * approval is a click while Touch ID is off except Gnomon's own root actions; voice-arm stays off the list because it
+ * opens a standing helper-held unlock rather than deciding one card (conservative, S2 design choice).
+ */
+export const CLICK_APPROVABLE_KINDS: readonly string[] = Object.freeze(['permission', 'budget', 'knot', 'tend', 'verdict', 'merge-conflict', 'gate-class', 'fallback', 'ask-user', 'plan', 'voice-share', 'handoff', 'declassify', 'reconsider', 'strictness', 'incident', 'daemon-stop', 'loop-choice']);
 const CARD_CLASSES = ['reversible', 'destructive', 'irreversible'];
 export function clickApproveMessage(f: { cardId: string; cardKind: string; cardClass: string; decision: string; contentHash: string; approver: string; answerDigest?: string }): Buffer {
   return Buffer.from(`${CLICK_APPROVE_DOMAIN}${[f.cardId, f.cardKind, f.cardClass, f.decision, f.contentHash, f.approver, ...(f.answerDigest ? [f.answerDigest] : [])].join('\n')}`, 'utf8');
@@ -217,6 +225,7 @@ export function clickDecisionRefusal(m: Buffer): string | null {
   const [, kind, cls, decision] = f as [string, string, string, string];
   if (!CARD_CLASSES.includes(cls)) return 'an approve:v2 names its card class';
   if (CLICK_ROOT_KINDS.includes(kind)) return 'a root card is never approved by a click';
+  if (!CLICK_APPROVABLE_KINDS.includes(kind)) return 'a click approves only the click-approvable card kinds';
   if (decision === 'always' && cls !== 'reversible') return 'an always on a destructive or irreversible card is never a click';
   return null;
 }

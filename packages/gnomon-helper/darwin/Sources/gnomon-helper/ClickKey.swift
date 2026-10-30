@@ -1,4 +1,4 @@
-// gnomon-helper (darwin) 1.11.0 — the CLICK KEY, helper side (TD-2026-10-29-894/-746, G-HLP-04). While the global
+// gnomon-helper (darwin) 1.11.0 (allowlist 1.11.1) — the CLICK KEY, helper side (TD-2026-10-29-894/-746, G-HLP-04). While the global
 // Touch ID switch is OFF, a card approval is a click: the kernel asks this helper to sign `gnomon:approve:v1` with a
 // click key bound to the app-bound GUI connection, and rows carry the click keyId (the "click-made" mark).
 //
@@ -11,7 +11,7 @@
 //   click.sign {connId, keyId, messages[]}
 //     `gnomon:approve:v2` ONLY (Aegis S1 M1): the preimage itself names the card kind and class —
 //     gnomon:approve:v2\n<cardId>\n<cardKind>\n<cardClass>\n<decision>\n<contentHash>\n<approver>[\n<answerDigest>] —
-//     so the refusal never trusts a request field: never a root card kind (clickRootKinds), never `always` on a
+//     so the refusal never trusts a request field: only a click-approvable kind (clickApprovableKinds, 1.11.1), never `always` on a
 //     destructive or irreversible card, never presence:v1, approve-voice:v1, row-sig:v1 or approve:v1 (the presence
 //     domain). A verifier refuses the same (decision-batch.ts clickDecisionRefusal, shared click-approve vectors).
 //     At most 60 a minute (all keys) and 512 per key.
@@ -22,11 +22,16 @@
 import Foundation
 import Security
 
-/// The card kinds whose decisions are root actions (TD-2026-10-29-894): a click never signs for them. `permission`
-/// is not here: an ordinary permission card is a click when Touch ID is off, and its destructive Always is a root
+/// The card kinds whose decisions are root actions (TD-2026-10-29-894), named in the refusal text only: the rule is the
+/// allowlist below. An ordinary permission card is a click when Touch ID is off; its destructive Always is a root
 /// row that only decision.sign (one presence) can sign.
 let clickRootKinds: Set<String> = ["install", "uninstall", "voice.enrol", "mod.mcp.config", "api-token", "peer-pair", "grant", "loop-trust",
                                    "local.config", "presence.mode", "kernel-custody", "log.quarantine", "repin", "root-grant"]
+/// 1.11.1 (Aegis S2 M-3): the card kinds a click may approve, an ALLOWLIST (mirror of CLICK_APPROVABLE_KINDS in
+/// decision-batch.ts; shared click-approve vectors). A kind not listed — a root kind, voice-arm, a kind added later —
+/// is never a click.
+let clickApprovableKinds: Set<String> = ["permission", "budget", "knot", "tend", "verdict", "merge-conflict", "gate-class", "fallback", "ask-user",
+                                         "plan", "voice-share", "handoff", "declassify", "reconsider", "strictness", "incident", "daemon-stop", "loop-choice"]
 let maxClickKeys = 8
 let clickPerMinute = 60
 
@@ -158,6 +163,7 @@ func clickApproveRefusal(_ m: Data) -> String? {
     guard let a = parseClickApprove(m) else { return "a click key signs only gnomon:approve:v2 decisions" }
     guard cardClasses.contains(a.cardClass) else { return "an approve:v2 names its card class" }
     guard !clickRootKinds.contains(a.cardKind) else { return "a root card is never approved by a click" }
+    guard clickApprovableKinds.contains(a.cardKind) else { return "a click approves only the click-approvable card kinds" }
     guard !(a.decision == "always" && a.cardClass != "reversible") else { return "an always on a destructive or irreversible card is never a click" }
     return nil
 }

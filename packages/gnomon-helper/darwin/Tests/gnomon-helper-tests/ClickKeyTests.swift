@@ -164,6 +164,15 @@ final class ClickKeyTests: XCTestCase {
         }
     }
 
+    /// 1.11.1 (Aegis S2 M-3): the click rule is an allowlist; a kind not on it is refused even when it is no root kind.
+    func testTheClickRuleIsAnAllowlist() {
+        let msg = { (kind: String) in Data("gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\n\(kind)\nreversible\nallow\nsha256:\(String(repeating: "a", count: 64))\np:abcdefgh/matt".utf8) }
+        for k in clickApprovableKinds { XCTAssertNil(clickApproveRefusal(msg(k)), k) }
+        for k in ["question", "voice-arm", "future-kind", "Permission"] { XCTAssertEqual(clickApproveRefusal(msg(k)), "a click approves only the click-approvable card kinds", k) }
+        for k in clickRootKinds { XCTAssertEqual(clickApproveRefusal(msg(k)), "a root card is never approved by a click", k) }
+        XCTAssertTrue(clickApprovableKinds.isDisjoint(with: clickRootKinds))
+    }
+
     /// G-HLP-04: the click key's attributes and token blob are never read (S0 P2: a blob reloads in another process).
     func testTheBlobIsNeverExportedSourceGuard() throws {
         let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

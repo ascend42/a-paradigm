@@ -14,7 +14,7 @@
     },
     {
       "name": "an answer with its digest",
-      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nquestion\nreversible\nanswer\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\nsha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nask-user\nreversible\nanswer\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\nsha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "refused": null
     },
     {
@@ -121,6 +121,131 @@
       "name": "an empty field",
       "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\n\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
       "refused": "a click key signs only gnomon:approve:v2 decisions"
+    },
+    {
+      "name": "allowlist: a permission allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\npermission\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a budget allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nbudget\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a knot allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nknot\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a tend allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ntend\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a verdict allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nverdict\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a merge-conflict allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nmerge-conflict\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a gate-class allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ngate-class\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a fallback allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nfallback\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a ask-user allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nask-user\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a plan allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nplan\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a voice-share allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nvoice-share\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a handoff allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nhandoff\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a declassify allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ndeclassify\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a reconsider allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nreconsider\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a strictness allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nstrictness\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a incident allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nincident\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a daemon-stop allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ndaemon-stop\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: a loop-choice allow is a click",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nloop-choice\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": null
+    },
+    {
+      "name": "allowlist: \"question\" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nquestion\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a click approves only the click-approvable card kinds"
+    },
+    {
+      "name": "allowlist: \"voice-arm\" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nvoice-arm\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a click approves only the click-approvable card kinds"
+    },
+    {
+      "name": "allowlist: \"repin\" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nrepin\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a root card is never approved by a click"
+    },
+    {
+      "name": "allowlist: \"root-grant\" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nroot-grant\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a root card is never approved by a click"
+    },
+    {
+      "name": "allowlist: \"Permission\" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nPermission\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a click approves only the click-approvable card kinds"
+    },
+    {
+      "name": "allowlist: \"permission \" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\npermission \nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a click approves only the click-approvable card kinds"
+    },
+    {
+      "name": "allowlist: \"future-kind\" is not click-approvable",
+      "message": "gnomon:approve:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nfuture-kind\nreversible\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+      "refused": "a click approves only the click-approvable card kinds"
     }
   ]
 }

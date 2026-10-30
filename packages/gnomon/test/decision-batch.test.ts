@@ -44,6 +44,20 @@ describe('click decisions (Aegis S1 M1): the kind and class are in the approve:v
     expect(clickKeyedRefusal('click:abc', clickApproveMessage({ cardId: 'card:x', cardKind: 'permission', cardClass: 'destructive', decision: 'always', contentHash: 'sha256:00', approver: 'p:abcdefgh/matt' }))).toMatch(/always/);
     expect(clickKeyedRefusal('gkey:v1:abc', Buffer.from('gnomon:row-sig:v1\n{}'))).toBeNull();
   });
+  it('FALSIFIER (Aegis S2 M-3): the click rule is an allowlist; a kind not on it is refused even when it is no root kind', async () => {
+    const { CLICK_APPROVABLE_KINDS, CLICK_ROOT_KINDS } = await import('../src/kernel/identity/decision-batch.js');
+    const { CARD_KINDS } = await import('@a-company/gnomon-contracts');
+    const m = (cardKind: string) => clickApproveMessage({ cardId: 'card:x', cardKind, cardClass: 'reversible', decision: 'allow', contentHash: 'sha256:00', approver: 'p:abcdefgh/matt' });
+    for (const k of CLICK_APPROVABLE_KINDS) expect(clickDecisionRefusal(m(k)), k).toBeNull();
+    for (const k of ['question', 'voice-arm', 'future-kind', 'Permission']) expect(clickDecisionRefusal(m(k)), k).toBe('a click approves only the click-approvable card kinds');
+    for (const k of CLICK_ROOT_KINDS) expect(clickDecisionRefusal(m(k)), k).toBe('a root card is never approved by a click');
+    // every allowlisted kind is a real card kind and none is a root kind
+    for (const k of CLICK_APPROVABLE_KINDS) {
+      expect(CARD_KINDS as readonly string[], k).toContain(k);
+      expect(CLICK_ROOT_KINDS, k).not.toContain(k);
+    }
+    expect(CV.vectors.filter((v) => v.name.startsWith('allowlist:')).length).toBeGreaterThanOrEqual(CLICK_APPROVABLE_KINDS.length + 4);
+  });
 });
 
 type Vector = { name: string; approvals: string[]; root: string[]; intent: string | null; error: string | null; shown?: string };
