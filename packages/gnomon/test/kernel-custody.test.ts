@@ -27,6 +27,7 @@ import {
   type HelperTransport,
   type KernelCertRecord,
 } from '../src/kernel/identity/index.js';
+import { ensureGnomonHome } from '../src/kernel/lifecycle/home.js';
 import { KernelLog } from '../src/kernel/log/index.js';
 import { KeyRing, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 
@@ -39,9 +40,8 @@ afterEach(() => {
 const home = (): string => {
   const d = mkdtempSync(path.join(os.tmpdir(), 'gnomon-custody-'));
   dirs.push(d);
-  const h = path.join(d, '.gnomon');
-  mkdirSync(h, { mode: 0o700 });
-  return h;
+  // ensureGnomonHome applies the owner-only DACL on Windows (G-WIN-02); a bare mkdir mode is ignored there
+  return ensureGnomonHome(path.join(d, '.gnomon'));
 };
 
 function certKey(): { priv: KeyObject; x963: Buffer } {
