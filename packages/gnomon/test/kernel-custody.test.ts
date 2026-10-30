@@ -394,7 +394,7 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     await log.close();
   });
 
-  it('FALSIFIER (M-6): ahead, but a row after the anchored head is not signed by a trusted key: quarantine fork, no write', async () => {
+  it('M-6 / re-check M-1: an unknown key after the anchored head is partial, not a quarantine; a legacy key past its bound is', async () => {
     const h = home();
     const a = SoftwareEd25519Signer.generate('kernel');
     const ring = new KeyRing();
@@ -410,11 +410,21 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     const r3 = new KeyRing();
     r3.addEd25519(a.publicKeyPem);
     const l3 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: b, keyRing: r3, kernelKeyIds: [a.keyId] });
+    // re-check M-1: rows of a certless session (a key this start does not know) are partial, not a quarantine
     const f = fakeHelper({ anchor: anchored });
-    expect(await new HelperLogAnchor({ helper: f.t, log: l3 }).start()).toMatchObject({ state: 'quarantine', verdict: 'fork' });
-    expect(f.stored()).toEqual(anchored);
-    expect(l3.signaturesVerifyAfter(l3.head().seq)).toEqual({ ok: true });
+    expect(await new HelperLogAnchor({ helper: f.t, log: l3 }).start()).toMatchObject({ state: 'tracking', verdict: 'ahead' });
+    expect(l3.signaturesVerifyAfter(anchored.seq)).toEqual({ ok: true });
     await l3.close();
+    // a legacy key past its seal bound IS tamper evidence
+    const l4 = KernelLog.open({ home: h, kernelPrincipal: KP, signer: b, keyRing: r3, kernelKeyIds: [a.keyId], kernelKeyBounds: { [a.keyId]: { maxSeq: 1, logId: anchored.logId } } });
+    expect(l4.signaturesVerifyAfter(1)).toMatchObject({ ok: false });
+    let h1 = '';
+    for (const v of l4.read({ reader: { class: 'human' }, fromSeq: 1, toSeq: 1 })) h1 = v.view === 'full' ? (v.event as { hash: string }).hash : v.stub.hash;
+    expect(h1).toMatch(/^sha256:/);
+    expect(l4.chainVerifiesTo({ logId: anchored.logId, seq: 1, hash: h1 })).toEqual({ ok: true });
+    const g = fakeHelper({ anchor: { ...anchored, seq: 1, hash: h1 } });
+    expect(await new HelperLogAnchor({ helper: g.t, log: l4 }).start()).toMatchObject({ state: 'quarantine', verdict: 'fork' });
+    await l4.close();
   });
 
   it('M-7: a narrowing row is anchored before its append resolves; any other row waits for the cadence', async () => {

@@ -832,7 +832,11 @@ export class KernelLog {
           } catch {
             return { ok: false, detail: `row ${r.seq} is not JSON` };
           }
-          if (this.#keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64')) !== 'ok') return { ok: false, detail: `row ${r.seq} does not verify under a known key` };
+          const v = this.#keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64'));
+          // Aegis S2 re-check M-1: a row under a key this start does not know (a certless session after the seal) is
+          // labelled partial and not trusted — only the narrowing path honours it — but it is no tamper evidence
+          if (v === 'unknown-key') continue;
+          if (v !== 'ok') return { ok: false, detail: `row ${r.seq} has a bad signature under a known key` };
           if (r.principal === this.#opts.kernelPrincipal && !this.isKernelKey(keyId, r.seq)) return { ok: false, detail: `kernel row ${r.seq} is not signed by a kernel key within its seal` };
         }
       } finally {
