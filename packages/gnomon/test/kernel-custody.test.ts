@@ -473,6 +473,22 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     await log.close();
   });
 
+  it('L-3: a HUNG helper still lets a revoke acknowledge within about 2 s, flagged unanchoredNarrowing', async () => {
+    const { log } = await logWith(1);
+    const f = fakeHelper();
+    const a = new HelperLogAnchor({ helper: f.t, log, cadenceMs: 60_000 });
+    await a.start();
+    log.setAnchorHook((e) => a.hookFor(e));
+    const orig = f.t.request.bind(f.t);
+    f.t.request = (req) => (req.op === 'anchor.write' ? new Promise(() => undefined) : orig(req)); // never answers
+    const t0 = Date.now();
+    await log.append({ kind: 'approval.rule.revoked', principal: KP, payload: { ruleId: 'card:01J00000000000000000000003', repoKey: `sha256:${'a'.repeat(64)}`, tool: 'Bash', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA' } });
+    expect(Date.now() - t0).toBeLessThan(2600);
+    expect(a.unanchoredNarrowing).toBe(true);
+    log.setAnchorHook(null);
+    await log.close();
+  });
+
   it('no helper, or one older than 1.11.0: unavailable, nothing sent', async () => {
     const { log } = await logWith(1);
     expect((await new HelperLogAnchor({ helper: null, log }).start()).state).toBe('unavailable');
