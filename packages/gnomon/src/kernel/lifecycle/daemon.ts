@@ -566,6 +566,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const logAnchor = new HelperLogAnchor({ helper: opts.helper ?? null, log });
   await logAnchor.start();
   let migrationCardId: string | null = null;
+  /** status view of the anchor: words only (G-HON-03: no bare numbers in status; the heads are in daemon.start and the log) */
+  const anchorView = (): Record<string, unknown> => {
+    const a = logAnchor.status();
+    return { state: a.state, ...(a.verdict ? { verdict: a.verdict } : {}), ...(a.why ? { why: a.why } : {}), ...(a.resolve ? { resolve: a.resolve } : {}) };
+  };
   const custodyStatus = (): KernelCustodyStatus => {
     const c = custodyOf(certResult, sealRead, logAnchor.quarantined);
     return {
@@ -806,7 +811,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     log: () => ({ ...log.head() }),
     kernelKey: () => {
       const c = custodyStatus();
-      return { keyId: kernelSigner.keyId, custody: c.custody, source: kernelKeySource, detail: { ...c, anchor: logAnchor.status() } };
+      return { keyId: kernelSigner.keyId, custody: c.custody, source: kernelKeySource, detail: { ...c, anchor: anchorView() } };
     },
     root: () => ({ state: authority.state, rootKeyId: authority.rootKeyId }),
     web: () => {
