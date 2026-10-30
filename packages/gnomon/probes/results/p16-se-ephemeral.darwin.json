@@ -1,0 +1,131 @@
+{
+  "probe": "p16-se-ephemeral",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "signed": true,
+    "signingNote": null,
+    "results": {
+      "adhoc": {
+        "made": {
+          "attributeKeys": [
+            "accc",
+            "bsiz",
+            "class",
+            "decr",
+            "drve",
+            "encr",
+            "esiz",
+            "extr",
+            "kcls",
+            "klbl",
+            "modi",
+            "next",
+            "perm",
+            "priv",
+            "sign",
+            "tkid",
+            "toid",
+            "type",
+            "vrfy",
+            "wrap"
+          ],
+          "createMs": 106,
+          "label": "gnomon-p16-4595BBCC-A4E4-4247-9AA6-755CE2009F4A",
+          "lookupDataProtection": -25300,
+          "lookupLegacy": -25300,
+          "ok": true,
+          "tokenBlobBytes": 324,
+          "tokenBlobWritten": true,
+          "use": {
+            "publicKeySha256": "d800fe7c347290ab",
+            "signed": true,
+            "verified": true
+          }
+        },
+        "later": {
+          "label": "gnomon-p16-4595BBCC-A4E4-4247-9AA6-755CE2009F4A",
+          "lookupDataProtection": -25300,
+          "lookupLegacy": -25300,
+          "ok": true
+        },
+        "finding_c_tokenBlobReimportable": {
+          "ok": true,
+          "reimported": true,
+          "signatureBytes": 72,
+          "signed": true
+        },
+        "claims": {
+          "a_createdAndSigned": true,
+          "b_notInKeychain": true
+        }
+      },
+      "developer-id": {
+        "made": {
+          "attributeKeys": [
+            "accc",
+            "bsiz",
+            "class",
+            "decr",
+            "drve",
+            "encr",
+            "esiz",
+            "extr",
+            "kcls",
+            "klbl",
+            "modi",
+            "next",
+            "perm",
+            "priv",
+            "sign",
+            "tkid",
+            "toid",
+            "type",
+            "vrfy",
+            "wrap"
+          ],
+          "createMs": 4,
+          "label": "gnomon-p16-837A2BE7-EC90-46EA-AC9D-334DDE90C4A9",
+          "lookupDataProtection": -25300,
+          "lookupLegacy": -25300,
+          "ok": true,
+          "tokenBlobBytes": 324,
+          "tokenBlobWritten": true,
+          "use": {
+            "publicKeySha256": "4c5ede84e16d542d",
+            "signed": true,
+            "verified": true
+          }
+        },
+        "later": {
+          "label": "gnomon-p16-837A2BE7-EC90-46EA-AC9D-334DDE90C4A9",
+          "lookupDataProtection": -25300,
+          "lookupLegacy": -25300,
+          "ok": true
+        },
+        "finding_c_tokenBlobReimportable": {
+          "ok": true,
+          "reimported": true,
+          "signatureBytes": 71,
+          "signed": true
+        },
+        "claims": {
+          "a_createdAndSigned": true,
+          "b_notInKeychain": true
+        }
+      }
+    },
+    "summary": "P2 PASS: adhoc: created+signed=true notInKeychain=true; developer-id: created+signed=true notInKeychain=true; finding: token blob re-loadable by a second process = true"
+  },
+  "specRefs": [
+    "P8-D68",
+    "TD-2026-10-29-746 S0 P2",
+    "G-ID-13"
+  ],
+  "at": "2026-10-29T22:45:15.277Z"
+}

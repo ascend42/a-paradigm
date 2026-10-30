@@ -1,0 +1,88 @@
+{
+  "probe": "p17-se-afterfirstunlock",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "group": "SW4BMQ8PNL.gnomon.probe",
+    "tag": "gnomon-p17-177d1e24",
+    "profile": {
+      "present": true,
+      "valid": true,
+      "path": "~/.config/gnomon-signing/gnomon-helper.provisionprofile",
+      "name": "Gnomon Helper Developer ID",
+      "uuid": "c388e12f-c99b-4363-9e43-ffa76a67c333",
+      "team": [
+        "SW4BMQ8PNL"
+      ],
+      "applicationIdentifier": "SW4BMQ8PNL.gnomon.helper",
+      "keychainAccessGroups": [
+        "SW4BMQ8PNL.*"
+      ],
+      "expires": "2044-10-13T01:08:39.000Z",
+      "appIdOk": true,
+      "groupOk": true,
+      "sha256": "04a610410ce3928e"
+    },
+    "create": {
+      "accc": "cku",
+      "accessControl": "<SecAccessControlRef: cku;ock(true);odel(true);osgn(true);oa(true);okd(true)>",
+      "accessible": "dk",
+      "group": "SW4BMQ8PNL.gnomon.probe",
+      "ok": true,
+      "readback": 0,
+      "use": {
+        "publicKeySha256": "7a660f5decdcc05a",
+        "signed": true,
+        "verified": true
+      }
+    },
+    "signAgain": {
+      "ok": true,
+      "protection": {
+        "accc": "cku",
+        "accessControl": "<SecAccessControlRef: cku;ock(true);odel(true);osgn(true);oa(true);okd(true)>",
+        "pdmn": "dk",
+        "readback": 0
+      },
+      "uptimeSeconds": 1127535,
+      "use": {
+        "publicKeySha256": "7a660f5decdcc05a",
+        "signed": true,
+        "verified": true
+      }
+    },
+    "otherSigned": {
+      "ok": false,
+      "stage": "load",
+      "status": -34018
+    },
+    "adhoc": {
+      "ok": false,
+      "stage": "load",
+      "status": -34018
+    },
+    "claims": {
+      "a_created": true,
+      "a_afterFirstUnlock": true,
+      "a_signsFromSecondRun": true,
+      "b_otherSignedBinaryRefused": true,
+      "b_adhocRefused": true
+    },
+    "summary": "P3 PASS: a_created=true a_afterFirstUnlock=true a_signsFromSecondRun=true b_otherSignedBinaryRefused=true b_adhocRefused=true",
+    "cleanup": {
+      "ok": true,
+      "status": 0
+    }
+  },
+  "specRefs": [
+    "P8-D68",
+    "TD-2026-10-29-746 S0 P3",
+    "G-ID-13"
+  ],
+  "at": "2026-10-30T06:41:08.189Z"
+}
