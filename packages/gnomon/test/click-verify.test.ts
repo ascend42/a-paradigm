@@ -107,6 +107,13 @@ describe('replay checkDecisionSigs (Aegis S2 M-1): a click decision verifies onl
     return { sign, req, decide, run };
   };
 
+  it('FALSIFIER (Aegis S2 L-2): a second approval.request for the same card id never replaces the first and is flagged', () => {
+    const t = setup({ kind: 'permission' });
+    const dup = { ...env(1, 'approval.request', { card: { cardId, contentHash: H, kind: 'plan' } }), seq: 2 };
+    const dec = { ...t.decide(t.sign('plan', 'reversible')), seq: 3 };
+    expect(t.run([t.req, dup, dec])).toEqual(['card-duplicate', 'decision-sig-bad']);
+  });
+
   it('a click on a permission card verifies', () => {
     const t = setup({ kind: 'permission' });
     expect(t.run([t.req, t.decide(t.sign('permission', 'reversible'))])).toEqual([]);

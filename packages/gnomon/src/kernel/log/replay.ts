@@ -183,7 +183,7 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
 }
 
 /** Divergences of the decisionSig check (P8-D98). */
-export type DecisionSigDivergence = 'decision-sig-bad' | 'decision-sig-v1-after-cutover' | 'decision-sig-unverifiable' | 'decision-sig-click-refused';
+export type DecisionSigDivergence = 'decision-sig-bad' | 'decision-sig-v1-after-cutover' | 'decision-sig-unverifiable' | 'decision-sig-click-refused' | 'card-duplicate';
 
 /** The P8-D98 reservation tag: a kind carrying it is written only by a P8-D98 kernel (a cutover marker). */
 const D98_TAG = '8.0:P8-D98';
@@ -210,6 +210,11 @@ export function checkDecisionSigs(rows: Iterable<Row>, keyRing: KeyRing, keys: D
         const e = JSON.parse(r.envelope) as Record<string, unknown>;
         const c = isPlainObject(e.payload) && isPlainObject((e.payload as Record<string, unknown>).card) ? ((e.payload as Record<string, unknown>).card as Record<string, unknown>) : null;
         if (c && typeof c.cardId === 'string' && typeof c.kind === 'string') {
+          // Aegis S2 L-2: the FIRST request for a card id is the card; a later one never replaces it and is flagged
+          if (cards.has(c.cardId)) {
+            divergences.push({ seq: r.seq, reason: 'card-duplicate', detail: `a second approval.request for ${c.cardId.slice(0, 40)}` });
+            continue;
+          }
           cards.set(c.cardId, { cardId: c.cardId, kind: c.kind, ...(typeof c.contentHash === 'string' ? { contentHash: c.contentHash } : {}), ...(Array.isArray(c.flags) ? { flags: c.flags.filter((x): x is string => typeof x === 'string') } : {}), ...(isPlainObject(c.detail) ? { detail: c.detail as Record<string, unknown> } : {}) });
         }
       } catch {
