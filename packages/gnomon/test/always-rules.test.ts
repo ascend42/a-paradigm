@@ -139,12 +139,15 @@ describe('#always-rules: revoke (approval.rule.revoked) and the exact-only match
     expect(b.list().map((r) => r.ruleId)).toEqual([card(2)]);
   });
 
-  it('a forged revoked row (another principal, a non-kernel key, no key) is ignored', () => {
-    for (const forge of [{ principal: 'p:abcdefgh/founder' }, { keyId: 'device-key' }, { keyId: undefined as unknown as string }]) {
+  it('a revoked row from another principal or with no key is ignored; from a non-kernel key in the chain it narrows (Aegis S2 H-3)', () => {
+    for (const forge of [{ principal: 'p:abcdefgh/founder' }, { keyId: undefined as unknown as string }]) {
       const b = book(learnRows(card(1)));
       b.fold({ ...revokedRow(card(1)), ...forge });
       expect(b.match(REPO, 'Bash', h)?.ruleId).toBe(card(1));
     }
+    const b = book(learnRows(card(1)));
+    b.fold({ ...revokedRow(card(1)), keyId: 'device-key' });
+    expect(b.match(REPO, 'Bash', h)).toBeNull();
   });
 
   it('a replayed learned row for the revoked card never brings it back; a fresh `always` on a new card learns a new rule', () => {

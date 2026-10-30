@@ -99,6 +99,7 @@ import { inputHash } from './permission.js';
 import { pushRuleWords } from '../git/verbs.js';
 import { simpleArgv } from './shell-readonly.js';
 import { prefixMatchRefusal, prefixRefusal } from './prefix-policy.js';
+import { isNarrowingRow } from '../log/narrowing.js'; // Aegis S2 H-3: narrowing rows from any key in the chain
 
 /** Input keys a prefix rule tolerates besides `command` (anything else, e.g. run_in_background, raises the card). */
 export const PREFIX_RULE_INPUT_KEYS: ReadonlySet<string> = new Set(['command', 'description', 'timeout']);
@@ -299,7 +300,7 @@ export class RuleBook {
   /** Fold one chain row. Rows not signed by the kernel are ignored. */
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId, r.seq)) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !(this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload))) return;
     const p = obj(r.payload);
     if (!p) return;
     if (r.kind === 'approval.request') {

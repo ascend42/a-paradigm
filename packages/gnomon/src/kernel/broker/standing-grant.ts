@@ -34,6 +34,7 @@ import { STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, 
 import type { KernelLog } from '../log/index.js';
 import type { RuleRow, RuleSource } from '../supervisor/rules.js';
 import { fail, unlockKeyOf, type ApprovalBroker, type BrokerLog, type DecideContext, type StandingMatch, type StandingSeam } from './broker.js';
+import { isNarrowingRow } from '../log/narrowing.js'; // Aegis S2 H-3: narrowing rows from any key in the chain
 
 export { STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_TUPLES };
 export const STANDING_KINDS = Object.freeze(['grant.standing', 'grant.standing.used', 'grant.standing.revoked'] as const);
@@ -89,7 +90,7 @@ export class StandingGrantBook {
 
   fold(r: RuleRow): void {
     if (typeof r.seq === 'number' && r.seq > this.lastSeq) this.lastSeq = r.seq;
-    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !this.#trust.isKernelKey(r.keyId, r.seq)) return;
+    if (r.principal !== this.#trust.principal || typeof r.keyId !== 'string' || !(this.#trust.isKernelKey(r.keyId, r.seq) || isNarrowingRow(r.kind, r.payload))) return;
     const p = obj(r.payload);
     if (!p || typeof p.grantId !== 'string' || !CARD_ID.test(p.grantId)) return;
     if (r.kind === 'grant.standing') {

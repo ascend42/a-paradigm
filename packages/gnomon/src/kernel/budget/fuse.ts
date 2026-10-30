@@ -59,6 +59,7 @@ import type { Signer } from '../log/signer.js';
 import type { ApiTokenBilling } from '../broker/api-token.js';
 import { scanApiBilling, type BillingScanSource } from './billing.js';
 import { DEFAULT_FUSE, type FuseConfig, type ScopeName } from './config.js';
+import { isNarrowingRow } from '../log/narrowing.js'; // Aegis S2 H-3: narrowing rows from any key in the chain
 
 export const PERMIT_KINDS = Object.freeze(['session.spawn', 'turn', 'tool.permission', 'tend.llm', 'oracle.reviewer', 'teacher.draft', 'mod.spend'] as const);
 export type PermitKind = (typeof PERMIT_KINDS)[number];
@@ -450,7 +451,7 @@ export class BudgetFuse {
     let untrusted = 0;
     for (const row of rows) {
       // Aegis C1: only the kernel's own signed rows count — these kinds are not reserved, so anyone could write one
-      if (!trust.principals.includes(row.principal) || typeof row.keyId !== 'string' || !trust.isKernelKey(row.keyId, row.seq)) {
+      if (!trust.principals.includes(row.principal) || typeof row.keyId !== 'string' || !(trust.isKernelKey(row.keyId, row.seq) || isNarrowingRow(row.kind, row.payload))) {
         untrusted++;
         continue;
       }

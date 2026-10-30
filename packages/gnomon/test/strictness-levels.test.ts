@@ -212,8 +212,13 @@ describe('#strictness-levels: who may set a level (G-STR-01, the manual subset)'
   it('the book folds kernel-signed rows only; an unknown level from a newer kernel folds as L3', () => {
     const book = new StrictnessBook({ principal: KP, isKernelKey: (k) => k === 'kernel-key' });
     book.fold({ seq: 1, kind: 'approval.strictness.lowered', principal: 'p:abcdefgh/s-1', keyId: 'kernel-key', payload: { repo: REPO, from: 'L0', to: 'L0' } });
-    book.fold({ seq: 2, kind: 'approval.strictness.raised', principal: KP, keyId: 'other-key', payload: { repo: REPO, from: 'L0', to: 'L2' } });
+    book.fold({ seq: 2, kind: 'approval.strictness.lowered', principal: KP, keyId: 'other-key', payload: { repo: REPO, from: 'L0', to: 'L0' } });
     expect(book.level(REPO)).toBe('L0');
+    // Aegis S2 H-3: a raise only narrows, so it is honoured from any key in the chain; a lowering still needs a kernel key
+    book.fold({ seq: 2, kind: 'approval.strictness.raised', principal: KP, keyId: 'other-key', payload: { repo: REPO, from: 'L0', to: 'L2' } });
+    expect(book.level(REPO)).toBe('L2');
+    book.fold({ seq: 2, kind: 'approval.strictness.lowered', principal: KP, keyId: 'other-key', payload: { repo: REPO, from: 'L2', to: 'L0' } });
+    expect(book.level(REPO)).toBe('L2');
     book.fold({ seq: 3, kind: 'approval.strictness.raised', principal: KP, keyId: 'kernel-key', payload: { repo: REPO, from: 'L0', to: 'L9' } });
     expect(book.level(REPO)).toBe('L3');
   });
