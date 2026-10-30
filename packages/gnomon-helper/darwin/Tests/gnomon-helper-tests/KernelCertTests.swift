@@ -1,4 +1,4 @@
-// gnomon-helper 1.11.0 (G-HLP-03): kernel.cert and the anchor. No Secure Enclave and no keychain: a CryptoKit
+// gnomon-helper 1.11.0 (G-HLP-03; genesis signature 1.11.1, Aegis S2 M-2): kernel.cert and the anchor. No Secure Enclave and no keychain: a CryptoKit
 // software key and MemoryItemStore stand in through the Server seams.
 
 import CryptoKit
@@ -138,6 +138,29 @@ final class AnchorTests: XCTestCase {
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true])["error"] as? String, "anchor-log")
     }
 
+    /// The PEM SubjectPublicKeyInfo of an Ed25519 key, as the kernel sends it (no trailing newline).
+    private func edPem(_ k: Curve25519.Signing.PrivateKey) -> String {
+        "-----BEGIN PUBLIC KEY-----\n" + (ed25519SpkiPrefix + k.publicKey.rawRepresentation).base64EncodedString() + "\n-----END PUBLIC KEY-----"
+    }
+
+    private func genesisSig(_ k: Curve25519.Signing.PrivateKey, _ g: String) -> String {
+        (try! k.signature(for: Data("gnomon:log-genesis:v1\n".utf8) + Data(base64Encoded: g)!)).base64EncodedString()
+    }
+
+    func testTheGenesisSignatureRuleIsPure() {
+        let k = Curve25519.Signing.PrivateKey()
+        let g = Data("{}".utf8)
+        let sig = (try! k.signature(for: Data(logGenesisSigDomain.utf8) + g)).base64EncodedString()
+        XCTAssertNil(genesisSigRefusal(g, sig: sig, certifiedPub: edPem(k)))
+        XCTAssertNotNil(genesisSigRefusal(g, sig: sig, certifiedPub: nil), "nothing certified")
+        XCTAssertNotNil(genesisSigRefusal(g, sig: sig, certifiedPub: edPem(Curve25519.Signing.PrivateKey())), "another key")
+        XCTAssertNotNil(genesisSigRefusal(Data("{ }".utf8), sig: sig, certifiedPub: edPem(k)), "other bytes")
+        XCTAssertNotNil(genesisSigRefusal(g, sig: (try! k.signature(for: g)).base64EncodedString(), certifiedPub: edPem(k)), "no domain")
+        XCTAssertNotNil(genesisSigRefusal(g, sig: 7, certifiedPub: edPem(k)), "not base64")
+        XCTAssertEqual(ed25519RawKey(pem: edPem(k)), k.publicKey.rawRepresentation)
+        XCTAssertNil(ed25519RawKey(pem: "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----"))
+    }
+
     private func genesis(_ prevSeq: Int, _ prevHash: String, log: String = logB) -> String {
         let g: Json = ["schemaVersion": "gnomon-log-genesis:v1", "logId": log, "prev": ["logId": logA, "seq": prevSeq, "hash": prevHash]]
         return canonicalJSON(g).base64EncodedString()
@@ -150,7 +173,17 @@ final class AnchorTests: XCTestCase {
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logA, "seq": 10, "hash": h1])["written"] as? Bool, true)
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(9, h1)])["error"] as? String, "anchor-log", "a genesis naming another head")
         XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(10, h1, log: logA)])["error"] as? String, "anchor-log", "a genesis for another log")
-        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(10, h1)])["written"] as? Bool, true)
+        // 1.11.1 (Aegis S2 M-2): the genesis must be signed by the kernel key this helper certified
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(10, h1)])["error"] as? String, "anchor-log", "no cert issued: an unsigned genesis proves nothing")
+        let k = Curve25519.Signing.PrivateKey()
+        let kpem = edPem(k)
+        XCTAssertEqual(r.call(["op": "kernel.cert", "kernelKeyId": kid(kpem), "pub": kpem, "logId": logA])["ok"] as? Bool, true)
+        let g = genesis(10, h1)
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": g])["error"] as? String, "anchor-log", "certified, but the genesis carries no signature")
+        let other = Curve25519.Signing.PrivateKey()
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": g, "genesisSig": genesisSig(other, g)])["error"] as? String, "anchor-log", "signed by another key")
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": genesis(10, h1, log: logA), "genesisSig": genesisSig(k, genesis(10, h1, log: logA))])["error"] as? String, "anchor-log", "a signed genesis for another log")
+        XCTAssertEqual(r.call(["op": "anchor.write", "logId": logB, "seq": 1, "hash": h2, "newLog": true, "genesis": g, "genesisSig": genesisSig(k, g)])["written"] as? Bool, true)
         // (c) a quarantine decision allows ONE move from exactly the stored head
         let q = Rig11()
         XCTAssertEqual(q.call(["op": "anchor.write", "logId": logA, "seq": 10, "hash": h1])["written"] as? Bool, true)

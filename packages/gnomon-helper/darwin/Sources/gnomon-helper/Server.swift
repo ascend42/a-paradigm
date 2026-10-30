@@ -73,7 +73,8 @@ final class Server {
         self.items = items
         self.clock = clock
         self.issuer = CertIssuer(key: certKey, items: items, boot: boot, clock: clock)
-        self.anchor = Anchor(items: items, clock: clock)
+        let issuer = self.issuer
+        self.anchor = Anchor(items: items, clock: clock, certifiedPub: { issuer.certifiedPub })
         self.modes = ModeStore(items: items)
         self.clickFactory = clickFactory
     }

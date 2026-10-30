@@ -44,7 +44,11 @@ import Foundation
 /// it guards — kernel.cert (KernelCert.swift), anchor.read / anchor.write (Anchor.swift), presence.mode / presence.mode.on
 /// (Mode.swift), click.open / click.sign (ClickKey.swift) — plus the presence.mode and kernel-custody row tables. Same
 /// protocol, additive; the kernel selects them from info.version (HELPER_OP_MIN, ROW_TABLE_MIN_HELPER).
-let gnomonHelperVersion = "1.11.0"
+/// 1.11.1 (Aegis S2 M-2, M-3): a genesis row moves the anchor only when the kernel key this helper certified signed it
+/// (Anchor.swift genesisSigRefusal), and the click rule is an allowlist of click-approvable card kinds
+/// (ClickKey.swift clickApprovableKinds). Same protocol; the kernel sends a genesis and click.sign only to 1.11.1
+/// (HELPER_OP_MIN `anchor.genesis`, `click.sign`), so a 1.11.0 helper keeps every other 1.11.0 op.
+let gnomonHelperVersion = "1.11.1"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).
