@@ -485,8 +485,15 @@ async function quarantineLogWith(
     onStep('staging-created', { staging, evidence });
 
     const keyRing = new KeyRing();
+    // Aegis S2 H-1 / L-3 (#kernel-custody): the seal moves with the home, so a quarantine never resets it to "unsealed"
+    const sealFile = path.join(opts.home, 'keys', 'kernel-custody.json');
+    if (fs.existsSync(sealFile)) {
+      fs.mkdirSync(path.join(staging, 'keys'), { recursive: true, mode: 0o700 });
+      fs.copyFileSync(sealFile, path.join(staging, 'keys', 'kernel-custody.json'));
+      fs.chmodSync(path.join(staging, 'keys', 'kernel-custody.json'), 0o600);
+    }
     if (opts.signer instanceof SoftwareEd25519Signer) {
-      recordKernelPub(staging, opts.signer.publicKeyPem);
+      recordKernelPub(staging, opts.signer.publicKeyPem, new Date(), { sealed: false });
       keyRing.addEd25519(opts.signer.publicKeyPem);
     }
     const payload: QuarantinedPayload = { quarantinedLog: quarantined.log, quarantinedHead: { ...quarantined.head }, evidencePath: evidence, authorizedBy: opts.authorizedBy };

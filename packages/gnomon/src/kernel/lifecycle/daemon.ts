@@ -174,7 +174,7 @@ import { EconomyTally } from '../desk/turn-economy.js';
 import { FolderPicker, type ChooserRunner, type FolderAsker, type FolderRow } from '../folders/folders.js';
 import { spawn as spawnChild } from 'node:child_process';
 import { childNodePath, runningAsSea } from './sea.js';
-import { custodyOf, KernelPubSealed, migrationCardLines, migrationRows, readKernelSeal, requestKernelCert, sealFilePresent, writeKernelSeal, type KernelCertResult, type KernelCustodyStatus, type SealRead } from '../identity/index.js';
+import { custodyOf, KERNEL_SEAL_ROW_KIND, KernelPubSealed, migrationCardLines, migrationRows, readKernelSeal, requestKernelCert, resolveCustody, sealFilePresent, sealRowPayload, tamperCardLines, writeKernelSeal, type CustodyResolution, type KernelCertResult, type KernelCustodyStatus, type SealRead } from '../identity/index.js';
 import { HelperLogAnchor } from '../identity/log-anchor.js';
 import { LOG_QUARANTINE_SCHEMA } from '../identity/decision-batch.js';
 import { beginRootDecision } from '../manifest/grant-lock.js';
@@ -532,14 +532,17 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // Sharing a home across pid namespaces is unsupported.
   let log: KernelLog;
   let sealRead: SealRead = { state: 'none' };
+  let custody: CustodyResolution = { mode: 'unsealed', seal: null, read: { state: 'none' }, logged: null };
   try {
     const pem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
     // #kernel-custody (S2): the seal, verified against the root; before it, today's behaviour (record, all partial).
     // After it, only certified and sealed legacy keys join the ring, and this start's key is recorded with its cert.
-    sealRead = readKernelSeal(home, authority);
-    if (typeof pem === 'string' && !sealFilePresent(home)) recordKernelPub(home, pem);
+    // Aegis S2 H-1: the seal is resolved against the anchored log too; missing, invalid or replaced fails closed
+    custody = resolveCustody(home, authority);
+    sealRead = custody.read;
+    if (typeof pem === 'string' && custody.mode === 'unsealed' && !sealFilePresent(home)) recordKernelPub(home, pem);
     const keyRing = new KeyRing();
-    const pubs = readKernelPubs(home, { seal: sealRead.state === 'sealed' ? sealRead.seal : null });
+    const pubs = readKernelPubs(home, { seal: custody.seal });
     for (const k of pubs) keyRing.addEd25519(k.publicKeyPem);
     log = KernelLog.open({ home, kernelPrincipal, signer: kernelSigner, keyRing, kernelKeyIds: pubs.map((k) => k.keyId) });
   } catch (err) {
@@ -554,9 +557,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ? await requestKernelCert({ helper: opts.helper ?? null, signer: { keyId: kernelSigner.keyId, publicKeyPem: kernelPem }, logId: log.logId, sea: opts.custodySea ?? runningAsSea() })
       : { cert: null, why: 'not-sea', detail: 'the kernel key has no public PEM' };
   let pubRefused = false;
-  if (typeof kernelPem === 'string' && (certResult.cert || sealFilePresent(home))) {
+  if (typeof kernelPem === 'string' && (certResult.cert || custody.mode !== 'unsealed' || sealFilePresent(home))) {
     try {
-      recordKernelPub(home, kernelPem, new Date(), certResult.cert ? { cert: certResult.cert } : {});
+      recordKernelPub(home, kernelPem, new Date(), certResult.cert ? { cert: certResult.cert } : { sealed: true });
     } catch (e) {
       if (!(e instanceof KernelPubSealed)) throw e;
       pubRefused = true; // sealed and no cert: this start's rows are not kernel-authored later (custody partial)
@@ -572,11 +575,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     return { state: a.state, ...(a.verdict ? { verdict: a.verdict } : {}), ...(a.why ? { why: a.why } : {}), ...(a.resolve ? { resolve: a.resolve } : {}) };
   };
   const custodyStatus = (): KernelCustodyStatus => {
-    const c = custodyOf(certResult, sealRead, logAnchor.quarantined);
+    const c = custodyOf(certResult, sealRead, logAnchor.quarantined, custody.mode === 'tampered' ? custody.why : undefined);
     return {
       ...c,
       cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
-      seal: sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
+      seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
       ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
       ...(pubRefused ? { partialBecause: [...c.partialBecause, 'kernel-pub.jsonl is sealed and this start has no cert'] } : {}),
     };
@@ -844,10 +847,14 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   async function offerCustodyCards(): Promise<void> {
     if (!authority.rootKeyId) return;
     const cert = certResult.cert;
-    if (cert && !(sealRead.state === 'sealed' && sealRead.seal.certKey === cert.certKey) && (await broker.rootTableReady('grant', { action: 'kernel-custody' }))) {
+    // Aegis S2 H-1: the migration card only for an UNSEALED home whose anchor is tracking (a quarantined or absent anchor
+    // could be a rolled-back home); a tampered seal raises the tamper card, which reseals with no legacy key
+    const tamperedSeal = custody.mode === 'tampered';
+    const offerMigration = custody.mode === 'unsealed' && logAnchor.status().state === 'tracking';
+    if (cert && (offerMigration || tamperedSeal) && (await broker.rootTableReady('grant', { action: 'kernel-custody' }))) {
       const cardId = mintId('card');
       const all = readKernelPubs(home);
-      const legacy = all.filter((e) => !(e.keyId === kernelSigner.keyId && e.cert)).map((e) => e.keyId);
+      const legacy = tamperedSeal ? [] : all.filter((e) => !(e.keyId === kernelSigner.keyId && e.cert)).map((e) => e.keyId);
       const { rows, keyIds: sealedIds } = migrationRows({ cert, legacyKeyIds: legacy, currentKeyId: kernelSigner.keyId, head: log.head(), cardId });
       const sealedN = sealedIds.length;
       migrationCardId = cardId;
@@ -857,7 +864,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         requestedBy: kernelPrincipal,
         attended: true,
         detail: { action: 'kernel-custody', certKeyId: cert.certKeyId, legacyKeys: sealedN, logId: rows[1].logId, headSeq: rows[1].headSeq, rootRows: rows },
-        lines: migrationCardLines({ legacyKeys: sealedN, certKeyId: cert.certKeyId }),
+        lines: tamperedSeal ? tamperCardLines(custody.why ?? 'the seal does not verify') : migrationCardLines({ legacyKeys: sealedN, certKeyId: cert.certKeyId }),
         decisions: ['allow', 'deny'],
         handOnly: true,
         timeoutMs: 12 * 3600_000,
@@ -874,6 +881,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           if (!k || !l || !ks || !ls) throw new Error('#kernel-custody: the seal commits only its prepared, root-signed rows');
           writeKernelSeal(home, { row: k, signer: ks.signer, sig: ks.sig }, { row: l, signer: ls.signer, sig: ls.sig }, sealedIds);
           sealRead = readKernelSeal(home, authority);
+          if (sealRead.state === 'sealed') {
+            await appendRow(KERNEL_SEAL_ROW_KIND, sealRowPayload(home, sealRead.seal)); // H-1: the anchored log names the seal
+            custody = { mode: 'sealed', seal: sealRead.seal, read: sealRead, logged: null };
+          }
         },
       }).catch(() => {
         migrationCardId = null;
@@ -1834,6 +1845,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     root: authority.state,
   });
   logAnchor.startTimer();
+  if (custody.mode === 'sealed' && custody.heal && custody.seal) await appendRow(KERNEL_SEAL_ROW_KIND, sealRowPayload(home, custody.seal)).catch(() => undefined);
+  if (custody.mode === 'tampered') await appendRow(KERNEL_SEAL_ROW_KIND, { custody: 'tampered', reason: custody.why ?? 'unknown', certKeyId: custody.seal?.certKeyId ?? null }).catch(() => undefined);
   void offerCustodyCards().catch(() => undefined);
   try {
     // before idle.start(): a timer due inside the horizon holds the daemon from its first instant

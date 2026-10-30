@@ -31,6 +31,9 @@
 import { createHash, createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { canonicalJson } from '@a-company/gnomon-contracts';
+import { ACTIVE_DB, listSealedSegments } from '../log/kernel-log.js';
 import { normalizeBootId, readBootSession } from '../log/boot.js';
 import { ed25519KeyId, type SoftwareEd25519Signer } from '../log/signer.js';
 import { KERNEL_CERT_KEY_SCHEMA, KERNEL_LEGACY_SCHEMA, kernelCustodyRefusal, legacyKeysDigest } from './decision-batch.js';
@@ -312,11 +315,123 @@ export interface KernelCustodyStatus {
 }
 
 /** The custody verdict from its three inputs. */
-export function custodyOf(cert: KernelCertResult, seal: SealRead, anchorQuarantined: boolean): Pick<KernelCustodyStatus, 'custody' | 'partialBecause'> {
+export function custodyOf(cert: KernelCertResult, seal: SealRead, anchorQuarantined: boolean, tampered?: string): Pick<KernelCustodyStatus, 'custody' | 'partialBecause'> {
   const because: string[] = [];
+  if (tampered) because.push(`the seal is missing or tampered (${tampered})`);
   if (!cert.cert) because.push(`no kernel cert (${cert.why ?? 'none'})`);
   if (seal.state !== 'sealed') because.push(seal.state === 'none' ? 'kernel-pub.jsonl is not sealed yet (the one-time card)' : `the seal does not verify (${seal.why})`);
   else if (cert.cert && seal.seal.certKey !== cert.cert.certKey) because.push('the cert is signed by another key than the registered kernel-cert key');
   if (anchorQuarantined) because.push('the log anchor is in quarantine');
   return { custody: because.length === 0 ? 'full' : 'partial', partialBecause: because };
+}
+
+/* ── H-1: the seal on the anchored log ────────────────────────────────── */
+
+/**
+ * Aegis S2 H-1: after a seal the kernel appends a signed row naming it, so the anchored, hash-chained log keeps the
+ * seal from being rolled back by deleting or replacing kernel-custody.json. The kind is the registered kernel kind
+ * `key.rotate` (the kernel key's custody moved to certified; `key.*` is a critical, anchored namespace), payload
+ * {custody: 'sealed', cardId, certKeyId, certKey, sealDigest}; a dedicated kind joins the next batched clientApiId
+ * move. A start that finds the seal file missing, invalid or another one appends {custody: 'tampered', reason}.
+ */
+export const KERNEL_SEAL_ROW_KIND = 'key.rotate';
+
+/** sha256 of the seal document's canonical JSON. */
+export function sealDigestOf(home: string): string | null {
+  try {
+    const doc = JSON.parse(fs.readFileSync(kernelCustodyPath(home), 'utf8')) as unknown;
+    return `sha256:${createHash('sha256').update(canonicalJson(doc), 'utf8').digest('hex')}`;
+  } catch {
+    return null;
+  }
+}
+
+export interface LoggedSeal {
+  seq: number;
+  cardId: string;
+  certKeyId: string;
+  certKey: string;
+  sealDigest: string;
+}
+
+/**
+ * The latest `custody: 'sealed'` row of this home's log, read BEFORE the log opens (read-only, every segment). The row
+ * is trusted because the log is hash-chained and helper-anchored (#log-anchor): removing it forks the chain.
+ */
+export function loggedSeal(home: string): LoggedSeal | null {
+  const files = [...listSealedSegments(home).map((s) => s.file), path.join(home, ACTIVE_DB)].filter((f) => fs.existsSync(f));
+  let best: LoggedSeal | null = null;
+  for (const f of files) {
+    let db: DatabaseSync | undefined;
+    try {
+      db = new DatabaseSync(f, { readOnly: true });
+      const rows = db.prepare('SELECT seq, envelope FROM chain WHERE kind = ? ORDER BY seq').all(KERNEL_SEAL_ROW_KIND) as Array<{ seq: number; envelope: string }>;
+      for (const r of rows) {
+        const p = (JSON.parse(r.envelope) as { payload?: Record<string, unknown> }).payload ?? {};
+        if (p.custody !== 'sealed' || typeof p.certKeyId !== 'string' || typeof p.certKey !== 'string' || typeof p.sealDigest !== 'string' || typeof p.cardId !== 'string') continue;
+        if (!best || r.seq > best.seq) best = { seq: r.seq, cardId: p.cardId, certKeyId: p.certKeyId, certKey: p.certKey, sealDigest: p.sealDigest };
+      }
+    } catch {
+      // an unreadable segment: the log's own open reports it
+    } finally {
+      db?.close();
+    }
+  }
+  return best;
+}
+
+/** How this start trusts kernel-pub.jsonl. */
+export interface CustodyResolution {
+  mode: 'unsealed' | 'sealed' | 'tampered';
+  /** the seal readKernelPubs applies (null = unsealed); a tampered start trusts only keys certified under the LOGGED cert key */
+  seal: KernelSeal | null;
+  read: SealRead;
+  why?: string;
+  /** the file is sealed and verified but the log holds no row yet (a crash right after the card): append one */
+  heal?: boolean;
+  logged: LoggedSeal | null;
+}
+
+/**
+ * Aegis S2 H-1, fail closed in every case:
+ *   - a logged seal and a seal file whose digest matches: sealed;
+ *   - a logged seal and the file missing, invalid or another digest: TAMPERED — only keys certified under the logged
+ *     cert key are trusted, no legacy key at all, never all-partial, never the migration card;
+ *   - no logged seal and an invalid file: TAMPERED with no trusted cert key (nothing from kernel-pub.jsonl verifies);
+ *   - no logged seal and a verified file: sealed, and the row is appended now (heal);
+ *   - neither: unsealed (today's behaviour; the migration card may be offered).
+ */
+export function resolveCustody(home: string, root: { readonly rootKeyId: string | null; verifyRow(signer: string, row: unknown, sigB64: string): boolean }): CustodyResolution {
+  const read = readKernelSeal(home, root);
+  const logged = loggedSeal(home);
+  const tampered = (why: string, certKey: string, certKeyId: string): CustodyResolution => ({
+    mode: 'tampered',
+    why,
+    read,
+    logged,
+    seal: { certKey, certKeyId, legacyKeyIds: new Set(), logId: '', headSeq: -1, headHash: '', cardId: logged?.cardId ?? '' },
+  });
+  if (logged) {
+    if (read.state !== 'sealed') return tampered(read.state === 'none' ? 'the seal file is missing but the log holds the seal' : `the seal file does not verify (${read.why})`, logged.certKey, logged.certKeyId);
+    if (sealDigestOf(home) !== logged.sealDigest || read.seal.certKeyId !== logged.certKeyId) return tampered('the seal file is not the one the log names', logged.certKey, logged.certKeyId);
+    return { mode: 'sealed', seal: read.seal, read, logged };
+  }
+  if (read.state === 'invalid') return tampered(`the seal file does not verify (${read.why})`, '', '');
+  if (read.state === 'sealed') return { mode: 'sealed', seal: read.seal, read, logged, heal: true };
+  return { mode: 'unsealed', seal: null, read, logged };
+}
+
+/** The seal row's payload for the current seal file. */
+export function sealRowPayload(home: string, seal: KernelSeal): Record<string, unknown> {
+  return { custody: 'sealed', cardId: seal.cardId, certKeyId: seal.certKeyId, certKey: seal.certKey, sealDigest: sealDigestOf(home) };
+}
+
+/** Lines of the root card a tampered seal raises (it re-seals with NO legacy key: fail closed). */
+export function tamperCardLines(why: string): string[] {
+  return [
+    "Gnomon's kernel key seal is missing or was changed",
+    `${why}. Until it is resealed, Gnomon trusts only kernel keys the helper certified under the sealed key, and nothing older.`,
+    'This Touch ID reseals with the current certified key only: kernel keys from before the original seal stay unverifiable.',
+    'If you did not remove or restore ~/.gnomon/keys yourself, deny and check this Mac first. Gnomon keeps running with custody partial either way.',
+  ];
 }

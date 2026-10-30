@@ -221,6 +221,61 @@ describe('the seal (G-ID-14): kernel-pub.jsonl after the migration card', () => 
   });
 });
 
+describe('H-1: the seal on the anchored log cannot be rolled back', () => {
+  const KP = 'p:00000000/kernel';
+  async function sealedHome() {
+    const { resolveCustody, sealRowPayload, KERNEL_SEAL_ROW_KIND } = await import('../src/kernel/identity/index.js');
+    const h = home();
+    const ck = certKey();
+    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    const legacy = SoftwareEd25519Signer.generate();
+    recordKernelPub(h, legacy.publicKeyPem);
+    const signer = SoftwareEd25519Signer.generate('kernel');
+    const log = KernelLog.open({ home: h, kernelPrincipal: KP, signer, keyRing: new KeyRing(), kernelKeyIds: [signer.keyId] });
+    const m = migrationRows({ cert: issue(ck, signer), legacyKeyIds: [legacy.keyId], currentKeyId: signer.keyId, head: { log: log.logId, seq: log.head().seq, hash: log.head().hash }, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
+    const [k, l] = m.rows.map((r) => ({ ...r, createdAt: '2026-10-29T00:00:00.000Z' }));
+    writeKernelSeal(h, { row: k!, ...root.signRow(k) }, { row: l!, ...root.signRow(l) }, m.keyIds);
+    const r0 = resolveCustody(h, root);
+    expect(r0).toMatchObject({ mode: 'sealed', heal: true });
+    await log.append({ kind: KERNEL_SEAL_ROW_KIND, principal: KP, payload: sealRowPayload(h, (r0 as { seal: never }).seal) });
+    await log.close();
+    expect(resolveCustody(h, root)).toMatchObject({ mode: 'sealed' });
+    expect(resolveCustody(h, root).heal).toBeUndefined();
+    return { h, ck, root, legacy, resolveCustody };
+  }
+
+  it('FALSIFIER: delete the seal, append a key: the forged key does not verify, legacy keys stop verifying, no migration card (tampered)', async () => {
+    const { kernelCustodyPath } = await import('../src/kernel/identity/index.js');
+    const { h, ck, root, legacy, resolveCustody } = await sealedHome();
+    rmSync(kernelCustodyPath(h));
+    const forger = SoftwareEd25519Signer.generate();
+    recordKernelPub(h, forger.publicKeyPem, new Date(), { sealed: false }); // the forger appends with the file gone
+    const r = resolveCustody(h, root);
+    expect(r.mode).toBe('tampered'); // the daemon never offers the migration card in this mode, only the tamper card
+    const trusted = readKernelPubs(h, { seal: r.seal }).map((e) => e.keyId);
+    expect(trusted).not.toContain(forger.keyId);
+    expect(trusted).not.toContain(legacy.keyId);
+    // a key certified under the LOGGED cert key is still trusted
+    const good = SoftwareEd25519Signer.generate();
+    recordKernelPub(h, good.publicKeyPem, new Date(), { cert: issue(ck, good) });
+    expect(readKernelPubs(h, { seal: resolveCustody(h, root).seal }).map((e) => e.keyId)).toEqual([good.keyId]);
+  });
+
+  it('FALSIFIER: a replaced seal file (another valid seal) or an invalid one is tampered, never all-partial', async () => {
+    const { kernelCustodyPath } = await import('../src/kernel/identity/index.js');
+    const { h, root, resolveCustody } = await sealedHome();
+    writeFileSync(kernelCustodyPath(h), '{"schemaVersion":"gnomon-kernel-custody-doc:v1"}');
+    expect(resolveCustody(h, root).mode).toBe('tampered');
+    const h2 = home();
+    writeFileSync(path.join(h2, 'keys.tmp'), '');
+    mkdirSync(path.join(h2, 'keys'), { mode: 0o700 });
+    writeFileSync(kernelCustodyPath(h2), 'not json');
+    const r2 = resolveCustody(h2, root);
+    expect(r2.mode).toBe('tampered');
+    expect(r2.seal).not.toBeNull();
+  });
+});
+
 describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog on its own', () => {
   const KP = 'p:00000000/kernel';
   async function logWith(rows: number): Promise<{ log: KernelLog; h: string }> {
