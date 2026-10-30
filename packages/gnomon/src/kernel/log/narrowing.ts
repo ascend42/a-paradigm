@@ -25,3 +25,27 @@ export function isNarrowingRow(kind: string, payload: unknown): boolean {
   if (kind === 'tool.trust') return p.op === 'cleared' || p.op === 'dropped'; // an MCP/tool trust revocation
   return false;
 }
+
+/**
+ * Aegis S2 sign-off N-1 (M-7): the kernel's OWN appends that are anchored at once (the append awaits the helper
+ * anchor). Kind alone decides here: these rows are written by this kernel, so no per-row trust question arises.
+ */
+const ANCHOR_NOW = new Set([
+  'approval.rule.revoked',
+  'approval.rule.disabled',
+  'grant.standing.revoked',
+  'approval.strictness.raised',
+  'loop.paused',
+  'loop.budget.tightened',
+  // fuse trips
+  'budget.pause',
+  'budget.breaker.open',
+  'budget.ladder',
+  'permit.deny',
+]);
+
+export function anchorNow(kind: string, payload?: unknown): boolean {
+  if (ANCHOR_NOW.has(kind)) return true;
+  const p = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+  return kind === 'tool.trust' && (p.op === 'cleared' || p.op === 'dropped');
+}

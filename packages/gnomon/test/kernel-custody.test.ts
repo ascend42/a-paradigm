@@ -438,6 +438,11 @@ describe('log anchor (G-ID-15): read, compare, advance, quarantine; never newLog
     const r2 = await log.append({ kind: 'approval.rule.revoked', principal: KP, payload: { ruleId: 'card:01J00000000000000000000001', repoKey: `sha256:${'a'.repeat(64)}`, tool: 'Bash', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA' } });
     expect(f.stored()!.seq).toBe(r2.seq);
     expect(a.unanchoredNarrowing).toBe(false);
+    // N-1: a strictness raise and a loop pause are anchored at once too
+    const r3 = await log.append({ kind: 'approval.strictness.raised', principal: KP, payload: { repo: `sha256:${'a'.repeat(64)}`, from: 'L0', to: 'L1' } });
+    expect(f.stored()!.seq).toBe(r3.seq);
+    const r4 = await log.append({ kind: 'loop.paused', principal: KP, payload: { loopId: 'nightly', scope: 'repo', repoKey: `sha256:${'a'.repeat(64)}`, reason: 'human', by: 'p:abcdefgh/matt' } });
+    expect(f.stored()!.seq).toBe(r4.seq);
     // the helper keeps refusing (rate limit): one retry, then the acknowledgement goes on within the bound, flagged
     const orig = f.t.request.bind(f.t);
     f.t.request = async (req) => (req.op === 'anchor.write' ? Promise.reject(Object.assign(new Error('rate-limited'), { code: 'rate-limited' })) : orig(req));

@@ -30,7 +30,7 @@
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { HELPER_OP_MIN, versionAtLeast, type HelperTransport } from './helper.js';
 import type { Signer } from '../log/signer.js';
-import { isNarrowingRow } from '../log/narrowing.js';
+import { anchorNow } from '../log/narrowing.js';
 
 export const LOG_ANCHOR_CADENCE_MS = 1000;
 /** M-7 follow-ups: the one quick retry of a narrowing row's anchor write, and how long its acknowledgement may wait. */
@@ -170,7 +170,7 @@ export class HelperLogAnchor {
    * already acknowledged. Every other row keeps the 1 s cadence. null = nothing to await.
    */
   hookFor(e: { seq?: number; kind: string; payload?: unknown }): Promise<void> | null {
-    if (this.#status.state !== 'tracking' || !isNarrowingRow(e.kind, e.payload)) return null;
+    if (this.#status.state !== 'tracking' || !anchorNow(e.kind, e.payload)) return null; // N-1: the kernel's own narrowing kinds
     const landed = (): boolean => e.seq === undefined || (this.#written !== null && this.#written.seq >= e.seq);
     // M-7 follow-ups: one quick retry (~100 ms) and a bound (~2 s) on how long the acknowledgement waits
     const attempt = async (): Promise<void> => {
