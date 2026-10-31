@@ -70,8 +70,8 @@ describe('#gui-local-model: the section in every state', () => {
     expect(p('ctx-unknown')).toMatch(/^\? context size unknown/);
     // fix 2026-10-31: the start-up check asks no generation, so tools are "not checked yet", never "can't call tools"
     const unchecked = row(sec(local({ lastProbe: { at: '2026-10-22T23:24:00.000Z', ok: false, why: 'tools-unchecked', tools: false, contextSize: 32768 } })).rows, 'local-check');
-    expect(valueOf(unchecked)).toBe('? answers · context 32 768 · tools not checked yet · 23:24');
-    expect(unchecked).toMatchObject({ how: expect.stringMatching(/first local session checks once/), keys: [{ act: 'check', label: 'Check again' }] });
+    expect(valueOf(unchecked)).toBe('? answers · tools not checked yet · context 32 768 · 23:24');
+    expect(unchecked).toMatchObject({ how: expect.stringMatching(/first local session runs the check once/), keys: [{ act: 'check', label: 'Check again' }] });
     expect(valueOf(row(sec(local({ runner: null })).rows, 'local-check'))).toBe('✕ runner not pinned');
   });
   it('the last fallback names the folder and the reason', () => {
