@@ -154,6 +154,9 @@ describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
     const kinds = rows.map((r) => r.kind);
     expect(kinds).toEqual(['model.probe', 'model.capabilities', 'model.fallback.requested']);
     expect(kinds.some((k) => k.startsWith('permit.') || k === 'session.spawned')).toBe(false);
+    // fix 2026-10-31 (Windows CI): a failed tool check leaves no background measurement to add a later row
+    await l.tierSettled();
+    expect(rows.map((r) => r.kind)).toEqual(['model.probe', 'model.capabilities', 'model.fallback.requested']);
   });
 
   it('G-LCL-03: the card\'s fallback-cloud decision opens Claude for the same requester; deny opens nothing (S7)', async () => {

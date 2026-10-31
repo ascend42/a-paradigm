@@ -975,6 +975,18 @@ export class LocalLane {
     return mem ? mem.skill >= 1 : null;
   }
 
+  /** A settled T1 that failed: tier 0 in the store (or memory without a fingerprint); an unwritable store keeps memory. */
+  #storeNoTools(base: string, model: string, fp: string | null): void {
+    if (fp) {
+      try {
+        writeMeasured(this.#o.home, { base, model, fingerprint: fp }, { skill: 0, passed: 0 });
+        return;
+      } catch {
+        /* the #t1 memory record still answers for this daemon */
+      }
+    } else this.#memSkill.set(`${base}|${model}`, { skill: 0, passed: 0 });
+  }
+
   /**
    * One probe of endpoint `ep` (cached for the probe TTL). The metadata (n_ctx, the model id, the fingerprint) is
    * always asked; it never loads weights. The tool check (T1) is a GENERATION, so it is answered from what the lane
@@ -994,6 +1006,7 @@ export class LocalLane {
     let caps: LocalCapabilities;
     let probeRow = false;
     let t1Settled = false;
+    let t1Fp: string | null = null;
     const logProbe = async (c: LocalCapabilities): Promise<void> => {
       probeRow = true;
       await this.#o.log('model.probe', { endpoint: ep.id, ok: c.ok, ...(c.error ? { error: c.error } : {}) });
@@ -1011,6 +1024,7 @@ export class LocalLane {
           const r = await probeToolCall({ base: ep.base, model }, io);
           caps = { ...caps, tools: r.tools, toolsSource: 'live' };
           t1Settled = r.settled;
+          t1Fp = fp;
           if (r.settled && gen === this.#gen) this.#t1.set(`${ep.base}|${model}|${fp ?? ''}`, r.tools);
         } else caps = { ...caps, tools: false, toolsSource: 'unchecked' };
       }
@@ -1023,8 +1037,14 @@ export class LocalLane {
       // a probe begun under an older config neither caches nor shows (setConfig cleared both)
       this.#probes.set(ep.id, { at: Date.now(), caps });
       this.#setLastProbe(ep.id, caps);
-      // slice C4'a: T2-T4 in the background after a settled live T1 (a no-op on a store hit); Re-measure forces its own
-      if (caps.ok && t1Settled && !o.force) this.#measure(ep.id, ep.base, caps);
+      // slice C4'a: T2-T4 in the background after a settled live T1 that PASSED (a no-op on a store hit); Re-measure
+      // forces its own. A settled T1 that failed is tier 0 with nothing left to measure: it is stored here, at once and
+      // with no second row (this probe's model.capabilities row already says tools:false). Before, a background
+      // #measure logged a second model.capabilities row whose place among the open's rows depended on timing (Windows).
+      if (caps.ok && t1Settled && !o.force) {
+        if (caps.tools) this.#measure(ep.id, ep.base, caps);
+        else this.#storeNoTools(ep.base, caps.model ?? ep.model, t1Fp);
+      }
     }
     return caps;
   }
