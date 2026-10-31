@@ -1567,7 +1567,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const reloadLocalConfig = (why: 'set' | 'removed', removedVersion?: number): LoadedLocalConfig => {
     localCfg = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), chainRemoved: localRemoved(), ...(why === 'removed' ? { missing: 'removed' as const, ...(removedVersion !== undefined ? { removedVersion } : {}) } : {}) });
     supervisor.setLocalConfig(localCfg.config);
-    if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
+    // the human just allowed this config: a model the lane does not know is tool-checked now (a generation they asked for)
+    if (localCfg.config?.endpoints.length) void supervisor.probeLocal({ generate: true }).catch(() => undefined);
     // a loop refused at start for want of a local model clears once the cause clears (its stack alert goes with it)
     loops.localConfigApplied();
     return localCfg;
@@ -1842,7 +1843,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   }
 
   emit({ kind: 'daemon.start', pid: pidfile.pid, socketPath: pidfile.socketPath, via: choice.via, idleMs });
-  // §13.2: probe every configured local endpoint once at start (background; never blocks serving, never throws)
+  // §13.2: probe every configured local endpoint once at start (background; never blocks serving, never throws).
+  // Fix 2026-10-31: METADATA ONLY — no generation, nothing that loads model weights (a boot that loaded a 9.7B model
+  // froze a 16 GB Mac); the tool check comes from the fingerprint cache or waits for the first local session.
   if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
   await appendRow('daemon.start', {
     pid: pidfile.pid,

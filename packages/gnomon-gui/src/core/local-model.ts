@@ -51,6 +51,7 @@ export const LOCAL_COPY = Object.freeze({
   requestHow: 'Allow takes the root key and your presence. Deny keeps things as they are and brings your entries back here.',
   decide: 'Decide in the stack',
   checkingHow: 'The kernel asks the server for its models, a tool call and its context size.',
+  toolsUncheckedHow: 'Checking tool calls makes the server load the model, so Gnomon doesn’t at start-up. Your first local session checks once (it waits for it); Check again checks now.',
   palette: { none: 'Set up local model…', set: 'Local model settings…' },
 });
 
@@ -364,6 +365,9 @@ export function checkRowOf(p: LocalProbeView | null, v: LocalStatusView, checkin
   const server = e ? serverOf(e.compat).label : 'the server';
   if (p.ok) return { value: `answers · tools ${p.tools ? 'native' : 'by template'} · context ${p.contextSize !== null ? ctxText(p.contextSize) : 'unknown'} · ${at}`, mark: '✓', how: '', key: false };
   switch (p.why) {
+    case 'tools-unchecked':
+      // the kernel's start-up check asks no generation (it would load the model): tools are checked at first use
+      return { value: `answers · context ${p.contextSize !== null ? ctxText(p.contextSize) : 'unknown'} · tools not checked yet · ${at}`, mark: '?', how: LOCAL_COPY.toolsUncheckedHow, key: true };
     case 'no-tools':
       return { value: `answers, but can’t call tools · ${at}`, mark: '✕', how: 'Pick a model with tool calls (qwen2.5-coder has them), then Change….', key: true };
     case 'ctx-below-floor':
@@ -513,6 +517,7 @@ export function appliedToast(v: LocalStatusView): { text: string; kind: 'info' |
   if (p.why === 'no-tools') return { kind: 'fail', text: `set, but ${e.model} can’t call tools\n  next: pick a model with tool calls, then Settings → Local model → Change…` };
   if (p.why === 'ctx-below-floor') return { kind: 'fail', text: `set, but context ${p.contextSize !== null ? ctxText(p.contextSize) : '?'}: sessions need ${ctxText(LOCAL_CTX_FLOOR)}\n  next: raise num_ctx, then Settings → Local model → Check again` };
   if (p.why === 'ctx-unknown') return { kind: 'info', text: `set · ${e.model} on ${at} · ✓ answers · ? context size unknown` };
+  if (p.why === 'tools-unchecked') return { kind: 'info', text: `set · ${e.model} on ${at} · ✓ answers · ? tools not checked yet (the first local session checks)` };
   return { kind: 'fail', text: `set, but no answer: ${errorWords(p.error)} at ${at}\n  next: start ${server}, then Settings → Local model → Check again` };
 }
 export const turnedOffToast = (loops: readonly string[]): string => `turned off${loops.length ? ` · ${andList(loops)} won’t start until one is set up` : ''}`;

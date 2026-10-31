@@ -84,9 +84,9 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
       mcpCache,
       mcpTrust: { of: (id) => { const n = mcpCache.newest(id); return n ? { binding: bindingOf({ id, launchHash: n.launchHash, pluginVersion: n.pluginVersion, toolsHash: n.toolsHash }), launchHash: n.launchHash, toolsHash: n.toolsHash, label: n.label } : null; }, drop: () => undefined },
     });
-    // slice C4'a: measure the endpoint's tool skill first, as the daemon's start probe does (the fake passes T1-T4;
+    // slice C4'a: measure the endpoint's tool skill first, as an applied config's probe does (the fake passes T1-T4;
     // the 8k window caps it at tier 2); an unmeasured endpoint opens provisional at tier 1
-    await lane.probeAll();
+    await lane.probeAll({ generate: true });
     await lane.tierSettled();
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
     const offered = rows.find((r) => r.kind === 'session.sandbox' && r.payload.hsid === s.hsid)!.payload.brokeredTools as string[];

@@ -2152,9 +2152,13 @@ export class SessionSupervisor {
     return { hsid: s.hsid, uuid: s.uuid, outcome };
   }
 
-  /** #local-runner's daemon-start probe of every configured local endpoint (model.probe / model.capabilities rows). */
-  probeLocal(): Promise<Array<{ endpoint: string; ok: boolean }>> {
-    return this.#local.probeAll();
+  /**
+   * #local-runner's probe of every configured local endpoint (model.probe / model.capabilities rows). Daemon start
+   * calls it bare: metadata only, never a generation (nothing that loads model weights). `generate:true` is for a
+   * config the human just applied (an unknown model's tool check runs then).
+   */
+  probeLocal(o: { generate?: boolean } = {}): Promise<Array<{ endpoint: string; ok: boolean }>> {
+    return this.#local.probeAll(o);
   }
 
   /**

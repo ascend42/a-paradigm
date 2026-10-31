@@ -62,7 +62,8 @@ components:
       copied entry> (PERMIT_REQUIRED runner-pin-mismatch{part}); residual:
       node is not copied (Homebrew node loads ../lib) — round 3: EVERY session profile (Claude and local) denies writes to node, its install prefix and the pinned source dir (policy.ts localRunnerDenies, fed from the loaded local config), and node is re-hashed synchronously right before spawn; a concurrent staging rename (EEXIST/ENOTEMPTY) is success iff the dest verifies; turn.event rows for compaction lines keep summaryHash/summaryBytes even over the line cap; a signed config with maxTokens >= 0.85 x contextTarget is invalid; round 2 (M3): roots resolved ONCE by native realpath (fail closed) and only the resolved paths reach the policy, child config, darwin extras, repo id and spawn cwd; re-checked right before spawn; per-task endpoint choice = first endpoint in
       signed order capable for the floor; probeAll at daemon start records
-      model.probe/model.capabilities; roots inside the Gnomon home refused;
+      model.probe/model.capabilities (fix 2026-10-31: METADATA ONLY, see
+      #local-tool-tier); roots inside the Gnomon home refused;
       the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a
       turn in flight writes the steer line under that turn's permit
       (session.inject + turn.steer, no new permit), idle it is a plain send; round 2: the steer needs the in-flight turn permit live (else PERMIT_REQUIRED); the child refuses a steer that reaches it idle and the kernel logs turn.steer{phase:refused, by:child};
@@ -433,7 +434,19 @@ components:
       fsync + rename, never through a symlink; shape-validated, a corrupt/oversized file ignored, a bad record
       dropped): records keyed sha256(base|model|fingerprint) with skill, passed, version (TIER_PROBE_VERSION), human;
       readTiers, lookupTier, writeMeasured, setHuman; a new fingerprint drops the old digest's records (human value
-      too); no TTL. LocalLane: probeAll and Check again (recordProbe) run #measure in the background (fingerprintOf,
+      too); no TTL. Fix 2026-10-31 (boot load: every launch made Ollama load a 9.7B model and run T1-T4, freezing a
+      16 GB Mac): the daemon-start probe (probeAll with no options) is METADATA ONLY (/health, /slots, /props,
+      /v1/models, /api/show, /api/ps, /api/tags; no completion, no /api/generate or /api/chat, no keep_alive) and
+      runs no #measure. The tool check T1 (probeToolCall, a generation) is answered from the fingerprint cache
+      (this daemon's settled T1 by base|model|fingerprint, else the store's current measurement: skill >= 1 iff T1
+      passed, else the no-fingerprint memory record): LocalCapabilities.toolsSource live|cached|unchecked, carried on
+      model.capabilities; nothing known at boot => 'unchecked' and status.local.lastProbe{ok:false,
+      why:'tools-unchecked'} (never no-tools; its tier pending). T1 runs live, lazily, only when a model:local open or
+      a loop step finds nothing known (once per fingerprint; the model.probe row is written before the generation so
+      the GUI shows status.local.probing "checking..."), on Check again, on remeasure (forced), or after an applied
+      config (probeAll{generate:true}). A settled live T1 (a 2xx or 4xx answer; never no answer, a timeout or a 5xx)
+      is remembered and starts #measure once; an unsettled one is retried at the next open. Check again
+      (recordProbe) runs #measure in the background (fingerprintOf,
       then probeToolSkill on a cache miss; a model with no fingerprint is measured into memory only); remeasure(id)
       forces one (C4'b: request.local.tier.remeasure; a running one is joined); tierSettled() for tests; status.local.lastProbe.tier{skill,
       passed, measuring, window, human}. At open: local.yaml surface from the tier, model.capabilities{hsid, tier,
@@ -829,7 +842,8 @@ components:
       probingEndpoint} while it runs and refreshes status.local.lastProbe
       and the probe cache like the automatic probe (model-missing kept as
       the why); a probe begun under an older config records nothing. The
-      automatic probe (probeAll) shows as probing too. LoopRunner
+      automatic probe (probeAll) and a session open's lazy tool check show
+      as probing too. LoopRunner
       status.loops.startRefused also lists every trusted loop that would be
       refused NOW (count 0, trigger 'none'), recomputed at every status
       build and config apply; still one per loop, the first fire keeps its

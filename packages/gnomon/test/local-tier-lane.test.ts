@@ -171,7 +171,7 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
       localMcp: () => [{ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE, path.join(root!, 'pid')], trust: 'trusted' }],
     });
     // measured (fingerprint known), then the human's remembered tier 0: the session opens with no MCP server started
-    await lane.probeAll();
+    await lane.probeAll({ generate: true });
     await lane.tierSettled();
     const rec = Object.values(readTiers(home).records)[0]!;
     setHuman(home, { base: rec.base, model: rec.model, fingerprint: rec.fingerprint }, 0);
@@ -246,7 +246,7 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
     }
     const measuredRows = () => rows.filter((r) => r.kind === 'model.capabilities' && r.payload.tierSource === 'measured' && r.payload.action === undefined && r.payload.hsid === undefined);
     // Aegis info: a re-measure while the background (unforced) measurement runs is QUEUED after it, and says so
-    await lane.probeAll();
+    await lane.probeAll({ generate: true });
     const r1 = await ask(human, 'request.local.tier.remeasure', { endpoint: 'fake' });
     expect(r1).toEqual({ endpoint: 'fake', measuring: true, joined: true, queued: true });
     expect(lane.lastProbe()?.tier?.measuring).toBe(true);
@@ -268,7 +268,7 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
     expect(await pending).toMatchObject({ joined: false, queued: false });
     await lane.tierSettled();
     expect(measuredRows()).toHaveLength(2);
-    await lane.probeAll();
+    await lane.probeAll({ generate: true });
     await lane.tierSettled();
     // a remembered tier, then clear: the store forgets it, one row says so, and the next open is measured
     const rec = Object.values(readTiers(home).records)[0]!;

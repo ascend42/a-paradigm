@@ -222,7 +222,9 @@ components:
       Residual: carded Bash can restructure ancestor dirs mid-session.
       M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
-      probeLocal() is the daemon-start local probe; the daemon passes the
+      probeLocal() is the daemon-start local probe (metadata only, never a
+      generation; probeLocal({generate:true}) after an applied local config
+      only); the daemon passes the
       root-signed local config. The one place `claude -p` starts. Slice 1:
       ATTENDED HUMAN-started Claude Code sessions only (others FORBIDDEN;
       the scheduler run step still refuses). open: session.open -> preflight
