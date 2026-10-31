@@ -48,7 +48,7 @@ import Foundation
 /// (Anchor.swift genesisSigRefusal), and the click rule is an allowlist of click-approvable card kinds
 /// (ClickKey.swift clickApprovableKinds). Same protocol; the kernel sends a genesis and click.sign only to 1.11.1
 /// (HELPER_OP_MIN `anchor.genesis`, `click.sign`), so a 1.11.0 helper keeps every other 1.11.0 op.
-let gnomonHelperVersion = "1.11.1"
+let gnomonHelperVersion = "1.11.2"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).

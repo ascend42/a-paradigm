@@ -33,7 +33,9 @@ let helperAcceptsDevKernel = false
 let minKernelVersion = "8.1.0"
 /// The SEA's build-stamp section (scripts/build-sea.mjs KERNEL_STAMP_*): segment __GNOMON, section GNOMON_STAMP.
 let kernelStampSegment = "__GNOMON"
-let kernelStampSection = "GNOMON_STAMP"
+/// postject prefixes "__" to every Mach-O section name, so the resource GNOMON_STAMP lands as __GNOMON_STAMP
+/// (fix 2026-10-31: 1.11.0-1.11.1 looked for GNOMON_STAMP, found no stamp and refused every release kernel).
+let kernelStampSection = "__GNOMON_STAMP"
 let kernelStampPrefix = "gnomon-kernel-stamp:v1\n"
 
 struct KernelStamp: Equatable {

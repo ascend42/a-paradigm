@@ -38,6 +38,10 @@ import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
 import { createScratch, hardenedGit, liveScratch, parkRepoDir, parkScratch, removeScratch, scratchChanges, sweepLoopScratch } from '../src/kernel/git/scratch.js';
 import { PKG_ROOT } from './helpers.js';
 import { waitFor } from './session-helpers.js';
+import { tierProbeBodies } from '../src/kernel/local/probe.js';
+/** the capability probe's requests (T1 and the T2-T4 tier tests, by their constant prompts): never the agent's */
+const PROBE_PROMPTS = new Set([...Object.values(tierProbeBodies('m')).map((b) => (JSON.parse(b) as { messages: Array<{ content: string }> }).messages[0]!.content), 'What time is it in UTC? Use the tool.']);
+const notProbe = (q: { messages?: unknown }): boolean => !PROBE_PROMPTS.has((q.messages as Array<{ content?: unknown }> | undefined)?.[0]?.content as string);
 
 type Def = Record<string, any>;
 const KERNEL = 'p:abcdefgh/kernel';
@@ -277,7 +281,7 @@ describe('Example B (green-typecheck) against a fake local endpoint: the act ste
     expect(r.rows.find((x) => x.kind === 'session.routed' && x.payload.hsid === hsid)!.payload.allowTools).toEqual(['list_dir', 'read_file', 'write_file']);
     const launch = r.launches.at(-1);
     expect(launch.act).toMatchObject({ scratch: open.cwd, repo: root, endpointPort: Number(new URL(srv.base).port) });
-    const req = srv.requests.filter((q) => !JSON.stringify(q.tools ?? []).includes('get_time'))[0]!;
+    const req = srv.requests.filter((q) => notProbe(q))[0]!;
     expect((req.tools ?? []).map((t: any) => t.function.name).sort()).toEqual(['list_dir', 'read_file', 'write_file']);
     expect(JSON.stringify(req.messages)).toMatch(/BEGIN DATA [0-9a-f]+ ref=tsc\.evidence/);
     // tool lines carry model-written content: hashed in turn.event like model text

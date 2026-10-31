@@ -314,6 +314,9 @@ export interface KernelCustodyStatus {
   migration?: { cardId: string };
   /** why custody is partial (empty when full) */
   partialBecause: string[];
+  /** fix 2026-10-31: why this start holds no cert, and the helper's words (absent with a valid cert) */
+  certWhy?: KernelCertMissing;
+  certDetail?: string;
 }
 
 /** The custody verdict from its three inputs. */
@@ -323,7 +326,7 @@ export function custodyOf(cert: KernelCertResult, seal: SealRead, anchorQuaranti
   if (o.anchorState !== undefined && o.anchorState !== 'tracking' && !anchorQuarantined) because.push(`the log anchor is ${o.anchorState}`);
   if (cert.cert && o.now !== undefined && cert.expiresAt && !(o.now < Date.parse(cert.expiresAt))) because.push('the kernel cert has expired (restart Gnomon to renew it)');
   if (tampered) because.push(`the seal is missing or tampered (${tampered})`);
-  if (!cert.cert) because.push(`no kernel cert (${cert.why ?? 'none'})`);
+  if (!cert.cert) because.push(`no kernel cert (${cert.why ?? 'none'}${cert.detail ? `: ${cert.detail.replace(/^#identity: helper refused \(([^)]*)\): /, '$1: ').slice(0, 200)}` : ''})`);
   if (seal.state !== 'sealed') because.push(seal.state === 'none' ? 'kernel-pub.jsonl is not sealed yet (the one-time card)' : `the seal does not verify (${seal.why})`);
   else if (cert.cert && seal.seal.certKey !== cert.cert.certKey) because.push('the cert is signed by another key than the registered kernel-cert key');
   if (anchorQuarantined) because.push('the log anchor is in quarantine');

@@ -69,7 +69,7 @@ components:
   kernel-sea:
     description: >-
       #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13) — S1
-      additions: the build stamp section GNOMON_STAMP (the helper's kernel
+      additions: the build stamp resource GNOMON_STAMP (Mach-O section __GNOMON_STAMP, KERNEL_STAMP_MACHO_SECTION) (the helper's kernel
       version floor), the voice client tree pin (checkVoiceClient before each
       voice spawn and model fetch) and gateRunningChild (codesign -R on a
       direct gnomon.node child's pid right after spawn, SIGKILL on failure).

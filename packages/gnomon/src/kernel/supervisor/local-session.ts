@@ -130,7 +130,7 @@ import { ANCHOR_GIT_CONFIG } from './shell-readonly.js';
 import { appendLedger } from '../local/edit-ledger.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
-import { fingerprintOf, probeLocalEndpoint, probeToolSkill, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
+import { fingerprintOf, probeLocalEndpoint, probeToolCall, probeToolSkill, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { effectiveTier, isTier, lookupTier, lowerSurface, measuredCurrent, setHuman, skillTier, tierPlan, tiersWritable, windowTier, writeMeasured, WINDOW_TIER_MIN, type TierModel, type TierSource, type TierSurface, type ToolTier } from '../local/tool-tier.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
@@ -695,6 +695,8 @@ export class LocalLane {
   readonly #fingerprints = new Map<string, { base: string; model: string; fingerprint: string | null; at: number }>();
   /** slice C4'a: a model with no fingerprint is measured into memory only (never persisted), by `base|model` */
   readonly #memSkill = new Map<string, { skill: ToolTier; passed: number }>();
+  /** fix 2026-10-31: each settled live tool check (T1) of this daemon, by `base|model|fingerprint` (never asked twice) */
+  readonly #t1 = new Map<string, boolean>();
   /** slice C4'a: the tool-skill measurements in flight, by endpoint id (one at a time per endpoint) */
   readonly #measuring = new Map<string, Promise<void>>();
   /** Slice C4'b: an explicit re-measure in flight per endpoint (its probe, then its measurement): a second one joins it */
@@ -796,8 +798,11 @@ export class LocalLane {
   }
 
   #setLastProbe(id: string, caps: LocalCapabilities, why?: string): void {
-    const k = capability(caps, this.#config?.ctxFloor ?? DEFAULT_CTX_FLOOR, false);
-    this.#lastProbe = { endpoint: id, at: new Date().toISOString(), ok: k.capable && why === undefined, why: why ?? k.reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), tools: caps.tools, contextSize: caps.nCtx };
+    // fix 2026-10-31: tools not checked yet (the boot probe asks no generation) is its own state, never no-tools
+    const unchecked = caps.ok && caps.toolsSource === 'unchecked';
+    const k = capability(unchecked ? { ...caps, tools: true } : caps, this.#config?.ctxFloor ?? DEFAULT_CTX_FLOOR, false);
+    const reason = unchecked && k.capable ? 'tools-unchecked' : k.reason;
+    this.#lastProbe = { endpoint: id, at: new Date().toISOString(), ok: k.capable && !unchecked && why === undefined, why: why ?? reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), tools: caps.tools, contextSize: caps.nCtx };
     this.#refreshProbeTier(id);
   }
 
@@ -827,14 +832,14 @@ export class LocalLane {
    * Slice C4'a: what the lane knows of a model's tier — the measured skill (T1 failed: 0; a current measurement for its
    * fingerprint; else null, pending), how many tests passed, the human's remembered value and the store key's model.
    */
-  #tierOf(id: string, base: string, model: string, caps: Pick<LocalCapabilities, 'tools'>): { skill: ToolTier | null; passed: number | null; human: ToolTier | null; model: TierModel | null } {
+  #tierOf(id: string, base: string, model: string, caps: Pick<LocalCapabilities, 'tools' | 'toolsSource'>): { skill: ToolTier | null; passed: number | null; human: ToolTier | null; model: TierModel | null } {
     const f = this.#fingerprints.get(id);
     const known = f && f.base === base && f.model === model ? f : null;
     const tm: TierModel | null = known?.fingerprint ? { base, model, fingerprint: known.fingerprint } : null;
     const rec = tm ? this.#readTier(tm) : null;
     const mem = known && !known.fingerprint ? this.#memSkill.get(`${base}|${model}`) : undefined;
     const human = rec?.human ?? null;
-    if (!caps.tools) return { skill: 0, passed: 0, human, model: tm };
+    if (!caps.tools && caps.toolsSource !== 'unchecked') return { skill: 0, passed: 0, human, model: tm };
     if (measuredCurrent(rec)) return { skill: rec.skill, passed: rec.passed, human, model: tm };
     if (mem) return { skill: mem.skill, passed: mem.passed, human, model: tm };
     return { skill: null, passed: null, human, model: tm };
@@ -906,7 +911,7 @@ export class LocalLane {
       await started;
       if (background) await background.catch(() => undefined);
       this.#probes.delete(id);
-      const caps = await this.#probe({ id, base: v.base, model: e.model }).catch(() => null);
+      const caps = await this.#probe({ id, base: v.base, model: e.model }, { generate: true, force: true }).catch(() => null);
       if (caps?.ok && gen === this.#gen) this.#measure(id, v.base, caps, { force: true });
       await this.#measuring.get(id);
     })()
@@ -941,23 +946,105 @@ export class LocalLane {
     return typeof p === 'number' ? [p] : [];
   }
 
-  async #probe(ep: { id: string; base: string; model: string }): Promise<LocalCapabilities> {
+  /**
+   * Fix 2026-10-31 (#local-runner, boot load): the model's fingerprint for endpoint `id`, learnt within the probe TTL
+   * or asked now (/props, /api/tags: metadata, never a generation). Null when the server names none.
+   */
+  async #fingerprintFor(id: string, base: string, model: string, gen: number): Promise<string | null> {
+    const known = this.#fingerprints.get(id);
+    if (known && known.base === base && known.model === model && Date.now() - known.at < (this.#o.probeTtlMs ?? 60_000)) return known.fingerprint;
+    const fp = await fingerprintOf({ base, model }, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+    if (gen === this.#gen) this.#fingerprints.set(id, { base, model, fingerprint: fp, at: Date.now() });
+    return fp;
+  }
+
+  /**
+   * Fix 2026-10-31: what the lane already knows of a model's tool check (T1), by fingerprint, without asking the
+   * model: this daemon's own T1 result, else the tier store's current measurement (skill ≥ 1 iff T1 passed), else
+   * the in-memory measurement of a model with no fingerprint. Null = never checked.
+   */
+  #knownTools(base: string, model: string, fp: string | null): boolean | null {
+    const t1 = this.#t1.get(`${base}|${model}|${fp ?? ''}`);
+    if (t1 !== undefined) return t1;
+    if (fp) {
+      const rec = this.#readTier({ base, model, fingerprint: fp });
+      if (measuredCurrent(rec)) return rec.skill >= 1;
+      return null;
+    }
+    const mem = this.#memSkill.get(`${base}|${model}`);
+    return mem ? mem.skill >= 1 : null;
+  }
+
+  /** A settled T1 that failed: tier 0 in the store (or memory without a fingerprint); an unwritable store keeps memory. */
+  #storeNoTools(base: string, model: string, fp: string | null): void {
+    if (fp) {
+      try {
+        writeMeasured(this.#o.home, { base, model, fingerprint: fp }, { skill: 0, passed: 0 });
+        return;
+      } catch {
+        /* the #t1 memory record still answers for this daemon */
+      }
+    } else this.#memSkill.set(`${base}|${model}`, { skill: 0, passed: 0 });
+  }
+
+  /**
+   * One probe of endpoint `ep` (cached for the probe TTL). The metadata (n_ctx, the model id, the fingerprint) is
+   * always asked; it never loads weights. The tool check (T1) is a GENERATION, so it is answered from what the lane
+   * knows for this model's fingerprint (#knownTools) and run live only when `generate` is set AND nothing is known —
+   * a session or loop step about to use the model, Check again, Re-measure (`force`: live whatever is known). A live
+   * T1 that settled is remembered by fingerprint and starts the background T2-T4 measurement once (unforced); without
+   * `generate` and with nothing known the result is toolsSource 'unchecked'. While the generation runs the model.probe
+   * row is already written and status.local.probing names the endpoint, so the GUI says "checking…".
+   */
+  async #probe(ep: { id: string; base: string; model: string }, o: { generate: boolean; force?: boolean }): Promise<LocalCapabilities> {
     const hit = this.#probes.get(ep.id);
-    if (hit && Date.now() - hit.at < (this.#o.probeTtlMs ?? 60_000)) return hit.caps;
+    const live = hit && Date.now() - hit.at < (this.#o.probeTtlMs ?? 60_000) ? hit : undefined;
+    if (live && !o.force && (!o.generate || live.caps.toolsSource !== 'unchecked' || !live.caps.ok)) return live.caps;
     const gen = this.#gen;
     const end = this.beginProbe(ep.id);
+    const io = { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) };
     let caps: LocalCapabilities;
+    let probeRow = false;
+    let t1Settled = false;
+    let t1Fp: string | null = null;
+    const logProbe = async (c: LocalCapabilities): Promise<void> => {
+      probeRow = true;
+      await this.#o.log('model.probe', { endpoint: ep.id, ok: c.ok, ...(c.error ? { error: c.error } : {}) });
+    };
     try {
-      caps = await probeLocalEndpoint(ep, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+      // a probe within the TTL whose tools are unchecked keeps its metadata (only the tool check is new)
+      caps = live && !o.force ? live.caps : await probeLocalEndpoint(ep, { ...io, toolCheck: false });
+      if (caps.ok) {
+        const model = caps.model ?? ep.model;
+        const fp = await this.#fingerprintFor(ep.id, ep.base, model, gen);
+        const known = o.force ? null : this.#knownTools(ep.base, model, fp);
+        if (known !== null) caps = { ...caps, tools: known, toolsSource: 'cached' };
+        else if (o.generate) {
+          await logProbe(caps); // the GUI re-reads status on this row: status.local.probing says checking… during the generation
+          const r = await probeToolCall({ base: ep.base, model }, io);
+          caps = { ...caps, tools: r.tools, toolsSource: 'live' };
+          t1Settled = r.settled;
+          t1Fp = fp;
+          if (r.settled && gen === this.#gen) this.#t1.set(`${ep.base}|${model}|${fp ?? ''}`, r.tools);
+        } else caps = { ...caps, tools: false, toolsSource: 'unchecked' };
+      }
     } finally {
       end();
     }
-    await this.#o.log('model.probe', { endpoint: ep.id, ok: caps.ok, ...(caps.error ? { error: caps.error } : {}) });
-    if (caps.ok) await this.#o.log('model.capabilities', { backend: 'local', endpoint: ep.id, model: caps.model, tools: caps.tools, ctx: caps.nCtx, ctxSource: caps.nCtxSource, templateTools: caps.templateTools });
+    if (!probeRow && !live) await logProbe(caps);
+    if (caps.ok) await this.#o.log('model.capabilities', { backend: 'local', endpoint: ep.id, model: caps.model, tools: caps.tools, toolsSource: caps.toolsSource ?? 'live', ctx: caps.nCtx, ctxSource: caps.nCtxSource, templateTools: caps.templateTools });
     if (gen === this.#gen) {
       // a probe begun under an older config neither caches nor shows (setConfig cleared both)
       this.#probes.set(ep.id, { at: Date.now(), caps });
       this.#setLastProbe(ep.id, caps);
+      // slice C4'a: T2-T4 in the background after a settled live T1 that PASSED (a no-op on a store hit); Re-measure
+      // forces its own. A settled T1 that failed is tier 0 with nothing left to measure: it is stored here, at once and
+      // with no second row (this probe's model.capabilities row already says tools:false). Before, a background
+      // #measure logged a second model.capabilities row whose place among the open's rows depended on timing (Windows).
+      if (caps.ok && t1Settled && !o.force) {
+        if (caps.tools) this.#measure(ep.id, ep.base, caps);
+        else this.#storeNoTools(ep.base, caps.model ?? ep.model, t1Fp);
+      }
     }
     return caps;
   }
@@ -966,16 +1053,18 @@ export class LocalLane {
    * The daemon-start probe (§13.2 "records model.probe + model.capabilities for each configured endpoint"): every
    * endpoint that passes the loopback/LAN rule is probed once (cached for the next open); a refused one is skipped
    * here and refused at open (G-SUB-06). Never throws.
+   *
+   * Fix 2026-10-31: by default (daemon start) it is METADATA ONLY — no generation, nothing that loads weights; the
+   * tool check comes from the fingerprint cache or stays 'unchecked' until the first local session (or Check again).
+   * `generate:true` is for an applied config (the human just allowed it): a model the lane does not know is checked.
    */
-  async probeAll(): Promise<Array<{ endpoint: string; ok: boolean }>> {
+  async probeAll(o: { generate?: boolean } = {}): Promise<Array<{ endpoint: string; ok: boolean }>> {
     const out: Array<{ endpoint: string; ok: boolean }> = [];
     for (const ep of this.#config?.endpoints ?? []) {
       const v = classifyEndpoint(ep.base, this.#forbiddenPorts());
       if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat) || loopbackPort(v.base) === null) continue; // Aegis L3: loopback only in 8.0
-      const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }).catch(() => null);
+      const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }, { generate: o.generate === true }).catch(() => null);
       out.push({ endpoint: ep.id, ok: caps?.ok === true });
-      // slice C4'a: T2-T4 in the background after the probe, only on a cache miss
-      if (caps?.ok) this.#measure(ep.id, v.base, caps);
     }
     return out;
   }
@@ -1003,7 +1092,7 @@ export class LocalLane {
     let caps: LocalCapabilities | null = null;
     let cap: ReturnType<typeof capability> = capability(null, floor, false);
     for (const e of eps) {
-      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model });
+      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model }, { generate: true });
       const k = capability(c, floor, e.ep.textTools === true);
       if (!first || k.capable) {
         first = e;
@@ -1091,7 +1180,7 @@ export class LocalLane {
     for (const e of pool) {
       // a failed probe is not cached for a loop step: each retry asks the endpoint again
       if (this.#probes.get(e.ep.id)?.caps.ok !== true) this.#probes.delete(e.ep.id);
-      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model }).catch(() => null);
+      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model }, { generate: true }).catch(() => null);
       // judge and summarize use no tools (surface 'none'): capable = reachable and n_ctx ≥ the floor; an act step uses
       // tools (native, or the text-tool fallback): the same test, the route's tools mode kept
       const k = capability(c, floor, true);

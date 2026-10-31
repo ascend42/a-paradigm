@@ -1869,7 +1869,11 @@ components:
       status.local.probing (or a Check again in flight), "not checked yet"
       with Check again otherwise; Check again reads the refreshed
       status.local.lastProbe (the kernel records it), ui.check holds only a
-      call that failed. A never-fired start refusal (count 0) is the same
+      call that failed. Fix 2026-10-31: lastProbe.why 'tools-unchecked' (the
+      kernel's start-up probe asks no generation, so nothing loads the model)
+      reads "? answers · context … · tools not checked yet" with Check again
+      and a how line saying the first local session checks once; the applied
+      toast says the same. A never-fired start refusal (count 0) is the same
       one alert, worded "■ <id> can’t start". settings-sheet.ts
       compositionGate: no repaint while an IME composition is active (owed,
       run at compositionend). The card's signed lines say their diff mark in

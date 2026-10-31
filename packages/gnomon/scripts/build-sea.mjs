@@ -203,6 +203,8 @@ export async function bundleSeaMain(outfile, { pkg = PKG, build } = {}) {
  */
 export const KERNEL_STAMP_SEGMENT = '__GNOMON';
 export const KERNEL_STAMP_SECTION = 'GNOMON_STAMP';
+/** postject prefixes '__' to a Mach-O section name: the section the helper reads (Caller.swift kernelStampSection). */
+export const KERNEL_STAMP_MACHO_SECTION = '__GNOMON_STAMP';
 export function kernelStampBytes({ profile, version }) {
   if (!['dev', 'release'].includes(profile) || typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) || version.length > 32) throw new Error('a kernel stamp names profile dev|release and a semver version');
   return Buffer.from(`gnomon-kernel-stamp:v1\n${JSON.stringify({ profile, version })}`, 'utf8');

@@ -14,6 +14,14 @@
  *           names get_time with JSON-object arguments. A template that
  *           merely mentions tools is recorded (`templateTools`) but never
  *           turns tools on (§13.1: tools off unless detected).
+ *           The tool check is a GENERATION: the server loads the model's
+ *           weights for it. `toolCheck:false` skips it (toolsSource
+ *           'unchecked', tools false). Every other request here is metadata
+ *           only (/health, /slots, /props, /v1/models, Ollama's /api/show
+ *           and /api/ps: none loads weights, none sets keep_alive). The
+ *           daemon-start probe never runs the check (fix 2026-10-31: a boot
+ *           that loaded a 9.7B model froze a 16 GB Mac); probeToolCall is
+ *           the check alone.
  * Every request re-runs the loopback/LAN rule, follows no redirect and has a
  * timeout; every body is stream-read into a buffer capped at PROBE_BODY_CAP
  * (1 MiB) and the request is aborted past it (Aegis M1, round 2); any failure
@@ -52,6 +60,11 @@ export interface LocalCapabilities {
   templateTools: boolean;
   nCtx: number | null;
   nCtxSource: 'slots' | 'props' | 'ollama-show' | 'ollama-ps' | null;
+  /**
+   * Where `tools` came from: 'live' is a tool-call generation just now, 'cached' is the lane's record for this model's
+   * fingerprint (no generation), 'unchecked' is not known yet (tools is false and means nothing). Absent means 'live'.
+   */
+  toolsSource?: 'live' | 'cached' | 'unchecked';
   error?: string;
 }
 
@@ -92,7 +105,7 @@ async function getJson(f: ProbeFetch, url: string, init: RequestInit, ms: number
   }
 }
 
-export async function probeLocalEndpoint(ep: { id: string; base: string; model: string }, o: { fetch?: ProbeFetch; forbiddenPorts?: readonly number[]; timeoutMs?: number; toolTimeoutMs?: number } = {}): Promise<LocalCapabilities> {
+export async function probeLocalEndpoint(ep: { id: string; base: string; model: string }, o: { fetch?: ProbeFetch; forbiddenPorts?: readonly number[]; timeoutMs?: number; toolTimeoutMs?: number; toolCheck?: boolean } = {}): Promise<LocalCapabilities> {
   const base: LocalCapabilities = { endpoint: ep.id, base: ep.base, ok: false, model: null, tools: false, templateTools: false, nCtx: null, nCtxSource: null };
   const v = classifyEndpoint(ep.base, o.forbiddenPorts);
   if (!v.ok) return { ...base, error: `refused:${v.why}` };
@@ -108,7 +121,8 @@ export async function probeLocalEndpoint(ep: { id: string; base: string; model: 
   const propsCtx = typeof pj?.default_generation_settings?.n_ctx === 'number' ? pj.default_generation_settings.n_ctx : typeof pj?.n_ctx === 'number' ? pj.n_ctx : null;
   const ids = ((models.json as { data?: Array<{ id?: unknown }> } | null)?.data ?? []).map((d) => d?.id).filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 128);
   const model = ids.includes(ep.model) ? ep.model : (ids[0] ?? null);
-  // Ollama serves neither /slots nor /props: its context is the model's num_ctx parameter, else the loaded size
+  // Ollama serves neither /slots nor /props: its context is the model's num_ctx parameter, else the loaded size.
+  // /api/show reads the model's manifest and file header and /api/ps lists what is loaded: neither loads weights.
   let ollamaCtx: number | null = null;
   let ollamaSource: 'ollama-show' | 'ollama-ps' | null = null;
   if (slotCtx === null && propsCtx === null) {
@@ -127,18 +141,41 @@ export async function probeLocalEndpoint(ep: { id: string; base: string; model: 
       }
     }
   }
-  const chat = await getJson(f, `${v.base}/v1/chat/completions`, {
+  const check = o.toolCheck !== false;
+  const tools = check ? (await probeToolCall({ base: v.base, model: model ?? ep.model }, { fetch: f, ...(o.toolTimeoutMs !== undefined ? { timeoutMs: o.toolTimeoutMs } : {}) })).tools : false;
+  return {
+    ...base,
+    ok: true,
+    model: model ?? ep.model,
+    tools,
+    toolsSource: check ? 'live' : 'unchecked',
+    templateTools: typeof pj?.chat_template === 'string' && /tool/i.test(pj.chat_template),
+    nCtx: slotCtx ?? propsCtx ?? ollamaCtx,
+    nCtxSource: slotCtx !== null ? 'slots' : propsCtx !== null ? 'props' : ollamaSource,
+  };
+}
+
+/**
+ * T1, the live tool check, alone: ONE completion with a single `get_time` tool and tool_choice "required". It is a
+ * GENERATION (the server loads the model). True iff the reply's tool_calls[0] names get_time with JSON-object
+ * arguments. `base` must already have passed classifyEndpoint. Never throws. `settled` says whether the answer is
+ * worth remembering: a 2xx reply (right or wrong call) or a 4xx (the server refuses tools) is; no answer, a timeout or
+ * a 5xx (an Ollama that could not load the model, a busy server) is not, and the next check asks again.
+ */
+export async function probeToolCall(ep: { base: string; model: string }, o: { fetch?: ProbeFetch; timeoutMs?: number } = {}): Promise<{ tools: boolean; settled: boolean }> {
+  const f = o.fetch ?? ((u, i) => fetch(u, i));
+  const chat = await getJson(f, `${ep.base}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: model ?? ep.model,
+      model: ep.model,
       messages: [{ role: 'user', content: 'What time is it in UTC? Use the tool.' }],
       tools: [{ type: 'function', function: { name: 'get_time', description: 'Current time in a timezone', parameters: { type: 'object', properties: { tz: { type: 'string' } }, required: ['tz'] } } }],
       tool_choice: 'required',
       max_tokens: 128,
       temperature: 0,
     }),
-  }, o.toolTimeoutMs ?? 120_000);
+  }, o.timeoutMs ?? 120_000);
   const call = (chat.json as { choices?: Array<{ message?: { tool_calls?: Array<{ function?: { name?: unknown; arguments?: unknown } }> } }> } | null)?.choices?.[0]?.message?.tool_calls?.[0];
   let argsOk = false;
   try {
@@ -147,15 +184,7 @@ export async function probeLocalEndpoint(ep: { id: string; base: string; model: 
   } catch {
     argsOk = false;
   }
-  return {
-    ...base,
-    ok: true,
-    model: model ?? ep.model,
-    tools: call?.function?.name === 'get_time' && argsOk,
-    templateTools: typeof pj?.chat_template === 'string' && /tool/i.test(pj.chat_template),
-    nCtx: slotCtx ?? propsCtx ?? ollamaCtx,
-    nCtxSource: slotCtx !== null ? 'slots' : propsCtx !== null ? 'props' : ollamaSource,
-  };
+  return { tools: call?.function?.name === 'get_time' && argsOk, settled: chat.status >= 200 && chat.status < 500 };
 }
 
 // ── slice C4'a (#local-tool-tier): the tool-skill probe T2-T4 and the model fingerprint ─────────────────────────────

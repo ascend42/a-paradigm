@@ -587,6 +587,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     return {
       ...c,
       cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
+      ...(certResult.cert ? {} : { certWhy: certResult.why ?? 'not-sea', ...(certResult.detail ? { certDetail: certResult.detail.slice(0, 300) } : {}) }),
       seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
       ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
       ...(custody.digestMismatch ? { sealDigestMismatch: true } : {}),
@@ -1567,7 +1568,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const reloadLocalConfig = (why: 'set' | 'removed', removedVersion?: number): LoadedLocalConfig => {
     localCfg = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), chainRemoved: localRemoved(), ...(why === 'removed' ? { missing: 'removed' as const, ...(removedVersion !== undefined ? { removedVersion } : {}) } : {}) });
     supervisor.setLocalConfig(localCfg.config);
-    if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
+    // the human just allowed this config: a model the lane does not know is tool-checked now (a generation they asked for)
+    if (localCfg.config?.endpoints.length) void supervisor.probeLocal({ generate: true }).catch(() => undefined);
     // a loop refused at start for want of a local model clears once the cause clears (its stack alert goes with it)
     loops.localConfigApplied();
     return localCfg;
@@ -1842,7 +1844,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   }
 
   emit({ kind: 'daemon.start', pid: pidfile.pid, socketPath: pidfile.socketPath, via: choice.via, idleMs });
-  // §13.2: probe every configured local endpoint once at start (background; never blocks serving, never throws)
+  // §13.2: probe every configured local endpoint once at start (background; never blocks serving, never throws).
+  // Fix 2026-10-31: METADATA ONLY — no generation, nothing that loads model weights (a boot that loaded a 9.7B model
+  // froze a 16 GB Mac); the tool check comes from the fingerprint cache or waits for the first local session.
   if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
   await appendRow('daemon.start', {
     pid: pidfile.pid,
@@ -1854,7 +1858,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     kernelKeyCustody: custodyStatus().custody,
     // #kernel-custody (S2): the helper's cert of this key, on the signed log (verifiable without kernel-pub.jsonl)
     ...(certResult.cert ? { kernelCert: { ...certResult.cert } } : {}),
-    kernelCustody: { cert: certResult.cert ? 'valid' : (certResult.why ?? 'none'), seal: sealRead.state, anchor: logAnchor.status().state, ...(logAnchor.status().verdict ? { anchorVerdict: logAnchor.status().verdict } : {}) },
+    kernelCustody: { cert: certResult.cert ? 'valid' : (certResult.why ?? 'none'), ...(certResult.cert ? {} : { certWhy: certResult.why ?? 'none', ...(certResult.detail ? { certDetail: certResult.detail.slice(0, 300) } : {}) }), seal: sealRead.state, anchor: logAnchor.status().state, ...(logAnchor.status().verdict ? { anchorVerdict: logAnchor.status().verdict } : {}) },
     root: authority.state,
   });
   logAnchor.startTimer();
