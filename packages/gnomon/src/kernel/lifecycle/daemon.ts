@@ -587,6 +587,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     return {
       ...c,
       cert: certResult.cert ? { state: 'valid', certKeyId: certResult.cert.certKeyId, expiresAt: certResult.expiresAt ?? '' } : { state: 'none', why: certResult.why ?? 'not-sea', ...(certResult.detail ? { detail: certResult.detail } : {}) },
+      ...(certResult.cert ? {} : { certWhy: certResult.why ?? 'not-sea', ...(certResult.detail ? { certDetail: certResult.detail.slice(0, 300) } : {}) }),
       seal: custody.mode === 'tampered' ? { state: 'invalid', why: `tampered: ${custody.why}` } : sealRead.state === 'sealed' ? { state: 'sealed', certKeyId: sealRead.seal.certKeyId, matchesCert: certResult.cert?.certKey === sealRead.seal.certKey } : sealRead.state === 'invalid' ? { state: 'invalid', why: sealRead.why } : { state: 'none' },
       ...(migrationCardId ? { migration: { cardId: migrationCardId } } : {}),
       ...(custody.digestMismatch ? { sealDigestMismatch: true } : {}),
@@ -1857,7 +1858,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     kernelKeyCustody: custodyStatus().custody,
     // #kernel-custody (S2): the helper's cert of this key, on the signed log (verifiable without kernel-pub.jsonl)
     ...(certResult.cert ? { kernelCert: { ...certResult.cert } } : {}),
-    kernelCustody: { cert: certResult.cert ? 'valid' : (certResult.why ?? 'none'), seal: sealRead.state, anchor: logAnchor.status().state, ...(logAnchor.status().verdict ? { anchorVerdict: logAnchor.status().verdict } : {}) },
+    kernelCustody: { cert: certResult.cert ? 'valid' : (certResult.why ?? 'none'), ...(certResult.cert ? {} : { certWhy: certResult.why ?? 'none', ...(certResult.detail ? { certDetail: certResult.detail.slice(0, 300) } : {}) }), seal: sealRead.state, anchor: logAnchor.status().state, ...(logAnchor.status().verdict ? { anchorVerdict: logAnchor.status().verdict } : {}) },
     root: authority.state,
   });
   logAnchor.startTimer();
