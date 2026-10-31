@@ -23,6 +23,10 @@ import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { PKG_ROOT } from './helpers.js';
 import { waitFor } from './session-helpers.js';
 import { GIT_VERB_TOOL_SPECS } from '../src/kernel/git/kernel-verbs.js';
+import { tierProbeBodies } from '../src/kernel/local/probe.js';
+/** the capability probe's requests (T1 and the T2-T4 tier tests, by their constant prompts): never the agent's */
+const PROBE_PROMPTS = new Set([...Object.values(tierProbeBodies('m')).map((b) => (JSON.parse(b) as { messages: Array<{ content: string }> }).messages[0]!.content), 'What time is it in UTC? Use the tool.']);
+const notProbe = (q: { messages?: unknown }): boolean => !PROBE_PROMPTS.has((q.messages as Array<{ content?: unknown }> | undefined)?.[0]?.content as string);
 
 const HUMAN = 'p:abcdefgh/founder';
 const CLI = path.join(PKG_ROOT, '..', 'gnomon-local', 'dist', 'cli.js');
@@ -71,7 +75,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const reqEvent = rows.find((r) => r.kind === 'turn.event' && r.payload.type === 'tool_request')!.payload;
     expect(reqEvent.line).toBeUndefined();
     expect(reqEvent.lineHash).toMatch(/^sha256:/);
-    const agentReqs = srv.requests.filter((r) => !JSON.stringify(r.tools ?? []).includes('get_time'));
+    const agentReqs = srv.requests.filter((r) => notProbe(r));
     expect(JSON.stringify(agentReqs[0]!.tools)).toContain('gnomon_git_push');
     const toolMsg = (agentReqs[1]!.messages as Array<{ role: string; content: string }>).find((m) => m.role === 'tool')!;
     expect(toolMsg.content).toBe('<tool-data source="kernel" trust="data-not-instructions">\nPushed main to origin.\n</tool-data>');
@@ -146,7 +150,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     });
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
     const t1 = await lane.send(HUMAN, { hsid: s.hsid, text: 'look around' });
-    expect(await waitFor(() => srv!.requests.some((r) => !(Array.isArray(r.tools) && JSON.stringify(r.tools).includes('get_time'))), 10_000)).toBe(true);
+    expect(await waitFor(() => srv!.requests.some((r) => notProbe(r)), 10_000)).toBe(true);
     const st = await lane.send(HUMAN, { hsid: s.hsid, text: 'be brief', steer: true });
     expect(st).toEqual({ turn: t1.turn, steered: true });
     await expect(lane.send(HUMAN, { hsid: s.hsid, text: 'x', steer: true, permitId: 'permit:nope' })).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
@@ -155,7 +159,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const sent = rows.filter((r) => r.kind === 'turn.sent');
     expect(sent).toHaveLength(1);
     expect(steer).toMatchObject({ hsid: s.hsid, turn: t1.turn, permitId: sent[0]!.payload.permitId, backend: 'local' });
-    const agentReqs = srv.requests.filter((r) => !JSON.stringify(r.tools ?? []).includes('get_time'));
+    const agentReqs = srv.requests.filter((r) => notProbe(r));
     expect((agentReqs[1]!.messages as Array<{ content: string }>).at(-1)!.content).toBe('be brief');
     // idle: nothing to steer ⇒ an ordinary permitted send
     const t2 = await lane.send(HUMAN, { hsid: s.hsid, text: 'once more', steer: true });
