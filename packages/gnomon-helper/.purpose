@@ -80,7 +80,7 @@ components:
       caller check (Caller.swift: LOCAL_PEERTOKEN on stdin, the unchanged
       parent, the hardcoded gnomon.kernel requirement with kSecCSStrictValidate,
       hardened runtime, no get-task-allow, never ad-hoc or gnomon.node, the
-      SEA's GNOMON_STAMP version floor; gnomon.kernel.dev only with
+      SEA's build stamp version floor (1.11.2: read from section __GNOMON_STAMP, the name postject writes for the GNOMON_STAMP resource; 1.11.0-1.11.1 looked for GNOMON_STAMP and refused every SEA kernel as caller-refused: no build stamp); gnomon.kernel.dev only with
       -DGNOMON_HELPER_DEV / build-darwin.mjs --dev-kernel) guards the
       no-presence ops: kernel.cert (SE kernel-cert key, group
       SW4BMQ8PNL.gnomon.prod only, AfterFirstUnlockThisDeviceOnly checked from

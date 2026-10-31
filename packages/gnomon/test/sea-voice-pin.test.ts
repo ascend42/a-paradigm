@@ -2,7 +2,7 @@
  * #kernel-sea TD-2026-10-29-746 (helper 1.11.0 slice, kernel side): the voice client pin and the running-child check.
  * Platform-independent: the SEA facts, guard and codesign verifier are stubbed; voiceTreeHash runs on a temp tree.
  */
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -182,5 +182,12 @@ describe('voiceTreeHash (build) and the kernel stamp', () => {
     expect(sea.KERNEL_STAMP_SECTION).toBe('GNOMON_STAMP');
     expect(sea.kernelStampBytes({ profile: 'release', version: '8.1.0' }).toString('utf8')).toBe('gnomon-kernel-stamp:v1\n{"profile":"release","version":"8.1.0"}');
     expect(() => sea.kernelStampBytes({ profile: 'probe', version: '8.1.0' })).toThrow();
+  });
+
+  it('fix 2026-10-31: postject writes the resource as __<name>, and the helper reads exactly that section', () => {
+    expect(sea.KERNEL_STAMP_MACHO_SECTION).toBe(`__${sea.KERNEL_STAMP_SECTION}`);
+    const swift = readFileSync(path.join(__dirname, '..', '..', 'gnomon-helper', 'darwin', 'Sources', 'gnomon-helper', 'Caller.swift'), 'utf8');
+    expect(/^let kernelStampSection = "([^"]+)"$/m.exec(swift)?.[1]).toBe(sea.KERNEL_STAMP_MACHO_SECTION);
+    expect(/^let kernelStampSegment = "([^"]+)"$/m.exec(swift)?.[1]).toBe(sea.KERNEL_STAMP_SEGMENT);
   });
 });

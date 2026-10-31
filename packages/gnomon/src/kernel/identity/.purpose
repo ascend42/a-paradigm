@@ -198,7 +198,7 @@ components:
       keys/kernel-custody.json (root-signed rows, re-verified every start). After the seal only certified
       and sealed legacy keys are trusted and an uncertified append is refused (KernelPubSealed). Dismissed,
       nothing breaks and the card returns next start. status.kernelKeyCustody is full only with a cert, a
-      seal of that cert key and no anchor quarantine; status.kernelCustody carries the reasons.
+      seal of that cert key and no anchor quarantine; status.kernelCustody carries the reasons. Fix 2026-10-31: with no cert, daemon.start kernelCustody and status.kernelCustody carry certWhy and certDetail (the helper's code and message), and partialBecause says it in words: no kernel cert (refused: <code>: <message>).
     path: src/kernel/identity/kernel-custody.ts
     type: module
     tags: [gnomon, kernel, identity, custody, helper, s2]
