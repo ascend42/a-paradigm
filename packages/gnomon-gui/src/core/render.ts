@@ -854,6 +854,77 @@ const short = (v: unknown, n = 19): string => (typeof v === 'string' ? (v.length
 const list = (v: unknown): string | null => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]).join(', ') : null);
 
 export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
+
+/* ── #kernel-custody cards (TD-2026-10-29-746): the migration card and the log.quarantine card ──────────────────── */
+// The SAME schemas and field tables as the kernel's kernelCustodyRefusal / logQuarantineRowRefusal (decision-batch.ts)
+// and the helper's (Protocol.swift). The card carries the rows WITHOUT createdAt (the kernel adds it at prepare).
+export const KERNEL_CERT_KEY_SCHEMA = 'gnomon-kernel-cert-key:v1';
+export const KERNEL_LEGACY_SCHEMA = 'gnomon-kernel-legacy:v2';
+export const LOG_QUARANTINE_SCHEMA = 'gnomon-log-quarantine:v1';
+const KERNEL_LEGACY_MAX_COUNT = 1_000_000;
+const SHA256_TAG_RE = /^sha256:[0-9a-f]{64}$/;
+const LOG_ID_RE = /^log:[0-9A-HJKMNP-TV-Z]{26}$/;
+const B64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+const exactKeys = (r: Record<string, unknown>, keys: readonly string[]): boolean => {
+  const ks = Object.keys(r);
+  return ks.length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(r, k));
+};
+const wholeAtLeast = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= min;
+function b64Bytes(s: string): Uint8Array | null {
+  try {
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The migration card (grant, action kernel-custody): exactly [cert-key row, legacy row], each bound to this card, every
+ * field as the kernel and helper accept it, the certKeyId the sha256 of the key it names, and the hashed detail's
+ * summary (certKeyId, legacyKeys, logId, headSeq) equal to the rows. One line per row, every field in full. null = no Allow.
+ */
+export function kernelCustodyLines(d: Record<string, unknown>, rows: readonly Record<string, unknown>[], cardId: unknown): string[] | null {
+  if (rows.length !== 2) return null;
+  const [k, l] = rows as [Record<string, unknown>, Record<string, unknown>];
+  if (k.schemaVersion !== KERNEL_CERT_KEY_SCHEMA || !exactKeys(k, ['schemaVersion', 'certKey', 'certKeyId', 'cardId']) || k.cardId !== cardId) return null;
+  if (typeof k.certKey !== 'string' || k.certKey.length !== 88 || !B64_RE.test(k.certKey) || typeof k.certKeyId !== 'string' || !SHA256_TAG_RE.test(k.certKeyId)) return null;
+  const raw = b64Bytes(k.certKey);
+  // Aegis L: canonical base64 only (the kernel and helper re-encode and compare), so atob's slack never shows an Allow they refuse
+  if (!raw || raw.length !== 65 || raw[0] !== 0x04 || btoa(String.fromCharCode(...raw)) !== k.certKey || `sha256:${hex(sha256(raw))}` !== k.certKeyId) return null;
+  if (l.schemaVersion !== KERNEL_LEGACY_SCHEMA || !exactKeys(l, ['schemaVersion', 'keysDigest', 'keyCount', 'logId', 'headSeq', 'headHash', 'cardId']) || l.cardId !== cardId) return null;
+  if (typeof l.keysDigest !== 'string' || !SHA256_TAG_RE.test(l.keysDigest) || !wholeAtLeast(l.keyCount, 1) || l.keyCount > KERNEL_LEGACY_MAX_COUNT) return null;
+  if (typeof l.logId !== 'string' || !LOG_ID_RE.test(l.logId) || !wholeAtLeast(l.headSeq, 0) || typeof l.headHash !== 'string' || !SHA256_TAG_RE.test(l.headHash)) return null;
+  if (d.certKeyId !== k.certKeyId || d.legacyKeys !== l.keyCount || d.logId !== l.logId || d.headSeq !== l.headSeq) return null;
+  const n = l.keyCount;
+  // Mika 2026-11-01: one line per signed field, every field in full (as local.config)
+  return [
+    `helper certifying key ${k.certKeyId}`,
+    `public key (P-256) ${k.certKey}`,
+    // the helper's dialog words ("legacy kernel keys"): the sealed set can be the current key alone (a one-key home)
+    `seal ${n} legacy kernel key${n === 1 ? '' : 's'} · keys digest ${l.keysDigest}`,
+    `log ${l.logId} · head entry ${l.headSeq}`,
+    `head hash ${l.headHash}`,
+  ];
+}
+
+/** The log.quarantine card (grant, action log.quarantine): exactly one row, bound to this card, as the kernel accepts it, equal to the detail's from/to. */
+export function logQuarantineLines(d: Record<string, unknown>, rows: readonly Record<string, unknown>[], cardId: unknown): string[] | null {
+  if (rows.length !== 1) return null;
+  const r = rows[0]!;
+  if (r.schemaVersion !== LOG_QUARANTINE_SCHEMA || !exactKeys(r, ['schemaVersion', 'from', 'to', 'cardId']) || r.cardId !== cardId) return null;
+  const f = r.from;
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return null;
+  const h = f as Record<string, unknown>;
+  if (!exactKeys(h, ['logId', 'seq', 'hash']) || typeof h.logId !== 'string' || !LOG_ID_RE.test(h.logId) || !wholeAtLeast(h.seq, 0) || typeof h.hash !== 'string' || !SHA256_TAG_RE.test(h.hash)) return null;
+  if (typeof r.to !== 'string' || !LOG_ID_RE.test(r.to) || r.to === h.logId) return null;
+  // the hashed detail's from/to (the card's prose is built from them) must be the row's
+  if (canonicalJson(d.from ?? null) !== canonicalJson(h) || d.to !== r.to) return null;
+  return [`move the log anchor from ${h.logId} · head entry ${h.seq}`, `head hash ${h.hash}`, `to new log ${r.to}`];
+}
+
 export const LOCAL_COMPAT_LABEL: Readonly<Record<string, string>> = Object.freeze({ ollama: 'Ollama', 'lm-studio': 'LM Studio', 'llama.cpp': 'llama.cpp', vllm: 'vLLM', 'mlx-lm': 'MLX' });
 // Aegis L4: the SAME table as the kernel's localRowRefusal (decision-batch.ts) and the helper's (Protocol.swift).
 // ASCII classes only ([0-9], never \d): Arabic-Indic or fullwidth digits, LOCALHOST and [::ffff:127.0.0.1] are refused.
@@ -1090,6 +1161,12 @@ export function rootRowsOf(card: Record<string, unknown>, ctx: { local?: LocalCu
     items = localRootItems(rowList[0]!, previous, ctx.local) ?? undefined;
     if (!items) return null;
     lines.push(...items.map((i) => i.text));
+  } else if (d.action === 'kernel-custody' || d.action === 'log.quarantine' || rowList.some((r) => r.schemaVersion === KERNEL_CERT_KEY_SCHEMA || r.schemaVersion === KERNEL_LEGACY_SCHEMA || r.schemaVersion === LOG_QUARANTINE_SCHEMA)) {
+    // #kernel-custody (TD-2026-10-29-746): a custody row only ever on its own grant action, bound to this card
+    if (kind !== 'grant') return null;
+    const custody = d.action === 'kernel-custody' ? kernelCustodyLines(d, rowList, card.cardId) : d.action === 'log.quarantine' ? logQuarantineLines(d, rowList, card.cardId) : null;
+    if (!custody) return null;
+    lines.push(...custody);
   } else
     for (const r of rowList) {
       const l = rootRowLine(r);
@@ -1249,7 +1326,8 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
   // #gui-mcp-servers: turning on one of the human's MCP servers (detail.action mcp.enable) is a root configuration card too
   // C5'b: trusting a server's tool labels (detail.action mcp.trust) is one too
-  const gnomonFam = v.rootRows?.action === 'local.config' || v.rootRows?.action === 'mcp.enable' || v.rootRows?.action === 'mcp.trust';
+  // #kernel-custody: the one-time key migration and the log anchor move are about Gnomon itself too
+  const gnomonFam = ['local.config', 'mcp.enable', 'mcp.trust', 'kernel-custody', 'log.quarantine'].includes(v.rootRows?.action ?? '');
   const tag0 = voiceTagOf(v.voice ?? null);
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
@@ -1268,7 +1346,10 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // nothing about the server; its kernel lines (what runs, where, the shell, fetch and repo warnings) ARE the decision,
   // so they show on the face, not under details. The k-line and the presence line already show: not twice.
   const mcpFace = v.rootRows?.action === 'mcp.enable' || v.rootRows?.action === 'mcp.trust';
-  const bodyShown = loud || capped || mcpFace;
+  // #kernel-custody (Mika 2026-11-01): the key migration and the log anchor move keep the kernel's words on the face
+  // (the planted-key count, Aegis S2 L-4, must be visible before the touch); the body scrolls inside its cap
+  const faceBody = mcpFace || v.rootRows?.action === 'kernel-custody' || v.rootRows?.action === 'log.quarantine';
+  const bodyShown = loud || capped || faceBody;
   // C5'b: the trust card's "launch … · tools …" hash line goes to details and title= (never the face)
   const hashLine = v.rootRows?.action === 'mcp.trust' ? (kernelTextLines(block).find((l) => TRUST_HASH_LINE.test(l)) ?? null) : null;
   // Mika: a brokered card with no scoped key drops the kernel's "Always: any call of …" line too
@@ -1308,7 +1389,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
-    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}${mcpFace ? ' wraps' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
+    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}${faceBody ? ' wraps' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
     kLine ? h(doc, 'span', { class: 'k-line kernel-owned', ...(hashLine ? { title: hashLine } : {}) }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
     gitWarn ? h(doc, 'p', { class: 'card-warn kernel-owned' }, gitWarn) : null,
