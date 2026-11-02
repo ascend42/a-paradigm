@@ -470,7 +470,7 @@ components:
       - skills
     file: packages/paradigm-mcp/src/utils/protocol-loader.ts
   global-store:
-    description: 'Cross-project wisdom store at ~/.paradigm/wisdom/ (antipatterns, preferences, decisions). 7.12.0 (D2): loadGlobalDecisions is @deprecated and no longer part of the wisdom read path — retained only for the promote-to-global duplicate check in tools/wisdom.ts.'
+    description: 'Cross-project wisdom store at ~/.paradigm/wisdom/ (antipatterns, preferences, decisions). 7.12.0 (D2): loadGlobalDecisions is @deprecated and no longer part of the wisdom read path — retained only for the promote-to-global duplicate check in tools/wisdom.ts. resolveProjectRoot(hint): explicit hint, PARADIGM_PROJECT_DIR, CLAUDE_PROJECT_DIR, then walk up to `.paradigm/`; a value holding an unexpanded `${...}` placeholder (a client that does not interpolate its MCP config) is never treated as a path (2026-11-01, portable MCP configs).'
     type: store
     tags:
       - wisdom

@@ -52,6 +52,13 @@ components:
     tags:
       - doctor
       - agent-identity
+  mcp-portability-audit:
+    description: 'auditMcpPortability(rootDir) — scans the committed project MCP configs (.mcp.json, .cursor/mcp.json, .cline/mcp.json) for a server whose cwd or an args entry is an absolute path (POSIX or Windows; ${...} placeholders pass). Doctor renders "MCP config portability" warn (with `paradigm sync` as the fix when only the paradigm server is affected) or ok. Advisory — never fails doctor. 2x-engineers report 2026-11-01.'
+    type: utility
+    file: mcp-portability-audit.ts
+    tags:
+      - doctor
+      - mcp-config
   legacy-names-audit:
     description: 'v7.13.0 (T-2026-09-26-005, MCP surface cut) auditLegacyToolNames(rootDir) — scans CLAUDE.md, AGENTS.md, .cursor/rules/** and .claude/settings{,.local}.json permissions.{allow,deny,ask} for renamed pre-7.13 `paradigm_<family>_<op>` tool names (anchors and same-name entries excluded). Driven by #legacy-tool-map (single source of truth, imported from paradigm-mcp). Doctor renders "Legacy tool names (permissions)" warn (dead allowlist entries re-prompt) and "Legacy tool names" warn with the family({op}) replacement; ok when clean. Advisory — never fails doctor.'
     type: utility

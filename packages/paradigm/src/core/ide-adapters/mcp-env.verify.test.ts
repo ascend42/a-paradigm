@@ -23,7 +23,7 @@ const mkClient = (id: string): AIClient => ({
   id,
   detected: true,
   configPath: `/tmp/${id}.json`,
-  configType: 'project',
+  configType: id === 'claude-desktop' || id === 'continue' ? 'user' : 'project',
   instructions: '',
 });
 
@@ -46,12 +46,12 @@ describe('generated-value correctness: claude.ts', () => {
     expect(env.PATH).toContain('/usr/local/bin');
   });
 
-  it('generateMcpConfig leaves command/args/cwd untouched (posix path only)', () => {
+  it('generateMcpConfig leaves command/args untouched and writes no absolute cwd (posix path only)', () => {
     const cfg = claudeAdapter.generateMcpConfig('/some/root');
     const server = cfg.mcpServers.paradigm;
     expect(server.command).toBe('paradigm-mcp');
     expect(server.args).toEqual(['.']);
-    expect(server.cwd).toBe('/some/root');
+    expect(server.cwd).toBeUndefined();
     if (process.platform !== 'win32') {
       expect(server.env!.PATH.startsWith('${PATH}:')).toBe(true);
       expect(server.env!.PATH).toContain('/opt/homebrew/bin');
@@ -91,26 +91,32 @@ describe('generated-value correctness: setup.ts (env narrowed to claude-code onl
     expect(env.PATH.startsWith('${PATH};')).toBe(true);
   });
 
-  it('command/args/cwd unchanged across setup transports', () => {
+  it('command/args unchanged; absolute cwd ONLY in user-level configs (never in a committed project file)', () => {
     const cont = generateMCPConfig(mkClient('continue'), '/proj', 'proj');
     const t = cont.experimental!.modelContextProtocolServers![0].transport;
     expect(t.command).toBe('paradigm-mcp');
     expect(t.args).toEqual(['.']);
     expect(t.cwd).toBe('/proj');
-    const std = generateMCPConfig(mkClient('cline'), '/proj', 'proj').mcpServers!['proj'];
-    expect(std.command).toBe('paradigm-mcp');
-    expect(std.args).toEqual(['.']);
-    expect(std.cwd).toBe('/proj');
+    expect(generateMCPConfig(mkClient('claude-desktop'), '/proj', 'proj').mcpServers!['proj'].cwd).toBe('/proj');
+    for (const id of ['cline', 'claude-code', 'cursor']) {
+      const std = generateMCPConfig(mkClient(id), '/proj', 'proj').mcpServers!['proj'];
+      expect(std.command, id).toBe('paradigm-mcp');
+      expect(std.args, id).toEqual(['.']);
+      expect(std.cwd, id).toBeUndefined();
+      expect(JSON.stringify(std), id).not.toContain('/proj');
+    }
+    expect(generateMCPConfig(mkClient('cursor'), '/proj', 'proj').mcpServers!['proj'].env).toEqual({ PARADIGM_PROJECT_DIR: '${workspaceFolder}' });
   });
 });
 
 describe('generated-value correctness: cursor.ts (env narrowed out)', () => {
-  it('adapter emits NO env (Cursor ${VAR} unconfirmed → bare command), command/args/cwd intact', () => {
+  it('adapter emits no PATH env (Cursor ${PATH} unconfirmed), the workspace root by interpolation, no absolute cwd', () => {
     const server = cursorAdapter.generateMcpConfig('/some/root').mcpServers.paradigm;
     expect(server.command).toBe('paradigm-mcp');
     expect(server.args).toEqual(['.']);
-    expect(server.cwd).toBe('/some/root');
-    expect(server.env).toBeUndefined();
+    expect(server.cwd).toBeUndefined();
+    expect(server.env).toEqual({ PARADIGM_PROJECT_DIR: '${workspaceFolder}' });
+    expect(JSON.stringify(server)).not.toContain('/some/root');
   });
 });
 

@@ -989,6 +989,25 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       // Agent audit is advisory — never fail doctor on it.
     }
 
+    // MCP config portability: a committed project MCP config must not name this machine's folder
+    try {
+      const { auditMcpPortability } = await import('./mcp-portability-audit.js');
+      const hits = auditMcpPortability(cwd);
+      if (hits.length > 0) {
+        const paradigmOnly = hits.every(h => h.server === 'paradigm');
+        results.push({
+          name: 'MCP config portability',
+          status: 'warn',
+          message: `${hits.length} absolute path(s) in project MCP config, broken on any other machine: ${hits.slice(0, 3).map(h => `${h.file} ${h.server}.${h.field} = ${h.value}`).join('; ')}${hits.length > 3 ? '; …' : ''}`,
+          fix: paradigmOnly ? '`paradigm sync` rewrites the paradigm server without an absolute cwd' : 'Remove the absolute `cwd`/path from those servers (`paradigm sync` fixes the paradigm one)',
+        });
+      } else {
+        results.push({ name: 'MCP config portability', status: 'ok', message: 'Project MCP configs name no machine-specific folder' });
+      }
+    } catch {
+      // Advisory — never fail doctor on it.
+    }
+
     // Legacy MCP tool names (7.13.0 surface cut — aliases removed in 7.15)
     try {
       const { auditLegacyToolNames } = await import('./legacy-names-audit.js');

@@ -69,10 +69,13 @@ export function resolveProjectRoot(hint?: string): string {
     try { return fs.existsSync(path.join(dir, '.paradigm')); } catch { return false; }
   };
 
+  // A client that does not interpolate its config (e.g. a Cursor build that leaves
+  // PARADIGM_PROJECT_DIR=${workspaceFolder} literal) hands us `${...}`: never a path.
+  const usable = (v: string | undefined): v is string => !!v && !!v.trim() && !/\$\{[^}]*\}/.test(v);
   const explicit: string[] = [];
-  if (hint && hint !== '.') explicit.push(path.resolve(hint));
+  if (usable(hint) && hint !== '.') explicit.push(path.resolve(hint));
   for (const env of [process.env.PARADIGM_PROJECT_DIR, process.env.CLAUDE_PROJECT_DIR]) {
-    if (env && env.trim()) explicit.push(path.resolve(env.trim()));
+    if (usable(env)) explicit.push(path.resolve(env.trim()));
   }
 
   // (1)+(2): an explicit candidate that is actually a Paradigm project.
@@ -81,7 +84,7 @@ export function resolveProjectRoot(hint?: string): string {
   }
 
   // (3): walk up from the hint (or cwd) looking for `.paradigm/`.
-  const start = path.resolve(hint && hint !== '.' ? hint : process.cwd());
+  const start = path.resolve(usable(hint) && hint !== '.' ? hint : process.cwd());
   let dir = start;
   // eslint-disable-next-line no-constant-condition
   while (true) {

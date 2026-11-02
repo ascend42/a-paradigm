@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../../utils/logger.js';
 import { mcpServerEnv } from '../../core/ide-adapters/mcp-env.js';
+import { CURSOR_PROJECT_ENV } from '../../core/ide-adapters/cursor.js';
 
 // Types
 export interface AIClient {
@@ -151,7 +152,13 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
   // and a static absolute list would REPLACE it (regressing nvm/Volta users whose
   // node lives under $HOME). So those clients keep the bare command (today's
   // behavior — no regression) until their expansion is verified (follow-up task).
-  const env = client.id === 'claude-code' ? mcpServerEnv(true) : undefined;
+  const pathEnv = client.id === 'claude-code' ? mcpServerEnv(true) : undefined;
+  // Cursor's spawn cwd is not reliably the workspace: name the root by its own interpolation (no PATH touched)
+  const env = client.id === 'cursor' ? { ...pathEnv, ...CURSOR_PROJECT_ENV } : pathEnv;
+  // A project-level config is committed and shared: NEVER an absolute cwd (it names this machine's folder and
+  // breaks every other clone; the server resolves "." by walking up to `.paradigm/`). Only a user-level config
+  // (Claude Desktop, Continue: one file in $HOME, outside any repo) needs the absolute project path.
+  const cwd = client.configType === 'user' ? { cwd: projectPath } : {};
 
   if (client.id === 'continue') {
     // Continue has a different config format
@@ -163,7 +170,7 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
               type: 'stdio',
               command: 'paradigm-mcp',
               args: ['.'],
-              cwd: projectPath,
+              ...cwd,
               ...(env ? { env } : {}),
             },
           },
@@ -178,7 +185,7 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
       [serverName]: {
         command: 'paradigm-mcp',
         args: ['.'],
-        cwd: projectPath,
+        ...cwd,
         ...(env ? { env } : {}),
       },
     },
@@ -554,7 +561,8 @@ export async function mcpListCommand(options: { json?: boolean }) {
     
     // List servers
     for (const server of servers) {
-      const isCurrentProject = server.cwd === currentProjectPath;
+      // a project-level config without cwd is this project's (it is resolved from the folder it lives in)
+      const isCurrentProject = server.cwd === currentProjectPath || (client.configType === 'project' && server.cwd === 'unknown');
       const icon = isCurrentProject ? chalk.green('●') : chalk.gray('○');
       const nameDisplay = isCurrentProject
         ? chalk.green(server.name)

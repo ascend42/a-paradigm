@@ -42,15 +42,16 @@ describe('adapter generateMcpConfig env', () => {
     } else {
       expect(env!.PATH.startsWith('${PATH}:')).toBe(true);
     }
-    // command/args/cwd left exactly as-is.
+    // command/args as-is; .mcp.json is committed: no absolute cwd (portable across clones)
     expect(cfg.mcpServers.paradigm.command).toBe('paradigm-mcp');
     expect(cfg.mcpServers.paradigm.args).toEqual(['.']);
-    expect(cfg.mcpServers.paradigm.cwd).toBe('/some/root');
+    expect(cfg.mcpServers.paradigm.cwd).toBeUndefined();
   });
 
-  it('Cursor adapter emits NO env (${VAR} expansion unconfirmed → bare command)', () => {
+  it('Cursor adapter: no PATH env, only PARADIGM_PROJECT_DIR via ${workspaceFolder}, no absolute cwd', () => {
     const cfg = cursorAdapter.generateMcpConfig('/some/root');
-    expect(cfg.mcpServers.paradigm.env).toBeUndefined();
+    expect(cfg.mcpServers.paradigm.env).toEqual({ PARADIGM_PROJECT_DIR: '${workspaceFolder}' });
+    expect(cfg.mcpServers.paradigm.cwd).toBeUndefined();
   });
 });
 
@@ -60,7 +61,7 @@ describe('setup generateMCPConfig env', () => {
     id,
     detected: true,
     configPath: `/tmp/${id}.json`,
-    configType: 'project',
+    configType: id === 'claude-desktop' || id === 'continue' ? 'user' : 'project',
     instructions: '',
   });
 
