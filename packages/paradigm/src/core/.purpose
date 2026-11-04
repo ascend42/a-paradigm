@@ -168,6 +168,13 @@ components:
       - authority
       - claims
       - compliance
+  config-schema:
+    description: 'Zod validation for .paradigm/config.yaml (config-schema.ts): validateConfig returns errors for schema violations and warnings for unknown top-level keys (passthrough). classroom.reprobe (T-2026-11-04-002) is an optional enum ask | off, default ask: the class skill asks the human (count and rough token cost) before re-probing pending certs, or skips the step when off. ClassroomConfig mirrors it in paradigm-config.ts.'
+    type: utility
+    file: config-schema.ts
+    tags:
+      - config
+      - classroom
 signals:
   orchestration-started:
     description: Multi-agent orchestration has begun

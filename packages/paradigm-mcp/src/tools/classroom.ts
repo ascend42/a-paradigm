@@ -8,6 +8,8 @@
  *   paradigm_syllabus_get     — fetch one syllabus + a fresh validate pass
  *   paradigm_scenario_list    — list/filter the scenario bank by agent
  *   paradigm_scenario_record  — author a scenario (origin: authored | poison-pill)
+ *   paradigm_scenario_run     — record one scenario run; a human-confirmed cross-lens
+ *                               run of a pending notebook cert writes exercise evidence
  *   paradigm_classroom_status — read-only per-agent: field-failures + certs + repeat-rate
  *   paradigm_classroom_promote — gated single-entry promotion (certifiedBy: peer|quorum)
  *
@@ -27,11 +29,13 @@ import {
 } from '../utils/syllabus-loader.js';
 import {
   recordScenario,
+  isSafeScenarioId,
   loadScenarios,
   loadScenariosForAgent,
   type ScenarioProbe,
 } from '../utils/scenario-loader.js';
-import { readExerciseEvents, readFieldFailures } from '../utils/field-failures.js';
+import { readHomedExerciseEvents, readFieldFailures } from '../utils/field-failures.js';
+import { recordProbeRun, readReprobeMode } from '../utils/probe-runs.js';
 import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 // The repeat-failure-rate rollup is the ONE canonical formula in premise-core
 // (TD-2026-06-19-007) — shared with `paradigm doctor` so the metric never
@@ -42,6 +46,9 @@ import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 import { computeRepeatFailureRate, NO_EXERCISE_WRITER_NOTICE } from '@a-company/premise-core';
 import { readClassroomCertifications, certEvidenceState } from '../utils/field-failures.js';
 import { SURVIVAL_WINDOW_DAYS } from '../utils/decay.js';
+
+/** Status lists at most this many pending certs (pendingCertsTotal has the count). */
+export const PENDING_CERTS_MAX = 50;
 
 export function getClassroomToolsList() {
   return [
@@ -147,15 +154,35 @@ export function getClassroomToolsList() {
             properties: { must: { type: 'string', enum: ['survive', 'reject'] } },
             required: ['must'],
           },
+          authored_by: { type: 'string', description: 'Who wrote the scenario (required). A scenario the learner wrote never counts as a probe of it.' },
         },
-        required: ['id', 'scenario', 'probes', 'origin', 'expected'],
+        required: ['id', 'scenario', 'probes', 'origin', 'expected', 'authored_by'],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_scenario_run',
+      description:
+        'Record one scenario run against one learning. The outcome always lands on the scenario. It counts as classroom evidence only when the human confirmed the result, the entry is a NOTEBOOK id with a pending cert, and neither the assessor nor the scenario author is the learner. held = an adversarial-probe exercise (two distinct scenarios clear the survival floor); broke = a probe-break field failure that revises the entry down and overturns the cert. Run only inside a class term the human started: a confirmed run with no term (or term ad-hoc) is recorded but counts nothing. ~120 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          scenarioId: { type: 'string', description: 'The scenario that was run' },
+          entryId: { type: 'string', description: 'The learning it targeted: a notebook entry id (binds a pending cert) or a journal id (stand; binds nothing)' },
+          assessor: { type: 'string', description: 'Who ran the probe (must not be the learner)' },
+          result: { type: 'string', enum: ['held', 'broke'] },
+          human_confirmed: { type: 'boolean', description: 'True only after the human confirmed the result; drills pass false' },
+          term: { type: 'string', description: 'Class term id (needed for a confirmed run to count)' },
+          reason: { type: 'string', description: 'Short note: why it held or how it broke' },
+        },
+        required: ['scenarioId', 'entryId', 'assessor', 'result', 'human_confirmed'],
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     {
       name: 'paradigm_classroom_status',
       description:
-        'Read-only Classroom summary per agent: field-failures (confounded ones counted apart), certifications (pending/unproven/survived/overturned), and repeat-failure-rate. `survived` counts only exercise-evidenced survivals; aged-but-unexercised certs and legacy aged-only survivals read `unproven` and are not in the rate. When the exercises ledger is empty it says so plainly (`survival`: no exercise events recorded yet, no cert can survive). ~250 tokens.',
+        'Read-only Classroom summary per agent: field-failures (confounded ones counted apart), certifications (pending/unproven/survived/overturned), and repeat-failure-rate. `survived` counts only exercise-evidenced survivals; aged-but-unexercised certs and legacy aged-only survivals read `unproven` and are not in the rate. When no exercise event and no probe break exists it says so plainly (`survival`: no exercise events recorded yet, no cert can survive). Also returns probeBreakRate (all-time: probe breaks / counted scenario_run probes, null when none), reprobe (classroom.reprobe: ask | off) and pendingCerts (first 50, with pendingCertsTotal) for the class re-probe step. ~300 tokens.',
       inputSchema: {
         type: 'object',
         properties: { agent: { type: 'string', description: 'Filter to one agent (omit for all)' } },
@@ -291,6 +318,13 @@ export async function handleClassroomTool(
     }
 
     case 'paradigm_scenario_record': {
+      if (!isSafeScenarioId(args.id)) {
+        return { handled: true, text: JSON.stringify({ error: 'scenario id must match [A-Za-z0-9._-]+ and contain no ".."', field: 'id' }) };
+      }
+      // Loid F2: every new scenario names its author, so a self-authored probe can be refused.
+      if (typeof args.authored_by !== 'string' || !args.authored_by.trim()) {
+        return { handled: true, text: JSON.stringify({ error: 'scenario_record needs authored_by (who wrote the scenario)', field: 'authored_by' }) };
+      }
       const id = await recordScenario(ctx.rootDir, {
         id: args.id as string,
         scenario: args.scenario as string,
@@ -298,11 +332,39 @@ export async function handleClassroomTool(
         origin: args.origin as 'poison-pill' | 'authored',
         origin_ref: args.origin_ref as string | undefined,
         expected: args.expected as { must: 'survive' | 'reject' },
+        authored_by: args.authored_by.trim(),
       });
       return {
         handled: true,
         text: JSON.stringify({ success: true, id, message: 'Scenario recorded' }),
       };
+    }
+
+    case 'paradigm_scenario_run': {
+      const missing = ['scenarioId', 'entryId', 'assessor'].filter(k => typeof args[k] !== 'string' || !(args[k] as string).trim());
+      if (missing.length > 0) {
+        return { handled: true, text: JSON.stringify({ error: `scenario_run needs ${missing.join(', ')}`, missing }) };
+      }
+      if (args.result !== 'held' && args.result !== 'broke') {
+        return { handled: true, text: JSON.stringify({ error: 'result must be held or broke', field: 'result', got: args.result ?? null }) };
+      }
+      if (typeof args.human_confirmed !== 'boolean') {
+        return { handled: true, text: JSON.stringify({ error: 'human_confirmed must be true or false (false for a drill)', field: 'human_confirmed' }) };
+      }
+      if (!isSafeScenarioId(args.scenarioId)) {
+        return { handled: true, text: JSON.stringify({ error: 'scenarioId must match [A-Za-z0-9._-]+ and contain no ".."', field: 'scenarioId' }) };
+      }
+      // Any caller-supplied timestamp is ignored: every row is server-stamped.
+      const result = await recordProbeRun(ctx.rootDir, {
+        scenarioId: args.scenarioId as string,
+        entryId: args.entryId as string,
+        assessor: args.assessor as string,
+        result: args.result,
+        humanConfirmed: args.human_confirmed,
+        term: typeof args.term === 'string' ? args.term : undefined,
+        reason: typeof args.reason === 'string' ? args.reason : undefined,
+      });
+      return { handled: true, text: JSON.stringify(result, null, 2) };
     }
 
     case 'paradigm_classroom_status': {
@@ -311,7 +373,30 @@ export async function handleClassroomTool(
       const certs = readClassroomCertifications(ctx.rootDir);
       // Ruling 6: an empty exercises ledger means no cert CAN survive, so a null
       // rate is not "nothing happened yet". Say so plainly instead of a silent null.
-      const noExerciseWriter = readExerciseEvents(ctx.rootDir).length === 0;
+      // Judge 9 / Loid F6: the homed reader (physical home), the one survival uses.
+      const exercises = readHomedExerciseEvents(ctx.rootDir);
+      const probeBreaks = failures.filter(f => f.signal === 'probe-break');
+      // Flag a: a probe that broke is exercise-writer activity too.
+      const noExerciseWriter = exercises.length === 0 && probeBreaks.length === 0;
+      // T-2026-11-04-002: probe-break rate (ALL-TIME) = breaks / counted probes
+      // (held adversarial-probe receipts + probe-break rows), null when none ran.
+      // Confounded rows never count.
+      const probeBreakRateFor = (agent?: string): number | null => {
+        const held = new Set<string>();
+        for (const ev of exercises) {
+          if (ev.attribution === 'confounded') continue;
+          if (ev.kind !== 'adversarial-probe' || (agent && ev.agent !== agent)) continue;
+          held.add(`${ev.certEntryId}::${ev.orchestrationId}`);
+        }
+        const breaks = new Set<string>();
+        for (const f of probeBreaks) {
+          if (f.attribution === 'confounded' || (agent && f.agent !== agent)) continue;
+          for (const id of f.attributedEntryIds ?? []) breaks.add(`${id}::${f.orchestrationId}`);
+        }
+        for (const b of breaks) held.delete(b);
+        const total = held.size + breaks.size;
+        return total === 0 ? null : breaks.size / total;
+      };
 
       // The repeat-failure-rate is computed by premise-core's canonical rollup
       // (shared with `paradigm doctor`). We map its per-agent { resolved,
@@ -326,6 +411,10 @@ export async function handleClassroomTool(
       // Read-time evidence state: `unproven` is derived, never stored.
       const stateCtx = { now: Date.now(), survivalWindowDays: SURVIVAL_WINDOW_DAYS };
       const stateOf = (c: (typeof certs)[number]) => certEvidenceState(c, stateCtx);
+
+      const pendingAll = certs
+        .filter(c => c.outcome === 'pending' && c.kind !== 'skill')
+        .filter(c => !filterAgent || c.agent === filterAgent);
 
       // Per-agent rollup.
       const agents = new Set<string>();
@@ -351,6 +440,7 @@ export async function handleClassroomTool(
           confoundedFailures: agentFailures.filter(f => f.attribution === 'confounded').length,
           certifications: { total: agentCerts.length, pending, unproven, survived, overturned, legacyAgedSurvived },
           repeatFailureRate,
+          probeBreakRate: probeBreakRateFor(agent),
           ...(repeatFailureRate === null && noExerciseWriter ? { repeatFailureRateNote: NO_EXERCISE_WRITER_NOTICE } : {}),
         };
       }
@@ -364,7 +454,15 @@ export async function handleClassroomTool(
             certifications: certs.length,
             overturned: certs.filter(c => c.outcome === 'overturned').length,
             unproven: certs.filter(c => stateOf(c) === 'unproven').length,
+            probeBreakRate: probeBreakRateFor(),
+            probeBreakRateWindow: 'all-time',
           },
+          // The class skill's re-probe step: `off` skips it; `ask` lists these
+          // and asks the human (count + rough cost) before running any scenario.
+          reprobe: readReprobeMode(ctx.rootDir),
+          pendingCerts: pendingAll.slice(0, PENDING_CERTS_MAX)
+            .map(c => ({ agent: c.agent, entryId: c.entryId, home: c.home, ts: c.ts })),
+          pendingCertsTotal: pendingAll.length,
           perAgent,
         }, null, 2),
       };

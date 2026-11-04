@@ -219,3 +219,28 @@ describe('DEFAULT_CONVENTIONS', () => {
     expect(DEFAULT_CONVENTIONS.length).toBeGreaterThan(0);
   });
 });
+
+describe('config-schema classroom.reprobe (T-2026-11-04-002)', () => {
+  const base = `
+version: "1.0"
+project: reprobe-test
+`;
+  it('accepts classroom.reprobe ask and off without warnings', () => {
+    for (const mode of ['ask', 'off']) {
+      const result = validateConfig(`${base}classroom:\n  reprobe: ${mode}\n`);
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([]);
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it('is optional: a config with no classroom block is valid', () => {
+    expect(validateConfig(base).valid).toBe(true);
+  });
+
+  it('rejects any other reprobe value', () => {
+    const result = validateConfig(`${base}classroom:\n  reprobe: always\n`);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('classroom.reprobe'))).toBe(true);
+  });
+});

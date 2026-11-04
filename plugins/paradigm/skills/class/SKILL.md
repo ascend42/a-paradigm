@@ -9,16 +9,26 @@ description: Convene the Classroom — the gated, teacher-led learning term. Age
 
 This is the **gated** Classroom — the *only* place a learning certifies. The model: learnings are **provisional**; the field is the real exam (see `/paradigm:study-hall` for unattended staging and `paradigm doctor` for the repeat-failure-rate). Your job here is not to verify truth — it is to keep the loop honest: refute cheaply, sign off on real work, and let the field correct what slips through.
 
-Pick the arm from the argument (default: walk `review` → `report`). **Step 0 runs first whenever the classroom is cold.**
+Pick the arm from the argument (default: walk `re-probe` → `review` → `report`). **Step 0 runs first whenever the classroom is cold.**
+
+**Nothing here runs on its own.** Scenario runs spend model tokens, so they happen only inside a term the human started, in this project, and the re-probe step asks first.
 
 ## Step 0 — cold start: is there a classroom here yet?
 BEFORE any arm, check `paradigm_classroom` (op `syllabus_list`) (or `.paradigm/curriculum/`). If no syllabi exist, do NOT fall through to an empty review — run the **Orientation Term** (the guided cold-start that turns the machinery on experientially):
 1. **Offer it as the teacher (Cid), not a wizard.** *"There's no classroom here yet — that's normal, this is a fresh project. Want a 5-minute Orientation Term? One agent, one thing, the team tries to break it, you sign off."*
 2. **Pick the student from real signal** — agents actually active in `nominations.jsonl` / the roster, not an alphabetical dump. Enroll ONE.
-3. **Seed the curriculum** (gate-zero exempt — hand-authored syllabi are allowed): `paradigm_classroom` (op `syllabus_record`) (the teacher proposes the SOURCES, the human approves once) + one breaking scenario via `paradigm_classroom` (op `scenario_record`) (offer a poison-pill template so the human isn't staring at a blank field — this teaches the core doctrine: refutation, not validation).
+3. **Seed the curriculum** (gate-zero exempt — hand-authored syllabi are allowed): `paradigm_classroom` (op `syllabus_record`) (the teacher proposes the SOURCES, the human approves once) + one breaking scenario via `paradigm_classroom` (op `scenario_record`, with `authored_by`) (offer a poison-pill template so the human isn't staring at a blank field — this teaches the core doctrine: refutation, not validation).
 4. **Stage one candidate** — a scoped `/paradigm:study-hall <agent>` drill against the new syllabus.
 5. **Run the gate (THE STAND, below) on that one candidate.** Guide toward `refine` — the most instructive first verdict (it shows the whole engine).
 6. **The promise:** *"<agent> now knows '<X> except <Y>.' Certified pending — the FIELD is the real exam. If it breaks in real work, I attribute it back here, revise it down, and bring it to you."* The cold-start is cured, not hidden — the Term Board is the default from now on.
+
+## Term start — re-probe pending certs (asks first)
+A `pending` cert survives only on exercise: two human-confirmed probes from distinct scenarios clear the floor. Ageing never does.
+1. Read `classroom.reprobe` in `.paradigm/config.yaml` (`paradigm_classroom` (op `status`) returns it as `reprobe`, with the `pendingCerts` list). Absent = `ask`.
+2. **`off`:** skip this step and say so in one line.
+3. **`ask`:** list the pending notebook certs (agent, entry id, age) and, per cert, the cross-lens scenarios you would run: at least 2 distinct scenarios whose probe `learning_ref` is the NOTEBOOK entry id, authored by someone other than the learner, run by an assessor who is not the learner (one assessor may run both). Give the total run count and a rough token estimate (about 3k tokens per run is a fair first guess; say it is an estimate). Run nothing until the human says yes; they may pick a subset.
+4. For each run, show the human the result and ask them to confirm it. Then record it: `paradigm_classroom({op:'scenario_run', scenarioId, entryId: <notebook id>, assessor, result: 'held' | 'broke', human_confirmed: true, term: <this term's id> })`. `term` is required: a confirmed run without one counts nothing (`refusedReason: no class term`). Pass `human_confirmed: true` only after the human confirmed; otherwise pass `false` (recorded, never counted). The result says whether it `counted`, and why not (`refusedReason`) when it did not.
+5. A `broke` run overturns the cert and revises the entry down: bring it to `review` as a `refine` candidate.
 
 ## Arm: `roster` — who's in class
 1. Surface roster recommendations from the EXISTING engine — run `paradigm shift` (dry-run / recommendations only). Never auto-apply.
@@ -33,7 +43,7 @@ For the chosen agent:
 For each staged candidate (study-hall journals, **foraged externals**, or learnings up for re-ratification), run it as attributed turns in a FIXED ORDER — **dissent first**, because concurrence anesthetizes:
 
 1. **The claim — one line.** The proposer states the learning + thin evidence (applied N×, held N×). No more; praise comes last, if at all.
-2. **The strongest breaking scenario, FIRST** — from a **cross-lens assessor** (a *different domain* than the learner; same-family peers share blind spots), who MUST author or pull a *breaking* scenario (`paradigm_classroom` (op `scenario_record`) / `paradigm_classroom` (op `scenario_list`)) and probe the learning. **No scenario, no assessment** — an assessment with no attached scenario is rejected. The advocate (Jinx) piles on or stands down. Record the outcome on the scenario.
+2. **The strongest breaking scenario, FIRST** — from a **cross-lens assessor** (a *different domain* than the learner; same-family peers share blind spots), who MUST author or pull a *breaking* scenario (`paradigm_classroom` (op `scenario_record`) / `paradigm_classroom` (op `scenario_list`)) and probe the learning. **No scenario, no assessment** — an assessment with no attached scenario is rejected. `scenario_record` requires `authored_by` (who wrote it). The advocate (Jinx) piles on or stands down. Record the outcome with `paradigm_classroom({op:'scenario_run', scenarioId, entryId: <journal id>, assessor, result, human_confirmed, term })`. Stand scenarios target journal ids, so this records the outcome only and binds no cert (there is none before promotion).
 3. **One causal question, with a fork.** Present ONLY the dissent + the breaking scenarios (not "N concurred" — note the suppressed concurrences). Ask one: *does this hold BECAUSE of the rule, or were the cases easy?* — and offer the fork: **rule now, or interrogate an agent first.**
 4. **Interrogation (optional, on the record).** The human may `@<agent>` a direct question; the agent answers as a new attributed turn. A proposer that **concedes on the record** is the loop earning its keep — capture it.
 5. **Home (human):** show the candidate's home before the verdict: `repo` (committed, shared with the team) or `user` (just the human, every project), and whether it was chosen or only inferred. Ask "Keep it in the {home}, or flip it?" The human may flip it.
