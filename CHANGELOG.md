@@ -5,6 +5,30 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.1.1] — 2026-11-04
+
+**The learning loop now tells the truth about what it knows.** A certified learning used to be marked "survived" just because time passed. It now survives only after real evidence: two test scenarios you confirm in a class term, run by an agent other than the one that learned it. Old learnings that were only aged read `unproven`. A failure that could have come from several learnings no longer blames all of them. Nothing in this spends tokens on its own: probes run only in a class term you start, and the class asks first. Paradigm also stops writing your machine's folder into committed MCP configs, so a teammate's clone gets working Paradigm tools. Gnomon is unchanged in this release (still 8.1.0).
+
+### Added
+- **Probe runs** (`#probe-runs`, `paradigm_classroom` op `scenario_run`). A test scenario run against a pending learning counts as evidence only when you confirm the result, it runs inside a class term, the assessor is not the learner, and it runs after the learning was certified. Two such runs on different scenarios let a learning survive. A run that breaks the learning lowers its confidence and overturns its certification.
+- **Re-probe at the start of a class term**, with `classroom.reprobe: ask | off` in `.paradigm/config.yaml` (default `ask`). The class lists the pending learnings, how many runs it would do and a rough token cost, and runs nothing without your yes. Study hall and forage run only when you start them; you may schedule them yourself, and their drills never count as evidence.
+- **Lesson evidence** (`#lesson-evidence`). Journal and notebook entries can carry a `cue` (the situation the lesson applies to) and `evidence`. Each piece of evidence gets its verdict from Paradigm's own records, never from the author. Promotion warns when the evidence is only unattributable or points the other way, and never blocks.
+- **Always-on budget** (`paradigm doctor`, check 10). Measures the text Paradigm loads into every agent session (CLAUDE.md and skill descriptions for Claude Code, always-apply rules for Cursor, AGENTS.md) against `context.always-on-max-chars` (default 12000, a starting estimate). Informational only; `paradigm sync` warns when a file it writes goes over.
+- **Skill trigger lint.** `DESCRIPTION_NO_TRIGGER` warns when a skill's description names no situation ("Use when …"). In Claude Code the description is what decides whether a skill is opened.
+- **MCP config portability check** (`paradigm doctor`). Warns when a committed project MCP config names an absolute folder.
+- **The orchestration log records `baseCommit` and `dirty`**, so a task's repo state can be rebuilt later.
+
+### Changed
+- **Survival needs evidence, not age** (T-2026-11-03-001). Only recorded uses and deliberate probes let a learning survive. An aged learning with neither reads `unproven`, and the repeat-failure rate in doctor, classroom status and the classroom board leaves those out. Until a project records any probe, status says so plainly.
+- **Unattributable failures** (T-2026-11-03-002). When a brief carried more than one learning, a failure is recorded as `confounded` with every suspect listed, and no learning loses confidence or certification.
+- **The field-failure and exercise logs are never trimmed**, so an old failure can't be forgotten and then counted again.
+
+### Fixed
+- **Committed MCP configs no longer name your machine's folder.** `.mcp.json`, `.cursor/mcp.json` and `paradigm mcp setup`'s project configs drop the absolute `cwd`. The server finds the project by walking up to `.paradigm/`. Cursor's config names the project with `PARADIGM_PROJECT_DIR=${workspaceFolder}`, and an unexpanded value is ignored. `paradigm sync` and `paradigm shift` remove the old path from existing files. Claude Desktop and Continue keep the absolute path, since their configs live in your home folder.
+- The orchestration log's `git status` never takes git's lock, so it can't break a commit you are running.
+- **Security: `glob` 14.0.3** in `@a-company/paradigm`, `@a-company/portal-core` 3.5.1 and `@a-company/purpose-core` 3.7.1. It fixes the `glob` AbortSignal traversal advisory (GHSA-3g3m-2fjr-6pw4) and, through `minimatch` 11, the pattern denial-of-service advisory (GHSA-g3hv-75wg-m249). A fresh install of 8.1.1 audits at 0 vulnerabilities.
+- **A fresh clone builds again.** `build:platform-ui` installs the platform UI's own dependencies when they are missing; it used to fail on `@xyflow/react` in any checkout without them.
+
 ## [8.1.0] — 2026-10-29
 
 **Local models in Gnomon can use tools, and you stay in charge of every one.** A local-model session can now read and search your project, keep a working memory, and call tools from your MCP servers. Each model gets a tool tier that matches what it can handle. You trust a server before its tools run, and a tool that changes things asks first. You can make an Always rule for it, and destructive tools carry extra safeguards. Type "/" in the composer to run a tool or skill yourself, and open the Tools drawer to see what the session has. In Paradigm, every learning record now has a home: the repo, you, or this machine. The Stop hook no longer interrupts long sessions, and commits no longer pick up `.paradigm` index files. 8.1.0 is also the first npm release of the 8.0.5 security fix for agents run through the Anthropic API.

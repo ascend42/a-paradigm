@@ -1,6 +1,6 @@
 {
   "name": "@a-company/portal-core",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "Portal configuration parsing and validation",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
-    "glob": "^13.0.0"
+    "glob": "^14.0.3"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
