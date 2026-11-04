@@ -43,7 +43,12 @@ components:
       (WebCrypto Ed25519 in Node + every local engine under the §11.2 CSP;
       safari.html for Safari by hand, P09_SAFARI_LINE to record it),
       p12-excalidraw-csp (pinned Excalidraw bundled by esbuild in a temp dir,
-      loaded under the §11.2 CSP; violations by phase, size, parse time),
+      loaded under the §11.2 CSP; violations by phase, size, parse time;
+      every non-mounted run keeps its error and launcher tail in
+      engines.<name>.nonMountedRuns, and a launch that sent no report within
+      90 s is retried once per engine, the timed-out attempt kept in
+      engines.<name>.launchRetries; a page that reported is never retried
+      and loadClean is unchanged, T-2026-10-31-001),
       p14-link-outbound (default-deny sandbox-exec link profile), p03-pipe-dacl
       (win32, W1: Node cannot adopt a foreign pipe, the default pipe DACL lets Everyone and
       Anonymous read, a WRITE_DAC client handle makes it owner-only pipe-wide, a squatted

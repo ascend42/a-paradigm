@@ -22,6 +22,7 @@
  *     an endpoint on one of those ports is refused before this (sandbox/loop-act.ts);
  *   - last: the Gnomon keys dir and the credential stores, read and write.
  */
+import * as path from 'node:path';
 import { nodeRuntimeDirs } from '../../kernel/sandbox/transport.js';
 
 export const LOOP_ACT_PROFILE_VERSION = 1;
@@ -83,7 +84,7 @@ export function loopActTailSbpl(i: LoopActTailInput): string[] {
     '(deny process-exec)',
     `(allow process-exec (literal ${q(i.nodeReal)}))`,
     `(deny file-read* ${uniq([i.repoReal, ...(i.gitDenyReal ?? [])]).map((d) => `(subpath ${q(d)})`).join(' ')})`,
-    `(allow file-read* (subpath ${q(i.runDirReal)})${nm.map((d) => ` (subpath ${q(d)})`).join('')}${uniq(nodeRuntimeDirs(i.nodeReal)).map((d) => ` (subpath ${q(d)})`).join('')})`,
+    `(allow file-read* (subpath ${q(i.runDirReal)})${nm.map((d) => ` (subpath ${q(d)})`).join('')}${uniq(nodeRuntimeDirs(i.nodeReal, path.posix)).map((d) => ` (subpath ${q(d)})`).join('')})`,
     `(allow file-read-metadata ${uniq(ancestors(i.runDirReal)).map((d) => `(literal ${q(d)})`).join(' ')})`,
     '(deny file-write*)',
     `(allow file-write* (subpath ${q(i.scratchReal)}) (subpath ${q(i.tmpReal)}) (literal "/dev/null"))`,

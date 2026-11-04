@@ -12,12 +12,20 @@ import { spawnSync } from 'node:child_process';
 
 let cached: number | null | undefined;
 
+/**
+ * Parse `sw_vers -productVersion` ("15.7.1", "26.1"): the major, or null for any other text (unknown: callers fail
+ * closed). Exported so the macOS floor is tested on every host without a 14.x runner (T-2026-10-31-001).
+ */
+export function parseSwVersMajor(text: string): number | null {
+  const m = /^(\d+)\./.exec(text.trim());
+  return m ? Number(m[1]) : null;
+}
+
 export function darwinMacosMajor(): number | null {
   if (cached !== undefined) return cached;
   try {
     const r = spawnSync('/usr/bin/sw_vers', ['-productVersion'], { encoding: 'utf8', timeout: 5_000, env: { PATH: '/usr/bin:/bin' } });
-    const m = r.status === 0 ? /^(\d+)\./.exec(r.stdout.trim()) : null;
-    cached = m ? Number(m[1]) : null;
+    cached = r.status === 0 ? parseSwVersMajor(r.stdout) : null;
   } catch {
     cached = null;
   }

@@ -51,16 +51,17 @@ const q = (p: string): string => {
 
 function ancestors(p: string): string[] {
   const out: string[] = [];
-  for (let d = path.dirname(p); ; d = path.dirname(d)) {
+  // macOS paths: posix on every host (the builder runs as a pure unit on win32 too)
+  for (let d = path.posix.dirname(p); ; d = path.posix.dirname(d)) {
     out.push(d);
-    if (d === path.dirname(d)) break;
+    if (d === path.posix.dirname(d)) break;
   }
   return out;
 }
 
 export function modProfileSbpl(i: ModProfileInput): string {
   if (i.proxyPort !== null && !(Number.isInteger(i.proxyPort) && i.proxyPort > 0 && i.proxyPort < 65536)) throw new ModSbplError(`bad proxy port ${i.proxyPort}`);
-  const runtime = nodeRuntimeDirs(i.nodeReal);
+  const runtime = nodeRuntimeDirs(i.nodeReal, path.posix);
   const reads = [
     '(literal "/")',
     '(literal "/dev/null")',

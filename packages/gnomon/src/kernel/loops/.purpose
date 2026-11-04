@@ -166,6 +166,9 @@ components:
       check is error `killed`. Falsifiers: G-SBX-07, G-SBX-04..06 and G-SEC-02 against
       this profile (test/loop-check-sandbox.test.ts, darwin); parsers,
       scanner, env, registry and copy everywhere (test/loop-check.test.ts).
+      The darwin SBPL builders (loop-check-sbpl, loop-act-sbpl, mod-sbpl)
+      build macOS paths with path.posix (nodeRuntimeDirs(nodeReal,
+      path.posix)) so they run as pure units on win32 too (T-2026-10-31-001).
       TD-2026-10-23-268/448: kernel/loops/loop-env.ts reads a node's `env`
       values in the kernel: <home>/loop-env FIRST (owner-only 0600/0400, never
       a symlink), then the loop's envFiles; every open O_NOFOLLOW|O_NONBLOCK,
@@ -181,12 +184,15 @@ components:
       ([REDACTED:env:NAME], URL-encoded too). network:on allows outbound IP
       and the mDNSResponder socket in the loop-check SBPL, and denies every
       kernel listener (web, mod proxies, local-model endpoints) on every
-      address (remote ip "*:PORT").
+      address (remote ip "*:PORT"). The env-file POSIX semantics (symlink
+      refusal, owner-only mode, FIFO) are test/loop-env-posix.test.ts
+      (darwin, linux); win32 has no O_NOFOLLOW and no POSIX modes (P8-D78).
     path: src/kernel/loops/check-exec.ts
     type: module
     tags: [gnomon, loops, sandbox, paradigm-8, security]
     tests:
       - test/loop-env-kernel.test.ts
+      - test/loop-env-posix.test.ts
       - test/loop-check.test.ts
       - test/loop-check-sandbox.test.ts
     anchors:

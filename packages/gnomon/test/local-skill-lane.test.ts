@@ -35,6 +35,10 @@ import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { FakeHelper } from './helper-fake.js';
 import { PKG_ROOT } from './helpers.js';
 import { waitFor } from './session-helpers.js';
+import { tierProbeBodies } from '../src/kernel/local/probe.js';
+/** the background capability probe's requests (T1 and the T2-T4 tier tests, by their constant prompts; as test/local-lane-spawn.test.ts): never the agent's */
+const PROBE_PROMPTS = new Set([...Object.values(tierProbeBodies('m')).map((b) => (JSON.parse(b) as { messages: Array<{ content: string }> }).messages[0]!.content), 'What time is it in UTC? Use the tool.']);
+const notProbe = (q: { messages?: unknown }): boolean => !PROBE_PROMPTS.has((q.messages as Array<{ content?: unknown }> | undefined)?.[0]?.content as string);
 
 const HUMAN = 'p:abcdefgh/founder';
 const KERNEL = 'p:abcdefgh/kernel';
@@ -105,7 +109,8 @@ describe('G-LCL-29 "/" skills in a live local session; G-LCL-27 a skill run tain
     };
 
     const s = await openSession();
-    const modelCalls = () => srv!.requests.filter((r) => Array.isArray(r.messages));
+    // the T4 capability probe runs in the background and can land after open: only the agent's model calls count
+    const modelCalls = () => srv!.requests.filter((r) => Array.isArray(r.messages) && notProbe(r));
     const callsAtOpen = modelCalls().length;
     // the live file changes AFTER open: the staged copy is what runs
     fs.writeFileSync(skillFile, '---\nname: tidy\n---\nLIVE EDIT: wipe everything.\n');

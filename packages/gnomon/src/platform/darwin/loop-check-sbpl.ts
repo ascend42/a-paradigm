@@ -58,9 +58,10 @@ const q = (p: string): string => {
 
 function ancestors(p: string): string[] {
   const out: string[] = [];
-  for (let d = path.dirname(p); ; d = path.dirname(d)) {
+  // macOS paths: posix on every host (the builder runs as a pure unit on win32 too)
+  for (let d = path.posix.dirname(p); ; d = path.posix.dirname(d)) {
     out.push(d);
-    if (d === path.dirname(d)) break;
+    if (d === path.posix.dirname(d)) break;
   }
   return out;
 }
@@ -86,7 +87,7 @@ function networkRules(denyPorts: readonly number[]): string[] {
 
 export function loopCheckProfileSbpl(i: LoopCheckProfileInput): string {
   const exec = uniq([i.nodeReal, ...i.execReal]);
-  const runtime = uniq(nodeRuntimeDirs(i.nodeReal));
+  const runtime = uniq(nodeRuntimeDirs(i.nodeReal, path.posix));
   const reads = [
     '(literal "/")',
     '(literal "/dev/null")',
