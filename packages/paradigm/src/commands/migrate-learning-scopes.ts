@@ -51,7 +51,9 @@ export const FROZEN_USER_ARTIFACTS: readonly LearningArtifact[] = [
 ];
 
 /** Repo-home stores a project without git wrote to the user home. */
-export const REPO_HOME_ARTIFACTS: readonly LearningArtifact[] = ['overrides', 'classroom-certifications', 'notebook-refs'];
+export const REPO_HOME_ARTIFACTS: readonly LearningArtifact[] = [
+  'overrides', 'classroom-certifications', 'classroom-exercises', 'notebook-refs',
+];
 
 export interface MigrateScopesOptions {
   apply?: boolean;

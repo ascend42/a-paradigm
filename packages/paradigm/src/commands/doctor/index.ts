@@ -16,6 +16,7 @@ import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
 import {
   computeRepeatFailureRate,
+  NO_EXERCISE_WRITER_NOTICE,
 } from '@a-company/premise-core';
 // Relative-path import into bundled paradigm-mcp source (same pattern as core/task-bridge.ts).
 // Doctor's static graph stays logger-free: learning-stores pulls in no
@@ -49,6 +50,12 @@ interface DoctorOptions {
   context?: boolean;
   /** When true, include human-readable gap narrations in the output */
   explain?: boolean;
+  /**
+   * Home directory for checks that read user-level files (~/.claude always-on
+   * census, hook health). Defaults to os.homedir(). Test seam: keeps a test
+   * off the developer's real ~/.claude.
+   */
+  homeDir?: string;
 }
 
 /**
@@ -1198,14 +1205,18 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     try {
       const certs = readLearningRows<ClassroomCertRow & { legacy?: true }>('classroom-certifications', cwd);
       const populations = Object.entries(certificationsByHome(certs)).map(([home, rows]) => {
-        const rollup = computeRepeatFailureRate(rows!.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
+        // T-2026-11-03-001: a survived row without exercise evidence (minted by the old aging timer) is unproven, never resolved
+        const rollup = computeRepeatFailureRate(rows!.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })), { requireExercise: true });
         const resolvedTotal = Object.values(rollup.perAgent).reduce((n, a) => n + a.resolved, 0);
         const overturnedTotal = Object.values(rollup.perAgent).reduce((n, a) => n + a.overturned, 0);
         return { home, certCount: rows!.length, rollup, resolvedTotal, overturnedTotal };
       });
+      // Ruling 6: an empty exercises ledger means no cert CAN survive yet.
+      const noExerciseWriter = readLearningRows<object>('classroom-exercises', cwd).length === 0;
       return {
         present: certs.length > 0,
         certCount: certs.length,
+        noExerciseWriter,
         populations,
         resolvedTotal: populations.reduce((n, p) => n + p.resolvedTotal, 0),
         overturnedTotal: populations.reduce((n, p) => n + p.overturnedTotal, 0),
@@ -1242,7 +1253,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     try {
       const { hookHealthChecks } = await import('./hook-health.js');
       const os = await import('os');
-      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: os.homedir() }));
+      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: options.homeDir ?? os.homedir() }));
     } catch {
       // hook health is advisory
     }
@@ -1311,10 +1322,15 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     header('Classroom / learning health');
     if (!classroom.present) {
       dim('  No certifications yet — the learning loop has not turned. This is normal for a fresh project.');
+      if (classroom.noExerciseWriter) dim(`  Survival: ${NO_EXERCISE_WRITER_NOTICE}.`);
     } else {
+      // Said plainly, before any rate: a null rate here is "cannot be measured", not "all quiet".
+      if (classroom.noExerciseWriter) out(`  Survival: ${NO_EXERCISE_WRITER_NOTICE}.`);
       for (const p of classroom.populations) {
         const { overall } = p.rollup;
-        const rateLabel = overall === null ? 'n/a (no certs resolved yet)' : String(overall);
+        const rateLabel = overall === null
+          ? (classroom.noExerciseWriter ? `n/a (${NO_EXERCISE_WRITER_NOTICE})` : 'n/a (no certs resolved yet)')
+          : String(overall);
         kv(`repeat-failure-rate [population: ${populationOf(p.home as CertPopulation)}]`, rateLabel);
         kv('  resolved / overturned', `${p.resolvedTotal} / ${p.overturnedTotal}`);
         // Per-agent split — only agents with at least one resolved cert.
@@ -1343,7 +1359,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // ──────────────────────────────────────────────────────────────────────
 
   const { runContextAudit } = await import('./context-audit.js');
-  const contextResults = await runContextAudit(cwd, { quiet });
+  const contextResults = await runContextAudit(cwd, { quiet, homeDir: options.homeDir });
 
   let contextErrorCount = 0;
   let contextWarnCount = 0;

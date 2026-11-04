@@ -33,7 +33,8 @@
  *                         journals (~/.paradigm/agents/<agent>/journal/*.yaml).
  *                         Excludes entries already promoted to the notebook
  *                         (promoted_to_notebook set) — they've graduated.
- *   GET /certifications — cert rows with a derived `loop: 'gated'|'legacy'`.
+ *   GET /certifications — cert rows with a derived `loop: 'gated'|'legacy'` and
+ *                         `evidenceState` (pending|unproven|survived|overturned).
  *   GET /refinements    — field-failure rows (the overturned/refinement signal).
  *   GET /rapsheet       — per-entry learning lineage: born (cert) ⋈ applied
  *                         (notebook-refs) ⋈ broke (field-failures). `breaks: []`
@@ -48,6 +49,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { certEvidenceState, isEvidencedSurvival } from '@a-company/premise-core';
 import type { PlatformWsContext } from '../ws/index.js';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -279,21 +281,29 @@ function deriveLoop(certifiedBy: string | undefined): 'gated' | 'legacy' {
  * resolves it is `pending` and contributes to NEITHER side — so a board with
  * only pending certs has a `null` rate, which the UI reads as "no settled exams
  * yet", never as healthy.
+ *
+ * T-2026-11-03-001: a `survived` row counts only when it carries exercise evidence (isEvidencedSurvival: exercised
+ * and adversarially probed). A survived row minted by the old aging timer is `unproven`: neither side of the rate.
  */
 function rollupCerts(certs: ClassroomCertRow[]): {
   total: number;
   pending: number;
   survived: number;
+  unproven: number;
   overturned: number;
   resolved: number;
   repeatFailureRate: number | null;
 } {
   let pending = 0;
   let survived = 0;
+  let unproven = 0;
   let overturned = 0;
   for (const c of certs) {
     switch (c.outcome) {
-      case 'survived': survived++; break;
+      case 'survived':
+        if (isEvidencedSurvival(c)) survived++;
+        else unproven++;
+        break;
       case 'overturned': overturned++; break;
       default: pending++; break;
     }
@@ -303,6 +313,7 @@ function rollupCerts(certs: ClassroomCertRow[]): {
     total: certs.length,
     pending,
     survived,
+    unproven,
     overturned,
     resolved,
     repeatFailureRate: resolved > 0 ? overturned / resolved : null,
@@ -330,13 +341,14 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
       const bootstrapped = syllabi.length > 0;
       const certs = readJsonlSafe<ClassroomCertRow>(certsPath);
 
-      // Per-agent cert tallies: certified = survived (the field proved it),
-      // provisional = pending (certified-pending, awaiting the field's veto).
+      // Per-agent cert tallies: certified = an EVIDENCED survival (exercised and
+      // adversarially probed; F4: a legacy aged-only `survived` row is unproven,
+      // not certified), provisional = pending (awaiting the field's veto).
       const byAgent = new Map<string, { certified: number; provisional: number }>();
       for (const c of certs) {
         if (!c.agent) continue;
         const bucket = byAgent.get(c.agent) ?? { certified: 0, provisional: 0 };
-        if (c.outcome === 'survived') bucket.certified++;
+        if (isEvidencedSurvival(c)) bucket.certified++;
         else if (c.outcome === 'pending' || c.outcome === undefined) bucket.provisional++;
         byAgent.set(c.agent, bucket);
       }
@@ -407,8 +419,9 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
   router.get('/certifications', (_req: Request, res: Response) => {
     try {
       const certs = readJsonlSafe<ClassroomCertRow>(certsPath);
+      const now = Date.now();
       const out = certs
-        .map(c => ({ ...c, loop: deriveLoop(c.certifiedBy) }))
+        .map(c => ({ ...c, loop: deriveLoop(c.certifiedBy), evidenceState: certEvidenceState(c, { now }) }))
         .reverse();
       res.json(out);
     } catch (err) {
@@ -442,6 +455,7 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
       const certs = readJsonlSafe<ClassroomCertRow>(certsPath);
       const refs = readJsonlSafe<NotebookRefRow>(refsPath);
       const failures = readJsonlSafe<FieldFailureRow>(failuresPath);
+      const now = Date.now();
 
       const rows = certs
         .filter(c => typeof c.entryId === 'string')
@@ -474,6 +488,10 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
             certifiedBy: c.certifiedBy,
             loop: deriveLoop(c.certifiedBy),
             outcome: c.outcome ?? 'pending',
+            // F4: the read-time evidence state (pending|unproven|survived|overturned),
+            // the same rule as paradigm_classroom_status: a legacy aged-only
+            // `survived` row reads `unproven`.
+            evidenceState: certEvidenceState(c, { now }),
             bornTs: c.ts,
             appliedCount: applications.length,
             lastAppliedAt: appliedTimes.length ? appliedTimes[appliedTimes.length - 1] : undefined,

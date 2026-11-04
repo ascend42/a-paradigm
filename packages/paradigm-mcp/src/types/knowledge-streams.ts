@@ -14,6 +14,8 @@
  *    Storage: .paradigm/decisions/
  */
 
+import type { LessonEvidence } from './notebooks.js';
+
 // ────────────────────────────────────────────────────────
 // Stream 1: Work Log
 // ────────────────────────────────────────────────────────
@@ -137,6 +139,10 @@ export interface JournalEntry {
   tags?: string[];
   /** Whether this has been promoted to a notebook entry */
   promoted_to_notebook?: string;
+  /** Optional checkable cue: the shape of situation the lesson applies to (carried to the notebook). */
+  cue?: string;
+  /** Optional ledger-backed evidence (carried to the notebook; checked, with a warning, at gated promotion). */
+  evidence?: LessonEvidence[];
   /**
    * External-provenance envelope. Present only for entries staged with
    * provenance (e.g., foraged web candidates via `/paradigm:forage`).

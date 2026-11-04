@@ -132,13 +132,14 @@ features:
       - '#probe-handler'
       - '#image-processor'
   sync-command:
-    description: Generate IDE instruction files from .paradigm/ config (CLAUDE.md, .cursorrules, etc.)
+    description: 'Generate IDE instruction files from .paradigm/ config (CLAUDE.md, .cursorrules, etc.). After a successful claude / cursor / agents sync (single or --all), prints one warn() line per regenerated always-on surface over the #always-on-budget cap (context.always-on-max-chars), keyed by the resolved adapter name (lowercased), so a mixed-case target still warns; measures only, never changes what is generated or its section order (#cache-aligner head stays byte-stable).'
     type: command
     flows:
       - $sync-flow
     components:
       - '#sync-handler'
       - '#ide-adapters'
+      - '#always-on-budget'
   sync-llms-command:
     description: Generate llms.txt - LLM-readable project summary following the llms.txt standard
     type: command
@@ -591,7 +592,7 @@ components:
     description: Validates project setup
     type: utility
   config-schema-validator:
-    description: Zod-based (zod 4) schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys
+    description: 'Zod-based (zod 4) schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys. context.always-on-max-chars (positive number) is the #always-on-budget cap.'
     type: utility
   integrity-checker:
     description: CLI integrity check implementation — broken references, duplicate symbols, orphaned symbols, missing anchors

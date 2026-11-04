@@ -179,11 +179,20 @@ export {
   readClassroomCertifications,
   readFieldFailures,
   computeRepeatFailureRate,
+  meetsSurvivalFloor,
+  isEvidencedSurvival,
+  K_MIN_EXERCISE,
+  MIN_ADVERSARIAL_PROBES,
+  SURVIVAL_WINDOW_DAYS,
+  certEvidenceState,
+  NO_EXERCISE_WRITER_NOTICE,
 } from './classroom-metrics.js';
 export type {
   ClassroomCertRow,
   FieldFailureRow,
   AgentRepeatFailure,
   RepeatFailureRate,
+  RepeatFailureRateOptions,
   ExerciseIntensity,
+  CertEvidenceState,
 } from './classroom-metrics.js';

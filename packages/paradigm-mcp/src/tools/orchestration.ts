@@ -8,6 +8,7 @@
 
 import * as fs from 'fs';
 import * as os from 'os';
+import { execFileSync } from 'child_process';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
@@ -2891,7 +2892,51 @@ export async function emitTaskDag(
   return { epicTaskId, agentTaskIds };
 }
 
-function logOrchestration(
+/**
+ * Repo state at orchestration time, so a logged task can be replayed against
+ * the commit it ran on. `git rev-parse HEAD` + `git status --porcelain` in
+ * rootDir (execFileSync, no shell, short timeout). Outside a git repo or on
+ * any error (no git, unborn HEAD, timeout) the missing field is omitted —
+ * never throws.
+ *
+ *   - status never takes index.lock (I1): `--no-optional-locks` plus
+ *     GIT_OPTIONAL_LOCKS=0, so a concurrent commit in the same repo is never
+ *     raced by an opportunistic index refresh.
+ *   - Paradigm's own state is not "dirty" (I2): `.paradigm/` is excluded from
+ *     the status pathspec (the orchestration log itself lives there).
+ *   - rev-parse and status run in separate try blocks (I2): a status timeout
+ *     keeps baseCommit and omits only `dirty`.
+ */
+export function readRepoState(rootDir: string): { baseCommit?: string; dirty?: boolean } {
+  const git = (args: string[]): string => execFileSync('git', args, {
+    cwd: rootDir,
+    encoding: 'utf8',
+    timeout: 3000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+  });
+  let baseCommit: string;
+  try {
+    baseCommit = git(['--no-optional-locks', 'rev-parse', 'HEAD']).trim();
+  } catch (err) {
+    log.component('#orchestration').debug('Repo state unavailable; baseCommit omitted', {
+      error: err instanceof Error ? err.name : 'unknown',
+    });
+    return {};
+  }
+  if (!/^[0-9a-f]{40,64}$/.test(baseCommit)) return {};
+  try {
+    const dirty = git(['--no-optional-locks', 'status', '--porcelain', '--', '.', ':(exclude).paradigm', ':(exclude,glob)**/.paradigm/**']).trim().length > 0;
+    return { baseCommit, dirty };
+  } catch (err) {
+    log.component('#orchestration').debug('Repo status unavailable; dirty omitted', {
+      error: err instanceof Error ? err.name : 'unknown',
+    });
+    return { baseCommit };
+  }
+}
+
+export function logOrchestration(
   rootDir: string,
   orchestrationId: string,
   task: string,
@@ -2911,6 +2956,9 @@ function logOrchestration(
     created: new Date().toISOString(),
     status: 'pending',
     mode: plan.mode,
+    // Replay anchor: the commit the task ran on, and whether the tree had
+    // uncommitted changes then. Omitted outside a git repo.
+    ...readRepoState(rootDir),
     symbols: plan.symbols,
     estimatedAgents: plan.estimatedAgents,
     estimatedTokens: plan.estimatedTokens,

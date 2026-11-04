@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { migrateLearningScopes } from '../src/commands/migrate-learning-scopes.js';
+import { migrateLearningScopes, REPO_HOME_ARTIFACTS } from '../src/commands/migrate-learning-scopes.js';
 import { appendLearningRows, pathFor, resetLearningStoreCaches } from '../../paradigm-mcp/src/utils/learning-stores.js';
 import { readPendingVerdicts } from '../../paradigm-mcp/src/utils/session-work-log.js';
 
@@ -116,6 +116,25 @@ describe('migrate learning-stores --scopes', () => {
       expect(rows(repoFile)).toEqual([{ timestamp: 't', remediation_id: 'rmd-1', home: 'repo' }]);
       expect(fs.existsSync(written)).toBe(false);
       expect((await migrateLearningScopes(root, { apply: true, yes: true })).steps).toEqual([]);
+    } finally {
+      if (prev !== undefined) process.env.PARADIGM_LEARNING_ASSUME_REPO = prev;
+    }
+  });
+
+  it('F7: offers the classroom exercises ledger back to the repo too (it is a repo-home source of truth)', async () => {
+    expect(REPO_HOME_ARTIFACTS).toContain('classroom-exercises');
+    const prev = process.env.PARADIGM_LEARNING_ASSUME_REPO;
+    delete process.env.PARADIGM_LEARNING_ASSUME_REPO;
+    try {
+      fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
+      const ev = { ts: 't', certEntryId: 'nb-a', orchestrationId: 'sc-1', agent: 'kit', kind: 'adversarial-probe' };
+      const written = appendLearningRows('classroom-exercises', root, [ev]);
+      expect(written.startsWith(root)).toBe(false); // no git: user home
+      fs.mkdirSync(path.join(root, '.git'));
+      resetLearningStoreCaches();
+      const res = await migrateLearningScopes(root, { apply: true, yes: true });
+      expect(res.steps).toEqual([expect.objectContaining({ artifact: 'classroom-exercises', kind: 'back-to-repo', status: 'done', rows: 1 })]);
+      expect(rows(path.join(root, '.paradigm', 'events', 'classroom-exercises.jsonl'))).toEqual([{ ...ev, home: 'repo' }]);
     } finally {
       if (prev !== undefined) process.env.PARADIGM_LEARNING_ASSUME_REPO = prev;
     }

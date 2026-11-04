@@ -198,6 +198,8 @@ export function listLearningStores(rootDir: string, opts: LearningStoreOptions =
       count: () => countJsonl(ev('promotion-decisions.jsonl')) },
     { id: 'classroom-certifications', class: 'pipeline', path: ev('classroom-certifications.jsonl'), scope: 'project', owner: '#field-failures',
       count: () => countJsonl(ev('classroom-certifications.jsonl')) },
+    { id: 'classroom-exercises', class: 'pipeline', path: ev('classroom-exercises.jsonl'), scope: 'project', owner: '#field-failures',
+      count: () => countJsonl(ev('classroom-exercises.jsonl')) },
     { id: 'notebook-refs', class: 'pipeline', path: ev('notebook-refs.jsonl'), scope: 'project', owner: '#notebook-loader',
       count: () => countJsonl(ev('notebook-refs.jsonl')) },
     { id: 'settlement-liveness', class: 'pipeline', path: ev('settlement-liveness.jsonl'), scope: 'project', owner: '#task-settlement',
@@ -264,7 +266,7 @@ export const LEARNING_HOMES: readonly LearningHome[] = ['repo', 'user', 'machine
 export type LearningArtifact =
   // repo by default
   | 'notebooks' | 'decisions' | 'wisdom' | 'habits' | 'agent-state' | 'overrides'
-  | 'classroom-certifications' | 'notebook-refs'
+  | 'classroom-certifications' | 'classroom-exercises' | 'notebook-refs'
   // user by default
   | 'journals' | 'verdicts' | 'provisional-mined' | 'nominations' | 'debates'
   | 'promotion-decisions' | 'estimate-actuals' | 'learned-token-estimates'
@@ -293,6 +295,9 @@ export const ARTIFACTS: Readonly<Record<LearningArtifact, ArtifactSpec>> = {
   'agent-state': { defaultHome: 'repo', rel: ['agent-state'] },
   'overrides': { defaultHome: 'repo', rel: ['events', 'overrides.jsonl'] },
   'classroom-certifications': { defaultHome: 'repo', rel: ['events', 'classroom-certifications.jsonl'] },
+  // The exercise evidence a cert's survival is minted from (TD-2026-07-01-401).
+  // Same home as the certifications it measures (Loid's rule).
+  'classroom-exercises': { defaultHome: 'repo', rel: ['events', 'classroom-exercises.jsonl'] },
   'notebook-refs': { defaultHome: 'repo', rel: ['events', 'notebook-refs.jsonl'] },
   'journals': { defaultHome: 'user', rel: ['agents'], userShared: true },
   'verdicts': { defaultHome: 'user', rel: ['events', 'verdicts.jsonl'] },
@@ -315,6 +320,7 @@ const REGISTRY_ARTIFACT: Record<string, LearningArtifact> = {
   'journals': 'journals', 'decisions': 'decisions', 'antipatterns': 'wisdom', 'preferences': 'wisdom',
   'notebooks': 'notebooks', 'notebooks-global': 'notebooks', 'antipatterns-global': 'wisdom', 'nominations': 'nominations', 'debates': 'debates',
   'promotion-decisions': 'promotion-decisions', 'classroom-certifications': 'classroom-certifications',
+  'classroom-exercises': 'classroom-exercises',
   'notebook-refs': 'notebook-refs', 'settlement-liveness': 'settlement-liveness',
   'postflight-liveness': 'postflight-liveness', 'habits': 'habits', 'verdicts': 'verdicts',
   'overrides': 'overrides', 'provisional-mined': 'provisional-mined', 'estimate-actuals': 'estimate-actuals',

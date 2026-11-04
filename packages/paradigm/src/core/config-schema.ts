@@ -64,6 +64,9 @@ const contextSchema = z.object({
   enabled: z.boolean().optional(),
   'index-file': z.string().optional(),
   'docs-path': z.string().optional(),
+  // #always-on-budget cap (chars) for Paradigm-generated always-on text per
+  // surface. Default 12000 — a starting estimate to calibrate.
+  'always-on-max-chars': z.number().positive().optional(),
 }).passthrough();
 
 const probeSchema = z.object({

@@ -45,6 +45,7 @@ vi.mock('os', async (importOriginal) => {
 import { runFieldFailureReducer } from './field-failure-reducer.js';
 import { loadScenarios } from './scenario-loader.js';
 import {
+  appendFieldFailure,
   readFieldFailures,
   readClassroomCertifications,
   appendClassroomCertification,
@@ -163,6 +164,7 @@ describe('runFieldFailureReducer — the loop turns (acceptance)', () => {
 
     expect(result).toEqual({
       failuresRecorded: 1,
+      failuresConfounded: 0,
       entriesRevised: 1,
       certsOverturned: 1,
       scenariosCreated: 1,
@@ -292,6 +294,7 @@ describe('runFieldFailureReducer — only real breaks count', () => {
 
     expect(result).toEqual({
       failuresRecorded: 0,
+      failuresConfounded: 0,
       entriesRevised: 0,
       certsOverturned: 0,
       scenariosCreated: 0,
@@ -404,5 +407,165 @@ describe('runFieldFailureReducer — refinement capture (X except Y)', () => {
     expect(afterSecond.refinement!.exceptions[0].sourceFailureId).toBe(
       makeFailureId(ORCH_ID, ENTRY_ID),
     );
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// Attribution (T-2026-11-03-002): more than one injected entry ⇒ confounded
+// ────────────────────────────────────────────────────────
+
+describe('runFieldFailureReducer — confounded attribution', () => {
+  const OTHER = 'nb-test-agent-cache-pattern';
+
+  it('records ONE confounded row with every injected id, keeps scenarios, revises and overturns nothing', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID, confidence: START_CONFIDENCE }));
+    writeProjectNotebook(makeEntry({ id: OTHER, concepts: ['cache'], confidence: START_CONFIDENCE }));
+    appendClassroomCertification(projectDir, pendingCert({ entryId: ENTRY_ID }));
+    appendClassroomCertification(projectDir, pendingCert({ entryId: OTHER }));
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID, OTHER], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+
+    const result = runFieldFailureReducer(projectDir);
+
+    expect(result).toEqual({
+      failuresRecorded: 1,
+      failuresConfounded: 1,
+      entriesRevised: 0,
+      certsOverturned: 0,
+      scenariosCreated: 2,
+    });
+
+    const failures = readFieldFailures(projectDir);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].attribution).toBe('confounded');
+    expect([...failures[0].attributedEntryIds].sort()).toEqual([ENTRY_ID, OTHER].sort());
+
+    // No reviseDown: confidence and the broke counter are untouched.
+    for (const id of [ENTRY_ID, OTHER]) {
+      const entry = readProjectNotebook(id);
+      expect(entry.confidence).toBe(START_CONFIDENCE);
+      expect(entry.appliedAndBrokeCount ?? 0).toBe(0);
+      expect(entry.refinement).toBeUndefined();
+    }
+    // No overturn.
+    expect(readClassroomCertifications(projectDir).map(c => c.outcome)).toEqual(['pending', 'pending']);
+  });
+
+  it('unions receipts per agent: two single-entry loads of different entries are still confounded', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID }));
+    writeProjectNotebook(makeEntry({ id: OTHER, concepts: ['cache'] }));
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    recordNotebookReference(projectDir, AGENT, [OTHER], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'revised' }));
+
+    const result = runFieldFailureReducer(projectDir);
+    expect(result.failuresConfounded).toBe(1);
+    expect(result.entriesRevised).toBe(0);
+  });
+
+  it('two receipts of the SAME single entry stay attributable', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID }));
+    appendClassroomCertification(projectDir, pendingCert());
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+
+    const result = runFieldFailureReducer(projectDir);
+    expect(result).toMatchObject({ failuresRecorded: 1, failuresConfounded: 0, entriesRevised: 1, certsOverturned: 1 });
+    expect(readFieldFailures(projectDir)[0].attribution).toBeUndefined();
+  });
+
+  it('is durable: a second pass writes no second confounded row and still revises nothing', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID }));
+    writeProjectNotebook(makeEntry({ id: OTHER, concepts: ['cache'] }));
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID, OTHER], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+
+    runFieldFailureReducer(projectDir);
+    const second = runFieldFailureReducer(projectDir);
+    expect(second.failuresRecorded).toBe(0);
+    expect(readFieldFailures(projectDir)).toHaveLength(1);
+    expect(readProjectNotebook(ENTRY_ID).confidence).toBe(START_CONFIDENCE);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// Ruling 4: verdict scope; Judge I5: pair-level durable dedupe
+// ────────────────────────────────────────────────────────
+
+describe('runFieldFailureReducer — verdict scope (ruling 4) and pair dedupe (I5)', () => {
+  const PEER = 'peer-agent';
+  const PEER_ENTRY = 'nb-peer-agent-cache-pattern';
+  const OTHER = 'nb-test-agent-cache-pattern';
+
+  it('a verdict naming its agent considers only that agent\'s receipts', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID }));
+    writeProjectNotebook(makeEntry({ id: PEER_ENTRY, concepts: ['cache'] }), PEER);
+    appendClassroomCertification(projectDir, pendingCert({ entryId: ENTRY_ID }));
+    appendClassroomCertification(projectDir, pendingCert({ entryId: PEER_ENTRY, agent: PEER }));
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    recordNotebookReference(projectDir, PEER, [PEER_ENTRY], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ agent: AGENT, verdict: 'dismissed' }));
+
+    const result = runFieldFailureReducer(projectDir);
+
+    expect(result).toMatchObject({ failuresRecorded: 1, failuresConfounded: 0, entriesRevised: 1, certsOverturned: 1 });
+    const failures = readFieldFailures(projectDir);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({ agent: AGENT, attributedEntryIds: [ENTRY_ID] });
+    // The peer's entry was never named by the verdict: untouched.
+    expect(readProjectNotebook(PEER_ENTRY, PEER).appliedAndBrokeCount ?? 0).toBe(0);
+    expect(readClassroomCertifications(projectDir).find(c => c.entryId === PEER_ENTRY)?.outcome).toBe('pending');
+  });
+
+  it('a verdict naming NO agent judges the union: two agents with one entry each is confounded, nothing revised', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID }));
+    writeProjectNotebook(makeEntry({ id: PEER_ENTRY, concepts: ['cache'] }), PEER);
+    appendClassroomCertification(projectDir, pendingCert({ entryId: ENTRY_ID }));
+    appendClassroomCertification(projectDir, pendingCert({ entryId: PEER_ENTRY, agent: PEER }));
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    recordNotebookReference(projectDir, PEER, [PEER_ENTRY], ORCH_ID);
+    appendSessionWorkEntry(projectDir, { ...makeVerdict({ verdict: 'dismissed' }), agent: undefined });
+
+    const result = runFieldFailureReducer(projectDir);
+
+    expect(result).toMatchObject({ entriesRevised: 0, certsOverturned: 0 });
+    expect(result.failuresRecorded).toBe(result.failuresConfounded);
+    const failures = readFieldFailures(projectDir);
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures.every(f => f.attribution === 'confounded')).toBe(true);
+    expect(failures.flatMap(f => f.attributedEntryIds).sort()).toEqual([ENTRY_ID, PEER_ENTRY].sort());
+    // Loid L2: every confounded row names ALL the suspects in scope, across agents
+    for (const f of failures) expect([...(f.suspects ?? [])].sort()).toEqual([ENTRY_ID, PEER_ENTRY].sort());
+    expect(readProjectNotebook(ENTRY_ID).confidence).toBe(START_CONFIDENCE);
+    expect(readProjectNotebook(PEER_ENTRY, PEER).confidence).toBe(START_CONFIDENCE);
+    expect(readClassroomCertifications(projectDir).map(c => c.outcome)).toEqual(['pending', 'pending']);
+  });
+
+  it('skips an (orchestrationId, agent) pair that already has a legacy row: no double record, no hurt rewritten to confounded', () => {
+    writeProjectNotebook(makeEntry({ id: ENTRY_ID }));
+    writeProjectNotebook(makeEntry({ id: OTHER, concepts: ['cache'] }));
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID, OTHER], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+    // A legacy (pre-confounding) pass attributed only injected[0].
+    appendFieldFailure(projectDir, {
+      ts: '2026-06-19T00:00:00.000Z',
+      orchestrationId: ORCH_ID,
+      agent: AGENT,
+      signal: 'reviewer-reject',
+      severity: 'high',
+      attributedEntryIds: [ENTRY_ID],
+      symbols: [],
+      detail: 'legacy',
+      sourceEvent: 'verdict:dismissed',
+    });
+
+    const result = runFieldFailureReducer(projectDir);
+
+    expect(result.failuresRecorded).toBe(0);
+    const failures = readFieldFailures(projectDir);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].attribution).toBeUndefined();
+    expect(readProjectNotebook(OTHER).confidence).toBe(START_CONFIDENCE);
   });
 });
