@@ -129,6 +129,19 @@ components:
       .paradigm/events/*.jsonl tolerantly (skip corrupt lines, never throw),
       mirroring graph-slice's .paradigm file access. The cert WRITER stays in
       paradigm-mcp/utils/field-failures.ts — only the read+rollup is shared.
+      Survival floor (TD-2026-07-01-401): K_MIN_EXERCISE=2 and
+      MIN_ADVERSARIAL_PROBES=1 live here, with meetsSurvivalFloor(exercise) and
+      isEvidencedSurvival(cert), so the paradigm-mcp writer and every reader
+      share one floor. computeRepeatFailureRate(certs, { requireExercise: true })
+      counts a survived row without qualifying `exercise` counters (minted by
+      the pre-gate aging timer) as unproven (per agent and overall), not
+      resolved; the default (no options) keeps the legacy formula for callers
+      that have not opted in. certEvidenceState(cert, {now, survivalWindowDays})
+      is the ONE read-time rule (pending | unproven | survived | overturned)
+      shared by the MCP tool, the decay pass and the platform server routes;
+      SURVIVAL_WINDOW_DAYS (14) is a label only. NO_EXERCISE_WRITER_NOTICE is
+      the plain status both the MCP tool and the doctor print when the
+      exercises ledger is empty (ruling 6).
     tags:
       - classroom
       - metrics

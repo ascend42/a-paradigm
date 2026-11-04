@@ -4,6 +4,14 @@ description: |
   Contains agent management, budget tracking, IDE adapters, provider registry,
   and all internal logic that powers the CLI commands.
 components:
+  always-on-budget:
+    description: 'measureAlwaysOn(rootDir, {homeDir}) — read-only, never throws. Measures text loaded into every agent session, grouped by surface. claude-code = CLAUDE.md + skill description: frontmatter of pdg-* projected skills (<root>/.claude/skills and ~/.claude/skills) + the installed Paradigm Claude Code plugin skills (installed_plugins.json, project-scope install for rootDir wins over user-scope; samePath compares install paths case-insensitively on win32); cursor = .cursor/rules/paradigm-*.mdc with alwaysApply true; agents-md = AGENTS.md. Chars plus estimated tokens (chars/4, an estimate). Only Paradigm-generated text counts toward the cap (readAlwaysOnCap: context.always-on-max-chars, default 12000 — a starting estimate to calibrate); ~/.claude/CLAUDE.md, the project MEMORY.md, non-Paradigm skills and non-paradigm alwaysApply rules go to census, never capped. overCapLine/surfaceForAdapter serve the paradigm sync warning. Consumed by doctor context-audit check 10 and sync.'
+    file: always-on-budget.ts
+    type: utility
+    tags:
+      - context-budget
+      - doctor
+      - sync
   session-markers-gitignore:
     description: ensureSessionMarkersGitignore writes an idempotent managed block into .paradigm/.gitignore listing every hook-written session marker (.purpose-paths, .orchestrated, .pending-review, .solo-declared, .sessions/, ...) and the generated state in GENERATED_STATE (scan-index.json, flow-index.json, navigator.yaml, manifest.consistency.json, session-breadcrumbs.prev.json, the machine-only event logs (compliance-history, team-funnel, postflight-liveness, settlement-liveness, hook-timings trim temp files), lore/timeline.yaml and the generated protocols/personas/curriculum/scenarios/university index.yaml; the hand-written docs .index.yaml files, the learning event logs (verdicts, overrides, debates, nominations, promotion-decisions, classroom-certifications, notebook-refs, session-log, stream.jsonl and its .last-processed cursor) and history/ stay committed). Called by `paradigm init` and `paradigm sync` so no project commits per-session hook state or rebuilt indexes. User lines outside the block are preserved. untrackGeneratedState(rootDir), called by `paradigm sync`, runs `git rm --cached` (execFileSync, no shell) on tracked files isManagedIgnore matches (session markers and generated state) in .paradigm/ and in nested .paradigm/ folders, writing the managed block into each nested folder's .gitignore; files stay on disk and a second run is a no-op.
     file: session-markers-gitignore.ts

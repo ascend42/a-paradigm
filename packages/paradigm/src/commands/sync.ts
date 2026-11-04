@@ -6,6 +6,8 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../utils/logger.js';
+import { warn } from '../utils/cli-output.js';
+import { measureAlwaysOn, overCapLine, surfaceForAdapter, type AlwaysOnSurface } from '../core/always-on-budget.js';
 import { ensureSessionMarkersGitignore, untrackGeneratedState } from '../core/session-markers-gitignore.js';
 import {
   detectIDE,
@@ -17,6 +19,26 @@ import {
   writeMcpConfig,
   writeNestedContexts,
 } from '../core/ide-adapters/index.js';
+
+/**
+ * #always-on-budget: one warn() line per regenerated always-on surface over
+ * the cap. Measures only; never changes what sync wrote.
+ */
+function warnAlwaysOnOverCap(rootDir: string, adapterNames: string[], quiet?: boolean): void {
+  const surfaces = new Set(adapterNames.map(surfaceForAdapter).filter((s): s is AlwaysOnSurface => s !== null));
+  if (surfaces.size === 0) return;
+  try {
+    const budget = measureAlwaysOn(rootDir);
+    for (const surface of surfaces) {
+      const line = overCapLine(budget, surface);
+      if (!line) continue;
+      log.command('sync').warn('Always-on text over cap', { surface, cap: budget.cap });
+      if (!quiet) warn(line);
+    }
+  } catch (err) {
+    log.command('sync').debug('Always-on budget skipped', { error: (err as Error).message });
+  }
+}
 
 interface SyncOptions {
   all?: boolean;
@@ -89,6 +111,7 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
     
     const successCount = results.filter(r => r.success).length;
     console.log(chalk.gray(`\n${successCount}/${results.length} IDE files generated.`));
+    warnAlwaysOnOverCap(rootDir, results.filter(r => r.success).map(r => r.ide), quiet);
     
     if (successCount === results.length) {
       tracker.success('All IDE files generated', { count: results.length });
@@ -165,6 +188,9 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
       }
     }
     tracker.success('IDE files generated', { ide: finalTargetIde, path: result.outputPath });
+    // The adapter's own name, not the raw target (I3): `Claude` resolves to the
+    // claude adapter, so its always-on surface is checked too.
+    warnAlwaysOnOverCap(rootDir, [adapter.name.toLowerCase()], quiet);
 
     // Generate MCP config if requested or by default for supporting IDEs
     if (options.mcp !== false && adapter.generateMcpConfig) {

@@ -18,6 +18,7 @@ import { loadDataPolicy, filterContent } from '../utils/data-policy-loader.js';
 import { resolveJournalHome, teachConfirmationLine } from '../utils/teach-home.js';
 import { promotionHomeOf, readLearningHomeConfig } from '../utils/learning-stores.js';
 import { visibilityOf } from '../utils/learning-commit-guard.js';
+import { normalizeLessonEvidence } from '../utils/lesson-evidence.js';
 
 export function getStreamsToolsList() {
   return [
@@ -105,6 +106,20 @@ export function getStreamsToolsList() {
           home: { type: 'string', enum: ['repo', 'user', 'machine'], description: 'Where the lesson lives (scoped learning). repo = committed, shared; user = just this person. Omit to infer from taught_text, else from transferable.' },
           home_source: { type: 'string', enum: ['explicit', 'inferred'], description: 'explicit when the human chose or confirmed home; inferred when it came from wording. Defaults to explicit when home is given.' },
           taught_text: { type: 'string', description: "Teach only: the human's own words. With no home, the home is inferred from them; when they do not settle it, nothing is recorded and the reply carries ask: \"This repo or just you?\"." },
+          cue: { type: 'string', description: 'Optional checkable cue: the shape of situation this lesson applies to. Carried to the notebook on promotion.' },
+          evidence: {
+            type: 'array',
+            description: 'Optional ledger refs behind the lesson. Verdicts are re-derived from the ledgers at promotion (author verdicts are not trusted); weak evidence warns, it does not block.',
+            items: {
+              type: 'object',
+              properties: {
+                ref: { type: 'string', description: 'Scenario id, probe-run (scenario-run/orchestration) id, field-failure id (ff-<orch>-<entry>), or source (decision id / project path)' },
+                kind: { type: 'string', enum: ['scenario-outcome', 'probe-run', 'field-failure', 'source'] },
+                verdict: { type: 'string', enum: ['helped', 'hurt', 'no-effect', 'confounded'] },
+              },
+              required: ['ref', 'kind', 'verdict'],
+            },
+          },
         },
         required: ['agent', 'trigger', 'insight', 'project', 'transferable'],
       },
@@ -296,6 +311,13 @@ export async function handleStreamsTool(
           : {}),
         ...(homeRes.home ? { home: homeRes.home } : {}),
         home_source: homeRes.home_source,
+        // Checkable lesson schema (advisory): spread only when valid, so
+        // ordinary entries serialize exactly as before.
+        ...(typeof args.cue === 'string' && args.cue.trim() ? { cue: args.cue.trim() } : {}),
+        ...(() => {
+          const evidence = normalizeLessonEvidence(args.evidence);
+          return evidence ? { evidence } : {};
+        })(),
       });
       const home = promotionHomeOf(entry);
       return {

@@ -31,6 +31,8 @@ import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile, isAgentActive
 import { loadJournalEntries } from './journal-loader.js';
 import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
 import { appendClassroomCertification } from './field-failures.js';
+import { deriveLessonEvidence, evidenceStrength, ledgerEvidenceResolver } from './lesson-evidence.js';
+import type { EvidenceStrength, NotebookEntry } from '../types/notebooks.js';
 import { log } from './mcp-logger.js';
 import type { HomeSource, PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
 import {
@@ -1092,7 +1094,7 @@ export function autoPromoteJournalEntries(
     if (!decision.promote) continue;
 
     try {
-      const { entry: nbEntry } = addNotebookEntry(
+      const { entry: nbEntry, filePath: nbFile } = addNotebookEntry(
         agentId,
         {
           context: entry.pattern?.applies_when || entry.insight.slice(0, 80),
@@ -1118,10 +1120,12 @@ export function autoPromoteJournalEntries(
           },
           home,
           home_source: homeSource,
+          ...lessonFields(entry as { cue?: unknown }),
         },
         home === 'user' ? 'global' : 'project',
         rootDir
       );
+      attachDerivedEvidence(rootDir, nbEntry, nbFile, (entry as { evidence?: unknown }).evidence);
 
       promoted.push({ journalId: entry.id, notebookId: nbEntry.id });
 
@@ -1166,6 +1170,54 @@ export function autoPromoteJournalEntries(
  * the YAML file in ~/.paradigm/agents/<agent>/journal/ containing `journalId`
  * and sets/appends `promoted_to_notebook: "<notebookId>"`. Non-fatal on failure.
  */
+/**
+ * The checkable-lesson cue a promotion carries from the journal entry to the
+ * notebook entry (advisory schema). Spread so an entry without it serializes
+ * exactly as before. Evidence is NOT copied here: see attachDerivedEvidence.
+ */
+function lessonFields(entry: { cue?: unknown }): { cue?: string } {
+  const out: { cue?: string } = {};
+  if (typeof entry.cue === 'string' && entry.cue.trim()) out.cue = entry.cue.trim();
+  return out;
+}
+
+/**
+ * F6: check the journal's evidence against the ledgers FOR the notebook entry it
+ * just became (probe runs and scenarios must be about this entry), and store on
+ * the notebook entry only {ref, kind} plus the DERIVED verdict (none for a
+ * source citation). The author's verdict is never copied; rows that do not
+ * resolve are dropped. Returns the evidence strength. Best-effort: a failed
+ * rewrite leaves the entry without evidence, never breaks the promotion.
+ */
+function attachDerivedEvidence(
+  rootDir: string,
+  nbEntry: NotebookEntry,
+  filePath: string,
+  evidence: unknown,
+): EvidenceStrength {
+  const resolve = ledgerEvidenceResolver(rootDir, {
+    entryId: nbEntry.id,
+    symbols: [...(nbEntry.concepts ?? []), ...(nbEntry.tags ?? [])],
+  });
+  const strength = evidenceStrength(evidence, resolve);
+  const stored = deriveLessonEvidence(evidence, resolve);
+  if (stored) {
+    try {
+      fs.writeFileSync(
+        filePath,
+        yaml.dump({ ...nbEntry, evidence: stored }, { lineWidth: 120, noRefs: true, sortKeys: false }),
+        'utf-8',
+      );
+    } catch (e) {
+      log.component('#nomination-engine').warn('failed to store derived lesson evidence', {
+        notebookId: nbEntry.id,
+        error: (e as Error).message,
+      });
+    }
+  }
+  return strength;
+}
+
 function markJournalPromoted(agentId: string, journalId: string, notebookId: string): void {
   try {
     const journalDir = path.join(os.homedir(), '.paradigm', 'agents', agentId, 'journal');
@@ -1206,6 +1258,13 @@ function markJournalPromoted(agentId: string, journalId: string, notebookId: str
  * these as peer-certified rather than LEGACY.
  *
  * Promotes a SINGLE journal entry by id. Returns the outcome.
+ *
+ * Checkable lessons (advisory): the entry's `evidence` is checked against the
+ * ledgers for the notebook entry it becomes (evidenceStrength, ruling 5).
+ * `confounded-only` or `contradicted` adds a WARNING to the result and the log;
+ * `none` or `cited` adds an info NOTE (debug log). It never refuses. The human
+ * ruling stays the gate. The notebook entry stores only {ref, kind} plus the
+ * derived verdict (F6).
  */
 export function gatedPromoteJournalEntry(
   rootDir: string,
@@ -1219,7 +1278,19 @@ export function gatedPromoteJournalEntry(
     /** S3: the human saw the home at sign-off and kept it. Recorded as explicit. */
     homeConfirmed?: boolean;
   } = {}
-): { promoted: boolean; journalId: string; notebookId?: string; reason?: string; home?: LearningHome; home_source?: HomeSource } {
+): {
+  promoted: boolean;
+  journalId: string;
+  notebookId?: string;
+  reason?: string;
+  home?: LearningHome;
+  home_source?: HomeSource;
+  evidenceStrength?: EvidenceStrength;
+  /** Evidence that points the wrong way: confounded-only / contradicted. */
+  warnings?: string[];
+  /** Info, not a warning: evidence absent (none) or citations only (cited). */
+  notes?: string[];
+} {
   // Load all of the agent's journal entries (all triggers) and find the target.
   const journal = loadJournalEntries(agentId, { limit: 500 }) as Array<{
     id: string;
@@ -1231,6 +1302,8 @@ export function gatedPromoteJournalEntry(
     transferable?: boolean;
     home?: LearningHome;
     home_source?: HomeSource;
+    cue?: string;
+    evidence?: unknown;
   }>;
 
   const entry = journal.find(e => e.id === journalId);
@@ -1257,7 +1330,7 @@ export function gatedPromoteJournalEntry(
   const homeSource: HomeSource = opts.home !== undefined || opts.homeConfirmed || entry.home_source === 'explicit'
     ? 'explicit'
     : 'inferred';
-  const { entry: nbEntry } = addNotebookEntry(
+  const { entry: nbEntry, filePath: nbFile } = addNotebookEntry(
     agentId,
     {
       context: entry.pattern?.applies_when || entry.insight.slice(0, 80),
@@ -1274,10 +1347,35 @@ export function gatedPromoteJournalEntry(
       },
       home,
       home_source: homeSource,
+      ...lessonFields(entry),
     },
     home === 'user' ? 'global' : 'project',
     rootDir
   );
+
+  // Advisory evidence check (Loid): verdicts come from the ledgers, never from
+  // the author, and probe runs / scenarios must be about THIS entry. Weak
+  // evidence warns; it does not block the human's ruling. Absent or cited-only
+  // evidence is the common legacy case, so it is an info note at debug, not a
+  // warning (Judge I6): only evidence that points the WRONG way warns.
+  const strength = attachDerivedEvidence(rootDir, nbEntry, nbFile, entry.evidence);
+  const warnings: string[] = [];
+  const notes: string[] = [];
+  if (strength === 'none') {
+    notes.push('lesson has no ledger-backed evidence: no evidence ref resolves to a scenario outcome, probe run, field failure or source');
+  } else if (strength === 'cited') {
+    notes.push('lesson evidence is citations only: its sources exist, but no ref resolves to an outcome that shows the lesson helped');
+  } else if (strength === 'confounded-only') {
+    warnings.push('lesson evidence is confounded only: every derived outcome is a confounded field failure, so no single lesson was shown to help or hurt');
+  } else if (strength === 'contradicted') {
+    warnings.push('lesson evidence is contradicted: the ledgers derive only hurt / no-effect outcomes for it, none that helped');
+  }
+  const evidenceLog = { agentId, journalId: entry.id, notebookId: nbEntry.id, evidenceStrength: strength };
+  if (warnings.length > 0) {
+    log.component('#nomination-engine').warn('gated promotion with weak lesson evidence', evidenceLog);
+  } else if (notes.length > 0) {
+    log.component('#nomination-engine').debug('gated promotion without outcome evidence', evidenceLog);
+  }
 
   // Write a `pending` certification — peer/quorum certified (NOT 'gate'). The
   // fail-side reducer later-binds outcome to `overturned`/`survived`.
@@ -1296,7 +1394,16 @@ export function gatedPromoteJournalEntry(
 
   markJournalPromoted(agentId, entry.id, nbEntry.id);
 
-  return { promoted: true, journalId, notebookId: nbEntry.id, home, home_source: homeSource };
+  return {
+    promoted: true,
+    journalId,
+    notebookId: nbEntry.id,
+    home,
+    home_source: homeSource,
+    evidenceStrength: strength,
+    ...(warnings.length > 0 ? { warnings } : {}),
+    ...(notes.length > 0 ? { notes } : {}),
+  };
 }
 
 // ── Surfacing Config ──

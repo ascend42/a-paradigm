@@ -665,7 +665,8 @@ export interface LintIssue {
     | 'VERSION_NOT_SEMVER'
     | 'DIR_ID_MISMATCH'
     | 'RESOURCE_SYMLINK'
-    | 'PACK_SHADOWED';
+    | 'PACK_SHADOWED'
+    | 'DESCRIPTION_NO_TRIGGER';
   message: string;
   /** 1-based body line, when applicable. */
   line?: number;
@@ -737,6 +738,9 @@ function agentExists(agent: string, env: SkillEnv, known?: string[]): boolean {
 }
 
 /** Lint a parsed skill. Errors block projection and certification. */
+/** A trigger clause in a skill description (house style: plugins/paradigm/skills/class/SKILL.md "Use when …"). */
+export const SKILL_TRIGGER_CLAUSE = /\b(use when|use for|use this|when the user|when you|trigger)/i;
+
 export function lintSkill(skill: SkillFile, env: SkillEnv, opts: LintOptions = {}): LintIssue[] {
   const issues: LintIssue[] = [];
   const meta = skill.metadata.paradigm;
@@ -769,6 +773,12 @@ export function lintSkill(skill: SkillFile, env: SkillEnv, opts: LintOptions = {
   // SKILL_IS_NOTEBOOK — too thin to be a procedure.
   if (lines.filter(l => l.trim()).length < 3) {
     issues.push({ level: 'warn', code: 'SKILL_IS_NOTEBOOK', message: 'body has fewer than 3 non-blank lines — a single insight belongs in a notebook' });
+  }
+
+  // Harness² review (2026-11-03): in Claude Code a skill's description IS its trigger (it is the always-on line
+  // that decides whether the skill is ever opened), so it must name the situation, not just the topic.
+  if (!SKILL_TRIGGER_CLAUSE.test(skill.description ?? '')) {
+    issues.push({ level: 'warn', code: 'DESCRIPTION_NO_TRIGGER', message: 'description names no trigger ("Use when …"): in Claude Code the description is what decides whether the skill is ever opened' });
   }
 
   if (opts.structuralOnly) return issues;

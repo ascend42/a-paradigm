@@ -52,6 +52,8 @@ describe('guard scope (registry learning stores only)', () => {
       '.paradigm/events/team-funnel.jsonl', '.paradigm/events/settlement-liveness.jsonl', '.paradigm/notebooks/a/b.yaml',
       '.paradigm/wisdom/antipatterns.yaml', '.paradigm/agent-state/x.json', '.paradigm/learned/token-estimates.json',
       'packages/x/.paradigm/events/debates.jsonl',
+      // F7: the exercises ledger is a source of truth for survival; it must be in scope.
+      '.paradigm/events/classroom-exercises.jsonl', '.paradigm/events/classroom-certifications.jsonl',
     ]) expect(isGuardedPath(p), p).toBe(true);
     for (const p of [
       '.paradigm/decisions/TD-1.yaml', '.paradigm/lore/entries/2026-01-01/L-1.yaml', '.paradigm/specs/a.yaml',
@@ -60,6 +62,7 @@ describe('guard scope (registry learning stores only)', () => {
       'src/a.ts',
     ]) expect(isGuardedPath(p), p).toBe(false);
     expect(guardedLearningRels()).not.toContain('decisions');
+    expect(guardedLearningRels()).toContain('events/classroom-exercises.jsonl');
   });
 });
 

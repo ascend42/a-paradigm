@@ -4,24 +4,70 @@
  * Storage:
  *   ~/.paradigm/notebooks/{agent-id}/nb-{concept}.yaml   (global)
  *   .paradigm/notebooks/{agent-id}/nb-{concept}.yaml     (project)
- *
- * Schema is co-owned with @a-company/agent-format (source of truth for publish contract).
- * Keep these fields in sync with packages/agent-format/src/notebook.ts in a-neverland.
  */
 
-/**
- * Publishing scope — controls which audiences can receive this entry.
- * Matches the enum in @a-company/agent-format.
- */
 import type { HomeSource, LearningHome } from './knowledge-streams.js';
 
+/** Publishing scope — controls which audiences can receive this entry. */
 export type NotebookScope = 'generalizable' | 'project-specific' | 'platform-specific';
+
+/** What kind of ledger row a piece of lesson evidence points at. */
+export type LessonEvidenceKind = 'scenario-outcome' | 'probe-run' | 'field-failure' | 'source';
+
+/** What the referenced row says the lesson did. */
+export type LessonEvidenceVerdict = 'helped' | 'hurt' | 'no-effect' | 'confounded';
+
+/**
+ * One piece of evidence behind a lesson (checkable lesson schema, advisory).
+ * Loid's rule: the verdict must be DERIVABLE from the ledger row `ref` points
+ * at, never an author-asserted confidence. Readers re-derive it where the ledger
+ * can (see utils/lesson-evidence.ts) and ignore the stored verdict there.
+ */
+export interface LessonEvidence {
+  /** Ledger reference: a scenario id, an exercise receipt id, a field-failure id, or a source path/decision id. */
+  ref: string;
+  kind: LessonEvidenceKind;
+  verdict: LessonEvidenceVerdict;
+}
+
+/**
+ * How well a lesson's evidence holds up (ruling 5): see evidenceStrength in
+ * utils/lesson-evidence.ts.
+ *   none            no row resolves
+ *   cited           only source citations resolve (no outcome)
+ *   confounded-only derived outcomes exist, but every one is confounded
+ *   contradicted    derived outcomes exist, but only hurt / no-effect (no helped)
+ *   supported       at least one DERIVED `helped`
+ */
+export type EvidenceStrength = 'none' | 'cited' | 'confounded-only' | 'contradicted' | 'supported';
+
+/**
+ * Lesson evidence as stored on a NOTEBOOK entry (F6). Only the ref and kind are
+ * carried from the journal; `verdict` is the verdict the LEDGER derived at
+ * promotion, never the author's. Absent = a source citation (no outcome).
+ * Rows that did not resolve at promotion are not stored.
+ */
+export interface StoredLessonEvidence {
+  ref: string;
+  kind: LessonEvidenceKind;
+  verdict?: LessonEvidenceVerdict;
+}
 
 export interface NotebookEntry {
   /** Unique entry ID — stable deterministic format: nb-{agentId}-{conceptSlug} */
   id: string;
   /** Context description — when to apply this snippet */
   context: string;
+  /**
+   * Optional checkable cue: the SHAPE of situation the lesson applies to
+   * (advisory). `context` stays the required, working field; `cue` sharpens it.
+   */
+  cue?: string;
+  /**
+   * Optional ledger-backed evidence for the lesson (advisory, never asserted
+   * confidence): {ref, kind} plus the LEDGER-derived verdict at promotion.
+   */
+  evidence?: StoredLessonEvidence[];
   /** The reusable code/knowledge snippet */
   snippet: string;
   /** Where this entry came from */
@@ -68,8 +114,8 @@ export interface NotebookEntry {
    * Publishing scope — who this entry is safe to share with.
    * - 'generalizable': safe for any agent that installs this agent (default)
    * - 'project-specific': only relevant to the project where the entry was created; never published
-   * - 'platform-specific': only relevant to Paradigm/nevr.land platform agents; published under @a-company only
-   * Auto-classified at creation time. Owner can override via `nevr notebook audit`.
+   * - 'platform-specific': only relevant to Paradigm platform agents; published under @a-company only
+   * Auto-classified at creation time.
    */
   scope?: NotebookScope;
   /**

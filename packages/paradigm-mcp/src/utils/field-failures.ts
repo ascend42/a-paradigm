@@ -1,8 +1,9 @@
 /**
  * The Classroom — fail-side event writers (TD-2026-06-19-007).
  *
- * Two append-only JSONL channels, both mirroring `appendPromotionDecision`
- * (nomination-engine.ts) including MAX_ENTRIES pruning:
+ * Append-only JSONL channels. The first two mirror `appendPromotionDecision`
+ * (nomination-engine.ts) including MAX_ENTRIES pruning; the exercises ledger
+ * (classroom-exercises.jsonl) is a source of truth and is never pruned:
  *
  *   .paradigm/events/field-failures.jsonl
  *     One row per attributed field break. The LEFT∘RIGHT join product:
@@ -23,6 +24,12 @@ import * as path from 'path';
 import { log } from './mcp-logger.js';
 import type { ExerciseIntensity } from '@a-company/premise-core';
 import {
+  K_MIN_EXERCISE,
+  MIN_ADVERSARIAL_PROBES,
+  meetsSurvivalFloor,
+  isEvidencedSurvival,
+} from '@a-company/premise-core';
+import {
   appendLearningRows,
   readLearningRows,
   rewriteLearningRows,
@@ -41,14 +48,16 @@ export const EXERCISES_FILE = 'classroom-exercises.jsonl';
 const MAX_ENTRIES = 500;
 
 /**
- * Survival gate (docs/specs/classroom-falsifiable-loop.md §1-2, TD-2026-07-01-…).
+ * Survival gate (docs/specs/classroom-falsifiable-loop.md §1-2, TD-2026-07-01-401).
  * A cert may resolve to `survived` only when it has been exercised at least
  * K_MIN_EXERCISE times AND faced at least MIN_ADVERSARIAL_PROBES deliberate
  * probes (human ruling 2026-07-01: passive apply-and-held alone cannot mint
  * survival). Aging alone never resolves — it renders `unproven`.
+ *
+ * The constants and the floor predicate live in premise-core so the writer here
+ * and every reader (MCP tool, CLI doctor) share ONE floor; re-exported here.
  */
-export const K_MIN_EXERCISE = 2;
-export const MIN_ADVERSARIAL_PROBES = 1;
+export { K_MIN_EXERCISE, MIN_ADVERSARIAL_PROBES, meetsSurvivalFloor, isEvidencedSurvival };
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -80,6 +89,21 @@ export interface FieldFailureRow {
   scenarioId?: string;
   /** Provenance: which raw event produced this row (e.g. 'verdict:dismissed'). */
   sourceEvent: string;
+  /**
+   * Attribution verdict (T-2026-11-03-002). `confounded` = more than one entry
+   * was injected for this agent under this orchestration, so the break cannot be
+   * pinned on any one of them: the row lists every injected id, but NO entry is
+   * revised down and NO cert is overturned. Absent = `attributable` (legacy rows
+   * and single-entry injections, which carry exactly one attributed id).
+   */
+  attribution?: 'attributable' | 'confounded';
+  /** Loid L2: on a confounded row, every entry in scope that could have caused the break (across agents). */
+  suspects?: string[];
+}
+
+/** True when a failure row pins its break on its attributed entries (legacy rows included). */
+export function isAttributableFailure(row: Pick<FieldFailureRow, 'attribution'>): boolean {
+  return row.attribution !== 'confounded';
 }
 
 /**
@@ -110,9 +134,11 @@ export interface ClassroomCertRow {
    * without survival flips, resolved == overturned and repeat-failure-rate is a
    * structural 1.0 (a lie).
    *
-   * SUPERSEDED by the falsifiable loop (docs/specs/classroom-falsifiable-loop.md):
-   * survival must be minted by EXERCISE, not by aging. Sub-phase 1 gates this on
-   * `exercise` below; until then the field is retained for back-compat.
+   * GATED by the falsifiable loop (docs/specs/classroom-falsifiable-loop.md,
+   * T-2026-11-03-001): survival is minted by EXERCISE, not by aging —
+   * surviveCertification refuses unless the exercises ledger clears the floor,
+   * and stamps `exercise` on the row. A legacy `survived` row without `exercise`
+   * was minted by the old aging timer and reads as `unproven`.
    */
   survivedAt?: string;
   /**
@@ -149,17 +175,6 @@ export interface ExerciseEvent {
   kind: 'application' | 'adversarial-probe' | 'break-attempt';
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-function pruneFile(filePath: string, maxLines: number): void {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.trim().split('\n').filter(l => l.trim());
-    if (lines.length > maxLines) {
-      fs.writeFileSync(filePath, lines.slice(-maxLines).join('\n') + '\n', 'utf8');
-    }
-  } catch { /* non-fatal */ }
-}
 
 function readJsonl<T>(filePath: string): T[] {
   try {
@@ -178,7 +193,7 @@ function readJsonl<T>(filePath: string): T[] {
 // ── field-failures.jsonl ─────────────────────────────────────────────
 
 /**
- * Append one field-failure row. Mirrors `appendPromotionDecision` incl. pruning.
+ * Append one field-failure row. Never pruned: it is a source of truth (see below).
  */
 export function appendFieldFailure(rootDir: string, row: FieldFailureRow): void {
   try {
@@ -186,7 +201,9 @@ export function appendFieldFailure(rootDir: string, row: FieldFailureRow): void 
     fs.mkdirSync(dir, { recursive: true });
     const filePath = path.join(dir, FIELD_FAILURES_FILE);
     fs.appendFileSync(filePath, JSON.stringify(row) + '\n', 'utf8');
-    pruneFile(filePath, MAX_ENTRIES);
+    // Loid (re-review): NEVER pruned, like the exercises ledger. surviveCertification's break check, the brokeIn
+    // exclusions and the reducer's durable dedupe all read it: a pruned break would stop blocking survival, let its
+    // orchestration count as an exercise, and let a still-present verdict record the break again.
   } catch (err) {
     log.component('#field-failures').warn('failed to record field failure', {
       agent: row.agent,
@@ -208,6 +225,91 @@ export function readFieldFailures(rootDir: string): FieldFailureRow[] {
 export function makeFailureId(orchestrationId: string, entryId: string): string {
   return `ff-${orchestrationId}-${entryId}`;
 }
+
+// ── classroom-exercises.jsonl ────────────────────────────────────────
+
+/**
+ * Append exercise events to the exercises ledger (same home as the cert they
+ * measure). Best-effort. Every row needs a real join receipt: rows without a
+ * `certEntryId` or `orchestrationId` are dropped, never written.
+ *
+ * NOT pruned (F7): this ledger is the source of truth a cert's survival is
+ * rebuilt from, so trimming it to MAX_ENTRIES would silently erase the evidence
+ * that minted a survival and make the floor unreachable on a busy project.
+ */
+export function appendExerciseEvents(
+  rootDir: string,
+  rows: ExerciseEvent[],
+  opts: { home?: LearningHome } = {},
+): void {
+  const valid = rows.filter(r => r.certEntryId && r.orchestrationId);
+  if (valid.length === 0) return;
+  try {
+    appendLearningRows('classroom-exercises', rootDir, valid, { home: opts.home });
+  } catch (err) {
+    log.component('#field-failures').warn('failed to record exercise events', {
+      count: valid.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** Read all exercise events (union of homes). Never throws. */
+export function readExerciseEvents(rootDir: string): ExerciseEvent[] {
+  try {
+    return readLearningRows<ExerciseEvent>('classroom-exercises', rootDir);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Derive a cert's exercise counters from the exercises ledger — never from the
+ * clock. One receipt counts once: events are deduped by
+ * `(certEntryId, orchestrationId)`. Only events at or after `sinceIso` (the
+ * cert's own timestamp) count, so evidence for an earlier, overturned cert of
+ * the same entry is not reused. A receipt whose orchestration also produced a
+ * field-failure row naming this entry (attributable OR confounded) did not
+ * demonstrably hold, so it is excluded.
+ */
+export function exerciseIntensityFor(
+  entryId: string,
+  exercises: ExerciseEvent[],
+  failures: FieldFailureRow[],
+  sinceIso?: string,
+): ExerciseIntensity {
+  const since = sinceIso ? Date.parse(sinceIso) : NaN;
+  const brokeIn = new Set<string>();
+  for (const f of failures) {
+    if ((f.attributedEntryIds ?? []).includes(entryId)) brokeIn.add(f.orchestrationId);
+  }
+  const receipts = new Map<string, { probe: boolean; breakAttempt: boolean; ts?: string }>();
+  for (const ev of exercises) {
+    if (ev.certEntryId !== entryId || !ev.orchestrationId) continue;
+    if (brokeIn.has(ev.orchestrationId)) continue;
+    if (!Number.isNaN(since)) {
+      const t = Date.parse(ev.ts);
+      if (Number.isNaN(t) || t < since) continue;
+    }
+    const r = receipts.get(ev.orchestrationId) ?? { probe: false, breakAttempt: false };
+    if (ev.kind === 'adversarial-probe') r.probe = true;
+    if (ev.kind === 'break-attempt') r.breakAttempt = true;
+    if (!r.ts || ev.ts > r.ts) r.ts = ev.ts;
+    receipts.set(ev.orchestrationId, r);
+  }
+  const intensity: ExerciseIntensity = { timesExercised: 0, adversarialProbes: 0, breakAttempts: 0 };
+  for (const r of receipts.values()) {
+    intensity.timesExercised++;
+    if (r.probe) intensity.adversarialProbes++;
+    if (r.breakAttempt) intensity.breakAttempts++;
+    if (r.ts && (!intensity.lastExercisedAt || r.ts > intensity.lastExercisedAt)) intensity.lastExercisedAt = r.ts;
+  }
+  return intensity;
+}
+
+// Read-time evidence state of a cert (no write): the ONE rule lives in
+// premise-core so the platform server and the doctor label the same way.
+export { certEvidenceState, type CertEvidenceState } from '@a-company/premise-core';
 
 // ── classroom-certifications.jsonl ───────────────────────────────────
 
@@ -271,31 +373,59 @@ export function overturnCertification(
 }
 
 /**
- * Decay-pass later-bind: flip the FIRST matching `pending` cert for `entryId` to
- * `survived` (the field ran the survival window without breaking it). Mirrors
- * {@link overturnCertification}: idempotent (a row already resolved — survived OR
- * overturned — is left untouched, so overturn always wins and re-runs never
- * double-flip), rewrites the file in place.
+ * Later-bind: flip the FIRST matching `pending` cert for `entryId` to `survived`
+ * — ONLY when the exercises ledger clears the survival floor (TD-2026-07-01-401,
+ * T-2026-11-03-001). The gate lives HERE so every caller is gated: a caller that
+ * only knows a cert is old cannot mint survival, because age is never consulted.
  *
- * @returns true if a pending row was flipped to survived, false if none matched.
+ * Refuses (returns false, writes nothing) when:
+ *   - the first pending row's exercise counters (from {@link exerciseIntensityFor},
+ *     counting only receipts at/after the cert's ts) miss the floor
+ *     (>= K_MIN_EXERCISE exercises AND >= MIN_ADVERSARIAL_PROBES probes);
+ *   - an ATTRIBUTABLE field failure for `entryId` landed at/after the cert's ts
+ *     (the field broke it; overturn wins). Confounded breaks do not block, but
+ *     their orchestrations never count as exercises.
+ *
+ * On a flip the row is stamped with the `exercise` counters that minted it, so
+ * readers can tell an evidenced survival from a legacy aged-only one
+ * ({@link isEvidencedSurvival}). Idempotent: resolved rows are never touched.
+ *
+ * @returns true if a pending row was flipped to survived, false otherwise.
  */
 export function surviveCertification(
   rootDir: string,
   entryId: string
 ): boolean {
   try {
+    const exercises = readExerciseEvents(rootDir);
+    const failures = readFieldFailures(rootDir);
+    let considered = false;
     let flipped = false;
-    // Only a still-pending cert flips. An overturned row stays overturned
-    // (overturn wins); an already-survived row is left untouched (idempotent).
+    // Only the FIRST still-pending cert for the entry is considered: a later
+    // pending row is younger, so it cannot have more qualifying receipts.
     rewriteLearningRows<ClassroomCertRow>('classroom-certifications', rootDir, row => {
-      if (flipped || row.entryId !== entryId || row.outcome !== 'pending') return undefined;
+      if (considered || row.entryId !== entryId || row.outcome !== 'pending') return undefined;
+      considered = true;
+      const since = typeof row.ts === 'string' ? row.ts : undefined;
+      const sinceMs = since ? Date.parse(since) : NaN;
+      const broken = failures.some(f =>
+        isAttributableFailure(f)
+        && (f.attributedEntryIds ?? []).includes(entryId)
+        && (Number.isNaN(sinceMs) || Number.isNaN(Date.parse(f.ts)) || Date.parse(f.ts) >= sinceMs));
+      if (broken) return undefined;
+      const exercise = exerciseIntensityFor(entryId, exercises, failures, since);
+      if (!meetsSurvivalFloor(exercise)) return undefined;
       flipped = true;
       return {
         ...row,
         outcome: 'survived',
         survivedAt: new Date().toISOString(),
+        exercise,
       } satisfies ClassroomCertRow;
     });
+    if (considered && !flipped) {
+      log.component('#classroom-certifications').debug('survival refused: exercise floor not met', { entryId });
+    }
     return flipped;
   } catch (err) {
     log.component('#classroom-certifications').warn('failed to survive certification', {

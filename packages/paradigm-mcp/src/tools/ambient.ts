@@ -544,13 +544,13 @@ interface PostflightResult {
    * The Classroom (TD-2026-06-19-007): fail-side reducer counts — field breaks
    * attributed back to notebook entries, entries revised down, certs overturned.
    */
-  fieldFailures?: { failuresRecorded: number; entriesRevised: number; certsOverturned: number };
+  fieldFailures?: { failuresRecorded: number; entriesRevised: number; certsOverturned: number; failuresConfounded?: number };
   /**
-   * The Classroom (TD-2026-06-19-007) decay pass: certs aged-without-break flipped
-   * to `survived` (makes repeat-failure-rate's denominator real) + unused entries
-   * gently decayed.
+   * The Classroom (TD-2026-06-19-007) decay pass: aged pending certs swept —
+   * `survived` only when the exercises ledger clears the floor, else counted
+   * `unproven` (TD-2026-07-01-401) — plus unused entries gently decayed.
    */
-  decay?: { certsSurvived: number; entriesDecayed: number };
+  decay?: { certsSurvived: number; certsUnproven?: number; entriesDecayed: number };
 }
 
 /**
@@ -588,11 +588,11 @@ export async function runPostflightLearning(
     ? { failuresRecorded: 0, entriesRevised: 0, certsOverturned: 0 }
     : runFieldFailureReducer(rootDir);
 
-  // The Classroom decay pass — runs RIGHT AFTER the reducer (load-bearing for the
-  // metric: it flips aged-without-break certs to `survived`, making the
-  // repeat-failure-rate denominator real, and gently decays silent entries).
+  // The Classroom decay pass — runs RIGHT AFTER the reducer. It sweeps aged
+  // pending certs (survival only on exercise evidence; otherwise `unproven`) and
+  // gently decays silent entries. Time never mints survival.
   const decay = dryRun
-    ? { certsSurvived: 0, entriesDecayed: 0 }
+    ? { certsSurvived: 0, certsUnproven: 0, entriesDecayed: 0 }
     : runDecayPass(rootDir);
 
   // Provisional-candidate intake (T-2026-06-13-004): mine already-recorded

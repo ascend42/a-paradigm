@@ -1,5 +1,5 @@
 /**
- * Context Audit — 9 quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
+ * Context Audit — 10 quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
  *
  * Checks:
  *   1. stale-references     — dead file/dir paths in instruction files
@@ -11,6 +11,8 @@
  *   7. instruction-vagueness — vague/hedging language in instruction files
  *   8. config-schema-validation — config.yaml schema validation
  *   9. purpose-file-health   — oversized/stale .purpose files
+ *  10. always-on-budget      — chars / est. tokens of text loaded into every
+ *                              agent session (advisory, #always-on-budget)
  */
 
 import * as fs from 'fs';
@@ -18,6 +20,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { log } from '../../utils/logger.js';
 import { filterGitIgnored, resolvePurposeCoverage } from '@a-company/purpose-core';
+import { measureAlwaysOn, ALWAYS_ON_CAP_KEY, type AlwaysOnEntry } from '../../core/always-on-budget.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -876,10 +879,55 @@ async function checkPurposeFileHealth(rootDir: string): Promise<ContextAuditResu
 }
 
 // ---------------------------------------------------------------------------
+// Check 10: Always-On Budget (advisory)
+// ---------------------------------------------------------------------------
+
+function fmtEntry(e: AlwaysOnEntry): string {
+  const skills = e.skillCount !== undefined ? `, ${e.skillCount} skill${e.skillCount === 1 ? '' : 's'}` : '';
+  return `${e.label} [${e.surface}]: ${e.chars.toLocaleString('en-US')} chars, ~${e.estTokens.toLocaleString('en-US')} tokens est.${skills}`;
+}
+
+/**
+ * Text Paradigm generates that loads into every agent session: one result per
+ * surface (its files as details, so doctor's 5-detail cap rarely truncates),
+ * plus a census line for user-owned text. An ADVISORY (never warn or error,
+ * so doctor stays healthy) when a surface's Paradigm-generated total exceeds
+ * the cap; census is never flagged.
+ */
+async function checkAlwaysOnBudget(rootDir: string, homeDir?: string): Promise<ContextAuditResult[]> {
+  const budget = measureAlwaysOn(rootDir, { homeDir });
+  const cap = budget.cap.toLocaleString('en-US');
+  const results: ContextAuditResult[] = [];
+
+  if (budget.surfaces.length === 0) {
+    results.push({ check: 'always-on-budget', status: 'ok', message: 'No Paradigm-generated always-on text found' });
+  }
+  for (const s of budget.surfaces) {
+    const total = `${s.surface}: ${s.chars.toLocaleString('en-US')} chars (~${s.estTokens.toLocaleString('en-US')} tokens est.)`;
+    const details = budget.entries.filter((e) => e.surface === s.surface).map(fmtEntry);
+    results.push(s.overCap
+      ? {
+          check: 'always-on-budget',
+          // Advisory, not warn (Judge B1): the cap is an uncalibrated starting
+          // estimate, so being over it must not turn doctor/shift unhealthy.
+          status: 'advisory',
+          message: `${total} over the ${cap}-char cap`,
+          details,
+          fix: `Trim generated sections or skill descriptions, or calibrate ${ALWAYS_ON_CAP_KEY} in .paradigm/config.yaml (default 12000 is a starting estimate)`,
+        }
+      : { check: 'always-on-budget', status: 'ok', message: `${total} under the ${cap}-char cap`, details });
+  }
+  const census = budget.census.map(fmtEntry);
+  census.push('MCP tool schemas: not measured');
+  results.push({ check: 'always-on-budget', status: 'ok', message: 'census outside Paradigm (informational, not capped)', details: census });
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function runContextAudit(rootDir: string, _options?: { quiet?: boolean }): Promise<ContextAuditResult[]> {
+export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string }): Promise<ContextAuditResult[]> {
   const tracker = log.command('doctor:context-audit').start('Running context audit checks');
   const results: ContextAuditResult[] = [];
 
@@ -892,6 +940,7 @@ export async function runContextAudit(rootDir: string, _options?: { quiet?: bool
   results.push(...await checkInstructionVagueness(rootDir));
   results.push(...await checkConfigSchema(rootDir));
   results.push(...await checkPurposeFileHealth(rootDir));
+  results.push(...await checkAlwaysOnBudget(rootDir, options?.homeDir));
 
   const errorCount = results.filter(r => r.status === 'error').length;
   const warnCount = results.filter(r => r.status === 'warn').length;

@@ -31,7 +31,7 @@ import {
   loadScenariosForAgent,
   type ScenarioProbe,
 } from '../utils/scenario-loader.js';
-import { readFieldFailures } from '../utils/field-failures.js';
+import { readExerciseEvents, readFieldFailures } from '../utils/field-failures.js';
 import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 // The repeat-failure-rate rollup is the ONE canonical formula in premise-core
 // (TD-2026-06-19-007) — shared with `paradigm doctor` so the metric never
@@ -39,8 +39,9 @@ import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 // field-failures.ts; only the read + rollup is shared.
 // Scoped learning: certifications are read through field-failures (the union of
 // every home), so a transferable:true promotion's user-home cert is counted.
-import { computeRepeatFailureRate } from '@a-company/premise-core';
-import { readClassroomCertifications } from '../utils/field-failures.js';
+import { computeRepeatFailureRate, NO_EXERCISE_WRITER_NOTICE } from '@a-company/premise-core';
+import { readClassroomCertifications, certEvidenceState } from '../utils/field-failures.js';
+import { SURVIVAL_WINDOW_DAYS } from '../utils/decay.js';
 
 export function getClassroomToolsList() {
   return [
@@ -154,7 +155,7 @@ export function getClassroomToolsList() {
     {
       name: 'paradigm_classroom_status',
       description:
-        'Read-only Classroom summary per agent: field-failures, certifications (pending/survived/overturned), and repeat-failure-rate. This is the rollup the doctor metric reuses. ~250 tokens.',
+        'Read-only Classroom summary per agent: field-failures (confounded ones counted apart), certifications (pending/unproven/survived/overturned), and repeat-failure-rate. `survived` counts only exercise-evidenced survivals; aged-but-unexercised certs and legacy aged-only survivals read `unproven` and are not in the rate. When the exercises ledger is empty it says so plainly (`survival`: no exercise events recorded yet, no cert can survive). ~250 tokens.',
       inputSchema: {
         type: 'object',
         properties: { agent: { type: 'string', description: 'Filter to one agent (omit for all)' } },
@@ -164,7 +165,7 @@ export function getClassroomToolsList() {
     {
       name: 'paradigm_classroom_promote',
       description:
-        'Gated promotion of a SINGLE journal entry to the notebook (TD-2026-06-25-044, the "two-loops" resolution). This is the gated `/class` sign-off path: a human ruling IS the gate, so there is NO confidence-0.8 threshold. Writes a `pending` certification stamped certifiedBy: peer|quorum (NOT the legacy `gate`). ~100 tokens.',
+        'Gated promotion of a SINGLE journal entry to the notebook (TD-2026-06-25-044, the "two-loops" resolution). This is the gated `/class` sign-off path: a human ruling IS the gate, so there is NO confidence-0.8 threshold. Writes a `pending` certification stamped certifiedBy: peer|quorum (NOT the legacy `gate`). Checks the journal entry\'s optional `evidence` against the ledgers and returns `evidenceStrength` plus a `warnings` list when it is none or confounded-only (advisory: never refuses). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -308,12 +309,23 @@ export async function handleClassroomTool(
       const filterAgent = args.agent as string | undefined;
       const failures = readFieldFailures(ctx.rootDir);
       const certs = readClassroomCertifications(ctx.rootDir);
+      // Ruling 6: an empty exercises ledger means no cert CAN survive, so a null
+      // rate is not "nothing happened yet". Say so plainly instead of a silent null.
+      const noExerciseWriter = readExerciseEvents(ctx.rootDir).length === 0;
 
       // The repeat-failure-rate is computed by premise-core's canonical rollup
       // (shared with `paradigm doctor`). We map its per-agent { resolved,
       // overturned, rate } onto this tool's stable output shape (which also
       // reports pending/survived counts + field-failures).
-      const rollup = computeRepeatFailureRate(certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
+      // requireExercise: a `survived` row without exercise evidence (minted by the
+      // pre-gate aging timer) is `unproven`, not resolved (TD-2026-07-01-401).
+      const rollup = computeRepeatFailureRate(
+        certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })),
+        { requireExercise: true },
+      );
+      // Read-time evidence state: `unproven` is derived, never stored.
+      const stateCtx = { now: Date.now(), survivalWindowDays: SURVIVAL_WINDOW_DAYS };
+      const stateOf = (c: (typeof certs)[number]) => certEvidenceState(c, stateCtx);
 
       // Per-agent rollup.
       const agents = new Set<string>();
@@ -325,25 +337,33 @@ export async function handleClassroomTool(
         if (filterAgent && agent !== filterAgent) continue;
         const agentFailures = failures.filter(f => f.agent === agent);
         const agentCerts = certs.filter(c => c.agent === agent);
-        const overturned = agentCerts.filter(c => c.outcome === 'overturned').length;
-        const survived = agentCerts.filter(c => c.outcome === 'survived').length;
-        const pending = agentCerts.filter(c => c.outcome === 'pending').length;
-        // Canonical rate from premise-core (null until ≥1 cert resolves).
+        const states = agentCerts.map(stateOf);
+        const overturned = states.filter(st => st === 'overturned').length;
+        const survived = states.filter(st => st === 'survived').length;
+        const pending = states.filter(st => st === 'pending').length;
+        const unproven = states.filter(st => st === 'unproven').length;
+        // Legacy aged-only survivals: still written `survived`, read `unproven`.
+        const legacyAgedSurvived = agentCerts.filter(c => c.outcome === 'survived' && stateOf(c) === 'unproven').length;
+        // Canonical rate from premise-core (null until ≥1 EXERCISED cert resolves).
         const repeatFailureRate = rollup.perAgent[agent]?.rate ?? null;
         perAgent[agent] = {
           fieldFailures: agentFailures.length,
-          certifications: { total: agentCerts.length, pending, survived, overturned },
+          confoundedFailures: agentFailures.filter(f => f.attribution === 'confounded').length,
+          certifications: { total: agentCerts.length, pending, unproven, survived, overturned, legacyAgedSurvived },
           repeatFailureRate,
+          ...(repeatFailureRate === null && noExerciseWriter ? { repeatFailureRateNote: NO_EXERCISE_WRITER_NOTICE } : {}),
         };
       }
 
       return {
         handled: true,
         text: JSON.stringify({
+          ...(noExerciseWriter ? { survival: NO_EXERCISE_WRITER_NOTICE } : {}),
           totals: {
             fieldFailures: failures.length,
             certifications: certs.length,
             overturned: certs.filter(c => c.outcome === 'overturned').length,
+            unproven: certs.filter(c => stateOf(c) === 'unproven').length,
           },
           perAgent,
         }, null, 2),

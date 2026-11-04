@@ -1,16 +1,51 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { doctorCommand } from './doctor/index.js';
 import { createTempProject } from '../test-utils.js';
 
 let cleanup: (() => void) | undefined;
+// Isolate from the real ~/.claude (always-on census, hook health): HOME and
+// USERPROFILE point at an empty temp dir, and the healthy-path tests also pass
+// it explicitly as doctorCommand's homeDir.
+const realHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+let fakeHome = '';
+beforeEach(() => {
+  fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-home-'));
+  process.env.HOME = fakeHome;
+  process.env.USERPROFILE = fakeHome;
+});
 
 afterEach(() => {
   cleanup?.();
   cleanup = undefined;
   vi.restoreAllMocks();
+  for (const [k, v] of Object.entries(realHome)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  fs.rmSync(fakeHome, { recursive: true, force: true });
 });
+
+/** A project that passes every doctor check. */
+function healthyProject(opts: { withGit?: boolean } = {}): string {
+  const { rootDir, cleanup: c } = createTempProject({
+    withSpecs: true,
+    withDocs: true,
+    withPurpose: true,
+    withScanIndex: true,
+    ...(opts.withGit ? { withGit: true } : {}),
+  });
+  cleanup = c;
+  fs.mkdirSync(path.join(rootDir, '.paradigm', 'prompts'), { recursive: true });
+  fs.writeFileSync(path.join(rootDir, '.paradigm', 'specs', '.index.yaml'), 'version: 1.0.0\ndescription: stub\n', 'utf8');
+  fs.writeFileSync(path.join(rootDir, '.paradigm', 'prompts', '.index.yaml'), 'version: 1.0.0\ndescription: stub\n', 'utf8');
+  fs.writeFileSync(path.join(rootDir, '.premise'), '', 'utf8');
+  fs.mkdirSync(path.join(rootDir, 'plugins', 'paradigm'), { recursive: true });
+  fs.writeFileSync(path.join(rootDir, 'plugins', 'paradigm', 'hooks.json'), '{}', 'utf8');
+  return rootDir;
+}
 
 describe('doctorCommand', () => {
   it('returns true for healthy project', async () => {
@@ -30,8 +65,15 @@ describe('doctorCommand', () => {
     // Create hooks so the hooks check passes
     fs.mkdirSync(path.join(rootDir, 'plugins', 'paradigm'), { recursive: true });
     fs.writeFileSync(path.join(rootDir, 'plugins', 'paradigm', 'hooks.json'), '{}', 'utf8');
-    const result = await doctorCommand({ quiet: true, rootDir });
+    const result = await doctorCommand({ quiet: true, rootDir, homeDir: fakeHome });
     expect(result).toBe(true);
+  });
+
+  it('B1: Paradigm always-on text over the cap is advisory, so the project stays healthy', async () => {
+    const rootDir = healthyProject();
+    fs.appendFileSync(path.join(rootDir, '.paradigm', 'config.yaml'), '\ncontext:\n  always-on-max-chars: 100\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), 'x'.repeat(150), 'utf8');
+    expect(await doctorCommand({ quiet: true, rootDir, homeDir: fakeHome })).toBe(true);
   });
 
   it('reports an outdated Paradigm git hook (still running npx paradigm)', async () => {
@@ -53,11 +95,11 @@ describe('doctorCommand', () => {
     fs.writeFileSync(hook, '#!/bin/sh\n# Paradigm pre-push hook - reindex history before pushing\n# Installed by: paradigm hooks install\nnpx paradigm history reindex\n');
     const lines: string[] = [];
     vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { lines.push(a.join(' ')); });
-    expect(await doctorCommand({ rootDir })).toBe(false);
+    expect(await doctorCommand({ rootDir, homeDir: fakeHome })).toBe(false);
     expect(lines.join('\n')).toMatch(/Git pre-push hook[\s\S]*Outdated \(v1, current v3\) and still runs `npx paradigm`/);
     // Without the hook the same project is healthy.
     fs.rmSync(hook);
-    expect(await doctorCommand({ quiet: true, rootDir })).toBe(true);
+    expect(await doctorCommand({ quiet: true, rootDir, homeDir: fakeHome })).toBe(true);
   });
 
   it('detects missing .paradigm/', async () => {
@@ -184,7 +226,8 @@ describe('doctorCommand', () => {
       path.join(eventsDir, 'classroom-certifications.jsonl'),
       [
         JSON.stringify({ agent: 'builder', entryId: 'e1', outcome: 'overturned' }),
-        JSON.stringify({ agent: 'builder', entryId: 'e2', outcome: 'survived' }),
+        // an EVIDENCED survival (T-2026-11-03-001): exercised and probed, so it counts as resolved
+        JSON.stringify({ agent: 'builder', entryId: 'e2', outcome: 'survived', exercise: { timesExercised: 2, adversarialProbes: 1 } }),
       ].join('\n') + '\n',
       'utf8',
     );
@@ -202,6 +245,36 @@ describe('doctorCommand', () => {
     expect(allOutput).toMatch(/Learning census\s+classroom-certifications: repo 2 \(legacy 2\) · user 0 · machine 0 · last write/);
     // The healthy "loop is correcting" advisory fires on the overturned cert.
     expect(allOutput).toMatch(/loop is correcting/i);
+  });
+
+  it('classroom health (ruling 6): an empty exercises ledger is said plainly, not a silent n/a', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const rootDir = healthyProject();
+    const eventsDir = path.join(rootDir, '.paradigm', 'events');
+    fs.mkdirSync(eventsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(eventsDir, 'classroom-certifications.jsonl'),
+      JSON.stringify({ agent: 'builder', entryId: 'e1', outcome: 'pending', ts: '2026-01-01T00:00:00.000Z' }) + '\n',
+      'utf8',
+    );
+    const output = async () => {
+      consoleSpy.mockClear();
+      writeSpy.mockClear();
+      await doctorCommand({ rootDir, homeDir: fakeHome });
+      return consoleSpy.mock.calls.map((a) => a.join(' ')).join('\n') + '\n' + writeSpy.mock.calls.map((a) => String(a[0])).join('');
+    };
+    const empty = await output();
+    expect(empty).toContain('no exercise events recorded yet (spec sub-phase 1): no cert can survive');
+    expect(empty).not.toContain('n/a (no certs resolved yet)');
+
+    fs.writeFileSync(
+      path.join(eventsDir, 'classroom-exercises.jsonl'),
+      JSON.stringify({ ts: '2026-01-02T00:00:00.000Z', certEntryId: 'e1', orchestrationId: 'o1', agent: 'builder', kind: 'application' }) + '\n',
+      'utf8',
+    );
+    const withRows = await output();
+    expect(withRows).not.toContain('no exercise events recorded yet');
   });
 
   it('quiet mode suppresses doctor console output', async () => {

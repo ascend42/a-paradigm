@@ -92,7 +92,7 @@ function writeSource(
 ): string {
   const dir = path.join(scopeDir, id);
   fs.mkdirSync(dir, { recursive: true });
-  const fm = { name: id, description: `The ${id} skill`, ...extra, metadata: { paradigm: meta({ id, ...m }) } };
+  const fm = { name: id, description: `The ${id} skill. Use when testing ${id}.`, ...extra, metadata: { paradigm: meta({ id, ...m }) } };
   fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\n${yaml.dump(fm)}---\n${body}`);
   return dir;
 }
@@ -191,6 +191,15 @@ describe('lint', () => {
     const issues = lintSkill(resolveSkill('demo-skill', env)!, env);
     expect(issues.find(i => i.code === 'SKILL_IS_NOTEBOOK')?.level).toBe('warn');
     expect(hasLintErrors(issues)).toBe(false);
+  });
+
+  it('DESCRIPTION_NO_TRIGGER warns when the description names no situation, never errors', () => {
+    writeSource(globDir(), 'demo-skill', {}, BODY, { description: 'Notes about deploys' });
+    const bare = lintSkill(resolveSkill('demo-skill', env)!, env);
+    expect(bare.find(i => i.code === 'DESCRIPTION_NO_TRIGGER')?.level).toBe('warn');
+    expect(hasLintErrors(bare)).toBe(false);
+    writeSource(globDir(), 'demo-skill', {}, BODY, { description: 'Deploy checklist. Use when the user says "ship it".' });
+    expect(codes(resolveSkill('demo-skill', env)!)).not.toContain('DESCRIPTION_NO_TRIGGER');
   });
 
   it('OWNED_SKILL_CAP warns past 5', () => {
@@ -654,7 +663,7 @@ describe('hardening', () => {
     const a = adoptSkill('demo-skill', { env });
     expect(a.refused).toBe('allowed-tools-widened');
     expect(a.frontmatterDiff!.allowedTools).toMatchObject({ added: ['Bash(rm:*)'], widened: true });
-    expect(a.frontmatterDiff!.description).toEqual({ from: 'The demo-skill skill', to: 'Changed desc' });
+    expect(a.frontmatterDiff!.description).toEqual({ from: 'The demo-skill skill. Use when testing demo-skill.', to: 'Changed desc. Use when testing demo-skill.' });
     const ok = adoptSkill('demo-skill', { env, confirmAllowedTools: true });
     expect(ok.ok).toBe(true);
     expect(resolveSkill('demo-skill', env)!['allowed-tools']).toBe('Read Grep Bash(rm:*)');

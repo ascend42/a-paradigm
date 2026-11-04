@@ -401,11 +401,11 @@ describe('instruction-vagueness', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Integration: runContextAudit returns all 7 checks
+// Integration: runContextAudit returns every check
 // ---------------------------------------------------------------------------
 
 describe('runContextAudit', () => {
-  it('returns results for all 7 checks', async () => {
+  it('returns results for every check', async () => {
     suppressOutput();
     const { rootDir, cleanup: c } = createTempProject({ withScanIndex: true });
     cleanup = c;
@@ -418,5 +418,72 @@ describe('runContextAudit', () => {
     expect(checks).toContain('orphaned-symbols');
     expect(checks).toContain('stale-portal');
     expect(checks).toContain('instruction-vagueness');
+    expect(checks).toContain('always-on-budget');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 10: always-on-budget (advisory)
+// ---------------------------------------------------------------------------
+
+describe('always-on-budget', () => {
+  function setup(): { rootDir: string; home: string } {
+    const { rootDir, cleanup: c } = createTempProject();
+    const home = fs.mkdtempSync(path.join(rootDir, '..', 'aob-home-'));
+    cleanup = () => { c(); fs.rmSync(home, { recursive: true, force: true }); };
+    return { rootDir, home };
+  }
+  const budgetResults = (results: ContextAuditResult[]) => results.filter((r) => r.check === 'always-on-budget');
+
+  it('reports per-surface chars and estimated tokens, ok under the default cap', async () => {
+    suppressOutput();
+    const { rootDir, home } = setup();
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), 'x'.repeat(400), 'utf8');
+    const results = budgetResults(await runContextAudit(rootDir, { quiet: true, homeDir: home }));
+    const claude = results.find((r) => r.message.startsWith('claude-code'));
+    expect(claude?.status).toBe('ok');
+    expect(claude?.message).toContain('400 chars (~100 tokens est.)');
+    expect(claude?.details?.[0]).toContain('CLAUDE.md');
+    expect(results.some((r) => r.status === 'warn' || r.status === 'error')).toBe(false);
+  });
+
+  it('is advisory (never warn or error) over the configured cap and counts only Paradigm text', async () => {
+    suppressOutput();
+    const { rootDir, home } = setup();
+    fs.appendFileSync(path.join(rootDir, '.paradigm', 'config.yaml'), '\ncontext:\n  always-on-max-chars: 100\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), 'x'.repeat(150), 'utf8');
+    // User-owned always-on text is census only, even when huge.
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'y'.repeat(50000), 'utf8');
+    const results = budgetResults(await runContextAudit(rootDir, { quiet: true, homeDir: home }));
+    const claude = results.find((r) => r.message.startsWith('claude-code'));
+    expect(claude?.status).toBe('advisory');
+    expect(claude?.message).toContain('150 chars');
+    expect(claude?.message).toContain('over the 100-char cap');
+    const census = results.find((r) => r.message.startsWith('census'));
+    expect(census?.status).toBe('ok');
+    expect(census?.details?.some((d) => d.includes('~/.claude/CLAUDE.md') && d.includes('50,000'))).toBe(true);
+    // B1: over the cap never counts against doctor/shift health.
+    expect(results.some((r) => r.status === 'error' || r.status === 'warn')).toBe(false);
+  });
+
+  it('counts alwaysApply paradigm rules and skill descriptions on their surfaces', async () => {
+    suppressOutput();
+    const { rootDir, home } = setup();
+    const rules = path.join(rootDir, '.cursor', 'rules');
+    fs.mkdirSync(rules, { recursive: true });
+    fs.writeFileSync(path.join(rules, 'paradigm-core.mdc'), '---\ndescription: core\nalwaysApply: true\n---\nbody', 'utf8');
+    fs.writeFileSync(path.join(rules, 'paradigm-cmds.mdc'), '---\ndescription: cmds\nalwaysApply: false\n---\nbody', 'utf8');
+    const skill = path.join(rootDir, '.claude', 'skills', 'pdg-demo');
+    fs.mkdirSync(skill, { recursive: true });
+    fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: pdg-demo\ndescription: Do the demo. Use when the user asks.\n---\nbody', 'utf8');
+    const results = budgetResults(await runContextAudit(rootDir, { quiet: true, homeDir: home }));
+    const cursor = results.find((r) => r.message.startsWith('cursor'));
+    expect(cursor?.details).toHaveLength(1);
+    expect(cursor?.details?.[0]).toContain('paradigm-core.mdc');
+    const claude = results.find((r) => r.message.startsWith('claude-code'));
+    expect(claude?.details?.[0]).toContain('pdg-* descriptions');
+    expect(claude?.details?.[0]).toContain('1 skill');
+    expect(claude?.message).toContain(`${'Do the demo. Use when the user asks.'.length} chars`);
   });
 });

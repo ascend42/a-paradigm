@@ -34,7 +34,8 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { listLearningStores } from './learning-stores.js';
 
-export const LEARNING_GUARD_SCHEMA = 'learning-guard:v3';
+// v4: scope gains the classroom-exercises ledger (TD-2026-07-01-401).
+export const LEARNING_GUARD_SCHEMA = 'learning-guard:v4';
 
 /** The PARADIGM_OVERRIDE id that lets one commit through (logged). */
 export const LEARNING_GUARD_OVERRIDE_ID = 'learning-guard';

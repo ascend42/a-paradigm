@@ -4,7 +4,7 @@ description: |
   Includes core setup validation and context audit checks for AI instruction file quality.
 features:
   context-audit-checks:
-    description: Context audit with 7 checks — stale-references, convention-contradictions, undocumented-stack, purpose-coverage, orphaned-symbols, stale-portal, instruction-vagueness
+    description: Context audit with 10 checks — stale-references, convention-contradictions, undocumented-stack, purpose-coverage, orphaned-symbols, stale-portal, instruction-vagueness, config-schema-validation, purpose-file-health, always-on-budget
     components:
       - '#context-audit'
 components:
@@ -20,7 +20,7 @@ components:
     type: handler
     file: packages/paradigm/src/commands/doctor/hook-health.ts
   doctor-handler:
-    description: 'Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. Warns on each Paradigm-owned git hook (.git/hooks/post-commit, pre-push) that #git-hook-state classes as outdated (below paradigm-hook-version 3, or still running `npx paradigm`), fix `paradigm hooks install`. v6.0.4 added ''info'' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it). Scoped learning S2: the classroom repeat-failure rate is grouped by home (certificationsByHome), one warn per home; liveness reads the union of the machine home and the frozen repo logs. Scoped learning S4: a Learning census info line per store (repo / user / machine counts, legacy, last write, learn-path skips), a Learning conflicts info line for Loid (repo vs user, never resolved), and the repeat-failure scoreboard labelled [population: repo|user|machine|legacy-prior].'
+    description: 'Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. Warns on each Paradigm-owned git hook (.git/hooks/post-commit, pre-push) that #git-hook-state classes as outdated (below paradigm-hook-version 3, or still running `npx paradigm`), fix `paradigm hooks install`. v6.0.4 added ''info'' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it). Scoped learning S2: the classroom repeat-failure rate is grouped by home (certificationsByHome), one warn per home; liveness reads the union of the machine home and the frozen repo logs. Scoped learning S4: a Learning census info line per store (repo / user / machine counts, legacy, last write, learn-path skips), a Learning conflicts info line for Loid (repo vs user, never resolved), and the repeat-failure scoreboard labelled [population: repo|user|machine|legacy-prior]. T-2026-11-03-001: the rate uses requireExercise, so a survived row without exercise evidence counts as unproven, not resolved. Ruling 6: when the classroom-exercises ledger is empty the block says plainly Survival: no exercise events recorded yet (spec sub-phase 1): no cert can survive (NO_EXERCISE_WRITER_NOTICE from premise-core), instead of a bare n/a rate. options.homeDir (default os.homedir()) is threaded to the context audit and hook health so tests stay off the real ~/.claude.'
     type: handler
     file: index.ts
     components:
@@ -39,7 +39,7 @@ components:
       - status
       - v6.0.4
   context-audit:
-    description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md). purpose-coverage skips gitignored source dirs (purpose-core filterGitIgnored; release/ by name outside git) so build and release output never counts, and counts a dir as covered only by the shared #purpose-coverage rule (own .purpose or a documenting ancestor; placeholders never count) (T-2026-10-27-003).
+    description: '10 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md). Check 10 always-on-budget (advisory, #always-on-budget) emits one result per surface (claude-code, cursor, agents-md) with chars and estimated tokens (chars/4) per file as details, advisory (never warn or error, so doctor and shift stay healthy; Judge B1) when the surface''s Paradigm-generated total exceeds context.always-on-max-chars (default 12000, a starting estimate), plus an ok census line for user-owned text (~/.claude/CLAUDE.md, MEMORY.md, non-Paradigm skills and rules; MCP tool schemas not measured) that is never warned on. runContextAudit accepts options.homeDir for tests. purpose-coverage skips gitignored source dirs (purpose-core filterGitIgnored; release/ by name outside git) so build and release output never counts, and counts a dir as covered only by the shared #purpose-coverage rule (own .purpose or a documenting ancestor; placeholders never count) (T-2026-10-27-003).'
     type: utility
     tags:
       - feature

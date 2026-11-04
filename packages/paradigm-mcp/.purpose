@@ -218,10 +218,10 @@ components:
       - '#AspectSearch'
       - '#AspectSuggest'
   ClassroomTools:
-    description: 'The Classroom MCP tools (TD-2026-06-19-007) — the curriculum-artifact surface the gated class + study-hall skills drive. paradigm_syllabus_record/list/get (per-agent .syllabus, gate-zero status), paradigm_scenario_record/list (the breaking-test-case bank), paradigm_classroom_status (per-agent field-failures + certifications + repeat-failure-rate; the rollup the doctor metric reuses). Handlers delegate to the syllabus + scenario loaders and the wave-1 field-failures ledger.'
+    description: 'The Classroom MCP tools (TD-2026-06-19-007) — the curriculum-artifact surface the gated class + study-hall skills drive. paradigm_syllabus_record/list/get (per-agent .syllabus, gate-zero status), paradigm_scenario_record/list (the breaking-test-case bank), paradigm_classroom_status (per-agent field-failures with confoundedFailures, certifications pending/unproven/survived/overturned + legacyAgedSurvived via certEvidenceState, repeat-failure-rate with requireExercise so aged-only survivals are unproven, not resolved; when the exercises ledger is empty it says plainly survival: no exercise events recorded yet (spec sub-phase 1), no cert can survive, plus repeatFailureRateNote on a null rate, ruling 6), paradigm_classroom_promote (gated promotion; returns evidenceStrength + warnings on confounded-only / contradicted, notes on none / cited). Handlers delegate to the syllabus + scenario loaders and the wave-1 field-failures ledger.'
     type: tool
     anchors:
-      - src/tools/classroom.ts:1-330
+      - src/tools/classroom.ts:1-395
     tags:
       - mcp
       - classroom

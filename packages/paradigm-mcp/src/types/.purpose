@@ -18,7 +18,7 @@ components:
     type: types
     tags: [skills, schema]
   NotebookTypes:
-    description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance"
+    description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance. Checkable lesson schema (advisory): optional cue (the shape of situation; context stays required) and evidence (LessonEvidence {ref, kind: scenario-outcome|probe-run|field-failure|source, verdict: helped|hurt|no-effect|confounded}), plus EvidenceStrength (none|cited|confounded-only|contradicted|supported, ruling 5). NotebookEntry.evidence is StoredLessonEvidence {ref, kind, verdict?}: the verdict is the LEDGER-derived one at promotion, absent for a source citation (F6). Verdicts must be derivable from ledger rows (see #lesson-evidence). No external schema co-ownership (the a-neverland agent-format coupling note is removed)."
     type: types
     tags: [notebooks, schema]
   AmbientTypes:
@@ -26,7 +26,7 @@ components:
     type: types
     tags: [ambient, coordination, event-stream, schema, partners]
   KnowledgeStreamTypes:
-    description: "Type definitions for three knowledge streams — WorkLogEntry, JournalEntry, TeamDecision, KnowledgeStream"
+    description: "Type definitions for three knowledge streams — WorkLogEntry, JournalEntry, TeamDecision, KnowledgeStream. JournalEntry carries the optional checkable-lesson cue + evidence (LessonEvidence from notebooks.ts), copied to the notebook on promotion."
     type: types
     tags: [knowledge-streams, work-log, journal, decisions, schema]
   DataPolicyTypes:
