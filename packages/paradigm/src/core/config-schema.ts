@@ -82,6 +82,13 @@ const metricsSchema = z.object({
   local_snapshots_enabled: z.boolean().optional(),
 }).passthrough();
 
+// T-2026-11-04-002: the Classroom re-probe step. `ask` (default): the class
+// skill lists pending certs with a scenario count and rough token cost and runs
+// only on the human's yes. `off`: the step is skipped. Nothing re-probes on its own.
+const classroomSchema = z.object({
+  reprobe: z.enum(['ask', 'off']).optional(),
+}).passthrough();
+
 export const paradigmConfigSchema = z.object({
   version: z.string(),
   project: z.string(),
@@ -100,6 +107,7 @@ export const paradigmConfigSchema = z.object({
   context: contextSchema.optional(),
   probe: probeSchema.optional(),
   metrics: metricsSchema.optional(),
+  classroom: classroomSchema.optional(),
   states: z.record(z.string(), z.unknown()).optional(),
   'custom-symbols': z.record(z.string(), symbolDefinitionSchema).optional(),
 }).passthrough(); // Allow unknown top-level keys (warn, don't error)
@@ -113,7 +121,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'agent-guidelines', 'symbol-system', 'tag-bank',
   'component_types', 'logging', 'purpose-required',
   'conventions', 'workspace', 'limits', 'ai-agent',
-  'context', 'probe', 'metrics', 'states', 'custom-symbols',
+  'context', 'probe', 'metrics', 'classroom', 'states', 'custom-symbols',
   'docs', 'features', 'enforcement', 'model-resolution',
 ]);
 

@@ -78,7 +78,7 @@ export const FAMILY_META: FamilyMeta[] = [
   // ── On-demand tier (14) ──
   { name: 'paradigm_sentinel', tier: 'on-demand', keys: ['sentinel'], detector: 'sentinel', description: 'Sentinel incidents, patterns, logs, traces, metrics.' },
   { name: 'paradigm_symphony', tier: 'on-demand', keys: ['symphony'], detector: 'symphony', description: 'Symphony multi-agent relay: send, poll, peek, thread, status, files.' },
-  { name: 'paradigm_classroom', tier: 'on-demand', keys: ['classroom'], description: 'Classroom: syllabi, scenarios, status, promote.' },
+  { name: 'paradigm_classroom', tier: 'on-demand', keys: ['classroom'], description: 'Classroom: syllabi, scenarios (record, list, scenario_run probes), status (probeBreakRate, reprobe, pendingCerts), promote.' },
   { name: 'paradigm_habits', tier: 'on-demand', keys: ['habits'], detector: 'habits', description: 'Habits: list, check, add, edit, remove, status, practice context.' },
   { name: 'paradigm_persona', tier: 'on-demand', keys: ['persona', 'personas'], detector: 'personas', description: 'Personas: create, get, list, update, delete, steps, run, coverage, validate.' },
   { name: 'paradigm_university', tier: 'on-demand', keys: ['university'], detector: 'university', description: 'University packs: list packs, search content.' },

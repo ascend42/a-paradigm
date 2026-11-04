@@ -474,6 +474,10 @@
         "readOnlyHint": false,
         "destructiveHint": false
       },
+      "scenario_run": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
       "syllabus_get": {
         "readOnlyHint": true,
         "destructiveHint": false

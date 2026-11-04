@@ -31,6 +31,7 @@ import {
 } from '@a-company/premise-core';
 import {
   appendLearningRows,
+  effectiveHome,
   readLearningRows,
   rewriteLearningRows,
   type LearningHome,
@@ -72,7 +73,9 @@ export type FieldFailureSignal =
   | 'human-override'
   | 'test-fail'
   | 'decision-reopened'
-  | 'decision-diverged';
+  | 'decision-diverged'
+  /** T-2026-11-04-002: a human-confirmed scenario run (recordProbeRun) broke the entry. */
+  | 'probe-break';
 
 export interface FieldFailureRow {
   ts: string;
@@ -173,6 +176,20 @@ export interface ExerciseEvent {
   orchestrationId: string;
   agent: string;
   kind: 'application' | 'adversarial-probe' | 'break-attempt';
+  /**
+   * Scoped learning: the home this row was written to (stamped by
+   * appendLearningRows; tagged by the reader). Survival counts only events in
+   * the cert's own home (T-2026-11-04-002).
+   */
+  home?: LearningHome;
+  /** Probe runs: who ran the probe (never the learner). */
+  assessor?: string;
+  /** Probe runs: the scenario the probe came from. */
+  scenarioId?: string;
+  /** Who wrote the row (currentAuthor), for provenance. */
+  author?: string;
+  /** A confounded exercise cannot be pinned on this entry: it never counts. Absent = attributable. */
+  attribution?: 'attributable' | 'confounded';
 }
 
 
@@ -195,7 +212,7 @@ function readJsonl<T>(filePath: string): T[] {
 /**
  * Append one field-failure row. Never pruned: it is a source of truth (see below).
  */
-export function appendFieldFailure(rootDir: string, row: FieldFailureRow): void {
+export function appendFieldFailure(rootDir: string, row: FieldFailureRow): boolean {
   try {
     const dir = path.join(rootDir, EVENTS_DIR);
     fs.mkdirSync(dir, { recursive: true });
@@ -204,12 +221,14 @@ export function appendFieldFailure(rootDir: string, row: FieldFailureRow): void 
     // Loid (re-review): NEVER pruned, like the exercises ledger. surviveCertification's break check, the brokeIn
     // exclusions and the reducer's durable dedupe all read it: a pruned break would stop blocking survival, let its
     // orchestration count as an exercise, and let a still-present verdict record the break again.
+    return true;
   } catch (err) {
     log.component('#field-failures').warn('failed to record field failure', {
       agent: row.agent,
       orchestrationId: row.orchestrationId,
       error: err instanceof Error ? err.message : String(err),
     });
+    return false;
   }
 }
 
@@ -236,21 +255,25 @@ export function makeFailureId(orchestrationId: string, entryId: string): string 
  * NOT pruned (F7): this ledger is the source of truth a cert's survival is
  * rebuilt from, so trimming it to MAX_ENTRIES would silently erase the evidence
  * that minted a survival and make the floor unreachable on a busy project.
+ *
+ * @returns true when at least one row was written.
  */
 export function appendExerciseEvents(
   rootDir: string,
   rows: ExerciseEvent[],
   opts: { home?: LearningHome } = {},
-): void {
+): boolean {
   const valid = rows.filter(r => r.certEntryId && r.orchestrationId);
-  if (valid.length === 0) return;
+  if (valid.length === 0) return false;
   try {
     appendLearningRows('classroom-exercises', rootDir, valid, { home: opts.home });
+    return true;
   } catch (err) {
     log.component('#field-failures').warn('failed to record exercise events', {
       count: valid.length,
       error: err instanceof Error ? err.message : String(err),
     });
+    return false;
   }
 }
 
@@ -264,6 +287,32 @@ export function readExerciseEvents(rootDir: string): ExerciseEvent[] {
 }
 
 /**
+ * Exercise events as survival reads them (T-2026-11-04-002): the union of homes,
+ * each row judged by its PHYSICAL home (the file it sits in, mapped through
+ * effectiveHome: a non-git root's repo path holds user data). A row is kept only
+ * when its stamped home, if any, is that physical home, and it is tagged with
+ * it (never the configured default). So a committed repo file cannot carry a
+ * row that claims to be user-home evidence.
+ */
+export function readHomedExerciseEvents(rootDir: string): ExerciseEvent[] {
+  try {
+    const out: ExerciseEvent[] = [];
+    readLearningRows<ExerciseEvent>('classroom-exercises', rootDir, {
+      filter: (row, at) => {
+        const physical = effectiveHome(at, rootDir);
+        const stamped = row.home === undefined ? physical : effectiveHome(row.home, rootDir);
+        if (stamped !== physical) return false;
+        out.push({ ...row, home: physical });
+        return false; // collected here, with the physical home; the union tags are not used
+      },
+    });
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Derive a cert's exercise counters from the exercises ledger — never from the
  * clock. One receipt counts once: events are deduped by
  * `(certEntryId, orchestrationId)`. Only events at or after `sinceIso` (the
@@ -271,12 +320,17 @@ export function readExerciseEvents(rootDir: string): ExerciseEvent[] {
  * the same entry is not reused. A receipt whose orchestration also produced a
  * field-failure row naming this entry (attributable OR confounded) did not
  * demonstrably hold, so it is excluded.
+ *
+ * T-2026-11-04-002: when `home` is given (the cert's home), only events whose
+ * home matches count, so a committed repo row cannot mint survival for a
+ * user-home cert. Confounded exercise rows never count.
  */
 export function exerciseIntensityFor(
   entryId: string,
   exercises: ExerciseEvent[],
   failures: FieldFailureRow[],
   sinceIso?: string,
+  home?: LearningHome,
 ): ExerciseIntensity {
   const since = sinceIso ? Date.parse(sinceIso) : NaN;
   const brokeIn = new Set<string>();
@@ -286,6 +340,8 @@ export function exerciseIntensityFor(
   const receipts = new Map<string, { probe: boolean; breakAttempt: boolean; ts?: string }>();
   for (const ev of exercises) {
     if (ev.certEntryId !== entryId || !ev.orchestrationId) continue;
+    if (ev.attribution === 'confounded') continue;
+    if (home !== undefined && ev.home !== home) continue;
     if (brokeIn.has(ev.orchestrationId)) continue;
     if (!Number.isNaN(since)) {
       const t = Date.parse(ev.ts);
@@ -380,7 +436,8 @@ export function overturnCertification(
  *
  * Refuses (returns false, writes nothing) when:
  *   - the first pending row's exercise counters (from {@link exerciseIntensityFor},
- *     counting only receipts at/after the cert's ts) miss the floor
+ *     counting only receipts at/after the cert's ts and in the cert's own home)
+ *     miss the floor
  *     (>= K_MIN_EXERCISE exercises AND >= MIN_ADVERSARIAL_PROBES probes);
  *   - an ATTRIBUTABLE field failure for `entryId` landed at/after the cert's ts
  *     (the field broke it; overturn wins). Confounded breaks do not block, but
@@ -397,15 +454,18 @@ export function surviveCertification(
   entryId: string
 ): boolean {
   try {
-    const exercises = readExerciseEvents(rootDir);
+    const exercises = readHomedExerciseEvents(rootDir);
     const failures = readFieldFailures(rootDir);
     let considered = false;
     let flipped = false;
     // Only the FIRST still-pending cert for the entry is considered: a later
     // pending row is younger, so it cannot have more qualifying receipts.
-    rewriteLearningRows<ClassroomCertRow>('classroom-certifications', rootDir, row => {
+    rewriteLearningRows<ClassroomCertRow>('classroom-certifications', rootDir, (row, at) => {
       if (considered || row.entryId !== entryId || row.outcome !== 'pending') return undefined;
       considered = true;
+      // The cert's own home: its stamped home, else the file it was read from,
+      // mapped the way the writers map it (no repo home here → user).
+      const certHome: LearningHome = effectiveHome(row.home ?? at, rootDir);
       const since = typeof row.ts === 'string' ? row.ts : undefined;
       const sinceMs = since ? Date.parse(since) : NaN;
       const broken = failures.some(f =>
@@ -413,7 +473,7 @@ export function surviveCertification(
         && (f.attributedEntryIds ?? []).includes(entryId)
         && (Number.isNaN(sinceMs) || Number.isNaN(Date.parse(f.ts)) || Date.parse(f.ts) >= sinceMs));
       if (broken) return undefined;
-      const exercise = exerciseIntensityFor(entryId, exercises, failures, since);
+      const exercise = exerciseIntensityFor(entryId, exercises, failures, since, certHome);
       if (!meetsSurvivalFloor(exercise)) return undefined;
       flipped = true;
       return {

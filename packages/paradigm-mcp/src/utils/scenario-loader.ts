@@ -46,6 +46,12 @@ export interface ScenarioOutcome {
   assessor: string;
   human_confirmed: boolean;
   at: string;
+  /** Probe runs (T-2026-11-04-002): the learning the run targeted (notebook or journal id). */
+  learning_ref?: string;
+  /** Probe runs: why the run did not count, when it did not (the outcome is still recorded). */
+  refused?: string;
+  /** Free-text note from the assessor. */
+  reason?: string;
 }
 
 export interface Scenario {
@@ -67,6 +73,11 @@ export interface Scenario {
    * `paradigm skill certify`; ignored by notebook assessment.
    */
   fixture?: string;
+  /**
+   * Who authored the scenario (T-2026-11-04-002). A scenario the learner wrote
+   * is not a probe of the learner: recordProbeRun refuses to count it.
+   */
+  authored_by?: string;
 }
 
 export interface ScenarioIndexEntry {
@@ -87,6 +98,14 @@ export interface ScenarioIndex {
     retired: number;
     byOrigin: Record<ScenarioOrigin, number>;
   };
+}
+
+/**
+ * A scenario id is a file name under the bank: letters, digits, `.`, `_`, `-`,
+ * and never `..` (Judge 4: an id must not walk out of the scenarios dir).
+ */
+export function isSafeScenarioId(id: unknown): id is string {
+  return typeof id === 'string' && /^[A-Za-z0-9._-]+$/.test(id) && !id.includes('..');
 }
 
 // ────────────────────────────────────────────────────────
@@ -191,6 +210,7 @@ export async function recordScenario(
     outcome_history: scenario.outcome_history || [],
     repeat_failures: scenario.repeat_failures ?? 0,
     status: scenario.status || 'active',
+    ...(scenario.authored_by ? { authored_by: scenario.authored_by } : {}),
   };
 
   fs.writeFileSync(filePath, yaml.dump(full, { lineWidth: -1, noRefs: true }), 'utf8');

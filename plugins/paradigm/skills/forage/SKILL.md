@@ -1,6 +1,6 @@
 ---
 name: forage
-description: Send an agent on an EXPEDITION into the wild — Reddit, Medium, engineering blogs, Anthropic docs — to grow its knowledge around a topic. Returns CITED candidate learnings (never certifies), staged at the floor trust tier for the gated class to adjudicate. Use when the user says "forage", "send an expedition", "go research X", "have <agent> learn about Y in the wild", or schedules a breadth scout.
+description: Send an agent on an EXPEDITION into the wild — Reddit, Medium, engineering blogs, Anthropic docs — to grow its knowledge around a topic. Returns CITED candidate learnings (never certifies), staged at the floor trust tier for the gated class to adjudicate. Nothing schedules it by default: it runs when the human starts it, and the human may choose to schedule a breadth scout. Use when the user says "forage", "send an expedition", "go research X", "have <agent> learn about Y in the wild", or schedules a breadth scout.
 ---
 
 # Forage — expeditions into the wild (external knowledge)
@@ -13,7 +13,7 @@ This is the **outward-facing** half of study hall. An agent goes to the open web
 
 ## Axes
 - **`--axis depth`** (default; Matt-directed): a DEEP dive on one named question (e.g. *"new paradigms for organizing TypeScript projects"*). Few sturdy candidates (2–4), richer `sourceSet`, a "where the debate stands / who disagrees" synthesis.
-- **`--axis breadth`** (scheduled-scoutable, **capped**): a WIDE scout to widen an area (often from a Roster amber gap). Many shallow leads (8–12); aggressive distillation; the overflow becomes **syllabus open-questions**, not staged learnings.
+- **`--axis breadth`** (**capped**; the human may choose to schedule it, never a default): a WIDE scout to widen an area (often from a Roster amber gap). Many shallow leads (8–12); aggressive distillation; the overflow becomes **syllabus open-questions**, not staged learnings.
 
 ## The expedition (owning agent + topic)
 1. **Scope it.** owning agent · topic · axis · source allowlist (default: Reddit · Medium · articles · Anthropic docs). **Scholar is the forager-of-record** (citation discipline is his competence); the **owning agent owns** the resulting candidates.
@@ -24,7 +24,7 @@ This is the **outward-facing** half of study hall. An agent goes to the open web
    - **NOVEL** → stage fresh.
    - **DUPLICATE** → drop; note "external corroboration" on the existing entry's `sourceSet`; no new card.
    - **CONFLICTS** with an existing entry → stage as a **CHALLENGER** (`parentId` set, `lineageType:'capture'`) so the gate adjudicates head-to-head. A conflict with a **SETTLED** learning requires the human's **explicit consent** to put settled curriculum on trial — flag it, do **not** auto-stage the challenge (TD-2026-06-25-044).
-6. **Intake evidence-gate — "no scenario, no assessment," applied HERE.** Before a candidate may stage, it must be paired with a **breaking scenario authored against OUR repo** (`paradigm_classroom` (op `scenario_record`)): grep/read the actual code to find where this "best practice" collides with how we already build. A candidate with no local-collision attempt is **not a candidate** — it stays in **Field Notes** (`.paradigm/curriculum/expeditions/E-<id>.jsonl`), un-stageable.
+6. **Intake evidence-gate — "no scenario, no assessment," applied HERE.** Before a candidate may stage, it must be paired with a **breaking scenario authored against OUR repo** (`paradigm_classroom` (op `scenario_record`, `authored_by` = the forager)): grep/read the actual code to find where this "best practice" collides with how we already build. A candidate with no local-collision attempt is **not a candidate** — it stays in **Field Notes** (`.paradigm/curriculum/expeditions/E-<id>.jsonl`), un-stageable.
 7. **STAGE at the floor (never certify).** `paradigm_journal({op:'record', agent, trigger: 'pattern_discovered', insight, confidence_after, provenance: { source: 'external', trust: 'external', sourceSet: [urls] }, tags: ['expedition', 'source:external', 'cite:<host>'] })`. Candidates land in the **same Docket** the gated review consumes. They **never** touch notebooks. Also append the full haul to `.paradigm/curriculum/expeditions/E-<id>.jsonl`.
 
 ## The report

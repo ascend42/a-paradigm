@@ -56,6 +56,13 @@ export interface ParadigmConfig {
    * .paradigm/university/.metrics/ is written.
    */
   metrics?: MetricsConfig;
+  /** T-2026-11-04-002: Classroom options (see config-schema.ts). */
+  classroom?: ClassroomConfig;
+}
+
+export interface ClassroomConfig {
+  /** Re-probe pending certs at term start: `ask` (default) asks first with a count and rough cost; `off` skips. */
+  reprobe?: 'ask' | 'off';
 }
 
 export interface MetricsConfig {

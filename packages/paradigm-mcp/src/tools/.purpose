@@ -379,3 +379,8 @@ components:
     type: tool
     gates: []
     tags: [portal, security]
+  classroom-tools:
+    description: 'paradigm_classroom family (tools/classroom.ts): syllabus_record/list/get, scenario_list, scenario_record (requires authored_by; id must pass isSafeScenarioId), scenario_run (T-2026-11-04-002; legacy name paradigm_scenario_run) which requires scenarioId, entryId, assessor, result held|broke (an invalid result is named in the error) and a boolean human_confirmed, validates the id, and calls #probe-runs recordProbeRun (a passed ts is ignored), status and promote. status reads exercises through readHomedExerciseEvents and adds probeBreakRate per agent and in totals (all-time, probeBreakRateWindow; probe-break rows / (held adversarial-probe receipts + probe-break rows), confounded rows skipped, null when none), reprobe (classroom.reprobe, ask by default) and pendingCerts (first PENDING_CERTS_MAX = 50 pending notebook certs, with pendingCertsTotal) for the class skill re-probe step; the no-exercise notice shows only when there is no exercise event AND no probe-break row.'
+    file: src/tools/classroom.ts
+    type: tool-group
+    tags: [classroom, learning-loop]

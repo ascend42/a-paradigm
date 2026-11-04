@@ -173,6 +173,7 @@ export const LEGACY_TOOL_MAP: Record<string, LegacyToolTarget> = {
   paradigm_ripple: { tool: 'paradigm_ripple' },
   paradigm_scenario_list: { tool: 'paradigm_classroom', op: 'scenario_list' },
   paradigm_scenario_record: { tool: 'paradigm_classroom', op: 'scenario_record' },
+  paradigm_scenario_run: { tool: 'paradigm_classroom', op: 'scenario_run' },
   paradigm_search: { tool: 'paradigm_search' },
   paradigm_sentinel_add_pattern: { tool: 'paradigm_sentinel', op: 'add_pattern' },
   paradigm_sentinel_app_state: { tool: 'paradigm_sentinel', op: 'app_state' },
