@@ -46,6 +46,12 @@ components:
     type: service
     path: index.ts
 
+  mcp-config-portability:
+    description: "generateMcpConfig (claude.ts → .mcp.json, cursor.ts → .cursor/mcp.json) writes NO absolute cwd: these files are committed, and a machine path broke every other clone (2x-engineers, 2026-11-01). The server resolves `.` by walking up to `.paradigm/`; Cursor also gets env PARADIGM_PROJECT_DIR=${workspaceFolder} (Cursor's spawn cwd is not reliably the workspace; no PATH touched). writeMcpConfig replaces the paradigm entry, so `paradigm sync`/`shift` heal an old file. `paradigm mcp setup` keeps an absolute cwd only for user-level configs (Claude Desktop, Continue). Doctor: 'MCP config portability' (commands/doctor/mcp-portability-audit.ts)."
+    type: utility
+    path: cursor.ts
+    aspects: ["~ide-adapter-pattern"]
+
 flows:
   ide-sync-flow:
     description: Sync .paradigm/ to IDE instruction files

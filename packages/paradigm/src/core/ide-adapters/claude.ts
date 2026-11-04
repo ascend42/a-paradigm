@@ -268,16 +268,18 @@ export class ClaudeAdapter implements IDEAdapter {
   /**
    * Generate MCP configuration for Claude
    */
-  generateMcpConfig(rootDir: string): McpConfig {
+  generateMcpConfig(_rootDir: string): McpConfig {
     // Claude Code expands ${VAR} in .mcp.json env values (guide-confirmed), so
     // use the append form that preserves the inherited PATH.
     const env = mcpServerEnv(true);
+    // .mcp.json is committed and shared: NEVER an absolute cwd (it names this
+    // machine's folder and breaks every other clone). The server resolves its
+    // root from "." / CLAUDE_PROJECT_DIR by walking up to `.paradigm/`.
     return {
       mcpServers: {
         paradigm: {
           command: 'paradigm-mcp',
           args: ['.'],
-          cwd: rootDir,
           ...(env ? { env } : {}),
         },
       },

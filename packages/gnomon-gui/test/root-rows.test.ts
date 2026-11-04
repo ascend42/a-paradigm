@@ -222,3 +222,101 @@ describe('TD-2026-10-22-769 (Mika F3): the local.config card renders its gnomon-
     }
   });
 });
+
+describe('#kernel-custody (TD-2026-10-29-746): the migration and log.quarantine cards render the rows the kernel signs, or offer no Allow', async () => {
+  // the kernel's OWN builders and the kernel's OWN validators: the GUI must accept exactly what the kernel raises
+  const { generateKeyPairSync, createHash } = await import('node:crypto');
+  const { migrationRows } = await import('../../gnomon/src/kernel/identity/kernel-custody.js');
+  const { kernelCustodyRefusal, logQuarantineRowRefusal, LOG_QUARANTINE_SCHEMA } = await import('../../gnomon/src/kernel/identity/decision-batch.js');
+  const jwk = generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ format: 'jwk' }) as { x: string; y: string };
+  const raw = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]);
+  const certKey = raw.toString('base64');
+  const certKeyId = `sha256:${createHash('sha256').update(raw).digest('hex')}`;
+  const LOG = 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+  const head = { log: LOG, seq: 20415, hash: `sha256:${'a'.repeat(64)}` };
+  const built = migrationRows({ cert: { certKey, certKeyId } as never, legacyKeyIds: ['kk:2', 'kk:1', 'kk:3'], currentKeyId: 'kk:9', head, cardId: C });
+  const detailOf = (rows: Record<string, unknown>[]) => ({ action: 'kernel-custody', certKeyId, legacyKeys: 3, logId: LOG, headSeq: head.seq, rootRows: rows });
+  const custodyCard = (rows: Record<string, unknown>[], detail: Record<string, unknown> = detailOf(rows)) => {
+    const { rootRows, ...rest } = detail;
+    return card(rootRows as unknown[], { kind: 'grant', detail: rest });
+  };
+  const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+  it("the kernel's migration rows: every field in full, and Allow is offered", () => {
+    expect(kernelCustodyRefusal(built.rows as never)).toBeNull();
+    const c = custodyCard(built.rows);
+    const rr = rootRowsOf(c);
+    expect(rr).not.toBeNull();
+    expect(rr!.lines).toEqual([
+      `helper certifying key ${certKeyId}`,
+      `public key (P-256) ${certKey}`,
+      `seal 3 legacy kernel keys · keys digest ${built.rows[1].keysDigest}`,
+      `log ${LOG} · head entry 20415`,
+      `head hash ${head.hash}`,
+    ]);
+    expect(rr!.rowsDigest).toBe(rowsDigestOf(built.rows));
+    const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+    expect(el.text).toContain('This decision signs');
+    expect(el.text).not.toContain('does not show what its approval signs');
+    expect(el.text).toContain('⊙ gnomon · grant');
+    // Mika 2026-11-01: the kernel's words (the planted-key count, Aegis S2 L-4) on the face, the title wraps
+    const cls = (e: FEl) => e.attrs.get('class') ?? e.className;
+    // the body is a direct child of the card section (on the face), not inside the collapsed details
+    expect(el.children.some((e) => e instanceof FEl && /\bcard-body\b/.test(cls(e)))).toBe(true);
+    const plain = card(ROWS.slice(0, 1), { kind: 'grant' });
+    expect((renderCard({ doc: fdoc }, view(plain), plain.block) as FEl).children.some((e) => e instanceof FEl && /\bcard-body\b/.test(cls(e))), 'an ordinary grant keeps its body in details').toBe(false);
+    expect(el.all().some((e) => /\bcard-title\b.*\bwraps\b/.test(cls(e)))).toBe(true);
+    expect(keysOf(el)).toEqual(['allow', 'deny']);
+  });
+
+  it('fails closed (no Allow, deny kept) on anything it cannot vouch for', () => {
+    const [k, l] = clone(built.rows);
+    const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const nonCanonical = certKey.slice(0, 86) + B64[B64.indexOf(certKey[86]!) ^ 1] + '=';
+    expect(Buffer.from(nonCanonical, 'base64').equals(raw)).toBe(true); // the same bytes: only the encoding differs
+    const other = 'card:01HZZZZZZZZZZZZZZZZZZZZZZY';
+    const bad: Array<[string, Record<string, unknown>[], Record<string, unknown>?]> = [
+      ['the rows swapped', [l, k]],
+      ['the legacy row missing', [k]],
+      ['a third row', [k, l, l]],
+      ['a cert-key row for another card', [{ ...k, cardId: other }, l]],
+      ['a legacy row for another card', [k, { ...l, cardId: other }]],
+      ['a certKeyId that is not sha256 of the key', [{ ...k, certKeyId: `sha256:${'b'.repeat(64)}` }, l]],
+      ['a key that is not X9.63 P-256', [{ ...k, certKey: Buffer.alloc(65, 1).toString('base64') }, l]],
+      // the last base64 char carries 2 padding bits: flip one, atob decodes the same bytes, the kernel refuses it
+      ['a non-canonical base64 key', [{ ...k, certKey: nonCanonical }, l]],
+      ['an unknown cert-key field', [{ ...k, signer: 'x' }, l]],
+      ['an unknown legacy field', [k, { ...l, keyIds: ['kk:1'] }]],
+      ['a zero key count', [k, { ...l, keyCount: 0 }]],
+      ['a bad log id', [k, { ...l, logId: 'log:nope' }]],
+      ['a fractional head seq', [k, { ...l, headSeq: 1.5 }]],
+      ['an old v1 legacy row', [k, { ...l, schemaVersion: 'gnomon-kernel-legacy:v1' }]],
+    ];
+    bad.push(['a detail count that is not the row count', [k, l], { ...detailOf([k, l]), legacyKeys: 2 }]);
+    bad.push(['a detail head that is not the row head', [k, l], { ...detailOf([k, l]), headSeq: 1 }]);
+    bad.push(['custody rows under another action', [k, l], { ...detailOf([k, l]), action: 'mod.uninstall' }]);
+    for (const [name, rows, detail] of bad) {
+      const c = custodyCard(rows, detail ?? detailOf(rows));
+      expect(rootRowsOf(c), name).toBeNull();
+      expect(keysOf(renderCard({ doc: fdoc }, view(c), c.block) as FEl), name).toEqual(['deny']);
+    }
+  });
+
+  it("the log.quarantine row the kernel raises: in full, and Allow; another card's or a same-log move: no Allow", () => {
+    const row = { schemaVersion: LOG_QUARANTINE_SCHEMA, from: { logId: LOG, seq: 7, hash: head.hash }, to: 'log:01HYYYYYYYYYYYYYYYYYYYYYYY', cardId: C };
+    expect(logQuarantineRowRefusal(row as never)).toBeNull();
+    // the detail exactly as the daemon raises it: {action, from, to, rootRows}
+    const q = (r: Record<string, unknown>, d: Record<string, unknown> = { from: row.from, to: row.to }) => card([r], { kind: 'grant', detail: { action: 'log.quarantine', ...d } });
+    const rr = rootRowsOf(q(row));
+    expect(rr!.lines).toEqual([`move the log anchor from ${LOG} · head entry 7`, `head hash ${head.hash}`, 'to new log log:01HYYYYYYYYYYYYYYYYYYYYYYY']);
+    expect(keysOf(renderCard({ doc: fdoc }, view(q(row)), q(row).block) as FEl)).toEqual(['allow', 'deny']);
+    for (const [name, r] of [
+      ['another card', { ...row, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZY' }],
+      ['the same log', { ...row, to: LOG }],
+      ['a head with an extra field', { ...row, from: { ...row.from, extra: 1 } }],
+    ] as Array<[string, Record<string, unknown>]>)
+      expect(rootRowsOf(q(r, { from: r.from, to: r.to })), name).toBeNull();
+    expect(rootRowsOf(q(row, { from: { ...row.from, seq: 8 }, to: row.to })), 'a detail head that is not the row head').toBeNull();
+    expect(rootRowsOf(q(row, { from: row.from, to: LOG.replace('Z', 'X') })), 'a detail target that is not the row target').toBeNull();
+  });
+});

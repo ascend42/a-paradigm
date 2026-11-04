@@ -264,7 +264,16 @@ components:
       TD-2026-10-22-769 (Mika F3): rootRowLine renders a gnomon-root-local:v1 row (localRootRowLine: the config
       version, every endpoint with its server, base, model and who may use it, the runner folder, tree and node
       sha) and returns null on ANY field it cannot render (unknown keys, a non-loopback base, a cloud compat, more
-      than 4 endpoints, a malformed pin), so the local.config card shows only deny. core/loops.ts: status.loops
+      than 4 endpoints, a malformed pin), so the local.config card shows only deny. #kernel-custody
+      (TD-2026-10-29-746, fix 2026-11-01): the migration card (grant, action kernel-custody) renders its two rows
+      (kernelCustodyLines: gnomon-kernel-cert-key:v1 with the full key and its sha256 certKeyId, checked;
+      gnomon-kernel-legacy:v2 with the key count, keysDigest and log head), and the log.quarantine card its one
+      gnomon-log-quarantine:v1 row (logQuarantineLines); each row bound to this card, every field as the kernel's
+      kernelCustodyRefusal / logQuarantineRowRefusal accept it, the detail summary equal to the rows; anything else
+      shows only deny. One line per signed field, every field in full; both carry the ⊙ gnomon head and keep the
+      kernel's words on the face (Mika: the planted-key count, Aegis S2 L-4, is visible before the touch). Tests build
+      the rows with the kernel's own migrationRows and validators.
+      core/loops.ts: status.loops
       startRefused becomes one `refused-start` stack alert per loop ("■ <id> didn’t start", ×n since), gone when
       the kernel drops the refusal.
     fidelity-2: >-

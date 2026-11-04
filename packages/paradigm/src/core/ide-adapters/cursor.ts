@@ -910,25 +910,33 @@ paradigm flow validate $task-creation
   /**
    * Generate MCP configuration for Cursor
    */
-  generateMcpConfig(rootDir: string): McpConfig {
+  generateMcpConfig(_rootDir: string): McpConfig {
     // Cursor's ${VAR} expansion in mcp env values is NOT confirmed. Neither env
     // form is safe without it: an unexpanded literal `${PATH}` would DESTROY the
     // PATH (append form), and a static absolute list would REPLACE the inherited
     // PATH (regressing nvm/Volta users). So Cursor keeps the bare command — no
     // env — until its expansion is verified (follow-up task). Only Claude Code
     // (confirmed to expand ${VAR}) gets the safe append-form PATH augmentation.
-    const env = undefined;
+    //
+    // .cursor/mcp.json is committed and shared: NEVER an absolute cwd (it names
+    // this machine's folder and breaks every other clone). Cursor's spawn cwd for
+    // stdio servers is not reliably the workspace, so the root comes from
+    // PARADIGM_PROJECT_DIR = ${workspaceFolder} (Cursor's documented config
+    // interpolation). This touches no PATH: if a Cursor build leaves it
+    // unexpanded, the server ignores the literal and walks up from its cwd.
     return {
       mcpServers: {
         paradigm: {
           command: 'paradigm-mcp',
           args: ['.'],
-          cwd: rootDir,
-          ...(env ? { env } : {}),
+          env: { ...CURSOR_PROJECT_ENV },
         },
       },
     };
   }
 }
+
+/** Cursor's project MCP env: the workspace root via Cursor's own interpolation (no absolute path in the file). */
+export const CURSOR_PROJECT_ENV: Readonly<Record<string, string>> = Object.freeze({ PARADIGM_PROJECT_DIR: '${workspaceFolder}' });
 
 export const cursorAdapter = new CursorAdapter();
