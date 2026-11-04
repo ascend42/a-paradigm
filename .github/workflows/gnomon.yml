@@ -38,9 +38,11 @@ jobs:
       fail-fast: false
       matrix:
         # GitHub's macOS runners have SIP off, so the session enforcement suite skips there (floor sip) and the
-        # refusal runs; macos-15 also records (informational, no assertion) the copied-osascript exit under the generated profile;
-        # macos-14 exercises the macOS floor refusal. The full enforcement suite runs only on a SIP-on macOS 15+ host.
-        os: [macos-14, macos-15, windows-latest, ubuntu-latest]
+        # refusal runs; macos-15 also records (informational, no assertion) the copied-osascript exit under the generated profile.
+        # macos-14 is retired (T-2026-10-31-001): the macOS floor refusal (need 15) runs on every host with an injected
+        # version (test/session-sandbox.test.ts, parseSwVersMajor in test/macos-version.test.ts). The full enforcement
+        # suite runs only on a SIP-on macOS 15+ host.
+        os: [macos-15, windows-latest, ubuntu-latest]
         node: [24]
     steps:
       - name: Checkout
@@ -104,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-15, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -163,7 +165,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-15, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

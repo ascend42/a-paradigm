@@ -63,15 +63,27 @@ export class GitRefusal extends Error {
  */
 /**
  * Aegis L4 (T-2026-10-23-002): the hooks path every kernel git call pins. POSIX: /dev/null (not a directory: no hook
- * is found). win32 has no /dev/null: a kernel-owned EMPTY directory under the user's local app data (made at load).
+ * is found). win32 has no /dev/null: a kernel-owned EMPTY directory under the user's local app data. The path is a
+ * constant; the directory is made LAZILY by ensureEmptyHooksDir() before the first git spawn that pins it, never at
+ * module load (a CLI command that runs no git must write nothing under the user's home).
  */
 export const EMPTY_HOOKS_PATH: string = process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA ?? path.join(process.env.USERPROFILE ?? 'C:\\', 'AppData', 'Local'), 'Gnomon', 'empty-hooks') : '/dev/null';
-if (process.platform === 'win32') {
+let emptyHooksMade = false;
+
+/** Make the win32 empty hooks dir once, before the first hardened git spawn (a no-op off win32). Idempotent. */
+export function ensureEmptyHooksDir(platform: NodeJS.Platform = process.platform): void {
+  if (emptyHooksMade || platform !== 'win32') return;
+  emptyHooksMade = true;
   try {
     fs.mkdirSync(EMPTY_HOOKS_PATH, { recursive: true });
   } catch {
     /* git finds no hooks in a missing dir either */
   }
+}
+
+/** True when an argv pins the empty hooks path (the spawn sites call ensureEmptyHooksDir() first). */
+export function pinsEmptyHooks(args: readonly string[]): boolean {
+  return args.includes(`core.hooksPath=${EMPTY_HOOKS_PATH}`);
 }
 
 export const HARDENED_GIT_FLAGS: readonly string[] = Object.freeze([
@@ -133,6 +145,7 @@ export function gitBinary(from: Readonly<Record<string, string | undefined>> = p
 /** One hardened git call; stdout as a Buffer. */
 export function hardenedGit(args: readonly string[], o: GitCall = {}): { status: number; stdout: Buffer; stderr: string } {
   const pre = [...HARDENED_GIT_FLAGS, ...(o.gitDir ? ['--git-dir', o.gitDir] : [])];
+  ensureEmptyHooksDir();
   const r = spawnSync(gitBinary(), [...pre, ...args], {
     ...(o.cwd ? { cwd: o.cwd } : {}), env: o.env ?? hardenedGitEnv(), ...(o.input !== undefined ? { input: o.input } : {}),
     maxBuffer: o.maxBuffer ?? 64 * 1024 * 1024, windowsHide: true,

@@ -100,15 +100,16 @@ function ancestors(p: string): string[] {
 }
 
 /** The runtime directories the node binary loads from (realpath'd): its install's lib/, plus Homebrew's kegs. Never the prefix. */
-export function nodeRuntimeDirs(nodeReal: string): string[] {
-  const dirs = new Set<string>([path.join(path.dirname(path.dirname(nodeReal)), 'lib')]);
-  const parts = nodeReal.split(path.sep);
+export function nodeRuntimeDirs(nodeReal: string, p: path.PlatformPath = path): string[] {
+  // `p`: the darwin SBPL builders pass path.posix (they emit macOS paths, and run as pure units on every host)
+  const dirs = new Set<string>([p.join(p.dirname(p.dirname(nodeReal)), 'lib')]);
+  const parts = nodeReal.split(p.sep);
   const cellar = parts.indexOf('Cellar');
   if (cellar > 0) {
-    const brew = parts.slice(0, cellar).join(path.sep) || path.sep;
-    dirs.add(path.join(brew, 'Cellar')); // dependency kegs (libuv, llhttp, openssl, …)
-    dirs.add(path.join(brew, 'opt')); // their opt/ links
-    dirs.add(path.join(brew, 'etc', 'openssl@3')); // Homebrew OpenSSL reads its openssl.cnf at startup (measured)
+    const brew = parts.slice(0, cellar).join(p.sep) || p.sep;
+    dirs.add(p.join(brew, 'Cellar')); // dependency kegs (libuv, llhttp, openssl, …)
+    dirs.add(p.join(brew, 'opt')); // their opt/ links
+    dirs.add(p.join(brew, 'etc', 'openssl@3')); // Homebrew OpenSSL reads its openssl.cnf at startup (measured)
   }
   return [...dirs];
 }

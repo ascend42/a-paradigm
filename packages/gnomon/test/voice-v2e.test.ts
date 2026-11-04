@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux, win32
 /**
  * #gnomon-voice V2e (T-2026-10-19-026; TD-2026-10-19-194/-298/-063), pure half: the kernel-supervised voice client
  * (spawn / kill / restart with backoff over a fake child), the allow-list env, the adopted-fd principal (voice only,
@@ -12,6 +13,9 @@ import { describe, expect, it } from 'vitest';
 import { appendCappedLog, VoiceChildSupervisor, voiceChildArgs, voiceChildEnv, type VoiceChildOptions } from '../src/kernel/voice/voice-child.js';
 import { resolveVoiceClientEntry } from '../src/kernel/voice/voice-install.js';
 import { createKernelDispatcher, RpcRefusal } from '../src/kernel/socket/index.js';
+
+/** win32 has no POSIX modes (owner-only is an ACL there, the parity phase P8-D78): modes are asserted off win32 only. */
+const POSIX_MODES = process.platform !== 'win32';
 
 class FakeChild extends EventEmitter {
   readonly signals: string[] = [];
@@ -141,8 +145,8 @@ describe('#gnomon-voice V2e: VoiceChildSupervisor', () => {
     expect(log).toMatch(/voice app started/);
     expect(log).toContain('boom: the mic went away');
     expect(log).toMatch(/voice app exited \(exit 1\)/);
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
+    if (POSIX_MODES) expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    if (POSIX_MODES) expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
     // capped: past the cap the file rolls over to voice.log.1 (two files at most)
     appendCappedLog(file, 'x'.repeat(300), 400);
     appendCappedLog(file, 'y'.repeat(300), 400);
@@ -152,8 +156,8 @@ describe('#gnomon-voice V2e: VoiceChildSupervisor', () => {
     fs.chmodSync(file, 0o644);
     fs.chmodSync(path.dirname(file), 0o755);
     appendCappedLog(file, 'z');
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
+    if (POSIX_MODES) expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    if (POSIX_MODES) expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
     // never throws (an unwritable place is ignored)
     expect(() => appendCappedLog('/dev/null/nope/voice.log', 'z')).not.toThrow();
   });

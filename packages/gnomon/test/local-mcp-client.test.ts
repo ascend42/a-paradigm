@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux, win32
 /**
  * #local-mcp-client (TD-2026-10-27-833 slice C2'): the kernel's stdio MCP client and the per-session pool, over a fake
  * server (test/fixtures/fake-mcp-server.mjs, spawned via process.execPath: never a shebang). List, call,
@@ -379,19 +380,22 @@ describe('Aegis L3 / Q7', () => {
 
 describe('Aegis M3 (re-check): pid-reuse-safe reaping', () => {
   it('a group is killed once, when its leader closes; a closed group is never signalled again', async () => {
+    // win32 has no process groups (the server sits in the daemon's kill-on-close job): the close never signals a pid
+    const win32 = process.platform === 'win32';
     const kills: number[] = [];
     const c = new McpStdioClient(spawnFake(), { killGroup: (pid) => void kills.push(pid) });
     await c.initialize();
     const pid = c.pid!;
     await expect(c.callTool('crash', {}, { deadline: Date.now() + 10_000 })).rejects.toMatchObject({ code: 'exited' });
     await c.exited;
-    await waitFor(() => kills.length === 1);
-    expect(kills).toEqual([pid]);
+    if (!win32) await waitFor(() => kills.length === 1);
+    const expected = win32 ? [] : [pid];
+    expect(kills).toEqual(expected);
     expect(c.closed).toBe(true);
     expect(c.pid).toBeUndefined();
     c.kill();
     c.kill();
-    expect(kills).toEqual([pid]);
+    expect(kills).toEqual(expected);
   }, 20_000);
 
   it('closeAll signals only live leaders; a restarted server never re-kills the old group', async () => {

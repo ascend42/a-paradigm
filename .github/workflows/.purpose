@@ -30,14 +30,19 @@ components:
   gnomon-ci:
     description: >-
       gnomon.yml (research 29 §3) — path-filtered on packages/gnomon*/** and
-      .github/**. Job `test`: macos-14 / windows-latest / ubuntu-latest on Node
+      .github/**. Job `test`: macos-15 / windows-latest / ubuntu-latest on Node
       24, fail-fast off, runs build:gnomon, test:gnomon (contracts, G-KRN-02,
-      G-SEC-01, G-WIN-05) and typecheck. Job `probes-ci`: macos-14 /
-      windows-latest, runs the probe harness self-test (p-harness) and uploads
-      probes/results/*.json as artifacts. Job `native`: unsigned swift build of
-      gnomon-helper on macos-14; cargo build of gnomon-wrapper on
-      windows-latest once its Cargo.toml exists. Intended to become a required
-      check once green.
+      G-SEC-01, G-WIN-05) and typecheck. Job `probes-ci`: macos-15 /
+      windows-latest, runs the probe harness self-test (p-harness) and P09/P12
+      and uploads the results as artifacts. Job `native`: on macos-15 the
+      unsigned swift build of gnomon-helper, the gnomon-voice-io swift build
+      and tests and the gnomon-wrapper cargo test against the built kernel
+      dist; on windows-latest the Rust gnomon-helper cargo test and release
+      build. macos-14 is retired (T-2026-10-31-001): the macOS floor
+      refusal (need 15) is covered on every host by an injected version
+      (test/session-sandbox.test.ts) and the parseSwVersMajor table
+      (test/macos-version.test.ts), so no 14.x runner is needed. Intended to
+      become a required check once green.
     path: gnomon.yml
     tags: [ci, gnomon, paradigm-8, windows-parity]
 

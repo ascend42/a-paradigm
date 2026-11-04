@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux
 /**
  * TD-2026-10-23-268 (Aegis review): a loop's named variables reach ONLY the check child. The kernel's own spawns
  * (the `git ls-files` that builds the check copy, with kernelEnv) never carry them, and the copy never carries the

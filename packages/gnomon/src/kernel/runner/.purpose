@@ -147,11 +147,14 @@ components:
       .bash_login, .zlogout, ~/.config/fish.
       macOS FLOOR (P8 note, CI run 39100281741): SESSION_SANDBOX_MIN_MACOS = 15
       (platform/darwin/session-sbpl.ts, read via platform/darwin/macos.ts
-      sw_vers); below it the darwin session backend refuses
+      sw_vers, parsed by parseSwVersMajor: null for any other text, fail
+      closed); below it the darwin session backend refuses
       sandbox-unavailable {floor:macos, have, need} and status shows the
       session sandbox unavailable — on macos-14 a copied osascript reached
-      System Events from inside the profile. CI tests macos-15 (enforcement)
-      and macos-14 (floor refusal).
+      System Events from inside the profile. CI runs macos-15; the macos-14
+      runner is retired (T-2026-10-31-001), so the floor refusal runs on every
+      host with injected probes (test/macos-version.test.ts: the
+      parseSwVersMajor table and sessionLaunchPlan(…, 'darwin', () => 14)).
       SIP FLOOR (CI run 39100811385, GitHub macos-15 runner, SIP off: a copied
       launchctl not SIGKILLed): darwinSipEnabled (platform/darwin/macos.ts,
       csrutil status, cached; Custom Configuration counts as disabled) — SIP
@@ -258,4 +261,5 @@ components:
       - test/session-profile.test.ts
       - test/session-sandbox.test.ts
       - test/session-sandbox-win32.test.ts
+      - test/macos-version.test.ts
     oracles: [G-SUB-01, G-RUN-02, G-RUN-06, G-SBX-04, G-SBX-05, G-SBX-06, G-SBX-08, G-WIN-06]

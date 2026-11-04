@@ -16,7 +16,9 @@ components:
       transport.ts): profile data, the darwin sandbox-exec SBPL generator
       (default-deny; read of `/`, /usr/lib, /System/Library, the node binary
       and its install's lib/ — never the prefix — plus Homebrew's Cellar, opt
-      and etc/openssl@3; refused `sandbox-unavailable` if any granted read
+      and etc/openssl@3 (nodeRuntimeDirs; the darwin SBPL builders pass
+      path.posix so they emit macOS paths on any host, T-2026-10-31-001);
+      refused `sandbox-unavailable` if any granted read
       subpath equals or contains $HOME, the gnomon home or its keys dir
       (Aegis C2);
       the child's entry dir and package.json ancestors, the pinned bundle;

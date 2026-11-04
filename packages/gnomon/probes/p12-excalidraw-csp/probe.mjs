@@ -26,6 +26,12 @@
 // Verdict: fail if the page does not mount or any load-time script/eval
 // violation fires; partial if load is clean but the export path is refused by
 // the CSP (or an engine row is missing); pass if all clean.
+// Launch flake (T-2026-10-31-001, hosted macOS Firefox): a run whose browser
+// sends NO report within 90 s never loaded the page, so it says nothing about
+// the CSP; such a run is retried ONCE per engine (LAUNCH_RETRIES) and both the
+// timed-out attempt and every non-mounted run keep their error and launcher
+// tail in the evidence (engines.<name>.launchRetries / .nonMountedRuns). A run
+// that reported is never retried: a mount failure or a violation stands.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -38,6 +44,9 @@ export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12'
 
 const PINS = { '@excalidraw/excalidraw': '0.18.1', react: '19.3.1', 'react-dom': '19.3.1', esbuild: '0.28.2' };
 const RUNS = Number(process.env.P12_RUNS ?? 3);
+/** retries per engine, only for a launch that sent no report (never for a page that reported) */
+const LAUNCH_RETRIES = 1;
+const NO_REPORT = 'no report within 90 s';
 // Excalidraw's dist/prod chunks that the font-subset worker loads by relative
 // URL at runtime; they have no bare imports, so they are served as-is.
 const WORKER_CHUNKS = /^(subset-worker\.chunk\.js|subset-shared\.chunk\.js|chunk-[A-Z0-9]+\.js)$/;
@@ -314,13 +323,27 @@ export default async function probe(ctx) {
   try {
     for (const e of pick) {
       const runs = [];
+      const launchRetries = [];
       for (let i = 0; i < RUNS; i++) {
-        const before = server.requests.length;
-        const { report, wallMs, launcherTail } = await runPage(server, e, '/', 90_000);
-        const served = server.requests.slice(before);
-        runs.push(report ? { wallMs, ...summarize(report, scan, served) } : { wallMs, error: 'no report within 90 s', launcherTail });
+        let r;
+        for (;;) {
+          const before = server.requests.length;
+          const { report, wallMs, launcherTail } = await runPage(server, e, '/', 90_000);
+          const served = server.requests.slice(before);
+          r = report ? { wallMs, ...summarize(report, scan, served) } : { wallMs, error: NO_REPORT, launcherTail };
+          // only a launch that never reported is retried, once per engine; the timed-out attempt stays in the evidence
+          if (report || launchRetries.length >= LAUNCH_RETRIES) break;
+          launchRetries.push({ run: i + 1, ...r });
+        }
+        runs.push(r);
       }
       const ok = runs.filter((r) => r.mounted);
+      // every run that did not mount, with what it said (a report's stage/errors, or the launcher tail)
+      const nonMountedRuns = runs.map((r, i) => ({ run: i + 1, r })).filter(({ r }) => !r.mounted).map(({ run, r }) => ({
+        run, wallMs: r.wallMs, error: r.error ?? `did not mount (stage ${r.stage ?? 'unknown'})`,
+        ...(r.launcherTail !== undefined ? { launcherTail: r.launcherTail } : {}),
+        ...(r.error === undefined ? { stage: r.stage, errors: r.errors, rejections: r.rejections } : {}),
+      }));
       const directives = [...new Set(runs.flatMap((r) => (r.violations ?? []).map((v) => v.directive)))];
       perEngine[e.name] = {
         version: e.version,
@@ -339,6 +362,8 @@ export default async function probe(ctx) {
         exportSvg: ok.every((r) => r.svg?.ok),
         exportSvgFontFace: ok.every((r) => r.svg?.fontFace === true),
         firstRun: runs[0],
+        nonMountedRuns,
+        launchRetries,
       };
     }
   } finally {

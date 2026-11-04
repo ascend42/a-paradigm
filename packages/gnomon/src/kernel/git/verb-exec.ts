@@ -23,7 +23,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { EMPTY_HOOKS_PATH, gitBinary, hardenedGitEnv } from './scratch.js';
+import { EMPTY_HOOKS_PATH, ensureEmptyHooksDir, gitBinary, hardenedGitEnv, pinsEmptyHooks } from './scratch.js';
 import { redactText } from '../trace/capture.js';
 
 export const EXEC_OUTPUT_CAP = 256 * 1024;
@@ -45,6 +45,8 @@ export const execTool: Exec = (bin, args, o) =>
     let err = '';
     let timedOut = false;
     let child: ReturnType<typeof spawn>;
+    // HARDENED_GIT_FLAGS / PUSH_GIT_FLAGS pin core.hooksPath at the win32 empty dir: make it before the spawn
+    if (pinsEmptyHooks(args)) ensureEmptyHooksDir();
     try {
       child = spawn(bin, [...args], { cwd: o.cwd, env: o.env, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) {

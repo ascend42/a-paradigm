@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux, win32
 /**
  * #gnomon-voice V2e item 3: the kernel's speakable reply row (KernelSpeakable) and the NARROWED voice reader
  * projection (redaction.ts case 'voice': voice.* rows of the attached session only; the kernel's speakable row in
@@ -13,6 +14,9 @@ import { KernelSpeakable, SpeakableProjector, speakableSummary, isKernelSpeakabl
 import { mayBeVisible, projectForReader } from '../src/kernel/log/redaction.js';
 import { voiceStatusFor, VoiceReports, VOICE_MIC_METER_TTL_MS, VOICE_REPORT_TTL_MS } from '../src/kernel/voice/voice-requests.js';
 import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
+
+/** win32 has no POSIX modes (owner-only is an ACL there, the parity phase P8-D78): modes are asserted off win32 only. */
+const POSIX_MODES = process.platform !== 'win32';
 
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
 const line = (content: unknown[]) => JSON.stringify({ type: 'assistant', message: { content } });
@@ -156,7 +160,7 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     expect(readInputChoice(home)).toBeNull();
     writeInputChoice(home, { id: 'usb-mic', name: 'Shure MV7' });
     expect(readInputChoice(home)).toEqual({ id: 'usb-mic', name: 'Shure MV7' });
-    expect(fs.statSync(inputChoicePath(home)).mode & 0o777).toBe(0o600);
+    if (POSIX_MODES) expect(fs.statSync(inputChoicePath(home)).mode & 0o777).toBe(0o600);
     fs.writeFileSync(inputChoicePath(home), '{"format":"other","id":"x"}');
     expect(readInputChoice(home)).toBeNull();
   });
@@ -172,7 +176,7 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     expect(readReplyMode(home)).toBeNull();
     writeReplyMode(home, 'show');
     expect(readReplyMode(home)).toBe('show');
-    expect(fs.statSync(replyModePath(home)).mode & 0o777).toBe(0o600);
+    if (POSIX_MODES) expect(fs.statSync(replyModePath(home)).mode & 0o777).toBe(0o600);
     writeReplyMode(home, 'speak');
     expect(readReplyMode(home)).toBe('speak');
     fs.writeFileSync(replyModePath(home), '{"format":"other","mode":"show"}');

@@ -94,7 +94,10 @@ components:
       <home>/loop-work/act-<runId>/tree (0700, never inside the repo, no .git)
       from hardened git plumbing only (rev-parse, ls-tree -r -z -l, cat-file
       --batch: raw blobs, no filters, no textconv, no checkout, no hook;
-      HARDENED_GIT_FLAGS --no-optional-locks, core.hooksPath=/dev/null,
+      HARDENED_GIT_FLAGS --no-optional-locks, core.hooksPath=EMPTY_HOOKS_PATH
+      (/dev/null; on win32 a constant kernel-owned empty dir under LOCALAPPDATA
+      made lazily by ensureEmptyHooksDir() before the first spawn that pins it,
+      hardenedGit and execTool via pinsEmptyHooks, never at module load),
       core.fsmonitor=false, core.sshCommand=false, protocol.allow=never,
       credential.helper empty; hardenedGitEnv: a clean env with no inherited
       GIT_*, GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM, GIT_ATTR_NOSYSTEM).
@@ -130,6 +133,7 @@ components:
     tests:
       - test/loop-act-e2e.test.ts
       - test/loop-act.test.ts
+      - test/empty-hooks.test.ts
     anchors:
       - src/kernel/git/scratch.ts
       - src/kernel/git/index.ts
