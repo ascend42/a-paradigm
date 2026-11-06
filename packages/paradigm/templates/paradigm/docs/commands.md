@@ -540,6 +540,8 @@ paradigm wisdom expert --area payments
 
 **Implementation history — tracking changes, validation, fragility.**
 
+Commit history is derived from git on read: every commit carrying symbols (its `Symbols:` trailers, else the nearest `.purpose` at that commit) is a history row, cached per SHA on this machine. `.paradigm/history/log.jsonl` holds only rows you author with `record` / `validate` (merged across branches with `merge=union`); `.paradigm/history/index.yaml` is generated and git-ignored. Nothing writes tracked history at commit time, so a commit leaves the tree clean.
+
 ### paradigm history show
 
 Show history overview or for a specific symbol.
@@ -555,7 +557,7 @@ paradigm history show #checkout --limit 20 --json
 
 ### paradigm history init
 
-Initialize the history directory.
+Create `.paradigm/history/` with `log.jsonl` and `validation.yaml` (the index is generated, never created here).
 
 ```bash
 paradigm history init
@@ -573,7 +575,7 @@ paradigm history fragile --json
 
 ### paradigm history reindex
 
-Regenerate the index from the log.
+Rebuild the generated index now (reads rebuild it automatically when stale). It is written only when git ignores `index.yaml`; otherwise run `paradigm sync` first.
 
 ```bash
 paradigm history reindex
@@ -581,7 +583,7 @@ paradigm history reindex
 
 ### paradigm history record
 
-Record an implementation event.
+Record an implementation event (an authored row with a collision-free `h-…` id).
 
 ```bash
 paradigm history record \
@@ -599,7 +601,7 @@ Record a validation result.
 ```bash
 paradigm history validate \
   --result pass \
-  --ref h0045 \
+  --ref h-mhx2k3a01b2c \
   --passed 15 \
   --failed 0
 ```
@@ -608,11 +610,11 @@ paradigm history validate \
 
 ## paradigm hooks
 
-**Git hooks for automatic history capture.**
+**Git hooks (sync-commit delegate, learning guard).**
 
 ### paradigm hooks install
 
-Install git hooks for automatic history capture.
+Install the git hooks. An outdated Paradigm hook (below v4) is upgraded in place without `--force`; the previous file is kept as `<name>.paradigm-v<N>.bak` and any block another tool appended (Warpline's auto-seal) is carried over byte for byte.
 
 ```bash
 paradigm hooks install
@@ -637,8 +639,11 @@ paradigm hooks status
 ```
 
 **What hooks do:**
-- `post-commit`: Records implementation entries from commits
-- `pre-push`: Reindexes history before pushing
+- `post-commit`: passes the commit's `Symbols:` to `paradigm task sync-commit` (linked external items). Since v4 it writes no history.
+- `pre-push`: no-op since v4 (it used to reindex the then-tracked history index).
+- `pre-commit`: scoped learning guard.
+
+**Migrating from pre-v4 history** (commits dirtied the tree): run `paradigm sync` (ignores and untracks `history/index.yaml`, adds the `log.jsonl merge=union` block to `.gitattributes`), commit the result once, then `paradigm hooks install`. A branch still carrying the old index hits one modify/delete conflict on `.paradigm/history/index.yaml` when merged or rebased: resolve it as a delete (`git rm .paradigm/history/index.yaml`). `paradigm doctor` reports a repository that has not migrated.
 
 ---
 

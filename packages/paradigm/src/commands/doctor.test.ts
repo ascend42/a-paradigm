@@ -96,7 +96,7 @@ describe('doctorCommand', () => {
     const lines: string[] = [];
     vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { lines.push(a.join(' ')); });
     expect(await doctorCommand({ rootDir, homeDir: fakeHome })).toBe(false);
-    expect(lines.join('\n')).toMatch(/Git pre-push hook[\s\S]*Outdated \(v1, current v3\) and still runs `npx paradigm`/);
+    expect(lines.join('\n')).toMatch(/Git pre-push hook[\s\S]*Outdated \(v1, current v4\) and still runs `npx paradigm`/);
     // Without the hook the same project is healthy.
     fs.rmSync(hook);
     expect(await doctorCommand({ quiet: true, rootDir, homeDir: fakeHome })).toBe(true);

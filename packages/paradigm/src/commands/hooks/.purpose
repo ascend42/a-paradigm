@@ -111,8 +111,13 @@ components:
       git-hook-state.ts: classes .git/hooks/post-commit and pre-push as absent,
       foreign (no "# Paradigm <name> hook" + "# Installed by: paradigm hooks
       install" header: never touched), outdated (paradigm-hook-version below
-      GIT_HOOK_VERSION = 3, no marker = v1, or still running `npx paradigm`) or
-      current. `paradigm hooks install` upgrades an outdated Paradigm hook
+      GIT_HOOK_VERSION = 4, no marker = v1, or still running `npx paradigm`) or
+      current. HISTORY_FREE_POST_COMMIT_VERSION = 4: below it post-commit
+      appends to the tracked history log (tree dirty after every commit).
+      foreignManagedBlocks(content) returns the `# >>> name >>>` ... `# <<< name
+      <<<` blocks other tools append (Warpline auto-seal) verbatim; the
+      installer re-appends them after any rewrite (upgrade or --force) so they
+      survive byte for byte. `paradigm hooks install` upgrades an outdated Paradigm hook
       without --force, keeping the old file as <name>.paradigm-v<N>.bak so
       local edits survive; a current one is left alone; `hooks status` and
       `paradigm doctor` report outdated ones. Free of chalk/generated-hooks so
@@ -134,7 +139,7 @@ components:
       cannot resolve, the write is skipped (legacy repo logs stay frozen).
       Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
       plugins and written by `paradigm hooks install` beside paradigm-common.sh;
-      the git post-commit / pre-push hooks embed it, hook version 3) that is the
+      the git post-commit hook embeds it, hook version 4) that is the
       one place the hooks find the paradigm CLI. Used by paradigm-common.sh
       (Stop hooks, project root = the caller's $CWD), both pre-commit hooks
       (project root = CLAUDE_PROJECT_DIR / Cursor input cwd, then the git
@@ -338,6 +343,17 @@ components:
       - memory-steward
       - advisory
       - loid
+  git-history-hooks:
+    description: 'The git hooks `paradigm hooks install` writes (index.ts), hook version 4 (T-2026-11-06-001). post-commit only runs the provider-agnostic `task sync-commit` delegate with the symbols of every Symbols: trailer; it no longer appends to .paradigm/history/log.jsonl (history is derived from git on read by #history-git), so a commit leaves the tree clean. pre-push is a v4 no-op stub (it used to run `history reindex`, rewriting the tracked index.yaml), kept versioned so an outdated one is still upgraded. pre-commit (learning guard) is unchanged apart from the marker. installGitHook keeps foreign managed blocks across a rewrite (#git-hook-state foreignManagedBlocks), fixing the upgrade that dropped the Warpline block; a block carried into a body ending in `exit 0` (pre-push, pre-commit) goes before that line so it runs (Warpline mirror push). --force over a differing hook keeps <name>.paradigm-prev-<ms>.bak. The pre-push and pre-commit stubs end with `:` (no exit) so a block appended later still runs. A hooks dir inside the work tree (core.hooksPath=.githooks, .husky) is refused without --force (#git-hook-state hooksDirInWorkTree); backups always go to the git dir (`git rev-parse --git-path paradigm-hook-backups`, gitHookBackupDir). install/uninstall/status and readGitHook resolve the hooks dir with `git rev-parse --git-path hooks` (#git-hook-state gitHooksDir: core.hooksPath, linked worktrees). `hooks install` advises `paradigm sync` while index.yaml is still tracked; `hooks status` reports derived mode or a pre-v4 post-commit.'
+    type: hook
+    file: index.ts
+    components:
+      - '#git-hook-state'
+      - '#history-git'
+    tags:
+      - hooks
+      - git
+      - history
 
 aspects:
   ~stop-hook-8-compliance-checks:

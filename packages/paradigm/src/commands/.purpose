@@ -125,3 +125,15 @@ components:
       - orchestration
       - team-funnel
     file: packages/paradigm/src/commands/solo.ts
+  history-commands:
+    description: 'paradigm history show/fragile/reindex/record/validate/init (history/index.ts). Share the MCP loader (#history-loader): show and fragile read ensureHistoryIndex + loadMergedHistory (commit rows derived from git, authored and legacy rows from log.jsonl; show reports how many came from git and a shallow clone); reindex regenerates and writes the index only when git ignores it, otherwise says to run `paradigm sync`; record and validate append authored rows with newHistoryId (no wc -l counter); init creates log.jsonl and validation.yaml, never index.yaml. `paradigm sync` and `paradigm init` call ensureHistoryGitattributes; sync untracks history/index.yaml (#session-markers-gitignore) and tells the user an in-flight branch hits one modify/delete conflict on it, resolved as a delete. shift-files no longer scaffolds history/index.yaml.'
+    file: packages/paradigm/src/commands/history/index.ts
+    type: command
+    components:
+      - '#history-loader'
+      - '#session-markers-gitignore'
+    tags:
+      - history
+      - cli
+    tests:
+      - packages/paradigm/src/commands/history/history-from-git.test.ts

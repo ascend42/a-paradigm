@@ -18,7 +18,7 @@ import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 import { indexCommand } from './scan/index.js';
-import { ensureSessionMarkersGitignore } from '../core/session-markers-gitignore.js';
+import { ensureHistoryGitattributes, ensureSessionMarkersGitignore } from '../core/session-markers-gitignore.js';
 import { detectDiscipline, getDisciplineConfig, detectStack, getStackConfig, STACK_PRESETS } from '../core/discipline.js';
 
 // ============================================
@@ -710,6 +710,8 @@ export async function initCommand(options: InitOptions) {
 
   // Keep hook session markers (.purpose-paths, .orchestrated, ...) out of git
   ensureSessionMarkersGitignore(paradigmDir);
+  // Authored history rows merge line-wise across branches (log.jsonl merge=union)
+  if (!options.dryRun) ensureHistoryGitattributes(cwd);
 
   // Scoped learning S2: ask once whether the repo is public (the commit guard
   // then refuses human-taught entries whose home was only inferred). Unset = public.

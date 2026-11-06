@@ -221,7 +221,24 @@ describe('hooksInstallCommand - Git', () => {
     // It must NEVER name a provider (provider-agnostic).
     expect(content).not.toContain('gh ');
     // Version marker bumped so `hooks install --force` re-emits.
-    expect(content).toContain('paradigm-hook-version: 3');
+    expect(content).toContain('paradigm-hook-version: 4');
+  });
+
+  // v4 (T-2026-11-06-001): history is derived from git on read. The hooks
+  // never write .paradigm/history, so a commit leaves the tree clean.
+  it('v4 post-commit writes no history and pre-push no longer reindexes', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ postCommit: true, prePush: true, force: true });
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    const post = fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8');
+    const push = fs.readFileSync(path.join(hooksDir, 'pre-push'), 'utf8');
+    expect(post).not.toContain('.paradigm/history');
+    expect(post).not.toContain('log.jsonl');
+    expect(post).not.toMatch(/wc -l/);
+    expect(push).not.toContain('history reindex');
+    expect(push).toContain('paradigm-hook-version: 4');
+    const { gitHookState } = await import('./git-hook-state.js');
+    expect(gitHookState(push, 'pre-push')).toBe('current');
   });
 
   // The git hooks resolve the CLI like the other hooks (embedded paradigm-resolve.sh):
@@ -235,8 +252,9 @@ describe('hooksInstallCommand - Git', () => {
     for (const f of ['post-commit', 'pre-push']) {
       const content = fs.readFileSync(path.join(hooksDir, f), 'utf8');
       expect(content, f).not.toMatch(/npx\s+(--\S+\s+)*paradigm/);
-      expect(content, f).toContain('_pm_resolve_paradigm "$_PM_GIT_ROOT"');
     }
+    // pre-push is a v4 no-op stub; post-commit still resolves the CLI for sync-commit
+    expect(fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8')).toContain('_pm_resolve_paradigm "$_PM_GIT_ROOT"');
 
     // The project's own copy records each call; a stub npx would mark any use.
     const pkgDir = path.join(rootDir, 'node_modules', '@a-company', 'paradigm');
@@ -271,8 +289,10 @@ describe('hooksInstallCommand - Git', () => {
       cleanups.forEach((fn) => fn());
     }
 
-    expect(fs.readFileSync(path.join(rootDir, 'calls.log'), 'utf8').split('\n').filter(Boolean)).toEqual(['task sync-commit', 'history reindex']);
+    expect(fs.readFileSync(path.join(rootDir, 'calls.log'), 'utf8').split('\n').filter(Boolean)).toEqual(['task sync-commit']);
     expect(fs.existsSync(path.join(rootDir, 'npx.log'))).toBe(false);
+    // the commit wrote no history row (pre-v4 appended one to the tracked log.jsonl)
+    expect(fs.readFileSync(path.join(rootDir, '.paradigm', 'history', 'log.jsonl'), 'utf8')).toBe('');
   });
 
   // Hooks written by older `paradigm hooks install` (v1 pre-push had no marker; v2
@@ -304,6 +324,146 @@ npx paradigm history reindex 2>/dev/null || true
     expect(gitHookState(push, 'pre-push')).toBe('current');
     expect(fs.readFileSync(path.join(hooksDir, 'post-commit.paradigm-v2.bak'), 'utf8')).toBe(OLD_POST_COMMIT);
     expect(fs.readFileSync(path.join(hooksDir, 'pre-push.paradigm-v1.bak'), 'utf8')).toBe(OLD_PRE_PUSH);
+  });
+
+  // The latent bug: an upgrade rewrote the whole file and dropped the block
+  // `warpline hook install` appends. It must survive byte for byte.
+  const WARPLINE_BLOCK = [
+    '# >>> warpline auto-seal >>>',
+    '# Seal each git commit into the Warpline fabric (this project\'s native history).',
+    "_wl_node='/opt/node bin/node'",
+    '_wl_mode=none',
+    'if [ "$_wl_mode" = none ]; then',
+    '  echo "warpline: auto-seal SKIPPED" >&2',
+    'fi',
+    '# <<< warpline auto-seal <<<',
+  ].join('\n');
+  const V3_POST_COMMIT = `#!/bin/sh
+# Paradigm post-commit hook - captures history from commits
+# Installed by: paradigm hooks install
+# paradigm-hook-version: 3   (v2 adds the provider-agnostic sync-commit delegate;
+#                             v3 resolves the CLI like the other hooks, no npx)
+COUNT=$(wc -l < ".paradigm/history/log.jsonl" | tr -d ' ')
+echo "{}" >> .paradigm/history/log.jsonl
+
+${WARPLINE_BLOCK}
+`;
+
+  it('v3 → v4 upgrade keeps the Warpline block byte for byte', async () => {
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    fs.writeFileSync(path.join(hooksDir, 'post-commit'), V3_POST_COMMIT);
+    const { hooksInstallCommand } = await importHooks();
+    const { gitHookState, foreignManagedBlocks } = await import('./git-hook-state.js');
+    await hooksInstallCommand({ postCommit: true });
+    const post = fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8');
+    expect(gitHookState(post, 'post-commit')).toBe('current');
+    expect(post).toContain(`\n\n${WARPLINE_BLOCK}\n`);
+    expect(post.endsWith(`${WARPLINE_BLOCK}\n`)).toBe(true);
+    expect(foreignManagedBlocks(post)).toEqual([WARPLINE_BLOCK]);
+    expect(post).not.toContain('.paradigm/history');
+    expect(fs.readFileSync(path.join(hooksDir, 'post-commit.paradigm-v3.bak'), 'utf8')).toBe(V3_POST_COMMIT);
+    // a second install is a no-op: still one block
+    await hooksInstallCommand({ postCommit: true });
+    expect(foreignManagedBlocks(fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8'))).toHaveLength(1);
+    // --force keeps it too
+    await hooksInstallCommand({ postCommit: true, force: true });
+    expect(foreignManagedBlocks(fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8'))).toEqual([WARPLINE_BLOCK]);
+  });
+
+  // Warpline 0.3.0 appends a managed pre-push block. Carried across the v3 → v4
+  // upgrade and --force byte for byte, and placed BEFORE the stub's `exit 0` so it runs.
+  const MIRROR_BLOCK = [
+    '# >>> warpline mirror push >>>',
+    '# Push refs/warpline/fabric alongside the branch.',
+    'git push --quiet origin refs/warpline/fabric 2>/dev/null || true',
+    '# <<< warpline mirror push <<<',
+  ].join('\n');
+  const V3_PRE_PUSH = `#!/bin/sh
+# Paradigm pre-push hook - reindex history before pushing
+# Installed by: paradigm hooks install
+# paradigm-hook-version: 3   (v3 resolves the CLI like the other hooks, no npx)
+$PARADIGM_BIN history reindex 2>/dev/null || true
+
+${MIRROR_BLOCK}
+`;
+
+  it('v3 → v4 pre-push upgrade and --force keep the Warpline mirror block where it runs', async () => {
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    fs.writeFileSync(path.join(hooksDir, 'pre-push'), V3_PRE_PUSH);
+    const { hooksInstallCommand } = await importHooks();
+    const { foreignManagedBlocks, gitHookState } = await import('./git-hook-state.js');
+    const check = () => {
+      const push = fs.readFileSync(path.join(hooksDir, 'pre-push'), 'utf8');
+      expect(gitHookState(push, 'pre-push')).toBe('current');
+      expect(foreignManagedBlocks(push)).toEqual([MIRROR_BLOCK]);
+      expect(push).not.toContain('history reindex');
+      expect(push).not.toMatch(/^exit\b/m); // nothing ends the script before the carried block
+      expect(push.trimEnd().endsWith(MIRROR_BLOCK)).toBe(true);
+    };
+    await hooksInstallCommand({ prePush: true });
+    check();
+    expect(fs.readFileSync(path.join(hooksDir, 'pre-push.paradigm-v3.bak'), 'utf8')).toBe(V3_PRE_PUSH);
+    await hooksInstallCommand({ prePush: true, force: true });
+    check();
+  });
+
+  it('a block appended to the installed v4 pre-push / pre-commit later still runs', { timeout: SHELL_TEST_TIMEOUT }, async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ prePush: true });
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    const marker = path.join(rootDir, 'mirror-ran');
+    const hook = path.join(hooksDir, 'pre-push');
+    fs.appendFileSync(hook, `# >>> warpline mirror push >>>\ntouch '${shellPath(marker)}'\n# <<< warpline mirror push <<<\n`);
+    execFileSync(SH, [shellPath(hook)], { cwd: rootDir, env: { ...baseEnv(), PATH: pathValue(SYS_PATH) }, stdio: 'pipe' });
+    expect(fs.existsSync(marker)).toBe(true);
+    const { PRE_COMMIT_HOOK } = await importHooks();
+    expect(PRE_COMMIT_HOOK.trimEnd().split('\n').pop()).not.toMatch(/^exit\b/);
+  });
+
+  it('--force over a hook Paradigm did not write keeps a backup', async () => {
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    const mine = '#!/bin/sh\n# my own hook\necho mine\n';
+    fs.writeFileSync(path.join(hooksDir, 'post-commit'), mine);
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ postCommit: true, force: true });
+    const baks = fs.readdirSync(hooksDir).filter((f) => f.startsWith('post-commit.paradigm-prev-') && f.endsWith('.bak'));
+    expect(baks).toHaveLength(1);
+    expect(fs.readFileSync(path.join(hooksDir, baks[0]), 'utf8')).toBe(mine);
+  });
+
+  it('installs where git runs hooks: core.hooksPath, and a linked worktree whose .git is a file', async () => {
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+    const g = (cwd: string, ...a: string[]) => execFileSync('git', a, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    g(rootDir, 'init', '-q');
+    g(rootDir, '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'init');
+    const { hooksInstallCommand } = await importHooks();
+    // linked worktree: hooks land in the common dir's hooks folder, no ENOTDIR
+    const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'pdg-wt-'));
+    fs.rmSync(wt, { recursive: true });
+    g(rootDir, 'worktree', 'add', '-q', '-b', 'wtb', wt);
+    try {
+      vi.spyOn(process, 'cwd').mockReturnValue(wt);
+      await hooksInstallCommand({ postCommit: true });
+      expect(fs.statSync(path.join(wt, '.git')).isFile()).toBe(true);
+      expect(fs.existsSync(path.join(rootDir, '.git', 'hooks', 'post-commit'))).toBe(true);
+      // core.hooksPath into the work tree: refused without --force, written with it
+      vi.spyOn(process, 'cwd').mockReturnValue(rootDir);
+      g(rootDir, 'config', 'core.hooksPath', '.githooks');
+      fs.mkdirSync(path.join(rootDir, '.githooks'));
+      const theirs = '#!/bin/sh\n# husky-style shared hook\n';
+      fs.writeFileSync(path.join(rootDir, '.githooks', 'pre-push'), theirs);
+      await hooksInstallCommand({ prePush: true });
+      expect(fs.readFileSync(path.join(rootDir, '.githooks', 'pre-push'), 'utf8')).toBe(theirs);
+      await hooksInstallCommand({ prePush: true, force: true });
+      const { readGitHook } = await import('./git-hook-state.js');
+      expect(readGitHook(rootDir, 'pre-push')).toContain('paradigm-hook-version: 4');
+      // the backup went to the git dir, never the work tree
+      expect(fs.readdirSync(path.join(rootDir, '.githooks')).filter((f) => f.endsWith('.bak'))).toEqual([]);
+      const backups = fs.readdirSync(path.join(rootDir, '.git', 'paradigm-hook-backups'));
+      expect(backups.some((f) => f.startsWith('pre-push.paradigm-prev-'))).toBe(true);
+    } finally {
+      fs.rmSync(wt, { recursive: true, force: true });
+    }
   });
 
   it('never touches a hook Paradigm did not write, even one that calls paradigm', async () => {

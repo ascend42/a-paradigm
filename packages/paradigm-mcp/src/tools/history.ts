@@ -175,6 +175,8 @@ export async function handleHistoryTool(
               }
             : null,
           recent: sh.recent.slice(0, 3).map((e) => ({
+            id: e.id,
+            source: e.source ?? 'legacy',
             type: e.type,
             description: e.description,
             author: e.author,
@@ -182,6 +184,8 @@ export async function handleHistoryTool(
           })),
           co_changes: sh.co_changes.slice(0, 5),
         })),
+        // Shallow clone: rows for commits outside the clone depth are missing.
+        ...(history.shallow ? { shallow: true } : {}),
         summary: {
           total_symbols: symbols.length,
           with_history: symbolHistories.filter((sh) => sh.summary).length,
@@ -228,7 +232,6 @@ export async function handleHistoryTool(
           type,
           symbols,
           message: 'History entry recorded successfully',
-          note: 'Run paradigm history reindex to update the index after multiple entries',
         }),
       };
     }
@@ -277,6 +280,7 @@ export async function handleHistoryTool(
           })),
           warnings: check.warnings,
           recommendations: check.recommendations,
+          ...(history.shallow ? { shallow: true } : {}),
           summary:
             check.fragile.length === 0
               ? 'All symbols are stable - safe to proceed'

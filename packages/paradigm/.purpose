@@ -607,10 +607,10 @@ components:
     description: Manages team preferences, antipatterns, decisions, and expertise
     type: handler
   history-handler:
-    description: Manages implementation log, validation, and fragility
+    description: Manages implementation history, validation, and fragility. Commit history is derived from git on read (#history-git); log.jsonl keeps tool-authored rows (merge=union) and index.yaml is generated and git-ignored (T-2026-11-06-001)
     type: handler
   hooks-handler:
-    description: Manages git hooks for automatic history capture
+    description: Manages git hooks (post-commit sync-commit delegate, pre-push no-op, pre-commit learning guard); v4 writes no history
     type: handler
   claude-code-hooks-installer:
     description: Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex. Includes paradigm-navigate-remind.sh PreToolUse hook (Glob|Grep matcher) that fires once per session to prompt navigate-first behaviour.

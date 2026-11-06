@@ -41,3 +41,7 @@ components:
     description: "Pack manifest constants and convenience re-exports — PACK_MANIFEST_FILENAME ('pack.yaml'), PACK_SCHEMA_VERSION ('1'), PACKAGE_JSON_POINTER_FIELD ('paradigm.universityPack'), FIRST_PARTY_PACK_IDS. Re-exports TenantKind, Origin, PackDependency, PackCompliance, PackManifest, PackLocation from university.ts."
     type: types
     tags: [university, pack, manifest, v6.0, schema]
+  HistoryTypes:
+    description: 'History types (history.ts): HistoryEntry (gains source?: HistoryEntrySource = git | authored | legacy; ids h-<sha12>, h-<ms36><rand4>, legacy h0001 or h0001@<sha7>), HistoryStamp {v, head, logSize, logMtimeMs, cacheCount}, HistoryIndex (stamp?, shallow?), HistoryContext (shallow?), SymbolHistorySummary, CoChangePattern, FragileSymbol, ValidationSummary, FragilityCheck.'
+    type: types
+    tags: [history, schema]

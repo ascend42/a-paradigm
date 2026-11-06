@@ -8,7 +8,7 @@ import ora from 'ora';
 import { log } from '../utils/logger.js';
 import { warn } from '../utils/cli-output.js';
 import { measureAlwaysOn, overCapLine, surfaceForAdapter, type AlwaysOnSurface } from '../core/always-on-budget.js';
-import { ensureSessionMarkersGitignore, untrackGeneratedState } from '../core/session-markers-gitignore.js';
+import { ensureHistoryGitattributes, ensureSessionMarkersGitignore, untrackGeneratedState } from '../core/session-markers-gitignore.js';
 import {
   detectIDE,
   getAdapter,
@@ -79,12 +79,22 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
   // generated state (indexes, event logs) out of git; untrack any already
   // committed (git rm --cached, files stay on disk; a no-op on later runs).
   ensureSessionMarkersGitignore(path.join(rootDir, '.paradigm'));
+  // Authored history rows merge line-wise across branches (T-2026-11-06-001).
+  if (ensureHistoryGitattributes(rootDir)) {
+    log.command('sync').info('Wrote the history merge=union block in .gitattributes');
+    if (!quiet) console.log(chalk.gray('  .gitattributes: .paradigm/history/log.jsonl merge=union (commit it).'));
+  }
   try {
     const untracked = untrackGeneratedState(rootDir);
     if (untracked.length > 0) {
       log.command('sync').info('Untracked generated .paradigm state', { count: untracked.length });
       if (!quiet) {
         console.log(chalk.gray(`  Untracked ${untracked.length} generated .paradigm file(s) (kept on disk); commit the removal.`));
+        if (untracked.some((f) => f === '.paradigm/history/index.yaml' || f.endsWith('/.paradigm/history/index.yaml'))) {
+          console.log(chalk.gray('  history/index.yaml is now generated from git and log.jsonl. A branch that still changes it hits one'));
+          console.log(chalk.gray('  modify/delete conflict on it when merged or rebased: resolve it as a delete (`git rm .paradigm/history/index.yaml`).'));
+          console.log(chalk.gray('  Then run `paradigm hooks install` so the post-commit hook stops writing history.'));
+        }
       }
     }
   } catch (err) {

@@ -1,6 +1,6 @@
 # History System Specification
 
-> **Paradigm v1.1** | Implementation log, validation, fragility tracking
+> **Paradigm v1.2** | Implementation history derived from git, validation, fragility tracking
 
 ## Overview
 
@@ -8,29 +8,53 @@ The History system captures the **temporal and empirical dimension** of developm
 
 ## Purpose
 
-- **Track what changed** - append-only log of implementations, validations, rollbacks
+- **Track what changed** - every commit carrying symbols, plus authored implementations, validations, rollbacks
 - **Identify fragile areas** - symbols with frequent failures or rollbacks need extra care
 - **Detect co-change patterns** - symbols that often change together
 - **Guide AI agents** - check stability before modifying risky areas
 - **Enable post-mortems** - full history for any symbol
 
-## Storage Structure
+## Sources and Storage
+
+History has three sources, merged on read:
+
+| Source | Where | Id |
+|--------|-------|----|
+| `git` | Derived from each commit reachable from HEAD that carries symbols. Cached per SHA in the machine home (`<state dir>/<repoId>/history/commits.jsonl`), never in the repository | `h-<sha12>` |
+| `authored` | `paradigm history record / validate` and the MCP `paradigm_history_record / _validate` tools append to `log.jsonl` | `h-<base36 ms><4 random>` |
+| `legacy` | Rows the pre-v4 post-commit hook appended to `log.jsonl` (frozen, still read) | `h0001`, or `h0001@<sha7>` when two branches minted the same one |
 
 ```
 .paradigm/history/
-├── log.jsonl           # Append-only implementation log
-├── index.yaml          # Pre-computed symbol index (regenerated)
+├── log.jsonl           # Tracked: authored rows (+ frozen legacy rows); merge=union
+├── index.yaml          # GENERATED and git-ignored: rebuilt on read when stale
 └── validation.yaml     # Validation config + summary
 ```
 
+A commit row is a pure function of (SHA, message, changed files, `.purpose` at that SHA):
+
+- **Symbols** come from every `Symbols:` line of the message (a GitHub squash merge concatenates several). A commit with none falls back to the nearest `.purpose` (not the root one) of each changed file, read at that commit, narrowed to the symbols that cover that file: a component whose declared `path` / `file` / `files` names it (or a folder holding it), or a path-less one whose id equals the file's name stem (`login-form.ts` tags `#login-form`). A shallow clone's boundary commit is derived from its trailers only and never cached. A git failure or timeout leaves the result incomplete: nothing is cached as "no symbols" and the index is not written. No match, no symbols: a commit never inherits every component of a `.purpose`.
+- **Author** is the commit author; `type: agent` when a `Co-Authored-By:` trailer names an AI agent or bot.
+- **Intent** comes from the subject prefix (feat/fix/refactor).
+- Amended or rebased-away commits drop out (only reachable SHAs count); a cherry-pick is a new SHA and a new row.
+- A log row that names a commit wins over the derived row for it, so legacy ids keep resolving.
+- Legacy rows are not reachability-filtered: a legacy row for a pre-squash branch commit still counts alongside the derived row of the squash commit that replaced it.
+
+No hook writes history: a commit leaves the working tree clean. In a shallow clone the index is marked `shallow: true` and fragility checks warn that older history is missing.
+
 ## Schema: log.jsonl
 
-Append-only, one JSON object per line. Never edit - only append.
+Append-only, one JSON object per line. Never edit - only append. `.gitattributes` carries `.paradigm/history/log.jsonl merge=union` (written by `paradigm init` / `paradigm sync`), so rows authored on two branches merge without a conflict; ids are random, so they never collide.
 
 ```jsonl
-{"id":"h0001","ts":"2026-02-02T10:00:00Z","type":"implement","symbols":["#checkout"],"author":{"type":"agent","id":"builder"},"commit":"abc123","intent":"feature","files":["src/checkout/page.tsx"],"description":"Added Apple Pay support"}
-{"id":"h0002","ts":"2026-02-02T10:30:00Z","type":"validate","ref":"h0001","symbols":[],"author":{"type":"agent","id":"tester"},"result":"pass","tests":{"passed":15,"failed":0}}
-{"id":"h0003","ts":"2026-02-03T09:00:00Z","type":"rollback","ref":"h0001","symbols":["#checkout"],"author":{"type":"human","id":"alice"},"reason":"Performance regression on mobile"}
+{"id":"h-mhx2k3a01b2c","ts":"2026-02-02T10:30:00Z","source":"authored","type":"validate","ref":"h-3f9c2a1b7d4e","symbols":[],"author":{"type":"agent","id":"tester"},"result":"pass","tests":{"passed":15,"failed":0}}
+{"id":"h-mhx2m0q9zz01","ts":"2026-02-03T09:00:00Z","source":"authored","type":"rollback","ref":"h-3f9c2a1b7d4e","symbols":["#checkout"],"author":{"type":"human","id":"alice"},"reason":"Performance regression on mobile"}
+```
+
+A derived row (not stored in the repository) looks like:
+
+```json
+{"id":"h-3f9c2a1b7d4e","ts":"2026-02-02T10:00:00Z","source":"git","type":"implement","symbols":["#checkout"],"author":{"type":"human","id":"Ada"},"commit":"3f9c2a1b7d4e…","intent":"feature","files":["src/checkout/page.tsx"],"description":"feat(#checkout): Apple Pay support"}
 ```
 
 ### Entry Types
@@ -46,7 +70,8 @@ Append-only, one JSON object per line. Never edit - only append.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique ID (h0001, h0002, ...) |
+| `id` | string | Unique ID (`h-<sha12>` derived, `h-<ms36><rand4>` authored, `h0001` legacy) |
+| `source` | string? | `git` / `authored` / `legacy` (readers fill it in; on disk only authored rows carry it) |
 | `ts` | string | ISO timestamp |
 | `type` | string | Entry type (implement/validate/rollback/refactor) |
 | `symbols` | string[] | Affected Paradigm symbols |
@@ -62,11 +87,12 @@ Append-only, one JSON object per line. Never edit - only append.
 
 ## Schema: index.yaml
 
-Pre-computed from log.jsonl. Regenerate with `paradigm history reindex`.
+Generated from log.jsonl merged with the derived rows, and git-ignored. Every reader (`paradigm history`, the MCP tools and resources) checks its `stamp` and rebuilds it when HEAD, log.jsonl or the commit cache changed, so a fresh clone has an index on first read. It is only written when git ignores it (after `paradigm sync`); in an unmigrated repository it is computed in memory and the tracked file is left alone. `paradigm history reindex` forces a rebuild.
 
 ```yaml
 version: "1.0"
 generated: "2026-02-02T12:00:00Z"
+stamp: { v: 1, head: "3f9c2a1b…", logSize: 1024, logMtimeMs: 1738497600000, cacheCount: 52311 }
 
 by_symbol:
   "#checkout":
@@ -216,7 +242,7 @@ Record test results.
 {
   "name": "paradigm_history_validate",
   "arguments": {
-    "implementation_id": "h0045",
+    "implementation_id": "h-3f9c2a1b7d4e",
     "result": "pass",
     "tests": {"passed": 15, "failed": 0}
   }
@@ -253,7 +279,7 @@ paradigm history init
 # Show fragile symbols
 paradigm history fragile
 
-# Regenerate index from log
+# Rebuild the generated index now (reads do it automatically when stale)
 paradigm history reindex
 
 # Record an implementation
@@ -266,29 +292,30 @@ paradigm history record \
 # Record validation result
 paradigm history validate \
   --result pass \
-  --ref h0045 \
+  --ref h-3f9c2a1b7d4e \
   --passed 15 \
   --failed 0
 ```
 
 ## Git Hooks
 
-Automatic history capture via git hooks.
+History needs no hook. `paradigm hooks install` (hook version 4) writes:
+
+- post-commit: passes the commit's `Symbols:` to `paradigm task sync-commit` (linked external items); writes no history
+- pre-push: a no-op (it used to reindex the tracked index)
+- pre-commit: the scoped learning guard
+
+### Migrating from pre-v4 history
+
+Before v4 the post-commit hook appended to the tracked log.jsonl (with `wc -l + 1` ids that collided across branches) and pre-push rewrote the tracked index.yaml, so every commit left the tree dirty.
 
 ```bash
-# Install hooks
-paradigm hooks install
-
-# Hooks installed:
-# - post-commit: Records implementation entries from commits
-# - pre-push: Reindexes history
+paradigm sync            # ignore + git rm --cached history/index.yaml; .gitattributes merge=union
+git commit -am "chore: history derived from git"
+paradigm hooks install   # v1-v3 → v4, old hook kept as .paradigm-v<N>.bak, Warpline block preserved
 ```
 
-Post-commit hook extracts:
-- Symbols from .purpose files in changed directories
-- Intent from commit message prefix (feat/fix/refactor)
-- Files changed
-- Commit hash and author
+A branch that still changes index.yaml hits one modify/delete conflict on it when merged or rebased: resolve it as a delete (`git rm .paradigm/history/index.yaml`). There is no backfill: legacy rows stay as they are and keep resolving. `paradigm doctor` warns while a repository has not migrated.
 
 ## Agent Workflow
 
@@ -316,17 +343,17 @@ Agent: "I need to modify #search to add filters"
 
 3. Implement with extra care, add comprehensive tests
 
-4. After commit, call paradigm_history_record(...)
+4. Commit with a `Symbols: #search` trailer (the commit becomes a history row)
 
 5. After tests pass, call paradigm_history_validate(...)
 ```
 
 ## Best Practices
 
-1. **Always record** - even failed attempts provide learning
+1. **Use `Symbols:` trailers** - they are what attributes a commit; record rollbacks and failed attempts too
 2. **Check fragility first** - before modifying unknown areas
 3. **Respect co-change patterns** - if A often changes with B, check B
-4. **Reindex periodically** - after batch operations
+4. **Keep squash bodies** - a squash merge that drops the commit trailers falls back to `.purpose` symbols (GitHub: default the squash message to the PR title and commit details)
 5. **Review fragile symbols** - in sprint planning
 
 ## Token Cost Optimization
@@ -336,4 +363,4 @@ Agent: "I need to modify #search to add filters"
 - Full history: ~200-400 tokens
 - Co-change patterns: ~50-100 tokens
 
-Pre-computed index.yaml avoids scanning full log.
+The generated index.yaml (and the per-SHA commit cache) avoid re-reading git history on every call; only commits not yet cached are read.

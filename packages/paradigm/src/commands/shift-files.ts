@@ -140,13 +140,7 @@ export const GUARANTEED_FILES: GuaranteedFile[] = [
   { path: '.paradigm/events/session-log.jsonl', defaultContent: '' },
 
   // ── History & Knowledge ────────────────────────────────────────────────
-  {
-    path: '.paradigm/history/index.yaml',
-    defaultContent: [
-      'version: "1.0"',
-      'entries: []',
-    ].join('\n') + '\n',
-  },
+  // history/index.yaml is generated and git-ignored (ensureHistoryIndex), never scaffolded.
   { path: '.paradigm/history/log.jsonl', defaultContent: '' },
   {
     path: '.paradigm/lore/timeline.yaml',

@@ -35,7 +35,7 @@ import {
   CURSOR_PRETOOLUSE_HOOK,
   CURSOR_POSTTOOLUSE_HOOK,
 } from './generated-hooks.js';
-import { GIT_HOOK_VERSION, gitHookState, gitHookVersion, type GitHookName } from './git-hook-state.js';
+import { GIT_HOOK_VERSION, HISTORY_FREE_POST_COMMIT_VERSION, foreignManagedBlocks, gitHookBackupDir, gitHookState, gitHookVersion, gitHooksDir, hooksDirInWorkTree, type GitHookName } from './git-hook-state.js';
 
 /**
  * Detect whether the Paradigm plugin is active in Claude Code.
@@ -264,53 +264,19 @@ _PM_GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 export const POSTWRITE_MATCHER = 'Write|Edit|MultiEdit|NotebookEdit';
 
 const POST_COMMIT_HOOK = `#!/bin/sh
-# Paradigm post-commit hook - captures history from commits
+# Paradigm post-commit hook - delegates commit symbols to linked external items
 # Installed by: paradigm hooks install
-# paradigm-hook-version: 3   (v2 adds the provider-agnostic sync-commit delegate;
-#                             v3 resolves the CLI like the other hooks, no npx)
+# paradigm-hook-version: 4   (v2 adds the provider-agnostic sync-commit delegate;
+#                             v3 resolves the CLI like the other hooks, no npx;
+#                             v4 writes no history: it is derived from git on read,
+#                             so the tree stays clean after a commit)
 
 ${GIT_HOOK_RESOLVE}
-# Get the commit message and hash
 COMMIT_HASH=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log -1 --pretty=%B)
 
-# Get changed files
-CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
-
-# Extract symbols from changed files (look for .purpose files)
-extract_symbols() {
-  local symbols=""
-  for file in $CHANGED_FILES; do
-    # Check if there's a .purpose file in the directory
-    dir=$(dirname "$file")
-    while [ "$dir" != "." ]; do
-      if [ -f "$dir/.purpose" ]; then
-        # Extract feature/component names from .purpose
-        purpose_symbols=$(grep -E '^(features|components|gates|flows):' "$dir/.purpose" -A 10 2>/dev/null | grep -E '^  - (name|id):' | sed 's/.*: //' | tr '\\n' ',' | sed 's/,$//')
-        if [ -n "$purpose_symbols" ]; then
-          symbols="$symbols,$purpose_symbols"
-        fi
-        break
-      fi
-      dir=$(dirname "$dir")
-    done
-  done
-  echo "$symbols" | sed 's/^,//' | tr ',' '\\n' | sort -u | tr '\\n' ',' | sed 's/,$//'
-}
-
-SYMBOLS=$(extract_symbols)
-
-# Extract symbols from commit message Symbols: trailer
-MSG_SYMBOLS=$(echo "$COMMIT_MSG" | grep -E '^Symbols:' | sed 's/^Symbols: //' | tr -d ' ')
-if [ -n "$MSG_SYMBOLS" ]; then
-  if [ -n "$SYMBOLS" ]; then
-    SYMBOLS="$SYMBOLS,$MSG_SYMBOLS"
-  else
-    SYMBOLS="$MSG_SYMBOLS"
-  fi
-  # Deduplicate
-  SYMBOLS=$(echo "$SYMBOLS" | tr ',' '\\n' | sort -u | tr '\\n' ',' | sed 's/,$//')
-fi
+# Symbols from every Symbols: trailer (a squash merge body can carry several)
+MSG_SYMBOLS=$(printf '%s\\n' "$COMMIT_MSG" | grep -E '^Symbols:' | sed 's/^Symbols://' | tr -d ' ' | tr '\\n' ',' | sed 's/,,*/,/g; s/^,//; s/,$//')
 
 # Provider-agnostic sync delegate (Phase 2b). A touched symbol drops a comment
 # on any linked external item. ENTIRELY best-effort: redirected + '|| true' so a
@@ -321,63 +287,26 @@ if [ -n "$MSG_SYMBOLS" ]; then
     $PARADIGM_BIN task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS" >/dev/null 2>&1 || true
   fi
 fi
-
-# Determine intent from commit message
-determine_intent() {
-  case "$COMMIT_MSG" in
-    feat*|feature*|add*) echo "feature" ;;
-    fix*|bug*) echo "fix" ;;
-    refactor*) echo "refactor" ;;
-    *) echo "feature" ;;
-  esac
-}
-
-INTENT=$(determine_intent)
-
-# Record if we found symbols (from .purpose or commit message) and .paradigm/history exists
-if [ -n "$SYMBOLS" ] && [ -d ".paradigm/history" ]; then
-  # Generate entry ID
-  if [ -f ".paradigm/history/log.jsonl" ]; then
-    COUNT=$(wc -l < ".paradigm/history/log.jsonl" | tr -d ' ')
-    COUNT=$((COUNT + 1))
-  else
-    COUNT=1
-  fi
-  ID=$(printf "h%04d" $COUNT)
-
-  # Create entry
-  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  AUTHOR=$(git config user.name || echo "unknown")
-
-  # Format symbols as JSON array
-  SYMBOLS_JSON=$(echo "$SYMBOLS" | sed 's/,/","/g' | sed 's/^/"/' | sed 's/$/"/')
-
-  # Format files as JSON array
-  FILES_JSON=$(echo "$CHANGED_FILES" | tr '\\n' ',' | sed 's/,$//' | sed 's/,/","/g' | sed 's/^/"/' | sed 's/$/"/')
-
-  # Write entry
-  echo "{\\"id\\":\\"$ID\\",\\"ts\\":\\"$TIMESTAMP\\",\\"type\\":\\"implement\\",\\"symbols\\":[$SYMBOLS_JSON],\\"author\\":{\\"type\\":\\"human\\",\\"id\\":\\"$AUTHOR\\"},\\"commit\\":\\"$COMMIT_HASH\\",\\"intent\\":\\"$INTENT\\",\\"files\\":[$FILES_JSON],\\"description\\":\\"$(echo "$COMMIT_MSG" | head -1 | sed 's/"/\\\\"/g')\\"}" >> .paradigm/history/log.jsonl
-
-  echo "[paradigm] History entry $ID recorded"
-fi
 `;
 
+/**
+ * v4: a no-op. The pre-v4 hook ran `paradigm history reindex`, rewriting the
+ * tracked history/index.yaml before every push; the index is now generated
+ * and git-ignored. Kept as a versioned stub so an outdated pre-push is still
+ * detected and upgraded by `paradigm hooks install`.
+ */
 const PRE_PUSH_HOOK = `#!/bin/sh
-# Paradigm pre-push hook - reindex history before pushing
+# Paradigm pre-push hook - no-op (history is derived from git on read)
 # Installed by: paradigm hooks install
-# paradigm-hook-version: 3   (v3 resolves the CLI like the other hooks, no npx)
-
-${GIT_HOOK_RESOLVE}
-if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ] && _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
-  echo "[paradigm] Reindexing history..."
-  $PARADIGM_BIN history reindex 2>/dev/null || true
-fi
+# paradigm-hook-version: 4   (v4 no longer reindexes history: index.yaml is generated and git-ignored)
+# Ends without \`exit\`: a block another tool appends later (Warpline's mirror push) still runs.
+:
 `;
 
 export const PRE_COMMIT_HOOK = `#!/bin/sh
 # Paradigm pre-commit hook - scoped learning guard (#learning-commit-guard)
 # Installed by: paradigm hooks install
-# paradigm-hook-version: 3
+# paradigm-hook-version: 4
 # Refuses a commit whose staged learning-store data carries a home: user/machine
 # row, a machine path, or (learning.visibility public, the default) a
 # human-taught entry whose home was only inferred. Escape (logged):
@@ -396,7 +325,8 @@ if _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
   fi
   [ "$_pm_lg_rc" -eq 0 ] || printf '[paradigm] learning guard did not run cleanly (exit %s); commit allowed\\n' "$_pm_lg_rc" >&2
 fi
-exit 0
+# Ends without \`exit\` so a block another tool appends later still runs.
+:
 `;
 
 /**
@@ -410,7 +340,7 @@ function installGitHook(
   hooksDir: string,
   name: GitHookName,
   body: string,
-  opts: { force?: boolean; dryRun?: boolean },
+  opts: { force?: boolean; dryRun?: boolean; backupDir?: string },
   installed: string[],
 ): void {
   const hookPath = path.join(hooksDir, name);
@@ -437,12 +367,48 @@ function installGitHook(
     return;
   }
   fs.mkdirSync(hooksDir, { recursive: true });
-  if (upgrade && content !== null) {
-    fs.writeFileSync(path.join(hooksDir, `${name}.paradigm-v${from}.bak`), content);
+  // Blocks another tool appended (Warpline's `# >>> warpline auto-seal >>>`)
+  // survive the rewrite byte for byte, in the layout that tool writes
+  // (body, blank line, block), so its own install still finds and refreshes it.
+  // A body ending in `exit 0` gets them before that line, where they still run.
+  let out = body;
+  let kept = 0;
+  for (const block of content !== null ? foreignManagedBlocks(content) : []) {
+    if (out.includes(block)) continue;
+    const exitAt = out.search(/\nexit 0\s*$/);
+    out = exitAt >= 0
+      ? `${out.slice(0, exitAt).replace(/\n+$/, '\n')}\n${block}\n${out.slice(exitAt)}`
+      : `${out.replace(/\n+$/, '\n')}\n${block}\n`;
+    kept++;
   }
-  fs.writeFileSync(hookPath, body);
+  let backup: string | null = null;
+  if (upgrade && content !== null) {
+    backup = `${name}.paradigm-v${from}.bak`;
+  } else if (content !== null && content !== out) {
+    // --force over a hook that differs (Paradigm's or not): never lose it.
+    backup = `${name}.paradigm-prev-${Date.now()}.bak`;
+  }
+  // Backups live in the git dir (never the work tree, where core.hooksPath may point).
+  const backupDir = opts.backupDir ?? hooksDir;
+  if (backup && content !== null) {
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.writeFileSync(path.join(backupDir, backup), content);
+    if (backupDir !== hooksDir) backup = path.join(path.relative(hooksDir, backupDir), backup);
+  }
+  fs.writeFileSync(hookPath, out);
   fs.chmodSync(hookPath, '755');
-  installed.push(upgrade ? `${name} (upgraded from v${from}; previous kept as ${name}.paradigm-v${from}.bak)` : name);
+  const keptNote = kept > 0 ? `; kept ${kept} block(s) other tools manage` : '';
+  installed.push(upgrade
+    ? `${name} (upgraded from v${from}; previous kept as ${backup}${keptNote})`
+    : `${name}${backup ? ` (previous kept as ${backup})` : ''}${keptNote ? ` (${keptNote.slice(2)})` : ''}`);
+}
+
+function readGitHookAt(hooksDir: string, name: GitHookName): string | null {
+  try {
+    return fs.readFileSync(path.join(hooksDir, name), 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -512,35 +478,47 @@ export async function hooksInstallCommand(options: {
   // Install git hooks (unless --claude-code or --cursor was the only flag)
   if (!onlyClaudeCode && !onlyCursor) {
     // Check if we're in a git repo
-    const gitDir = path.join(rootDir, '.git');
-    if (!fs.existsSync(gitDir)) {
+    // Where git really runs hooks from (core.hooksPath, linked worktrees).
+    const hooksDir = gitHooksDir(rootDir);
+    if (!hooksDir) {
       console.log(chalk.red('Not a git repository.'));
       return;
     }
+    // core.hooksPath into the work tree (.githooks, .husky): committed, shared files.
+    const workTreeBlocked = !options.force && hooksDirInWorkTree(rootDir, hooksDir);
+    if (workTreeBlocked) {
+      console.log(chalk.yellow(`Git hooks dir ${hooksDir} is inside the work tree (core.hooksPath); its files are shared. Git hooks not written; re-run with --force to install into it.`));
+    }
+    const backupDir = gitHookBackupDir(rootDir, hooksDir);
 
-    const hooksDir = path.join(gitDir, 'hooks');
-
-    const installAllGit = !options.postCommit && !options.prePush && !options.claudeCode;
+    const installAllGit = !workTreeBlocked && !options.postCommit && !options.prePush && !options.claudeCode;
     const installed: string[] = [];
 
-    if (installAllGit || options.postCommit) {
-      installGitHook(hooksDir, 'post-commit', POST_COMMIT_HOOK, { force: options.force, dryRun }, installed);
+    if (!workTreeBlocked && (installAllGit || options.postCommit)) {
+      installGitHook(hooksDir, 'post-commit', POST_COMMIT_HOOK, { force: options.force, dryRun, backupDir }, installed);
     }
-    if (installAllGit || options.prePush) {
-      installGitHook(hooksDir, 'pre-push', PRE_PUSH_HOOK, { force: options.force, dryRun }, installed);
+    if (!workTreeBlocked && (installAllGit || options.prePush)) {
+      installGitHook(hooksDir, 'pre-push', PRE_PUSH_HOOK, { force: options.force, dryRun, backupDir }, installed);
     }
     if (installAllGit) {
-      installGitHook(hooksDir, 'pre-commit', PRE_COMMIT_HOOK, { force: options.force, dryRun }, installed);
+      installGitHook(hooksDir, 'pre-commit', PRE_COMMIT_HOOK, { force: options.force, dryRun, backupDir }, installed);
     }
 
     if (!dryRun && installed.length > 0) {
       console.log(chalk.green(`Git hooks installed: ${installed.join(', ')}`));
     }
 
-    // Initialize history if needed
-    const historyDir = path.join(rootDir, '.paradigm/history');
-    if (!fs.existsSync(historyDir) && !dryRun) {
-      console.log(chalk.gray('Tip: Run `paradigm history init` to initialize history tracking'));
+    // Commit history needs no hook: it is derived from git on read. The
+    // tracked index.yaml and the log.jsonl merge driver come from `paradigm sync`.
+    if (!dryRun && fs.existsSync(path.join(rootDir, '.paradigm'))) {
+      try {
+        const tracked = execFileSync('git', ['--no-optional-locks', 'ls-files', '--', '.paradigm/history/index.yaml'], {
+          cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+        if (tracked) {
+          console.log(chalk.yellow('.paradigm/history/index.yaml is still tracked: run `paradigm sync` and commit the removal so commits leave the tree clean.'));
+        }
+      } catch { /* not a work tree: nothing to advise */ }
     }
   }
 
@@ -991,14 +969,12 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
 
   if (!options.cursor) {
     // Uninstall git hooks
-    const gitDir = path.join(rootDir, '.git');
+    const hooksDir = gitHooksDir(rootDir);
 
-    if (!fs.existsSync(gitDir)) {
+    if (!hooksDir) {
       console.log(chalk.red('Not a git repository.'));
       return;
     }
-
-    const hooksDir = path.join(gitDir, 'hooks');
     const removed: string[] = [];
 
     for (const hookName of ['post-commit', 'pre-push', 'pre-commit']) {
@@ -1094,13 +1070,12 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
  */
 export async function hooksStatusCommand(): Promise<void> {
   const rootDir = process.cwd();
-  const gitDir = path.join(rootDir, '.git');
+  const hooksDir = gitHooksDir(rootDir);
 
   // Git hooks status
-  if (fs.existsSync(gitDir)) {
+  if (hooksDir) {
     console.log(chalk.magenta('\n  Git Hooks Status\n'));
 
-    const hooksDir = path.join(gitDir, 'hooks');
     const hooks = ['post-commit', 'pre-push', 'pre-commit'];
 
     for (const hookName of hooks) {
@@ -1122,18 +1097,17 @@ export async function hooksStatusCommand(): Promise<void> {
 
     console.log();
 
-    // Check history directory
-    const historyDir = path.join(rootDir, '.paradigm/history');
-    if (fs.existsSync(historyDir)) {
-      const logPath = path.join(historyDir, 'log.jsonl');
-      if (fs.existsSync(logPath)) {
-        const content = fs.readFileSync(logPath, 'utf8');
-        const count = content.split('\n').filter((l) => l.trim()).length;
-        console.log(chalk.white(`  History entries: ${count}`));
-      }
+    // History is derived from git on read (v4); log.jsonl holds authored rows only.
+    const postCommit = readGitHookAt(hooksDir, 'post-commit');
+    if (postCommit !== null && gitHookState(postCommit, 'post-commit') !== 'foreign' && gitHookVersion(postCommit) < HISTORY_FREE_POST_COMMIT_VERSION) {
+      console.log(chalk.yellow('  History: post-commit still writes tracked history (tree dirty after every commit) — run `paradigm sync && paradigm hooks install`'));
     } else {
-      console.log(chalk.gray('  History: not initialized'));
-      console.log(chalk.gray('  Run `paradigm history init` to enable'));
+      console.log(chalk.white('  History: derived from git on read (no hook writes it)'));
+    }
+    const logPath = path.join(rootDir, '.paradigm', 'history', 'log.jsonl');
+    if (fs.existsSync(logPath)) {
+      const count = fs.readFileSync(logPath, 'utf8').split('\n').filter((l) => l.trim()).length;
+      console.log(chalk.gray(`  Authored + legacy rows in log.jsonl: ${count}`));
     }
   } else {
     console.log(chalk.gray('\n  Not a git repository (git hooks N/A)\n'));

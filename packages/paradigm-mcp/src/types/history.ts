@@ -22,11 +22,22 @@ export type HistoryIntent = 'feature' | 'fix' | 'refactor' | 'experimental' | 'c
 export type AuthorType = 'human' | 'agent';
 
 /**
+ * Where an entry came from (history from git, T-2026-11-06-001):
+ *   git      — derived from a commit on read (id `h-<sha12>`), cached per SHA in the machine home
+ *   authored — written by `paradigm history record/validate` or the MCP tools into log.jsonl (id `h-<ms36><rand4>`)
+ *   legacy   — a log.jsonl row from before derivation (the old post-commit hook, `h0001`-style ids)
+ * On disk only authored rows carry it; readers fill it in.
+ */
+export type HistoryEntrySource = 'git' | 'authored' | 'legacy';
+
+/**
  * Single entry in the history log (stored in log.jsonl)
  */
 export interface HistoryEntry {
-  /** Unique ID (e.g., "h001") */
+  /** Unique ID: `h-<sha12>` (git), `h-<ms36><rand4>` (authored), `h0001` (legacy; `h0001@<sha7>` when ambiguous) */
   id: string;
+  /** Where the entry came from (see HistoryEntrySource). */
+  source?: HistoryEntrySource;
   /** Timestamp */
   ts: string;
   /** Type of entry */
@@ -102,11 +113,33 @@ export interface FragileSymbol {
 }
 
 /**
- * Pre-computed history index (regenerated from log.jsonl)
+ * What a generated index.yaml was built from. The index is rebuilt when any
+ * field differs from the current repository state (ensureHistoryIndex).
+ */
+export interface HistoryStamp {
+  /** Derivation format version; a code change that alters derived rows bumps it. */
+  v: number;
+  /** HEAD commit, or null outside git / before the first commit */
+  head: string | null;
+  logSize: number;
+  logMtimeMs: number;
+  /** Byte size of the machine-home commit cache (a proxy for its row count). */
+  cacheCount: number;
+  /** `<size>:<mtime>` of the shallow file ("" when not shallow): an unshallow invalidates the index. */
+  shallow?: string;
+}
+
+/**
+ * Generated history index: log.jsonl (authored + legacy rows) merged with rows
+ * derived from git. Written to the git-ignored .paradigm/history/index.yaml.
  */
 export interface HistoryIndex {
   version: string;
   generated: string;
+  /** What the index was built from (absent on pre-derivation index files). */
+  stamp?: HistoryStamp;
+  /** True when built in a shallow clone: older commits are missing. */
+  shallow?: boolean;
 
   /** History indexed by symbol */
   by_symbol: Record<string, SymbolHistorySummary>;
@@ -145,6 +178,8 @@ export interface SymbolValidation {
  */
 export interface HistoryContext {
   index: HistoryIndex | null;
+  /** True when the repository is a shallow clone (derived history is partial). */
+  shallow?: boolean;
   validation: ValidationSummary | null;
   /** Raw log entries (loaded on demand) */
   recentEntries?: HistoryEntry[];

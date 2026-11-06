@@ -430,7 +430,7 @@ components:
       - classroom
       - learning-loop
   learning-stores:
-    description: 'Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec''s three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid''s must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated; its dir is ~/.claude/projects/<nativeMemorySlug(root)>/memory, where the slug is Claude Code''s project key (every non-alphanumeric character → -, so C:\Users\x → C--Users-x on Windows; the Stop hook''s Check 15 uses the same rule). Used by the doctor census and migrate learning-stores.'
+    description: 'Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec''s three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid''s must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated; its dir is ~/.claude/projects/<nativeMemorySlug(root)>/memory, where the slug is Claude Code''s project key (every non-alphanumeric character → -, so C:\Users\x → C--Users-x on Windows; the Stop hook''s Check 15 uses the same rule). Used by the doctor census and migrate learning-stores. machineHomeFor(root) exposes the per-repo machine home for machine-local caches that are not learning data (#history-git). The history row counts log.jsonl rows plus derived rows in the machine-home commit cache whose commit no log row covers (an upper bound: the cache may hold unreachable SHAs).'
     type: registry
     tags:
       - learning
@@ -550,3 +550,31 @@ components:
     tags:
       - feature
       - classroom
+  history-git:
+    description: 'History derived from git (utils/history-git.ts, T-2026-11-06-001, Option C). deriveCommitEntries(root): `git rev-list HEAD`, the machine-home cache (<machine home>/history/commits.jsonl via #learning-stores machineHomeFor, rows {v, sha, entry|null}, a memo not learning data), then ONE `git log --no-walk=unsorted --stdin --format=%x1e%H%x1f%an%x1f%aI%x1f%B%x1f --name-only` over the missing SHAs only. Symbols come from EVERY `Symbols:` line (trailerSymbols; GitHub squash bodies carry several, an empty one adds nothing); a commit with none falls back to the nearest .purpose of each changed file AT THAT SHA, narrowed (HISTORY_DERIVE_VERSION 2, matchPurposeItems): only symbols whose declared path/file/files matches the changed file (relative to the .purpose dir, the repo, or as a trailing path), and a path-less symbol only for a file whose name stem equals its id; no match gives no symbols, never every component. Hardened: DerivedHistory.complete is false on any git failure/timeout or when the per-call budget (maxPerCall 20000, chunks of 2000, cache appended per chunk) runs out; commits whose .purpose lookup failed and shallow boundary commits (trailer-only, files []) are never cached; the cache is compacted (atomic rewrite) when it holds rows of another version or more than 2000 unreachable rows; CRLF bodies are read; .purpose files are found by reading each candidate folder''s TREE (cat-file --batch), so a .purpose blob missing in a partial clone is detected in the blob pass and the commit is left underived (never cached); in a partial clone (isPartialClone: extensions.partialclone or a promisor remote, checked once per derive) a missing candidate folder also fails closed; compaction keeps the newest 2000 unreachable rows (the cache is shared by worktrees) and triggers above 4000; the stamp includes the shallow file''s size:mtime so fetch --unshallow invalidates the index; test hooks are __setHistoryGitFaultsForTests / __setAfterLogReadHookForTests; historyGitEnv adds GIT_TERMINAL_PROMPT=0 and GIT_NO_LAZY_FETCH=1. The loader stamps an incomplete index head:null and never writes it, takes the log.jsonl stamp before reading it, writes index.yaml atomically, and canWriteHistoryIndex allows a write only on exit 0, 128 not-a-repository or no git (two batched `git cat-file` calls: --batch-check for oids, --batch for each distinct blob; purposeSymbols reads map-shaped and list-shaped sections and prefixes components/features #, gates ^, flows $, signals !, aspects ~; the repo root .purpose is never used). Row: id h-<sha12>, source git, type implement, intent from the subject, author.type agent when a Co-Authored-By trailer names an AI agent or bot. Unreachable cached rows (amend, other branches) are filtered by rev-list; shallow from `git rev-parse --is-shallow-repository`. execFileSync argv, --no-optional-locks, inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE dropped; never throws.'
+    type: module
+    file: history-git.ts
+    tags: [history, git]
+    tests:
+      - src/utils/history-git.test.ts
+  history-loader:
+    description: 'History loader (utils/history-loader.ts). loadMergedHistory(root) = log.jsonl rows (authored, plus legacy rows without a source written by the pre-v4 post-commit hook) ∪ #history-git rows, deduped by commit (a log row wins, so a legacy id still resolves), oldest first; legacy ids minted twice by the old wc -l + 1 rule become <id>@<sha7> and resolveHistoryId accepts exact ids or an unambiguous bare one. newHistoryId() = h-<base36 ms><4 random base36>: time-sortable, collision-free across branches, never equal to a derived h-<sha12>. ensureHistoryIndex(root) reads .paradigm/history/index.yaml when its stamp {v, head, logSize, logMtimeMs, cacheCount (cache byte size)} matches, else rebuilds (buildHistoryIndex over the merged set) and writes it only when git ignores it (canWriteHistoryIndex: check-ignore, or no git), so a read never dirties an unmigrated tree; a fresh clone gets an index (fragility no longer says no index). loadHistoryContext uses it whenever .paradigm/ exists and reports shallow; #index-loader ensureHistory reloads when isHistoryContextFresh is false. recordHistoryEntry writes source authored with a newHistoryId. checkFragility warns on a shallow clone.'
+    type: loader
+    file: history-loader.ts
+    components:
+      - '#history-git'
+    tags: [history]
+    tests:
+      - src/utils/history-git.test.ts
+flows:
+  history-derivation:
+    description: 'Read path for history (T-2026-11-06-001). No hook is involved: commits leave the tree clean.'
+    steps:
+      - component: '#history-loader'
+        action: ensureHistoryIndex compares the index.yaml stamp with HEAD, log.jsonl size/mtime and the cache size
+      - component: '#history-git'
+        action: when stale, deriveCommitEntries reads only uncached reachable SHAs and appends them to the machine-home cache
+      - component: '#history-loader'
+        action: loadMergedHistory merges log.jsonl rows with derived rows (dedupe by commit, reachability filter, id@sha7 for ambiguous legacy ids)
+      - component: '#history-loader'
+        action: buildHistoryIndex writes the git-ignored index.yaml (only when ignored)

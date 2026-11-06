@@ -1,20 +1,30 @@
 /**
- * History Loader - Loads implementation history from .paradigm/history/
+ * History Loader - Loads implementation history from .paradigm/history/ and git
  *
- * Parses:
- * - log.jsonl: Append-only implementation log (one JSON object per line)
- * - index.yaml: Pre-computed symbol index (regenerated from log)
+ * Sources ($history-derivation, T-2026-11-06-001):
+ * - git: one row per commit carrying symbols, derived on read (#history-git),
+ *   cached per SHA in the machine home. No hook writes history any more.
+ * - log.jsonl (tracked, merge=union): tool-authored rows (history record /
+ *   validate, the MCP tools) plus the frozen legacy rows the pre-v4
+ *   post-commit hook appended.
+ * - index.yaml: GENERATED and git-ignored. ensureHistoryIndex rebuilds it when
+ *   missing or stale (stamp: HEAD, log.jsonl size/mtime, cache size) and only
+ *   writes it when git ignores it, so a read never dirties the tree.
  * - validation.yaml: Validation config and summary
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
+import { randomBytes } from 'crypto';
 import * as yaml from 'js-yaml';
 import { log } from './mcp-logger.js';
+import { deriveCommitEntries, gitHead, historyCachePath, historyGitEnv, writeFileAtomic, HISTORY_DERIVE_VERSION } from './history-git.js';
 import type {
   HistoryContext,
   HistoryEntry,
   HistoryIndex,
+  HistoryStamp,
   ValidationSummary,
   SymbolHistory,
   SymbolHistorySummary,
@@ -27,47 +37,140 @@ import type {
 const HISTORY_DIR = '.paradigm/history';
 
 /**
- * Load all history data from a project directory
+ * Load all history data from a project directory. The index is the generated
+ * one (ensureHistoryIndex): present on a fresh clone too, as long as the
+ * project has a .paradigm/ folder.
  */
 export async function loadHistoryContext(rootDir: string): Promise<HistoryContext> {
-  const historyPath = path.join(rootDir, HISTORY_DIR);
-
-  if (!fs.existsSync(historyPath)) {
+  if (!fs.existsSync(path.join(rootDir, '.paradigm'))) {
     return {
       index: null,
       validation: null,
     };
   }
 
-  const [index, validation] = await Promise.all([
-    loadHistoryIndex(historyPath),
-    loadValidationSummary(historyPath),
-  ]);
+  const historyPath = path.join(rootDir, HISTORY_DIR);
+  const index = ensureHistoryIndex(rootDir);
+  const validation = await loadValidationSummary(historyPath);
 
   return {
     index,
     validation,
+    shallow: index.shallow === true,
   };
 }
 
-/**
- * Load index.yaml
- */
-async function loadHistoryIndex(historyPath: string): Promise<HistoryIndex | null> {
-  const filePath = path.join(historyPath, 'index.yaml');
-
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
-
+/** What the index for `rootDir` would be built from right now. Cheap: one rev-parse and two stats. */
+export function currentHistoryStamp(rootDir: string): HistoryStamp {
+  const logPath = path.join(rootDir, HISTORY_DIR, 'log.jsonl');
+  let logSize = 0;
+  let logMtimeMs = 0;
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const data = yaml.load(content) as HistoryIndex;
-    return data;
-  } catch (error) {
-    log.component('#history-loader').error('Error parsing index.yaml', { error: (error as Error).message });
-    return null;
+    const st = fs.statSync(logPath);
+    logSize = st.size;
+    logMtimeMs = Math.floor(st.mtimeMs);
+  } catch { /* no log */ }
+  let cacheCount = 0;
+  try {
+    cacheCount = fs.statSync(historyCachePath(rootDir)).size;
+  } catch { /* no cache yet, or no home directory */ }
+  return { v: HISTORY_DERIVE_VERSION, head: gitHead(rootDir), logSize, logMtimeMs, cacheCount, shallow: shallowFileStamp(rootDir) };
+}
+
+/** Size and mtime of `git rev-parse --git-path shallow` ("" when not shallow), so `fetch --unshallow` invalidates the index. */
+function shallowFileStamp(rootDir: string): string {
+  try {
+    const rel = execFileSync('git', ['--no-optional-locks', 'rev-parse', '--git-path', 'shallow'], {
+      cwd: rootDir, env: historyGitEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: false, timeout: 5000,
+    }).trim();
+    const st = fs.statSync(path.resolve(rootDir, rel));
+    return `${st.size}:${Math.floor(st.mtimeMs)}`;
+  } catch {
+    return '';
   }
+}
+
+function sameStamp(a: HistoryStamp | undefined, b: HistoryStamp): boolean {
+  return !!a && a.v === b.v && a.head === b.head && a.logSize === b.logSize && a.logMtimeMs === b.logMtimeMs && a.cacheCount === b.cacheCount && (a.shallow ?? '') === (b.shallow ?? '');
+}
+
+/** True when the context's index was built from the repository's current state. */
+export function isHistoryContextFresh(rootDir: string, history: HistoryContext | null | undefined): boolean {
+  if (!history) return false;
+  if (!history.index) return !fs.existsSync(path.join(rootDir, '.paradigm'));
+  return sameStamp(history.index.stamp, currentHistoryStamp(rootDir));
+}
+
+/**
+ * Whether the generated index may be written: git ignores it (after
+ * `paradigm sync`), or the project is not in a git repository. A tracked or
+ * not-yet-ignored index.yaml is never rewritten, so reading history never
+ * dirties the tree of an unmigrated repository.
+ */
+export function canWriteHistoryIndex(rootDir: string, opts: { timeout?: number } = {}): boolean {
+  try {
+    execFileSync('git', ['--no-optional-locks', 'check-ignore', '-q', '--', `${HISTORY_DIR}/index.yaml`], {
+      cwd: rootDir,
+      env: historyGitEnv(), // a v3 pre-push calls `history reindex` inside a hook, with GIT_DIR set
+      stdio: ['ignore', 'ignore', 'pipe'],
+      encoding: 'utf8',
+      shell: false,
+      timeout: opts.timeout ?? 5000,
+    });
+    return true; // exit 0: ignored
+  } catch (err) {
+    const e = err as { status?: number | null; code?: string; stderr?: string };
+    if (e.code === 'ENOENT') return true; // no git at all: nothing can track the file
+    if (e.status === 128 && /not a git repository/i.test(String(e.stderr ?? ''))) return true;
+    return false; // 1 = not ignored or tracked; a signal, timeout or anything else: never risk a tracked file
+  }
+}
+
+/**
+ * The generated history index: read index.yaml when its stamp matches the
+ * current state, else rebuild from loadMergedHistory and write it back when
+ * canWriteHistoryIndex. Never throws.
+ */
+export function ensureHistoryIndex(rootDir: string): HistoryIndex {
+  const stamp = currentHistoryStamp(rootDir);
+  const filePath = path.join(rootDir, HISTORY_DIR, 'index.yaml');
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = yaml.load(fs.readFileSync(filePath, 'utf8')) as HistoryIndex | null;
+      if (data && sameStamp(data.stamp, stamp)) return data;
+    }
+  } catch (error) {
+    log.component('#history-loader').warn('Rebuilding unreadable index.yaml', { error: (error as Error).message });
+  }
+  return rebuildHistoryIndex(rootDir);
+}
+
+/** Test-only: runs between reading log.jsonl and stamping (simulates a concurrent append). */
+let afterLogReadHook: (() => void) | null = null;
+export function __setAfterLogReadHookForTests(fn: (() => void) | null): void {
+  afterLogReadHook = fn;
+}
+
+function rebuildHistoryIndex(rootDir: string): HistoryIndex {
+  // log.jsonl size/mtime BEFORE reading it: an append meanwhile then reads as stale.
+  const before = currentHistoryStamp(rootDir);
+  const merged = loadMergedHistory(rootDir);
+  afterLogReadHook?.();
+  const index = buildHistoryIndex(merged.entries);
+  // Cache size after deriving (the derivation grows it); the HEAD the rows were
+  // derived from. An incomplete derivation stamps head null, so the next read
+  // rebuilds, and is never written.
+  const after = currentHistoryStamp(rootDir);
+  index.stamp = { ...before, cacheCount: after.cacheCount, head: merged.complete ? merged.head : null };
+  if (merged.shallow) index.shallow = true;
+  if (merged.complete && canWriteHistoryIndex(rootDir)) {
+    try {
+      writeFileAtomic(path.join(rootDir, HISTORY_DIR, 'index.yaml'), yaml.dump(index, { lineWidth: -1 }));
+    } catch (error) {
+      log.component('#history-loader').warn('Could not write index.yaml', { error: (error as Error).message });
+    }
+  }
+  return index;
 }
 
 /**
@@ -91,9 +194,15 @@ async function loadValidationSummary(historyPath: string): Promise<ValidationSum
 }
 
 /**
- * Load entries from log.jsonl (can be memory-intensive for large logs)
+ * Load entries from log.jsonl (can be memory-intensive for large logs).
+ * Each row gets its `source`: rows written before derivation carry none and
+ * read as 'legacy'.
  */
 export async function loadHistoryLog(rootDir: string): Promise<HistoryEntry[]> {
+  return readLogRows(rootDir);
+}
+
+function readLogRows(rootDir: string): HistoryEntry[] {
   const logPath = path.join(rootDir, HISTORY_DIR, 'log.jsonl');
 
   if (!fs.existsSync(logPath)) {
@@ -106,19 +215,69 @@ export async function loadHistoryLog(rootDir: string): Promise<HistoryEntry[]> {
     const content = fs.readFileSync(logPath, 'utf8');
     const lines = content.split('\n').filter((line) => line.trim());
 
+    let malformed = 0;
     for (const line of lines) {
       try {
         const entry = JSON.parse(line) as HistoryEntry;
+        if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
+        if (!Array.isArray(entry.symbols)) entry.symbols = [];
+        entry.source = entry.source === 'authored' ? 'authored' : 'legacy';
         entries.push(entry);
-      } catch (error) {
-        log.component('#history-loader').error('Error parsing log line', { error: (error as Error).message });
+      } catch {
+        malformed++; // e.g. legacy hook rows with unescaped quotes; skipped on every read, so not an error
       }
     }
+    if (malformed > 0) log.component('#history-loader').debug('Skipped malformed log.jsonl lines', { malformed });
   } catch (error) {
     log.component('#history-loader').error('Error reading log.jsonl', { error: (error as Error).message });
   }
 
   return entries;
+}
+
+export interface MergedHistory {
+  /** Oldest first. */
+  entries: HistoryEntry[];
+  shallow: boolean;
+  /** The HEAD the derived rows were read at (null outside git). */
+  head: string | null;
+  /** False when some reachable commit could not be derived (see DerivedHistory.complete). */
+  complete: boolean;
+}
+
+/**
+ * log.jsonl rows (legacy + authored) ∪ rows derived from git, deduped by
+ * `commit`: a log row for a commit wins over its derived row, so a legacy id
+ * still resolves. Derived rows are only those reachable from HEAD. Legacy ids
+ * that occur more than once (the old `wc -l + 1` rule minted the same id on
+ * two branches) become `<id>@<sha7>` so each resolves to one row.
+ */
+export function loadMergedHistory(rootDir: string): MergedHistory {
+  const logRows = readLogRows(rootDir);
+  const covered = new Set(logRows.map((e) => e.commit).filter((c): c is string => typeof c === 'string' && c.length > 0));
+
+  const legacyCount = new Map<string, number>();
+  for (const e of logRows) if (e.source === 'legacy') legacyCount.set(e.id, (legacyCount.get(e.id) ?? 0) + 1);
+  for (const e of logRows) {
+    if (e.source === 'legacy' && (legacyCount.get(e.id) ?? 0) > 1 && e.commit) e.id = `${e.id}@${e.commit.slice(0, 7)}`;
+  }
+
+  const derived = deriveCommitEntries(rootDir);
+  const entries = [...logRows, ...derived.entries.filter((e) => !e.commit || !covered.has(e.commit))];
+  entries.sort((a, b) => (Date.parse(a.ts) || 0) - (Date.parse(b.ts) || 0));
+  return { entries, shallow: derived.shallow, head: derived.head, complete: derived.complete };
+}
+
+/**
+ * Find the entry `ref` names: an exact id (`h-…`, `h0042`, `h0042@abc1234`),
+ * or a bare legacy id when exactly one row carries it. Null when unknown or
+ * ambiguous.
+ */
+export function resolveHistoryId(entries: HistoryEntry[], ref: string): HistoryEntry | null {
+  const exact = entries.find((e) => e.id === ref);
+  if (exact) return exact;
+  const byBare = entries.filter((e) => e.id.startsWith(`${ref}@`));
+  return byBare.length === 1 ? byBare[0] : null;
 }
 
 /**
@@ -257,6 +416,10 @@ export function checkFragility(
     }
   }
 
+  if (history.shallow) {
+    warnings.push('Shallow clone: history for commits beyond the clone depth is missing (git fetch --unshallow for the full record)');
+  }
+
   const safeToModify = fragile.filter((f) => f.fragility === 'critical').length === 0;
 
   const recommendations: string[] = [];
@@ -292,14 +455,15 @@ export async function recordHistoryEntry(
     fs.mkdirSync(historyPath, { recursive: true });
   }
 
-  // Generate ID and timestamp
-  const id = generateEntryId(logPath);
+  // Collision-free id (two branches recording at once never mint the same one)
+  const id = newHistoryId();
   const ts = new Date().toISOString();
 
   const fullEntry: HistoryEntry = {
     id,
     ts,
     ...entry,
+    source: 'authored',
   };
 
   // Append to log
@@ -329,37 +493,28 @@ export async function recordValidation(
 }
 
 /**
- * Generate a unique entry ID
+ * A new authored history id: `h-<base36 ms><4 random base36>`. Time-sortable
+ * and collision-free across branches and clones (no counter). The base36 ms
+ * part starts with a non-hex letter until the 2050s, so it never equals a
+ * derived `h-<sha12>` id.
  */
-function generateEntryId(logPath: string): string {
-  let count = 1;
-
-  if (fs.existsSync(logPath)) {
-    const content = fs.readFileSync(logPath, 'utf8');
-    count = content.split('\n').filter((line) => line.trim()).length + 1;
-  }
-
-  return `h${String(count).padStart(4, '0')}`;
+export function newHistoryId(now: number = Date.now()): string {
+  const rand = randomBytes(4).readUInt32BE(0) % (36 ** 4);
+  return `h-${now.toString(36)}${rand.toString(36).padStart(4, '0')}`;
 }
 
 /**
- * Regenerate the history index from the log
+ * Regenerate the history index (log.jsonl merged with git), writing it when
+ * git ignores index.yaml (canWriteHistoryIndex).
  */
 export async function regenerateHistoryIndex(rootDir: string): Promise<HistoryIndex> {
-  const entries = await loadHistoryLog(rootDir);
-  const index = buildHistoryIndex(entries);
-
-  // Save the index
-  const indexPath = path.join(rootDir, HISTORY_DIR, 'index.yaml');
-  fs.writeFileSync(indexPath, yaml.dump(index, { lineWidth: -1 }));
-
-  return index;
+  return rebuildHistoryIndex(rootDir);
 }
 
 /**
  * Build a history index from entries
  */
-function buildHistoryIndex(entries: HistoryEntry[]): HistoryIndex {
+export function buildHistoryIndex(entries: HistoryEntry[]): HistoryIndex {
   const bySymbol: Record<string, SymbolHistorySummary> = {};
   const symbolChanges: Record<string, HistoryEntry[]> = {};
 

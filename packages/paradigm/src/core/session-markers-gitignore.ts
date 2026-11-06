@@ -13,7 +13,10 @@
  * any user lines outside it are kept. `paradigm sync` then calls
  * `untrackGeneratedState`, which removes already-committed generated files
  * from the git index (`git rm --cached`, the working copies stay); a second
- * run finds nothing left to untrack.
+ * run finds nothing left to untrack. `ensureHistoryGitattributes` adds the
+ * managed `.paradigm/history/log.jsonl merge=union` block to the root
+ * .gitattributes, so authored history rows from two branches merge without a
+ * conflict (T-2026-11-06-001).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -52,11 +55,14 @@ export const SESSION_MARKERS: readonly string[] = Object.freeze([
  * hooks, plus the machine-churn event logs. Authored content and learning
  * records stay committed: config.yaml, decisions/, lore/entries/, specs/,
  * docs/ (including the hand-written docs .index.yaml files), roster, habits,
- * protocol and university sources, the learning event logs and history/.
+ * protocol and university sources, the learning event logs and
+ * history/log.jsonl (tool-authored rows plus the frozen legacy hook rows).
  * Every `<dir>/index.yaml` listed here has a rebuild function and a `generated`
  * stamp: protocols (rebuildProtocolIndex), personas (rebuildPersonaIndex),
  * curriculum + scenarios (rebuildSyllabusIndex / rebuildScenarioIndex),
- * university (rebuildUniversityIndex); lore/timeline.yaml is rebuilt from
+ * university (rebuildUniversityIndex), history (ensureHistoryIndex: log.jsonl
+ * merged with rows derived from git, T-2026-11-06-001; this overrides #78's
+ * "history/ stays committed"); lore/timeline.yaml is rebuilt from
  * lore/entries/ on every lore write (rebuildTimeline).
  */
 export const GENERATED_STATE: readonly string[] = Object.freeze([
@@ -74,7 +80,8 @@ export const GENERATED_STATE: readonly string[] = Object.freeze([
   // provisional-mined, estimate-actuals) are frozen, still tracked and still
   // read; new rows go to the user home. They are NOT ignored here. Repo-home
   // records (overrides, classroom-certifications, notebook-refs), session-log,
-  // stream.jsonl + its .last-processed cursor and history/ stay committed.
+  // stream.jsonl + its .last-processed cursor and history/log.jsonl stay
+  // committed; history/index.yaml is generated (listed below).
   'events/team-funnel.jsonl',
   'events/compliance-history.jsonl',
   'events/postflight-liveness.jsonl',
@@ -86,6 +93,7 @@ export const GENERATED_STATE: readonly string[] = Object.freeze([
   'curriculum/index.yaml',
   'curriculum/scenarios/index.yaml',
   'university/index.yaml',
+  'history/index.yaml',
 ]);
 
 const BEGIN = '# >>> paradigm session markers (managed by paradigm init/sync) >>>';
@@ -194,4 +202,50 @@ export function untrackGeneratedState(rootDir: string): string[] {
     });
   }
   return files;
+}
+
+const ATTR_BEGIN = '# >>> paradigm history (managed by paradigm init/sync) >>>';
+const ATTR_END = '# <<< paradigm history <<<';
+
+export function historyGitattributesBlock(): string {
+  return [
+    ATTR_BEGIN,
+    '# Authored history rows (paradigm history record/validate) from two branches',
+    '# merge line-wise; commit history itself is derived from git, never written here.',
+    '.paradigm/history/log.jsonl merge=union',
+    ATTR_END,
+  ].join('\n');
+}
+
+/**
+ * Write or refresh the managed history block in `<rootDir>/.gitattributes`
+ * (`.paradigm/history/log.jsonl merge=union`). Idempotent: the block is
+ * replaced in place and lines outside it are kept. Returns true when the file
+ * changed.
+ */
+export function ensureHistoryGitattributes(rootDir: string): boolean {
+  const file = path.join(rootDir, '.gitattributes');
+  const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const block = historyGitattributesBlock();
+  let after: string;
+  const b = before.indexOf(ATTR_BEGIN);
+  const e = before.indexOf(ATTR_END);
+  if (b !== -1 && e > b) {
+    after = before.slice(0, b) + block + before.slice(e + ATTR_END.length);
+  } else {
+    after = (before && !before.endsWith('\n') ? before + '\n' : before) + (before ? '\n' : '') + block + '\n';
+  }
+  if (after === before) return false;
+  fs.writeFileSync(file, after, 'utf8');
+  return true;
+}
+
+/** True when `<rootDir>/.gitattributes` carries the managed history block. */
+export function hasHistoryGitattributes(rootDir: string): boolean {
+  try {
+    const text = fs.readFileSync(path.join(rootDir, '.gitattributes'), 'utf8');
+    return text.includes(ATTR_BEGIN) && text.includes('.paradigm/history/log.jsonl merge=union');
+  } catch {
+    return false;
+  }
 }
