@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { ensureSessionMarkersGitignore, SESSION_MARKERS, untrackGeneratedState } from './session-markers-gitignore.js';
+import { ensureHistoryGitattributes, ensureSessionMarkersGitignore, hasHistoryGitattributes, historyGitattributesBlock, SESSION_MARKERS, untrackGeneratedState } from './session-markers-gitignore.js';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -63,11 +63,13 @@ describe('ensureSessionMarkersGitignore', () => {
       // authored: stays tracked
       'config.yaml': 'v: 1', 'lore/entries/2026-10-28/L-1.lore': 'x', 'docs/.index.yaml': 'x',
       'decisions/D-1.yaml': 'x', 'protocols/P-x.protocol': 'x', 'events/sub/nested.jsonl': '{}',
-      // learning records and shared history: stay tracked
+      // learning records and the authored history log: stay tracked
       'events/verdicts.jsonl': '{}', 'events/overrides.jsonl': '{}', 'events/debates.jsonl': '{}',
       'events/nominations.jsonl': '{}', 'events/promotion-decisions.jsonl': '{}',
       'events/provisional-mined.jsonl': '{}', 'events/stream.jsonl': '{}', 'events/.last-processed': '1',
-      'history/log.jsonl': '{}', 'history/index.yaml': 'v: 1',
+      'history/log.jsonl': '{}',
+      // the history index is generated from git + log.jsonl (T-2026-11-06-001): untracked
+      'history/index.yaml': 'v: 1',
     };
     for (const [f, c] of Object.entries(files)) {
       fs.mkdirSync(path.dirname(path.join(p, f)), { recursive: true });
@@ -87,6 +89,7 @@ describe('ensureSessionMarkersGitignore', () => {
       '.paradigm/events/compliance-history.jsonl', '.paradigm/events/hook-timings.jsonl',
       '.paradigm/events/postflight-liveness.jsonl', '.paradigm/events/settlement-liveness.jsonl',
       '.paradigm/events/team-funnel.jsonl', '.paradigm/flow-index.json',
+      '.paradigm/history/index.yaml',
       '.paradigm/lore/timeline.yaml', '.paradigm/navigator.yaml',
       '.paradigm/protocols/index.yaml', '.paradigm/scan-index.json',
       'packages/x/.paradigm/events/hook-timings.jsonl', 'packages/x/.paradigm/scan-index.json',
@@ -98,20 +101,53 @@ describe('ensureSessionMarkersGitignore', () => {
     const tracked = git('ls-files', '.paradigm');
     for (const f of ['config.yaml', 'lore/entries/2026-10-28/L-1.lore', 'docs/.index.yaml', 'decisions/D-1.yaml', 'protocols/P-x.protocol', 'events/sub/nested.jsonl',
       'events/verdicts.jsonl', 'events/overrides.jsonl', 'events/debates.jsonl', 'events/nominations.jsonl', 'events/promotion-decisions.jsonl',
-      'events/provisional-mined.jsonl', 'events/stream.jsonl', 'events/.last-processed', 'history/log.jsonl', 'history/index.yaml']) {
+      'events/provisional-mined.jsonl', 'events/stream.jsonl', 'events/.last-processed', 'history/log.jsonl']) {
       expect(tracked).toContain(`.paradigm/${f}`);
     }
+    expect(tracked).not.toContain('.paradigm/history/index.yaml');
     // second run: nothing left, nothing re-added, ignored files stay untracked
     expect(untrackGeneratedState(root)).toEqual([]);
     git('add', '-A');
     expect(git('ls-files', '.paradigm/scan-index.json')).toBe('');
     expect(git('ls-files', '.paradigm/events/compliance-history.jsonl')).toBe('');
     expect(git('ls-files', '.paradigm/events/team-funnel.jsonl')).toBe('');
+    expect(git('ls-files', '.paradigm/history/index.yaml')).toBe('');
+    expect(git('ls-files', '.paradigm/history/log.jsonl').trim()).toBe('.paradigm/history/log.jsonl');
     expect(git('ls-files', 'packages/x/.paradigm/events/hook-timings.jsonl')).toBe('');
     // the hook-timings trim temp file is ignored too
     fs.writeFileSync(path.join(p, 'events', 'hook-timings.jsonl.tmp.123'), 'x');
     expect(git('ls-files', '-o', '--exclude-standard', '--', '.paradigm/events')).not.toContain('hook-timings');
     // outside a git repository: a no-op
     expect(untrackGeneratedState(tmp())).toEqual([]);
+  });
+});
+
+describe('ensureHistoryGitattributes', () => {
+  it('writes the managed merge=union block once, keeping other lines', () => {
+    const root = tmp();
+    fs.writeFileSync(path.join(root, '.gitattributes'), '*.purpose linguist-language=YAML');
+    expect(hasHistoryGitattributes(root)).toBe(false);
+    expect(ensureHistoryGitattributes(root)).toBe(true);
+    const first = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8');
+    expect(first.startsWith('*.purpose linguist-language=YAML\n')).toBe(true);
+    expect(first).toContain(`${historyGitattributesBlock()}\n`);
+    expect(hasHistoryGitattributes(root)).toBe(true);
+    // idempotent: no rewrite, no second block
+    expect(ensureHistoryGitattributes(root)).toBe(false);
+    expect(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8')).toBe(first);
+    expect(first.split('merge=union').length).toBe(2);
+  });
+
+  it('replaces a stale managed block in place and git reads the attribute', () => {
+    const root = tmp();
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    fs.writeFileSync(path.join(root, '.gitattributes'), 'a\n# >>> paradigm history (managed by paradigm init/sync) >>>\nold\n# <<< paradigm history <<<\nb\n');
+    ensureHistoryGitattributes(root);
+    const s = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8');
+    expect(s.startsWith('a\n')).toBe(true);
+    expect(s.endsWith('b\n')).toBe(true);
+    expect(s).not.toContain('\nold\n');
+    const attr = execFileSync('git', ['check-attr', 'merge', '--', '.paradigm/history/log.jsonl'], { cwd: root, encoding: 'utf8' });
+    expect(attr.trim()).toBe('.paradigm/history/log.jsonl: merge: union');
   });
 });

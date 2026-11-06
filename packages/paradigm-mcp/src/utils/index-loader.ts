@@ -20,7 +20,7 @@ import {
 import { parseGateConfig, type ParsedGateConfig } from '@a-company/portal-core';
 import type { WisdomContext, HistoryContext } from '../types/index.js';
 import { loadWisdomContext } from './wisdom-loader.js';
-import { loadHistoryContext } from './history-loader.js';
+import { loadHistoryContext, isHistoryContextFresh } from './history-loader.js';
 import { loadWorkspaceContext, type WorkspaceContext } from './workspace-loader.js';
 import { gnomonStaged } from './gnomon-staged.js';
 
@@ -308,7 +308,9 @@ export async function ensureWisdom(ctx: ProjectContext): Promise<WisdomContext> 
  * Ensure history context is loaded
  */
 export async function ensureHistory(ctx: ProjectContext): Promise<HistoryContext> {
-  if (!ctx.history) {
+  // History is derived from git: a commit since the last load makes it stale
+  // (one rev-parse + two stats to check).
+  if (!ctx.history || !isHistoryContextFresh(ctx.rootDir, ctx.history)) {
     ctx.history = await loadHistoryContext(ctx.rootDir);
   }
   return ctx.history;

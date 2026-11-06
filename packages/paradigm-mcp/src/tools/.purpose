@@ -384,3 +384,9 @@ components:
     file: src/tools/classroom.ts
     type: tool-group
     tags: [classroom, learning-loop]
+  history-tools:
+    description: 'paradigm_history family (tools/history.ts): context, record, validate, fragility. Reads go through #index-loader ensureHistory (reloaded when the #history-loader stamp is stale), so commit history derived from git is current without a reindex; recent rows carry id and source, and context/fragility add shallow: true in a shallow clone. record/validate append an authored row with a collision-free newHistoryId; the old run-reindex note is gone (T-2026-11-06-001).'
+    file: src/tools/history.ts
+    type: tool-group
+    components: ['#history-loader']
+    tags: [history]

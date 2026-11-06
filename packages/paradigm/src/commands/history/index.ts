@@ -4,54 +4,27 @@
  * Commands:
  * - paradigm history show [symbol] - Display history for symbols
  * - paradigm history fragile - Show fragile symbols
- * - paradigm history reindex - Regenerate index from log
- * - paradigm history validate - Record validation result
+ * - paradigm history reindex - Regenerate the generated index
+ * - paradigm history record / validate - Append an authored row to log.jsonl
+ *
+ * Commit history is derived from git on read ($history-derivation); these
+ * commands share the MCP server's loader (one id rule, one merge, one index
+ * builder), so the CLI and the tools never disagree.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import * as yaml from 'js-yaml';
-
-interface HistoryEntry {
-  id: string;
-  ts: string;
-  type: 'implement' | 'validate' | 'rollback' | 'refactor';
-  symbols: string[];
-  author: {
-    type: 'human' | 'agent';
-    id: string;
-  };
-  commit?: string;
-  intent?: string;
-  files?: string[];
-  description?: string;
-  ref?: string;
-  result?: 'pass' | 'fail' | 'partial';
-  tests?: { passed: number; failed: number; skipped?: number };
-  reason?: string;
-}
-
-interface SymbolHistorySummary {
-  symbol: string;
-  total_changes: number;
-  last_modified: string;
-  stability_score: number;
-  fragility: 'low' | 'medium' | 'high' | 'critical';
-  recent: HistoryEntry[];
-  contributors: {
-    human: string[];
-    agent: string[];
-  };
-}
-
-interface HistoryIndex {
-  version: string;
-  generated: string;
-  by_symbol: Record<string, SymbolHistorySummary>;
-  co_changes: { symbols: string[]; frequency: number; correlation: number }[];
-  fragile_symbols: { symbol: string; fragility: string; reason: string }[];
-}
+import {
+  buildHistoryIndex,
+  canWriteHistoryIndex,
+  ensureHistoryIndex,
+  loadMergedHistory,
+  recordHistoryEntry,
+  regenerateHistoryIndex,
+} from '../../../../paradigm-mcp/src/utils/history-loader.js';
+import type { HistoryIntent } from '../../../../paradigm-mcp/src/types/history.js';
 
 const HISTORY_DIR = '.paradigm/history';
 
@@ -63,16 +36,16 @@ export async function historyShowCommand(
   options: { json?: boolean; limit?: number } = {}
 ): Promise<void> {
   const rootDir = process.cwd();
-  const historyPath = path.join(rootDir, HISTORY_DIR);
 
-  if (!fs.existsSync(historyPath)) {
-    console.log(chalk.yellow('No history directory found.'));
-    console.log(chalk.gray(`Run \`paradigm history init\` to create .paradigm/history/`));
+  if (!fs.existsSync(path.join(rootDir, '.paradigm'))) {
+    console.log(chalk.yellow('No .paradigm/ directory found.'));
+    console.log(chalk.gray('Run `paradigm init` first.'));
     return;
   }
 
-  const index = loadYaml<HistoryIndex>(path.join(historyPath, 'index.yaml'));
-  const entries = loadLog(path.join(historyPath, 'log.jsonl'));
+  // Derive once: the index for display is built from the same merged set.
+  const { entries, shallow } = loadMergedHistory(rootDir);
+  const index = buildHistoryIndex(entries);
 
   if (options.json) {
     if (symbol) {
@@ -80,7 +53,7 @@ export async function historyShowCommand(
       const symbolEntries = entries.filter((e) => e.symbols.includes(symbol));
       console.log(JSON.stringify({ symbol, summary: symbolData, entries: symbolEntries }, null, 2));
     } else {
-      console.log(JSON.stringify({ index, entries: entries.slice(-(options.limit || 20)) }, null, 2));
+      console.log(JSON.stringify({ index, shallow, entries: entries.slice(-(options.limit || 20)) }, null, 2));
     }
     return;
   }
@@ -134,8 +107,10 @@ export async function historyShowCommand(
 
   // Overview
   const symbols = Object.keys(index?.by_symbol || {});
+  const fromGit = entries.filter((e) => e.source === 'git').length;
   console.log(chalk.white(`  Tracked symbols: ${symbols.length}`));
-  console.log(chalk.white(`  Total entries: ${entries.length}`));
+  console.log(chalk.white(`  Total entries: ${entries.length}`) + chalk.gray(` (${fromGit} from git, ${entries.length - fromGit} in log.jsonl)`));
+  if (shallow) console.log(chalk.yellow('  Shallow clone: commits beyond the clone depth are missing.'));
   console.log();
 
   // Fragile symbols
@@ -184,18 +159,10 @@ export async function historyInitCommand(options: { force?: boolean } = {}): Pro
 
   fs.mkdirSync(historyPath, { recursive: true });
 
-  // Create empty log
-  fs.writeFileSync(path.join(historyPath, 'log.jsonl'), '');
-
-  // Create empty index
-  const index: HistoryIndex = {
-    version: '1.0',
-    generated: new Date().toISOString(),
-    by_symbol: {},
-    co_changes: [],
-    fragile_symbols: [],
-  };
-  fs.writeFileSync(path.join(historyPath, 'index.yaml'), yaml.dump(index, { lineWidth: -1 }));
+  // Create the authored log (commit history is derived from git; index.yaml is generated and git-ignored)
+  if (!fs.existsSync(path.join(historyPath, 'log.jsonl')) || options.force) {
+    fs.writeFileSync(path.join(historyPath, 'log.jsonl'), '');
+  }
 
   // Create validation template
   const validation = {
@@ -208,8 +175,7 @@ export async function historyInitCommand(options: { force?: boolean } = {}): Pro
 
   console.log(chalk.green('History directory initialized!'));
   console.log(chalk.gray(`  ${historyPath}/`));
-  console.log(chalk.gray('    log.jsonl'));
-  console.log(chalk.gray('    index.yaml'));
+  console.log(chalk.gray('    log.jsonl        (authored rows; commit history is derived from git)'));
   console.log(chalk.gray('    validation.yaml'));
 }
 
@@ -218,16 +184,14 @@ export async function historyInitCommand(options: { force?: boolean } = {}): Pro
  */
 export async function historyFragileCommand(options: { json?: boolean } = {}): Promise<void> {
   const rootDir = process.cwd();
-  const indexPath = path.join(rootDir, HISTORY_DIR, 'index.yaml');
 
-  if (!fs.existsSync(indexPath)) {
-    console.log(chalk.yellow('No history index found.'));
-    console.log(chalk.gray('Run `paradigm history reindex` to generate'));
+  if (!fs.existsSync(path.join(rootDir, '.paradigm'))) {
+    console.log(chalk.yellow('No .paradigm/ directory found.'));
     return;
   }
 
-  const index = loadYaml<HistoryIndex>(indexPath);
-  const fragile = index?.fragile_symbols || [];
+  const index = ensureHistoryIndex(rootDir);
+  const fragile = index.fragile_symbols || [];
 
   if (options.json) {
     console.log(JSON.stringify({ fragile }, null, 2));
@@ -256,23 +220,23 @@ export async function historyFragileCommand(options: { json?: boolean } = {}): P
  */
 export async function historyReindexCommand(): Promise<void> {
   const rootDir = process.cwd();
-  const historyPath = path.join(rootDir, HISTORY_DIR);
-  const logPath = path.join(historyPath, 'log.jsonl');
 
-  if (!fs.existsSync(logPath)) {
-    console.log(chalk.yellow('No history log found.'));
+  if (!fs.existsSync(path.join(rootDir, '.paradigm'))) {
+    console.log(chalk.yellow('No .paradigm/ directory found.'));
     return;
   }
 
-  const entries = loadLog(logPath);
-  const index = buildIndex(entries);
+  const index = await regenerateHistoryIndex(rootDir);
+  const entries = Object.values(index.by_symbol).reduce((n, s) => n + s.total_changes, 0);
 
-  const indexPath = path.join(historyPath, 'index.yaml');
-  fs.writeFileSync(indexPath, yaml.dump(index, { lineWidth: -1 }));
-
-  console.log(chalk.green('History index regenerated!'));
+  if (canWriteHistoryIndex(rootDir)) {
+    console.log(chalk.green('History index regenerated!'));
+  } else {
+    console.log(chalk.yellow('History index computed but not written: .paradigm/history/index.yaml is not git-ignored.'));
+    console.log(chalk.gray('  Run `paradigm sync` (it ignores and untracks the generated index), then commit.'));
+  }
   console.log(chalk.gray(`  Symbols: ${Object.keys(index.by_symbol).length}`));
-  console.log(chalk.gray(`  Entries: ${entries.length}`));
+  console.log(chalk.gray(`  Symbol changes: ${entries}`));
   console.log(chalk.gray(`  Fragile: ${index.fragile_symbols.length}`));
 }
 
@@ -288,32 +252,18 @@ export async function historyRecordCommand(options: {
   reason?: string;
 }): Promise<void> {
   const rootDir = process.cwd();
-  const logPath = path.join(rootDir, HISTORY_DIR, 'log.jsonl');
 
-  fs.mkdirSync(path.join(rootDir, HISTORY_DIR), { recursive: true });
-
-  // Count existing entries for ID
-  let count = 1;
-  if (fs.existsSync(logPath)) {
-    const content = fs.readFileSync(logPath, 'utf8');
-    count = content.split('\n').filter((l) => l.trim()).length + 1;
-  }
-
-  const entry: HistoryEntry = {
-    id: `h${String(count).padStart(4, '0')}`,
-    ts: new Date().toISOString(),
+  const id = await recordHistoryEntry(rootDir, {
     type: options.type,
-    symbols: options.symbols.split(',').map((s) => s.trim()),
-    author: { type: 'human', id: process.env.USER || 'unknown' },
+    symbols: options.symbols.split(',').map((s) => s.trim()).filter(Boolean),
+    author: { type: 'human', id: process.env.USER || process.env.USERNAME || 'unknown' },
     description: options.description,
-    intent: options.intent as HistoryEntry['intent'],
+    intent: options.intent as HistoryIntent | undefined,
     commit: options.commit,
     reason: options.reason,
-  };
+  });
 
-  fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
-
-  console.log(chalk.green(`Entry ${entry.id} recorded!`));
+  console.log(chalk.green(`Entry ${id} recorded!`));
 }
 
 /**
@@ -326,19 +276,8 @@ export async function historyValidateCommand(options: {
   failed?: number;
 }): Promise<void> {
   const rootDir = process.cwd();
-  const logPath = path.join(rootDir, HISTORY_DIR, 'log.jsonl');
 
-  fs.mkdirSync(path.join(rootDir, HISTORY_DIR), { recursive: true });
-
-  let count = 1;
-  if (fs.existsSync(logPath)) {
-    const content = fs.readFileSync(logPath, 'utf8');
-    count = content.split('\n').filter((l) => l.trim()).length + 1;
-  }
-
-  const entry: HistoryEntry = {
-    id: `h${String(count).padStart(4, '0')}`,
-    ts: new Date().toISOString(),
+  const id = await recordHistoryEntry(rootDir, {
     type: 'validate',
     symbols: [],
     author: { type: 'agent', id: 'cli' },
@@ -348,102 +287,7 @@ export async function historyValidateCommand(options: {
       options.passed !== undefined
         ? { passed: options.passed, failed: options.failed || 0 }
         : undefined,
-  };
+  });
 
-  fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
-
-  console.log(chalk.green(`Validation ${entry.id} recorded: ${options.result}`));
-}
-
-// Helper functions
-function loadYaml<T>(filePath: string): T | null {
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    return yaml.load(content) as T;
-  } catch {
-    return null;
-  }
-}
-
-function loadLog(logPath: string): HistoryEntry[] {
-  if (!fs.existsSync(logPath)) return [];
-  const content = fs.readFileSync(logPath, 'utf8');
-  return content
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => {
-      try {
-        return JSON.parse(l) as HistoryEntry;
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean) as HistoryEntry[];
-}
-
-function buildIndex(entries: HistoryEntry[]): HistoryIndex {
-  const bySymbol: Record<string, SymbolHistorySummary> = {};
-  const symbolChanges: Record<string, HistoryEntry[]> = {};
-
-  // Group by symbol
-  for (const entry of entries) {
-    for (const symbol of entry.symbols) {
-      if (!symbolChanges[symbol]) symbolChanges[symbol] = [];
-      symbolChanges[symbol].push(entry);
-    }
-  }
-
-  // Calculate summaries
-  for (const [symbol, changes] of Object.entries(symbolChanges)) {
-    const sorted = changes.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-
-    const rollbacks = changes.filter((c) => c.type === 'rollback').length;
-    const failures = changes.filter((c) => c.type === 'validate' && c.result === 'fail').length;
-    const total = changes.length;
-
-    const stabilityScore = Math.max(0, 1 - (rollbacks * 0.2 + failures * 0.1) / Math.max(1, total / 10));
-
-    let fragility: 'low' | 'medium' | 'high' | 'critical' = 'low';
-    if (stabilityScore < 0.5) fragility = 'critical';
-    else if (stabilityScore < 0.7) fragility = 'high';
-    else if (stabilityScore < 0.85) fragility = 'medium';
-
-    const humanContributors = new Set<string>();
-    const agentContributors = new Set<string>();
-    for (const change of changes) {
-      if (change.author.type === 'human') humanContributors.add(change.author.id);
-      else agentContributors.add(change.author.id);
-    }
-
-    bySymbol[symbol] = {
-      symbol,
-      total_changes: total,
-      last_modified: sorted[0]?.ts || new Date().toISOString(),
-      stability_score: stabilityScore,
-      fragility,
-      recent: sorted.slice(0, 5),
-      contributors: {
-        human: Array.from(humanContributors),
-        agent: Array.from(agentContributors),
-      },
-    };
-  }
-
-  // Find fragile symbols
-  const fragileSymbols = Object.values(bySymbol)
-    .filter((s) => s.fragility === 'high' || s.fragility === 'critical')
-    .map((s) => ({
-      symbol: s.symbol,
-      fragility: s.fragility,
-      reason: `Stability score: ${(s.stability_score * 100).toFixed(0)}%`,
-    }));
-
-  return {
-    version: '1.0',
-    generated: new Date().toISOString(),
-    by_symbol: bySymbol,
-    co_changes: [],
-    fragile_symbols: fragileSymbols,
-  };
+  console.log(chalk.green(`Validation ${id} recorded: ${options.result}`));
 }

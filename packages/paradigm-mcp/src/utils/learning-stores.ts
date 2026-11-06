@@ -129,6 +129,32 @@ function countJournals(agentsDir: string): number {
 
 const isYaml = (f: string) => f.endsWith('.yaml') || f.endsWith('.yml');
 
+/** Derived (git) history rows with symbols in the machine-home cache whose commit no log.jsonl row covers. Never throws. */
+function countDerivedHistory(root: string, logFile: string, opts: LearningStoreOptions): number {
+  try {
+    const cache = path.join(machineHomeFor(root, opts), 'history', 'commits.jsonl');
+    if (!fs.existsSync(cache)) return 0;
+    const covered = new Set<string>();
+    if (fs.existsSync(logFile)) {
+      for (const line of fs.readFileSync(logFile, 'utf8').split('\n')) {
+        const m = line.match(/"commit":"([0-9a-f]{7,64})"/);
+        if (m) covered.add(m[1]);
+      }
+    }
+    const seen = new Set<string>();
+    for (const line of fs.readFileSync(cache, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const row = JSON.parse(line) as { sha?: string; entry?: { symbols?: unknown[] } | null };
+        if (row.sha && row.entry && Array.isArray(row.entry.symbols) && row.entry.symbols.length > 0 && !covered.has(row.sha)) seen.add(row.sha);
+      } catch { /* skip */ }
+    }
+    return seen.size;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Claude Code's project key: the absolute path with every character other than A-Z a-z 0-9 → `-` (`/`, `.`,
  * `_`, spaces; on Windows `:` and `\`, so C:\Users\me\repo → C--Users-me-repo). Same rule as the Stop hook's
@@ -162,8 +188,13 @@ export function listLearningStores(rootDir: string, opts: LearningStoreOptions =
       count: () => countFiles(p('lore', 'entries'), f => f.endsWith('.lore') || isYaml(f), true) },
     { id: 'work-log', class: 'ledger', path: p('work-log'), scope: 'project', owner: '#work-log-loader',
       count: () => countFiles(p('work-log'), isYaml, true) },
+    // History (T-2026-11-06-001): authored + legacy rows in log.jsonl plus the
+    // rows derived from git, counted from the machine-home commit cache (rows
+    // with symbols; a SHA a log row already covers is counted once). The cache
+    // may hold SHAs no longer reachable (amended, other branches), so this is
+    // an upper bound; the history index applies the reachability filter.
     { id: 'history', class: 'ledger', path: p('history', 'log.jsonl'), scope: 'project', owner: '#history-handler',
-      count: () => countJsonl(p('history', 'log.jsonl')) },
+      count: () => countJsonl(p('history', 'log.jsonl')) + countDerivedHistory(root, p('history', 'log.jsonl'), opts) },
     { id: 'journals', class: 'ledger', path: g('agents'), scope: 'global', owner: '#journal-loader',
       count: () => countJournals(g('agents')) },
 
@@ -486,6 +517,16 @@ function machineBase(r: string, opts: PathForOptions): string {
   const override = opts.learningHome ?? process.env.PARADIGM_LEARNING_HOME;
   if (override) return path.join(override, 'machine', repoIdSegment(r));
   return path.join(machineStateDir(opts), repoIdSegment(r));
+}
+
+/**
+ * The per-repo machine home directory for `root` (see machineBase). For
+ * machine-local caches that are not learning data, such as the derived git
+ * history cache (#history-git: <machine home>/history/commits.jsonl).
+ * Computes only; creates nothing. Throws LearningHomeError with no home dir.
+ */
+export function machineHomeFor(root: string, opts: PathForOptions = {}): string {
+  return machineBase(path.resolve(root), opts);
 }
 
 /** The raw location of `artifact` in `home` (no guard, no mapping). */

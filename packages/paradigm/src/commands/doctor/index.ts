@@ -890,6 +890,15 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       });
     }
 
+    // History storage (T-2026-11-06-001): pre-v4 post-commit writes tracked
+    // history, a tracked generated index.yaml, no merge=union, duplicate legacy ids.
+    try {
+      const { historyAuditChecks } = await import('./history-audit.js');
+      for (const c of historyAuditChecks(cwd)) results.push(c);
+    } catch (err) {
+      results.push({ name: 'History', status: 'info', message: `history audit skipped: ${(err as Error).message}` });
+    }
+
     // Check habits config validity
     const habitsPath = path.join(cwd, '.paradigm', 'habits.yaml');
     if (fs.existsSync(habitsPath)) {
