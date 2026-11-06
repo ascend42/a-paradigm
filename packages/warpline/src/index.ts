@@ -116,6 +116,41 @@ export {
   type RefsMigrationResult,
 } from './fabric/refs.js';
 export {
+  MirrorRefusal,
+  gitContext,
+  openSection,
+  publish,
+  probeMode,
+  mirrorConfig,
+  parseLedger,
+  joinLedger,
+  appendOnlyViolations,
+  setViolations,
+  DEFAULT_MIRROR_BRANCH,
+  type MirrorCtx,
+  type MirrorConfig,
+  type FabricSection,
+  type MirrorRefusalKind,
+} from './fabric/git-mirror.js';
+export { verifyMirror, auditChain, type MirrorVerifyReport, type AuditResult, type AuditViolation } from './fabric/mirror-audit.js';
+export { adoptIntoSection, planMerge, type AdoptResult, type MergePlan as MirrorMergePlan } from './fabric/adopt.js';
+export { readWriterId, ensureWriterId, writerRef } from './fabric/writer.js';
+export { resolveGitBinary, gitSpawnCount, resetGitSpawnCount, REDIRECTING_GIT_ENV } from './fabric/git-run.js';
+export {
+  pushFabric,
+  adoptCommand,
+  migrateToMirror,
+  migrationPending,
+  claimCanonical,
+  pinGenesis,
+  auditCommand,
+  mirrorStatus,
+  MIGRATE_PATHS,
+  type PushResult,
+  type MigrateResult,
+  type MirrorStatus,
+} from './fabric/mirror-sync.js';
+export {
   warplineDirOf,
   readSelvage,
   writeSelvage,
@@ -130,6 +165,9 @@ export {
   uninstallHook,
   hookStatus,
   hookRemedy,
+  installPrePushHook,
+  uninstallPrePushHook,
+  prePushHookInstalled,
   hookInstallAdvice,
   resolveInvokingBinary,
   parseBakedBinary,

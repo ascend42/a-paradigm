@@ -86,16 +86,18 @@ describe('(a) warpline init — seals genesis, writes .warpignore, guards .gitig
 
     const after = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
     expect(after).toBe(before); // no duplication
-    expect(after.match(/\.warpline\//g)?.length).toBe(1);
+    expect(after.split('\n').filter((l) => l.trim() === '.warpline/*').length).toBe(1);
   });
 
   it('appends to an existing .gitignore without duplicating', async () => {
     fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n.warpline/\n', 'utf8');
     const r = await initWarpline(root);
     expect(r.gitignore.action).toBe('appended');
-    expect(r.gitignore.addedLines).toEqual(['.warpline-judge/']); // .warpline/ already present
+    // W2: a bare `.warpline/` is rewritten to `.warpline/*` so the config (genesis pin) can be tracked
+    expect(r.gitignore.addedLines).toEqual(['!.warpline/config.json', '!.warpline/fabric-legacy.json', '.warpline-judge/']);
     const gi = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
-    expect(gi.match(/\.warpline\/$/gm)?.length ?? gi.split('\n').filter((l) => l.trim() === '.warpline/').length).toBe(1);
+    expect(gi.split('\n').filter((l) => l.trim() === '.warpline/').length).toBe(0);
+    expect(gi.split('\n').filter((l) => l.trim() === '.warpline/*').length).toBe(1);
   });
 });
 

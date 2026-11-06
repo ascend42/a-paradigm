@@ -370,6 +370,32 @@ ${WARPLINE_BLOCK}
     expect(foreignManagedBlocks(fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8'))).toEqual([WARPLINE_BLOCK]);
   });
 
+  // Warpline 0.3.0 adds a second managed block (the opt-in record pre-push,
+  // `# >>> warpline mirror push >>>`). Both families must survive an upgrade,
+  // byte for byte and in order.
+  const WARPLINE_PUSH_BLOCK = [
+    '# >>> warpline mirror push >>>',
+    "_wl_node='/opt/node bin/node'",
+    'if [ -z "${WARPLINE_MIRROR_PUSH:-}" ] && [ -n "${1:-}" ]; then',
+    '  warpline mirror push --detached "$1" </dev/null >>/dev/null 2>&1',
+    'fi',
+    ':',
+    '# <<< warpline mirror push <<<',
+  ].join('\n');
+
+  it('v3 → v4 upgrade keeps BOTH Warpline blocks byte for byte', async () => {
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    fs.writeFileSync(path.join(hooksDir, 'post-commit'), `${V3_POST_COMMIT}\n${WARPLINE_PUSH_BLOCK}\n`);
+    const { hooksInstallCommand } = await importHooks();
+    const { foreignManagedBlocks } = await import('./git-hook-state.js');
+    await hooksInstallCommand({ postCommit: true });
+    const post = fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8');
+    expect(foreignManagedBlocks(post)).toEqual([WARPLINE_BLOCK, WARPLINE_PUSH_BLOCK]);
+    expect(post).toContain(WARPLINE_BLOCK);
+    expect(post).toContain(WARPLINE_PUSH_BLOCK);
+    expect(post).not.toContain('.paradigm/history');
+  });
+
   // Warpline 0.3.0 appends a managed pre-push block. Carried across the v3 → v4
   // upgrade and --force byte for byte, and placed BEFORE the stub's `exit 0` so it runs.
   const MIRROR_BLOCK = [

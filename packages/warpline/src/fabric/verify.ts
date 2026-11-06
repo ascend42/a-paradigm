@@ -67,16 +67,17 @@
  * Library code: no console output — the CLI prints.
  */
 
-import { warplineDirOf, readFabric, readLegacyGrandfathered, readLegacyManifest, readSelvage } from './fabric.js';
+import { warplineDirOf, readFabric, readLegacyGrandfathered, readLegacyManifest, readSelvage, type FabricLegacy } from './fabric.js';
 import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
 import { findAnchor, computePrefixDigest, computeManifestDigest } from './anchor.js';
 import { buildDag } from './dag.js';
 import { listRefs, readRef } from './refs.js';
-import { readStakeJournal } from './stake-journal.js';
+import { readStakeJournal, type StakeJournal } from './stake-journal.js';
 import { hasSignedFrom, signedFromOf, readKeyRegistry, verifyPickIdSig, type AgentKeyRegistryRow } from './keys.js';
 import { grantActiveAt } from './grants.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
+import { verifyMirror, recordSigning } from './mirror-audit.js';
 
 export type FabricVerifyKind =
   | 'pickId-mismatch'
@@ -124,7 +125,23 @@ export type FabricVerifyKind =
    * "a strand that was here is gone". Different evidence, different remedy
    * (recover from the stake branch / a backup), different question for the human.
    */
-  | 'stake-journal-orphan';
+  | 'stake-journal-orphan'
+  /**
+   * C-6 (W2, #fabric-mirror) — the ledger's record in git (the own ref
+   * refs/warpline/writers/<wid>) holds a pickId the ledger lacks, or holds it at
+   * another position (the PREFIX rule, I7 — seals check the same rule). The
+   * record only moves append-only, so the ledger was truncated, reordered or
+   * replaced. Remedy: move the edited ledger aside; the next write restores it.
+   */
+  | 'mirror-orphan'
+  /** C-6 (M3) — a `.git` exists at the root but git could not answer: the backstop cannot be checked. */
+  | 'mirror-unavailable'
+  /** C-6 (#mirror-audit) — a canonical commit is not an append-only extension of its parent (a truncating fast-forward). */
+  | 'mirror-chain-truncation'
+  /** C-6 (#mirror-audit) — the canonical branch no longer descends from the last audited commit (force-push / deletion). */
+  | 'canonical-rewound'
+  /** C-6 (W2 review) — in the recorded layout, ledger strands past the git record (written outside publish). HARD. */
+  | 'mirror-unrecorded';
 
 export interface FabricVerifyFailure {
   /**
@@ -135,6 +152,8 @@ export interface FabricVerifyFailure {
   pickId: string;
   kind: FabricVerifyKind;
   detail: string;
+  /** a binding / merge-recipe object is ABSENT (not corrupt) — #fabric-adopt tolerates exactly this for incoming strands. */
+  objectAbsent?: boolean;
 }
 
 export interface FabricVerifyReport {
@@ -161,6 +180,19 @@ export interface FabricVerifyReport {
    * evidence is not evidence of truncation.
    */
   stakeJournal: { present: boolean; attested: number; missing: string[] };
+  /**
+   * C-6 — the git record of the ledger (#fabric-mirror, W2). `mode` is the
+   * layout; `missing`/`misordered` are HARD mirror-orphan failures; `unrecorded`
+   * counts ledger strands past the record (soft). Absent for candidate verifies.
+   */
+  mirror: {
+    mode: 'none' | 'legacy' | 'pre-migration' | 'mirror' | 'candidate';
+    role: 'canonical' | 'fork' | 'none';
+    recorded: number;
+    missing: string[];
+    misordered: string[];
+    unrecorded: number;
+  };
   /** the first v2 strand's parentPickId equals its predecessor (the v1 tip), or it is a well-rooted v2 genesis. */
   boundaryAnchored: boolean;
   /**
@@ -203,6 +235,17 @@ export interface VerifyOptions {
    * OTHER check still applies.
    */
   requireAnchor?: boolean;
+  /**
+   * #fabric-adopt candidate verify: authenticate THESE strands (an in-memory
+   * candidate ledger) instead of the on-disk ledger. The on-disk cross-checks
+   * (selvage, refs, stake journal, git record) are skipped — the candidate's tips
+   * are not written yet.
+   */
+  strands?: Strand[];
+  /** candidate verify: the INCOMING fabric-legacy.json bytes (null = none) instead of the local file. */
+  legacy?: Buffer | null;
+  /** (W2 review 9) the signing epoch from the TRACKED pin + the record's registry (fresh clones, linked worktrees). */
+  signing?: { signedFrom: string | null; agentRows: AgentKeyRegistryRow[] };
 }
 
 const isV2 = (s: Strand): boolean => s.schemaVersion >= 2;
@@ -255,9 +298,14 @@ function firstBadObject(store: ObjectStore, treeId: string, ok: Set<string>): Ba
 export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVerifyReport {
   const requireAnchor = opts.requireAnchor ?? true;
   const wdir = warplineDirOf(root);
-  const fabric = readFabric(wdir);
+  const candidate = opts.strands !== undefined;
+  const fabric = opts.strands ?? readFabric(wdir);
   const store = new ObjectStore(root);
-  const grandfathered = readLegacyGrandfathered(wdir);
+  const legacyOverride = opts.legacy !== undefined ? (opts.legacy === null ? null : (JSON.parse(opts.legacy.toString('utf8')) as FabricLegacy)) : undefined;
+  const grandfathered =
+    legacyOverride !== undefined
+      ? new Map((legacyOverride?.grandfathered ?? []).map((e) => [e.pickId, e.bodyHash] as [string, string]))
+      : readLegacyGrandfathered(wdir);
   const failures: FabricVerifyFailure[] = [];
   const legacyPickIds: string[] = [];
 
@@ -282,8 +330,8 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     else if (epoch === 2) v2Count++;
     else v1Count++;
 
-    const push = (kind: FabricVerifyKind, detail: string): void => {
-      failures.push({ seq: s.seq ?? i, pickId: s.pickId, kind, detail });
+    const push = (kind: FabricVerifyKind, detail: string, objectAbsent?: boolean): void => {
+      failures.push({ seq: s.seq ?? i, pickId: s.pickId, kind, detail, ...(objectAbsent ? { objectAbsent: true } : {}) });
       if (epoch === 3) v3DagOk = false;
       else if (epoch === 2) v2ChainOk = false;
       else if (kind === 'pickId-mismatch' || kind === 'legacy-body-mismatch') v1SelfHashOk = false;
@@ -377,6 +425,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
           bad.problem === 'missing'
             ? `binding object ${bad.id} is absent from the object store`
             : `binding object ${bad.id} does not recompute to its content-address (tampered bytes)`,
+          bad.problem === 'missing',
         );
       }
       if (
@@ -401,6 +450,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
           push(
             'merge-recipe-invalid',
             `merge recipe ${slot} tree ${s.merge[slot]}: object ${bad.id} is ${bad.problem === 'missing' ? 'absent from the object store' : 'tampered (does not recompute)'}`,
+            bad.problem === 'missing',
           );
         }
       }
@@ -498,8 +548,12 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   //     uses the key file — a swapped key file signs with a keyId the registry
   //     does not know, which is exactly sig-key-unknown), and verify under that
   //     row's public key over the domain-separated pickId.
-  const epochPinned = hasSignedFrom(root);
-  const signedFromPickId = epochPinned ? signedFromOf(root) : null;
+  const localPinned = hasSignedFrom(root);
+  // fresh clones / linked worktrees have no local .warpline/keys: the TRACKED pin +
+  // the record's registry are the trust anchor (W2 review 9)
+  const signing = opts.signing ?? (candidate || localPinned ? undefined : recordSigning(root));
+  const epochPinned = localPinned || signing !== undefined;
+  const signedFromPickId = localPinned ? signedFromOf(root) : (signing?.signedFrom ?? null);
   let sigSigned = 0;
   let sigExempt = 0;
   let sigFailed = 0;
@@ -526,9 +580,10 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     if (!boundaryOk) {
       sigExempt = fabric.length; // the registry-invalid HARD failure already fails verify
     } else {
-      const agentKeyRows = readKeyRegistry(root).rows.filter(
-        (r): r is AgentKeyRegistryRow => r.kind === 'agent-key',
-      );
+      const agentKeyRows = [
+        ...readKeyRegistry(root).rows.filter((r): r is AgentKeyRegistryRow => r.kind === 'agent-key'),
+        ...(signing?.agentRows ?? []),
+      ];
       for (let i = 0; i < fabric.length; i++) {
         const s = fabric[i];
         const agentId = s.authoredBy?.agentId;
@@ -657,8 +712,8 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   //    internally consistent). Refs mode (V3.2): the tip pointer is refs/heads/selvage
   //    (a pickId); the legacy stateId file, while it coexists, must agree with THAT
   //    strand's stateId instead of the physical tip. Lenient when no selvage is set.
-  const selvage = readSelvage(wdir);
-  const selvageRefId = readRef(wdir, 'selvage');
+  const selvage = candidate ? null : readSelvage(wdir);
+  const selvageRefId = candidate ? null : readRef(wdir, 'selvage');
   if (selvageRefId !== null) {
     const target = fabric.find((s) => s.pickId === selvageRefId);
     // an absent target is reported as ref-unresolved below (step 7b)
@@ -687,7 +742,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   //     missing strand is truncation evidence). Every headless tip no ref names is
   //     REPORTED as abandoned (legal — a lost race that never re-published), never
   //     a failure. v1 strands are excluded from abandonment (unlinked ≠ abandoned).
-  const refs = listRefs(wdir);
+  const refs = candidate ? new Map<string, string>() : listRefs(wdir);
   let abandonedHeads: string[] = [];
   if (refs.size > 0) {
     for (const [name, id] of refs) {
@@ -732,7 +787,9 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   //     absent, unreadable, disabled or fresh (#stake-journal call 1), and an empty
   //     set cannot produce a failure — `verify` stays fully usable on the vast
   //     majority of repos, which never turn the valve on.
-  const journal = readStakeJournal(root);
+  const journal: StakeJournal = candidate
+    ? { present: false, rows: 0, malformed: 0, attestations: [], unreadable: null }
+    : readStakeJournal(root);
   const stakeMissing: string[] = [];
   for (const a of journal.attestations) {
     if (knownPickIds.has(a.pickId)) continue;
@@ -748,6 +805,58 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
         `checkpoint. Recover the missing strands from the stake branch or a backup ` +
         `(\`warpline backup verify <dest>\`); do not seal on top of a truncated ledger.`,
     });
+  }
+
+  // 7d. GIT RECORD CROSS-CHECK (audit C-6, W2 #fabric-mirror) — the own ref is
+  //     the record; the ledger file is a cache of it. Advisory IN (no .git, legacy
+  //     layout, no record ⇒ no evidence), HARD OUT: a recorded strand that is
+  //     absent or out of place ⇒ mirror-orphan; git failing with a .git present ⇒
+  //     mirror-unavailable; the canonical/remote audit ⇒ mirror-chain-truncation /
+  //     canonical-rewound.
+  let mirrorSummary: FabricVerifyReport['mirror'] = {
+    mode: 'candidate', role: 'none', recorded: 0, missing: [], misordered: [], unrecorded: 0,
+  };
+  if (!candidate) {
+    const m = verifyMirror(root);
+    mirrorSummary = {
+      mode: m.mode, role: m.role, recorded: m.ownStrands, missing: m.missing, misordered: m.misordered, unrecorded: m.unrecorded,
+    };
+    if (m.ownRewound !== null) {
+      failures.push({ seq: -1, pickId: m.ownRef ?? '', kind: 'mirror-orphan', detail: `the own record was rewound or deleted: ${m.ownRewound}` });
+    }
+    if (m.mode === 'mirror' && m.ownRef !== null && m.unrecorded > 0) {
+      failures.push({
+        seq: -1,
+        pickId: '',
+        kind: 'mirror-unrecorded',
+        detail: `${m.unrecorded} ledger strand(s) are not in the git record ${m.ownRef}: they were written outside the recorded write path`,
+      });
+    }
+    if (m.unavailable !== null) {
+      failures.push({ seq: -1, pickId: '', kind: 'mirror-unavailable', detail: m.unavailable });
+    }
+    for (const pickId of m.missing) {
+      failures.push({
+        seq: -1,
+        pickId,
+        kind: 'mirror-orphan',
+        detail:
+          `the ledger's git record ${m.ownRef ?? ''} (commit ${(m.ownCommit ?? '').slice(0, 12)}) carries this strand ` +
+          `but the ledger does not: the ledger was TRUNCATED or replaced (a hand edit, a restored backup, a checkout ` +
+          `of a pre-migration commit). Move the edited ledger aside; the next write restores it from the record.`,
+      });
+    }
+    for (const pickId of m.misordered) {
+      failures.push({
+        seq: -1,
+        pickId,
+        kind: 'mirror-orphan',
+        detail: `the ledger carries this recorded strand at a different position than its git record (the prefix rule — reordered ledger)`,
+      });
+    }
+    for (const v of m.audit) {
+      failures.push({ seq: -1, pickId: v.pickIds[0] ?? v.commit, kind: v.kind, detail: `${v.ref}: ${v.detail}` });
+    }
   }
 
   // 8. Epoch-anchor authentication (spec §6) — the v1 prefix is authenticated against
@@ -856,7 +965,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     }
 
     // 8e. Manifest digest + cardinality.
-    const legacy = readLegacyManifest(wdir);
+    const legacy = legacyOverride !== undefined ? legacyOverride : readLegacyManifest(wdir);
     const recomputedManifest = computeManifestDigest(legacy);
     const manifestCount = legacy?.grandfathered.length ?? 0;
     let manifestOk = false;
@@ -891,10 +1000,24 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     v3Dag: { count: v3Count, ok: v3DagOk },
     abandonedHeads,
     stakeJournal: { present: journal.present, attested: journal.attestations.length, missing: stakeMissing },
+    mirror: mirrorSummary,
     signing: { epochPinned, signedFromPickId, signed: sigSigned, exempt: sigExempt, failed: sigFailed },
     boundaryAnchored,
     legacyUnverifiable: { count: legacyPickIds.length, pickIds: legacyPickIds },
     anchor: { present: anchorStrands.length > 0, ok: anchorOk, corroboration },
     failures,
   };
+}
+
+/**
+ * #fabric-adopt — authenticate a CANDIDATE ledger (in memory) with every
+ * structural check verifyFabric runs: pickId recompute, v2 chain + C-4, v3 DAG,
+ * signatures, grants, bindings, the epoch anchor. Returns the failures.
+ */
+export function verifyCandidate(
+  root: string,
+  strands: Strand[],
+  opts: { requireAnchor?: boolean; legacy?: Buffer | null; signing?: VerifyOptions['signing'] } = {},
+): FabricVerifyFailure[] {
+  return verifyFabric(root, { strands, requireAnchor: opts.requireAnchor, legacy: opts.legacy, signing: opts.signing }).failures;
 }

@@ -23,13 +23,22 @@
  */
 
 import { execFile, spawn } from 'node:child_process';
+import { sanitizedGitEnv } from '../fabric/git-run.js';
 import { promisify } from 'node:util';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { withRepoLock } from './repo-lock.js';
 
-const execFileAsync = promisify(execFile);
+const execFileRaw = promisify(execFile);
+/**
+ * (W2 review 12) every git call here runs with the redirecting GIT_* variables
+ * stripped (#git-run's sanitizedGitEnv) unless a caller passes its own env, so an
+ * inherited GIT_DIR / GIT_INDEX_FILE never points absorb (or the tip-state
+ * rehydration after an adoption) at another repository.
+ */
+const execFileAsync = ((cmd: string, args: readonly string[], opts?: Record<string, unknown>) =>
+  execFileRaw(cmd, args, { env: sanitizedGitEnv(), ...(opts ?? {}) } as never)) as unknown as typeof execFileRaw;
 
 const MAX_BUFFER = 64 * 1024 * 1024; // 64MB — symbol-heavy repos can be chatty.
 
@@ -153,7 +162,7 @@ export async function catFileBatch(shas: string[], opts: GitOptions = {}): Promi
         resolve();
       }
     };
-    const child = spawn('git', ['cat-file', '--batch'], { cwd });
+    const child = spawn('git', ['cat-file', '--batch'], { cwd, env: sanitizedGitEnv() });
     const chunks: Buffer[] = [];
     let err = '';
     child.stdout.on('data', (d: Buffer) => chunks.push(d));
@@ -489,7 +498,7 @@ export async function materializeTree(ref: string, opts: GitOptions = {}): Promi
 
       // No shell — two execFile-style spawns piped through Node streams. `tar -f -`
       // reads stdin (portable across GNU tar and macOS bsdtar).
-      const archive = spawn('git', ['archive', '--format=tar', sha], { cwd });
+      const archive = spawn('git', ['archive', '--format=tar', sha], { cwd, env: sanitizedGitEnv() });
       const extract = spawn('tar', ['-x', '-f', '-', '-C', dest]);
 
       let aErr = '';

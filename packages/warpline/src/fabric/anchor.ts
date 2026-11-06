@@ -36,6 +36,61 @@ import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
 import { verifyFabric } from './verify.js';
 import { gitLogHashes, gitShow } from '../git/git-exec.js';
+import { gitContext, mirrorConfig, readMirrorRefs, readSnapshot, readCap } from './git-mirror.js';
+import { readWriterId } from './writer.js';
+import { gitText } from './git-run.js';
+
+interface CorroborationCandidate {
+  commit: string;
+  method: EpochAnchor['corroboration']['method'];
+  /** the recorded ledger text at this commit. */
+  readFabric: () => Promise<string>;
+  /** the recorded fabric-legacy.json text, or null. */
+  readLegacy: () => Promise<string | null>;
+}
+
+/**
+ * Every recorded ledger state attest may corroborate against, newest first (W2):
+ * the worktree's OWN record ref history (refs/warpline/writers/<wid>), then the
+ * canonical branch (local, then remote-tracking), then branch history of the
+ * pre-0.3.0 tracked ledger path. Exported for tests.
+ */
+export async function corroborationCandidates(root: string, cwd: string = root): Promise<CorroborationCandidate[]> {
+  const out: CorroborationCandidate[] = [];
+  const seen = new Set<string>();
+  const ctx = gitContext(root);
+  if (ctx !== null) {
+    const cfg = mirrorConfig(root);
+    const wid = readWriterId(ctx.gitDir);
+    const refs = readMirrorRefs(ctx, wid, cfg);
+    const tips = [refs.own, refs.branch, refs.remote].filter((t): t is string => t !== null);
+    for (const tip of tips) {
+      const commits = gitText(ctx.root, ['rev-list', tip]).split('\n').map((l) => l.trim()).filter((l) => /^[0-9a-f]{40,64}$/.test(l));
+      for (const commit of commits) {
+        if (seen.has(commit)) continue;
+        seen.add(commit);
+        let snap: ReturnType<typeof readSnapshot> | null = null;
+        const load = (): ReturnType<typeof readSnapshot> => (snap ??= readSnapshot(ctx, commit, readCap(0)));
+        out.push({
+          commit,
+          method: 'mirror-history-prefix-match',
+          readFabric: async () => load().bytes.toString('utf8'),
+          readLegacy: async () => load().legacy?.toString('utf8') ?? null,
+        });
+      }
+    }
+  }
+  for (const commit of await gitLogHashes('.warpline/fabric.jsonl', { cwd })) {
+    if (seen.has(commit)) continue;
+    out.push({
+      commit,
+      method: 'git-history-prefix-match',
+      readFabric: () => gitShow(commit, '.warpline/fabric.jsonl', { cwd }),
+      readLegacy: () => gitShow(commit, '.warpline/fabric-legacy.json', { cwd }),
+    });
+  }
+  return out;
+}
 
 const sha256hex = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -204,15 +259,22 @@ export async function attestFabric(root: string, opts: AttestOptions = {}): Prom
   const grandfatheredCount = legacy?.grandfathered.length ?? 0;
   const prefixDigest = computePrefixDigest(v1);
 
-  // 3. Corroborate against git history (constraint b) — the first committed
-  //    fabric.jsonl whose first N strands AND manifest digest match the working
-  //    prefix. No match ⇒ refuse (no override).
-  const commits = await gitLogHashes('.warpline/fabric.jsonl', { cwd });
+  // 3. Corroborate against git history (constraint b) — the first recorded ledger
+  //    state whose first N strands AND manifest digest match the working prefix.
+  //    No match ⇒ refuse (no override). Two histories are walked, newest first:
+  //      a. the hidden-ref MIRROR (#fabric-mirror, 0.3.0+) — every mirror commit
+  //         is a ledger state sealed under #fabric-lock; its tree carries
+  //         fabric.jsonl and fabric-legacy.json side by side;
+  //      b. BRANCH history of .warpline/fabric.jsonl — the frozen pre-0.3.0
+  //         prefix stays in the project's history after `warpline migrate`
+  //         untracks the ledger, so old commits still corroborate.
+  const candidates = await corroborationCandidates(root, cwd);
   let corroboratingCommit: string | null = null;
-  for (const c of commits) {
+  let corroborationMethod: EpochAnchor['corroboration']['method'] = 'git-history-prefix-match';
+  for (const c of candidates) {
     let committedRaw: string;
     try {
-      committedRaw = await gitShow(c, '.warpline/fabric.jsonl', { cwd });
+      committedRaw = await c.readFabric();
     } catch {
       continue;
     }
@@ -236,20 +298,23 @@ export async function attestFabric(root: string, opts: AttestOptions = {}): Prom
     if (!match) continue;
     let committedManifest: FabricLegacy | null = null;
     try {
-      committedManifest = JSON.parse(await gitShow(c, '.warpline/fabric-legacy.json', { cwd })) as FabricLegacy;
+      const legacyText = await c.readLegacy();
+      committedManifest = legacyText === null ? null : (JSON.parse(legacyText) as FabricLegacy);
     } catch {
       committedManifest = null;
     }
     if (computeManifestDigest(committedManifest) !== manifestDigest) continue;
-    corroboratingCommit = c;
+    corroboratingCommit = c.commit;
+    corroborationMethod = c.method;
     break;
   }
   if (!corroboratingCommit) {
     throw new Error(
-      `warpline: attest refused — the working v1 prefix + manifest matched NO committed state in ` +
-        `\`git log -- .warpline/fabric.jsonl\` (${commits.length} commit(s) walked). During coexistence the fabric is ` +
-        `git-tracked by construction, so a no-match means the working prefix diverged from every state git ever saw. ` +
-        `Commit the prefix (\`git add .warpline/fabric.jsonl .warpline/fabric-legacy.json && git commit\`) then re-run.`,
+      `warpline: attest refused — the working v1 prefix + manifest matched NO committed state: neither the fabric ` +
+        `mirror ref nor \`git log -- .warpline/fabric.jsonl\` (${candidates.length} commit(s) walked). A no-match means ` +
+        `the working prefix diverged from every state git ever recorded. Seal once (the seal mirrors the ledger into ` +
+        `the hidden ref) or, on a repo that still branch-tracks the ledger, commit it ` +
+        `(\`git add .warpline/fabric.jsonl .warpline/fabric-legacy.json && git commit\`), then re-run.`,
     );
   }
 
@@ -265,7 +330,7 @@ export async function attestFabric(root: string, opts: AttestOptions = {}): Prom
     prefixDigest,
     manifestDigest,
     grandfatheredCount,
-    corroboration: { method: 'git-history-prefix-match', gitCommit: corroboratingCommit },
+    corroboration: { method: corroborationMethod, gitCommit: corroboratingCommit },
   };
 
   const selvage = readSelvage(wdir);

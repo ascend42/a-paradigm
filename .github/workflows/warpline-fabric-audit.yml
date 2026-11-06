@@ -1,0 +1,106 @@
+# Warpline fabric record audit (#mirror-audit).
+#
+# Why not a push trigger on the record branch: GitHub reads a push event's
+# workflow from the PUSHED commit, and record commits carry no .github/, so that
+# trigger never fires (W2 review item 2). This runs from main instead — on a
+# schedule, on demand, and on every push to main — fetches the record branch and
+# audits it from the last audited tip, which is persisted in the Actions cache.
+# A tip that does not descend from it (force-push / deletion + recreate) fails.
+#
+# The cursor is saved under a UNIQUE key per run and restored by key PREFIX, so
+# the newest saved cursor always wins. Caveats: GitHub evicts caches unused for
+# 7 days (the hourly schedule keeps it warm; after an eviction the next run audits
+# the whole chain again, which still detects truncation but cannot see a rewind
+# that happened during the gap), and GitHub disables scheduled workflows after
+# 60 days without repository activity (re-enable it in the Actions tab).
+name: Warpline fabric audit
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: warpline-fabric-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main (the engine) with full history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch the record branch
+        id: fetch
+        run: |
+          if git ls-remote --exit-code origin refs/heads/warpline/fabric >/dev/null; then
+            git fetch --no-tags origin '+refs/heads/warpline/fabric:refs/heads/warpline/fabric'
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "tip=$(git rev-parse refs/heads/warpline/fabric)" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore the last audited tip (prefix match — newest wins)
+        uses: actions/cache/restore@v4
+        with:
+          path: .git/warpline/audit.json
+          key: warpline-fabric-audit-none
+          restore-keys: warpline-fabric-audit-
+
+      # The record branch vanished but main pins a genesis (or this audit already
+      # saw a tip): that is a deletion, not "nothing to audit".
+      - name: Fail on a deleted record branch
+        if: steps.fetch.outputs.present != 'true'
+        run: |
+          if grep -q '"genesis"' .warpline/config.json 2>/dev/null || [ -s .git/warpline/audit.json ]; then
+            echo "::error::refs/heads/warpline/fabric is absent but the record existed (pinned genesis or audit cursor) — deleted?"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        if: steps.fetch.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.fetch.outputs.present == 'true'
+        run: npm ci
+
+      - name: Work around npm optional-deps bug (rollup linux binary)
+        if: steps.fetch.outputs.present == 'true'
+        run: |
+          ver=$(node -p "require('./node_modules/rollup/package.json').version")
+          npm install --no-save --force "@rollup/rollup-linux-x64-gnu@${ver}" || true
+
+      - name: Build the engine
+        if: steps.fetch.outputs.present == 'true'
+        run: |
+          npm run build --workspace=@a-company/purpose-core
+          npm run build --workspace=@a-company/portal-core
+          npm run build --workspace=@a-company/premise-core
+          npm run build --workspace=@a-company/warpline
+
+      # Incremental from the restored cursor (a rewind fails: canonical-rewound);
+      # with no cursor yet, the whole chain is audited.
+      - name: Audit the record chain
+        if: steps.fetch.outputs.present == 'true'
+        run: node packages/warpline/dist/cli.js mirror audit
+
+      - name: Persist the audited tip
+        if: steps.fetch.outputs.present == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .git/warpline/audit.json
+          key: warpline-fabric-audit-${{ github.run_id }}

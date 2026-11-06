@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -23,7 +22,10 @@ import {
 import { verifyFabric } from '../src/fabric/verify.js';
 
 const NOW = '2026-07-01T00:00:00.000Z';
-const REAL_WDIR = path.join(fileURLToPath(new URL('../../../', import.meta.url)), '.warpline');
+import { FROZEN_WDIR } from './fixtures/frozen-fabric.js';
+
+// I8: the frozen fixture, never the live ledger (a per-clone cache since 0.3.0).
+const REAL_WDIR = FROZEN_WDIR;
 
 /** A clean exclusion-rule v1 genesis (reproduces under the current rule). */
 function v1Genesis(): Strand {

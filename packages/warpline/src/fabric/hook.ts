@@ -413,12 +413,12 @@ function readHook(hookPath: string): string | null {
 }
 
 /** Strip an existing warpline block (between markers, inclusive) from hook text. */
-function stripBlock(text: string): string {
-  const begin = text.indexOf(BEGIN);
+function stripBlock(text: string, beginMarker: string = BEGIN, endMarker: string = END): string {
+  const begin = text.indexOf(beginMarker);
   if (begin === -1) return text;
-  const end = text.indexOf(END);
+  const end = text.indexOf(endMarker);
   if (end === -1) return text; // malformed — leave it for the human
-  const after = end + END.length;
+  const after = end + endMarker.length;
   // also swallow one trailing newline the block owned
   const tail = text.slice(after).replace(/^\n/, '');
   return (text.slice(0, begin).replace(/\n+$/, '\n') + tail).replace(/\n{3,}/g, '\n\n');
@@ -461,27 +461,65 @@ export function installHook(
         'or a real `warpline` executable.',
     );
   }
-  fs.mkdirSync(path.dirname(hookPath), { recursive: true });
   truncateHookLog(hookLogPath(hookPath));
+  return writeManagedBlock(hookPath, BEGIN, END, block(baked));
+}
+
+/** A top-level line that ends the hook: `exit …` / `exec …` at column 0. */
+const TERMINAL_LINE = /^(exit|exec)(\s|$)/;
+
+/** Warnings from the last writeManagedBlock (a terminal line still FOLLOWS the block). */
+export interface ManagedBlockWrite {
+  created: boolean;
+  refreshed: boolean;
+  /** a top-level exit/exec line after the block would stop it running (not moved: it was not trailing). */
+  terminalAfter: boolean;
+}
+
+/**
+ * Write (or refresh in place) one managed block in a hook file. Idempotent.
+ * The block goes BEFORE a trailing top-level `exit`/`exec` (W2 review note: a
+ * block appended after `exit 0` never runs); `terminalAfter` reports a terminal
+ * line that still follows it (an exit in the middle of the user's hook).
+ */
+function writeManagedBlock(hookPath: string, beginMarker: string, endMarker: string, text: string): ManagedBlockWrite {
+  // (review 3) the block must not swallow the user's exit status: it saves $? on
+  // entry and restores it on the way out, so `npm test` / `false` / `exit $?`
+  // before or after the block still decides the hook's result.
+  const lines0 = text.split('\n');
+  text = [lines0[0], '_wl_hook_rc=$?', ...lines0.slice(1, -1), '(exit $_wl_hook_rc)', lines0[lines0.length - 1]].join('\n');
+  fs.mkdirSync(path.dirname(hookPath), { recursive: true });
   const existing = readHook(hookPath);
   if (existing === null) {
-    fs.writeFileSync(hookPath, `#!/bin/sh\n${block(baked)}\n`, 'utf8');
+    fs.writeFileSync(hookPath, `#!/bin/sh\n${text}\n`, 'utf8');
     fs.chmodSync(hookPath, 0o755);
-    return { created: true, refreshed: false };
+    return { created: true, refreshed: false, terminalAfter: false };
   }
-  const hadBlock = existing.includes(BEGIN);
-  const base = stripBlock(existing).replace(/\n+$/, '\n');
+  const hadBlock = existing.includes(beginMarker);
+  const base = stripBlock(existing, beginMarker, endMarker).replace(/\n+$/, '\n');
   const withShebang = base.startsWith('#!') ? base : `#!/bin/sh\n${base}`;
-  fs.writeFileSync(hookPath, `${withShebang.replace(/\n+$/, '\n')}\n${block(baked)}\n`, 'utf8');
+  const lines = withShebang.replace(/\n+$/, '').split('\n');
+  // trailing terminal lines (plus blank lines between them) move below the block
+  let cut = lines.length;
+  while (cut > 1 && (TERMINAL_LINE.test(lines[cut - 1]) || lines[cut - 1].trim() === '')) cut--;
+  const tail = lines.slice(cut).filter((l) => l.trim() !== '');
+  const head = lines.slice(0, cut);
+  const out = [...head, '', text, ...(tail.length ? ['', ...tail] : [])].join('\n') + '\n';
+  fs.writeFileSync(hookPath, out, 'utf8');
   fs.chmodSync(hookPath, 0o755);
-  return { created: false, refreshed: hadBlock };
+  const terminalAfter = head.slice(1).some((l) => TERMINAL_LINE.test(l)) && head.findIndex((l) => TERMINAL_LINE.test(l)) > 0;
+  return { created: false, refreshed: hadBlock, terminalAfter };
 }
 
 /** Remove the warpline block; leaves any other hook content intact. */
 export function uninstallHook(hookPath: string): { removed: boolean } {
+  return removeManagedBlock(hookPath, BEGIN, END);
+}
+
+function removeManagedBlock(hookPath: string, beginMarker: string, endMarker: string): { removed: boolean } {
   const existing = readHook(hookPath);
-  if (existing === null || !existing.includes(BEGIN)) return { removed: false };
-  const stripped = stripBlock(existing).replace(/\n+$/, '\n');
+  if (existing === null || !existing.includes(beginMarker)) return { removed: false };
+  const stripped = stripBlock(existing, beginMarker, endMarker).replace(/\n+$/, '\n');
   // If nothing but a shebang remains, drop the hook file entirely.
   if (stripped.replace(/^#!.*\n/, '').trim().length === 0) {
     fs.rmSync(hookPath, { force: true });
@@ -490,4 +528,66 @@ export function uninstallHook(hookPath: string): { removed: boolean } {
     fs.chmodSync(hookPath, 0o755);
   }
   return { removed: true };
+}
+
+/* ───────────────── the record pre-push block (#fabric-mirror, W2) ───────────────── */
+
+const PUSH_BEGIN = '# >>> warpline mirror push >>>';
+const PUSH_END = '# <<< warpline mirror push <<<';
+
+/**
+ * The pre-push block — OPT-IN only (`warpline hook install --push`, or
+ * fabricMirror.autoPush in the config). It hands the push of the canonical record
+ * (refs/heads/warpline/fabric) to a DETACHED `warpline mirror push --detached
+ * "$1"` that returns at once (setsid on POSIX), so the user's push never waits on
+ * the network, a prompt or the fabric lock (M6, L2). `$1` must be a configured
+ * remote NAME (a URL is logged and skipped). Never fails the push: the block ends
+ * with `(exit $_wl_hook_rc)` (it restores the user's status).
+ */
+function prePushBlock(baked: BakedBinary): string {
+  return [
+    PUSH_BEGIN,
+    '# Hand the Warpline fabric record (refs/heads/warpline/fabric) to a detached',
+    '# `warpline mirror push`. Opt-in (`warpline hook install --push`). Never blocks or',
+    '# fails the push; the outcome is logged to <git-dir>/warpline-hook.log.',
+    `${BAKED_NODE_VAR}=${shSingleQuote(baked.node)}`,
+    `${BAKED_SCRIPT_VAR}=${shSingleQuote(baked.script)}`,
+    'if [ -z "${WARPLINE_MIRROR_PUSH:-}" ] && [ -n "${1:-}" ]; then',
+    '  _wl_gitdir="$(git rev-parse --absolute-git-dir 2>/dev/null || git rev-parse --git-dir 2>/dev/null)"',
+    '  _wl_log="${_wl_gitdir:-.}/warpline-hook.log"',
+    '  if git remote 2>/dev/null | grep -qx -- "$1"; then',
+    '    echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) pre-push $1" >>"$_wl_log" 2>&1',
+    '    if [ -n "${WARPLINE_BIN:-}" ]; then',
+    '      WARPLINE_MIRROR_PUSH=1 $WARPLINE_BIN mirror push --detached "$1" </dev/null >>"$_wl_log" 2>&1',
+    `    elif [ -x "$${BAKED_NODE_VAR}" ] && [ -f "$${BAKED_SCRIPT_VAR}" ]; then`,
+    `      WARPLINE_MIRROR_PUSH=1 "$${BAKED_NODE_VAR}" "$${BAKED_SCRIPT_VAR}" mirror push --detached "$1" </dev/null >>"$_wl_log" 2>&1`,
+    '    elif command -v warpline >/dev/null 2>&1; then',
+    '      WARPLINE_MIRROR_PUSH=1 warpline mirror push --detached "$1" </dev/null >>"$_wl_log" 2>&1',
+    '    else',
+    '      echo "    no warpline binary — record not pushed" >>"$_wl_log" 2>&1',
+    '    fi',
+    '  else',
+    '    echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) pre-push: \"$1\" is not a configured remote name — record push skipped" >>"$_wl_log" 2>&1',
+    '  fi',
+    'fi',
+    PUSH_END,
+  ].join('\n');
+}
+
+/** Install (or refresh) the record pre-push block. Idempotent; coexists with other pre-push content. */
+export function installPrePushHook(hookPath: string, baked: BakedBinary | null = resolveInvokingBinary()): ManagedBlockWrite {
+  if (baked === null) {
+    throw new Error('warpline: cannot resolve the running warpline binary to bake into the record pre-push hook.');
+  }
+  return writeManagedBlock(hookPath, PUSH_BEGIN, PUSH_END, prePushBlock(baked));
+}
+
+/** Remove the record pre-push block; leaves any other hook content intact. */
+export function uninstallPrePushHook(hookPath: string): { removed: boolean } {
+  return removeManagedBlock(hookPath, PUSH_BEGIN, PUSH_END);
+}
+
+/** Whether the record pre-push block is present. */
+export function prePushHookInstalled(hookPath: string): boolean {
+  return readHook(hookPath)?.includes(PUSH_BEGIN) ?? false;
 }

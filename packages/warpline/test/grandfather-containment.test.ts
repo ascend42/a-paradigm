@@ -9,6 +9,7 @@
  * regenerate instruction.
  */
 
+import { FROZEN_WDIR } from './fixtures/frozen-fabric.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -196,7 +197,7 @@ describe('grandfather containment — v1-only + manifest membership sanity', () 
 
 describe('grandfather containment — the REAL migrated manifest', () => {
   it('the repo manifest is body-pinned {pickId, bodyHash} and loads cleanly', () => {
-    const realWdir = path.join(new URL('../../../', import.meta.url).pathname, '.warpline');
+    const realWdir = FROZEN_WDIR; // I8: the frozen fixture (byte-exact copy), never the live per-clone ledger
     const map = readLegacyGrandfathered(realWdir);
     expect(map.size).toBe(7);
     for (const [pickId, bodyHash] of map) {
