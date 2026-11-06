@@ -527,6 +527,8 @@ export function generateHabitsSection(): string {
   lines.push('');
   lines.push('Paradigm tracks behavioral habits — repeatable practices that improve code quality.');
   lines.push('');
+  lines.push("`paradigm_habits` is an on-demand tool. If it is not in your tool list, call `paradigm_tool_activate({feature:'habits'})` first (or persist it with `mcp.tools.enable: [habits]` in `.paradigm/config.yaml`).");
+  lines.push('');
   lines.push('### When to Check Habits');
   lines.push('');
   lines.push('| Trigger | When | Tool |');

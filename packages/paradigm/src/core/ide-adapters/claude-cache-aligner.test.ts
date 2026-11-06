@@ -16,6 +16,15 @@ function withMeta(meta: ParadigmFiles['meta']): ParadigmFiles {
   return { ...files, meta };
 }
 
+describe('T-2026-11-06-002: CLAUDE.md sends rules to habits with the activate call', () => {
+  it('the Native Memory Hygiene habits line names paradigm_habits and paradigm_tool_activate', () => {
+    const md = adapter.generate(withMeta({ paradigmVersion: 'v2.0', symbolCount: 1, generatedAt: '2026-01-01T00:00:00Z' }));
+    const line = md.split('\n').find((l) => l.includes('A rule / tip / preference'));
+    expect(line).toContain('`paradigm_habits`');
+    expect(line).toContain("paradigm_tool_activate({feature:'habits'})");
+  });
+});
+
 describe('CLAUDE.md cache-aligner (#cache-aligner)', () => {
   it('keeps the head byte-identical when only version/counts/date/arc change', () => {
     const a = adapter.generate(

@@ -158,7 +158,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('Do NOT dump durable facts into native memory (`~/.claude/.../MEMORY.md`). Route them to the typed store that owns them:');
     sections.push('');
     sections.push('- **What happened** → lore via `paradigm_lore` (op `record`)');
-    sections.push('- **A rule / tip / preference** → the habits system');
+    // T-2026-11-06-002: paradigm_habits is an on-demand family; name the activate call so an agent never concludes the
+    // tool is missing (and falls back to native memory)
+    sections.push("- **A rule / tip / preference** → the habits system via `paradigm_habits` (op `add`). It is an on-demand tool: if it is not listed, call `paradigm_tool_activate({feature:'habits'})` first");
     sections.push('- **The "why" behind a choice** → `paradigm_decision` (op `record`)');
     sections.push('- **Status / plans / next steps** → tasks');
     sections.push('');

@@ -108,6 +108,33 @@ describe('tools/list budget (7.13)', () => {
   });
 });
 
+describe('T-2026-11-06-002: concise paradigm_status names a detected, unlisted family', () => {
+  it('habits detected → the concise status carries the activate hint; not detected → no habits hint', async () => {
+    const on = fs.mkdtempSync(path.join(os.tmpdir(), 'hint-on-'));
+    const off = fs.mkdtempSync(path.join(os.tmpdir(), 'hint-off-'));
+    try {
+      for (const r of [on, off]) {
+        fs.mkdirSync(path.join(r, '.paradigm'), { recursive: true });
+        fs.writeFileSync(path.join(r, '.paradigm', 'config.yaml'), 'project: hint\n');
+      }
+      fs.writeFileSync(path.join(on, '.paradigm', 'habits.yaml'), 'habits: []\n');
+      const status = async (root: string) => {
+        const h = register(await loadProjectContext(root));
+        await h.call('paradigm_status', { response_format: 'concise' }); // absorb the first-call recovery preamble
+        const text = (await h.call('paradigm_status', { response_format: 'concise' })).content[0].text;
+        return JSON.parse(text.slice(text.indexOf('{'))) as { hints?: string[] };
+      };
+      const withHint = await status(on);
+      expect(withHint.hints?.some((x) => x.includes("paradigm_tool_activate({feature:'habits'})"))).toBe(true);
+      // another detector may fire in a bare temp project; the habits hint must not
+      expect(((await status(off)).hints ?? []).some((x) => x.startsWith('habits detected'))).toBe(false);
+    } finally {
+      fs.rmSync(on, { recursive: true, force: true });
+      fs.rmSync(off, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('legacy map completeness', () => {
   it('every registered legacy tool name is mapped (to a family op or an anchor)', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'budget-map-'));

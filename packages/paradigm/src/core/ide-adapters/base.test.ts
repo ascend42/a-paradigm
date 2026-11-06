@@ -210,6 +210,10 @@ describe('generateHabitsSection', () => {
     expect(result).toContain('Quality');
     expect(result).toContain('`paradigm_habits` (op `practice_context`)');
   });
+
+  it('T-2026-11-06-002: names the activate call, since paradigm_habits is an on-demand tool', () => {
+    expect(generateHabitsSection()).toContain("paradigm_tool_activate({feature:'habits'})");
+  });
 });
 
 describe('generateLoreSection', () => {
