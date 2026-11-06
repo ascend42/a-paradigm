@@ -1,5 +1,5 @@
 ---
-description: Session recovery and handoff - call paradigm_session (op `recover`) at session start, paradigm_session (op `health`) periodically during long sessions, paradigm_session (op `handoff_prepare`) when context is high.
+description: Session recovery and handoff - call paradigm_session (op: recover) at session start, paradigm_session (op: health) periodically during long sessions, paradigm_session (op: handoff_prepare) when context is high.
 ---
 # Context Monitoring Protocol
 
@@ -73,7 +73,7 @@ Save checkpoints when transitioning between workflow phases to enable crash reco
 ### Usage
 
 ```
-paradigm_session({op:'checkpoint',
+paradigm_session({op:"checkpoint", 
   phase: "implementing",
   context: "Adding JWT auth middleware to /api/projects routes",
   modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],

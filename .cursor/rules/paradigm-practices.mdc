@@ -8,13 +8,15 @@ alwaysApply: false
 
 Paradigm tracks behavioral habits — repeatable practices that improve code quality.
 
+`paradigm_habits` is an on-demand tool. If it is not in your tool list, call `paradigm_tool_activate({feature:'habits'})` first (or persist it with `mcp.tools.enable: [habits]` in `.paradigm/config.yaml`).
+
 ### When to Check Habits
 
 | Trigger | When | Tool |
 |---------|------|------|
-| `preflight` | Before starting implementation | `paradigm_habits({op:'check', trigger: "preflight" })` |
-| `postflight` | After completing implementation | `paradigm_habits({op:'check', trigger: "postflight" })` |
-| `on-stop` | Before ending a session | `paradigm_habits({op:'check', trigger: "on-stop" })` |
+| `preflight` | Before starting implementation | `paradigm_habits({op:"check", trigger: "preflight" })` |
+| `postflight` | After completing implementation | `paradigm_habits({op:"check", trigger: "postflight" })` |
+| `on-stop` | Before ending a session | `paradigm_habits({op:"check", trigger: "on-stop" })` |
 
 ### Key Habit Categories
 
@@ -44,7 +46,7 @@ Lore captures the project timeline — sessions, decisions, milestones, and inci
 ### Recording
 
 ```
-paradigm_lore({op:'record',
+paradigm_lore({op:"record", 
   type: "agent-session",
   title: "Short description of work done",
   summary: "Detailed summary of changes...",
