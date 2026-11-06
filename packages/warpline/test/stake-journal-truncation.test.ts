@@ -117,6 +117,18 @@ class StakedRepo {
 const COMP = (n: number): string =>
   Array.from({ length: n }, (_, i) => `  c${i}:\n    description: C${i}\n    type: module\n`).join('');
 
+/** Delete every LOCAL witness of the git record: own refs, the canonical branch, and <git-dir>/warpline (cache + cursor). */
+async function deleteWriterRefs(dir: string): Promise<void> {
+  const { execFileSync } = await import('node:child_process');
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) if (k.startsWith('GIT_')) delete env[k];
+  (await import('node:fs')).rmSync((await import('node:path')).join(dir, '.git', 'warpline'), { recursive: true, force: true });
+  const refs = execFileSync('git', ['for-each-ref', '--format=%(refname)', 'refs/warpline/writers', 'refs/heads/warpline/fabric'], { cwd: dir, env, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean);
+  for (const r of refs) execFileSync('git', ['update-ref', '-d', r], { cwd: dir, env });
+}
+
 describe('C-6 — the stake journal makes tail truncation loud', () => {
   let repo: StakedRepo;
   let strands: Strand[];
@@ -168,7 +180,13 @@ describe('C-6 — the stake journal makes tail truncation loud', () => {
     expect(orphans.length).toBe(2);
     expect(new Set(orphans.map((o) => o.pickId))).toEqual(new Set([strands[1].pickId, strands[2].pickId]));
     expect(r.stakeJournal.missing.sort()).toEqual([strands[1].pickId, strands[2].pickId].sort());
-    expect(r.failures.length).toBe(2); // NOTHING else fires — this is the sole evidence
+    // Since 0.3.0 (W2) the journal is no longer the SOLE witness: the ledger's git
+    // record (#fabric-mirror, refs/warpline/writers/<wid>) recorded every seal too
+    // and dissents with its own kind. Nothing else fires.
+    const mirrorOrphans = r.failures.filter((f) => f.kind === 'mirror-orphan');
+    expect(new Set(mirrorOrphans.map((o) => o.pickId))).toEqual(new Set([strands[1].pickId, strands[2].pickId]));
+    expect(r.mirror.missing.sort()).toEqual([strands[1].pickId, strands[2].pickId].sort());
+    expect(r.failures.length).toBe(4);
 
     // The detail names the checkpoint and the remedy, and is its own kind (never
     // folded into chain-break: "a strand that was here is gone" is a different
@@ -194,9 +212,15 @@ describe('C-6 — absence of evidence is not evidence of truncation', () => {
 
       const r = verifyFabric(repo.dir);
       expect(r.stakeJournal).toEqual({ present: false, attested: 0, missing: [] });
-      expect(r.failures).toEqual([]); // the C-6 hole, deliberately left open: the
-      // journal is advisory, so a truncator who also deletes it leaves no LOCAL
-      // trace. The git stake branch is the tamper-resistant corroborator.
+      // 0.3.0 (W2): the git record still witnesses the cut (#fabric-mirror)…
+      expect(r.failures.map((f) => f.kind)).toEqual(['mirror-orphan', 'mirror-orphan']);
+      // …and with the own record ref deleted too, verify stays usable: both
+      // witnesses are advisory IN. The canonical branch (reflog), its pushed copy
+      // and the git stake branch are the off-machine corroborators.
+      await deleteWriterRefs(repo.dir);
+      const r2 = verifyFabric(repo.dir);
+      expect(r2.mirror.missing).toEqual([]);
+      expect(r2.failures).toEqual([]);
     } finally {
       await repo.destroy();
     }
@@ -216,6 +240,10 @@ describe('C-6 — absence of evidence is not evidence of truncation', () => {
       expect(before.stakeJournal).toEqual({ present: false, attested: 0, missing: [] });
 
       repo.truncateTo(1);
+      // the git record (W2) witnesses the cut even with the valve off; remove it to
+      // pin that verify stays usable with NO local witness at all.
+      expect(verifyFabric(repo.dir).failures.every((f) => f.kind === 'mirror-orphan')).toBe(true);
+      await deleteWriterRefs(repo.dir);
       const after = verifyFabric(repo.dir);
       expect(after.checked).toBe(1);
       expect(after.failures).toEqual([]);

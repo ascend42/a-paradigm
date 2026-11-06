@@ -40,6 +40,7 @@
  * Library code: no console output.
  */
 
+import { refreshSigningPin } from './mirror-sync.js';
 import {
   createHash,
   createPrivateKey,
@@ -472,6 +473,13 @@ export function mintAgentKey(root: string, principal: string, opts: { now?: stri
       createdAt: now,
     });
     signedFrom = { signedFromPickId: tip };
+  }
+  // (W2 final N1) keep the TRACKED signing pin (fabricMirror.signedFrom/keyIds) in
+  // step with the registry when this repo records its fabric in git
+  try {
+    refreshSigningPin(root);
+  } catch {
+    /* the pin is refreshed again by `warpline mirror pin` */
   }
   return { key, keyPath, registryPath, signedFrom };
 }

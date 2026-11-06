@@ -125,8 +125,10 @@ export interface EpochAnchor {
   manifestDigest: string | null; // sha256:… over the canonical fabric-legacy.json (null iff no manifest)
   grandfatheredCount: number; // pins manifest cardinality (kills the mint variant)
   corroboration: {
-    method: 'git-history-prefix-match';
-    gitCommit: string; // the commit whose committed fabric.jsonl v1 prefix matched (attest §5.3)
+    // 'git-history-prefix-match' = a branch commit that tracked .warpline/fabric.jsonl;
+    // 'mirror-history-prefix-match' = a commit of the hidden fabric mirror ref (0.3.0+, #fabric-mirror).
+    method: 'git-history-prefix-match' | 'mirror-history-prefix-match';
+    gitCommit: string; // the commit whose recorded fabric.jsonl v1 prefix matched (attest §5.3)
   };
 }
 

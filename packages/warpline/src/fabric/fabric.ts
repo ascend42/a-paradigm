@@ -24,6 +24,7 @@ import * as path from 'node:path';
 import { atomicWriteSync, appendDurableSync } from '../warp/durable.js';
 import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
 import { findAnchor, strandDigest } from './anchor.js';
+import { routeLedgerWrite } from './git-mirror.js';
 
 /** One grandfathered legacy strand: its stored pickId + its PINNED body hash (§7.2). */
 export interface FabricLegacyEntry {
@@ -153,7 +154,27 @@ export function writeSelvage(wdir: string, stateId: string, expectedOld?: string
  * (audit C-13 is a separate, open defect).
  */
 export function appendStrand(wdir: string, strand: Strand): void {
-  appendDurableSync(fabricPath(wdir), JSON.stringify(strand) + '\n');
+  const line = JSON.stringify(strand) + '\n';
+  let sepForAppend = '';
+  // MIRROR-FIRST (W2 #fabric-mirror, I4/L4): in a recorded repo the new ledger is
+  // committed to git before these bytes reach the file; a failed record writes
+  // nothing, and a crash between the two is restored at the next section open.
+  routeLedgerWrite(
+    wdir,
+    () => {
+      let cur: Buffer;
+      try {
+        cur = fs.readFileSync(fabricPath(wdir));
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+        cur = Buffer.alloc(0);
+      }
+      sepForAppend = cur.length > 0 && cur[cur.length - 1] !== 0x0a ? '\n' : '';
+      return Buffer.concat([cur, Buffer.from(sepForAppend + line, 'utf8')]);
+    },
+    // (review 18) the file gets EXACTLY the bytes the record got
+    () => appendDurableSync(fabricPath(wdir), sepForAppend + line),
+  );
 }
 
 /** One physical line of the ledger that did not parse as a strand (audit C-13). */
@@ -354,9 +375,11 @@ export function rewriteFabric(wdir: string, strands: Strand[]): void {
   // Durable + unique-staging publish of the WHOLE ledger (C-7/C-15). A shared
   // `${p}.tmp` here was the worst of the four: two concurrent rewrites could
   // interleave a partial ledger from one into the other's rename.
-  atomicWriteSync(
-    fabricPath(wdir),
-    strands.map((s) => JSON.stringify(s)).join('\n') + (strands.length ? '\n' : ''),
+  const bytes = strands.map((s) => JSON.stringify(s)).join('\n') + (strands.length ? '\n' : '');
+  routeLedgerWrite(
+    wdir,
+    () => Buffer.from(bytes, 'utf8'),
+    () => atomicWriteSync(fabricPath(wdir), bytes),
   );
 }
 

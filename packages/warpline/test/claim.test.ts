@@ -54,6 +54,8 @@ class FixtureRepo {
     await r.git('config', 'user.email', 'claim@warpline.test');
     await r.git('config', 'user.name', 'Warpline Claim');
     await r.git('config', 'commit.gpgsign', 'false');
+    // 0.3.0 layout (W2): the ledger is a per-clone cache, never tracked
+    (await import('node:fs')).writeFileSync((await import('node:path')).join(r.dir, '.gitignore'), '.warpline/\n');
     return r;
   }
   git = async (...args: string[]): Promise<string> =>

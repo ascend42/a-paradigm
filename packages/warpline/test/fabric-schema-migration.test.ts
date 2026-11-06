@@ -17,7 +17,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -27,8 +26,10 @@ import { warplineDirOf, readFabric, readLegacyGrandfathered } from '../src/fabri
 import { verifyFabric } from '../src/fabric/verify.js';
 
 const execFileAsync = promisify(execFile);
-const REAL_WDIR = path.join(fileURLToPath(new URL('../../../', import.meta.url)), '.warpline');
-const safe = (id: string): string => id.replace(/[^a-zA-Z0-9._-]/g, '_');
+import { FROZEN_WDIR, REAL_OBJECTS, withSyntheticBindings, copyRealObjects, writeStubState } from './fixtures/frozen-fabric.js';
+
+// I8: the frozen fixture, never the live ledger (a per-clone cache since 0.3.0).
+const REAL_WDIR = FROZEN_WDIR;
 
 /** The original v1 prefix of the real ledger (schemaVersion !== 2), as raw JSONL lines. */
 function realV1Lines(): string[] {
@@ -46,21 +47,20 @@ function realV1Lines(): string[] {
  * seal test, also seed the v1 tip's state + selvage so a pick anchors the real tip.
  * Read-only against the real repo — never mutates it.
  */
-function seedRealFabric(root: string, opts: { forSeal?: boolean } = {}): void {
+function seedRealFabric(root: string, opts: { forSeal?: boolean; realObjects?: boolean } = {}): void {
   const wdir = warplineDirOf(root);
   fs.mkdirSync(path.join(wdir, 'refs'), { recursive: true });
-  fs.writeFileSync(path.join(wdir, 'fabric.jsonl'), realV1Lines().join('\n') + '\n', 'utf8');
+  // Bindings re-derive against the object store during verify step 4: the REAL
+  // objects when WARPLINE_REAL_OBJECTS is set, else one small synthetic tree
+  // (bindings are outside the v1 pickId and the grandfathered body hash).
+  const lines = opts.realObjects ? realV1Lines() : withSyntheticBindings(root, realV1Lines());
+  if (opts.realObjects) copyRealObjects(wdir);
+  fs.writeFileSync(path.join(wdir, 'fabric.jsonl'), lines.join('\n') + '\n', 'utf8');
   fs.copyFileSync(path.join(REAL_WDIR, 'fabric-legacy.json'), path.join(wdir, 'fabric-legacy.json'));
-  // Bindings (seq 13/14) re-derive against the object store during verify step 4.
-  fs.cpSync(path.join(REAL_WDIR, 'objects'), path.join(wdir, 'objects'), { recursive: true });
   if (opts.forSeal) {
     const fabric = readFabric(wdir); // v1-only after the filtered copy above
     const tip = fabric[fabric.length - 1];
-    fs.mkdirSync(path.join(wdir, 'states'), { recursive: true });
-    fs.copyFileSync(
-      path.join(REAL_WDIR, 'states', `${safe(tip.stateId)}.json`),
-      path.join(wdir, 'states', `${safe(tip.stateId)}.json`),
-    );
+    writeStubState(wdir, tip.stateId);
     fs.writeFileSync(path.join(wdir, 'refs', 'selvage'), tip.stateId + '\n', 'utf8');
   }
 }
@@ -90,6 +90,18 @@ describe('migration — the frozen v1 prefix verifies with the grandfathered res
     expect(r.checked).toBe(r.v1Prefix.count);
     expect(r.checked).toBe(realV1Lines().length);
     expect(r.v2Chain.count).toBe(0);
+  });
+});
+
+describe.skipIf(REAL_OBJECTS === null)('migration — the REAL v1 binding objects re-derive (WARPLINE_REAL_OBJECTS)', () => {
+  it('verifyFabric over the v1 prefix with the original bindings: exit 0', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-migration-real-'));
+    try {
+      seedRealFabric(root, { realObjects: true });
+      expect(verifyFabric(root, { requireAnchor: false }).failures).toEqual([]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

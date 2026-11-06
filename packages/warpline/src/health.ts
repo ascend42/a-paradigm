@@ -53,6 +53,10 @@ import type { CounterfactualUnavailable, ConvergenceCell } from './fabric/counte
 import type { AdmitBaseSource, AdmitStatus } from './fabric/admit.js';
 import { gitPath, repoRoot, revListCount } from './git/git-exec.js';
 import { ROOT_ENV, explicitRootOf, type RootArm } from './root.js';
+import { mirrorStatus, localSigningPin } from './fabric/mirror-sync.js';
+import { readAuditCursor } from './fabric/mirror-audit.js';
+import { gitContext, mirrorConfig } from './fabric/git-mirror.js';
+import { prePushHookInstalled } from './fabric/hook.js';
 
 export const HEALTH_SCHEMA = 'health:v1' as const;
 
@@ -406,6 +410,20 @@ function nestedUnderOf(root: string): string | null {
   }
 }
 
+export interface MirrorHealth {
+  /** none (no git) · legacy (pre-0.3.0, tracked ledger) · pre-migration (an old checkout — writes refused) · mirror. */
+  layout: 'none' | 'legacy' | 'pre-migration' | 'mirror';
+  role: 'canonical' | 'fork' | 'none';
+  /** the ledger is empty but the repository has a canonical record: the next write adopts it. */
+  adoptionPending: boolean;
+  /** audit cursors per ref (last audited commit). */
+  cursor: Record<string, string>;
+  /** the opt-in record pre-push block is installed / requested by config. */
+  push: { hookInstalled: boolean; autoPush: boolean };
+  /** git failed with a .git present. */
+  unavailable: string | null;
+}
+
 export interface HealthReport {
   schemaVersion: typeof HEALTH_SCHEMA;
   root: string;
@@ -416,6 +434,8 @@ export interface HealthReport {
   hook: HookHealth;
   adjudication: AdjudicationHealth;
   disk: DiskHealth;
+  /** the fabric record in git (#fabric-mirror, W2). */
+  mirror: MirrorHealth;
   /** exit 1 — sound, but something is unmeasured or unreachable. */
   warnings: string[];
   /** exit 2 — the fabric cannot be trusted as it stands. */
@@ -799,7 +819,45 @@ export async function health(root: string): Promise<HealthReport> {
   const disk = diskOf(wdir);
   disk.mbPerStrand = fabric.strands > 0 ? Number((disk.bytes / fabric.strands / 1_048_576).toFixed(2)) : null;
 
-  return { schemaVersion: HEALTH_SCHEMA, root, rootResolution, fabric, seal, hook, adjudication, disk, warnings, unsound };
+  /* ── the fabric record (#fabric-mirror) ── */
+  const mirror: MirrorHealth = {
+    layout: 'none',
+    role: 'none',
+    adoptionPending: false,
+    cursor: {},
+    push: { hookInstalled: false, autoPush: false },
+    unavailable: null,
+  };
+  try {
+    const ms = mirrorStatus(root);
+    mirror.layout = ms.mode;
+    mirror.role = ms.role;
+    mirror.unavailable = ms.unavailable;
+    mirror.adoptionPending = ms.ledgerStrands === 0 && (ms.branchTip !== null || ms.remoteTip !== null);
+    mirror.push.autoPush = ms.autoPush;
+    const ctx = gitContext(root);
+    if (ctx) {
+      mirror.cursor = readAuditCursor(ctx);
+      mirror.push.hookInstalled = prePushHookInstalled(path.join(ctx.commonDir, 'hooks', 'pre-push'));
+    }
+    if (ms.unavailable) unsound.push(`the fabric record cannot be checked: ${ms.unavailable}`);
+    if (ms.missing.length || ms.misordered.length) {
+      unsound.push(`the ledger lacks ${ms.missing.length} recorded strand(s) / holds ${ms.misordered.length} out of place (C-6 truncation)`);
+    }
+    for (const v of ms.audit) unsound.push(`record audit ${v.kind}: ${v.detail}`);
+    if (ms.mode === 'legacy') warnings.push('the ledger is still branch-tracked (pre-0.3.0) — run `warpline mirror migrate`');
+    if (ms.mode === 'pre-migration') warnings.push('this checkout predates the fabric migration — every write is refused here');
+    if (mirror.adoptionPending) warnings.push('the ledger is empty and a canonical record exists — the next write adopts it (`warpline mirror adopt`)');
+    if (ms.mode === 'mirror' && localSigningPin(root) !== undefined && mirrorConfig(root).signedFrom === undefined) {
+      warnings.push('the local key registry has a signing epoch but .warpline/config.json has no fabricMirror.signedFrom pin — fresh clones will not check signatures (`warpline mirror pin`)');
+    }
+    if (ms.autoPush && !mirror.push.hookInstalled) warnings.push('fabricMirror.autoPush is set but the record pre-push block is not installed (`warpline hook install --push`)');
+  } catch (err) {
+    mirror.unavailable = (err as Error).message;
+    unsound.push(`the fabric record cannot be checked: ${(err as Error).message}`);
+  }
+
+  return { schemaVersion: HEALTH_SCHEMA, root, rootResolution, fabric, seal, hook, adjudication, disk, mirror, warnings, unsound };
 }
 
 /** 0 green · 1 warnings · 2 the fabric is unsound. */

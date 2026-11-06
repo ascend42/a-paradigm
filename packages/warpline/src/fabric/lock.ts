@@ -87,6 +87,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { warplineDirOf } from './fabric.js';
+import { openSection, registerSection, unregisterSection } from './git-mirror.js';
+import { adoptIntoSection, rehydrateTipState } from './adopt.js';
 
 /** How often a live holder refreshes the lockfile mtime ("still here"). */
 export const HEARTBEAT_MS = 5_000;
@@ -353,13 +355,45 @@ export function releaseFabricLock(handle: FabricLockHandle): void {
  * audit named. A section that wants to refuse BEFORE writing calls
  * `assertFabricLockHeld` itself.
  */
-export async function withFabricLock<T>(root: string, fn: () => Promise<T> | T): Promise<T> {
+export interface FabricLockOptions {
+  /**
+   * 'auto' (default): the section is RECORDED (#fabric-mirror, W2). Before `fn`
+   * runs the write section is opened (git context, layout, coverage against the
+   * own ref — restoring a shorter ledger, refusing a truncated or reordered one —
+   * and, for an empty ledger in a repo with history, #fabric-adopt); every ledger
+   * write `fn` makes is then committed to git BEFORE the file changes.
+   * 'manual': the caller drives the record itself (`warpline mirror migrate /
+   * adopt / claim`). Ledger writes in a manual section of a mirrored repo refuse.
+   */
+  mirror?: 'auto' | 'manual';
+}
+
+export async function withFabricLock<T>(
+  root: string,
+  fn: () => Promise<T> | T,
+  opts: FabricLockOptions = {},
+): Promise<T> {
   const handle = await acquireFabricLock(root);
+  const wdir = warplineDirOf(root);
+  let registered = false;
   try {
+    if (opts.mirror !== 'manual') {
+      const m = openSection(root);
+      if (m.mode === 'mirror') {
+        let moved = m.section.restored > 0;
+        if (m.section.needsAdopt !== null) moved = adoptIntoSection(m.section).appended > 0 || moved;
+        if (moved) await rehydrateTipState(root);
+        registerSection(wdir, m.section);
+      } else {
+        registerSection(wdir, m.mode);
+      }
+      registered = true;
+    }
     const result = await fn();
     assertFabricLockHeld(handle);
     return result;
   } finally {
+    if (registered) unregisterSection(wdir);
     releaseFabricLock(handle);
   }
 }

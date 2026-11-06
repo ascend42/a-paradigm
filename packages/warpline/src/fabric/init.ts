@@ -25,6 +25,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { pinGenesis } from './mirror-sync.js';
 import { warplineDirOf, readSelvage } from './fabric.js';
 import { readRef } from './refs.js';
 import { proposeNative, admitNative } from './native.js';
@@ -34,7 +35,11 @@ import { WARPIGNORE_FILE } from '../warp/warpignore.js';
 const INIT_ACTOR = 'warpline-init' as const;
 
 /** The git lines Warpline keeps present so git never swallows the fabric. */
-const GITIGNORE_LINES = ['.warpline/', '.warpline-judge/'] as const;
+// (W2 review b) ignore the per-clone caches but TRACK the config (it carries the
+// genesis pin, fabricMirror.genesis, so a clone never mints a second history) and
+// the grandfathered-legacy manifest. `.warpline/` (the whole dir) cannot be
+// re-included, so an existing bare `.warpline/` line is rewritten to `.warpline/*`.
+const GITIGNORE_LINES = ['.warpline/*', '!.warpline/config.json', '!.warpline/fabric-legacy.json', '.warpline-judge/'] as const;
 const GITIGNORE_BANNER = '# Warpline — never let git swallow the native fabric' as const;
 
 /** The starter `.warpignore` — defaults are implicit; the examples teach the syntax. */
@@ -69,6 +74,10 @@ function ensureGitignore(root: string): InitResult['gitignore'] {
     current = null;
   }
   if (current !== null) {
+    if (current.split(/\r?\n/).some((l) => l.trim() === '.warpline/' || l.trim() === '.warpline')) {
+      current = current.replace(/^\s*\.warpline\/?\s*$/m, '.warpline/*');
+      fs.writeFileSync(gp, current, 'utf8');
+    }
     const present = new Set(current.split(/\r?\n/).map((l) => l.trim()));
     const toAdd = GITIGNORE_LINES.filter((l) => !present.has(l));
     if (toAdd.length === 0) return { action: 'present', addedLines: [] };
@@ -119,6 +128,16 @@ export async function initWarpline(root: string, opts: { worktree?: string } = {
     // pre-existing selvage yields noop, and that path is guarded above.
     const admitted = await admitNative(root, { worktree, agentId: INIT_ACTOR, noRestore: true });
     genesisPickId = admitted.strand?.pickId ?? proposed.strand?.pickId ?? null;
+    // (W2 review 26) pin the genesis in .warpline/config.json fabricMirror so a
+    // clone of this repo never mints a second history (#fabric-mirror). Only in a
+    // git worktree toplevel — a pure native project has no record to pin.
+    if (genesisPickId !== null && fs.existsSync(path.join(root, '.git'))) {
+      try {
+        pinGenesis(root);
+      } catch {
+        /* the pin is an extra guard; init itself already succeeded */
+      }
+    }
   }
 
   // 3. Keep the fabric out of git.

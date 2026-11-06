@@ -18,6 +18,7 @@
  */
 
 import { Command } from 'commander';
+import { createRequire } from 'node:module';
 import { absorb, WORKTREE_REF } from './absorb.js';
 import { oracle, forecastHazardsFromRefs, type OracleRecord } from './oracle.js';
 import type { CleanHazard } from './fabric/hazard.js';
@@ -43,7 +44,28 @@ import type { WarpState } from './warp/warp-state.js';
 import { recordPick, type PickResult } from './fabric/pick.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
-import { installHook, uninstallHook, hookStatus, resolveInvokingBinary } from './fabric/hook.js';
+import {
+  installHook,
+  uninstallHook,
+  hookStatus,
+  resolveInvokingBinary,
+  installPrePushHook,
+  uninstallPrePushHook,
+  prePushHookInstalled,
+} from './fabric/hook.js';
+import {
+  pushFabric,
+  adoptCommand,
+  migrateToMirror,
+  migrationPending,
+  claimCanonical,
+  pinGenesis,
+  auditCommand,
+  mirrorStatus,
+} from './fabric/mirror-sync.js';
+import { gitContext, mirrorConfig, MirrorRefusal } from './fabric/git-mirror.js';
+import { spawn as spawnChild } from 'node:child_process';
+import { openSync as openFd } from 'node:fs';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { exitCodeForResult, exitCodeFor, RefusedError, refuse } from './fabric/refusal.js';
@@ -214,7 +236,8 @@ function shellPrincipal(): PrincipalClass {
 program
   .name('warpline')
   .description('Warpline — version control for meaning. START HERE: `warpline init` onboards a project (git optional), then `warpline status` is the manual. The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (fork/propose/admit/resolve/restore). Writes .warpline/ only, never git.')
-  .version('0.1.0')
+  // The real package version (src/cli.ts and dist/cli.js both sit one level below package.json)
+  .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
   // D-7: the EXPLICIT root. Registered here so it appears in --help; the value
   // is actually lifted out of argv by extractRootFlag below, which makes it
   // legal in ANY position (commander would otherwise reject it after the
@@ -597,12 +620,14 @@ program
   .command('hook')
   .description('Manage the auto-seal git hook — seal every git commit into the fabric automatically (coexists with any existing post-commit hook).')
   .argument('<action>', 'install | uninstall | status')
-  .action(async (action: string) => {
+  .option('--push', 'also install the OPT-IN pre-push block that hands the fabric record (warpline/fabric) to a detached `warpline mirror push` (default when fabricMirror.autoPush is set)')
+  .action(async (action: string, options: { push?: boolean }) => {
     try {
       const root = await resolveRoot();
       const hookPath = await gitPath('hooks/post-commit', { cwd: root }).catch(() =>
         `${root}/.git/hooks/post-commit`,
       );
+      const prePushPath = await gitPath('hooks/pre-push', { cwd: root }).catch(() => `${root}/.git/hooks/pre-push`);
       if (action === 'install') {
         // S1 (checkpoint valve): the auto-seal hook refuses to INSTALL where the
         // stake marker is present — this worktree is a one-way checkpoint state.
@@ -636,9 +661,34 @@ program
             `using the baked binary \`${baked.node} ${baked.script}\` (never blocks the commit).\n` +
             `  override at commit time with WARPLINE_BIN=/path/to/warpline; verify with \`warpline health\`.\n`,
         );
+        let autoPush = false;
+        try {
+          autoPush = mirrorConfig(root).autoPush;
+        } catch {
+          autoPush = false;
+        }
+        if (options.push || autoPush) {
+          const p = installPrePushHook(prePushPath, baked);
+          process.stdout.write(
+            `HOOK  record pre-push ${p.created ? 'created' : p.refreshed ? 'refreshed' : 'added'}\n  ${prePushPath}\n` +
+              `  every \`git push <remote>\` hands the fabric record (warpline/fabric) to a detached \`warpline mirror push\` ` +
+              `(canonical writer only; never blocks the push).\n`,
+          );
+          if (p.terminalAfter) {
+            process.stderr.write(`warpline: ${prePushPath} has a top-level exit/exec before its end; the record block may not run.\n`);
+          }
+        }
+        if (migrationPending(root)) {
+          process.stderr.write(
+            `warpline: this worktree still TRACKS .warpline/fabric.jsonl (pre-0.3.0 layout), so every auto-seal dirties ` +
+              `the tree after the commit. Run \`warpline mirror migrate\` to move the anti-truncation backstop to the ` +
+              `warpline/fabric branch and untrack the ledger.\n`,
+          );
+        }
       } else if (action === 'uninstall') {
         const r = uninstallHook(hookPath);
         process.stdout.write(r.removed ? `HOOK  auto-seal removed\n  ${hookPath}\n` : `HOOK  not installed — nothing to remove\n`);
+        if (uninstallPrePushHook(prePushPath).removed) process.stdout.write(`HOOK  record pre-push removed\n  ${prePushPath}\n`);
       } else if (action === 'status') {
         const s = hookStatus(hookPath);
         const label =
@@ -647,13 +697,198 @@ program
             : s.state === 'other-hook-no-warpline'
               ? 'NOT installed (a non-warpline post-commit hook is present)'
               : 'NOT installed';
-        process.stdout.write(`HOOK  ${label}\n  ${hookPath}\n`);
+        process.stdout.write(
+          `HOOK  ${label}\n  ${hookPath}\n` +
+            `HOOK  record pre-push ${prePushHookInstalled(prePushPath) ? 'INSTALLED' : 'NOT installed (opt-in: hook install --push)'}\n  ${prePushPath}\n`,
+        );
       } else {
         process.stderr.write(`warpline: hook action must be install | uninstall | status (got "${action}")\n`);
         process.exit(1);
       }
     } catch (err) {
       fail(err);
+    }
+  });
+
+/* ───────────── warpline mirror … — the fabric record in git (#fabric-mirror, W2) ───────────── */
+
+const mirrorCmd = program
+  .command('mirror')
+  .description(
+    "The fabric's anti-truncation record in git (audit C-6): the canonical branch warpline/fabric (written by ONE canonical writer, pushed fast-forward only) plus each worktree's own ref refs/warpline/writers/<id>. The ledger file is a cache of it; every seal is recorded in git first.",
+  );
+
+function mirrorFail(err: unknown): never {
+  fail(err);
+}
+
+mirrorCmd
+  .command('status')
+  .description('Show the layout, this worktree\'s role (canonical / fork), the record vs the ledger, and the audit. Exit 1 on truncation or audit evidence.')
+  .option('--json', 'emit the report as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const r = mirrorStatus(root);
+      if (options.json) process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      else {
+        const lines = [
+          `MIRROR  layout ${r.mode}${r.unavailable ? ' — git UNAVAILABLE' : ''} · role ${r.role}${r.linked ? ' (linked worktree)' : ''}`,
+          `  branch ${r.branch} @ ${r.branchTip?.slice(0, 12) ?? '(absent)'} · remote ${r.remote}/${r.branch} @ ${r.remoteTip?.slice(0, 12) ?? '(absent)'}`,
+          `  own record ${r.ownRef ?? '(none yet)'}${r.ownCommit ? ` @ ${r.ownCommit.slice(0, 12)}` : ''} — ${r.ownStrands} recorded, ${r.ledgerStrands} in the ledger${r.matches ? ' (match)' : ''}`,
+          `  genesis pin ${r.genesis ?? '(none)'} · auto-push ${r.autoPush ? 'on' : 'off'}`,
+        ];
+        if (r.unavailable) lines.push(`  ${r.unavailable}`);
+        if (r.missing.length || r.misordered.length) lines.push(`  TRUNCATION: ${r.missing.length} recorded strand(s) missing, ${r.misordered.length} out of place`);
+        for (const v of r.audit) lines.push(`  AUDIT ${v.kind}: ${v.detail}`);
+        if (r.mode === 'legacy') lines.push('  the ledger is still branch-tracked — run `warpline mirror migrate`');
+        if (r.mode === 'pre-migration') lines.push('  this checkout predates the migration — writes are refused here; check out a migrated commit');
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+      if (r.unavailable || r.missing.length || r.misordered.length || r.audit.length) process.exit(1);
+    } catch (err) {
+      mirrorFail(err);
+    }
+  });
+
+mirrorCmd
+  .command('migrate')
+  .description('Move the backstop from branch tracking to the record in ONE step: verify (same failures as the baseline), seed the record (or follow / fork an existing canonical), push the branch and confirm it, then edit .gitignore, `git rm --cached` the ledger + both tip pointers and write the config pin. Stage-only — you commit. Refuses (and untracks nothing) on any failure.')
+  .option('--no-push', 'do not push the branch (local-only migration)')
+  .option('--auto-push', 'set fabricMirror.autoPush in the config (the pre-push hook block)')
+  .option('--json', 'emit the result as JSON')
+  .action(async (options: { push?: boolean; autoPush?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const r = await migrateToMirror(root, { push: options.push !== false, autoPush: options.autoPush ? true : undefined });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+        return;
+      }
+      const lines = [
+        `MIGRATE  ${r.path} — ${r.strands} strand(s) recorded in ${r.ownRef}${r.commit ? ` @ ${r.commit.slice(0, 12)}` : ''}; push ${r.pushed}`,
+        `  genesis pin ${r.genesis ?? '(none)'} · .gitignore ${r.gitignore}`,
+      ];
+      if (r.untracked.length) {
+        lines.push(`  untracked (staged, not committed): ${r.untracked.join(', ')}`);
+        lines.push('  NEXT: commit the removal + .gitignore + .warpline/config.json (via a PR).');
+      }
+      process.stdout.write(lines.join('\n') + '\n');
+    } catch (err) {
+      mirrorFail(err);
+    }
+  });
+
+mirrorCmd
+  .command('adopt')
+  .description('Rebuild an empty or behind ledger from the VERIFIED canonical record (audit every new commit, plan, verify the candidate, one write). Fetches the canonical branch in the foreground first unless --no-fetch. Refuses on an unmigrated checkout.')
+  .option('--no-fetch', 'do not fetch the canonical branch first')
+  .option('--json', 'emit the result as JSON')
+  .action(async (options: { fetch?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const r = await adoptCommand(root, { fetch: options.fetch !== false });
+      if (options.json) process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      else process.stdout.write(`ADOPT  ${r.action}${r.source ? ` from ${r.source}` : ''}: +${r.appended} strand(s)\n`);
+      if (r.action === 'no-source') {
+        process.stderr.write(
+          'warpline: mirror adopt found no canonical record to adopt — fetch it (`git fetch origin +refs/heads/warpline/fabric:refs/remotes/origin/warpline/fabric`) or check `warpline mirror status`\n',
+        );
+        process.exit(1);
+      }
+    } catch (err) {
+      mirrorFail(err);
+    }
+  });
+
+mirrorCmd
+  .command('push')
+  .description("Fast-forward the remote's warpline/fabric to the canonical tip. Only the canonical writer pushes; never forced. --detached returns at once (the pre-push hook path).")
+  .argument('[remote]', 'git remote NAME (default: fabricMirror.remote or origin)')
+  .option('--detached', 'run the push in a detached child and return immediately (log: <git-dir>/warpline-hook.log)')
+  .option('--json', 'emit the result as JSON')
+  .action(async (remote: string | undefined, options: { detached?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      if (options.detached) {
+        const ctx = gitContext(root);
+        if (ctx === null) throw new MirrorRefusal(`warpline: mirror push — ${root} is not a git worktree toplevel`, 'not-applicable');
+        const log = openFd(path.join(ctx.commonDir, 'warpline-hook.log'), 'a');
+        const child = spawnChild(process.execPath, [process.argv[1], 'mirror', 'push', ...(remote ? [remote] : []), '--root', root], {
+          detached: true,
+          stdio: ['ignore', log, log],
+          windowsHide: true,
+          env: { ...process.env, WARPLINE_MIRROR_PUSH: '1' },
+        });
+        child.unref();
+        return;
+      }
+      const timeoutMs = Number(process.env.WARPLINE_NET_TIMEOUT_MS) > 0 ? Number(process.env.WARPLINE_NET_TIMEOUT_MS) : undefined;
+      const r = pushFabric(root, { remote, timeoutMs });
+      if (options.json) process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      else process.stdout.write(`PUSH  ${r.action} ${r.remote}${r.commit ? ` @ ${r.commit.slice(0, 12)}` : ''}\n`);
+      if (r.action === 'not-canonical' || r.action === 'not-a-remote' || r.action === 'nothing-to-push') {
+        const next =
+          r.action === 'not-canonical'
+            ? 'this worktree is a fork; only the canonical writer pushes (`warpline mirror status`; recover a lost canonical with `warpline mirror claim`)'
+            : r.action === 'not-a-remote'
+              ? `"${r.remote}" is not a configured git remote name (see \`git remote -v\`)`
+              : 'there is no local canonical branch to push yet (seal once, or `warpline mirror migrate`)';
+        process.stderr.write(`warpline: mirror push did nothing — ${next}\n`);
+        process.exit(1);
+      }
+    } catch (err) {
+      mirrorFail(err);
+    }
+  });
+
+mirrorCmd
+  .command('claim')
+  .description('Make this worktree the canonical writer (recovery for a lost canonical clone). Its record must contain the current canonical tip. Refused in linked worktrees.')
+  .action(async () => {
+    try {
+      const root = await resolveRoot();
+      const r = await claimCanonical(root);
+      process.stdout.write(`CLAIM  canonical @ ${r.commit.slice(0, 12)}${r.previousCanonical ? ` (was ${r.previousCanonical.slice(0, 12)})` : ''} — push with \`warpline mirror push\`\n`);
+    } catch (err) {
+      mirrorFail(err);
+    }
+  });
+
+mirrorCmd
+  .command('pin')
+  .description('Write the genesis pin (the first pickId) into .warpline/config.json fabricMirror (tracked) — a clone with this pin never mints a second genesis.')
+  .option('--auto-push', 'also set fabricMirror.autoPush')
+  .action(async (options: { autoPush?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const r = pinGenesis(root, { autoPush: options.autoPush ? true : undefined });
+      process.stdout.write(`PIN  genesis ${r.genesis}${r.changed ? ' (written)' : ' (already pinned)'}\n`);
+    } catch (err) {
+      mirrorFail(err);
+    }
+  });
+
+mirrorCmd
+  .command('audit')
+  .description('Audit every canonical commit since the cursor (append-only per commit; a tip not descending from the cursor = rewound) for the local branch and its remote-tracking ref; advance the cursor of each clean chain. Exit 1 on any violation.')
+  .option('--full', 'audit the whole chain, ignoring the cursor')
+  .option('--json', 'emit the results as JSON')
+  .action(async (options: { full?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const rs = auditCommand(root, { full: options.full });
+      if (options.json) process.stdout.write(JSON.stringify(rs, null, 2) + '\n');
+      else {
+        if (rs.length === 0) process.stdout.write('AUDIT  no canonical record here (nothing to audit)\n');
+        for (const r of rs) {
+          process.stdout.write(`AUDIT  ${r.ref} @ ${r.tip?.slice(0, 12)} — ${r.audited} commit(s) audited, ${r.violations.length} violation(s)\n`);
+          for (const v of r.violations) process.stdout.write(`  ${v.kind}: ${v.detail}\n`);
+        }
+      }
+      if (rs.some((r) => r.violations.length > 0)) process.exit(1);
+    } catch (err) {
+      mirrorFail(err);
     }
   });
 

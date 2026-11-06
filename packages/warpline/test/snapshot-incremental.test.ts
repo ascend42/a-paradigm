@@ -37,6 +37,8 @@ class Repo {
     await r.git('config', 'user.email', 'inc@warpline.test');
     await r.git('config', 'user.name', 'Warpline Inc');
     await r.git('config', 'commit.gpgsign', 'false');
+    // 0.3.0 layout (W2): the ledger is a per-clone cache, never tracked
+    (await import('node:fs')).writeFileSync((await import('node:path')).join(r.dir, '.gitignore'), '.warpline/\n');
     return r;
   }
   git = async (...a: string[]): Promise<string> =>

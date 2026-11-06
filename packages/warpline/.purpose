@@ -4163,6 +4163,97 @@ components:
       - "#field-oracle"
       - "#warpline-cli"
 
+  fabric-mirror:
+    description: >-
+      The fabric ledger's RECORD in git (soundness audit C-6, W2 design —
+      supersedes the W1 hidden ref). The ref is the record and
+      .warpline/fabric.jsonl is a cache of it: every ledger write is committed to
+      git BEFORE the file changes (mirror-first), with plumbing only (objects
+      written as loose objects in Node, one `update-ref --stdin` CAS transaction).
+      refs/heads/warpline/fabric is the canonical record (one canonical writer,
+      fast-forward only, reflog, fetched by clone, ruleset-protectable);
+      refs/warpline/writers/<wid> is each worktree's own record (reflog forced,
+      never pushed). Tree format warpline-mirror/1 (format, writer,
+      fabric-legacy.json, ledger/NNNNNN.jsonl 32-strand segments). The write
+      section (opened by #fabric-lock) refuses a pre-migration checkout, restores
+      an empty/shorter ledger from the own ref, refuses a ledger that holds
+      unrecorded or reordered strands (prefix rule), refuses a genesis while
+      history exists, and fails closed when .git exists but git fails. Review
+      fixes: the own record may never rewind or vanish out of band (mirror-cache
+      continuity + the canonical branch this writer wrote), an own-ref-less
+      ledger is checked against the canonical record, the public key registry
+      travels in the tree (keys-registry.jsonl) as the signing trust anchor
+      pinned by fabricMirror.signedFrom/keyIds, and signals are emitted to
+      <common-dir>/warpline/events.jsonl + the hook log (emitMirrorSignal).
+    type: module
+    file: src/fabric/git-mirror.ts
+    tags: [warpline, fabric, c-6, git]
+    signals: ["!fabric-adopted", "!mirror-chain-truncation", "!canonical-rewound"]
+    references: ["#git-run", "#fabric-writer", "#fabric-lock", "#fabric-adopt", "#mirror-audit", "#fabric"]
+  fabric-mirror-sync:
+    description: >-
+      The `warpline mirror {status, migrate, adopt, push, claim, pin, audit}`
+      verbs. push is canonical-writer only, fast-forward only, lock-free, with
+      the #git-run network env (no prompts, ssh BatchMode, 60 s kill) and a
+      --detached form for the opt-in pre-push block. migrate: verify baseline →
+      record (seed / follow / fork) → foreground push + ls-remote confirm (roll
+      back the refs on failure) → only then .gitignore, git rm --cached, the
+      config pin (fabricMirror {branch, remote, genesis, autoPush}).
+    type: module
+    file: src/fabric/mirror-sync.ts
+    tags: [warpline, fabric, c-6, git, cli]
+    references: ["#fabric-mirror", "#fabric-adopt", "#mirror-audit", "#hook"]
+  fabric-writer:
+    description: >-
+      The per-worktree writer id: 128 random bits in <per-worktree
+      git-dir>/warpline/writer-id (O_EXCL). Names the own record ref and is
+      written into each record commit; `git worktree remove` deletes it so a
+      re-added worktree gets a new id (no name reuse).
+    type: module
+    file: src/fabric/writer.ts
+    tags: [warpline, fabric, c-6]
+  mirror-audit:
+    description: >-
+      Audits every canonical commit since the cursor
+      (<common-dir>/warpline/audit.json): each must extend its first parent
+      append-only (and carry every strand of other parents); a tip not
+      descending from the cursor, or a vanished remote-tracking ref, is
+      canonical-rewound. Unchanged segment oids skip the blob read. Also hosts
+      verifyMirror, the verify-side ledger-vs-record cross-check (prefix rule).
+      DECISION (review e): verify is NOT read-only for the audit cursor — a
+      clean audit of the canonical / remote-tracking chain advances
+      <common-dir>/warpline/audit.json, and violations emit signals. Kept on
+      purpose: a cursor that only `mirror audit` moves goes stale, and a stale
+      cursor makes a later rewind look like history this clone never verified.
+    type: module
+    file: src/fabric/mirror-audit.ts
+    tags: [warpline, fabric, c-6, verify]
+    signals: ["!mirror-chain-truncation", "!canonical-rewound"]
+  fabric-adopt:
+    description: >-
+      Rebuilds an empty or behind ledger from VERIFIED git history and never
+      mints a new genesis: source (local canonical → remote-tracking → the last
+      commit that tracked the ledger), size cap, #mirror-audit, planMerge
+      (fast-forward / v3-only union / refuse diverged v1/v2), the candidate
+      verified in memory by the #fabric-verify core (new (kind, pickId) failures
+      refuse; absent binding objects of incoming strands tolerated, corrupt
+      objects never), the binding/v1 policy, then record → file + tips → cursor.
+    type: module
+    file: src/fabric/adopt.ts
+    tags: [warpline, fabric, c-6]
+    signals: ["!fabric-adopted"]
+  git-run:
+    description: >-
+      The one git runner for the record: strips redirecting GIT_* env (GIT_DIR,
+      GIT_WORK_TREE, GIT_INDEX_FILE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY,
+      GIT_ALTERNATE_OBJECT_DIRECTORIES, GIT_NAMESPACE, GIT_PREFIX), resolves the
+      binary (WARPLINE_GIT, PATH, git.exe on win32, usual locations), argv only,
+      30 s local / 60 s network timeouts, failure classes unavailable / timeout /
+      error, and a spawn-counter test seam.
+    type: module
+    file: src/fabric/git-run.ts
+    tags: [warpline, git, windows]
+
 flows:
   oracle-run:
     description: >-

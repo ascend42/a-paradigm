@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "8.1.1",
+  "version": "8.1.2",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -51,7 +51,7 @@
     "zod": "^4.6.7"
   },
   "optionalDependencies": {
-    "@a-company/warpline": "^0.2.2"
+    "@a-company/warpline": "^0.3.0"
   },
   "devDependencies": {
     "@a-company/portal-core": "*",
