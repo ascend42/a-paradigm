@@ -1168,6 +1168,9 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 project: parsed.project,
                 counts: parsed.counts,
                 total: parsed.total,
+                // T-2026-11-06-002: a detected-but-unlisted family is named even in concise mode, so an agent that is
+                // told to use it (e.g. habits) learns how to list it instead of concluding the tool does not exist
+                ...(hints.length > 0 ? { hints } : {}),
               }, null, 2);
             } catch {
               // Fall through with full text if parse fails
