@@ -41,3 +41,9 @@ packages/paradigm/src/commands/hooks/generated-hooks.ts text eol=lf
 
 # Warpline frozen fabric fixture (I8): pickIds and anchor digests hash these exact bytes; never convert.
 packages/warpline/test/fixtures/frozen-fabric/** -text
+
+# >>> paradigm history (managed by paradigm init/sync) >>>
+# Authored history rows (paradigm history record/validate) from two branches
+# merge line-wise; commit history itself is derived from git, never written here.
+.paradigm/history/log.jsonl merge=union
+# <<< paradigm history <<<
