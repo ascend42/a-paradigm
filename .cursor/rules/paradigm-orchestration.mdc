@@ -55,6 +55,9 @@ This project runs on **macOS**. Use appropriate syntax:
 - **builder** (haiku): You implement code based on specifications from the Architect. (writes: src/**, tests/**)
 - **reviewer** (sonnet): You review code for correctness, security, and adherence to specs. (writes: reviews/*.md)
 - **tester** (haiku): You verify implementations work correctly. (writes: tests/**, health.yaml)
+- **ftux** (opus): You simulate a first-time user actively trying to use a feature or surface. (writes: .paradigm/ftux/reports/**)
+- **scholar** (opus): You research, synthesize, and curate written knowledge across the project. (writes: docs/guides/**, packages/university/**/content/**, .paradigm/research/**)
+- **swift** (sonnet): You are the Swift-language ecosystem agent. You bring deep Swift/SwiftUI/Apple-platform expertise (writes: **/*.swift, **/Package.swift)
 - **security** (opus): You audit for security issues, especially around ^gates. (writes: security/*.md)
 
 ## Red Flags - STOP and Orchestrate
