@@ -55,6 +55,14 @@ export interface ParadigmFiles {
     };
   }>;
   /**
+   * Set when the project is versioned by Warpline (core/warpline-detect.ts).
+   * Unset → no generated file mentions Warpline. The block it renders is
+   * config-free and byte-stable, so it lives in CLAUDE.md's cacheable head.
+   */
+  warpline?: {
+    mode: 'native' | 'git';
+  };
+  /**
    * VOLATILE display metadata (#cache-aligner). These values change on version
    * bumps / reindex / arc shifts and MUST be rendered only in the trailer of a
    * generated context file, never in the KV-cacheable head. See
@@ -151,3 +159,38 @@ export interface IDEAdapter {
  * Registry of all available adapters
  */
 export type IDEAdapterRegistry = Map<string, IDEAdapter>;
+
+// ============================================================================
+// Warpline block (T-2026-11-12-001)
+// ============================================================================
+
+/** Opening marker of the Warpline block in AGENTS.md / CLAUDE.md. */
+export const WARPLINE_BLOCK_BEGIN = '<!-- warpline:begin -->';
+/** Closing marker of the Warpline block in AGENTS.md / CLAUDE.md. */
+export const WARPLINE_BLOCK_END = '<!-- warpline:end -->';
+
+/**
+ * The block text, per mode. MUST stay byte-identical to Warpline's own
+ * `renderAgentGuide(mode)` (packages/warpline/src/fabric/agent-guide.ts), which
+ * `warpline init` writes. Paradigm keeps its own copy because Warpline is an
+ * optional, external dependency it never imports at runtime; the parity test
+ * (src/core/warpline-block-parity.test.ts) enforces the match.
+ */
+export const WARPLINE_BLOCK_TEXT: Readonly<Record<'native' | 'git', string>> = {
+  native: [
+    WARPLINE_BLOCK_BEGIN,
+    '## Version control: Warpline',
+    'This project is versioned by Warpline, not git (there is no .git). Warpline is not in your training data; it describes itself at runtime.',
+    '- Start with `warpline orient` (where you are and what you can do next), then `warpline status` (what changed, by meaning). Add `--json` for structured output; `warpline --help` lists every command.',
+    '- Save work: `warpline fork <you>` → edit → `warpline propose --agent <you> --native -m "<why>"` → `warpline admit <you> --native`.',
+    '- If admit refuses with a KNOT, stop and ask the human. Only a human runs `warpline resolve`.',
+    '- Never edit `.warpline/` by hand. Diagnose with `warpline health`.',
+    WARPLINE_BLOCK_END,
+  ].join('\n'),
+  git: [
+    WARPLINE_BLOCK_BEGIN,
+    '## Version control: Warpline',
+    'This project uses git plus Warpline, which records the meaning of each change alongside commits. Use git as usual. Start with `warpline orient`; `warpline status` shows what changed by meaning, `warpline mirror status` shows whether the ledger is in step, `warpline health` diagnoses it. Never edit `.warpline/` by hand.',
+    WARPLINE_BLOCK_END,
+  ].join('\n'),
+};

@@ -10,6 +10,7 @@ import type { IDEAdapter, ParadigmFiles, GeneratedFile, McpConfig } from './type
 import {
   generateConventions,
   generateCommitConvention,
+  generateWarplineSection,
 } from './base.js';
 import { mcpServerEnv } from './mcp-env.js';
 
@@ -188,6 +189,13 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| Troubleshooting | `paradigm://guidance/troubleshooting` |');
     sections.push('| Docgen & the cache-aligner rule | `paradigm://guidance/docgen` |');
     sections.push('');
+
+    // Warpline block (T-2026-11-12-001) — only when the project is versioned by
+    // Warpline. Byte-stable text, so it belongs in the cacheable head.
+    const warplineSection = generateWarplineSection(files);
+    if (warplineSection) {
+      sections.push(warplineSection);
+    }
 
     // Directory structure — config-driven, stable across syncs, so it stays in
     // the cacheable head (it does not change on a version bump / reindex).

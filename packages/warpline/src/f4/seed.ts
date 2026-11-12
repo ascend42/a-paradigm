@@ -14,6 +14,9 @@
  * founder-gate FG-4 — ratified in T-005's pre-registration, never chosen by
  * the harness builder. Nothing here encodes a corpus.
  *
+ * COLD SUBJECT (D2, 2026-11-12): the agent under test sees only what
+ * `warpline init` ships — see the "WHO COUNTS AS COLD" block in #f4-completion.
+ *
  * ISOLATION LAW (Shield's ruling, lore L-2026-07-21): staged KNOTs must never
  * feed this repo's organic K3/F2 record — the harness runs against SCRATCH
  * fabrics only. Nothing in this module resolves a repo root implicitly; every
@@ -25,6 +28,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { forkNative, proposeNative, admitNative } from '../fabric/native.js';
+import { initWarpline } from '../fabric/init.js';
 
 export interface SeedWorldOptions {
   /** the SCRATCH fabric root (never a live repo — isolation law). */
@@ -56,15 +60,23 @@ function write(dir: string, rel: string, body: string): void {
 }
 
 /**
- * Initialize a scratch WORLD: base file + a sealed genesis selvage (authored
- * by the neutral 'seed-genesis' principal). Returns the contested file path.
- * The agent under test then drives fork → propose → admit itself.
+ * Initialize a scratch WORLD: base file, then `initWarpline` — the SAME call
+ * `warpline init` makes. Returns the contested file path. The agent under test
+ * then drives fork → propose → admit itself.
+ *
+ * COLD = WHAT INIT SHIPS (D2, 2026-11-12): building the world THROUGH init (not
+ * a hand-rolled propose/admit genesis) makes "the subject sees exactly what init
+ * ships" true by construction — the starter `.warpignore`, the agent guide
+ * (AGENTS.md; CLAUDE.md only if present), the .gitignore lines in a git world,
+ * and the genesis seal, in init's own order. Genesis is therefore authored by
+ * init's actor, 'warpline-init' (formerly a 'seed-genesis' principal no test
+ * keyed on). F4 rows stamp the guide epoch (agentGuideId) so arms never pool
+ * across a guide change (#f4-completion).
  */
 export async function seedWorld(opts: SeedWorldOptions): Promise<{ file: string }> {
   const file = opts.file ?? DEFAULT_FILE;
   write(opts.root, file, opts.baseBody ?? DEFAULT_BASE);
-  await proposeNative(opts.root, { worktree: opts.root, agentId: 'seed-genesis', intent: 'seed: genesis' });
-  await admitNative(opts.root, { worktree: opts.root, agentId: 'seed-genesis', noRestore: true });
+  await initWarpline(opts.root);
   return { file };
 }
 

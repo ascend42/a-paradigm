@@ -339,6 +339,10 @@ components:
 
   warpignore:
     description: >-
+      BUILT-IN GLOB (T-2026-11-12-001): `*.warpline-tmp.*` (WARPIGNORE_DEFAULT_GLOBS)
+      is skipped at any depth and cannot be negated — the staging file of
+      #warpline-agent-guide's atomic write, never content even when a write is
+      interrupted.
       Warpline's OWN, git-INDEPENDENT ignore mechanism (warp/warpignore.ts;
       T-2026-08-12-002, founder correction TD-2026-08-12-218). A native-first tool
       that "never touches git" cannot govern its own skips through git's
@@ -2791,6 +2795,95 @@ components:
       - "#warpline-root"
       - "#warpline-cli"
 
+  warpline-agent-guide:
+    description: >-
+      THE BLOCK `warpline init` SHIPS (src/fabric/agent-guide.ts, T-2026-11-12-001).
+      renderAgentGuide(mode: native|git) returns the exact text between
+      `<!-- warpline:begin -->` and `<!-- warpline:end -->` (lines joined with
+      \n, no trailing newline); ensureAgentGuide(root, mode) writes it into
+      AGENTS.md (created when absent) and CLAUDE.md (only when it already
+      exists), returning {mode, agentsMd, claudeMd: created|updated|unchanged|
+      skipped, notes}. Idempotent and surgical: only the text between the
+      markers is replaced, a file without a block gets one appended, text
+      outside is never touched, CRLF files stay CRLF, a BOM is kept. MARKERS
+      ARE WHOLE (TRIMMED) LINES OUTSIDE FENCED CODE (scanAgentGuide, shared
+      with #warpline-orient) — the same rules as Paradigm's scanWarplineBlocks,
+      asserted by the cross-package parity test: a fence closes only on the same
+      character, at least as long, with nothing after it. A substring match let
+      an inline mention pair with the real end marker and wipe the text between
+      (judge review 2026-11-12). Malformed — LEFT ALONE and reported: more than
+      one block, a begin inside an open block, a begin with no end, an end with
+      no begin, or a file ending inside an unclosed fence with no block (an
+      append would land inside the fence on every run).
+      Writes are atomic (same-dir temp + rename, file mode kept) and go through
+      symlinks to the real file (CLAUDE.md → AGENTS.md is written once); any
+      per-file error (read-only, not a file) is `skipped` + a note, never a
+      throw, so init always completes. Mode is git when the root is inside a
+      git work tree (a `.git` at the root or any ancestor), else native.
+      agentGuideId() is the content address of both texts; every f4Trace row
+      stamps it and #f4-completion keys arms on (descriptorsId, agentGuideId).
+      WHY: Warpline is in no model's weights (TD-2026-07-21-766) and init used
+      to print its agent hints to the terminal only, so an agent's next session
+      saw no .git and no instructions. F4 "cold" now means an agent that sees
+      only what init ships (founder D2, recorded in #f4-completion). BYTE PARITY:
+      Paradigm's generated CLAUDE.md/AGENTS.md carry the same text as a
+      fallback; a cross-package parity test in packages/paradigm compares them —
+      change both or neither. #f4-seed's seedWorld builds its world through
+      initWarpline, so an F4 subject sees exactly what init ships. Exported from
+      the package entry. Pinned by test/agent-guide-init.test.ts.
+    type: module
+    tags: [warpline, onboarding, f4, agents]
+    components:
+      - "#warpline-cli"
+
+  warpline-orient:
+    description: >-
+      WHERE AM I, WHAT NEXT — on the CLI (src/orient.ts, `warpline orient
+      [--agent <id>] [--json]`, founder D3, T-2026-11-12-001). Closes the
+      coverage gap #f4-trace recorded: the daemon's `status` (cycleStage
+      'orient') had no CLI equivalent, and `warpline status` is the meaning
+      diff. Reports mode (native/git), initialized + selvage, whether the agent
+      guide is present in AGENTS.md / CLAUDE.md, daemon lifecycle state, whether
+      .mcp.json has a server whose command/args actually run warpline (bare,
+      .cmd/.exe shim, @a-company/warpline, or warpline/dist/cli.js) with an
+      `mcp` argument after it, how many DISTINCT MCP agent tokens exist, and —
+      in a subdirectory with no .warpline/ of its own — the enclosing project
+      root (`enclosingRoot`; next is `warpline --root <it> orient`, never init),
+      THIS agent's next legal verbs with exact CLI commands (agent from --agent,
+      else $WARPLINE_AGENT_ID, else unknown → the no-scratch answer with a hint;
+      uninitialized → `warpline init`), the human-only verbs and flags, and the
+      limits cold agents trip on (KNOT needs a human; clean ≠ no change;
+      byte-compared files; never edit .warpline/). The next verbs come from the
+      SAME position reader as the daemon (#warplined-position) and the SAME rule
+      table (NEXT_LEGAL_VERBS), so the skins cannot drift. CLI-ONLY: no daemon
+      verb, descriptorsId unchanged. WRITES NOTHING — no traceCli row, no cache,
+      no lock, no git call of its own; pinned by a whole-tree byte digest before
+      and after (library and binary) in test/warpline-orient.test.ts, which also
+      covers native, git, --json shape and the fork → propose progression.
+      `orient:v1` is ADDITIVE ONLY (fields added, never removed/renamed/retyped);
+      the fields are documented in README.md and docs/specs/warpline-flows.md §4.
+    type: module
+    tags: [warpline, cli, read-only, f4, orientation]
+    components:
+      - "#warplined-position"
+      - "#warplined-descriptors"
+      - "#warpline-agent-guide"
+      - "#warpline-cli"
+
+  warplined-position:
+    description: >-
+      A principal's observable position in the write cycle, read from disk
+      (src/daemon/position.ts): cyclePositionOf(root, principal) → scratch
+      present / proposal sealed / behind the selvage / KNOT open, plus the raw
+      scratch and selvage values. Lifted out of the daemon's `status` handler
+      unchanged (T-2026-11-12-001) so `warpline orient` reads the SAME position
+      the daemon does. Plain file reads only, never throws (orientation must
+      not), nothing written. Both callers feed it to nextLegalVerbsFor.
+    type: module
+    tags: [warpline, daemon, read-only]
+    components:
+      - "#warplined-descriptors"
+
   native-write-path:
     description: >-
       PHASE 0 of NATIVE-FIRST (arky-architecture.md §2.1 — THE KEYSTONE; ratified
@@ -3871,7 +3964,15 @@ components:
       only, never a verdict input. A bare `warpline` (no command) prints help pointing
       at init then status; the legacy `.warplineignore` earns a one-time stderr
       deprecation notice on these surfaces when `.warpignore` is absent. Pinned by
-      test/init-status-native.test.ts. Phase-2 WRITE PATH: `warpline
+      test/init-status-native.test.ts. AGENT AWARENESS (T-2026-11-12-001, 0.3.1):
+      init also writes the agent guide (#warpline-agent-guide) into AGENTS.md /
+      CLAUDE.md before genesis (`--no-agent-guide` opts out) and its printout now
+      points agents at `warpline orient` / `warpline --help` as the manual, with
+      `status` described as what changed by meaning. NEW CLI-ONLY VERB `warpline
+      orient [--agent <id>] [--json]` (#warpline-orient) — added to the CLI
+      surface 2026-11-12; it adds no daemon verb, so the FG-3 freeze
+      (descriptorsId, test/descriptors-frozen.test.ts) is unchanged, and it is
+      untraced (writes nothing), recorded in the #f4-trace gap note. Phase-2 WRITE PATH: `warpline
       pick [-m <intent>] [--as <actor>] [--confidence <n>] [--ref <ref>] [--quiet]
       [--json]` seals meaning into the fabric (no-op when unchanged; with `--ref
       <commit>` and no -m, intent + actor are derived from the commit), `warpline

@@ -25,6 +25,7 @@ import {
   generateLoreSection,
   generateLlmsTxtSection,
 } from './base.js';
+import { WARPLINE_BLOCK_TEXT } from './types.js';
 import type { AgentsManifest } from '../../commands/team/types.js';
 
 /**
@@ -50,6 +51,9 @@ export class CursorAdapter implements IDEAdapter {
   readonly displayName = 'Cursor';
   readonly outputPath = '.cursor/rules';
   readonly multiFile = true;
+
+  /** Rule file written only when Warpline is detected (T-2026-11-12-001). */
+  static readonly WARPLINE_RULE = 'paradigm-warpline.mdc';
 
   detect(rootDir: string): boolean {
     // Check for .cursor directory (Cursor workspace)
@@ -180,6 +184,16 @@ export class CursorAdapter implements IDEAdapter {
       path: 'paradigm-commits.mdc',
       content: this.generateCommitsMdc(),
     });
+
+    // 16. Warpline (always apply) — only when the project is versioned by
+    // Warpline (T-2026-11-12-001). syncToIDE deletes a stale copy otherwise.
+    if (files.warpline) {
+      generatedFiles.push({
+        path: CursorAdapter.WARPLINE_RULE,
+        content: frontmatter('Version control: Warpline - start with warpline orient', { alwaysApply: true }) +
+          `${WARPLINE_BLOCK_TEXT[files.warpline.mode]}\n`,
+      });
+    }
 
     return generatedFiles;
   }

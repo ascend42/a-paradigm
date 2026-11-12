@@ -17,7 +17,9 @@
  * `.warpline-judge` (the Judge's witness/sandbox dir — tool state, never
  * meaning) and `node_modules`. Matched through the shared C-3 reserved-name
  * normalizer, so `.GIT`, `.git ` and `GIT~1` are covered too — the snapshot
- * filter and restoreTree's refusal must agree on the reserved set.
+ * filter and restoreTree's refusal must agree on the reserved set. Plus the
+ * basename glob `*.warpline-tmp.*` (WARPIGNORE_DEFAULT_GLOBS) — an interrupted
+ * atomic write's staging file, never content.
  *
  * COMPOSITION (not replacement). Callers OR this matcher with the legacy
  * `.warplineignore`/`.gitignore` matcher (ignore-rules.ts). This is deliberate:
@@ -69,6 +71,17 @@ export const WARPIGNORE_DEFAULT_NAMES: ReadonlySet<string> = new Set([
   '.warpline-judge',
   'node_modules',
 ]);
+
+/**
+ * Basename GLOBS skipped at any depth, also un-negatable: `*.warpline-tmp.*` is
+ * the staging name #warpline-agent-guide's atomic write uses (temp in the same
+ * directory, then rename). An interrupted write can leave one behind; it must
+ * never be sealed as project content.
+ */
+export const WARPIGNORE_DEFAULT_GLOBS: readonly string[] = Object.freeze(['*.warpline-tmp.*']);
+const DEFAULT_GLOB_RES: readonly RegExp[] = WARPIGNORE_DEFAULT_GLOBS.map(
+  (g) => new RegExp('^' + g.split('*').map((part) => part.replace(/[.+^${}()|[\]\\?]/g, '\\$&')).join('[^/]*') + '$'),
+);
 
 /** The compiled ignore matcher for one root. */
 export interface WarpignoreMatcher {
@@ -183,6 +196,7 @@ export function parseWarpignore(content: string | null): WarpignoreMatcher {
       // Un-negatable floor — checked BEFORE the file rules so no `!.git` (or any
       // spelling of it) can re-include a reserved name.
       if (matchesReservedName(base, WARPIGNORE_DEFAULT_NAMES)) return true;
+      if (DEFAULT_GLOB_RES.some((re) => re.test(base))) return true;
       return rulesMatch(rules, relPath, isDir);
     },
   };

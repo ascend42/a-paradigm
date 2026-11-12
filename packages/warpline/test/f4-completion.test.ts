@@ -190,7 +190,7 @@ describe('#f4-completion — the FG-3 scoring gate', () => {
     const { arms, unscoreable } = partitionArms([straddler]);
     expect(arms).toEqual([]);
     expect(unscoreable).toEqual([
-      { runId: 'r1', reason: 'mixed-teaching-surface', descriptorsIds: [FG1, FG2] },
+      { runId: 'r1', reason: 'mixed-teaching-surface', descriptorsIds: [FG1, FG2], agentGuideIds: ['agentGuide:absent'] },
     ]);
     // and it can never reach a rate
     expect(() => singleArm([straddler])).toThrow(F4UnscoreableError);
@@ -242,5 +242,49 @@ describe('#f4-completion — the FG-3 scoring gate', () => {
   it('an empty set has no arm to score (a rate over zero runs is not a rate)', () => {
     expect(partitionArms([])).toEqual({ arms: [], unscoreable: [] });
     expect(() => singleArm([])).toThrow(/spans 0 teaching surface/);
+  });
+});
+
+/**
+ * D2 (2026-11-12): "cold = what `warpline init` ships" makes the agent guide part
+ * of the teaching material, so the arm key is (descriptorsId, agentGuideId).
+ */
+describe('#f4-completion — the agent-guide epoch is part of the arm key (D2)', () => {
+  const GUIDE_A = 'agentGuide:v1:' + 'a'.repeat(64);
+  const GUIDE_B = 'agentGuide:v1:' + 'b'.repeat(64);
+  const run = (runId: string, guide: string | undefined) => {
+    seq = 0;
+    return evaluateCompletion([
+      row({ runId, ...(guide ? { agentGuideId: guide } : {}), verb: 'admit', ok: false, refusal: knotRefusal(undefined) }),
+    ]);
+  };
+
+  it('runs under two guides land in two arms, never one pooled rate', () => {
+    const { arms, unscoreable } = partitionArms([run('a1', GUIDE_A), run('b1', GUIDE_B), run('a2', GUIDE_A)]);
+    expect(unscoreable).toEqual([]);
+    expect(arms.map((a) => [a.agentGuideId, a.reports.length])).toEqual([
+      [GUIDE_A, 2],
+      [GUIDE_B, 1],
+    ]);
+    expect(() => singleArm([run('a1', GUIDE_A), run('b1', GUIDE_B)])).toThrow(F4UnscoreableError);
+    expect(summarizeArm(arms[0]!).agentGuideId).toBe(GUIDE_A);
+  });
+
+  it('an archived row with no stamp is its own epoch, never merged with a stamped one', () => {
+    const { arms } = partitionArms([run('old', undefined), run('new', GUIDE_A)]);
+    expect(arms.map((a) => a.agentGuideId).sort()).toEqual(['agentGuide:absent', GUIDE_A].sort());
+  });
+
+  it('ONE run whose rows disagree on the guide is UNSCOREABLE', () => {
+    seq = 0;
+    const straddler = evaluateCompletion([
+      row({ runId: 'g', agentGuideId: GUIDE_A, verb: 'admit', ok: false, refusal: knotRefusal(undefined) }),
+      row({ runId: 'g', agentGuideId: GUIDE_B, verb: 'knot.show', resultClass: 'read' }),
+    ]);
+    const { arms, unscoreable } = partitionArms([straddler]);
+    expect(arms).toEqual([]);
+    expect(unscoreable).toEqual([
+      { runId: 'g', reason: 'mixed-agent-guide', descriptorsIds: [FG1], agentGuideIds: [GUIDE_A, GUIDE_B] },
+    ]);
   });
 });

@@ -6,6 +6,8 @@
 import * as os from 'os';
 import type { ParadigmConfig } from '../paradigm-config.js';
 import type { ParadigmFiles } from './types.js';
+import { WARPLINE_BLOCK_TEXT } from './types.js';
+import { singleWarplineBlock } from '../warpline-detect.js';
 
 /**
  * Generate the header section
@@ -501,17 +503,12 @@ export function generateCheckpointProtocol(): string {
   lines.push('');
   lines.push('### Usage');
   lines.push('');
+  // Compact example (T-2026-11-12-001: keeps the default AGENTS.md well under the always-on cap).
   lines.push('```');
-  lines.push('paradigm_session({op:"checkpoint", ');
-  lines.push('  phase: "implementing",');
-  lines.push('  context: "Adding JWT auth middleware to /api/projects routes",');
-  lines.push('  modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],');
-  lines.push('  symbolsTouched: ["^authenticated", "#project-routes"],');
-  lines.push('  decisions: ["Using RS256 for JWT signing", "Storing refresh tokens in httpOnly cookies"]');
-  lines.push('})');
+  lines.push('paradigm_session({op:"checkpoint", phase: "implementing", context: "Adding JWT auth to /api/projects"})');
   lines.push('```');
   lines.push('');
-  lines.push('Keep it lightweight: `phase` + `context` are required, everything else is optional.');
+  lines.push('`phase` + `context` are required; `modifiedFiles`, `symbolsTouched` and `decisions` are optional.');
   lines.push('');
 
   return lines.join('\n');
@@ -645,6 +642,39 @@ export function generateWorkspaceSection(files: ParadigmFiles): string {
     siblings.map(s => `\`${s.name}/#symbol\``).join(', '));
   lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * Warpline block (T-2026-11-12-001): tells agents how to work in a project
+ * versioned by Warpline. '' when Warpline is not detected, so no generated file
+ * mentions it. Byte-stable (no config, no versions): safe in CLAUDE.md's
+ * cacheable head. Ends with a blank line like the other sections.
+ */
+export function generateWarplineSection(files: ParadigmFiles): string {
+  if (!files.warpline) return '';
+  return `${WARPLINE_BLOCK_TEXT[files.warpline.mode]}\n`;
+}
+
+/**
+ * Keep a Warpline block someone else wrote (`warpline init`, or a hand-edit)
+ * when Paradigm regenerates a whole instruction file. Markers count only as
+ * whole lines outside fenced code (#warpline-detect scanWarplineBlocks). When
+ * both the existing file and the generated text carry exactly one well-formed
+ * block, the existing block's text replaces the generated one (its line endings
+ * converted to the generated file's); otherwise — no block, several blocks, or
+ * malformed markers — the generated text wins. So a project without Warpline,
+ * or with `integrations.warpline.guidance: off`, loses the block on sync: such
+ * projects should run `warpline init --no-agent-guide` so Warpline does not
+ * write it back.
+ */
+export function preserveWarplineBlock(existing: string | null | undefined, generated: string): string {
+  if (!existing) return generated;
+  const kept = singleWarplineBlock(existing);
+  const fresh = singleWarplineBlock(generated);
+  if (!kept || !fresh) return generated;
+  let block = existing.slice(kept.start, kept.end).replace(/\r\n/g, '\n');
+  if (generated.includes('\r\n')) block = block.replace(/\n/g, '\r\n');
+  return generated.slice(0, fresh.start) + block + generated.slice(fresh.end);
 }
 
 /**

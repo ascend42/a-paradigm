@@ -1126,6 +1126,15 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               ...(protocols ? { protocols } : {}),
               ...(notebookReferences !== undefined ? { notebookReferences } : {}),
               ...(complianceHealth ? { complianceHealth } : {}),
+              // T-2026-11-12-001: only when the project is versioned by Warpline
+              ...(await (async () => {
+                try {
+                  const { getWarplineStatus } = await import('../utils/warpline-status.js');
+                  const warpline = getWarplineStatus(ctx.rootDir);
+                  return warpline ? { warpline } : {};
+                } catch { /* non-fatal */ }
+                return {};
+              })()),
               capabilities: 'paradigm://context/agent-protocol',
               ...(await (async () => {
                 try {
@@ -1171,6 +1180,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 // T-2026-11-06-002: a detected-but-unlisted family is named even in concise mode, so an agent that is
                 // told to use it (e.g. habits) learns how to list it instead of concluding the tool does not exist
                 ...(hints.length > 0 ? { hints } : {}),
+                // T-2026-11-12-001: how to version work is orientation, so concise keeps it
+                ...(parsed.warpline ? { warpline: parsed.warpline } : {}),
               }, null, 2);
             } catch {
               // Fall through with full text if parse fails

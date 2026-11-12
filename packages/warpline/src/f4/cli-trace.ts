@@ -20,8 +20,15 @@
  *
  * TWO KNOWN COVERAGE GAPS on this arm, surfaced rather than papered over:
  *   - `status` (daemon, cycleStage 'orient') — the state-aware self-description
- *     carrier D4 calls load-bearing has NO CLI equivalent. `warpline status` is
- *     a semantic diff; nothing on the CLI answers "what may I legally do next".
+ *     carrier D4 calls load-bearing had NO CLI equivalent. `warpline status` is
+ *     a semantic diff; nothing on the CLI answered "what may I legally do next".
+ *     CLOSED 2026-11-12 (T-2026-11-12-001): `warpline orient` (src/orient.ts)
+ *     projects the same answer from the same position reader
+ *     (daemon/position.ts) and rule table (NEXT_LEGAL_VERBS). It is a CLI-only
+ *     command, so descriptorsId does not move. It is deliberately NOT in
+ *     CLI_VERB_MAP and emits NO trace row: its contract, like `health`'s, is
+ *     that it writes nothing. An orient call is therefore invisible to the
+ *     classifier — it neither spends nor needs the orientation allowance.
  *   - `shadow.tail` — no CLI command reads shadow verdict rows (`admit --shadow`
  *     WRITES one; it does not tail them).
  *

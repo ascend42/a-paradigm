@@ -95,3 +95,35 @@ describe('#always-on-budget plugin install path (N3)', () => {
     expect(paradigmPluginInstallPath('/work/repo', home, 'darwin')).toBe('/user-install');
   });
 });
+
+describe('#always-on-budget and the Warpline block (T-2026-11-12-001)', () => {
+  it('moves a Warpline block out of the Paradigm count into the census', () => {
+    const root = tmp('aob-root-');
+    const home = tmp('aob-home-');
+    const block = '<!-- warpline:begin -->\nWarpline text\n<!-- warpline:end -->';
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), `${'a'.repeat(30)}\n${block}\n`);
+    fs.mkdirSync(path.join(root, '.cursor', 'rules'), { recursive: true });
+    const mdc = `---\ndescription: w\nalwaysApply: true\n---\n${block}\n`;
+    fs.writeFileSync(path.join(root, '.cursor', 'rules', 'paradigm-warpline.mdc'), mdc);
+    const b = measureAlwaysOn(root, { homeDir: home });
+    expect(b.surfaces.find((s) => s.surface === 'agents-md')?.chars).toBe(32);
+    const census = b.census.find((e) => e.label === 'AGENTS.md Warpline block (Warpline-owned)');
+    expect(census?.chars).toBe(block.length);
+    expect(census?.paradigm).toBe(false);
+    // the whole Warpline mdc is Warpline-owned: census only, nothing against the cursor cap
+    const mdcCensus = b.census.find((e) => e.label === '.cursor/rules/paradigm-warpline.mdc (Warpline-owned)');
+    expect(mdcCensus?.chars).toBe(mdc.length);
+    expect(mdcCensus?.paradigm).toBe(false);
+    expect(b.entries.some((e) => e.label.includes('paradigm-warpline.mdc'))).toBe(false);
+    expect(b.surfaces.find((s) => s.surface === 'cursor')?.chars ?? 0).toBe(0);
+  });
+
+  it('a fenced or inline marker mention is not a block and stays counted', () => {
+    const root = tmp('aob-root-');
+    const home = tmp('aob-home-');
+    const text = 'See `<!-- warpline:begin -->` here.\n```\n<!-- warpline:begin -->\n<!-- warpline:end -->\n```\n';
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), text);
+    const b = measureAlwaysOn(root, { homeDir: home });
+    expect(b.surfaces.find((s) => s.surface === 'agents-md')?.chars).toBe(text.length);
+  });
+});

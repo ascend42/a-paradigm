@@ -30,12 +30,11 @@
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import { warplineDirOf, readFabric } from '../fabric/fabric.js';
-import { listRefs, heads, readRef } from '../fabric/refs.js';
-import { readScratch } from '../fabric/scratch.js';
-import { parentsOf } from '../fabric/dag.js';
+import { warplineDirOf } from '../fabric/fabric.js';
+import { listRefs, heads } from '../fabric/refs.js';
 import { summarizeKnotPayload } from '../fabric/knot-payload.js';
 import { VERB_DESCRIPTORS, toolNameOf, UNTRUSTED_CONTENT_SENTENCE, nextLegalVerbsFor } from './descriptors.js';
+import { cyclePositionOf } from './position.js';
 import {
   forkNative,
   proposeNative,
@@ -48,7 +47,7 @@ import { mergeBranch } from '../fabric/merge.js';
 import { protectBranch, unprotectBranch, listProtected } from '../fabric/protected.js';
 import { readHead, DEFAULT_BRANCH } from '../fabric/head.js';
 import { shadowAdmit, readShadowVerdicts } from '../fabric/shadow.js';
-import { readKnotPayload, listKnotPayloads } from '../fabric/knot-payload.js';
+import { readKnotPayload } from '../fabric/knot-payload.js';
 import { gradeFabric } from '../fabric/grade.js';
 import { stake, stakeRecover } from '../fabric/stake.js';
 import { WORKTREE_REF } from '../absorb.js';
@@ -286,37 +285,11 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
         // descriptions to names-only, but nothing truncates a RESULT. status
         // teaches the cycle AND the caller's position in it, so a cold agent
         // recovers orientation from one call. All fields additive (G1).
-        let scratch: string | null = null;
-        let proposalSealed = false;
-        let behindSelvage = false;
-        let knotOpen = false;
-        let selvageTip: string | null = null;
-        try {
-          scratch = readScratch(r, who.principal);
-          selvageTip = readRef(wdir, 'selvage');
-          if (scratch?.startsWith('pick:')) {
-            const strand = readFabric(wdir).find((s) => s.pickId === scratch);
-            // The scratch tip IS this principal's sealed proposal (propose
-            // advanced it) — vs the fork base it was minted at (a tip strand
-            // someone else authored, or the base itself).
-            proposalSealed = !!strand && strand.authoredBy?.agentId === who.principal;
-            const base = proposalSealed && strand ? (parentsOf(strand)[0] ?? null) : scratch;
-            behindSelvage = selvageTip !== null && base !== selvageTip;
-            // FG-3 finding 2: a KNOT work order naming THIS principal's CURRENT
-            // sealed proposal means the contest is live. Keyed on stateId, so
-            // re-proposing (a new stateId) correctly clears it — the new
-            // proposal has not been judged yet.
-            if (proposalSealed && strand) {
-              knotOpen = listKnotPayloads(r).some(
-                (p) => p.ours.agentId === who.principal && p.ours.stateId === strand.stateId,
-              );
-            }
-          }
-        } catch {
-          /* status stays best-effort — orientation must never throw */
-        }
-        // the rule is DATA in #warplined-descriptors, so it rides descriptorsId
-        // and the FG-3 freeze covers the carrier and not just the descriptions.
+        // The position read is SHARED with `warpline orient` (#warplined-position)
+        // so the two skins cannot drift; it is best-effort and never throws.
+        const pos = cyclePositionOf(r, who.principal);
+        const { proposalSealed, behindSelvage, knotOpen } = pos;
+        const scratch = pos.scratch;
         const next = nextLegalVerbsFor({ scratchPresent: scratch !== null, proposalSealed, behindSelvage, knotOpen });
         return {
           schemaVersion: RPC_SCHEMA,

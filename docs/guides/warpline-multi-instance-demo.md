@@ -227,11 +227,13 @@ Two things make an instance a distinct agent:
 > an instance that forks *after* starts from the new tip and its overlapping edit just
 > fast-forwards. Fork alice and bob back-to-back at the same tip, let both edit, then admit.
 
-### B2. The prompt template (short — the notebooks teach the cycle)
+### B2. The prompt template (short — the project teaches the cycle)
 
-The core notebooks (`nb-warpline-onboarding-*`) already seed the fork→propose→admit cycle into
-builder/architect/reviewer agents, so the per-instance prompt only needs to say **who the
-instance is, what it owns, and to use Warpline**:
+`warpline init` writes the Warpline block into the project's `AGENTS.md` (and `CLAUDE.md` when
+it exists), and `warpline orient` / `warpline --help` / the MCP descriptors describe the
+fork→propose→admit cycle at runtime, so the per-instance prompt only needs to say **who the
+instance is, what it owns, and to use Warpline**. (The `nb-warpline-onboarding-*` notebook
+entries live only in the a-paradigm repo; other projects do not have them.)
 
 ```
 You are agent `alice` on a shared Warpline fabric. Your worktree is ./wt-alice.

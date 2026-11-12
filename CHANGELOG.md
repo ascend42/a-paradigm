@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.1.3] — 2026-11-12
+
+**Agents now know when a project uses Warpline.** An agent in a Warpline project used to start with no idea what Warpline was, because nothing it reads mentioned it. `warpline init` now writes a short guide into the project's AGENTS.md (and CLAUDE.md, if there is one), and `paradigm sync` writes the same guide into the files it generates. The new `warpline orient` tells an agent where it is and what it can do next. Ships with `@a-company/warpline` 0.3.1.
+
+### Added
+- **Warpline agent guide** (`#warpline-agent-guide`). `warpline init` writes a marked `<!-- warpline:begin -->` … `<!-- warpline:end -->` block: what Warpline is, start with `warpline orient`, the save cycle (fork → propose → admit), stop and ask the human on a KNOT, never edit `.warpline/` by hand. Native and git projects get their own wording (git mode is detected from any parent folder). Only the text between the markers is ever replaced; markers inside code examples, inline mentions, duplicate or unpaired markers and unclosed fences leave the file untouched with a note. Writes are atomic, and a file that can't be written is skipped instead of failing init. `--no-agent-guide` turns it off.
+- **`warpline orient`** (`#warpline-orient`). A read-only "where am I, what next" summary: mode, whether init ran, the daemon and MCP setup, this agent's position and next allowed steps, what only a human can do, and the key limits. In a subfolder it points to the project root instead of suggesting a second `init`. `--json` gives the documented `orient:v1` shape, which only ever gains fields.
+- **Paradigm writes the same guide** (`#warpline-detect`, `#warpline-block`). When a project has `.warpline/` or `.warpignore`, `paradigm sync` adds the block to CLAUDE.md, AGENTS.md, Copilot and Windsurf instructions and a Cursor rule, and keeps Warpline's own copy if one is there. Projects without Warpline get no Warpline text. Opt out with `integrations.warpline.guidance: off` (and `warpline init --no-agent-guide`).
+- **`paradigm doctor` and `paradigm_status`**: doctor flags generated files missing the block or holding a malformed one; `paradigm_status` reports Warpline's mode and whether the files are in step.
+
+### Changed
+- **The always-on budget** counts the Warpline block as Warpline's own text, outside Paradigm's cap. The Session Checkpoints example in generated files is shorter.
+- **F4 cold-agent runs** (Warpline): a cold agent now sees exactly what `warpline init` ships; runs are stamped with the guide version and never pooled across versions.
+- **Warpline skips its own interrupted temp files** (`*.warpline-tmp.*`), and `warpline init`'s KNOT hint prints the `--native` form.
+- **Docs**: the Warpline setup guide is corrected for 0.3.x (install from npm, what init writes, the `mirror` commands, branching).
+
 ## [8.1.2] — 2026-11-06
 
 **Commits no longer leave your tree dirty.** Paradigm's commit hook used to write its history file after every commit, and Warpline's auto-seal rewrote its ledger after every commit, so every repo was dirty right after you committed and switching branches or pulling could conflict. Paradigm now reads commit history straight from git, and Warpline 0.3.0 records its ledger on its own protected branch, `warpline/fabric`. History ids no longer collide across branches. Agents told to record rules as habits now learn how to turn the habits tool on. Ships with `@a-company/warpline` 0.3.0.

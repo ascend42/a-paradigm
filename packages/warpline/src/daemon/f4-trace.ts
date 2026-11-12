@@ -40,6 +40,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Refusal } from '../fabric/refusal.js';
 import { descriptorsId } from './descriptors.js';
+import { agentGuideId } from '../fabric/agent-guide.js';
 
 export const F4_TRACE_SCHEMA = 'f4Trace:v1' as const;
 
@@ -62,6 +63,13 @@ export interface F4TraceRow {
   /** structural verdict class for ok rows ('sealed' | decision.status | 'noop' | 'read'). */
   resultClass?: string;
   descriptorsId: string;
+  /**
+   * the agent-guide epoch (#warpline-agent-guide `agentGuideId`) — what `warpline
+   * init` hands a cold subject (D2, 2026-11-12). Optional only because rows
+   * archived before it existed lack it; every row emitted now carries it, and
+   * #f4-completion never pools runs across two values (absent = its own epoch).
+   */
+  agentGuideId?: string;
 }
 
 export function f4TracePathOf(root: string): string {
@@ -141,6 +149,7 @@ export class F4Tracer {
   private seq: number;
   private readonly runId: string;
   private readonly descriptorsId: string;
+  private readonly agentGuideId: string;
 
   constructor(
     private readonly root: string,
@@ -152,6 +161,7 @@ export class F4Tracer {
   ) {
     this.runId = process.env.WARPLINE_F4_RUN_ID || 'unscored';
     this.descriptorsId = descriptorsId();
+    this.agentGuideId = agentGuideId();
     this.seq = nextSeqFor(root, this.runId);
   }
 
@@ -175,6 +185,7 @@ export class F4Tracer {
       ...(entry.refusal ? { refusal: entry.refusal } : {}),
       ...(entry.resultClass ? { resultClass: entry.resultClass } : {}),
       descriptorsId: this.descriptorsId,
+      agentGuideId: this.agentGuideId,
     };
     try {
       const p = f4TracePathOf(this.root);

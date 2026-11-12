@@ -2,6 +2,9 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  warpline-status:
+    description: "T-2026-11-12-001 getWarplineStatus(rootDir) — the paradigm_status warpline field: {mode: native|git, start: 'warpline orient', synced: CLAUDE.md has exactly one whole-line block outside fenced code (hasSingleWarplineBlock)}, or null. Mirrors packages/paradigm core/warpline-detect.ts (the MCP server does not depend on the CLI package): .warpline/ dir or .warpignore file, git mode when .git exists in the root or any ancestor folder, integrations.warpline.guidance off hides it. File reads only, never throws; a test pins the begin marker to the CLI constant."
+    file: warpline-status.ts
   gnomon-staged:
     description: >-
       #gnomon-staged (TD-2026-10-27-833): utils/gnomon-staged.ts, the mode the Gnomon kernel sets

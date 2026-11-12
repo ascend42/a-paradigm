@@ -128,6 +128,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
 import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV, type RootArm } from './root.js';
 import { health, healthExitCode, type HealthReport } from './health.js';
+import { orient, type OrientReport } from './orient.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { runMcpServer } from './mcp/server.js';
@@ -235,7 +236,7 @@ function shellPrincipal(): PrincipalClass {
 
 program
   .name('warpline')
-  .description('Warpline — version control for meaning. START HERE: `warpline init` onboards a project (git optional), then `warpline status` is the manual. The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (fork/propose/admit/resolve/restore). Writes .warpline/ only, never git.')
+  .description('Warpline — version control for meaning. START HERE: `warpline init` onboards a project (git optional), then `warpline orient` says where you are and what you can do next (`warpline status` shows what changed, by meaning). The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (fork/propose/admit/resolve/restore). Writes .warpline/ only, never git.')
   // The real package version (src/cli.ts and dist/cli.js both sit one level below package.json)
   .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
   // D-7: the EXPLICIT root. Registered here so it appears in --help; the value
@@ -257,11 +258,12 @@ function emitWarpignoreDeprecation(root: string): void {
 program
   .command('init')
   .description(
-    "ONBOARD a project onto Warpline (native-first — git optional). Seals the genesis fabric (so `status` has a base), writes a starter `.warpignore`, and keeps `.warpline/` out of git. IDEMPOTENT — safe to re-run. Then `warpline status` is the manual; the cycle is fork → propose → admit, and a contested merge (KNOT) needs a human `resolve`.",
+    "ONBOARD a project onto Warpline (native-first — git optional). Seals the genesis fabric (so `status` has a base), writes a starter `.warpignore`, keeps `.warpline/` out of git, and writes the agent guide (a marked block in AGENTS.md, and in CLAUDE.md when it exists) so agents know the project is on Warpline. IDEMPOTENT — safe to re-run. Then `warpline orient` (and `warpline --help`) is the manual; the cycle is fork → propose → admit, and a contested merge (KNOT) needs a human `resolve`.",
   )
   .argument('[dir]', 'the project directory to initialize (default: the resolved root)')
+  .option('--no-agent-guide', 'do not write the agent guide block into AGENTS.md / CLAUDE.md')
   .option('--json', 'emit the InitResult as JSON')
-  .action(async (dir: string | undefined, options: { json?: boolean }) => {
+  .action(async (dir: string | undefined, options: { json?: boolean; agentGuide?: boolean }) => {
     try {
       // An explicit [dir] names the target directly (like --root); otherwise the
       // normal root resolution decides. Either way the target must already exist —
@@ -271,7 +273,7 @@ program
         process.stderr.write(`warpline: init — ${root} does not exist (create the project directory first)\n`);
         process.exit(1);
       }
-      const result = await initWarpline(root);
+      const result = await initWarpline(root, { agentGuide: options.agentGuide !== false });
       emitWarpignoreDeprecation(root);
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -446,6 +448,29 @@ program
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
       } else {
         printSemDiff(report);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('orient')
+  .description(
+    "WHERE AM I, WHAT NEXT (read-only, #warpline-orient). Mode (native: no git, or git plus Warpline), whether the project is initialized and the agent guide is in place, whether the daemon runs and an MCP entry is configured, THIS agent's next legal verbs with the exact commands, the human-only verbs, and the limits that trip cold agents. The CLI form of the daemon/MCP `status` self-description; `warpline status` is the meaning diff. Writes nothing.",
+  )
+  .option('--agent <id>', 'the agent to orient (default: $WARPLINE_AGENT_ID)')
+  .option('--json', 'emit the OrientReport as JSON')
+  .action(async (options: { agent?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      // NOT wrapped in traceCli: that WRITES an f4 row, and this verb's contract
+      // (like `health`) is that it writes nothing.
+      const report = orient(root, { agentId: options.agent });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else {
+        printOrient(report);
       }
     } catch (err) {
       fail(err);
@@ -3556,11 +3581,65 @@ function printInit(r: InitResult): void {
             : 'skipped (no git here — nothing to defend the fabric from)'
     }`,
   );
+  const ag = r.agentGuide;
+  if (ag === null) {
+    lines.push('agent guide  skipped (--no-agent-guide)');
+  } else {
+    lines.push(`agent guide  AGENTS.md ${ag.agentsMd}, CLAUDE.md ${ag.claudeMd === 'skipped' && !ag.notes.some((n) => n.startsWith('CLAUDE.md')) ? 'skipped (no CLAUDE.md)' : ag.claudeMd}  (${ag.mode} mode)`);
+    for (const n of ag.notes) lines.push(`             note: ${n}`);
+  }
   lines.push('');
   lines.push('You are now tracking with Warpline (native-first — git optional).');
-  lines.push('→ agents: run `warpline status` FIRST — it is the manual (what changed, in MEANING).');
+  lines.push('→ agents: run `warpline orient` FIRST (where you are, what you can do next); `warpline --help` lists every command.');
+  lines.push('→ `warpline status` shows what changed, by MEANING.');
   lines.push('→ the cycle:  warpline fork <agent>  →  edit  →  warpline propose --agent <agent> --native -m "<why>"  →  warpline admit <agent> --native');
-  lines.push('→ a CONTESTED merge (KNOT) needs a HUMAN:  warpline resolve <agent> -m "<decision>"  (agents escalate, never resolve).');
+  // The resolve form must work for the cycle printed above, which is the native
+  // cycle in BOTH modes (a non-native `resolve` needs --ref). Same form `orient` prints.
+  lines.push('→ a CONTESTED merge (KNOT) needs a HUMAN:  warpline resolve <agent> --native -m "<decision>"  (agents escalate, never resolve).');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+/** The `warpline orient` report — position, next legal verbs, human-only verbs, limits. */
+function printOrient(r: OrientReport): void {
+  const lines: string[] = [];
+  lines.push(`WARPLINE ORIENT  ${r.root}`);
+  lines.push(
+    `mode         ${r.mode === 'native' ? 'native — Warpline is the version control (no .git)' : 'git — git plus Warpline (use git as usual; Warpline records meaning)'}`,
+  );
+  lines.push(
+    `initialized  ${
+      r.initialized
+        ? `yes  selvage ${r.selvage ? short(r.selvage) : '(legacy tip)'}`
+        : r.enclosingRoot
+          ? `not here — this is a subdirectory of the Warpline project at ${r.enclosingRoot}`
+          : 'no — run `warpline init`'
+    }`,
+  );
+  lines.push(
+    `agent guide  AGENTS.md ${r.agentGuide.agentsMd ? 'present' : 'missing'}, CLAUDE.md ${r.agentGuide.claudeMd === null ? '(no file)' : r.agentGuide.claudeMd ? 'present' : 'missing'}`,
+  );
+  lines.push(
+    `daemon       ${r.daemon.state}; MCP ${r.daemon.mcpConfigured ? 'configured' : 'not configured'}${r.daemon.mcpTokens ? `, ${r.daemon.mcpTokens} agent token${r.daemon.mcpTokens === 1 ? '' : 's'}` : ''}`,
+  );
+  lines.push(`agent        ${r.agent.id ? `${r.agent.id} (${r.agent.source === 'flag' ? '--agent' : '$WARPLINE_AGENT_ID'})` : 'unknown — pass --agent <you> or set WARPLINE_AGENT_ID'}`);
+  if (r.position) {
+    const p = r.position;
+    lines.push(
+      `position     scratch ${p.scratchPresent ? 'yes' : 'no'} · proposal ${p.proposalSealed ? 'sealed' : 'none'}${p.behindSelvage ? ' · behind the selvage' : ''}${p.knotOpen ? ' · KNOT OPEN' : ''}`,
+    );
+  }
+  lines.push('');
+  lines.push('NEXT');
+  for (const s of r.next) lines.push(`  ${s.command}`);
+  lines.push(`  why: ${r.nextBecause}`);
+  lines.push('');
+  lines.push('HUMAN-ONLY (an agent stops and asks)');
+  for (const s of r.humanOnly) lines.push(`  ${s.command}`);
+  lines.push('');
+  lines.push('LIMITS');
+  for (const l of r.limits) lines.push(`  - ${l}`);
+  lines.push('');
+  lines.push('`warpline status` = what changed by meaning · `warpline --help` = every command · `--json` for structured output');
   process.stdout.write(lines.join('\n') + '\n');
 }
 

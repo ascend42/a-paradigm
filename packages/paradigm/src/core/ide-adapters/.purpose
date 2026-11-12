@@ -42,9 +42,15 @@ components:
     aspects: ["~ide-adapter-pattern"]
 
   adapter-registry:
-    description: IDE adapter discovery, selection, and factory
+    description: "IDE adapter discovery, selection, and factory. loadParadigmFiles sets files.warpline from #warpline-detect; syncToIDE runs preserveWarplineBlock on single-file outputs (an existing Warpline block is kept byte for byte, a block Paradigm no longer generates is dropped); every syncToIDE call (any adapter) deletes a stale .cursor/rules/paradigm-warpline.mdc when Warpline is not detected."
     type: service
     path: index.ts
+
+  warpline-block:
+    description: "T-2026-11-12-001 Warpline awareness. types.ts holds WARPLINE_BLOCK_BEGIN/END and WARPLINE_BLOCK_TEXT (native and git modes), byte-identical to @a-company/warpline renderAgentGuide(mode) — Paradigm never imports Warpline at runtime; src/core/warpline-block-parity.test.ts compares them. base.ts generateWarplineSection(files) ('' unless files.warpline) and preserveWarplineBlock(existing, generated): markers match only as whole lines outside fenced code; exactly one well-formed block in both texts keeps the existing block (CRLF converted to the generated line endings), else the generated text wins. Projects with integrations.warpline.guidance off should run warpline init --no-agent-guide, since sync drops the block. Placement: CLAUDE.md cacheable head between On-Demand Guidance and Directory Structure (#cache-aligner: byte-stable text); AGENTS.md, .windsurfrules and copilot-instructions.md right after the overview; Cursor gets paradigm-warpline.mdc (alwaysApply true) only when detected. Without Warpline no generated file mentions it. The AGENTS.md checkpoint example was compacted to keep the default AGENTS.md well under the always-on cap; the block itself is Warpline-owned census in #always-on-budget."
+    type: utility
+    path: types.ts
+    aspects: ["~ide-adapter-pattern"]
 
   mcp-config-portability:
     description: "generateMcpConfig (claude.ts → .mcp.json, cursor.ts → .cursor/mcp.json) writes NO absolute cwd: these files are committed, and a machine path broke every other clone (2x-engineers, 2026-11-01). The server resolves `.` by walking up to `.paradigm/`; Cursor also gets env PARADIGM_PROJECT_DIR=${workspaceFolder} (Cursor's spawn cwd is not reliably the workspace; no PATH touched). writeMcpConfig replaces the paradigm entry, so `paradigm sync`/`shift` heal an old file. `paradigm mcp setup` keeps an absolute cwd only for user-level configs (Claude Desktop, Continue). Doctor: 'MCP config portability' (commands/doctor/mcp-portability-audit.ts)."
