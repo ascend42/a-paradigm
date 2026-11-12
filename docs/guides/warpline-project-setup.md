@@ -1,14 +1,19 @@
 # Warpline project setup (founder runbook)
 
 One-time setup to put a project on Warpline — the meaning-merge **adjudication** layer
-(`fork → propose → admit → KNOT → resolve`). This is the human's setup runbook; the
-agent-facing behavior is seeded into the core notebooks (builder / architect / reviewer)
-as `nb-warpline-onboarding-*`, so a Paradigm-driven agent is warm by construction
-(TD-2026-08-11-351). This doc is what the notebook points to for the parts an agent cannot do.
+(`fork → propose → admit → KNOT → resolve`). This is the human's setup runbook for the parts
+an agent cannot do.
 
-All commands assume `@a-company/warpline` is built and the `warpline` bin is on PATH
-(`npm run build && npm link` in `packages/warpline/`, or set `WARPLINE_BIN` to the built
-`dist/cli.js`).
+Agents learn Warpline from what the project ships, not from this doc: `warpline init` writes a
+marked block (`<!-- warpline:begin -->` … `<!-- warpline:end -->`) into `AGENTS.md`, and into
+`CLAUDE.md` when it exists, and `paradigm sync` keeps the same block in Paradigm's generated
+`CLAUDE.md`, `AGENTS.md` and Cursor rules. From there an agent reads `warpline orient` (where
+it is, its next legal verbs), `warpline --help`, the MCP tool descriptors and the
+machine-readable refusals. (The `nb-warpline-onboarding-*` notebook entries exist only in the
+a-paradigm repo's own `.paradigm/notebooks/`; they are not shipped to other projects.)
+
+Install the CLI once: `npm i -g @a-company/warpline` (puts `warpline` on PATH). Hooks that
+cannot see your PATH can use `WARPLINE_BIN` pointing at the installed `dist/cli.js`.
 
 ---
 
@@ -18,14 +23,16 @@ One command sets everything up:
 
 ```sh
 # In the project root:
-warpline init                # seals genesis, writes .warpignore, git-ignores the fabric
-warpline status              # confirm you can see the selvage (works with git absent)
+warpline init                # seals genesis, writes .warpignore + the agent guide, git-ignores the fabric
+warpline orient              # where you are and what you can do next (works with git absent)
 ```
 
 `warpline init` seals a genesis strand via the native path, writes a starter `.warpignore`
-(Warpline's own ignore file — its handler governs skips with git absent), and, when a `.git`
-is present, appends `.warpline/` and `.warpline-judge/` to `.gitignore` so `git add -A` never
-swallows the ledger. It is idempotent — re-running on an initialized project is safe. In a
+(Warpline's own ignore file — its handler governs skips with git absent), writes the agent
+guide block (skip it with `--no-agent-guide`), and, when a `.git` is present, adds
+`.warpline/*`, `!.warpline/config.json`, `!.warpline/fabric-legacy.json` and `.warpline-judge/`
+to `.gitignore` so `git add -A` never swallows the ledger while the two small config files stay
+tracked. It is idempotent — re-running on an initialized project is safe. In a
 pure-native (no git) project it skips the `.gitignore` step (nothing to defend the fabric from).
 
 Ignores are governed by `.warpignore` (not `.gitignore`): gitignore-style globs, `!` negation,
@@ -117,8 +124,14 @@ Git stays the source of truth; Warpline rides alongside as the **meaning lens**.
 auto-seal hook so meaning is sealed on commit:
 
 ```sh
-warpline hook install        # requires WARPLINE_BIN set / warpline globally installed
+warpline hook install        # auto-seal on every git commit (warpline on PATH, or WARPLINE_BIN)
+warpline hook install --push # opt-in: also hand the fabric record to `warpline mirror push` on git push
+warpline mirror status       # is the ledger in step with its record in git (warpline/fabric)?
 ```
+
+The `warpline mirror` group (`status`, `push`, `audit`, `adopt`, `migrate`, `claim`, `pin`)
+manages the fabric's record in git: the canonical branch `warpline/fabric` plus one
+`refs/warpline/writers/<id>` ref per worktree.
 
 Agents use git normally (branch / commit / merge); Warpline adds `status` / `log` / `lifeline`
 / `weave` / `oracle` as the meaning view. Lowest friction, but **git is still load-bearing** —
@@ -147,8 +160,11 @@ cannot yet replace. Use posture B only when 2-4 agents write concurrently.
 - **`clean` ≠ "nothing changed".** A top-level scalar constant (e.g. `PORT 3000 → 9999`) is not
   lifted by any lens, so the change is invisible to meaning and reports clean. Never read
   "clean" as "no change."
-- **No branching / feature isolation yet** — single linear selvage, one in-flight proposal per
-  agent, no switch/checkout.
+- **Branches exist, but landing on `selvage` is a human act.** `warpline branch` / `switch`
+  (alias `checkout`) / `merge` give named lines; `selvage` is protected by default, so an
+  agent-class admit or merge onto it is refused (land on a feature branch and let a human
+  integrate). One in-flight proposal per agent; a merge that meaning was blind to (byte-decided
+  config, scalar constants) HOLDS for a human `--confirm`.
 - **N≥3 concurrency degrades** — serializes to one-merge-per-generation; a 20s global lock
   throws past ~4 writers. It is sold for the 2-4 band and degrades exactly there.
 - **Mirror mode keeps git load-bearing** — additive overhead plus a fail-closed cache-loss risk.

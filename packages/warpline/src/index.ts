@@ -685,3 +685,19 @@ export {
   type MergeTreeResult,
   type GitOptions,
 } from './git/git-exec.js';
+
+// #warpline-agent-guide (T-2026-11-12-001) — the block `warpline init` writes into
+// AGENTS.md / CLAUDE.md. renderAgentGuide is the byte-parity contract with
+// Paradigm's generated instruction files.
+export {
+  renderAgentGuide,
+  ensureAgentGuide,
+  agentGuideModeOf,
+  AGENT_GUIDE_BEGIN,
+  AGENT_GUIDE_END,
+  type AgentGuideMode,
+  type AgentGuideAction,
+  type AgentGuideResult,
+} from './fabric/agent-guide.js';
+// #warpline-orient — the read-only "where am I, what next" report (CLI `warpline orient`).
+export { orient, ORIENT_SCHEMA, type OrientReport, type OrientStep } from './orient.js';

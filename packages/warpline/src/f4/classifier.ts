@@ -51,6 +51,9 @@
 import type { Refusal } from '../fabric/refusal.js';
 import type { F4TraceRow } from '../daemon/f4-trace.js';
 
+/** The agent-guide epoch of an f4Trace row archived before rows carried one. */
+export const AGENT_GUIDE_ID_ABSENT = 'agentGuide:absent' as const;
+
 export type WastedRule = 'W1' | 'W2' | 'W3' | 'W4';
 
 export interface WastedMark {
@@ -85,6 +88,12 @@ export interface F4RunReport {
    * there — `classifyRun` stays pure and total.
    */
   descriptorsIds: string[];
+  /**
+   * distinct agent-guide epochs seen (D2: cold = what init ships). A row without
+   * the field (archived before it existed) reads as AGENT_GUIDE_ID_ABSENT — its
+   * own epoch, never silently merged with a stamped one. Gated in #f4-completion.
+   */
+  agentGuideIds: string[];
   episodes: RecoveryEpisode[];
   /** wasted count per episode, episode order. */
   wastedPerEpisode: number[];
@@ -270,6 +279,7 @@ export function classifyRun(rows: F4TraceRow[]): F4RunReport {
     totalCalls: sorted.length,
     skins: [...new Set(sorted.map((r) => r.skin))],
     descriptorsIds: [...new Set(sorted.map((r) => r.descriptorsId))],
+    agentGuideIds: [...new Set(sorted.map((r) => r.agentGuideId ?? AGENT_GUIDE_ID_ABSENT))],
     episodes: episodes.map(({ identicalRepeats: _i, orientationUsed: _o, hydratedPointers: _h, ladderProgress: _l, ...e }) => e),
     wastedPerEpisode,
     medianWastedPerRecovery: median(wastedPerEpisode),

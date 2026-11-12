@@ -17,6 +17,12 @@
  *      when the project looks like a git repo (a `.git` is present). Warpline
  *      still writes THIS git line so a coexisting `git add -A` never swallows the
  *      fabric — but its OWN skips are governed by `.warpignore`, never git.
+ *   4. WRITE THE AGENT GUIDE (#warpline-agent-guide, T-2026-11-12-001) — the
+ *      block between `<!-- warpline:begin -->` / `<!-- warpline:end -->` in
+ *      AGENTS.md (created when absent) and CLAUDE.md (only when present), so an
+ *      agent's NEXT session knows this project is on Warpline. Written BEFORE
+ *      genesis so `status` right after init shows no change. `agentGuide: false`
+ *      (CLI `--no-agent-guide`) opts out and writes nothing.
  *
  * IDEMPOTENT: re-running on an initialized project seals no second genesis and
  * duplicates no line — it reports `alreadyInitialized` and re-asserts the
@@ -30,6 +36,7 @@ import { warplineDirOf, readSelvage } from './fabric.js';
 import { readRef } from './refs.js';
 import { proposeNative, admitNative } from './native.js';
 import { WARPIGNORE_FILE } from '../warp/warpignore.js';
+import { ensureAgentGuide, agentGuideModeOf, type AgentGuideResult } from './agent-guide.js';
 
 /** The identity that seals the genesis strand (an onboarding act, not an agent's work). */
 const INIT_ACTOR = 'warpline-init' as const;
@@ -62,6 +69,8 @@ export interface InitResult {
   warpignoreWritten: boolean;
   /** what happened to `.gitignore`. */
   gitignore: { action: 'created' | 'appended' | 'present' | 'skipped'; addedLines: string[] };
+  /** the agent guide written into AGENTS.md / CLAUDE.md; null when opted out (`--no-agent-guide`). */
+  agentGuide: AgentGuideResult | null;
 }
 
 /** Ensure `.warpline/` + `.warpline-judge/` are git-ignored, idempotently. */
@@ -100,20 +109,29 @@ function ensureGitignore(root: string): InitResult['gitignore'] {
  * ORDER IS LOAD-BEARING: `.warpignore` is written BEFORE genesis is sealed, so
  * the genesis snapshot already honors it (a `dist/` the user uncomments after
  * init is respected on the next seal; the starter is all-comments so it changes
- * nothing today, but the ordering is the contract).
+ * nothing today, but the ordering is the contract). The agent guide is written
+ * before genesis too, so the genesis tree already holds AGENTS.md / CLAUDE.md and
+ * `status` right after init shows no change.
  */
-export async function initWarpline(root: string, opts: { worktree?: string } = {}): Promise<InitResult> {
+export async function initWarpline(
+  root: string,
+  opts: { worktree?: string; agentGuide?: boolean } = {},
+): Promise<InitResult> {
   const worktree = opts.worktree ?? root;
   const wdir = warplineDirOf(root);
   const alreadyInitialized = readRef(wdir, 'selvage') !== null || readSelvage(wdir) !== null;
 
-  // 1. Starter `.warpignore` (only when absent — init ONLY ever writes .warpignore).
+  // 1. Starter `.warpignore` (only when absent — an existing one is never rewritten).
   const warpignorePath = path.join(root, WARPIGNORE_FILE);
   let warpignoreWritten = false;
   if (!fs.existsSync(warpignorePath)) {
     fs.writeFileSync(warpignorePath, WARPIGNORE_STARTER, 'utf8');
     warpignoreWritten = true;
   }
+
+  // 1b. The agent guide — also BEFORE genesis, so the sealed base already holds
+  // AGENTS.md / CLAUDE.md and `status` right after init reports no change.
+  const agentGuide = opts.agentGuide === false ? null : ensureAgentGuide(root, agentGuideModeOf(root));
 
   // 2. Genesis — only when the fabric has no selvage yet.
   let genesisPickId: string | null = null;
@@ -143,5 +161,5 @@ export async function initWarpline(root: string, opts: { worktree?: string } = {
   // 3. Keep the fabric out of git.
   const gitignore = ensureGitignore(root);
 
-  return { root, alreadyInitialized, genesisPickId, warpignoreWritten, gitignore };
+  return { root, alreadyInitialized, genesisPickId, warpignoreWritten, gitignore, agentGuide };
 }

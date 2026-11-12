@@ -13,6 +13,9 @@
  *   9. purpose-file-health   — oversized/stale .purpose files
  *  10. always-on-budget      — chars / est. tokens of text loaded into every
  *                              agent session (advisory, #always-on-budget)
+ *  11. warpline-guidance     — the project uses Warpline but a generated
+ *                              instruction file lacks the Warpline block
+ *                              (advisory; silent without Warpline)
  */
 
 import * as fs from 'fs';
@@ -21,6 +24,7 @@ import * as yaml from 'js-yaml';
 import { log } from '../../utils/logger.js';
 import { filterGitIgnored, resolvePurposeCoverage } from '@a-company/purpose-core';
 import { measureAlwaysOn, ALWAYS_ON_CAP_KEY, type AlwaysOnEntry } from '../../core/always-on-budget.js';
+import { detectWarpline, scanWarplineBlocks } from '../../core/warpline-detect.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,9 +52,13 @@ function loadInstructionFiles(rootDir: string): { name: string; content: string;
   const results: { name: string; content: string; lines: string[] }[] = [];
   for (const name of INSTRUCTION_FILES) {
     const filePath = path.join(rootDir, name);
-    if (fs.existsSync(filePath)) {
+    try {
+      // A directory (or unreadable file) with an instruction file's name is skipped, never thrown on.
+      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) continue;
       const content = fs.readFileSync(filePath, 'utf8');
       results.push({ name, content, lines: content.split('\n') });
+    } catch {
+      continue;
     }
   }
   return results;
@@ -924,6 +932,65 @@ async function checkAlwaysOnBudget(rootDir: string, homeDir?: string): Promise<C
 }
 
 // ---------------------------------------------------------------------------
+// Check 11: Warpline guidance (advisory, T-2026-11-12-001)
+// ---------------------------------------------------------------------------
+
+/**
+ * When the project is versioned by Warpline (and guidance is not opted out),
+ * each generated instruction file that exists should carry the Warpline block,
+ * or agents never learn how to save work. Advisory only; returns nothing when
+ * Warpline is not detected.
+ */
+async function checkWarplineGuidance(rootDir: string): Promise<ContextAuditResult[]> {
+  const warpline = detectWarpline(rootDir);
+  if (!warpline) return [];
+  const cursorRule = path.join('.cursor', 'rules', 'paradigm-warpline.mdc');
+  const missing: string[] = [];
+  const malformed: string[] = [];
+  for (const file of ['CLAUDE.md', 'AGENTS.md']) {
+    let content: string;
+    try {
+      const full = path.join(rootDir, file);
+      if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue;
+      content = fs.readFileSync(full, 'utf8');
+    } catch {
+      continue; // unreadable: other checks report it
+    }
+    const scan = scanWarplineBlocks(content);
+    if (scan.malformed || scan.blocks.length > 1) malformed.push(`${file}: ${scan.malformed ? 'unpaired Warpline markers' : `${scan.blocks.length} Warpline blocks`}`);
+    else if (scan.blocks.length === 0) missing.push(file);
+  }
+  // Cursor: a project with generated Paradigm rules but no Warpline rule.
+  if (fs.existsSync(path.join(rootDir, '.cursor', 'rules', 'paradigm-core.mdc'))
+    && !fs.existsSync(path.join(rootDir, cursorRule))) {
+    missing.push(cursorRule);
+  }
+  const results: ContextAuditResult[] = [];
+  if (malformed.length > 0) {
+    results.push({
+      check: 'warpline-guidance',
+      status: 'advisory',
+      message: `Warpline block markers are malformed in ${malformed.length} file${malformed.length > 1 ? 's' : ''}`,
+      details: malformed,
+      fix: 'Keep exactly one <!-- warpline:begin --> line and one <!-- warpline:end --> line per file, then run `paradigm sync` or `warpline init`',
+    });
+  }
+  if (missing.length > 0) {
+    results.push({
+      check: 'warpline-guidance',
+      status: 'advisory',
+      message: `Project uses Warpline (${warpline.mode} mode) but ${missing.length} instruction file${missing.length > 1 ? 's lack' : ' lacks'} the Warpline block`,
+      details: missing,
+      fix: 'Run `paradigm sync` if Paradigm generates these files, or `warpline init` to add only the block',
+    });
+  }
+  if (results.length === 0) {
+    results.push({ check: 'warpline-guidance', status: 'ok', message: `Warpline block present (${warpline.mode} mode)` });
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -941,6 +1008,7 @@ export async function runContextAudit(rootDir: string, options?: { quiet?: boole
   results.push(...await checkConfigSchema(rootDir));
   results.push(...await checkPurposeFileHealth(rootDir));
   results.push(...await checkAlwaysOnBudget(rootDir, options?.homeDir));
+  results.push(...await checkWarplineGuidance(rootDir));
 
   const errorCount = results.filter(r => r.status === 'error').length;
   const warnCount = results.filter(r => r.status === 'warn').length;

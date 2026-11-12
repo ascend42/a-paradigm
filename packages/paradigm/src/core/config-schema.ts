@@ -89,6 +89,15 @@ const classroomSchema = z.object({
   reprobe: z.enum(['ask', 'off']).optional(),
 }).passthrough();
 
+// T-2026-11-12-001: optional external tools. `integrations.warpline.guidance`:
+// `auto` (default) adds the Warpline block to generated instruction files when
+// the project has `.warpline/` or `.warpignore`; `off` never adds it.
+const integrationsSchema = z.object({
+  warpline: z.object({
+    guidance: z.enum(['auto', 'off']).optional(),
+  }).passthrough().optional(),
+}).passthrough();
+
 export const paradigmConfigSchema = z.object({
   version: z.string(),
   project: z.string(),
@@ -108,6 +117,7 @@ export const paradigmConfigSchema = z.object({
   probe: probeSchema.optional(),
   metrics: metricsSchema.optional(),
   classroom: classroomSchema.optional(),
+  integrations: integrationsSchema.optional(),
   states: z.record(z.string(), z.unknown()).optional(),
   'custom-symbols': z.record(z.string(), symbolDefinitionSchema).optional(),
 }).passthrough(); // Allow unknown top-level keys (warn, don't error)
@@ -122,7 +132,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'component_types', 'logging', 'purpose-required',
   'conventions', 'workspace', 'limits', 'ai-agent',
   'context', 'probe', 'metrics', 'classroom', 'states', 'custom-symbols',
-  'docs', 'features', 'enforcement', 'model-resolution',
+  'docs', 'features', 'enforcement', 'model-resolution', 'integrations',
 ]);
 
 // ============================================================================

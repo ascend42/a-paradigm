@@ -244,3 +244,23 @@ project: reprobe-test
     expect(result.errors.some(e => e.includes('classroom.reprobe'))).toBe(true);
   });
 });
+
+describe('config-schema integrations.warpline.guidance (T-2026-11-12-001)', () => {
+  const base = `
+version: "1.0"
+project: warpline-test
+`;
+  it('accepts auto and off without warnings', () => {
+    for (const mode of ['auto', 'off']) {
+      const result = validateConfig(`${base}integrations:\n  warpline:\n    guidance: ${mode}\n`);
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([]);
+    }
+  });
+
+  it('rejects any other guidance value', () => {
+    const result = validateConfig(`${base}integrations:\n  warpline:\n    guidance: always\n`);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('integrations.warpline.guidance'))).toBe(true);
+  });
+});

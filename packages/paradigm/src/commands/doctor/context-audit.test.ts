@@ -487,3 +487,61 @@ describe('always-on-budget', () => {
     expect(claude?.message).toContain(`${'Do the demo. Use when the user asks.'.length} chars`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Check 11: warpline-guidance (advisory, T-2026-11-12-001)
+// ---------------------------------------------------------------------------
+
+describe('warpline-guidance', () => {
+  const wl = (results: ContextAuditResult[]) => results.filter((r) => r.check === 'warpline-guidance');
+
+  it('is silent when the project does not use Warpline', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), '# plain\n', 'utf8');
+    expect(wl(await runContextAudit(rootDir, { quiet: true }))).toHaveLength(0);
+  });
+
+  it('fires an advisory naming each generated file that lacks the block', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, '.warpline'));
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), '# no block\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, 'AGENTS.md'), '# x\n<!-- warpline:begin -->\nhi\n<!-- warpline:end -->\n', 'utf8');
+    const [r] = wl(await runContextAudit(rootDir, { quiet: true }));
+    expect(r.status).toBe('advisory');
+    expect(r.details).toEqual(['CLAUDE.md']);
+    expect(r.fix).toBe('Run `paradigm sync` if Paradigm generates these files, or `warpline init` to add only the block');
+  });
+
+  it('reports malformed markers (two blocks), ignores inline/fenced mentions, and survives a CLAUDE.md directory', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, '.warpline'));
+    const blk = '<!-- warpline:begin -->\nhi\n<!-- warpline:end -->\n';
+    fs.writeFileSync(path.join(rootDir, 'AGENTS.md'), blk + blk, 'utf8');
+    fs.mkdirSync(path.join(rootDir, 'CLAUDE.md'));
+    let results = wl(await runContextAudit(rootDir, { quiet: true }));
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('advisory');
+    expect(results[0].details).toEqual(['AGENTS.md: 2 Warpline blocks']);
+    fs.writeFileSync(path.join(rootDir, 'AGENTS.md'), 'Uses `<!-- warpline:begin -->`.\n```\n' + blk + '```\n', 'utf8');
+    results = wl(await runContextAudit(rootDir, { quiet: true }));
+    expect(results[0].details).toEqual(['AGENTS.md']);
+  });
+
+  it('is ok once the block is present, and silent when guidance is off', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, '.warpline'));
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), '<!-- warpline:begin -->\nhi\n<!-- warpline:end -->\n', 'utf8');
+    expect(wl(await runContextAudit(rootDir, { quiet: true }))[0]?.status).toBe('ok');
+    fs.writeFileSync(path.join(rootDir, 'CLAUDE.md'), '# none\n', 'utf8');
+    fs.appendFileSync(path.join(rootDir, '.paradigm', 'config.yaml'), '\nintegrations:\n  warpline:\n    guidance: off\n', 'utf8');
+    expect(wl(await runContextAudit(rootDir, { quiet: true }))).toHaveLength(0);
+  });
+});

@@ -4,7 +4,7 @@ description: |
   Includes core setup validation and context audit checks for AI instruction file quality.
 features:
   context-audit-checks:
-    description: Context audit with 10 checks — stale-references, convention-contradictions, undocumented-stack, purpose-coverage, orphaned-symbols, stale-portal, instruction-vagueness, config-schema-validation, purpose-file-health, always-on-budget
+    description: Context audit with 11 checks — stale-references, convention-contradictions, undocumented-stack, purpose-coverage, orphaned-symbols, stale-portal, instruction-vagueness, config-schema-validation, purpose-file-health, always-on-budget, warpline-guidance
     components:
       - '#context-audit'
 components:
@@ -39,7 +39,7 @@ components:
       - status
       - v6.0.4
   context-audit:
-    description: '10 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md). Check 10 always-on-budget (advisory, #always-on-budget) emits one result per surface (claude-code, cursor, agents-md) with chars and estimated tokens (chars/4) per file as details, advisory (never warn or error, so doctor and shift stay healthy; Judge B1) when the surface''s Paradigm-generated total exceeds context.always-on-max-chars (default 12000, a starting estimate), plus an ok census line for user-owned text (~/.claude/CLAUDE.md, MEMORY.md, non-Paradigm skills and rules; MCP tool schemas not measured) that is never warned on. runContextAudit accepts options.homeDir for tests. purpose-coverage skips gitignored source dirs (purpose-core filterGitIgnored; release/ by name outside git) so build and release output never counts, and counts a dir as covered only by the shared #purpose-coverage rule (own .purpose or a documenting ancestor; placeholders never count) (T-2026-10-27-003).'
+    description: '11 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md). Check 11 warpline-guidance (T-2026-11-12-001, advisory): when #warpline-detect finds Warpline (and guidance is not off), CLAUDE.md / AGENTS.md that exist must carry the <!-- warpline:begin --> block, and a project with generated Cursor rules must have paradigm-warpline.mdc; otherwise an advisory: run `paradigm sync` if Paradigm generates these files, or `warpline init` to add only the block. Markers match as whole lines outside fenced code; two blocks or unpaired markers get their own malformed advisory. A CLAUDE.md that is a directory is skipped (loadInstructionFiles also skips non-files). Silent (no result) without Warpline. Check 10 always-on-budget (advisory, #always-on-budget) emits one result per surface (claude-code, cursor, agents-md) with chars and estimated tokens (chars/4) per file as details, advisory (never warn or error, so doctor and shift stay healthy; Judge B1) when the surface''s Paradigm-generated total exceeds context.always-on-max-chars (default 12000, a starting estimate), plus an ok census line for user-owned text (~/.claude/CLAUDE.md, MEMORY.md, non-Paradigm skills and rules; MCP tool schemas not measured) that is never warned on. runContextAudit accepts options.homeDir for tests. purpose-coverage skips gitignored source dirs (purpose-core filterGitIgnored; release/ by name outside git) so build and release output never counts, and counts a dir as covered only by the shared #purpose-coverage rule (own .purpose or a documenting ancestor; placeholders never count) (T-2026-10-27-003).'
     type: utility
     tags:
       - feature

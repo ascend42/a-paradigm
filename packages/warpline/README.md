@@ -6,6 +6,13 @@
 
 ## What works today
 
+**Onboarding (git optional):**
+
+- `warpline init` — seal the genesis fabric, write a starter `.warpignore`, and write the agent guide (a marked block in `AGENTS.md`, and in `CLAUDE.md` when it exists; `--no-agent-guide` skips it).
+- `warpline orient [--agent <id>] [--json]` — read-only: mode (native or git), this agent's next legal commands, the human-only verbs, and the limits. Start here; `warpline --help` lists every command.
+  - `--json` emits `orient:v1`: `schema`, `root`, `mode`, `initialized`, `selvage`, `enclosingRoot`, `agentGuide {agentsMd, claudeMd}`, `daemon {state, mcpConfigured, mcpTokens}`, `agent {id, source}`, `position`, `next [{verb, command}]`, `nextBecause`, `humanOnly [{verb, command}]`, `limits`. Field meanings: `docs/specs/warpline-flows.md` §4.
+  - **Additive only:** `orient:v1` only ever gains fields (enum sets only grow); nothing is removed, renamed or retyped without a new schema (`orient:v2`). Ignore fields you do not know.
+
 **Read instruments (run on any git repo):**
 
 - `warpline oracle <A> <B>` — predict a merge from meaning, run git's real merge, score where they agree or diverge.

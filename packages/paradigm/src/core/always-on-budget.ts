@@ -26,6 +26,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { log } from '../utils/logger.js';
+import { scanWarplineBlocks } from './warpline-detect.js';
 
 /** Starting estimate; calibrate per project via context.always-on-max-chars. */
 export const DEFAULT_ALWAYS_ON_MAX_CHARS = 12000;
@@ -175,6 +176,15 @@ function isPdg(name: string): boolean {
   return name.startsWith('pdg-');
 }
 
+/**
+ * Chars of Warpline blocks in a file (T-2026-11-12-001). The block is
+ * Warpline-owned text (`warpline init` writes the same bytes), so it goes to
+ * the census instead of counting toward Paradigm's cap.
+ */
+function warplineChars(content: string): number {
+  return scanWarplineBlocks(content).blocks.reduce((n, b) => n + (b.end - b.start), 0);
+}
+
 /** Measure every always-on file. Read-only, never throws. */
 export function measureAlwaysOn(rootDir: string, options: AlwaysOnOptions = {}): AlwaysOnBudget {
   const homeDir = options.homeDir ?? os.homedir();
@@ -184,10 +194,16 @@ export function measureAlwaysOn(rootDir: string, options: AlwaysOnOptions = {}):
 
   try {
     // Generated instruction files.
+    // A Warpline block inside a Paradigm file is split out to the census.
+    const pushParadigmFile = (label: string, surface: AlwaysOnSurface, content: string): void => {
+      const wl = warplineChars(content);
+      entries.push(entry(label, surface, content.length - wl, true));
+      if (wl > 0) census.push(entry(`${label} Warpline block (Warpline-owned)`, surface, wl, false));
+    };
     const claudeMd = readText(path.join(rootDir, 'CLAUDE.md'));
-    if (claudeMd !== null) entries.push(entry('CLAUDE.md', 'claude-code', claudeMd.length, true));
+    if (claudeMd !== null) pushParadigmFile('CLAUDE.md', 'claude-code', claudeMd);
     const agentsMd = readText(path.join(rootDir, 'AGENTS.md'));
-    if (agentsMd !== null) entries.push(entry('AGENTS.md', 'agents-md', agentsMd.length, true));
+    if (agentsMd !== null) pushParadigmFile('AGENTS.md', 'agents-md', agentsMd);
 
     // Cursor rules with alwaysApply: true. paradigm-*.mdc are Paradigm's; others are the project's.
     const rulesDir = path.join(rootDir, '.cursor', 'rules');
@@ -200,8 +216,11 @@ export function measureAlwaysOn(rootDir: string, options: AlwaysOnOptions = {}):
     for (const name of rules) {
       const content = readText(path.join(rulesDir, name));
       if (content === null || parseFrontmatter(content)?.alwaysApply !== true) continue;
-      const e = entry(`.cursor/rules/${name}`, 'cursor', content.length, name.startsWith('paradigm-'));
-      (e.paradigm ? entries : census).push(e);
+      // paradigm-warpline.mdc carries Warpline's block for Cursor: Warpline-owned text,
+      // counted in the census exactly like the CLAUDE.md / AGENTS.md blocks, never against the cap.
+      if (name === 'paradigm-warpline.mdc') census.push(entry(`.cursor/rules/${name} (Warpline-owned)`, 'cursor', content.length, false));
+      else if (name.startsWith('paradigm-')) pushParadigmFile(`.cursor/rules/${name}`, 'cursor', content);
+      else census.push(entry(`.cursor/rules/${name}`, 'cursor', content.length, false));
     }
 
     // Skill descriptions Claude Code surfaces every session.

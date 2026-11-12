@@ -52,12 +52,27 @@ function dirOnPath(cmd: string): string | null {
  * leaked in, the block's `path` fallback arm could mask the `baked` arm under test.
  */
 function coldAgentPath(): string {
+  // A directory that also holds `warpline` (e.g. Homebrew's bin, where node and a global warpline live side by side)
+  // must never be on the cold PATH; its git/node are reached through symlinks in a private shim dir instead.
+  const hasWarpline = (d: string): boolean => ['warpline', 'warpline.cmd', 'warpline.exe'].some((n) => fs.existsSync(path.join(d, n)));
+  let shim: string | null = null;
+  const shimFor = (name: string, target: string): string => {
+    shim ??= fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-cold-path-'));
+    const link = path.join(shim, process.platform === 'win32' ? path.basename(target) : name);
+    if (!fs.existsSync(link)) fs.symlinkSync(target, link);
+    return shim;
+  };
   const dirs = new Set<string>();
+  const add = (name: string, dir: string | null, target: string | null): void => {
+    if (!dir || !target) return;
+    dirs.add(hasWarpline(dir) ? shimFor(name, target) : dir);
+  };
   const git = dirOnPath('git');
+  add('git', git, git && path.join(git, process.platform === 'win32' ? 'git.exe' : 'git'));
+  const execDir = path.dirname(process.execPath);
+  add('node', execDir, process.execPath);
   const node = dirOnPath('node');
-  if (git) dirs.add(git);
-  if (node) dirs.add(path.dirname(process.execPath));
-  if (node) dirs.add(node);
+  add('node', node, node && path.join(node, process.platform === 'win32' ? 'node.exe' : 'node'));
   return [...dirs].join(path.delimiter);
 }
 

@@ -17,6 +17,7 @@ import {
   generateCommandsReference,
   generateCommitConvention,
   generateFooter,
+  generateWarplineSection,
 } from './base.js';
 
 export class WindsurfAdapter implements IDEAdapter {
@@ -47,6 +48,9 @@ export class WindsurfAdapter implements IDEAdapter {
 
     // Overview
     sections.push(generateOverview(config));
+
+    // Warpline block (T-2026-11-12-001) — '' unless the project uses Warpline
+    sections.push(generateWarplineSection(files));
 
     // Symbol system
     sections.push(generateSymbolSystem(config));

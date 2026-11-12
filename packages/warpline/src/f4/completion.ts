@@ -32,6 +32,18 @@
  * separately because one bypasses the accountability record and the founder
  * rules on whether that should count WITH the frequencies in hand.
  *
+ * WHO COUNTS AS COLD (founder decision D2, 2026-11-12, T-2026-11-12-001): a
+ * cold agent is one that sees ONLY what `warpline init` ships — the agent-guide
+ * block init writes into AGENTS.md / CLAUDE.md (#warpline-agent-guide),
+ * `warpline orient`, `--help`, the daemon/MCP descriptors and the refusals.
+ * Nothing else: no repo-private notebook (a-paradigm's
+ * nb-warpline-onboarding-* entries were never shipped), no prompt-injected
+ * primer, no human hint. A run whose subject saw more is not an F4 run, and
+ * neither is one whose subject saw LESS: #f4-seed's seedWorld therefore builds
+ * the world THROUGH initWarpline (pinned by test/agent-guide-init.test.ts). And
+ * since the guide teaches, every f4Trace row stamps its epoch (agentGuideId)
+ * and the scoring gate below keys arms on (descriptorsId, agentGuideId).
+ *
  * SCORING GATE (2026-07-31 panel, D-11): the aggregator below refuses to pool
  * runs served by different teaching surfaces — see the FG-3 SCORING GATE block.
  *
@@ -39,7 +51,13 @@
  */
 
 import type { F4TraceRow } from '../daemon/f4-trace.js';
-import { classifyRun, targetNamesPointer, type F4RunReport, type RecoveryEpisode } from './classifier.js';
+import {
+  classifyRun,
+  targetNamesPointer,
+  AGENT_GUIDE_ID_ABSENT,
+  type F4RunReport,
+  type RecoveryEpisode,
+} from './classifier.js';
 
 /** How a completed run reached its completion — a REPORTED count, not a bar. */
 export type F4Outcome = 'escalation' | 'sidestep' | 'incomplete';
@@ -164,7 +182,15 @@ export function evaluateCompletion(rows: F4TraceRow[]): F4CompletionReport {
  * divergent ids yield two arms with two keyed rates, and the delta is the
  * caller's deliberate subtraction of two numbers that each name their surface.
  *
- * SCOPE, held deliberately narrow. The key is `descriptorsId` and nothing else.
+ * WIDENED 2026-11-12 (D2, T-2026-11-12-001): the key is the PAIR
+ * (descriptorsId, agentGuideId). "Cold = what `warpline init` ships" makes the
+ * agent guide part of what teaches the subject, so two runs handed different
+ * guides were served by different teaching material even under one
+ * descriptorsId. A run whose rows disagree on the guide is unscoreable
+ * ('mixed-agent-guide'); rows archived before the stamp read as
+ * AGENT_GUIDE_ID_ABSENT, their own epoch, never merged with a stamped one.
+ *
+ * SCOPE, held deliberately narrow. Beyond that pair the key is nothing else.
  * This builds no id, no tuple and no partition of the frozen surface — pre-
  * freeze item 2 (teachingId / scoringId / instrumentId) is an OPEN founder
  * decision and is not pre-empted here. Nor is there any comparison against a
@@ -194,6 +220,8 @@ declare const armBrand: unique symbol;
 export interface F4Arm {
   /** the ONE teaching-surface content address every row of every run carried. */
   readonly descriptorsId: string;
+  /** the ONE agent-guide epoch every row of every run carried (D2). */
+  readonly agentGuideId: string;
   readonly reports: readonly F4CompletionReport[];
   readonly [armBrand]: true;
 }
@@ -203,16 +231,19 @@ export type F4UnscoreableReason =
   /** no trace rows: there is no surface to attribute the run to. */
   | 'no-rows'
   /** ONE run's rows disagree on descriptorsId — the FG-3 per-run invariant. */
-  | 'mixed-teaching-surface';
+  | 'mixed-teaching-surface'
+  /** ONE run's rows disagree on agentGuideId — the subject saw two guides (D2). */
+  | 'mixed-agent-guide';
 
 export interface F4Unscoreable {
   runId: string;
   reason: F4UnscoreableReason;
   descriptorsIds: readonly string[];
+  agentGuideIds: readonly string[];
 }
 
 export interface F4Partition {
-  /** one arm per distinct descriptorsId, sorted by id for determinism. */
+  /** one arm per distinct (descriptorsId, agentGuideId), sorted for determinism. */
   arms: readonly F4Arm[];
   /** runs excluded from every arm, with the reason. */
   unscoreable: readonly F4Unscoreable[];
@@ -237,26 +268,35 @@ export class F4UnscoreableError extends Error {
  * collects — no upstream signature changed to make this possible.
  */
 export function partitionArms(reports: readonly F4CompletionReport[]): F4Partition {
-  const byId = new Map<string, F4CompletionReport[]>();
+  const byKey = new Map<string, { descriptorsId: string; agentGuideId: string; reports: F4CompletionReport[] }>();
   const unscoreable: F4Unscoreable[] = [];
 
   for (const report of reports) {
     const ids = report.run.descriptorsIds;
+    const guides = report.run.agentGuideIds ?? [AGENT_GUIDE_ID_ABSENT];
     const reason: F4UnscoreableReason | null =
-      ids.length === 0 ? 'no-rows' : ids.length > 1 ? 'mixed-teaching-surface' : null;
+      ids.length === 0
+        ? 'no-rows'
+        : ids.length > 1
+          ? 'mixed-teaching-surface'
+          : guides.length !== 1
+            ? 'mixed-agent-guide'
+            : null;
     if (reason) {
-      unscoreable.push({ runId: report.runId, reason, descriptorsIds: [...ids] });
+      unscoreable.push({ runId: report.runId, reason, descriptorsIds: [...ids], agentGuideIds: [...guides] });
       continue;
     }
-    const id = ids[0]!;
-    const bucket = byId.get(id) ?? [];
-    bucket.push(report);
-    byId.set(id, bucket);
+    const descriptorsId = ids[0]!;
+    const agentGuideId = guides[0]!;
+    const key = `${descriptorsId}\u0000${agentGuideId}`;
+    const bucket = byKey.get(key) ?? { descriptorsId, agentGuideId, reports: [] };
+    bucket.reports.push(report);
+    byKey.set(key, bucket);
   }
 
-  const arms = [...byId.entries()]
+  const arms = [...byKey.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([descriptorsId, armReports]) => ({ descriptorsId, reports: armReports }) as unknown as F4Arm);
+    .map(([, arm]) => arm as unknown as F4Arm);
 
   return { arms, unscoreable };
 }
@@ -272,12 +312,12 @@ export function singleArm(reports: readonly F4CompletionReport[]): F4Arm {
     const detail = partition.unscoreable.map((u) => `${u.runId}:${u.reason}`).join(', ');
     throw new F4UnscoreableError(
       `F4 scoring refused — ${partition.unscoreable.length} run(s) cannot be attributed to one teaching surface (${detail}). ` +
-        'FG-3 requires exactly one descriptorsId per run.',
+        'FG-3 requires exactly one descriptorsId (and, per D2, one agentGuideId) per run.',
       partition,
     );
   }
   if (partition.arms.length !== 1) {
-    const keys = partition.arms.map((a) => a.descriptorsId).join(' | ');
+    const keys = partition.arms.map((a) => `${a.descriptorsId} + ${a.agentGuideId}`).join(' | ');
     throw new F4UnscoreableError(
       `F4 scoring refused — this set spans ${partition.arms.length} teaching surface(s) (${keys || 'none'}); ` +
         'one rate across two surfaces is not a measurement. Score each arm and report the delta.',
@@ -290,6 +330,8 @@ export function singleArm(reports: readonly F4CompletionReport[]): F4Arm {
 export interface F4BatchReport {
   /** the teaching surface this rate is KEYED to — a rate without it is unreadable. */
   descriptorsId: string;
+  /** the agent-guide epoch this rate is keyed to (D2). */
+  agentGuideId: string;
   /** the skins observed across the arm. REPORTED, not gated (see KNOWN GAP). */
   skins: string[];
   runs: number;
@@ -318,6 +360,7 @@ export function summarizeArm(arm: F4Arm): F4BatchReport {
   const completed = reports.filter((r) => r.completed).length;
   return {
     descriptorsId: arm.descriptorsId,
+    agentGuideId: arm.agentGuideId,
     skins: [...new Set(reports.flatMap((r) => r.run.skins))].sort(),
     runs: reports.length,
     completed,

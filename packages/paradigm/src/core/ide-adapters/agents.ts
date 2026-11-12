@@ -26,6 +26,7 @@ import {
   generateHabitsSection,
   generateLoreSection,
   generateLlmsTxtSection,
+  generateWarplineSection,
 } from './base.js';
 
 export class AgentsAdapter implements IDEAdapter {
@@ -50,6 +51,9 @@ export class AgentsAdapter implements IDEAdapter {
 
     // Project overview
     sections.push(generateOverview(config));
+
+    // Warpline block (T-2026-11-12-001) — '' unless the project uses Warpline
+    sections.push(generateWarplineSection(files));
 
     // Symbol system
     sections.push(generateSymbolSystem(config));

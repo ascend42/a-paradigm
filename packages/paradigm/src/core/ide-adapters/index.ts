@@ -21,6 +21,9 @@ import { claudeAdapter } from './claude.js';
 import { agentsAdapter } from './agents.js';
 import * as yaml from 'js-yaml';
 import { parseParadigmConfig, type ParadigmConfig } from '../paradigm-config.js';
+import { detectWarpline } from '../warpline-detect.js';
+import { preserveWarplineBlock } from './base.js';
+import { CursorAdapter } from './cursor.js';
 
 // Export types
 export type { 
@@ -252,6 +255,10 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     }
   } catch { /* non-fatal — omit symbolCount */ }
 
+  // Warpline (T-2026-11-12-001): file-based detection only, honours the
+  // integrations.warpline.guidance opt-out.
+  const warpline = detectWarpline(rootDir);
+
   return {
     config,
     specs,
@@ -259,6 +266,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     projectName: path.basename(rootDir),
     workspace,
     agents,
+    ...(warpline ? { warpline } : {}),
     ...(meta ? { meta } : {}),
   };
 }
@@ -286,6 +294,10 @@ export function syncToIDE(
   const outputPath = path.join(rootDir, adapter.outputPath);
   
   try {
+    // The Cursor Warpline rule exists only while Warpline is detected; any sync
+    // (not only `sync cursor`) deletes a stale copy so Cursor stops loading it.
+    removeStaleWarplineRule(rootDir, files);
+
     // Handle multi-file adapters (like modern Cursor format)
     if (adapter.multiFile && adapter.generateFiles) {
       return syncMultiFileAdapter(rootDir, adapter, files, force);
@@ -303,8 +315,11 @@ export function syncToIDE(
       fs.mkdirSync(parentDir, { recursive: true });
     }
     
-    // Generate content
-    const content = adapter.generate(files);
+    // Generate content. A Warpline block already in the file (written by
+    // `warpline init`, or edited by hand) is kept byte for byte; one Paradigm no
+    // longer generates (Warpline gone or opted out) is dropped.
+    const existing = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf8') : null;
+    const content = preserveWarplineBlock(existing, adapter.generate(files));
     
     // Write file
     fs.writeFileSync(outputPath, content, 'utf8');
@@ -322,6 +337,13 @@ export function syncToIDE(
       message: `Failed to write ${adapter.outputPath}: ${(error as Error).message}`,
     };
   }
+}
+
+/** Delete .cursor/rules/paradigm-warpline.mdc when Warpline is not detected (T-2026-11-12-001). */
+function removeStaleWarplineRule(rootDir: string, files: ParadigmFiles): void {
+  if (files.warpline) return;
+  const stale = path.join(rootDir, cursorAdapter.outputPath, CursorAdapter.WARPLINE_RULE);
+  if (fs.existsSync(stale)) fs.unlinkSync(stale);
 }
 
 /**
