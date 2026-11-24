@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`paradigm doctor` recommends `paradigm shift`** (`#doctor-fix-commands`). In a directory that is not set up, doctor said "Fix: paradigm init"; it now names the documented entry point, `paradigm shift`. It no longer points at `.paradigm/docs/troubleshooting.md` unless that file exists, and suggests `paradigm doctor --explain` instead.
 - **`paradigm enforcement set --help` lists every level** (`#enforcement-levels`). The help and the invalid-level error named "strict, balanced, minimal" and left out `none`, the default. Both now come from one list (`ENFORCEMENT_LEVELS`). After a change, `set` reminds you to run `paradigm sync` so CLAUDE.md states the new level.
 
+### Added
+- **`paradigm reindex`** (`#reindex-command`). Rebuilds the symbol index from the command line: the same rebuild the MCP tool `paradigm_reindex` runs (`scan-index.json`, `navigator.yaml`, the flow index), with `--json` for the same summary and `-q` for silence. It refuses to run outside a Paradigm project. `paradigm doctor` now names it for a missing or stale index, where it used to say "run paradigm scan first" (bare `paradigm scan` only prints usage) or "Fix: paradigm index".
+
 ## [8.1.3] — 2026-11-12
 
 **Agents now know when a project uses Warpline.** An agent in a Warpline project used to start with no idea what Warpline was, because nothing it reads mentioned it. `warpline init` now writes a short guide into the project's AGENTS.md (and CLAUDE.md, if there is one), and `paradigm sync` writes the same guide into the files it generates. The new `warpline orient` tells an agent where it is and what it can do next. Ships with `@a-company/warpline` 0.3.1.

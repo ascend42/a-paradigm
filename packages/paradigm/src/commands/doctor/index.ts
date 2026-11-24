@@ -371,7 +371,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
               name: '.paradigm/scan-index.json',
               status: 'warn',
               message: `Stale (${ageHours} hours old)`,
-              fix: 'paradigm index',
+              fix: 'paradigm reindex',
             });
           } else {
             results.push({
@@ -385,14 +385,14 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
             name: 'scan-index',
             status: 'warn',
             message: 'Using legacy location',
-            fix: 'paradigm index',
+            fix: 'paradigm reindex',
           });
         } else {
           results.push({
             name: '.paradigm/scan-index.json',
             status: 'missing',
             message: 'Not generated',
-            fix: 'paradigm index',
+            fix: 'paradigm reindex',
           });
         }
       }

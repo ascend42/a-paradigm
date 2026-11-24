@@ -361,6 +361,17 @@ program
     await indexCommand(path, options);
   });
 
+// paradigm reindex — the CLI form of the MCP tool paradigm_reindex
+program
+  .command('reindex [path]')
+  .description('Rebuild the symbol index (scan-index.json, navigator.yaml, flow index) from .purpose files and portal.yaml')
+  .option('--json', 'Output the rebuild summary as JSON')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { reindexCommand } = await import('./commands/reindex/index.js');
+    await reindexCommand(path, options);
+  });
+
 // paradigm probe <subcommand>
 const probeCmd = program
   .command('probe')
