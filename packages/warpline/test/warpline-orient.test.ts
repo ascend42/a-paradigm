@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { orient, ORIENT_SCHEMA } from '../src/orient.js';
+import { orient, agentGuideLine, ORIENT_SCHEMA } from '../src/orient.js';
 import { initWarpline } from '../src/fabric/init.js';
 import { forkNative, proposeNative } from '../src/fabric/native.js';
 import { NEXT_LEGAL_VERBS } from '../src/daemon/descriptors.js';
@@ -148,6 +148,27 @@ describe('orient — native mode, git absent', () => {
     await initWarpline(root);
     write(root, 'CLAUDE.md', 'we keep `<!-- warpline:begin -->` ... `<!-- warpline:end -->` here\n');
     expect(orient(root, { env: NO_ENV }).agentGuide.claudeMd).toBe(false);
+  });
+
+  it('agent guide line: files that exist without the block are not called "missing"', () => {
+    // both files exist (written by another tool), neither holds the Warpline block
+    write(root, 'AGENTS.md', '# Agents\n\nProject notes.\n');
+    write(root, 'CLAUDE.md', '# Claude\n\nProject notes.\n');
+    const r = orient(root, { env: NO_ENV });
+    expect(r.agentGuide).toEqual({ agentsMd: false, claudeMd: false });
+    const line = agentGuideLine(r);
+    expect(line).toBe(
+      'agent guide  AGENTS.md has no Warpline guidance block; CLAUDE.md has no Warpline guidance block',
+    );
+    expect(line).not.toMatch(/\bmissing\b/);
+  });
+
+  it('agent guide line: an absent file is "no <file>", a file with the block says so', async () => {
+    expect(agentGuideLine(orient(root, { env: NO_ENV }))).toBe('agent guide  no AGENTS.md; no CLAUDE.md');
+    await initWarpline(root);
+    expect(agentGuideLine(orient(root, { env: NO_ENV }))).toBe(
+      'agent guide  AGENTS.md has the Warpline guidance block; no CLAUDE.md',
+    );
   });
 
   it('in a subdirectory of the project: points at the enclosing root, never at init', async () => {
