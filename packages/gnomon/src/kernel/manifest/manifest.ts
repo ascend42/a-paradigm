@@ -606,6 +606,12 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   offers.forEach((e, i) => {
     const errors = validateOfferSpecV1(e);
     if (errors.length) fail('SCHEMA', `provides.offers[${i}] is not offer-spec:v1: ${errors.slice(0, 3).join('; ')}`, { field: `provides.offers[${i}]`, errors });
+    // C7 (S1.2, G-DSK-09): `canvas` is published in offer-spec:v1 and INERT. Refused here by name at every tier, so
+    // at install AND at load, until boards raised by an offer ship (S1.5). Fail closed: anything but `mcp` is refused.
+    const reach = (e as OfferSpecV1).reach;
+    if (reach !== 'mcp') {
+      fail('SCHEMA', `provides.offers[${i}]: reach "${reach === 'canvas' ? 'canvas' : 'unknown'}" is reserved until boards raised by offer ship (S1.5)`, { field: `provides.offers[${i}].reach`, reach: reach === 'canvas' ? 'canvas' : 'unknown' });
+    }
     const k = (e as OfferSpecV1).kind;
     // S0b §2: the whole mcp__<server>__<tool> fits 64 (checked here, so at install AND at load)
     const q = qualifiedToolName(id, (e as OfferSpecV1).handoffTool);

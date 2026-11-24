@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { OFFER_REACHES, validateOfferSpecV1 } from '@a-company/gnomon-contracts';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { blockFor } from '../src/kernel/manifest/install.js';
 import {
@@ -90,6 +91,33 @@ describe('provides.offers (offer-spec:v1)', () => {
     // under publisher gnomon at the first-party tier it is admitted (gnomon.neurons is modns.gnomon.neurons.*, not neurons.*)
     expect(code(() => validateManifest({ ...m, publisher: 'gnomon' }, { tier: 'first-party' }))).toBe('none');
   });
+  it("G-DSK-09: reach 'canvas' is a valid offer-spec:v1 and is refused by the loader by name, at every tier", () => {
+    const canvas = { ...OFFER, contextIn: [...OFFER.contextIn], related: [...OFFER.related], reach: 'canvas' };
+    expect(OFFER_REACHES).toEqual(['mcp', 'canvas']);
+    expect(validateOfferSpecV1(canvas)).toEqual([]);
+    const refusal = (m: unknown, tier: 'local' | 'first-party'): ManifestRefusal => {
+      try {
+        validateManifest(m, { tier });
+      } catch (e) {
+        if (e instanceof ManifestRefusal) return e;
+        throw e;
+      }
+      throw new Error('not refused');
+    };
+    const local = refusal(mod({ offers: [canvas as never] }), 'local');
+    expect(local.manifestCode).toBe('SCHEMA');
+    expect(local.detail).toMatchObject({ field: 'provides.offers[0].reach', reach: 'canvas' });
+    expect(local.message).toContain('reach "canvas" is reserved');
+    const first = refusal({ ...mod({ offers: [canvas as never] }), publisher: 'gnomon', name: 'dimension' }, 'first-party');
+    expect(first.manifestCode).toBe('SCHEMA');
+    expect(first.detail).toMatchObject({ field: 'provides.offers[0].reach', reach: 'canvas' });
+    // one canvas offer among valid ones still refuses the whole manifest, naming its index
+    const mixed = refusal(mod({ offers: [{ ...OFFER, contextIn: [...OFFER.contextIn], related: [] }, { ...canvas, kind: 'draw-it' } as never] }), 'local');
+    expect(mixed.detail).toMatchObject({ field: 'provides.offers[1].reach', reach: 'canvas' });
+    // the same manifest with reach mcp is fine at both tiers
+    expect(() => validateManifest(mod(), { tier: 'local' })).not.toThrow();
+  });
+
   it('offers is a widening field: a new offer, or a changed handoff, is an addition', () => {
     expect(WIDENING_FIELDS).toContain('offers');
     const a = mod();
