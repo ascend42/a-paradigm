@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findChrome, leafUrl, shootLeaf } from '../scripts/board-leaf-shots.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
 import { startPreview } from '../scripts/preview.mjs';
-import { FIXTURE_DIM } from '../src/preview/board-fixture.js';
+import { FIXTURE_DIM, fixtureId } from '../src/preview/board-fixture.js';
 
 const SIZE = { width: 1440, height: 900 };
 const B = 'globalThis.gnomonPreviewBoard';
@@ -173,4 +173,83 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('two')).toMatchObject({ keep: 'saving', pending: 2, nodes: f('start').nodes + 2, line: 'Saving…' });
     expect(f('gone')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['edit:timeout'], line: '2 changes weren’t saved · do them again' });
   }, 120_000);
+
+  it('C2: a paste with the keyboard in the composer or on a card reaches no board listener; any control of the chrome keeps its own paste (N2); select() skips a fallback stub', async () => {
+    const a = await real([
+      facts('start'),
+      { read: `(globalThis.__heard = 0, ${B}.onPasteText(() => void globalThis.__heard++), ${B}.onAttempt(() => void globalThis.__heard++), 1)`, as: 'listening2' },
+      // the composer
+      { press: '#composer-text' }, { paste: 'to the composer' }, { wait: 250 },
+      { read: `document.querySelector('#composer-text').value`, as: 'composer' },
+      // a card's own key has the focus
+      { read: `(document.querySelector('#pinned .card button, #stack .card button').focus(), document.activeElement.tagName)`, as: 'card' }, { paste: 'to a card' }, { wait: 250 },
+      { read: 'globalThis.__heard', as: 'heardOutside' }, facts('outside'),
+      // controls of the leaf's chrome that are not text inputs: each keeps its paste
+      { read: `(() => { const h = document.querySelector('#preview-board .bd-head'); h.insertAdjacentHTML('beforeend', '<input id="n2n" type="number"><input id="n2e" type="email"><select id="n2s"><option>one</option></select><span id="n2c" contenteditable="true">·</span>'); return 1; })()`, as: 'made' },
+      { press: '#n2n' }, { paste: '42' }, { wait: 200 },
+      { press: '#n2e' }, { paste: 'a@b.example' }, { wait: 200 },
+      { press: '#n2c' }, { paste: 'editable words' }, { wait: 200 },
+      { read: `(document.querySelector('#n2s').focus(), 1)`, as: 'sel' }, { paste: 'into a select' }, { wait: 200 },
+      { read: `({ n: document.querySelector('#n2n').value, e: document.querySelector('#n2e').value, c: document.querySelector('#n2c').textContent })`, as: 'chrome' },
+      { read: 'globalThis.__heard', as: 'heardChrome' }, facts('chromeAfter'),
+      // select(): the stub is skipped, the rect is selected
+      { read: `(${B}.select(['${fixtureId(9)}', '${fixtureId(2)}']), 1)`, as: 'sel2' }, { wait: 300 },
+      { read: `({ n: ${B}.state().selected, kinds: ${B}.marks().filter((m) => m.selected).map((m) => m.kind) })`, as: 'picked' },
+      { read: `(${B}.select(['${fixtureId(9)}']), 1)`, as: 'sel3' }, { wait: 300 },
+      { read: `${B}.state().selected`, as: 'stubOnly' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(a.composer).toBe('to the composer');
+    expect(a.card).toBe('BUTTON');
+    expect(a.heardOutside).toBe(0);
+    expect(f('outside')).toMatchObject({ nodes: f('start').nodes, rows: f('start').rows, notices: [] });
+    expect(a.chrome).toMatchObject({ n: '42', e: 'a@b.example' });
+    expect(String((a.chrome as { c: string }).c)).toContain('editable words');
+    expect(a.heardChrome).toBe(0);
+    expect(f('chromeAfter')).toMatchObject({ nodes: f('start').nodes, rows: f('start').rows, notices: [] });
+    expect(a.picked).toEqual({ n: 1, kinds: ['sticky'] });
+    expect(a.stubOnly).toBe(0);
+  }, 120_000);
+
+  it('C2: a copy made before the link went down is forgotten: after the reconnect its paste gives the bare words, never a clone', async () => {
+    const a = await real([
+      facts('start'),
+      { at: [272, 86], press: true }, { key: 'c', meta: true, commands: ['copy'] }, { wait: 150 },
+      { read: `(${L}.down(), 1)`, as: 'd' }, { wait: 300 },
+      { await: `${L}.up().then(() => new Promise((r) => setTimeout(r, 1500))).then(() => 1)`, as: 'upped' },
+      { at: [640, 420], press: true }, { key: 'v', meta: true, commands: ['paste'] }, { wait: 600 }, facts('pasted'),
+      { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows[rows.length - 1].payload.ops.map((o) => [o.type, o.node && o.node.kind, o.node && o.node.text]); })()`, as: 'ops' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('pasted')).toMatchObject({ link: 'up', nodes: f('start').nodes + 1, rows: f('start').rows + 1, sameAsMod: true });
+    expect(a.ops).toEqual([['add', 'text', 'broker']]);
+  }, 120_000);
+
+  it('C2: a long scribble the handle cuts into pieces goes as several rows (in all over what one row may hold) and ONE Cmd+Z takes it back', async () => {
+    // a zigzag of 2,300 corners, drawn with real pointer moves, a frame apart
+    const path: number[][] = Array.from({ length: 2300 }, (_, i) => [60 + Math.round(i * 0.3), i % 2 ? 330 : 190]);
+    const a = await real([
+      facts('start'),
+      { press: '#preview-board [data-key="tool:stroke"]' }, { drag: path, settle: 1500 }, { wait: 2500 }, facts('drawn'),
+      { read: `(() => { const rows = ${L}.dims.rows(${DIM}).slice(0); return rows.map((r) => ({ ops: (r.payload.ops || []).map((o) => o.type + ':' + (o.node ? o.node.kind : '')), bytes: JSON.stringify(r.payload.ops || []).length, values: (r.payload.ops || []).reduce((n, o) => n + (o.node && o.node.points ? o.node.points.length : 0), 0) })); })()`, as: 'rows' },
+      { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+    ], 'empty');
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    const rows = (a.rows as Array<{ ops: string[]; bytes: number; values: number }>).slice(f('start').rows);
+    const pieces = rows.flatMap((r) => r.ops);
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.every((p) => p === 'add:stroke')).toBe(true);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.length).toBeLessThanOrEqual(4);
+    // together the pieces are over what ONE row may hold (16 KiB, or 4,096 keys and elements: here the points), each row is under it
+    const total = { bytes: rows.reduce((n, r) => n + r.bytes, 0), values: rows.reduce((n, r) => n + r.values, 0) };
+    expect(total.bytes > 16 * 1024 || total.values > 4096, JSON.stringify(total)).toBe(true);
+    for (const r of rows) expect(r.bytes < 16 * 1024 && r.values < 4096, JSON.stringify(r)).toBe(true);
+    expect(f('drawn')).toMatchObject({ keep: 'saved', pending: 0, canUndo: true, nodes: pieces.length, stored: true, sameAsMod: true, notices: [] });
+    expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 0, rows: f('drawn').rows + 1, sameAsMod: true, notices: [] });
+    expect(f('undone').lastOps).toEqual(Array(pieces.length).fill('delete'));
+  }, 300_000);
 });
