@@ -1,6 +1,6 @@
 # Hero pages: design direction (proposal)
 
-Session `2026-11-23-hero-pages`. Luna wrote this on 2026-11-23 while the founder was away, so every choice here is a recommendation the founder can accept or change. The alternatives are in `session.yaml` beside this file. The system is proposed in `.atelier/systems/pages/design-system.yaml`, the thing to look at is `.atelier/systems/pages/specimen-hero.html`, and the engineer's brief is `BUILD-BRIEF.md`. Mika has not vetted any of it yet.
+Session `2026-11-23-hero-pages`. Luna wrote this on 2026-11-23 while the founder was away, so every choice here is a recommendation the founder can accept or change. The alternatives are in `session.yaml` beside this file. The system is proposed in `.atelier/systems/pages/design-system.yaml`, the thing to look at is `.atelier/systems/pages/specimen-hero.html`, and the engineer's brief is `BUILD-BRIEF.md`. Mika reviewed the rendered specimen on 2026-11-23 and amended it; her changes and the reasons are in "Mika's review" at the foot of this file, and the sections above it have been brought into line. Everything is still a proposal.
 
 The evidence dossier and the teaching audit (`.paradigm/research/hero-pages/`) were committed while this was being written. The specimen's numbers, the path's levels and the first-screen contents below follow them. Where the README says something the dossier could not back up (the Stop hook blocking by default, learning that improves agents, a budget fuse that caps spending), the pages say what the dossier found instead.
 
@@ -36,8 +36,8 @@ Five pages and a 404, all static, in `pages/`:
 
 ### What each first screen must establish
 
-- **Hub:** what Paradigm is in one sentence about structure and checks, including that the checks are off until turned on; the three products and how each stands, as an index and not as three equal cards; the install command; one real `.purpose` excerpt, so the idea is seen and not only described.
-- **Paradigm:** the map is written next to the code and agents can be held to it; one plain line that checks are off until you turn them on; where it stands; the install command and the first prompt to say to the agent; a real slice of this repo's symbol graph.
+- **Hub:** what Paradigm is in one sentence about structure and checks, including that the checks are off until turned on; the three products and how each stands, as an index and not as three equal cards; the install command; one lead fact with its source; one real `.purpose` excerpt, so the idea is seen and not only described.
+- **Paradigm:** the map is written next to the code and agents can be held to it; one plain line that checks are off until you turn them on; where it stands; the install command, `paradigm shift`, and the first prompt to say to the agent; a real slice of this repo's symbol graph, with one lead fact under it.
 - **Gnomon:** every decision from every session lands on one stack and the answer is signed; where it stands, including "Apple silicon Macs only"; the `gnomon` command; the four requirements as a preflight (Apple silicon and macOS 15, native-installer Claude Code on a subscription, Touch ID or password, Node 24); one card and the signed log row it produced.
 - **Warpline:** what it is in one sentence, and at once what has and has not been tested, as the ledger. No install command above the ledger.
 - **Learn:** four levels and two product tracks, with the first station already open.
@@ -53,7 +53,7 @@ Five pages and a 404, all static, in `pages/`:
 **Paradigm**
 1. Hero.
 2. Three things it holds an agent to: structure, determinism, calibration, as rows. Each row ends in a link to its proof.
-3. What has been measured, and what hasn't: up to four fact lines, the one paired study as a before and after (it shows more tool calls with Paradigm, and the page says so), one proof excerpt, and the step chart only if a series ever exists.
+3. What has been measured, and what hasn't: the tool list before and after 7.13.0 as the before and after (about 30,000 tokens, now about 7,800, held by a test); up to four fact lines; the one paired study as a paired table in the Did not hold state, with all three of its measures and the sentence that we make no savings claim because of it; one proof excerpt; and the step chart only if a series ever exists.
 4. One session, start to finish: four numbered rows (ask the map, change the code, the hook checks, the record is written), each with a short proof excerpt. This is where a decision that supersedes another is shown.
 5. Lately.
 6. Where it stands: the standing ledger, limits and requirements.
@@ -69,7 +69,7 @@ Five pages and a 404, all static, in `pages/`:
 7. Start: `gnomon`.
 
 **Warpline**
-1. Headline, lede and the standing ledger (the whole lead; see the specimen, part 4).
+1. Headline, lede and the standing ledger, then one fact line for the base-rate study (the whole lead; see the specimen, part 4).
 2. The idea in one plate: two branches as threads and one place git cannot see, with three sentences.
 3. Try the read-only part, knowing the above: install, then `warpline oracle <A> <B>` on any git repo with two branches, with real captured output.
 4. The way back: the repository, the setup guide, the changelog.
@@ -101,11 +101,11 @@ The frame (type, grid, masthead, rows, fact lines, standing) is the same on all 
 Four components, in order of preference.
 
 1. **Fact line.** A mono numeral with its unit, one sentence that finishes it, and a source line (how it was measured, where, when). No source, no line. At most four in a run, as rows.
-2. **Before and after.** The same task measured twice. Two rows, one unit, one scale from zero, values printed. Shown only when both runs exist and the run record is linked; otherwise the block is left out.
+2. **Before and after.** One measure taken twice the same way. Two rows, one unit, one scale from zero, values printed. Bars only for a measure a test or command reproduces today, or with three or more runs a side; a single paired run is a paired table, never bars. Shown only when both sides exist and the run record is linked; otherwise the block is left out.
 3. **Proof excerpt.** The real file with its path and line numbers, copied by the build and never retyped. This is the component that makes the pages attractive, so each product page has at least two.
 4. **Step chart.** The only chart type, and only for one series with five or more dated measurements taken the same way. At most one per page, none on the hub or on Warpline. Until such a series exists there is no chart; nothing is drawn from made-up data.
 
-In the specimen these appear with three real facts from the dossier, the one real paired study, a real excerpt, and one hatched slot that says what evidence would fill it. Slots are an authoring state; the release build refuses to publish a page that still has one.
+In the specimen these appear with real facts from the dossier, the tool-list before and after, the one real paired study as a table, a real excerpt, and one hatched slot that says what evidence would fill it. Slots are an authoring state; the release build refuses to publish a page that still has one.
 
 ### How "what's new lately" is shown
 
@@ -115,9 +115,9 @@ A section called Lately: three to five dated rows on a vertical rule, newest fir
 
 By the **standing** component, which is new and is the answer to the founder's tone direction.
 
-- Three states: **Built**, **In progress**, **Untested**. Each is a 12px square (filled, split on the diagonal, hollow and dashed) and its word. It reads by shape and word, never by colour, and it is not a pill.
+- Four states: **Built**, **Did not hold**, **In progress**, **Untested**. Each is a 12px square (filled; hollow and struck through; split on the diagonal; hollow and dashed) and its word. It reads by shape and word, never by colour, and it is not a pill. Did not hold is for a claim that was measured against a bar set in advance and did not clear it.
 - **Standing line**, product level: in the hero under the lede, one row per state that applies, then an as-of date and the source.
-- **Standing ledger**, feature level: one row per feature with its state, what it is and its evidence, ordered built, in progress, untested. It sits after the proof and before the first step, at the same type size as the features.
+- **Standing ledger**, feature level: one row per feature with its state, what it is and its evidence, ordered by how much is known: built, did not hold, in progress, untested. It sits after the proof and before the first step, at the same type size as the features.
 - On Warpline the ledger is the lead, and its first cell carries the strand, so the device itself shows what is woven and what is loose.
 
 This does not undermine the page because it uses the page's strongest voice (ink, the 4px rule, evidence on every row) rather than small grey print, and because built rows sit in the same list as the untested ones. A reader who sees an untested row with evidence believes the built rows.
@@ -149,7 +149,7 @@ The two tracks branch off the line after level 0 and are drawn as short spurs, s
 
 Proposed in `.atelier/systems/pages/design-system.yaml`. In short:
 
-- **Type.** Fraunces for headlines, the reader's system sans for prose, JetBrains Mono for anything real (symbols, commands, numbers, paths, sources, standing). Eight sizes: 13, 15, 17, 21, 32, 44, 56, 68.
+- **Type.** Fraunces for headlines, the reader's system sans for prose, JetBrains Mono for anything real (symbols, commands, numbers, paths, sources, standing). Eight sizes: 13, 15, 17, 21, 32, 44, 56, 68. The display size is 68 from 1280 wide, 56 down to 620, 44 below.
 - **Colour.** Ink on ground in light and dark, no accent. The five symbol hues appear only with their glyphs. Product colours stay inside plates.
 - **Space.** A 4px base; sections 64 apart; rows 24.
 - **Shape.** Square, with radius 2 on keys. One shadow, Gnomon's.
@@ -158,8 +158,56 @@ Proposed in `.atelier/systems/pages/design-system.yaml`. In short:
 
 ## 5. The specimen
 
-`.atelier/systems/pages/specimen-hero.html`. Open it in a browser; it makes no network requests. It shows, in light and then in dark: the hub's first screen; the Paradigm page's hero and its first two sections; and the Warpline lead with the standing ledger. Every exhibit says whether it is real, an illustration, or a slot. Headlines and ledes are draft copy.
+`.atelier/systems/pages/specimen-hero.html`. Open it in a browser; it makes no network requests. It shows, in light and then in dark: the hub's first screen; the Paradigm page's hero and its first two sections; and the Warpline lead with the standing ledger. It does not show the Gnomon page, the Gnomon and Warpline plates, the path, Lately, the footer or the 404; those are built from the system and reviewed rendered before they are called done. Every exhibit says whether it is real, an illustration, or a slot. Headlines and ledes are draft copy.
 
 ## Open, for the founder
 
 See `session.yaml`, `needs_founder`.
+
+## Mika's review (2026-11-23)
+
+Rendered in headless Chrome at 320, 390, 768, 1024, 1440 and 1920 wide, light and dark, with reduced motion, in grayscale and under three colour-vision simulations, by keyboard, and with long and translated content. The full review, with screenshots, is the "Hero pages specimen review" section of the UI gate's review file. Verdict: buildable with the changes below. Luna's direction stands: one frame, three plates, rows and rules, the standing component, the provenance on every exhibit. Nothing below replaces it.
+
+### What was broken, and is fixed in the specimen and the system
+
+| Found | Change |
+|---|---|
+| The page scrolled sideways to 438px at every width from 320 to 430: the command line would not shrink. | The command line shrinks with its column and the command scrolls inside it. |
+| One breakpoint at 860 put two columns on screens too narrow for them. At 861 the hub's index ran off the page; graph labels were 7.2px at 320, 9.3 at 390, 9.6 at 861 and 12 at 1024; the Paradigm headline ran to four lines at 1024 and pushed the install command under the fold. | Four steps: 1280 (display 68 to 56), 1100 (heroes to one column, plate at most 560), 860 (rows stack), 620 (compact; the graph becomes a list of the same symbols and edges). Graph labels are now 14.7 to 15.4px wherever the drawing shows. |
+| A long repo path in a source line ran off the page at 320 to 390. | Source lines, captions and evidence break inside their block. |
+| The "real, never retyped" excerpt stopped at line 39, one line short of the list it quotes; the graph beside it showed the missing `#detection-engine`. | Excerpts run to line 40. |
+| The specimen said 1,770 symbols and 1,247 components. The dossier, which is the only source, says 1,769 and 1,246. | The dossier's figures. A re-measure goes through `facts.json`. |
+| The section heading sat on the first row's rule with no space (a specificity slip). | Fixed. |
+| "lines 32 to 39" links were 21px tall. | Padded to 44. |
+| In the dark theme the Warpline strip is 1.01:1 on the page and disappeared, leaving loose threads. | The strip is ruled with the frame's hairline in dark. |
+| No skip link; the hub's index was `div role=list` holding `article role=listitem`. | Skip link added; the index is a list. |
+| The `no-hype` rule matched nothing: the checker reads retired words from `content.vocabulary.retired`. | The map is written; the words now fail the check. |
+
+### Is it striking
+
+As delivered it was tidy, credible and plainly not stock, and it was flat. The Warpline lead was the one screen with presence: a declarative headline over a ledger with a black strip of thread down its edge. The hub and the Paradigm hero had a strong headline and then a field of 13px grey mono. Three specific causes, each changed within the direction:
+
+1. **No first screen had a number.** The first numeral was two screens down. Each first screen now carries one lead fact at numeral size with its source: about 7,800 tokens for the whole default tool list, cut from about 30,000, held by a test. It is the dossier's "single strongest proof" for Paradigm. On the product page it sits under the plate, which also fills the 290px of dead space the plate left beside the lead.
+2. **Two type levels, giant serif and tiny grey mono, with nothing between.** What a standing row says is now prose at 15 in primary ink; the section number is set in the display face at 44 in the margin column, which had read as empty.
+3. **The hub said each product twice** (a three-line definition list, then the index). The definition list is gone; the lead fact took its place.
+
+Still to lift, for the builder and for Luna, because they need the real artefact and not a sketch: the Paradigm plate is a ten-label wiring diagram, quiet for the page's main exhibit. It earns its place when the hover and focus ripple is built and when a real `paradigm ripple #init-handler` answer is printed under it as a proof excerpt (the teaching audit asks for exactly that above the fold). The Gnomon plate, which is not drawn yet, is where the pages can be most striking; it should be the largest and most finished object in the set.
+
+### The fourth state
+
+Yes, a fourth state, and not as a Warpline one-off. **Did not hold**: a claim was measured against a bar or a comparison written down before the run, and the result did not support it. The mark is a hollow square struck through by a bar that overshoots it, so its outline differs from the other three even at 12px and in grayscale. Three candidates were drawn; a crossed box read as a form checkbox and a slashed box was too near In progress.
+
+It carries two rows today. Warpline's calibration gate (K3 fired: 76.7% against 79.3% survival, p = 0.756) is a ledger row. Paradigm's February study heads its paired table. The base-rate study (17 of 275) is not a failure and not a pass, so it is a fact line under the Warpline ledger, which the system's own rule allows once something is measured. The Warpline page is still the shortest.
+
+### The with-and-without study
+
+Right to show, wrong as the page's first and largest graphic. It was one run a side, in February, on Paradigm v2 and a 15-file project; the system refuses a step chart for fewer than five points, and two bars from one run each give it the look of a result. Drawing only tool calls also picked the one measure that goes against us and left out the one that goes for us (file reads, 31 against 25) and the one that matters (28 of 28 both ways).
+
+So: the section's before and after is now the tool list (about 30,000 tokens before 7.13.0, about 7,800 today), which a test reproduces. The study follows the fact lines as a paired table with all three measures, in the Did not hold state, titled "Our one with-and-without study showed no benefit.", and its caption ends: "Until we do, these pages make no claim that Paradigm saves tokens or tool calls." It is in the same section as before, at the same type size as the facts, and nothing about it is hidden.
+
+### Left for the founder
+
+- The fourth state's name ("Did not hold") and whether the K3 row and the 17 of 275 fact line go on the Warpline page as shown.
+- The lead fact: about 7,800 tokens is the dossier's strongest proof, and it is a number about tool text, not about outcomes. Confirm it is the number to lead with.
+- The Warpline strip in the dark theme (ruled, as now) and Luna's standing question about a linen plate in light.
+- Three limits the dossier says a reader should hear from us first, which the draft ledgers did not have: 65% purpose coverage on Paradigm's own repo; no journals recorded by its learning loop; and that this repository is not a working Warpline example since dogfooding stopped on 2026-11-09. They are in the build brief as required ledger rows.
