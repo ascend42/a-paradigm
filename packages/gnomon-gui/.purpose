@@ -360,6 +360,30 @@ components:
     tags: [gnomon, gui, board, dimension, pure]
     tests:
       - test/dim-map.test.ts
+  gui-dim-store:
+    description: >-
+      #gui-dim-store (boards S1.3 pass P3a, s1.3-draft point 6 read path;
+      oracle G-DDL-01) - the dimensions the page has read from the log. PURE:
+      no DOM, socket or timer. DimStore.apply(rows) takes the rows the GUI
+      store follows, keeps those of the four DIM_KINDS per dimension (rows
+      already seen are skipped, so a resumed read cannot double them) and
+      returns the newly kept rows by dimension. It holds the state at the
+      head and a kept state every 512 rows; stateAt(dim, seq?) folds forward
+      from the nearest kept state with ONE foldDim call and never uses the
+      row-by-row fold (a source scan holds that). list(repo?) answers the
+      dimensions whose rows carry that repo scope; lastDimOf(hsid) the
+      dimension a session last opened or was attached to; stats() counts the
+      rows a scrub folded. Stated bounds: 512 dimensions (a row for one more
+      is counted, not kept); rows kept by reference for every held dimension;
+      at most 64 kept states per dimension, after which that dimension's
+      spacing doubles. reset() forgets everything when the log is replaced.
+      Nothing in the app imports it yet (pass P3b/P4 wires it to followLog).
+    path: src/core/dim-store.ts
+    type: module
+    tags: [gnomon, gui, dimension, pure]
+    oracles: [G-DDL-01]
+    tests:
+      - test/dim-store.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
