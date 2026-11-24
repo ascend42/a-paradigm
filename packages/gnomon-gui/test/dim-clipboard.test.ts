@@ -161,7 +161,9 @@ describe('#gui-dim-clipboard', () => {
     const state = board();
     const clip = new DimClipboard();
     expect(clip.paste('(1 board mark)', state, minter())).toEqual({ kind: 'nothing-held' });
-    expect(clip.paste('(12 board marks)\r\n', state, minter())).toEqual({ kind: 'nothing-held' });
+    // the match is exact (review of PR #117, C3): the line with anything around it is words somebody typed
+    expect(clip.paste('(12 board marks)\r\n', state, minter())).toEqual({ kind: 'text' });
+    expect(clip.paste(' (12 board marks) ', state, minter())).toEqual({ kind: 'text' });
     clip.copy(state, [ULID(3)]);
     clip.clear();
     expect(clip.paste(dimStandInLine(1), state, minter())).toEqual({ kind: 'nothing-held' });
@@ -196,11 +198,23 @@ describe('#gui-dim-clipboard dimPasteTextOp: a pasted text that is not the regis
     let n = 0;
     const mint = (): string => `01JPASTE00000000000000000${n++}`;
     const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
-    const short = dimPasteTextOp('two\r\nlines', emptyDimState(), { x: 10.4, y: 20.6 }, mint) as { type: string; node: Record<string, unknown> };
-    expect(short).toEqual({ type: 'add', node: { id: '01JPASTE000000000000000000', kind: 'text', x: 10, y: 21, z: short.node.z, text: 'two\nlines' } });
+    // the BOX is centred on the point: 5 characters wide, 2 lines high
+    const short = dimPasteTextOp('two\r\nlines', emptyDimState(), { x: 100, y: 100 }, mint) as { type: string; node: Record<string, unknown> };
+    expect(short).toEqual({ type: 'add', node: { id: '01JPASTE000000000000000000', kind: 'text', x: Math.round(100 - (5 * DIM_PASTE_WRAP.char) / 2), y: 100 - DIM_PASTE_WRAP.line, z: short.node.z, text: 'two\nlines' } });
     const long = dimPasteTextOp(svg, emptyDimState(), { x: 500, y: 300 }, mint) as { type: string; node: Record<string, unknown> };
-    expect(long.node).toMatchObject({ kind: 'text', text: svg, w: DIM_PASTE_WRAP.w, x: 500 - DIM_PASTE_WRAP.w / 2, y: 300 });
+    expect(long.node).toMatchObject({ kind: 'text', text: svg, w: DIM_PASTE_WRAP.w, x: 500 - DIM_PASTE_WRAP.w / 2, y: 300 - (Math.ceil(svg.length / DIM_PASTE_WRAP.over) * DIM_PASTE_WRAP.line) / 2 });
     expect(Object.keys(long.node).sort()).toEqual(['id', 'kind', 'text', 'w', 'x', 'y', 'z']);
+    // the wrap numbers agree: a line of `over` characters fits the column, one more does not
+    expect(DIM_PASTE_WRAP.over * DIM_PASTE_WRAP.char).toBeLessThanOrEqual(DIM_PASTE_WRAP.w);
+    expect((DIM_PASTE_WRAP.over + 1) * DIM_PASTE_WRAP.char).toBeGreaterThan(DIM_PASTE_WRAP.w);
+    expect((dimPasteTextOp('x'.repeat(DIM_PASTE_WRAP.over), emptyDimState(), { x: 0, y: 0 }, mint) as { node: object }).node).not.toHaveProperty('w');
+    // a repeat steps by 16; a long paste keeps its top in view; control characters go, a tab and a line end stay
+    const again = dimPasteTextOp('two\nlines', emptyDimState(), { x: 100, y: 100 }, mint, { repeat: 2 }) as { node: { x: number; y: number } };
+    expect([again.node.x - (short.node.x as number), again.node.y - (short.node.y as number)]).toEqual([32, 32]);
+    const tall = dimPasteTextOp(Array.from({ length: 100 }, () => 'line').join('\n'), emptyDimState(), { x: 0, y: 300 }, mint, { top: 40 }) as { node: { y: number } };
+    expect(tall.node.y).toBe(40 + DIM_PASTE_WRAP.margin);
+    expect((dimPasteTextOp('a\u001b[31mb\u0007\tc\u0000', emptyDimState(), { x: 0, y: 0 }, mint) as { node: { text: string } }).node.text).toBe('a[31mb\tc');
+    for (const blank of ['   ', ' \n\t ', '\u0007\u001b']) expect(dimPasteTextOp(blank, emptyDimState(), { x: 0, y: 0 }, mint)).toBeNull();
     for (const op of [short, long]) expect(validateDimOps(emptyDimState(), [op], { cls: 'human', principal: 'p:test/you' } as never).refused ?? []).toEqual([]);
   });
 });
@@ -240,5 +254,39 @@ describe('#gui-dim-clipboard review of PR #117: frames, parents and what a cut t
     expect((clip.paste(child.text, state('dim:01JCL1PD1MB000000000000002'), mint) as { ops: Array<{ node: Record<string, unknown> }> }).ops[0]!.node).not.toHaveProperty('parent');
     clip.clear();
     expect(clip.copy(a, [id(4), 'nope']).skipped).toBe(1);
+  });
+
+  it('review of PR #117, group C: the clipboard words are cleaned, a copy over the text limit goes under the stand-in line, the stand-in match is exact, and clones land in view', async () => {
+    const { DimClipboard, dimClipboardWords, dimStandInLine } = await import('../src/core/dim-clipboard.js');
+    const { foldDim, DIM_KINDS } = await import('@a-company/gnomon-contracts');
+    const id = (n: number): string => `01JCL1PC0ARD0000000000000${n}`;
+    const who = { relayedFor: { principal: 'p:t/you', connId: 'c', surface: 'gui' } };
+    const state = foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: 'dim:01JCL1PD1MC000000000000003', title: 't', attached: ['h'], opened: 'command', ...who } },
+      { seq: 2, kind: DIM_KINDS.op, payload: { v: 1, dim: 'dim:01JCL1PD1MC000000000000003', ...who, ops: [
+        { type: 'add', node: { id: id(1), kind: 'text', x: 10, y: 10, z: 'a', text: 'red\u001b[31m ‮evil​\ttab' } },
+        { type: 'add', node: { id: id(2), kind: 'text', x: 10, y: 60, z: 'b', text: 'x'.repeat(2500) } },
+        { type: 'add', node: { id: id(3), kind: 'text', x: 10, y: 90, z: 'c', text: 'y'.repeat(2500) } },
+        { type: 'add', node: { id: id(4), kind: 'rect', x: 100, y: 100, z: 'd', w: 50, h: 40 } },
+      ] } },
+    ] as never);
+    expect(dimClipboardWords('a\u001b[0m‮b‏\r\nc\td')).toBe('a[0mb\nc\td');
+    const clip = new DimClipboard();
+    expect(clip.copy(state, [id(1)]).text).toBe('red[31m evil\ttab');
+    // 5,001 joined characters: the stand-in line, and it still pastes back as clones
+    expect(clip.copy(state, [id(2), id(3)]).text).toBe(dimStandInLine(2));
+    let n = 0;
+    const mint = (): string => `01JCL1PC20NE00000000000${String(n++).padStart(3, '0')}`;
+    expect(clip.paste(dimStandInLine(2), state, mint)).toMatchObject({ kind: 'clones' });
+    // words that only LOOK like the stand-in line are words
+    clip.clear();
+    expect(clip.paste(' (3 board marks) ', state, mint)).toEqual({ kind: 'text' });
+    expect(clip.paste('(3 board marks)', state, mint)).toEqual({ kind: 'nothing-held' });
+    // panned away: the offset copy would be out of view, so the set is centred on the view; in view, it is offset 16
+    clip.copy(state, [id(4)]);
+    const far = clip.paste(dimStandInLine(1), state, mint, { x: 5000, y: 3000, w: 800, h: 600 }) as { ops: Array<{ node: { x: number; y: number } }> };
+    expect([far.ops[0]!.node.x + 25, far.ops[0]!.node.y + 20]).toEqual([5400, 3300]);
+    const near = clip.paste(dimStandInLine(1), state, mint, { x: 0, y: 0, w: 800, h: 600 }) as { ops: Array<{ node: { x: number; y: number } }> };
+    expect([near.ops[0]!.node.x, near.ops[0]!.node.y]).toEqual([132, 132]);
   });
 });

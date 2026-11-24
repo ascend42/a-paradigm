@@ -21,7 +21,7 @@
  * The equality can be forced by anything that can read or write the clipboard. It yields only clones of this
  * page's own earlier copy, validated and authored by whoever pastes.
  */
-import { DIM_CORE_KINDS, DIM_NODE_KEYS, dimZCompare, dimZPlace } from '@a-company/gnomon-contracts';
+import { DIM_CORE_KINDS, DIM_LIMITS, DIM_NODE_KEYS, dimZCompare, dimZPlace } from '@a-company/gnomon-contracts';
 import type { DimCoreKind, DimNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 
 export const DIM_CLIPBOARD_LIMITS = Object.freeze({ clones: 64, offset: 16 });
@@ -64,6 +64,32 @@ export const dimStandInLine = (count: number): string => (count === 1 ? '(1 boar
 const STAND_INS: ReadonlySet<string> = new Set(Array.from({ length: DIM_CLIPBOARD_LIMITS.clones }, (_, i) => dimStandInLine(i + 1)));
 /** CRLF and lone CR to LF: the form texts are compared in. */
 const lf = (text: string): string => text.replace(/\r\n?/g, '\n');
+/**
+ * Words as they may leave for the system clipboard: no control character but a line end and a tab, and no format
+ * character (a bidi override, a zero-width mark). A mark an agent wrote must not carry ESC or an override into a
+ * terminal the words are pasted in.
+ */
+export const dimClipboardWords = (text: string): string => lf(text).replace(/[^\P{Cc}\n\t]|\p{Cf}/gu, '');
+/** Pasted words as they may become a mark: no control character but a line end and a tab. */
+export const dimPastedWords = (text: string): string => lf(text).replace(/[^\P{Cc}\n\t]/gu, '');
+/** A scene rectangle (the part of the board in view). */
+export interface DimViewBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+/** The box of a kept node's shape: its size, or the extent of its points. */
+function boxOf(f: Record<string, unknown>): DimViewBox {
+  const n = (k: string): number => (typeof f[k] === 'number' ? (f[k] as number) : 0);
+  let [x0, y0, x1, y1] = [0, 0, n('w'), n('h')];
+  const pts = Array.isArray(f.points) ? (f.points as unknown[]) : [];
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    const [px, py] = [Number(pts[i]) || 0, Number(pts[i + 1]) || 0];
+    [x0, y0, x1, y1] = [Math.min(x0, px), Math.min(y0, py), Math.max(x1, px), Math.max(y1, py)];
+  }
+  return { x: n('x') + x0, y: n('y') + y0, w: x1 - x0, h: y1 - y0 };
+}
 
 /** True when a node's box (or its point, for a mark with no size) lies inside a live frame's box. */
 function landsIn(node: Record<string, unknown>, frame: Record<string, unknown> | undefined): boolean {
@@ -107,7 +133,10 @@ export class DimClipboard {
       this.#kept.push({ id, z: own(node, 'z'), fields, links });
       for (const k of ['text', 'label', 'title']) if (typeof fields[k] === 'string' && (fields[k] as string).length > 0) words.push(fields[k] as string);
     }
-    this.#text = words.length > 0 ? lf(words.join('\n')) : dimStandInLine(taken.length);
+    // the words, cleaned for the clipboard; the stand-in line when there are none, or more than one pasted text may
+    // hold (a paste over that limit is refused, so such a copy could never come back as clones)
+    const joined = dimClipboardWords(words.join('\n'));
+    this.#text = joined.trim().length > 0 && joined.length <= DIM_LIMITS.text ? joined : dimStandInLine(taken.length);
     return { text: this.#text, copied: taken.length, skipped: asked.size - taken.length, ids: taken };
   }
 
@@ -122,10 +151,26 @@ export class DimClipboard {
    * in `current`, in their copied order; frames come first and arrows last so each op may cite an earlier one.
    * Nothing is validated here: the caller sends the ops through the live controller.
    */
-  paste(text: unknown, current: DimState, mint: () => string): DimPasteResult {
-    if (!this.matches(text)) return typeof text === 'string' && STAND_INS.has(lf(text).trim()) ? { kind: 'nothing-held' } : { kind: 'text' };
+  paste(text: unknown, current: DimState, mint: () => string, view?: DimViewBox): DimPasteResult {
+    // (the stand-in line is matched EXACTLY: the same words with a space around them are words somebody typed)
+    if (!this.matches(text)) return typeof text === 'string' && STAND_INS.has(lf(text)) ? { kind: 'nothing-held' } : { kind: 'text' };
     this.#pastes += 1;
-    const shift = DIM_CLIPBOARD_LIMITS.offset * this.#pastes;
+    let shift = DIM_CLIPBOARD_LIMITS.offset * this.#pastes;
+    let [dx, dy] = [0, 0];
+    if (view) {
+      // the clones land where the person is looking: when the offset copy would be wholly out of view (they have
+      // panned away since the copy), the set is centred on the view instead
+      const boxes = this.#kept.map((k) => boxOf(k.fields));
+      const x0 = Math.min(...boxes.map((b) => b.x)) + shift;
+      const y0 = Math.min(...boxes.map((b) => b.y)) + shift;
+      const x1 = Math.max(...boxes.map((b) => b.x + b.w)) + shift;
+      const y1 = Math.max(...boxes.map((b) => b.y + b.h)) + shift;
+      if (x1 < view.x || x0 > view.x + view.w || y1 < view.y || y0 > view.y + view.h) {
+        dx = Math.round(view.x + view.w / 2 - (x0 + x1) / 2);
+        dy = Math.round(view.y + view.h / 2 - (y0 + y1) / 2);
+      }
+    }
+    shift = Math.round(shift);
     const ids = new Map(this.#kept.map((k) => [k.id, mint()]));
     let top: unknown = null;
     for (const [id, n] of current.nodes) if (top === null || dimZCompare({ z: top, id: '' }, { z: own(n.node, 'z'), id }) < 0) top = own(n.node, 'z');
@@ -134,8 +179,8 @@ export class DimClipboard {
       const z = dimZPlace(top, null);
       top = z;
       const node: Record<string, unknown> = { ...clone(k.fields), id: ids.get(k.id), z };
-      if (typeof node.x === 'number') node.x += shift;
-      if (typeof node.y === 'number') node.y += shift;
+      if (typeof node.x === 'number') node.x += shift + dx;
+      if (typeof node.y === 'number') node.y += shift + dy;
       for (const [key, target] of Object.entries(k.links)) {
         const to = ids.get(target);
         if (to !== undefined && target !== k.id) node[key] = to;
@@ -162,19 +207,31 @@ export class DimClipboard {
   }
 }
 
-/** A pasted text with a line over `over` characters is wrapped to a column `w` board units wide, centred on the paste point. */
-export const DIM_PASTE_WRAP = Object.freeze({ over: 48, w: 360 });
 /**
- * The one `add` op of a pasted text that is not the register's: a text node holding the words exactly as they were
- * pasted (line ends as LF; never parsed), with its top-left at `at` (the leaf gives the view centre) and on top of
- * everything in `current`. Nothing is validated here: the op goes through the live controller like any edit, so
- * the paster is its author.
+ * How a pasted text is laid out. One character of the board's face is `char` board units wide and a line is `line`
+ * high (JetBrains Mono at the board's one size); a text with a line over `over` characters is wrapped to a column
+ * `w` wide. `over` is what fits in `w` (the two used to disagree: 48 characters are 387 units, wider than 360).
  */
-export function dimPasteTextOp(text: string, current: DimState, at: { x: number; y: number }, mint: () => string): DimOp {
+export const DIM_PASTE_WRAP = Object.freeze({ w: 360, char: 8.0625, line: 18, over: Math.floor(360 / 8.0625), step: 16, margin: 12 });
+
+/**
+ * The one `add` op of a pasted text that is not the register's: a text node holding the words as they were pasted
+ * (line ends as LF, control characters removed; never parsed), on top of everything in `current`. Its BOX is
+ * centred on `at` (the leaf gives the view centre), stepped down and right by `repeat` times the step so a second
+ * paste does not sit exactly on the first, and its top is kept at or below `top` (the top of the view) so a long
+ * paste starts in view. Null when nothing is left to paste (only white space or control characters). Nothing is
+ * validated here: the op goes through the live controller like any edit, so the paster is its author.
+ */
+export function dimPasteTextOp(text: string, current: DimState, at: { x: number; y: number }, mint: () => string, o: { repeat?: number; top?: number } = {}): DimOp | null {
+  const words = dimPastedWords(text);
+  if (words.trim().length === 0) return null;
   let top: unknown = null;
   for (const [id, n] of current.nodes) if (top === null || dimZCompare({ z: top, id: '' }, { z: own(n.node, 'z'), id }) < 0) top = own(n.node, 'z');
-  const words = lf(text);
-  // a long line is wrapped to a column instead of running off the board (pasted JSON is one line of thousands of characters)
-  const long = words.split('\n').some((line) => line.length > DIM_PASTE_WRAP.over);
-  return { type: 'add', node: { id: mint(), kind: 'text', x: Math.round(at.x - (long ? DIM_PASTE_WRAP.w / 2 : 0)), y: Math.round(at.y), z: dimZPlace(top, null), text: words, ...(long ? { w: DIM_PASTE_WRAP.w } : {}) } as unknown as DimNode };
+  const lines = words.split('\n');
+  const long = lines.some((line) => line.length > DIM_PASTE_WRAP.over);
+  const width = long ? DIM_PASTE_WRAP.w : Math.max(...lines.map((line) => line.length)) * DIM_PASTE_WRAP.char;
+  const height = lines.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / DIM_PASTE_WRAP.over)), 0) * DIM_PASTE_WRAP.line;
+  const step = DIM_PASTE_WRAP.step * (o.repeat ?? 0);
+  const y = Math.max(at.y - height / 2, o.top === undefined ? -Infinity : o.top + DIM_PASTE_WRAP.margin) + step;
+  return { type: 'add', node: { id: mint(), kind: 'text', x: Math.round(at.x - width / 2 + step), y: Math.round(y), z: dimZPlace(top, null), text: words, ...(long ? { w: DIM_PASTE_WRAP.w } : {}) } as unknown as DimNode };
 }

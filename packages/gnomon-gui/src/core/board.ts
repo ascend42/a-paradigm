@@ -116,6 +116,7 @@ export interface BoardAttempt {
  * Something the board refused, for the leaf to say in its own words (the engine shows nothing).
  *  - `image`: an image insert (a picked, pasted or dropped image, SVG source or HTML carrying one); no image kind until S2
  *  - `scene-file`, `library-file`, `file`: a file dropped on the board; the drop never reaches the engine
+ *  - `drag` with `no-drop`: a drag that carries no file (selected text, a link): nothing can be dropped on a board
  *  - `file` with `no-file-paste`: a file on the clipboard; `paste` with `no-plain-text`: a paste that offers no plain
  *    text (an image copied from a page, a rich fragment with no text form). Nothing was added
  *  - `text` with `too-long`: pasted or typed words over what one mark may hold (`detail` is the limit). A paste
@@ -127,8 +128,8 @@ export interface BoardAttempt {
  *    starts no drag, shows no handles and cannot be selected or deleted, so the leaf says why nothing happened
  */
 export interface BoardRefusal {
-  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'mark' | 'fallback' | 'paste' | 'text' | 'clipboard';
-  why: 'no-image-kind' | 'no-file-drop' | 'no-file-paste' | 'no-plain-text' | 'too-long' | 'nothing-held' | 'not-stored' | 'not-a-board-kind' | 'kept-as-it-is';
+  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'drag' | 'mark' | 'fallback' | 'paste' | 'text' | 'clipboard';
+  why: 'no-image-kind' | 'no-file-drop' | 'no-drop' | 'no-file-paste' | 'no-plain-text' | 'too-long' | 'nothing-held' | 'not-stored' | 'not-a-board-kind' | 'kept-as-it-is';
   detail?: string;
 }
 

@@ -865,6 +865,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         }
         const mod = e.metaKey || e.ctrlKey;
         const key = e.key.toLowerCase();
+        // Cmd/Ctrl+D does nothing on a board (the engine's duplicate is removed), and must not fall through to the
+        // browser, where it opens the bookmark sheet
+        if (mod && !e.altKey && key === 'd') e.preventDefault();
         if (!mod || e.altKey || (key !== 'z' && !(key === 'y' && e.ctrlKey && !e.metaKey))) return;
         const s = api.getAppState();
         if (s.editingTextElement != null || s.editingFrame != null) return; // a text being typed keeps its own undo
@@ -937,6 +940,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         // the text is NEVER parsed: SVG source, engine JSON and HTML source are words like any other
         const text = dt?.getData('text/plain') ?? '';
         if (text.length === 0) return refuse({ what: 'paste', why: 'no-plain-text' });
+        if (text.trim().length === 0) return; // only white space: nothing to add and nothing to say
         if (text.length > DIM_LIMITS.text) return refuse({ what: 'text', why: 'too-long', detail: String(DIM_LIMITS.text) });
         if (!counts(e) || yielded) return; // a paste no person made is stopped and goes no further
         for (const l of [...pasteListeners]) l(text, e);
@@ -1026,7 +1030,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (said) return;
         attempt('drop', e.dataTransfer);
         const files = [...(e.dataTransfer?.files ?? [])];
-        if (files.length === 0) return void refuse({ what: [...(e.dataTransfer?.types ?? [])].includes(LIBRARY_MIME) ? 'library-file' : 'file', why: 'no-file-drop' });
+        if (files.length === 0) return void refuse([...(e.dataTransfer?.types ?? [])].includes(LIBRARY_MIME) ? { what: 'library-file', why: 'no-file-drop' } : { what: 'drag', why: 'no-drop' });
         for (const f of files) {
           const name = f.name.toLowerCase();
           const what: BoardRefusal['what'] = f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/.test(name) ? 'image' : name.endsWith('.excalidrawlib') ? 'library-file' : name.endsWith('.excalidraw') || name.endsWith('.json') ? 'scene-file' : 'file';
@@ -1047,10 +1051,12 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (dragSaid) return;
         dragSaid = true;
         const dt = e.dataTransfer;
+        if (dt) dt.dropEffect = 'none';
         attempt('drop', dt);
         const items = [...(dt?.items ?? [])];
         const types = [...(dt?.types ?? [])];
-        refuse(items.some((i) => i.kind === 'file' && i.type.startsWith('image/')) ? { what: 'image', why: 'no-image-kind' } : { what: types.includes(LIBRARY_MIME) ? 'library-file' : 'file', why: 'no-file-drop' });
+        const file = items.some((i) => i.kind === 'file') || types.includes('Files');
+        refuse(items.some((i) => i.kind === 'file' && i.type.startsWith('image/')) ? { what: 'image', why: 'no-image-kind' } : types.includes(LIBRARY_MIME) ? { what: 'library-file', why: 'no-file-drop' } : file ? { what: 'file', why: 'no-file-drop' } : { what: 'drag', why: 'no-drop' });
       };
       const onDragGone = (e: DragEvent): void => {
         // the drag left the board (or ended): the next one that enters is said again

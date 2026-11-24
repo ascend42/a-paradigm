@@ -45,14 +45,22 @@ export const REFUSAL_COPY = {
   'scene-file': 'Board files can’t be dropped here · nothing was changed',
   'library-file': 'Library files can’t be dropped here · draw the shapes',
   file: 'Files can’t be dropped on a board · write or draw it instead',
+  drag: 'Nothing can be dropped on a board · paste the words instead',
   mark: 'Part of what you pasted isn’t a board mark · it was left out',
   // short enough for the leaf at a 1024 window (the line is one row: longer words were cut off there)
   fallback: 'This Gnomon can’t draw that mark · it is kept as it is',
-  paste: 'Nothing there can be pasted as words · nothing was added',
-  text: 'That is too long for one mark · nothing was changed',
+  paste: 'Only words can be pasted on a board · nothing was added',
+  text: 'That is too long for one mark',
   clipboard: 'Those copied marks are no longer held · copy them again',
 } as const;
 export const refusalLine = (what: keyof typeof REFUSAL_COPY): string => REFUSAL_COPY[what];
+/** The line for a refusal as the handle reports it: some kinds have their own words by reason, and a length limit is said. */
+export function refusalLineOf(r: { what: keyof typeof REFUSAL_COPY; why?: string; detail?: string }): string {
+  if (r.why === 'no-file-paste') return 'Files can’t be pasted on a board · write or draw it instead';
+  if (r.why === 'not-stored') return CLIP_COPY.notStored;
+  if (r.what === 'text' && r.why === 'too-long' && /^\d+$/.test(r.detail ?? '')) return `That is over the ${Number(r.detail).toLocaleString('en-US')} characters one mark can hold · paste or type less`;
+  return REFUSAL_COPY[r.what];
+}
 /** Lines of the leaf's own copy register (proposed for Luna). A copy takes 64 marks at most; a cut takes all of the selection or nothing. */
 export const CLIP_COPY = {
   leftOut: (n: number): string => `${n} ${n === 1 ? 'mark was' : 'marks were'} left out of the copy · 64 at most, and only marks this Gnomon can draw`,

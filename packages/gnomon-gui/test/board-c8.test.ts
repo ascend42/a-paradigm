@@ -576,4 +576,86 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     expect(a.nodes).toBe(0);
     expect((a.end as Facts).alive).toBe(true); // the leaf's own board is untouched
   }, 120_000);
+
+  // ── the review of PR #117, group C: where things land, and words ──
+  it('C1: clones pasted after panning away land in view; a second text paste steps off the first; a long paste starts in view', async () => {
+    const BOX = `(() => { const v = ${B}.view(); return { x: -v.scrollX, y: -v.scrollY, w: v.width / v.zoom, h: v.height / v.zoom }; })()`;
+    const a = await real([
+      sel([BROKER]), copy, { wait: 200 },
+      { wheel: '#preview-board .bd-stage' }, { wheel: '#preview-board .bd-stage' }, { wheel: '#preview-board .bd-stage' }, { wheel: '#preview-board .bd-stage' }, { wheel: '#preview-board .bd-stage' }, { wait: 300 },
+      { read: BOX, as: 'box' },
+      { read: `(${B}.focus(), 1)`, as: 'f' }, pasteKey, { wait: 400 }, { read: EDITS, as: 'clone' },
+      { read: `(${B}.focus(), 1)`, as: 'f2' }, { paste: 'first words' }, { wait: 300 }, { read: `(${B}.focus(), 1)`, as: 'f3' }, { paste: 'first words' }, { wait: 300 }, { read: EDITS, as: 'texts' },
+      { read: `(${B}.focus(), 1)`, as: 'f4' }, { paste: Array.from({ length: 120 }, (_, i) => `line ${i}`).join('\n') }, { wait: 400 }, { read: EDITS, as: 'tall' },
+    ]);
+    const box = a.box as { x: number; y: number; w: number; h: number };
+    expect(box.y).toBeGreaterThan(600); // panned well away from where the copy was made
+    const clone = ((a.clone as Edit[]).at(-1)!.ops as Array<{ node: { x: number; y: number; w: number; h: number } }>)[0]!.node;
+    expect(Math.abs(clone.x + clone.w / 2 - (box.x + box.w / 2))).toBeLessThanOrEqual(1);
+    expect(Math.abs(clone.y + clone.h / 2 - (box.y + box.h / 2))).toBeLessThanOrEqual(1);
+    const texts = (a.texts as Edit[]).slice(-2).map((e) => (e.ops as Array<{ node: { x: number; y: number } }>)[0]!.node);
+    expect([texts[1]!.x - texts[0]!.x, texts[1]!.y - texts[0]!.y]).toEqual([16, 16]);
+    expect(Math.abs(texts[0]!.x + (11 * 8.0625) / 2 - (box.x + box.w / 2))).toBeLessThanOrEqual(1); // the BOX is centred, not its corner
+    const tall = ((a.tall as Edit[]).at(-1)!.ops as Array<{ node: { y: number } }>)[0]!.node;
+    expect(tall.y).toBeGreaterThanOrEqual(box.y); // its top is in view
+    expect(tall.y).toBeLessThan(box.y + box.h / 2);
+  }, 120_000);
+
+  it('C2, C3, C4, C5: Cmd+D stays out of the browser; the rail refuses a file drag; a pasted file, a text drag, look-alike words, white space and control characters each get the right answer; the lines say what happened', async () => {
+    const esc = fixtureId(980);
+    const big = [981, 982, 983].map((n, i) => ({ type: 'add', node: { id: fixtureId(n), kind: 'text', x: 700, y: 60 + i * 30, z: `zy${i}`, text: String(i).repeat(1500) } }));
+    const a = await real([
+      facts('start'),
+      // C2: Cmd+D with the board focused is default-prevented
+      { read: `(globalThis.__d = [], window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'd') globalThis.__d.push(e.defaultPrevented); }), ${B}.focus(), 1)`, as: 'w' },
+      { key: 'd', meta: true }, { read: "(() => { document.querySelector('#preview-board [data-key=\"tool:select\"]').focus(); return 1; })()", as: 'rf' }, { key: 'd', meta: true }, { read: 'globalThis.__d', as: 'cmdD' },
+      // C2: a file dragged onto the rail (left of the stage) is refused by the leaf
+      { drop: { files: [path.join(dir, 'drop.png')] }, at: [-24, 60] }, { wait: 300 }, { read: LINE, as: 'railLine' }, facts('rail'),
+      // C3: a text-only drag over the board
+      aim, { drop: { items: [{ mimeType: 'text/plain', data: 'dragged words' }] }, at: EMPTY }, { wait: 300 }, { read: LINE, as: 'dragLine' }, facts('drag'),
+      // C3: a file PASTE has its own line (a text file: an image has the image line)
+      aim, { read: `(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'], 'notes.txt', { type: 'text/plain' })); globalThis.__fp = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }); document.querySelector('#preview-board .excalidraw-container').dispatchEvent(globalThis.__fp); return globalThis.__fp.defaultPrevented; })()`, as: 'filePasteStopped' }, { wait: 200 }, { read: LINE, as: 'filePasteLine' }, facts('filePaste'),
+      // C5: the lines
+      aim, { clip: { 'text/html': '<b>x</b>' } }, { wait: 300 }, { read: LINE, as: 'htmlLine' }, facts('html'),
+      aim, { paste: 'x'.repeat(4001) }, { wait: 300 }, { read: LINE, as: 'longLine' }, facts('long'),
+      // C3: words that only look like the stand-in line are words; white space is nothing, silently
+      aim, { paste: ' (3 board marks) ' }, { wait: 300 }, { read: LINE, as: 'lookalikeLine' }, facts('lookalike'),
+      aim, { paste: '  \n\t ' }, { wait: 300 }, { read: LINE, as: 'blankLine' }, facts('blank'),
+      // C3: control characters never become part of a mark
+      aim, { paste: 'a\u001b[31mb\u0007c' }, { wait: 300 }, facts('control'),
+      // C3: a mark an agent wrote with ESC and a bidi override: the copy puts neither on the clipboard
+      { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${esc}', kind: 'text', x: 700, y: 20, z: 'zx', text: 'run\\u001b[2J \\u202Erm\\u200B -rf' } }], 'arky')), 1)`, as: 'r' }, { wait: 250 },
+      sel([esc]), copy, { wait: 250 }, { await: CLIPTEXT, as: 'cleanCopy' },
+      // C4: a copy whose words are over the limit goes under the stand-in line and still pastes back as clones
+      { read: `(${B}.render(${D}.apply(${JSON.stringify(big)}, 'arky')), 1)`, as: 'r2' }, { wait: 250 },
+      sel([981, 982, 983].map(fixtureId)), copy, { wait: 250 }, { await: CLIPTEXT, as: 'bigCopy' },
+      pasteKey, { wait: 500 }, { read: EDITS, as: 'bigPaste' }, facts('end'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.cmdD).toEqual([true, true]);
+    expect(String(a.railLine)).toContain('Files can’t be dropped');
+    refused(f('rail'), f('start'), [], 'a file dragged onto the rail');
+    expect(String(a.dragLine)).toContain('Nothing can be dropped on a board');
+    refused(f('drag'), f('rail'), ['drag:no-drop'], 'a text-only drag');
+    expect(a.filePasteStopped).toBe(true);
+    expect(String(a.filePasteLine)).toContain('Files can’t be pasted');
+    refused(f('filePaste'), f('drag'), ['file:no-file-paste'], 'a pasted file');
+    expect(String(a.htmlLine)).toBe('Only words can be pasted on a board · nothing was added');
+    refused(f('html'), f('filePaste'), ['paste:no-plain-text'], 'a paste with no plain text');
+    expect(String(a.longLine)).toContain('4,000');
+    expect(String(a.longLine)).not.toContain('nothing was changed');
+    refused(f('long'), f('html'), ['text:too-long'], 'a text over the limit');
+    pastedAsText(f('lookalike'), f('long'), ' (3 board marks) ', 'words that look like the stand-in line');
+    expect(String(a.lookalikeLine)).not.toContain('no longer held');
+    refused(f('blank'), f('lookalike'), [], 'a paste of white space');
+    expect(String(a.blankLine)).toContain('dimension in'); // nothing is said: the keep line stands
+    contained(f('control'), 'a paste with control characters');
+    expect(f('control').texts).toContain('a[31mbc');
+    expect(a.cleanCopy).toBe('run[2J rm -rf');
+    expect(a.bigCopy).toBe(dimStandInLine(3));
+    const back = (a.bigPaste as Edit[]).at(-1)!;
+    expect(back.ops).toHaveLength(3);
+    expect(back.ops.every((o) => o.type === 'add')).toBe(true);
+    contained(f('end'), 'at the end');
+  }, 180_000);
 });

@@ -212,3 +212,20 @@ describe('#gui-board isolation: the served page cannot reach the chunk by any lo
     expect(html).not.toMatch(/type\s*=\s*["']?module|modulepreload|<iframe|<object|<embed|<base\b/i);
   });
 });
+
+describe('#gui-board no engine clipboard action can be run through the handle (review of PR #117, B2)', () => {
+  it('the one action door (patch api-run-action) names exactly four zoom actions, and the key allowlist names none of the engine\'s clipboard or duplicate actions', async () => {
+    const { PATCHES } = (await import('../scripts/board-patches.mjs')) as { PATCHES: Array<{ id: string; replace: unknown }> };
+    const { gnomonBoardKeyActions } = await import('../src/board/skin.js');
+    const door = String(PATCHES.find((p) => p.id === 'api-run-action')!.replace);
+    expect(/\[([^\]]*)\]\.includes\(p\)/.exec(door)?.[1]).toBe('"zoomIn","zoomOut","resetZoom","zoomToFit"');
+    for (const name of ['copy', 'cut', 'paste', 'copyStyles', 'pasteStyles', 'copyAsPng', 'copyAsSvg', 'duplicateSelection']) {
+      expect(gnomonBoardKeyActions.has(name), name).toBe(false);
+      expect(door.includes(`"${name}"`), name).toBe(false);
+    }
+    // the handle itself calls gnomonAction only through its closed list of the same four
+    const src = (await import('node:fs')).readFileSync(new URL('../src/board/index.ts', import.meta.url), 'utf8');
+    expect(/const HANDLE_ACTIONS = \[([^\]]*)\] as const;/.exec(src)?.[1]).toBe("'zoomIn', 'zoomOut', 'resetZoom', 'zoomToFit'");
+    expect(src).not.toMatch(/executeAction|actionManager|navigator\.clipboard/);
+  });
+});

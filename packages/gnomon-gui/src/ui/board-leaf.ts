@@ -16,7 +16,7 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, dimKindName, resolveContentColour 
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -156,10 +156,14 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (r.skipped > 0) return clip.clear(), say(CLIP_COPY.cutRefused), null;
     return { text: r.text, ids: r.ids };
   };
+  let textPastes = 0;
+  let textPastedAt = '';
   const pasted = (hd: BoardHandle, text: string, cause: Event): void => {
     const view = o.view?.() ?? null;
     if (!view || !o.onOps) return;
-    const r = clip.paste(text, view, o.mint ?? mintNodeId);
+    const v = hd.view();
+    const box = { x: -v.scrollX, y: -v.scrollY, w: v.width / v.zoom, h: v.height / v.zoom };
+    const r = clip.paste(text, view, o.mint ?? mintNodeId, box);
     if (r.kind === 'nothing-held') return say(refusalLine('clipboard'));
     // what was pasted is what is selected afterwards (the originals used to stay selected: Delete took THEM)
     const sent = (ops: DimOp[]): void => {
@@ -167,8 +171,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       if (hd.isAlive()) hd.select(ops.flatMap((op) => (op.type === 'add' ? [op.node.id] : [])));
     };
     if (r.kind === 'clones') return void (r.ops.length > 0 && sent(r.ops));
-    const v = hd.view();
-    sent([dimPasteTextOp(text, view, { x: v.width / 2 / v.zoom - v.scrollX, y: v.height / 2 / v.zoom - v.scrollY }, o.mint ?? mintNodeId)]);
+    // a text pasted again with the view where it was steps down and right, so it never sits exactly on the last one
+    const where = `${v.scrollX},${v.scrollY},${v.zoom}`;
+    textPastes = where === textPastedAt ? textPastes + 1 : 0;
+    textPastedAt = where;
+    const op = dimPasteTextOp(text, view, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, o.mint ?? mintNodeId, { repeat: textPastes, top: box.y });
+    if (op) sent([op]);
   };
 
   // ── the frame ────────────────────────────────────────────────────────────
@@ -583,7 +591,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
               draw();
             }),
             hd.onScene(sceneSoon),
-            hd.onRefusal((r) => say(r.why === 'not-stored' ? CLIP_COPY.notStored : refusalLine(r.what))),
+            hd.onRefusal((r) => say(refusalLineOf(r))),
             hd.onCopy((ids) => copied(ids)),
             hd.onCut((ids) => cutTaken(ids)),
             hd.onCopyOutside(forget),
@@ -624,6 +632,28 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     else chooseTool(a.tool);
   };
   el.addEventListener('keydown', onKey, true);
+  // Cmd/Ctrl+D with the keyboard anywhere in the leaf never reaches the browser (its bookmark sheet)
+  el.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'd') e.preventDefault();
+  }, true);
+  // ONE guard for the whole leaf: nothing can be dropped on its head, rail, tray or foot either. (Over the board
+  // itself the handle refuses first and says what it was; this is everything around it, and the leaf while it has
+  // no board.) Said once per drag.
+  let dragSaid = false;
+  const dragGuard = (e: DragEvent): void => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    if (e.type === 'dragenter' && !dragSaid) {
+      dragSaid = true;
+      const types = [...(e.dataTransfer?.types ?? [])];
+      say(refusalLine(types.includes('Files') ? 'file' : 'drag'));
+    }
+    if (e.type === 'drop') dragSaid = false;
+  };
+  for (const type of ['dragenter', 'dragover', 'drop'] as const) el.addEventListener(type, dragGuard, true);
+  el.addEventListener('dragleave', (e) => {
+    if (!(e.relatedTarget instanceof Node && el.contains(e.relatedTarget))) dragSaid = false;
+  }, true);
   // a refusal has been read once the person does anything else: it goes at the next press or key (it used to stay
   // through a press on empty ground and through selecting another mark)
   el.addEventListener('pointerdown', unsay, true);
