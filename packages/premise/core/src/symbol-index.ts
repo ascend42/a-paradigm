@@ -484,6 +484,18 @@ export function isDeclared(entry: SymbolEntry): boolean {
   return entry.declared !== false;
 }
 
+/**
+ * Split entries into declared symbols and reference stubs. Anything that prints
+ * a list next to a getSymbolCounts total uses `declared`, so the list and the
+ * total agree.
+ */
+export function splitDeclared(entries: SymbolEntry[]): { declared: SymbolEntry[]; undeclared: SymbolEntry[] } {
+  const declared: SymbolEntry[] = [];
+  const undeclared: SymbolEntry[] = [];
+  for (const entry of entries) (isDeclared(entry) ? declared : undeclared).push(entry);
+  return { declared, undeclared };
+}
+
 /** How many index entries are reference stubs: referenced, declared nowhere. */
 export function getUndeclaredCount(index: SymbolIndex): number {
   let n = 0;

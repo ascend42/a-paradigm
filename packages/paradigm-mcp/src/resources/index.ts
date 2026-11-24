@@ -11,6 +11,7 @@ import {
   getSymbol,
   getSymbolsByType,
   getSymbolCounts,
+  splitDeclared,
   resolveSymbol,
   getAllSymbols,
   type SymbolType,
@@ -134,17 +135,20 @@ export function registerResources(server: Server, getContext: () => ProjectConte
       // paradigm://symbols - Overview of all symbols
       if (resourcePath === 'symbols') {
         const counts = getSymbolCounts(ctx.index);
-        const symbols = getAllSymbols(ctx.index);
+        const overview = splitDeclared(getAllSymbols(ctx.index));
 
+        // `total` and `symbols` describe the same thing: declared symbols. A
+        // reference stub is listed apart, under its own name.
         const text = JSON.stringify({
           project: ctx.projectName,
           counts,
           total: Object.values(counts).reduce((a, b) => a + b, 0),
-          symbols: symbols.map(s => ({
+          symbols: overview.declared.map(s => ({
             symbol: s.symbol,
             type: s.type,
             description: s.description,
           })),
+          undeclaredReferences: overview.undeclared.map(s => s.symbol),
         }, null, 2);
 
         trackResourceRead(text.length, uri);

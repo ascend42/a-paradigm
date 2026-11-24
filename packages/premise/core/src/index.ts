@@ -74,6 +74,7 @@ export {
   getSymbolCounts,
   collapseRepeatedPrefix,
   getUndeclaredCount,
+  splitDeclared,
   isDeclared,
   getAllSymbols,
   parseSymbol,

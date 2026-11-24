@@ -153,6 +153,12 @@ components:
       .purpose files the index did not read. countLoreEntries counts entry files under
       .paradigm/lore/entries (the .lore extension, and yaml for older entries).
       describeGateCounts and GATE_COUNT_SCOPE give the words printed next to a gate count.
+      FOLLOW-UPS, count sources that still do not read this module. (1) The navigate-remind
+      PreToolUse hook counts symbols from scan-index.json with jq. (2) The platform overview
+      route (platform-server/routes/overview.ts getSymbolCounts and getLoreStats) counts
+      scan-index symbols, stubs included, and reads only top-level yaml files as lore.
+      (3) addFlow in packages/probe/core/src/generator.ts emits no flow edges into
+      scan-index.json, so anything that reads related from that file sees flows as unconnected.
     type: utility
     path: project-counts.ts
     tests:

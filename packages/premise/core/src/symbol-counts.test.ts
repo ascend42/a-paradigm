@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { aggregateFromDirectory } from './aggregator.js';
-import { buildSymbolIndex, getSymbol, getSymbolCounts, getUndeclaredCount, isDeclared } from './symbol-index.js';
+import { buildSymbolIndex, getAllSymbols, getSymbol, getSymbolCounts, getUndeclaredCount, isDeclared, splitDeclared } from './symbol-index.js';
 
 let tmpDir: string;
 
@@ -53,6 +53,12 @@ describe('getSymbolCounts', () => {
     expect(getSymbolCounts(idx)).toEqual({ component: 1, flow: 1, gate: 1, signal: 0, aspect: 0 });
     expect(getUndeclaredCount(idx)).toBe(2);
     expect([...idx.entries.values()].filter(isDeclared)).toHaveLength(3);
+
+    // a list printed beside the total holds the same symbols the total counts
+    const { declared, undeclared } = splitDeclared(getAllSymbols(idx));
+    const total = Object.values(getSymbolCounts(idx)).reduce((a, b) => a + b, 0);
+    expect(declared).toHaveLength(total);
+    expect(undeclared.map((s) => s.symbol).sort()).toEqual(['!shell-ready', '^ghost']);
   });
 
   it('environment variables, colours and dotted paths in prose are not indexed at all', async () => {

@@ -7,6 +7,7 @@ import {
   getSymbol,
   getSymbolsByType,
   getSymbolCounts,
+  splitDeclared,
   resolveSymbol,
   getAllSymbols,
   type SymbolType,
@@ -36,7 +37,8 @@ export function registerSymbolResources(server: Server, getContext: () => Projec
       // paradigm://symbols - Overview of all symbols
       if (path === 'symbols') {
         const counts = getSymbolCounts(ctx.index);
-        const symbols = getAllSymbols(ctx.index);
+        // `total` and `symbols` both cover declared symbols; stubs are listed apart.
+        const { declared: symbols, undeclared } = splitDeclared(getAllSymbols(ctx.index));
         
         return {
           contents: [{
@@ -52,6 +54,7 @@ export function registerSymbolResources(server: Server, getContext: () => Projec
                 description: s.description,
                 filePath: s.filePath,
               })),
+              undeclaredReferences: undeclared.map(s => s.symbol),
             }, null, 2),
           }],
         };
