@@ -309,6 +309,19 @@ describe('orphaned-symbols', () => {
     expect(check!.status).toBe('ok');
   });
 
+  it('when the caller could not build the index, reports that once and does not build it again', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    // A project whose index WOULD build and find an isolate: proof that no second build ran
+    writePurpose(rootDir, ['version: "2.0"', 'components:', '  lonely-component:', '    description: alone']);
+    const results = await runContextAudit(rootDir, { quiet: true, indexError: 'boom: unreadable portal.yaml' });
+    const check = findCheck(results, 'orphaned-symbols');
+    expect(check!.status).toBe('advisory');
+    expect(check!.message).toBe('Could not build the symbol index: boom: unreadable portal.yaml');
+    expect(check!.details).toBeUndefined();
+  });
+
   it('uses the list the caller already computed', async () => {
     suppressOutput();
     const { rootDir, cleanup: c } = createTempProject();
@@ -347,7 +360,7 @@ describe('stale-portal', () => {
     const results = await runContextAudit(rootDir, { quiet: true });
     const check = findCheck(results, 'stale-portal');
     expect(check).toBeDefined();
-    expect(check!.status).toBe('error');
+    expect(check!.status).toBe('warn');
     expect(check!.details!.some((d) => d.includes('widgets'))).toBe(true);
   });
 
@@ -406,7 +419,7 @@ describe('stale-portal', () => {
     portalWith(rootDir, ['WS /ws']);
     source(rootDir, 'src/server/index.ts', "app.get('/health', ok);\n");
     const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
-    expect(check!.status).toBe('error');
+    expect(check!.status).toBe('warn');
     expect(check!.details).toEqual(['WS /ws']);
   });
 
@@ -420,7 +433,7 @@ describe('stale-portal', () => {
     source(rootDir, 'src/models/courses.ts', 'export const y = 2;\n');
     source(rootDir, 'src/docs/reference-index.ts', 'export const z = 3;\n');
     const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
-    expect(check!.status).toBe('error');
+    expect(check!.status).toBe('warn');
     expect(check!.details).toEqual(['GET /api/courses', 'GET /api/courses/:id', 'GET /api/reference']);
   });
 
@@ -436,7 +449,7 @@ describe('stale-portal', () => {
       "app.get('/api/canvas/state', state);",
     ].join('\n'));
     const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
-    expect(check!.status).toBe('error');
+    expect(check!.status).toBe('warn');
     expect(check!.details).toEqual(['GET /api/canvas/files/:id']);
   });
 
@@ -447,7 +460,7 @@ describe('stale-portal', () => {
     portalWith(rootDir, ['GET /api/plsat']);
     source(rootDir, 'src/server/plsat.test.ts', "request(app).get('/api/plsat');\n");
     const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
-    expect(check!.status).toBe('error');
+    expect(check!.status).toBe('warn');
   });
 
   it('file-based routing counts: app/api/<route>/route.ts', async () => {
@@ -467,7 +480,7 @@ describe('stale-portal', () => {
     portalWith(rootDir, ['GET /api/plsat']);
     source(rootDir, 'src/app/learn/plsat/page.tsx', 'export default function Page() { return null; }\n');
     const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
-    expect(check!.status).toBe('error');
+    expect(check!.status).toBe('warn');
   });
 
   it('a router package mounted under a longer prefix by another package serves the route', async () => {
@@ -480,6 +493,32 @@ describe('stale-portal', () => {
     source(rootDir, 'packages/sentinel/src/server/metrics.ts', "router.get('/aggregate/:name', handler);\n");
     const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
     expect(check!.status).toBe('ok');
+  });
+
+  it('is a warning, not an error: the check is a heuristic', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/nothing-serves-this']);
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('warn');
+    expect(check!.fix).toContain('built from constants is not detected');
+  });
+
+  it('a client call or a UI component is not a handler', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/widgets', 'GET /api/gadgets', 'GET /api/served']);
+    source(rootDir, 'src/client/api.ts', [
+      "export const load = () => fetch('/api/widgets');",
+      "export const more = () => axios.get('/api/gadgets');",
+      "export const again = () => fetch('/api/served');",
+    ].join('\n'));
+    source(rootDir, 'src/ui/Widgets.tsx', "export const link = <a href='/api/gadgets'>x</a>; const p = '/api/widgets';\n");
+    source(rootDir, 'src/server/index.ts', "app.get('/api/served', handler);\n");
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.details).toEqual(['GET /api/widgets', 'GET /api/gadgets']);
   });
 
   it('reports ok when no portal.yaml', async () => {

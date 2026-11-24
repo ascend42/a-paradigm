@@ -29,6 +29,9 @@ components:
       path as a string literal (a handler, a mounted router split across literals in one package,
       a WebSocket server path) or a route file sits at that path, and no longer accepts a file
       that merely shares a word with the route; any upper-case method, WS included, is read.
+      That check is a heuristic and reports at warn level; client calls and UI component files
+      are not read as handlers. When the symbol index cannot be built, doctor builds it once and
+      the orphaned-symbols check reports the failure without building it again.
     file: context-audit.ts
     tests:
       - packages/paradigm/src/commands/doctor/context-audit.test.ts

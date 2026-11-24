@@ -32,7 +32,7 @@ const WHAT_IT_CHECKS: Record<string, string> = {
   'orphaned-symbols':
     'Lists declared symbols with no connection to another symbol: they reference nothing and nothing references them, counting structured lists, flow steps and mentions in descriptions. `paradigm integrity` and `paradigm status` use the same definition and report the same number.',
   'stale-portal':
-    "For each route in portal.yaml, looks for the route's path as a string literal in source code (a handler, a mounted router, a WebSocket path). A route with none is declared and protected on paper, with nothing behind it. Implement it or remove it from portal.yaml.",
+    "For each route in portal.yaml, looks for the route's path as a string literal in source code (a handler, a mounted router, a WebSocket path). A route with none may be declared with nothing behind it. This is a heuristic: a handler whose path is built from constants or a template is not found, so check each route before removing it.",
   'instruction-vagueness':
     'Finds phrases in the instruction files that leave a rule optional ("try to", "if possible").',
   'config-schema-validation':

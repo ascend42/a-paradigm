@@ -461,7 +461,16 @@ async function checkPurposeCoverage(rootDir: string, projectFiles: ProjectFileLi
  * step isolated, disagreed with `integrity`, and could not run at all in a
  * checkout that had not been scanned.
  */
-async function checkOrphanedSymbols(rootDir: string, isolated?: IsolatedSymbol[]): Promise<ContextAuditResult[]> {
+async function checkOrphanedSymbols(rootDir: string, isolated?: IsolatedSymbol[], indexError?: string): Promise<ContextAuditResult[]> {
+  // The caller already tried to build the index and failed: say so once, and do
+  // not build it a second time.
+  if (!isolated && indexError !== undefined) {
+    return [{
+      check: 'orphaned-symbols',
+      status: 'advisory',
+      message: `Could not build the symbol index: ${indexError}`,
+    }];
+  }
   let found: IsolatedSymbol[];
   try {
     found = isolated ?? (await collectProjectCounts(rootDir)).isolated;
@@ -506,6 +515,13 @@ export function routeStaticPrefix(route: string): string {
   return kept.length > 0 ? `/${kept.join('/')}` : '';
 }
 
+/**
+ * Text just before a path literal that marks it as a CLIENT use of the route: a
+ * request (`fetch(`, `axios.get(`, `request(app).get(` is left alone: tests are
+ * already excluded), a URL being built, a navigation or a link.
+ */
+const CLIENT_CALL_RE = /(?:\bfetch|\baxios(?:\.\w+)?|\bnew\s+URL|\bnew\s+Request|\bnavigate|\bredirect|\bEventSource|\bhref\s*[:=]|\burl\s*[:=])\s*\(?\s*$/;
+
 /** Path literals found in source, by the package (or "" for the root) that holds them. */
 type PathLiterals = Map<string, Set<string>>;
 
@@ -537,6 +553,8 @@ function collectPathLiterals(rootDir: string, files: string[]): PathLiterals {
     while ((match = literal.exec(content)) !== null) {
       const prefix = routeStaticPrefix(match[1]);
       if (!prefix) continue;
+      // `fetch('/api/x')` is a caller, not a handler
+      if (CLIENT_CALL_RE.test(content.slice(Math.max(0, match.index - 40), match.index))) continue;
       if (!set) byPackage.set(pkg, (set = new Set()));
       set.add(prefix);
     }
@@ -665,7 +683,10 @@ async function checkStalePortal(rootDir: string, projectFiles: ProjectFileList):
   const sourceFiles = projectFiles.files.filter((rel) =>
     sourceExtensions.includes(path.extname(rel)) && !hasDirSegment(rel, sourceSkipDirs) && !/\.(test|spec)\.[a-z]+$/.test(rel),
   );
-  const literals = collectPathLiterals(rootDir, sourceFiles);
+  // UI components (.tsx/.jsx) call routes; they do not serve them. Their path
+  // literals are links and fetches, so they are not read as handlers. (Their
+  // location still counts below: a framework page file is a route.)
+  const literals = collectPathLiterals(rootDir, sourceFiles.filter((rel) => !/\.[jt]sx$/.test(rel)));
   // File-based routing (a `routes/projects.ts`, an `app/api/projects/[id]/route.ts`)
   // writes no path literal: the file's own location is the route.
   const routeFiles = sourceFiles.map((rel) => rel.toLowerCase());
@@ -681,10 +702,12 @@ async function checkStalePortal(rootDir: string, projectFiles: ProjectFileList):
   if (staleRoutes.length > 0) {
     results.push({
       check: 'stale-portal',
-      status: 'error',
+      // A heuristic, so a warning: a path built from constants or a template is
+      // not found, and a literal elsewhere in the package can pass a route.
+      status: 'warn',
       message: `${staleRoutes.length} portal route${staleRoutes.length > 1 ? 's' : ''} with no handler found (no source file writes the route's path, and no route file sits at it)`,
       details: staleRoutes,
-      fix: 'Implement missing route handlers or remove stale routes from portal.yaml',
+      fix: 'Check each route: implement the handler, or remove the route from portal.yaml if it is not planned. A handler whose path is built from constants is not detected.',
     });
   } else {
     results.push({
@@ -1003,7 +1026,7 @@ async function checkWarplineGuidance(rootDir: string): Promise<ContextAuditResul
 /**
  * options.projectFiles: the run's shared #project-files list (doctor passes its own); taken here when absent.
  */
-export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string; projectFiles?: ProjectFileList; isolated?: IsolatedSymbol[] }): Promise<ContextAuditResult[]> {
+export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string; projectFiles?: ProjectFileList; isolated?: IsolatedSymbol[]; indexError?: string }): Promise<ContextAuditResult[]> {
   const tracker = log.command('doctor:context-audit').start('Running context audit checks');
   const results: ContextAuditResult[] = [];
   // One file list for every check that used to walk the tree itself
@@ -1013,7 +1036,7 @@ export async function runContextAudit(rootDir: string, options?: { quiet?: boole
   results.push(...await checkConventionContradictions(rootDir));
   results.push(...await checkUndocumentedStack(rootDir));
   results.push(...await checkPurposeCoverage(rootDir, projectFiles));
-  results.push(...await checkOrphanedSymbols(rootDir, options?.isolated));
+  results.push(...await checkOrphanedSymbols(rootDir, options?.isolated, options?.indexError));
   results.push(...await checkStalePortal(rootDir, projectFiles));
   results.push(...await checkInstructionVagueness(rootDir));
   results.push(...await checkConfigSchema(rootDir));

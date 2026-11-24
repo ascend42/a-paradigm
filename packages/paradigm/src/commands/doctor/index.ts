@@ -219,8 +219,13 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // The shared numbers (#project-counts): the same module `paradigm status` prints
   // from, so the two commands cannot disagree. Null when the index cannot be built.
   let projectCounts: Promise<ProjectCounts | null> | undefined;
+  let projectCountsError: string | undefined;
   const getProjectCounts = (): Promise<ProjectCounts | null> =>
-    (projectCounts ??= collectProjectCounts(cwd, getProjectFiles()).catch(() => null));
+    (projectCounts ??= collectProjectCounts(cwd, getProjectFiles()).catch((e: unknown) => {
+      // Built once per run. The context audit reports this; it does not try again.
+      projectCountsError = e instanceof Error ? e.message : String(e);
+      return null;
+    }));
 
   // ──────────────────────────────────────────────────────────────────────
   // Core health checks (skipped when --context is specified)
@@ -1422,6 +1427,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     homeDir: options.homeDir,
     projectFiles: getProjectFiles(),
     isolated: (await getProjectCounts())?.isolated,
+    indexError: projectCountsError,
   });
 
   let contextErrorCount = 0;
