@@ -68,7 +68,7 @@ describe('mod-abi:v1 lifecycle (§12.3, G-MOD-01)', () => {
     expect(h.running()).toEqual([]);
   });
 
-  it('the example mod (packages/gnomon-mod-sdk/example/hello) renders, runs its command and keeps state', async () => {
+  it('the example mod (packages/gnomon-mod-sdk/example/hello) renders and keeps state through its tool; its command is read-only (G-MOD-17)', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
     const folder = path.join(r.root, 'example.hello');
@@ -78,7 +78,15 @@ describe('mod-abi:v1 lifecycle (§12.3, G-MOD-01)', () => {
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
     await h.start('example.hello');
-    expect(await h.relayCommand({ name: 'example.hello', commandId: 'hello.bump', principal: 'p:abcdefgh/matt', connId: 'c1' })).toEqual({ count: 1 });
+    // S1.3 (G-MOD-17, Aegis B1): a third-party mod's command is read-only on every surface, the GUI included, so
+    // the example's command only reads (hello.show) and its write is in the hello.count tool, which adds one per call
+    const show = () => h.relayCommand({ name: 'example.hello', commandId: 'hello.show', principal: 'p:abcdefgh/matt', connId: 'c1', surface: 'gui', principalClass: 'human' });
+    expect(await show()).toEqual({ count: 0 });
+    expect(await h.callTool('example.hello', 'hello.count', {})).toEqual({ count: 1 });
+    expect(await h.callTool('example.hello', 'hello.count', {})).toEqual({ count: 2 });
+    expect(await show()).toEqual({ count: 2 });
+    // the example as shipped trips no effect refusal
+    expect(r.events.filter((e) => e.kind === 'mod.effect.refused')).toEqual([]);
     const v = await h.relayView({ name: 'example.hello', viewId: 'hello.panel', input: { name: 'matt' }, principal: 'p:abcdefgh/matt', connId: 'c1' });
     expect(v.label).toBe('mod:example.hello');
     expect(JSON.stringify(v.block)).toContain('hello, matt');

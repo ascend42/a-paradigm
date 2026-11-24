@@ -129,6 +129,11 @@ export interface ConnAuthState {
    * never from params). Bound only by the session-key auth form, which is not built yet: absent on every connection.
    */
   hsid?: string;
+  /**
+   * S1.3 (G-MOD-16, gesture.ts): the last gesture stamp this connection spent on `mod.command` and how many
+   * commands it was spent on. Two numbers, written only by takeGesture; gone with the connection.
+   */
+  gesture?: { n: number; used: number };
 }
 
 /** serverSig message (after the signer's `gnomon:auth-server:v2\n` domain prefix) — the contracts definition. */

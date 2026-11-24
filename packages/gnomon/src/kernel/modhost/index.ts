@@ -6,14 +6,14 @@
  * (kernel/testing.ts createModHostForTest).
  */
 export { ModHost, HOST_INPUT_KEYS, MOD_ENTRIES, DEFAULT_CALL_TIMEOUT_MS, DEFAULT_CANCEL_GRACE_MS, RESTART_CAP, FOLDER_DEBOUNCE_MS, MAX_MOD_HOST_INFLIGHT, RELAY_MISS_ROWS_PER_WINDOW, RELAY_MISS_WINDOW_MS, EFFECT_REFUSED_ROWS_PER_WINDOW, EFFECT_REFUSED_WINDOW_MS } from './host.js';
-export { createModKernelCall, createModRelayPort, clampModAppend, MOD_APPEND_MAX_BYTES, MOD_APPEND_FIELDS, MOD_APPEND_ROWS_PER_SEC, MOD_APPEND_BYTES_PER_CALL } from './bridge.js';
+export { createModKernelCall, createModRelayPort, clampModAppend, checkModPayloadKeys, MOD_PAYLOAD_PROTOTYPE_KEYS, MOD_PAYLOAD_MAX_DEPTH, MOD_PAYLOAD_MAX_VISITED, MOD_APPEND_MAX_BYTES, MOD_APPEND_FIELDS, MOD_APPEND_ROWS_PER_SEC, MOD_APPEND_BYTES_PER_CALL } from './bridge.js';
 export type { ModKernelPorts, ModRelays, ModAppendRow, ModKernelCall } from './bridge.js';
 export { RowFold, FOLD_MAX_KEYS, FOLD_DISTINCT_CAP, FOLD_KEY_MAX } from './fold.js';
 export type { ModHostOptions, ModChildrenPort, KernelCallRequest, ModStartResult, RenderResult, CallOptions } from './host.js';
 export { ModRefusal, isModRefusal, MOD_REFUSAL_CODES } from './refusal.js';
 export type { ModRefusalCode } from './refusal.js';
-export { declaredEffects, effectsFor, verbEffect, methodEffect } from './effects.js';
-export type { CallContext } from './effects.js';
+export { commandCap, declaredEffects, effectsFor, verbEffect, methodEffect } from './effects.js';
+export type { CallContext, CallStamp } from './effects.js';
 export { sanitizeModBlock } from './block.js';
 export { EgressProxy, EGRESS_PORTS, isNonPublicAddress } from './egress-proxy.js';
 export { ModState, STATE_LIMITS, stateDir, blobsDir } from './state.js';
