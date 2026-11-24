@@ -629,7 +629,10 @@ components:
       root-signed agent registry row). Residual: no peer-pid or
       connection-to-session mapping exists, so loop sessions are recognised
       only by a connection-bound hsid (none bound until session-key auth);
-      they hold today because loop sessions get no socket or session key.
+      they hold today because loop sessions get no socket or session key. The client entry
+      imports leaves only (cli/kernel-pin.ts, cli/home-trust.ts, lifecycle/home.ts,
+      lifecycle/endpoint.ts, socket/client.ts): its import closure reaches no kernel/web file and
+      dist/agent.js carries no GUI bundle (test/agent-entry-fence.test.ts).
     path: src/kernel/loops/agent-ops.ts
     type: module
     tags: [gnomon, loops, agents, paradigm-8]
@@ -637,6 +640,7 @@ components:
     signals: []
     tests:
       - test/loop-agent-ops.test.ts
+      - test/agent-entry-fence.test.ts
     oracles: [G-LOOP-03, G-LOOP-05]
     anchors:
       - packages/gnomon/src/kernel/loops/agent-ops.ts
