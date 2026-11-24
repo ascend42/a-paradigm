@@ -394,7 +394,16 @@ function applyRow(d: Draft, row: DimRow): void {
   }
 }
 
-/** Fold one row. Pure: the input state is not changed. Never throws. */
+/**
+ * Fold one row. Pure: the input state is not changed. Never throws.
+ *
+ * COST: each call copies the whole state (the `nodes` Map and the `gone` Set) before it applies the row, so one
+ * call is O(nodes on the board) and folding n rows one call at a time is O(n²) entry copies (n add rows copy
+ * n(n-1)/2 entries; test/dim-fold-cost.test.ts counts them). Use it for ONE new row on a live state. To replay or
+ * scrub a range, call `foldDim(rows, upToSeq, from)` from a kept state instead: it copies `from` once and then
+ * applies every row to that one draft, which is linear in the rows. A scrubber keeps a state every so many rows
+ * and folds forward from the nearest one; it never reduces over `foldDimRow`.
+ */
 export function foldDimRow(state: DimState, row: DimRow): DimState {
   const d = draftOf(state);
   try {
@@ -405,7 +414,11 @@ export function foldDimRow(state: DimState, row: DimRow): DimState {
   return d;
 }
 
-/** Fold rows in order, optionally stopping after `upToSeq`. `from` continues an earlier fold (chunked replay). */
+/**
+ * Fold rows in order, optionally stopping after `upToSeq`. `from` continues an earlier fold (chunked replay).
+ * One copy of `from`, then one pass over the rows: the linear way to replay or scrub (see `foldDimRow` for the cost
+ * of going row by row).
+ */
 export function foldDim(rows: Iterable<DimRow>, upToSeq?: number, from: DimState = emptyDimState()): DimState {
   const d = draftOf(from);
   for (const row of rows) {

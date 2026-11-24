@@ -334,7 +334,11 @@ components:
       above) is the TOTAL form for stored data a renderer reads: a malformed
       neighbour key is an open end; equal or out-of-order neighbours place above
       the lower one; with no room at all the lower key is reused and ties are
-      ordered by id. A move re-reads no node in the secret check. DEFERRED,
+      ordered by id. A move re-reads no node in the secret check. foldDimRow
+      copies the whole state per row, so a row-by-row replay is quadratic in
+      entry copies; a replay or scrub uses foldDim(rows, upToSeq, from) from a
+      kept state, one copy and one pass (test/dim-fold-cost.test.ts counts the
+      copies; no behaviour or hash change). DEFERRED,
       tracked here: to S1.3, the engine mapping (gnomon-gui src/board/dim-map.ts
       and its goldens) and the check that nothing in contracts or mods imports
       the board; to S1.4, the secret-check residuals (combining marks and
@@ -347,6 +351,7 @@ components:
     tags: [gnomon, contracts, dimension, paradigm-8]
     tests:
       - test/dim-fold.test.ts
+      - test/dim-fold-cost.test.ts
       - test/dim-validate.test.ts
       - test/dim-move.test.ts
   contract-content-palette:
