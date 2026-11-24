@@ -87,9 +87,14 @@ export function clampModAppend(name: string, principal: string, params: Record<s
   if (typeof kind !== 'string' || !ownsModKind(name, kind)) throw new ModRefusal('VERB', `${name} may append only its own modns.${name}.* kinds`, { name, verb: 'log.append' });
   const raw = params.payload ?? {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new ModRefusal('LOG', 'log.append payload must be a plain object', { name, kind });
-  // a shallow copy with a null-safe own-key delete: the mod's object is never mutated and never trusted for this key
-  const payload: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
-  delete payload[RELAYED_FOR_APPEND_KEY];
+  // Aegis S1.2 A2: an own `__proto__` key (JSON.parse makes one) survives a spread and would be stored, and a later
+  // reader that assigns the payload onto an object would take its prototype from the mod. Refused by key class.
+  for (const k of Object.keys(raw)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') throw new ModRefusal('LOG', 'log.append payload has a prototype key (__proto__, constructor or prototype) at the top level', { name, kind, why: 'prototype-key' });
+  }
+  // a copy onto a null-prototype object, key by key: the mod's object is never mutated and never trusted for this key
+  const payload: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const k of Object.keys(raw)) if (k !== RELAYED_FOR_APPEND_KEY) payload[k] = (raw as Record<string, unknown>)[k];
   if (stamp) payload[RELAYED_FOR_APPEND_KEY] = { ...stamp.relayedFor };
   const bytes = Buffer.byteLength(canonicalJson(payload), 'utf8');
   if (bytes > MOD_APPEND_MAX_BYTES) throw new ModRefusal('LOG', `log.append payload is ${bytes} bytes; a mod may append at most ${MOD_APPEND_MAX_BYTES}`, { name, kind, bytes });

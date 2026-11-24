@@ -275,20 +275,28 @@ function draftOf(s: DimState): Draft {
 }
 
 const NON_EMPTY = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+/** An OWN property, or undefined: nothing here is ever read through a prototype. */
+const own = (o: Record<string, unknown>, k: string): unknown => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 
 /** `by` from the host stamp, or the unknown hand when the stamp is missing or malformed. */
 function byOf(payload: Record<string, unknown>): DimBy {
-  const r = payload.relayedFor;
-  if (!isPlainObject(r) || !NON_EMPTY(r.principal) || !(DIM_SURFACES as readonly unknown[]).includes(r.surface)) return UNKNOWN_BY;
+  // own keys only (Aegis S1.2 A2): a stamp is never read through a prototype
+  const r = own(payload, 'relayedFor');
+  if (!isPlainObject(r)) return UNKNOWN_BY;
+  const principal = own(r, 'principal');
+  const surface = own(r, 'surface');
+  const agent = own(r, 'agent');
+  if (!NON_EMPTY(principal) || !(DIM_SURFACES as readonly unknown[]).includes(surface)) return UNKNOWN_BY;
   // a tool surface always names its agent: a bridge or voice stamp without one vouches for nobody (never human)
-  if (r.agent === undefined) return r.surface === 'gui' || r.surface === 'cli' ? { cls: 'human', principal: r.principal } : UNKNOWN_BY;
-  if (!NON_EMPTY(r.agent)) return UNKNOWN_BY;
-  return { cls: 'agent', principal: r.principal, agent: r.agent };
+  if (agent === undefined) return surface === 'gui' || surface === 'cli' ? { cls: 'human', principal } : UNKNOWN_BY;
+  if (!NON_EMPTY(agent)) return UNKNOWN_BY;
+  return { cls: 'agent', principal, agent };
 }
 
 function hsidOf(attached: readonly string[], payload: unknown): string | null {
-  const r = isPlainObject(payload) ? payload.relayedFor : undefined;
-  if (isPlainObject(r) && NON_EMPTY(r.hsid)) return r.hsid;
+  const r = isPlainObject(payload) ? own(payload, 'relayedFor') : undefined;
+  const h = isPlainObject(r) ? own(r, 'hsid') : undefined;
+  if (NON_EMPTY(h)) return h;
   return attached.length === 1 ? attached[0]! : null;
 }
 

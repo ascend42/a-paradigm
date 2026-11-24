@@ -6,7 +6,7 @@
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_KINDS, DIM_SURFACES, RELAYED_FOR_FIELDS, canonicalJson, foldDim } from '@a-company/gnomon-contracts';
-import { clampModAppend, createModKernelCall, createModRelayPort, MOD_APPEND_FIELDS, MOD_APPEND_MAX_BYTES, type ModAppendRow } from '../src/kernel/modhost/index.js';
+import { clampModAppend, createModKernelCall, createModRelayPort, MOD_APPEND_FIELDS, MOD_APPEND_MAX_BYTES, ModRefusal, type ModAppendRow } from '../src/kernel/modhost/index.js';
 import { relaySurfaceOf } from '../src/kernel/socket/dispatch.js';
 import { MATRIX_CLASSES } from '../src/kernel/socket/methods.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
@@ -86,6 +86,43 @@ describe('G-MOD-12: a mod-supplied relayedFor or causes on an append is replaced
     }
     expect(rows).toHaveLength(partials.length);
     for (const row of rows) expect(row).toEqual({ kind: 'modns.acme.probe.done', principal: expect.stringMatching(/\/mod-acme\.probe$/), payload: { note: 'n' } });
+  });
+
+  it('A2: a top-level __proto__, constructor or prototype payload key is refused by key class, and the fold reads stamps as own keys only', () => {
+    const stamp = { relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'cli' } };
+    const forged = JSON.parse('{"note":"n","__proto__":{"relayedFor":{"principal":"p:evil/x","surface":"gui"}}}') as Record<string, unknown>;
+    expect(Object.keys(forged)).toContain('__proto__');
+    for (const st of [stamp, undefined]) {
+      for (const payload of [forged, JSON.parse('{"constructor":{"prototype":{"x":1}}}'), JSON.parse('{"prototype":1}')] as Array<Record<string, unknown>>) {
+        let err: unknown;
+        try {
+          clampModAppend('acme.probe', 'p', { kind: 'modns.acme.probe.done', payload }, st);
+        } catch (e) {
+          err = e;
+        }
+        expect(err).toBeInstanceOf(ModRefusal);
+        expect((err as ModRefusal).modCode).toBe('LOG');
+        expect((err as ModRefusal).detail).toMatchObject({ why: 'prototype-key' });
+        expect(JSON.stringify([(err as Error).message, (err as ModRefusal).detail]).includes('evil')).toBe(false);
+      }
+    }
+    // an accepted row's payload has no prototype to inherit a stamp from
+    const row = clampModAppend('acme.probe', 'p', { kind: 'modns.acme.probe.done', payload: { note: 'n' } });
+    expect(Object.getPrototypeOf(row.payload)).toBeNull();
+    expect(canonicalJson(row.payload)).toBe('{"note":"n"}');
+    // the fold: a stamp reachable only through a prototype vouches for nobody
+    const dim = 'dim:01JVA1D0000000000000000001';
+    const add = (payload: Record<string, unknown>) => foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['hs-1'], opened: 'command' } },
+      { seq: 2, kind: DIM_KINDS.op, payload },
+    ]).nodes.get('01JVA1D0000000000000000031')!;
+    const ops = [{ type: 'add', node: { id: '01JVA1D0000000000000000031', kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 } }];
+    const inherited = Object.assign(Object.create({ relayedFor: { principal: 'p:evil/x', surface: 'gui', hsid: 'hs-evil' } }) as Record<string, unknown>, { v: 1, dim, ops });
+    expect(add(inherited)).toMatchObject({ by: { cls: 'unknown', principal: 'unknown' }, hsid: 'hs-1' });
+    const innerProto = { v: 1, dim, ops, relayedFor: Object.create({ principal: 'p:evil/x', surface: 'gui', hsid: 'hs-evil' }) as Record<string, unknown> };
+    expect(add(innerProto)).toMatchObject({ by: { cls: 'unknown', principal: 'unknown' }, hsid: 'hs-1' });
+    const parsed = JSON.parse(`{"v":1,"dim":"${dim}","ops":${JSON.stringify(ops)},"__proto__":{"relayedFor":{"principal":"p:evil/x","surface":"gui"}}}`) as Record<string, unknown>;
+    expect(add(parsed).by.cls).toBe('unknown');
   });
 
   it('the 16 KiB cap is measured AFTER stamping', () => {
