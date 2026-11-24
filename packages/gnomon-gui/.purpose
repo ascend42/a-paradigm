@@ -421,6 +421,18 @@ components:
       option `chrome` makes a paste with focus on the leaf's rail the
       board's. Pasted clones and text land in view; clipboard words are
       cleaned of control and format characters.
+      PASS P4a (review of PR #117): the leaf's chrome keeps the paste, copy
+      and cut of ANY input, textarea, select or editable element (N2); a
+      copy with words selected in the chrome outside the board is left to
+      the browser and never gives the marks (N3); select() skips fallback
+      stubs; a pasted text is measured AFTER it is cleaned and refused
+      too-long with a line (N1); one paste step for words and clones, which
+      starts again after any other action; the same line is not announced
+      twice while it shows. The leaf gains say(line) and forget(), and
+      onFold carries the trusted event the fold's stamp is minted from;
+      core/board-leaf.ts noticeLine is a STAND-IN table of plain words for
+      the live loop's notices (the keep line's words belong to the pass
+      that mounts the leaf in the app).
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
@@ -589,8 +601,18 @@ components:
       may fold a row before or after row() is called. An edit or an undo
       with no gesture stamp changes nothing and answers not-sent. One send is
       in flight per dimension and sends are spaced DIM_LIVE_SEND_GAP_MS apart;
-      queued edits coalesce into batches of at most 64 ops (an undo is never
-      merged) and the newest stamp rides a coalesced batch. A batch is
+      a queued edit that fits one row joins the single-row batch still
+      waiting when both fit one row together (an undo and a multi-row action
+      are never merged) and the newest stamp rides a merged batch. ROWS THAT
+      FIT (pass P4a, core/dim-rows.ts): one action over a row's limits (64
+      ops, the row budget under the host's 16 KiB and 4,096 values) becomes a
+      GROUP of at most DIM_ACTION_ROWS (4) rows on one stamp, in order; an
+      action that needs more, or one op that fits no row, is refused whole
+      with a notice (too-large, row-too-large); a dropped row of a group
+      takes the rows of that action still waiting with it, under the one
+      notice. The rows of one action are ONE undo entry, undone by one
+      inverse that is itself packed into rows and leaves the list at its
+      last row. A batch says `more` when rows of its action follow. A batch is
       confirmed when the row with the acked seq arrives, in either order; a
       row of mine (own-key stamp: my principal, the GUI surface, and my
       connId when both sides name one) confirms at once when it carries
@@ -615,6 +637,50 @@ components:
     tags: [gnomon, gui, dimension, pure]
     tests:
       - test/dim-live.test.ts
+  gui-dim-session:
+    description: >-
+      #gui-dim-session (boards S1.3 pass P4a, s1.3-draft point 6) - the LIVE
+      loop of the open dimensions as one unit, not yet mounted in the app
+      (test/board-isolation.test.ts: ui/app.ts imports none of it).
+      DimSessions is the one place sessions are made; a DimSession is ONE
+      open dimension: it pins the dimension in #gui-dim-store, owns a
+      #gui-dim-live (Session.connId passed as its connId), and wires: the
+      followed rows (apply(rows), the same rows GuiStore.apply takes) to
+      live.row; live's sends to the ONE sender #gui-mod-command
+      (sendModCommand with the GnomonClient itself and no `now` argument,
+      'dim.op' with {dim, ops, focus:{hsid}}) and the answer to live.ack
+      (dimAckOf); one timer from nextDeadline() to timeout(); changed or
+      resync to handle.render(live.view()); the handle's onEdit and the
+      leaf's onOps to live.local with a stamp minted at that moment from the
+      listener's own event and Date.now() (#gui-gesture); onUndoKey to
+      live.undo. No stamp, no change: such an edit is put back by a render
+      and said in a notice; nothing is ever retried (spent and replayed mean
+      a new gesture). dim.open is sent ONCE (dim.attach before it on the same
+      stamp when the store shows the session is not attached); a session
+      rebuilt after a reconnect is RESUMED with no command, and the fold at
+      the mod's last answered seq is compared with the hash it gave
+      (status().verified, notice hash-mismatch). fold(cause) sends dim.close
+      after what is pending has settled. One DimSendLimiter for every command
+      of every session keeps the page under the host's per-mod append limit;
+      a stamp gate lets one stamp send all its commands (the rows of a
+      multi-row action, attach then open) before another stamp is first sent
+      on the connection, so no stamp number goes backwards. linkDown():
+      nothing is sent, new edits are refused with a notice, pending rolls
+      back at the timeout, the leaf forgets its copy; connect(link) DESTROYS
+      every session and builds it again (a new DimLive, the leaf and its copy
+      register destroyed); reset() (cursor-epoch) empties the DimStore and
+      destroys every session. status() answers keep, link, since, pending,
+      canUndo, phase, title, seq, partial, dropped and verified; notices are
+      data (about, code, field, why, lost), never words. core/dim-rows.ts
+      packs one action's ops into rows that fit.
+    path: src/core/dim-session.ts
+    type: module
+    tags: [gnomon, gui, dimension, live]
+    related: ["#gui-dim-live", "#gui-dim-store", "#gui-mod-command", "#gui-gesture", "#gui-board", "#dimension-mod"]
+    tests:
+      - test/dim-session.test.ts
+      - test/dim-session-live.test.ts
+      - ../gnomon/test/dimension-dogfood.test.ts
   gui-dim-undo:
     description: >-
       #gui-dim-undo (boards S1.3 pass P3a, s1.3-draft point 6 undo; Aegis B3)
@@ -654,8 +720,14 @@ components:
       matches), {kind: nothing-held} for a stand-in line the register does
       not hold, and {kind: text} otherwise. Every clone has a new
       id, sits 16 units further for each paste and on top; from, to and
-      parent are renamed to the clone when the target was copied too and
-      dropped otherwise; only the closed list DIM_CLIPBOARD_KEYS is carried
+      parent are renamed to the clone when the target was copied too; from
+      and to are dropped otherwise, and a parent to a frame that was NOT
+      copied is kept only on a paste into the same dimension, while that
+      frame still stands and the clone's whole box (its points included)
+      lands inside it (pass P4a: a deleted frame, another dimension or a
+      clone landing outside all drop it). paste takes the leaf's `repeat`
+      (pastes made one after another), so the step starts again after any
+      other action and a set centred on the view steps too; only the closed list DIM_CLIPBOARD_KEYS is carried
       (shape, words, colour; no author, refs, rel or carried-through field).
       The clones are ordinary adds, so whoever pastes is their author.
       clear() forgets the register (window blur, unmount). Nothing in the
@@ -1768,6 +1840,14 @@ components:
       authors of its own, and `?board=` picks open, tray, empty, yielded,
       loading, failed, crashed, short or tiny;
       scripts/board-leaf-shots.mjs captures them from an installed Chrome.
+      `?board=live` (boards S1.3 pass P4a) shows the REAL live loop: the
+      page's own GnomonClient on its own fake-kernel connection, followLog,
+      #gui-dim-session and the leaf mounted with the session's wiring. The
+      fake kernel answers the mod-command relay for gnomon.dimension with
+      the kernel's stamp rule and the mod's REAL checks, rows and fold
+      (packages/gnomon-mods/dimension/model.mjs, bundled into the preview
+      only; src/preview/dim-mod.ts restates the command flow of the mod's
+      index.mjs and says so); rows come back on the followed log.
     path: src/preview/
     type: module
     tags: [gnomon, gui, dev-tool, preview]

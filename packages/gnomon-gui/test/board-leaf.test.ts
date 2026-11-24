@@ -122,3 +122,22 @@ describe('#gui-board fences', () => {
     expect(readFileSync(path.join(root, 'core', 'board.ts'), 'utf8')).toMatch(/syntheticInput\?: boolean/);
   });
 });
+
+describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 characters; Mika, review of PR #117)', () => {
+  it('the three shortened lines, and every stand-in line for a notice of the live loop', async () => {
+    const { CLIP_COPY, noticeLine, refusalLineOf } = await import('../src/core/board-leaf.js');
+    const lines = [refusalLineOf({ what: 'text', why: 'too-long', detail: '4000' }), CLIP_COPY.leftOut(6), CLIP_COPY.leftOut(1), CLIP_COPY.cutRefused];
+    expect(lines).toEqual(['One mark holds 4,000 characters · paste or type less', '6 marks were left out · a copy takes 64 at most', '1 mark was left out · a copy takes 64 at most', 'Nothing was cut · a cut takes 64 marks at most']);
+    const notices = [
+      { about: 'link', code: 'link-down' }, { about: 'edit', code: 'link-down' }, { about: 'undo', code: 'redo-unavailable' }, { about: 'undo', code: 'undo-nothing' }, { about: 'undo', code: 'undo-invalid' },
+      { about: 'open', code: 'open-failed' }, { about: 'close', code: 'close-failed' }, { about: 'check', code: 'hash-mismatch' }, { about: 'edit', code: 'too-large' }, { about: 'edit', code: 'row-too-large' },
+      { about: 'edit', code: 'busy' }, { about: 'edit', code: 'not-sent' }, { about: 'edit', code: 'gesture-refused' }, { about: 'edit', code: 'timeout' }, { about: 'edit', code: 'no-answer' }, { about: 'edit', code: 'id-missing' },
+    ].flatMap((n) => [noticeLine({ ...n, lost: 1 }), noticeLine({ ...n, lost: 64 })]);
+    for (const line of [...lines, ...notices]) {
+      expect(line.length, line).toBeLessThanOrEqual(59);
+      // plain words: never a code, a field name or a kernel word
+      expect(line, line).not.toMatch(/[a-z]-[a-z]+-|ops\b|\bdim\b|gesture|stamp|seq\b/);
+    }
+  });
+});
+

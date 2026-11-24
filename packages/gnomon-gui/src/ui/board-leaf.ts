@@ -12,10 +12,10 @@
  *
  * No inline style attribute is written: sizes and positions go through CSSOM properties, classes do the rest.
  */
-import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, dimKindName, resolveContentColour } from '@a-company/gnomon-contracts';
+import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveContentColour } from '@a-company/gnomon-contracts';
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
-import { DimClipboard, dimPasteTextOp } from '../core/dim-clipboard.js';
+import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
 import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
@@ -160,15 +160,31 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (r.skipped > 0) return clip.clear(), say(CLIP_COPY.cutRefused), null;
     return { text: r.text, ids: r.ids };
   };
-  let textPastes = 0;
-  let textPastedAt = '';
+  // ONE step for pastes made one after another, words and clones alike: each sits a step down and right of the
+  // last. It starts again after any other action (a press, a key that is not the paste's own), when the view moves,
+  // and when something else is pasted.
+  let pasteStep = -1;
+  let pastedAt = '';
+  let pastedText = '';
+  const otherAction = (e: Event): void => {
+    if (e instanceof KeyboardEvent && (['Meta', 'Control', 'Shift', 'Alt'].includes(e.key) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v'))) return;
+    pasteStep = -1;
+  };
   const pasted = (hd: BoardHandle, text: string, cause: Event): void => {
     const view = o.view?.() ?? null;
     if (!view || !o.onOps) return;
     const v = hd.view();
     const box = { x: -v.scrollX, y: -v.scrollY, w: v.width / v.zoom, h: v.height / v.zoom };
-    const r = clip.paste(text, view, o.mint ?? mintNodeId, box);
+    const where = `${v.scrollX},${v.scrollY},${v.zoom}`;
+    const step = where === pastedAt && text === pastedText ? pasteStep + 1 : 0;
+    const r = clip.paste(text, view, o.mint ?? mintNodeId, box, { repeat: step });
     if (r.kind === 'nothing-held') return say(refusalLine('clipboard'));
+    // the length is checked AFTER the words are cleaned (Aegis N1): a bidi control becomes a visible glyph, so
+    // cleaned words can be longer than what was pasted, and a text over the limit would fail at the validator unsaid
+    if (r.kind === 'text' && dimPastedWords(text).length > DIM_LIMITS.text) return say(refusalLineOf({ what: 'text', why: 'too-long', detail: String(DIM_LIMITS.text) }));
+    pasteStep = step;
+    pastedAt = where;
+    pastedText = text;
     // what was pasted is what is selected afterwards (the originals used to stay selected: Delete took THEM)
     const sent = (ops: DimOp[]): void => {
       o.onOps!(ops, cause);
@@ -176,10 +192,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     };
     if (r.kind === 'clones') return void (r.ops.length > 0 && sent(r.ops));
     // a text pasted again with the view where it was steps down and right, so it never sits exactly on the last one
-    const where = `${v.scrollX},${v.scrollY},${v.zoom}`;
-    textPastes = where === textPastedAt ? textPastes + 1 : 0;
-    textPastedAt = where;
-    const op = dimPasteTextOp(text, view, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, o.mint ?? mintNodeId, { repeat: textPastes, top: box.y });
+    const op = dimPasteTextOp(text, view, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, o.mint ?? mintNodeId, { repeat: step, top: box.y });
     if (op) sent([op]);
   };
 
@@ -500,9 +513,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
   let saidAt = 0;
   function say(text: string): void {
+    // the same line while it is still showing is not announced a second time (a drag from the rail onto the board
+    // is refused by the leaf's guard and by the board: it is said once)
+    const again = text === said && Date.now() - saidAt < 1500;
     said = text;
     saidAt = Date.now();
-    saidLine.textContent = text;
+    if (!again) saidLine.textContent = text;
     clearTimeout(saidTimer);
     saidTimer = setTimeout(unsay, 6000);
     draw();
@@ -662,6 +678,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // through a press on empty ground and through selecting another mark)
   el.addEventListener('pointerdown', unsay, true);
   el.addEventListener('keydown', unsay, true);
+  el.addEventListener('pointerdown', otherAction, true);
+  el.addEventListener('keydown', otherAction, true);
   // the rail is one tab stop; ↑ and ↓ move within it
   rail.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;

@@ -91,6 +91,38 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('undone').lastOps).toEqual(Array(64).fill('delete'));
   }, 120_000);
 
+  it('review leftovers in the engine: words selected in the chrome are copied as themselves (N3); a paste that is too long only AFTER cleaning is refused with its line (N1); pastes step and the step starts again', async () => {
+    const long = `${'a'.repeat(3990)}${'\u202e'.repeat(8)}`;
+    const a = await real([
+      facts('start'),
+      // a mark is selected on the board, then the title's words are selected in the leaf's head
+      { at: [272, 86], press: true }, { read: `${B}.state().selected`, as: 'selected' },
+      { read: `(getSelection().selectAllChildren(document.querySelector('#preview-board .bd-head .title')), getSelection().toString())`, as: 'chosen' },
+      { key: 'c', meta: true, commands: ['copy'] }, { wait: 150 },
+      { await: 'navigator.clipboard.readText()', as: 'clipboard' },
+      { read: '(getSelection().removeAllRanges(), 1)', as: 'cleared' },
+      // 3,998 characters as pasted; over 4,000 once the bidi controls are made visible
+      { at: [640, 420], press: true }, { paste: long }, { wait: 300 }, facts('long'),
+      // three pastes one after another step down and right; a press starts the step again
+      { paste: 'one' }, { wait: 300 }, { paste: 'one' }, { wait: 300 }, { paste: 'one' }, { wait: 300 },
+      { at: [640, 420], press: true }, { paste: 'one' }, { wait: 300 },
+      { read: `[...${L}.session.view().nodes.values()].map((n) => n.node).filter((n) => n.kind === 'text' && n.text === 'one').map((n) => [n.x, n.y])`, as: 'ones' },
+      facts('end'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(a.selected).toBe(1);
+    expect(a.chosen).toBe('auth handoff');
+    expect(a.clipboard).toBe('auth handoff');
+    expect(long.length).toBeLessThan(4000);
+    expect(f('long')).toMatchObject({ nodes: f('start').nodes, rows: f('start').rows, line: 'One mark holds 4,000 characters · paste or type less' });
+    const ones = a.ones as Array<[number, number]>;
+    expect(ones).toHaveLength(4);
+    expect([ones[1]![0] - ones[0]![0], ones[2]![0] - ones[1]![0]]).toEqual([16, 16]);
+    expect(ones[3]).toEqual(ones[0]); // the step started again
+    expect(f('end')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes + 4, sameAsMod: true });
+  }, 120_000);
+
   it('link down: an edit is put back and said; link up: a new session and a new leaf, and a drawn mark persists again', async () => {
     const down = await real([facts('start'), { read: `(${L}.down(), 1)`, as: 'd' }, { wait: 300 }, facts('down'), ...drawRect, facts('edit'), { read: `${L}.leaf.el.isConnected`, as: 'leafStays' }], null, 'live-link-down');
     const f = (k: string): Facts => down[k] as Facts;

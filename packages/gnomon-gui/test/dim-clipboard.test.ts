@@ -290,3 +290,102 @@ describe('#gui-dim-clipboard review of PR #117: frames, parents and what a cut t
     expect([near.ops[0]!.node.x, near.ops[0]!.node.y]).toEqual([132, 132]);
   });
 });
+
+describe('#gui-dim-clipboard P4a: the kept `parent`, cleaned words, and the paste step (review of PR #117)', () => {
+  const id = (n: number): string => `01JCL1PB0ARD0000000000000${n}`;
+  const stamp = { principal: 'p:t/you', connId: 'c', surface: 'gui' };
+  const rows = (dim: string, extra: unknown[] = []): DimRow[] => [
+    { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['h'], opened: 'command', relayedFor: stamp } },
+    { seq: 2, kind: DIM_KINDS.op, payload: { v: 1, dim, relayedFor: stamp, ops: [
+      { type: 'add', node: { id: id(1), kind: 'frame', x: 0, y: 0, z: 'a', w: 300, h: 300, title: 'f' } },
+      { type: 'add', node: { id: id(2), kind: 'rect', x: 20, y: 20, z: 'b', w: 50, h: 40, parent: id(1) } },
+      { type: 'add', node: { id: id(3), kind: 'stroke', x: 250, y: 250, z: 'c', points: [0, 0, 10, 10, 20, 0], parent: id(1) } },
+      ...extra,
+    ] } },
+  ];
+  const A = 'dim:01JCL1PD1MA000000000000001';
+  const nodeOf = (r: DimPasteResult): Record<string, unknown> => clonesOf(r)[0]!.node as unknown as Record<string, unknown>;
+
+  it('a `parent` to a frame that was not copied is kept in the same dimension when the clone lands inside it', () => {
+    const a = foldDim(rows(A));
+    const clip = new DimClipboard();
+    const c = clip.copy(a, [id(2)]);
+    expect(nodeOf(clip.paste(c.text, a, minter()))).toMatchObject({ parent: id(1), x: 36, y: 36 });
+  });
+
+  it('…and is DROPPED when the frame was deleted before the paste', () => {
+    const a = foldDim(rows(A));
+    const clip = new DimClipboard();
+    const c = clip.copy(a, [id(2)]);
+    const gone = foldDim([...rows(A), { seq: 3, kind: DIM_KINDS.op, payload: { v: 1, dim: A, relayedFor: stamp, ops: [{ type: 'delete', id: id(1) }] } }]);
+    expect(gone.nodes.has(id(1))).toBe(false);
+    const node = nodeOf(clip.paste(c.text, gone, minter()));
+    expect(node).not.toHaveProperty('parent');
+    // and what is pasted passes the validator against the board as it stands (a `parent` to a gone frame would not)
+    expect(validateDimOps(gone, [{ type: 'add', node } as never], ME).refused).toEqual([]);
+  });
+
+  it('…and is DROPPED on a paste into another dimension, even one holding a frame under the same id', () => {
+    const a = foldDim(rows(A));
+    const clip = new DimClipboard();
+    const c = clip.copy(a, [id(2)]);
+    const other = foldDim(rows('dim:01JCL1PD1MB000000000000002'));
+    expect(other.nodes.has(id(1))).toBe(true);
+    expect(nodeOf(clip.paste(c.text, other, minter()))).not.toHaveProperty('parent');
+  });
+
+  it('…and is DROPPED when the clone lands outside the frame: by its box, and by the extent of its POINTS', () => {
+    const a = foldDim(rows(A));
+    const clip = new DimClipboard();
+    // the rect, pasted until its offset copy is past the frame's edge
+    const c = clip.copy(a, [id(2)]);
+    const landed = Array.from({ length: 16 }, () => nodeOf(clip.paste(c.text, a, minter())));
+    expect(landed[0]).toHaveProperty('parent', id(1));
+    const out = landed.find((n) => (n.x as number) + 50 > 300)!;
+    expect(out).not.toHaveProperty('parent');
+    // the stroke starts inside the frame at (266, 266) and its points run to x = 286: inside. One step more and
+    // its first point is still inside (282) while its points reach 302: it is NOT in the frame
+    const s = clip.copy(a, [id(3)]);
+    const first = nodeOf(clip.paste(s.text, a, minter()));
+    expect(first).toMatchObject({ x: 266, y: 266, parent: id(1) });
+    const second = nodeOf(clip.paste(s.text, a, minter()));
+    expect(second).toMatchObject({ x: 282, y: 282 });
+    expect(second).not.toHaveProperty('parent');
+  });
+
+  it('a copy holding ESC, a bidi control and a variation selector still matches itself on paste (the cleaned text is what is compared)', () => {
+    const dirty = `one\u001b[2J two \u202edrawkcab\u202c three\u2764\ufe0f four\u200b`;
+    const a = foldDim(rows(A, [{ type: 'add', node: { id: id(5), kind: 'text', x: 400, y: 20, z: 'e', text: dirty } }]));
+    const clip = new DimClipboard();
+    const c = clip.copy(a, [id(5)]);
+    expect(c.copied).toBe(1);
+    // nothing that could drive a terminal leaves for the clipboard
+    expect(/[\u001b\u202e\u202c\u200b]/.test(c.text)).toBe(false);
+    expect(c.text).not.toBe(dimStandInLine(1));
+    expect(clip.matches(c.text)).toBe(true);
+    expect(clip.matches(c.text.replace(/\n/g, '\r\n'))).toBe(true);
+    const r = clip.paste(c.text, a, minter());
+    expect(r.kind).toBe('clones');
+    // the clone carries the mark's own words, as the dimension holds them: authored by the paster through the validator
+    expect(nodeOf(r).text).toBe(dirty);
+  });
+
+  it('the paste step: `repeat` starts again at 0 after another action, and a set centred on the view steps too', () => {
+    const a = foldDim(rows(A));
+    const clip = new DimClipboard();
+    const c = clip.copy(a, [id(2)]);
+    const at = (r: DimPasteResult): [number, number] => [nodeOf(r).x as number, nodeOf(r).y as number];
+    // one after another: 0, 1, 2 …
+    expect(at(clip.paste(c.text, a, minter(), undefined, { repeat: 0 }))).toEqual([36, 36]);
+    expect(at(clip.paste(c.text, a, minter(), undefined, { repeat: 1 }))).toEqual([52, 52]);
+    // after another action the leaf says 0 again: the seventh paste is not 96 units off
+    expect(at(clip.paste(c.text, a, minter(), undefined, { repeat: 0 }))).toEqual([36, 36]);
+    // panned away: centred on the view, and the second centred paste is a step off the first
+    const view = { x: 5000, y: 5000, w: 400, h: 300 };
+    const p0 = at(clip.paste(c.text, a, minter(), view, { repeat: 0 }));
+    const p1 = at(clip.paste(c.text, a, minter(), view, { repeat: 1 }));
+    expect(p0).toEqual([5200 - 25, 5150 - 20]);
+    expect(p1).toEqual([p0[0] + DIM_CLIPBOARD_LIMITS.offset, p0[1] + DIM_CLIPBOARD_LIMITS.offset]);
+  });
+});
+
