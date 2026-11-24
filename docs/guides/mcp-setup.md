@@ -14,8 +14,10 @@ paradigm mcp setup
 paradigm mcp setup --client claude-code
 paradigm mcp setup --client cursor
 paradigm mcp setup --client claude-desktop
-paradigm mcp setup --client all
+paradigm mcp setup --client all   # every detected client, Claude Code included
 ```
+
+**For Claude Code users:** If you use the plugin, do not also configure `claude-code` here (and avoid `--client all`): it writes a second Paradigm server to `.mcp.json`.
 
 **For Claude Code users:** The fastest path is the plugin — see [Claude Code Plugin](#claude-code-plugin) below.
 
@@ -41,10 +43,10 @@ paradigm mcp setup --client all
 
 ### Static vs Dynamic Context
 
-| Approach | How It Works | Token Usage |
-|----------|--------------|-------------|
-| **Static (IDE Rules)** | Load everything at conversation start | ~2000 tokens upfront |
-| **Dynamic (MCP)** | Query only what's needed, when needed | ~100 tokens per query |
+| Approach | How It Works |
+|----------|--------------|
+| **Static (IDE Rules)** | Load everything at conversation start |
+| **Dynamic (MCP)** | Query only what's needed, when needed |
 
 ```
 Static:  [Load all context] → [Work on task]
@@ -56,7 +58,7 @@ Dynamic: [Minimal context] → [Need #checkout info?] → [Query MCP] → [Conti
 
 ### Why Use MCP with Paradigm?
 
-- **Token efficient** — Don't pay for context you don't use
+- **Queried on demand** — the agent asks for the context a task needs. We have not measured a token saving.
 - **Always current** — Reads live project state, not cached files
 - **Targeted answers** — Claude can ask "what depends on X?" and get precise data
 - **Technology agnostic** — Works with any language/framework
@@ -152,7 +154,7 @@ paradigm mcp remove old-project --client all
 | **Continue (VS Code)** | User-level | `~/.continue/config.json` |
 | **Cline (VS Code)** | Project-level | `.cline/mcp.json` |
 
-**Project-level** configs are specific to a project and can be shared with your team.
+**Project-level** configs are specific to a project. `paradigm mcp setup` adds them to `.gitignore` unless you pass `--no-gitignore`.
 **User-level** configs apply to all projects and are stored in your home directory.
 
 ### Claude Code Plugin
@@ -367,7 +369,6 @@ For best results, follow this "query before modify" protocol:
 | Monitoring session | `paradigm_session` (op `health`) every 10-15 tool calls |
 
 **Why this matters:**
-- **Token efficient**: ~100 tokens per query vs ~2000 for reading files
 - **Fresh data**: Always current from live project index
 - **Safer changes**: Understand impact before modifying
 
@@ -487,10 +488,10 @@ New MCP servers are **disabled by default** in Cursor. You must manually enable 
 4. **Restart the AI client completely** — Quit and relaunch, don't just close the window
 5. **For Cursor:** Ensure the server is enabled in Settings → Tools
 
-### "npx command not found"
+### "paradigm-mcp: command not found"
 
 1. **Check Node.js installation** — Run `node --version` in terminal
-2. **Use full path to npx** — Try `/usr/local/bin/npx` (macOS) or the full path on Windows
+2. **Check the global install** — Run `npm install -g @a-company/paradigm`, then `which paradigm-mcp`
 
 ### "Symbol not found" errors
 

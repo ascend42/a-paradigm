@@ -29,7 +29,7 @@ cd /path/to/your/project
 paradigm shift
 ```
 
-`paradigm shift` creates `.paradigm/`, a root `.purpose`, `portal.yaml`, the instruction files for Claude Code, Cursor, Copilot and Windsurf, plus `AGENTS.md`, and installs the hooks. Running it again keeps your existing `.paradigm/`, `.purpose` and `portal.yaml`, but it regenerates the instruction files every time. If you have a hand-written `CLAUDE.md`, back it up first.
+`paradigm shift` creates `.paradigm/`, a root `.purpose`, `portal.yaml`, the instruction files for Claude Code, Cursor, Copilot and Windsurf, plus `AGENTS.md`, and installs the hooks. Running it again keeps your existing `.paradigm/`, `.purpose` and `portal.yaml`, but it regenerates the instruction files every time. If you have hand-written instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/`, `.github/instructions/` or `.windsurfrules`), back them up before you run `paradigm shift`. An old `.cursorrules` file is renamed to `.cursorrules.bak`.
 
 **If you use Claude Code, install the plugin.** It adds the hooks, skills, agents and the MCP server for every project. In Claude Code:
 
@@ -38,11 +38,13 @@ paradigm shift
 /plugin install paradigm@a-paradigm
 ```
 
-**If you use Cursor, Claude Desktop, Continue or Cline,** add the MCP server with:
+**If you use Cursor, Claude Desktop, Continue or Cline,** add the MCP server by naming the client:
 
 ```bash
-paradigm mcp setup --client all
+paradigm mcp setup --client cursor    # or claude-desktop, continue, cline
 ```
+
+`--client all` configures every client it detects. That includes Claude Code whenever the project has a `.claude/` folder or a `.mcp.json`, in which case it writes a Paradigm entry to `.mcp.json`. If you use the Claude Code plugin, name the client instead of using `all`, so the plugin's server is not duplicated. If `.mcp.json` already has a Paradigm entry, remove it.
 
 See the [MCP Setup Guide](mcp-setup.md) for each client.
 
@@ -62,11 +64,11 @@ When you want checks, choose a level:
 
 ```bash
 paradigm enforcement set minimal    # warnings only, nothing blocks
-paradigm enforcement set balanced   # blocks on missing .purpose coverage and blocking habits; other checks warn
+paradigm enforcement set balanced   # blocks on missing .purpose coverage and blocking habits; most other checks warn
 paradigm enforcement set strict     # most checks block
 ```
 
-Symbol and aspect checks belong to Rune, the compliance agent. `paradigm shift` may offer to add him; to add him later, run:
+Rune, the compliance agent, is on the roster `paradigm shift` writes for a new project. Being on the roster does not turn any check on: at level `none` everything stays off. Two aspect checks (the aspect advisory and aspect drift) report only when he is on the roster and the enforcement level enables them. On an older project without him, run:
 
 ```bash
 paradigm agent roster add compliance
@@ -82,15 +84,14 @@ git clone https://github.com/ascend42/a-paradigm.git ~/.paradigm-cli
 cd ~/.paradigm-cli
 npm install && npm run build
 
-# 2. Install CLI and MCP server globally
+# 2. Install the CLI globally (it includes the paradigm-mcp server)
 cd packages/paradigm && npm install -g . && cd ../..
-cd packages/paradigm-mcp && npm install -g . && cd ../..
 
 # 3. Verify
 paradigm --version
 ```
 
-> **Important:** Keep the `~/.paradigm-cli/` directory. The global CLIs symlink to it — deleting it will break the install. To uninstall: `npm uninstall -g @a-company/paradigm @a-company/paradigm-mcp && rm -rf ~/.paradigm-cli`
+> **Important:** Keep the `~/.paradigm-cli/` directory. The global CLIs symlink to it — deleting it will break the install. To uninstall: `npm uninstall -g @a-company/paradigm && rm -rf ~/.paradigm-cli`
 
 ---
 
@@ -127,7 +128,7 @@ This is the list `paradigm shift` prints when it finishes. It also writes Copilo
 |---------|--------------|
 | `paradigm shift` | Initialize and configure your project for AI-assisted development |
 | `paradigm sync --all` | Generate IDE instruction files for all IDEs |
-| `paradigm mcp setup --client all` | Configure MCP for Cursor, Claude Desktop, Continue and Cline |
+| `paradigm mcp setup --client <client>` | Configure MCP for `cursor`, `claude-desktop`, `continue` or `cline` (`all` configures every detected client, Claude Code included) |
 | `paradigm doctor` | Verify setup is correct |
 
 ### Development Workflow
@@ -137,7 +138,7 @@ This is the list `paradigm shift` prints when it finishes. It also writes Copilo
 | `paradigm status` | Show symbol counts and project health |
 | `paradigm ripple #symbol` | Impact analysis before modifying a symbol |
 | `paradigm thread save "message"` | Record session progress |
-| `paradigm echo ERROR_CODE` | Find symbols related to an error |
+| `paradigm echo lookup ERROR_CODE` | Find symbols related to an error |
 
 Symbol search has no CLI command. Ask your agent, which uses the `paradigm_search` MCP tool.
 
@@ -191,14 +192,14 @@ Should show which AI clients have MCP configured.
 
 ## Maintenance Cost
 
-Adding a feature to Paradigm takes about 5 minutes of `.purpose` file maintenance. Here's what you get for that:
+Each feature you add needs its `.purpose` file kept current. We have not measured how long that takes. Here's what you get for it:
 
 - Every AI agent that touches your project starts with accurate context instead of guessing
 - Change-impact analysis (`paradigm ripple`) knows which downstream code to warn about
 - Once you turn enforcement on, the Stop hook catches undocumented changes before they become drift
 - Lore entries make sessions recoverable — future agents pick up exactly where you left off
 
-If 5 minutes per feature sounds like overhead, Paradigm is probably not the right fit. If you've lost hours to AI agents that didn't understand your project, it likely is.
+If keeping a description next to each feature sounds like overhead, Paradigm is probably not the right fit.
 
 ---
 

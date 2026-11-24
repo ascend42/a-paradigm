@@ -36,7 +36,7 @@ Profiles live in two places:
 | **security** | tier-1 | Audits for auth, secrets, injection, ownership checks. Reads `portal.yaml`. |
 | **tester** | tier-3 | Writes and runs tests. Methodical, conservative. |
 | **documentor** | tier-3 | Final orchestration stage. Updates `.purpose` files, `portal.yaml`, lore. Never touches source code. |
-| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance` (op `promote`) to advance each concern. `paradigm shift` may offer to add him; add him yourself with `paradigm agent roster add compliance`. |
+| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance` (op `promote`) to advance each concern. On the default roster `paradigm shift` writes for a new project; on an older project without him, run `paradigm agent roster add compliance`. Being on the roster turns no check on by itself: enforcement still defaults to `none`. |
 
 ### Specialty agents
 
@@ -62,15 +62,19 @@ A profile in `~/.paradigm/agents/` is _available_ globally. A roster entry in `.
 # .paradigm/roster.yaml
 version: '1.0'
 active:
+  - advocate
   - architect
   - builder
+  - compliance
+  - debugger
+  - documentor
+  - qa
   - reviewer
   - security
   - tester
-  - documentor
-  - ftux
-  - cid
 ```
+
+This is the roster `paradigm shift` writes for a project type it does not recognise. Other project types get more agents.
 
 When you `paradigm agent bench <id>`, the agent is removed from this project's roster — Maestro skips it. `paradigm agent activate <id>` adds it back. Both operate on the per-project roster, not the global profile.
 
@@ -125,7 +129,7 @@ paradigm agent sync <id>             # bootstrap expertise from existing lore
 paradigm agent sync <id> --dry-run   # preview without writing
 ```
 
-`create` defaults to `--global` — most agents you'd want shared across projects. Use `--global=false` for a project-specific override. `sync` walks `.paradigm/lore/entries/` and seeds `expertise[]` from `symbols_touched` arrays in past lore entries, so a freshly-created agent has a working memory of what got touched in the codebase.
+`create` always writes to the global `~/.paradigm/agents/`. The CLI has no option for a project-only profile. `sync` walks `.paradigm/lore/entries/` and seeds `expertise[]` from `symbols_touched` arrays in past lore entries, so a freshly-created agent has a working memory of what got touched in the codebase.
 
 ### Permission scopes (advisory)
 
@@ -246,7 +250,7 @@ See §9 of the [University guide](./university.md) for the related project-pack 
 
 ## 8. MCP tools
 
-All agent tools accept JSON args; ~50–200 token responses. Defined in `packages/paradigm-mcp/src/tools/agents.ts`.
+All agent tools accept JSON args. Defined in `packages/paradigm-mcp/src/tools/agents.ts`.
 
 | Tool | What it does |
 |------|--------------|
@@ -267,7 +271,7 @@ Two related tools used during orchestration:
 ### First time on a project
 
 ```bash
-paradigm shift                       # rosters core agents (incl. Rune) + ftux + cid
+paradigm shift                       # writes the default roster for the project type (includes Rune)
 paradigm agent roster                # confirm active list
 paradigm agent sync architect        # seed expertise from existing lore
 paradigm agent sync builder

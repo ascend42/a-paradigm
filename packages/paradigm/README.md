@@ -12,7 +12,7 @@ Paradigm gives AI coding agents structure, deterministic checks and calibrated m
 
 - **Agents stop rediscovering your codebase.** They can ask the map which files a task needs instead of reading everything. We have not measured a token or speed saving.
 - **Changes don't silently skip the paperwork.** Once you turn the checks on, a session that changes code without updating its description is blocked until it does. The checks are off on a new project.
-- **Auth rules are written down.** Protected routes and their gates live in `portal.yaml`, where agents and reviewers can read them. One gap today: the `paradigm_gates_for_route` lookup does not read the `routes` section of `portal.yaml` yet and returns an empty list for it.
+- **Auth rules are written down.** Protected routes and their gates live in `portal.yaml`, where agents and reviewers can read them. One gap today: the `paradigm_gates_for_route` lookup does not read the `routes` section of `portal.yaml` yet. Its suggestions come from the shape of the route path (an id, `/admin`, `/api`), not from the routes you declared.
 - **Your project remembers why.** Decisions, lore and agent notebooks survive between sessions, so the next agent knows what was tried and why.
 - **A team of specialised agents.** An architect, builder, reviewer, security agent and more, each with its own notebook of what it has learned on your project.
 - **One place to steer many sessions (Gnomon).** Every permission, question and plan from your Claude Code sessions lands on one decision stack. You answer by click or keyboard, confirmed with Touch ID or your password, or by voice if you turn it on.
@@ -27,7 +27,7 @@ cd your-project
 paradigm shift
 ```
 
-You need Node 24 or later. `paradigm shift` creates `.paradigm/`, a root `.purpose`, `portal.yaml`, instruction files for Claude Code, Cursor, Copilot and Windsurf, plus `AGENTS.md`, and the enforcement hooks. Running it again keeps your existing `.paradigm/`, `.purpose` and `portal.yaml`, but it regenerates the instruction files (`CLAUDE.md`, `AGENTS.md` and the Cursor, Copilot and Windsurf files) every time. If you have a hand-written `CLAUDE.md`, back it up before you run `paradigm shift`.
+You need Node 24 or later. `paradigm shift` creates `.paradigm/`, a root `.purpose`, `portal.yaml`, instruction files for Claude Code, Cursor, Copilot and Windsurf, plus `AGENTS.md`, and the enforcement hooks. Running it again keeps your existing `.paradigm/`, `.purpose` and `portal.yaml`, but it regenerates the instruction files (`CLAUDE.md`, `AGENTS.md` and the Cursor, Copilot and Windsurf files) every time. If you have hand-written instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/`, `.github/instructions/` or `.windsurfrules`), back them up before you run `paradigm shift`. An old `.cursorrules` file is renamed to `.cursorrules.bak`.
 
 If you use Claude Code, also install the plugin. It adds the hooks, skills, agents and the MCP server for every project:
 
@@ -52,11 +52,11 @@ A new project starts at enforcement level `none`: every check is off and the Sto
 
 ```bash
 paradigm enforcement set minimal    # warnings only, nothing blocks
-paradigm enforcement set balanced   # blocks on missing .purpose coverage and blocking habits; other checks warn
+paradigm enforcement set balanced   # blocks on missing .purpose coverage and blocking habits; most other checks warn
 paradigm enforcement set strict     # most checks block
 ```
 
-Symbol and aspect checks belong to Rune, the compliance agent. `paradigm shift` may offer to add him; to add him later, run `paradigm agent roster add compliance`.
+Rune, the compliance agent, is on the roster `paradigm shift` writes for a new project. Being on the roster does not turn any check on: at level `none` everything stays off. Two aspect checks (the aspect advisory and aspect drift) report only when he is on the roster and the enforcement level enables them. On an older project without him, run `paradigm agent roster add compliance`.
 
 ## Gnomon (new in 8.0)
 
@@ -106,7 +106,7 @@ Design: [docs/specs/gnomon.md](https://github.com/ascend42/a-paradigm/blob/main/
 | `paradigm lint` | Validate `.purpose` files |
 | `paradigm hooks install` | Reinstall the enforcement hooks |
 | `paradigm serve` | Open Platform, the local web UI (lore, graph, Academy, Brain) |
-| `paradigm mcp setup` | Add the MCP server to Cursor, Claude Desktop, Continue or Cline |
+| `paradigm mcp setup --client <client>` | Add the MCP server to `cursor`, `claude-desktop`, `continue` or `cline` |
 
 `paradigm --help` lists every command. Read-only commands such as `status`, `doctor` and `ripple` make no writes and no network calls.
 

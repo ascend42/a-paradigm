@@ -1,8 +1,8 @@
 # Paradigm Documentation
 
-Complete guides and references for using Paradigm - the AI-native project structure framework.
+Guides and command references for Paradigm.
 
-## 📚 Documentation Hub
+## Documentation Hub
 
 ### Getting Started
 - [Quick Start Guide](./guides/quick-start.md) - Complete setup walkthrough
@@ -24,7 +24,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 - [Paradigm Logger](../.paradigm/specs/logger.md) - Structured logging specification
 - [Purpose Files](./guides/quick-start.md) - Feature and component context files
 
-## 📖 Reading Order
+## Reading Order
 
 **For new users:**
 1. Start with [Quick Start Guide](./guides/quick-start.md)
@@ -39,7 +39,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 1. [`paradigm mcp setup`](./commands/mcp-setup.md) - MCP for Cursor, Claude Desktop, Continue and Cline
 2. [Symbol System](../CLAUDE.md#symbol-system) - Deep dive into Paradigm's structure
 
-## 🔍 Quick Command Lookup
+## Quick Command Lookup
 
 | Command | Use Case | Frequency |
 |---------|----------|-----------|
@@ -47,9 +47,9 @@ Complete guides and references for using Paradigm - the AI-native project struct
 | `paradigm sync` | Update IDE files | After config changes |
 | `paradigm ripple #symbol` | Check change impact | Before every modification |
 | `paradigm doctor` | Health check | When troubleshooting |
-| `paradigm mcp setup` | Add the MCP server to Cursor, Claude Desktop, Continue or Cline | Once per project or machine, depending on the client |
+| `paradigm mcp setup --client <client>` | Add the MCP server to Cursor, Claude Desktop, Continue or Cline | Once per project or machine, depending on the client |
 
-## 💡 Common Workflows
+## Common Workflows
 
 ### New Project Setup
 ```bash
@@ -65,7 +65,7 @@ If you use Claude Code, also install the plugin. In Claude Code:
 /plugin install paradigm@a-paradigm
 ```
 
-For Cursor, Claude Desktop, Continue or Cline, run `paradigm mcp setup --client all` instead. Compliance checks are off until you run `paradigm enforcement set <level>`.
+For Cursor, Claude Desktop, Continue or Cline, run `paradigm mcp setup --client <client>` instead (`cursor`, `claude-desktop`, `continue` or `cline`). `--client all` also configures Claude Code when it detects it, which duplicates the plugin's server. Compliance checks are off until you run `paradigm enforcement set <level>`.
 
 ### Before Refactoring
 ```bash
@@ -78,14 +78,14 @@ paradigm ripple "#feature-to-change"
 paradigm doctor
 ```
 
-## 🔗 External Resources
+## External Resources
 
 - [Paradigm GitHub Repository](https://github.com/ascend42/a-paradigm)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Contributing Guide](../CONTRIBUTING.md)
 - [Changelog](../CHANGELOG.md)
 
-## 📝 Contributing to Docs
+## Contributing to Docs
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on improving documentation.
 

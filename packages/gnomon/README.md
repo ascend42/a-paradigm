@@ -16,7 +16,7 @@ DEV ONLY path, is [docs/guides/gnomon-dogfood.md](../../docs/guides/gnomon-dogfo
 
 ## What you need
 
-- macOS 15 or later with SIP on, and Node 24 or later (22.14+ on 22.x and 23.7+ on 23.x also work: they have `--disable-sigusr1`).
+- macOS 15 or later with SIP on, and Node 24 or later.
 - Claude Code from the **native installer** (`~/.local/bin/claude`), logged in
   with your **subscription**. Gnomon refuses API billing (`BILLING_REFUSED`).
 - `NODE_OPTIONS` **unset** in your shell. Gnomon refuses to run its kernel

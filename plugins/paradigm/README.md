@@ -1,8 +1,7 @@
 # Paradigm — Claude Code Plugin
 
-AI-native project architecture for Claude Code. One install gives you structured
-context, enforcement hooks, multi-agent orchestration, and 32 grouped MCP tools (more on demand) — in
-every project, automatically.
+The Paradigm plugin for Claude Code. One install adds the hooks, skills, agents and the
+MCP server (32 tools by default, more on demand) to every project.
 
 ## Installation
 
@@ -21,7 +20,7 @@ server wires automatically on install, and the enforcement hooks start automatic
 
 | Hook | Event | Behavior |
 |---|---|---|
-| Stop | Session end | Validates compliance at session end. A new project starts at enforcement level `none`, where every check is off and nothing blocks. Turn checks on with `paradigm enforcement set <level>` (`minimal`, `balanced` or `strict`). Symbol and aspect checks belong to Rune, the compliance agent: `paradigm agent roster add compliance`. |
+| Stop | Session end | Validates compliance at session end. A new project starts at enforcement level `none`, where every check is off and nothing blocks. Turn checks on with `paradigm enforcement set <level>` (`minimal`, `balanced` or `strict`). Rune, the compliance agent, is on the default roster of a new project; that alone turns no check on. The aspect advisory and aspect drift checks report only when he is on the roster and the level enables them. On an older project without him: `paradigm agent roster add compliance`. |
 | PreToolUse | Before `git commit` | Auto-rebuilds symbol index before commits |
 | PostToolUse | After file edits | Advisory reminder about .purpose coverage |
 
