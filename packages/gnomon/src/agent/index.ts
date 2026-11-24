@@ -16,11 +16,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { refusalOf } from '@a-company/gnomon-contracts';
-import { kernelPinOf } from '../cli/daemon-cli.js';
-import { homeTrust } from '../cli/mod-cli.js';
+// LEAF IMPORTS ONLY (test/agent-entry-fence.test.ts): this entry is bundled into paradigm-mcp. `../cli/daemon-cli.js`,
+// `../cli/mod-cli.js` and the `../kernel/lifecycle/index.js` barrel all reach the daemon, and through it WebEndpoint
+// and the embedded GUI bundle (megabytes of base64 this client never serves).
+import { homeTrust } from '../cli/home-trust.js';
+import { kernelPinOf } from '../cli/kernel-pin.js';
 import { loadDeviceCredential, readRegistry } from '../kernel/identity/index.js';
-import { resolveGnomonHome, selectSocketPath } from '../kernel/lifecycle/index.js';
-import { connectGnomon, type DeviceCredential } from '../kernel/socket/index.js';
+import { selectSocketPath } from '../kernel/lifecycle/endpoint.js';
+import { resolveGnomonHome } from '../kernel/lifecycle/home.js';
+import { connectGnomon, type DeviceCredential } from '../kernel/socket/client.js';
 import { GNOMON_VERSION } from '../version.js';
 
 export const AGENT_KEY_ENV = 'GNOMON_AGENT_KEY';

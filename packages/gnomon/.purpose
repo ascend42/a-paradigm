@@ -223,6 +223,13 @@ flows:
     tags: [gnomon, setup]
 
   daemon-lifecycle:
+    kernel-pin-leaf: >-
+      kernelPinOf (the server-key pin read from the home) lives in the leaf src/cli/kernel-pin.ts and
+      homeTrust in src/cli/home-trust.ts; daemon-cli.ts and mod-cli.ts re-export them, so every
+      *-cli.ts caller is unchanged. The leaves import the identity modules by file and no verb
+      family, daemon or kernel/web module, so the agent client (src/agent/index.ts) no longer
+      bundles the daemon and the embedded GUI: dist/agent.js went from 6,629,187 to 353,541 bytes
+      (performance audit 2026-11-24, finding 8). test/agent-entry-fence.test.ts holds it.
     loops-gate: >-
       TD-2026-10-24-447 (#loops-gate, G-LOOP-29). daemon.ts resolves resolveLoopsEnabled() once
       before wireLoops({enabled}) and emits one daemon.desk loops.disabled when off; the stub
