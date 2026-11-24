@@ -141,3 +141,15 @@ export class DimClipboard {
     this.#pastes = 0;
   }
 }
+
+/**
+ * The one `add` op of a pasted text that is not the register's: a text node holding the words exactly as they were
+ * pasted (line ends as LF; never parsed), with its top-left at `at` (the leaf gives the view centre) and on top of
+ * everything in `current`. Nothing is validated here: the op goes through the live controller like any edit, so
+ * the paster is its author.
+ */
+export function dimPasteTextOp(text: string, current: DimState, at: { x: number; y: number }, mint: () => string): DimOp {
+  let top: unknown = null;
+  for (const [id, n] of current.nodes) if (top === null || dimZCompare({ z: top, id: '' }, { z: own(n.node, 'z'), id }) < 0) top = own(n.node, 'z');
+  return { type: 'add', node: { id: mint(), kind: 'text', x: Math.round(at.x), y: Math.round(at.y), z: dimZPlace(top, null), text: lf(text) } as unknown as DimNode };
+}

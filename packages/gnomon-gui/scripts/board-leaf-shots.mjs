@@ -39,6 +39,11 @@ const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], Ar
  * same and does NOT release ({release: [x, y]} does);
  * {key: 'Tab' | 'r' | …, shift?, meta?}; {paste: text} puts text on the clipboard and pastes it with the keyboard;
  * {read: expression} evaluates and records the value under `as`; {wait: ms}.
+ * For the C8 test (test/board-c8.test.ts): {clip: {'text/html': …, 'text/plain': …, 'image/png': <base64>}} puts
+ * those types on the clipboard and pastes with the keyboard; {key: 'c' | 'x', meta: true, commands: ['copy' | 'cut']}
+ * is a real copy or cut; {drop: {files?: [absolute paths], items?: [{mimeType, data}]}, at: [x, y]} is a real drag
+ * from outside the page dropped on the stage; {ime: composing, commit: text} drives an IME composition into the
+ * focused field; {drag: …, alt: true} holds Alt; {await: expression} awaits a promise and records its value.
  */
 export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [] }) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'gnomon-leaf-'));
@@ -89,7 +94,36 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     };
     for (const a of actions) {
       if (a.wait) await sleep(a.wait);
-      else if (a.read) acted[a.as] = JSON.parse((await evaluate(`JSON.stringify((() => (${a.read}))() ?? null)`)) ?? 'null');
+      else if (a.await) {
+        await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+        const r = await call('Runtime.evaluate', { expression: `(async () => JSON.stringify((await (${a.await})) ?? null))()`, awaitPromise: true, returnByValue: true });
+        acted[a.as] = typeof r.result?.value === 'string' ? JSON.parse(r.result.value) : { failed: r.exceptionDetails?.exception?.description ?? JSON.stringify(r).slice(0, 300) };
+      }
+      else if (a.clip) {
+        await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+        const expr = `(async () => { const src = ${JSON.stringify(a.clip)}; const parts = {}; for (const [type, v] of Object.entries(src)) parts[type] = type.startsWith('image/') ? new Blob([Uint8Array.from(atob(v), (c) => c.charCodeAt(0))], { type }) : new Blob([v], { type }); await navigator.clipboard.write([new ClipboardItem(parts)]); return 'written'; })().catch((e) => 'not written: ' + e)`;
+        // (the page's own clipboard.write parses the HTML it is given: a handler attribute in it raises a
+        // script-src-attr CSP row AT THE WRITE, before any paste, measured. `between` runs after the write and before
+        // the paste so a test can set those rows apart. A headless Chrome keeps its own clipboard: the system
+        // pasteboard cannot be used to avoid the page write.)
+        acted[a.as ?? 'clip'] = (await call('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })).result?.value ?? 'no answer';
+        if (a.between) await evaluate(a.between);
+        const v = { key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2 };
+        await call('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...v, commands: ['paste'] });
+        await call('Input.dispatchKeyEvent', { type: 'keyUp', ...v });
+      } else if (a.drop) {
+        const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+        const at = { x: box.x + a.at[0], y: box.y + a.at[1] };
+        const data = { items: a.drop.items ?? [], files: a.drop.files ?? [], dragOperationsMask: 1 };
+        for (const type of ['dragEnter', 'dragOver', 'drop']) {
+          await call('Input.dispatchDragEvent', { type, x: at.x, y: at.y, data });
+          await sleep(60);
+        }
+      } else if (a.ime !== undefined) {
+        await call('Input.imeSetComposition', { text: a.ime, selectionStart: a.ime.length, selectionEnd: a.ime.length });
+        await sleep(80);
+        await call('Input.insertText', { text: a.commit ?? a.ime });
+      } else if (a.read) acted[a.as] = JSON.parse((await evaluate(`JSON.stringify((() => (${a.read}))() ?? null)`)) ?? 'null');
       else if (a.key) {
         const [key, code] = KEYS[a.key] ?? [a.key, a.key.toUpperCase().charCodeAt(0)];
         const modifiers = (a.shift ? 8 : 0) | (a.meta ? 4 : 0) | (a.ctrl ? 2 : 0);
@@ -106,11 +140,12 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
           const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
           const pts = (a.drag ?? a.hold ?? [a.release]).map(([x, y]) => ({ x: box.x + x, y: box.y + y }));
           if (!a.release) {
-            await mouse('mouseMoved', pts[0].x, pts[0].y, { button: 'none' });
-            await mouse('mousePressed', pts[0].x, pts[0].y);
+            const mods = a.alt ? { modifiers: 1 } : {};
+            await mouse('mouseMoved', pts[0].x, pts[0].y, { button: 'none', ...mods });
+            await mouse('mousePressed', pts[0].x, pts[0].y, mods);
             for (const q of pts.slice(1)) {
               await sleep(34);
-              await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: q.x, y: q.y, button: 'left', buttons: 1 });
+              await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: q.x, y: q.y, button: 'left', buttons: 1, ...mods });
             }
             await sleep(34);
           }
@@ -118,7 +153,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
             await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pts[0].x, y: pts[0].y, button: 'left', buttons: 1 });
             await sleep(34);
           }
-          if (!a.hold) await mouse('mouseReleased', pts[pts.length - 1].x, pts[pts.length - 1].y);
+          if (!a.hold) await mouse('mouseReleased', pts[pts.length - 1].x, pts[pts.length - 1].y, a.alt ? { modifiers: 1 } : {});
           await sleep(a.settle ?? 120);
           continue;
         }

@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs build scripts (no types)
 import { applyPatch, applyPatches, countMatches, CSS_ASSETS, ENGINE, ENGINE_FILES, extractCssAssets, NAMESPACE_URLS, PATCHED_FILES, PATCHES, PatchError, sha256, STRIPPED_HOST, stripHosts, STUBS } from '../scripts/board-patches.mjs';
 // @ts-expect-error plain .mjs build scripts (no types)
-import { buildBoard, engineRoot, LICENSE_ALLOW, patchKeyPath, vendoredNotice } from '../scripts/board-build.mjs';
+import { buildBoard, embeddedFiles, engineRoot, LICENSE_ALLOW, patchKeyPath, vendoredNotice } from '../scripts/board-build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { devDependencies: Record<string, string> };
@@ -114,6 +114,20 @@ describe('#gui-board build report (a real build of the pinned engine)', () => {
     expect(report.stubs).toEqual(Object.fromEntries((STUBS as Array<{ id: string; expect: number }>).map((s) => [s.id, s.expect])));
     expect(report.stubs).toEqual({ locales: 55, 'font-subset': 2, 'build-env': 3, mermaid: 1, 'image-resize': 2 });
   });
+
+  it('untrusted input cannot be made to count in what ships: `syntheticInput` is not in the built chunk, nor in the pinned bytes; only a probe build carries it (Aegis, P3b-1 review)', async () => {
+    const built = files.get('board/board.js')!.toString('utf8');
+    expect(built).not.toContain('syntheticInput');
+    expect(built).not.toContain('__GNOMON_BOARD_PROBE__');
+    // the bytes the kernel serves: the pinned embed's own board/board.js
+    const pinned = (embeddedFiles(readFileSync(new URL('../../gnomon/src/kernel/web/gui-bundle.ts', import.meta.url), 'utf8')) as Map<string, Buffer>).get('board/board.js')!;
+    expect(pinned.length).toBeGreaterThan(1_000_000);
+    expect(pinned.toString('utf8')).not.toContain('syntheticInput');
+    // the probe build differs from the shipped one by that branch alone, and build.mjs (the embed) never asks for it
+    const probe = ((await buildBoard({ probe: true })) as { files: Map<string, Buffer> }).files.get('board/board.js')!.toString('utf8');
+    expect(probe).toContain('syntheticInput');
+    expect(readFileSync(new URL('../scripts/build.mjs', import.meta.url), 'utf8')).not.toMatch(/probe\s*:/);
+  }, 120_000);
 
   it('the hosts stripped from the minified chunk are exactly the pinned list (a new host in a bump is seen here)', () => {
     expect(Object.keys(report.hosts).sort()).toEqual([

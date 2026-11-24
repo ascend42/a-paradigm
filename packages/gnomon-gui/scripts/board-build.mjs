@@ -146,8 +146,12 @@ export const engineRoot = () => path.dirname(path.dirname(path.dirname(require.r
 /**
  * Build the board chunk. Resolves {files: Map<'board/…', Buffer>, report}; throws (never a partial chunk) on a
  * patch that does not match, an engine that is not the pinned one, a second React, an unknown licence or a sourcemap.
+ *
+ * `probe: true` is the PROBE build (define `__GNOMON_BOARD_PROBE__`): the one difference is that the mount option
+ * `syntheticInput` is honoured, for the P12 harness's edit checks in an engine with no trusted input (WKWebView).
+ * build.mjs never passes it: a probe build is never embedded, pinned or served by the kernel.
  */
-export async function buildBoard() {
+export async function buildBoard({ probe = false } = {}) {
   const pins = pkgJson(ROOT).devDependencies;
   const reactDir = path.dirname(require.resolve('react/package.json'));
   const reactDomDir = path.dirname(require.resolve('react-dom/package.json'));
@@ -230,6 +234,8 @@ export async function buildBoard() {
       'process.env.NODE_ENV': '"production"',
       __GNOMON_BOARD_ENGINE__: JSON.stringify(`${ENGINE.name}@${ENGINE.version}`),
       __GNOMON_BOARD_ENGINE_VERSION__: JSON.stringify(ENGINE.version),
+      // false in everything that ships: the untrusted-input branch of the handle is removed from the chunk
+      __GNOMON_BOARD_PROBE__: probe === true ? 'true' : 'false',
     },
     minify: true,
     legalComments: 'none', // the notices ship in board/LICENSES.txt

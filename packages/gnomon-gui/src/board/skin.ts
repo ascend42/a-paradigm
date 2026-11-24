@@ -124,3 +124,13 @@ export function gnomonBoardAdmit<T extends { type?: unknown }>(elements: readonl
   }
   return out;
 }
+
+/**
+ * How often the engine's own clipboard handlers were entered (patches `engine-paste-removed`, `engine-copy-removed`,
+ * `engine-cut-removed`: each counts here and returns). The handle stops paste, copy and cut before the engine
+ * (condition C8), so these stay 0; the C8 test and the P12 probe read them through `boardEngineRuns()`.
+ */
+export const gnomonBoardRuns: { paste: number; copy: number; cut: number } = { paste: 0, copy: 0, cut: 0 };
+export function gnomonBoardRan(what: 'paste' | 'copy' | 'cut'): void {
+  gnomonBoardRuns[what] += 1;
+}

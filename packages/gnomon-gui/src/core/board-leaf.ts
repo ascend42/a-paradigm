@@ -45,9 +45,12 @@ export const REFUSAL_COPY = {
   'scene-file': 'Board files can’t be dropped here · nothing was changed',
   'library-file': 'Library files can’t be dropped here · draw the shapes',
   file: 'Files can’t be dropped on a board · write or draw it instead',
-  table: 'Tables can’t be pasted yet · paste it into a text',
   mark: 'Part of what you pasted isn’t a board mark · it was left out',
-  fallback: 'This Gnomon can’t draw that mark · it is kept as it is and can’t be moved or deleted here',
+  // short enough for the leaf at a 1024 window (the line is one row: longer words were cut off there)
+  fallback: 'This Gnomon can’t draw that mark · it is kept as it is',
+  paste: 'Nothing there can be pasted as words · nothing was added',
+  text: 'That is too long for one mark · nothing was changed',
+  clipboard: 'Those copied marks are no longer held · copy them again',
 } as const;
 export const refusalLine = (what: keyof typeof REFUSAL_COPY): string => REFUSAL_COPY[what];
 
