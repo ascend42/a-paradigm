@@ -573,12 +573,15 @@ function stagedPath(home: string, name: string, cardId: string): string {
 function writeStaged(home: string, rec: StagedRecord): void {
   const p = stagedPath(home, rec.detail.name, rec.card.cardId);
   fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
+  // Written beside the record and renamed over it: a failed write never leaves a partly written record, and never
+  // touches the record already there (commitInstall rewrites a pending record AFTER its grant rows are appended).
+  const tmp = `${p}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(p, `${JSON.stringify(rec)}\n`, { mode: 0o600 });
+    fs.writeFileSync(tmp, `${JSON.stringify(rec)}\n`, { mode: 0o600 });
+    fs.renameSync(tmp, p);
   } catch (err) {
-    // the card id was minted by this call: a partly written record of it is never left for the pickup to read
     try {
-      if (fs.lstatSync(p).isFile()) fs.rmSync(p, { force: true });
+      if (fs.lstatSync(tmp).isFile()) fs.rmSync(tmp, { force: true });
     } catch {
       /* nothing was created */
     }
@@ -826,6 +829,12 @@ function cardForSnapshot(opts: StageOptions, emit: ManifestEventSink, now: Date,
   if (errors.length) throw new ManifestRefusal('SCHEMA', `install card does not validate: ${errors.join('; ')}`, { name });
   const record: StagedRecord = { schemaVersion: STAGED_RECORD_SCHEMA, card, detail, manifest };
   writeStaged(opts.home, record);
+  // Another stage of the identical content may have created this snapshot, failed and removed it while this call
+  // reused it: a card must never name a snapshot that is gone. Take the card back and refuse; staging again copies afresh.
+  if (!fs.existsSync(snap.dir)) {
+    fs.rmSync(stagedPath(opts.home, name, card.cardId), { force: true });
+    refuseSnapshot('changed-during-copy', '.', name, emit);
+  }
   if (current && widened.length) emit('manifest.widened', { name, fields: widened.map((w) => w.field) });
   emit('manifest.staged', { name, cardId: card.cardId, manifestHash: mh, packageHash: snap.packageHash, source, by: opts.requestedBy, ...(opts.hsid ? { hsid: opts.hsid } : {}), at: now.toISOString() });
   return { state: 'staged', cardId: card.cardId, record };

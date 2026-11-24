@@ -171,16 +171,27 @@ function hasEntry(dir: string, ok: (n: string) => boolean): boolean {
   }
 }
 
-/** Whether a mod directory holds a pinned snapshot or a staged card (by listing only; nothing is read). */
+/**
+ * Whether a mod directory holds a pinned snapshot, a staged card, or any regular file of its own (a pause marker, a
+ * start or uninstall request). The last matters for a legacy format-1 install: its pin lives under `mods/<bareName>/`
+ * while its markers live under `mods/gnomon.<name>/`, which holds no `pinned/<hex>`. Listing and lstat only.
+ */
 function holdsPinOrCard(home: string, name: string): boolean {
   const dir = modDirOf(home, name);
-  return hasEntry(path.join(dir, 'pinned'), (n) => /^[0-9a-f]{64}$/.test(n)) || hasEntry(path.join(dir, 'staged'), (n) => STAGED_FILE.test(n));
+  if (hasEntry(path.join(dir, 'pinned'), (n) => /^[0-9a-f]{64}$/.test(n)) || hasEntry(path.join(dir, 'staged'), (n) => STAGED_FILE.test(n))) return true;
+  return hasEntry(dir, (n) => {
+    try {
+      return fs.lstatSync(path.join(dir, n)).isFile();
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
  * Mod names that have a directory under `<home>/mods/` (bounded, sorted). The directory is writable by the OS user,
  * so the list is capped at MAX_PICKUP_MODS. When there are more names than the cap, names that hold neither a pin
- * nor a staged card (leftover directories) are skipped BEFORE the cap, so they cannot push a real mod out of the
+ * nor a staged card nor any file of their own (leftover directories) are skipped BEFORE the cap, so they cannot push a real mod out of the
  * scans; if real mods alone still exceed the cap, the tail is dropped and one warning is logged.
  */
 export function modNames(home: string, logger?: ModNamesLogger): string[] {

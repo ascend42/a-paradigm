@@ -198,7 +198,15 @@ components:
       ULID-named entries directly inside a real mods/.staging, follows nothing,
       and keeps entries younger than STAGING_SWEEP_MIN_AGE_MS because the CLI
       stages in its own process. What a staged, undecided or denied card leaves
-      on disk is unchanged.
+      on disk is unchanged. Review fixes (Aegis, PR 115): readChecked also
+      opens O_NONBLOCK, so a file swapped for a FIFO after the walk is refused
+      by the fstat instead of blocking (loadMod re-hashes linked folders in the
+      kernel). writeStaged writes beside the record and renames over it, and on
+      failure removes only its temp file, so a decision that cannot rewrite its
+      record never deletes it after the rows are appended. After the card is
+      written stageInstall checks the snapshot still exists (a concurrent stage
+      of identical content may have created, failed and removed it); if not it
+      takes the card back and refuses SNAPSHOT changed-during-copy.
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]

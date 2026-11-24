@@ -63,6 +63,7 @@ export interface PackageTree {
 }
 
 const O_NOFOLLOW: number = fs.constants.O_NOFOLLOW ?? 0;
+const O_NONBLOCK: number = fs.constants.O_NONBLOCK ?? 0;
 
 export function computePackageHash(files: readonly TreeFile[]): string {
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -133,7 +134,8 @@ export function walkSource(root: string, name: string, emit: ManifestEventSink):
 export function readChecked(e: WalkEntry, name: string, emit: ManifestEventSink): Buffer {
   let fd: number;
   try {
-    fd = fs.openSync(e.abs, fs.constants.O_RDONLY | O_NOFOLLOW);
+    // O_NONBLOCK: a file swapped for a FIFO since the walk must not block the open (the fstat below refuses it)
+    fd = fs.openSync(e.abs, fs.constants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   } catch {
     refuseSnapshot('changed-during-copy', e.rel, name, emit);
   }

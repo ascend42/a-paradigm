@@ -662,6 +662,8 @@ describe('#manifest-loader: a refused or failed stage leaves nothing behind (sec
       const real = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest());
       const linked = path.join(ptmp(), 'diff-lens');
       fs.mkdirSync(linked);
+      // sorts before the manifest: the walk would refuse THIS first (native-addon), so a symlink refusal can only be the early check
+      fs.writeFileSync(path.join(linked, 'a.node'), 'x');
       let made = true;
       try {
         fs.symlinkSync(path.join(real, MANIFEST_FILE), path.join(linked, MANIFEST_FILE), 'file');
@@ -722,6 +724,7 @@ describe('#manifest-loader: a refused or failed stage leaves nothing behind (sec
     fs.writeFileSync(path.join(outside, 'keep.txt'), 'keep');
     let linked = true;
     try {
+      fs.symlinkSync(outside, path.join(staging, STALE, 'dist', 'out'), 'dir'); // a link INSIDE the stale copy is not followed either
       fs.symlinkSync(outside, path.join(staging, LINK), 'dir');
       fs.lutimesSync(path.join(staging, LINK), old, old);
     } catch {
@@ -732,6 +735,7 @@ describe('#manifest-loader: a refused or failed stage leaves nothing behind (sec
     const modBefore = treeBytes(path.join(home, 'mods', 'acme.diff-lens'));
     expect(sweepStaging(home, { now })).toEqual(linked ? [LINK, STALE].sort() : [STALE]);
     expect(fs.readdirSync(staging).sort()).toEqual([FRESH, 'not-ours'].sort());
+    expect(fs.readdirSync(outside)).toEqual(['keep.txt']);
     expect(fs.readFileSync(path.join(outside, 'keep.txt'), 'utf8')).toBe('keep');
     expect(treeBytes(path.join(home, 'mods', 'acme.diff-lens'))).toEqual(modBefore);
     // a second pass and a home without mods/ are no-ops
@@ -739,7 +743,7 @@ describe('#manifest-loader: a refused or failed stage leaves nothing behind (sec
     expect(sweepStaging(ptmp())).toEqual([]);
   });
 
-  it('modNames with 300 empty leftover directories still returns every real mod; a list that is still over the cap is cut with one warning', () => {
+  it('modNames with 300 empty leftover directories still returns every real mod; a marker-only directory counts as real; a list that is still over the cap is cut with one warning', () => {
     const home = ptmp();
     const mods = path.join(home, 'mods');
     const HEX = 'a'.repeat(64);
@@ -750,17 +754,100 @@ describe('#manifest-loader: a refused or failed stage leaves nothing behind (sec
     fs.mkdirSync(path.join(mods, 'zzz.real-pin', 'pinned', HEX), { recursive: true });
     fs.mkdirSync(path.join(mods, 'zzz.real-card', 'staged'), { recursive: true });
     fs.writeFileSync(path.join(mods, 'zzz.real-card', 'staged', 'card-01JD1S0000000000000000CARD.json'), '{}');
+    // a legacy format-1 install keeps its pin under mods/<bareName>/ and its markers here: no pinned/<hex>, only a marker file
+    fs.mkdirSync(path.join(mods, 'zzz.marked'));
+    fs.writeFileSync(path.join(mods, 'zzz.marked', 'paused'), '');
     expect(fs.readdirSync(mods).length).toBeGreaterThan(MAX_PICKUP_MODS);
     const warned: Array<Record<string, unknown> | undefined> = [];
     const logger = { component: (id: string) => ({ warn: (_m: string, data?: Record<string, unknown>) => void warned.push({ id, ...data }) }) };
-    expect(modNames(home, logger)).toEqual(['zzz.real-card', 'zzz.real-pin']);
+    expect(modNames(home, logger)).toEqual(['zzz.marked', 'zzz.real-card', 'zzz.real-pin']);
     expect(warned).toEqual([]);
     // more REAL mods than the cap: the first MAX_PICKUP_MODS by name, and exactly one warning for the home
     for (let i = 0; i < MAX_PICKUP_MODS; i++) fs.mkdirSync(path.join(mods, `mmm.real-${String(i).padStart(3, '0')}`, 'pinned', HEX), { recursive: true });
     const cut = modNames(home, logger);
     expect([cut.length, cut[0], cut.includes('zzz.real-pin')]).toEqual([MAX_PICKUP_MODS, 'mmm.real-000', false]);
     modNames(home, logger);
-    expect(warned).toEqual([{ id: '#mod-host', held: MAX_PICKUP_MODS + 2, cap: MAX_PICKUP_MODS, dropped: 2 }]);
+    expect(warned).toEqual([{ id: '#mod-host', held: MAX_PICKUP_MODS + 3, cap: MAX_PICKUP_MODS, dropped: 3 }]);
+  });
+
+  it(
+    'a file swapped for a fifo between the walk and the read is refused without blocking (readChecked opens non-blocking)',
+    () => {
+      const w = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'a.js': 'one' });
+      const e = walkSource(w, 'acme.diff-lens', () => undefined).find((x) => x.rel === 'a.js')!;
+      fs.rmSync(path.join(w, 'a.js'));
+      const mk = spawnSync('mkfifo', [path.join(w, 'a.js')]);
+      if (!(mk.status === 0 && fs.lstatSync(path.join(w, 'a.js'), { throwIfNoEntry: false })?.isFIFO())) return; // no fifo on this filesystem
+      // as in the manifest test: a blocked open freezes the thread, so a watchdog releases it and the elapsed time fails the test
+      const watchdog = spawn('sh', ['-c', 'sleep 3; while :; do : > "$0"; done', path.join(w, 'a.js')], { stdio: 'ignore' });
+      try {
+        const t0 = Date.now();
+        expect(refusalOf(() => readChecked(e, 'acme.diff-lens', () => undefined)).detail.snapshotReason).toBe('changed-during-copy');
+        expect(Date.now() - t0, 'the open blocked on the fifo').toBeLessThan(2_000);
+      } finally {
+        watchdog.kill('SIGKILL');
+      }
+    },
+    10_000,
+  );
+
+  it('a failed re-stage of content equal to the installed pin leaves the installed tree, even when this call had to copy it again', () => {
+    const home = ptmp();
+    const auth = root();
+    const src = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n' });
+    const st = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    const pin = pinnedDir(home, 'acme.diff-lens', st.record.detail.packageHash);
+    const tree = treeBytes(pin);
+    // the pinned tree and every staged record are gone (a damaged home), so only the grant row still names the hash:
+    // the re-stage copies the tree again (created by THIS call) and then fails after the manifest block
+    removeTree(pin);
+    removeTree(path.join(home, 'mods', 'acme.diff-lens', 'staged'));
+    const opts = { home, source: src, via: 'linked' as const, requestedBy: HUMAN, trust: auth, get readPaths(): string[] { throw new Error('injected after the manifest block'); } };
+    expect(thrown(() => stageInstall(opts))).toMatchObject({ message: 'injected after the manifest block' });
+    expect(treeBytes(pin)).toEqual(tree);
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).manifest.version).toBe('1.2.0');
+  });
+
+  it('a snapshot that vanished while its card was being written (another stage of the same content failed and removed it) is refused, and the card is taken back', () => {
+    const home = ptmp();
+    const auth = root();
+    const src = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n' });
+    // the other stage: it created the snapshot this call will reuse
+    const other = snapshotFolder(home, src, 'acme.diff-lens', () => undefined);
+    const ev = events();
+    // …and removes it after this call reused it (readPaths is read while the card is built, after the snapshot step)
+    const opts = { home, source: src, via: 'package' as const, requestedBy: HUMAN, trust: auth, emit: ev.emit, get readPaths(): string[] { removeTree(other.dir); return []; } };
+    const r = refusalOf(() => stageInstall(opts));
+    expect([r.manifestCode, r.detail.snapshotReason]).toEqual(['SNAPSHOT', 'changed-during-copy']);
+    expect(ev.kinds()).not.toContain('manifest.staged');
+    // no card names the missing snapshot, and nothing of the mod is left
+    expect(fs.existsSync(path.join(home, 'mods', 'acme.diff-lens'))).toBe(false);
+    // staging again copies afresh and stages
+    expect(stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth }).state).toBe('staged');
+  });
+
+  it('a decision whose record cannot be rewritten in place never deletes the record (it is written beside and renamed), and no temp file is left', () => {
+    const home = ptmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(ptmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    const dir = path.join(home, 'mods', 'acme.diff-lens', 'staged');
+    const [file] = fs.readdirSync(dir);
+    const token = bound(home, 'acme.diff-lens', st.cardId);
+    fs.chmodSync(path.join(dir, file!), 0o400); // an in-place write fails here (not for root, and then nothing is at risk)
+    try {
+      decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: token, authority: auth });
+    } catch {
+      /* win32 refuses a rename over a read-only file: the decision fails, the record must still be there */
+    }
+    expect(fs.readdirSync(dir)).toEqual([file]);
+    const rec = readStaged(home, 'acme.diff-lens', st.cardId);
+    expect(rec?.card.cardId).toBe(st.cardId);
+    // the rows were appended, so the record is what lets the decision finish: it reads decided, or still pending and re-decidable
+    expect(readGrants(home, auth).installs).toHaveLength(1);
+    expect(['decided', 'pending']).toContain(rec?.card.state);
   });
 });
 
