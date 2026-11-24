@@ -210,7 +210,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('## Project Status & Metadata');
     sections.push('');
     sections.push(
-      `> **Paradigm ${files.meta?.paradigmVersion ?? 'v2.0'}** | For Claude Code, Claude API, and Claude-native interfaces`,
+      // The symbol-SCHEMA version, labelled as such: "Paradigm v2.0" read as a
+      // (badly stale) product version.
+      `> **Paradigm** (symbol schema ${files.meta?.paradigmVersion ?? 'v2'}) | For Claude Code, Claude API, and Claude-native interfaces`,
     );
     sections.push('>');
     sections.push('> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm) | **Plugin:** `paradigm` via Claude Code marketplace');

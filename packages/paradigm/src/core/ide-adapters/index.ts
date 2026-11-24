@@ -240,7 +240,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
   // on real symbol add/remove — meaningful, low git-churn) and deliberately omit
   // generatedAt (a per-sync timestamp would rewrite the trailer on every sync,
   // producing meaningless CLAUDE.md diffs) and currentArc (no canonical source).
-  // paradigmVersion is left to its schema-version default ("v2.0").
+  // paradigmVersion is left to its schema-version default ("v2").
   let meta: ParadigmFiles['meta'];
   try {
     const scanIndexPath = path.join(rootDir, '.paradigm', 'scan-index.json');
