@@ -16,7 +16,7 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveCo
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -82,6 +82,14 @@ export interface BoardLeaf {
   say(line: string): void;
   /** Forget the copy register (the kernel link went down). */
   forget(): void;
+  /**
+   * Hold the board still and say why for as long as it lasts (the link is down; the fold is out of date), or let it
+   * go (null). The picture stays; the rail is dimmed; no press, drag, paste or key draws anything; the line stays in
+   * the keep line's place and is announced once.
+   */
+  setInert(why: LeafInert | null): void;
+  /** The live loop's keep state in the keep line's place (`Saving…`, `Not saved`), or null for the usual keep line. A save is shown only once it is slow. */
+  setKeep(line: string | null): void;
   destroy(): void;
 }
 
@@ -222,7 +230,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const boardHeight = (): number => Math.max(0, el.clientHeight - head.offsetHeight - keep.offsetHeight - FOOT_HEIGHT);
   /** under the least height a board can be drawn on, whatever the state: the body and the foot are not drawn */
   const short = (): boolean => boardHeight() < BOARD_MIN_HEIGHT;
-  const yielded = (): boolean => load === 'ready' && o.cardFocused();
+  let inert: LeafInert | null = null;
+  let keepLine: string | null = null;
+  let keepShown: string | null = null;
+  let keepTimer: ReturnType<typeof setTimeout> | undefined;
+  /** the board takes no input: a card has the keys, or the board is held still */
+  const yielded = (): boolean => load === 'ready' && (o.cardFocused() || inert !== null);
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
   // ── head and keep line ───────────────────────────────────────────────────
@@ -232,8 +245,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     headKey.title = failed ? '' : 'Dimensions in this project (/boards)';
     if (failed) headKey.removeAttribute('aria-disabled');
     else headKey.setAttribute('aria-disabled', 'true'); // the list is S1.3's
-    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said ? ' bd-said-line' : ''}`;
+    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
+    // held still: its line stays for as long as it lasts, over anything else the keep line would say
+    if (inert && state !== 'failed' && state !== 'loading') {
+      keep.title = INERT_COPY[inert];
+      return void keep.append(INERT_COPY[inert]);
+    }
     // what the board refused is said in the keep line's place (as the yielded line is), so nothing below moves
     if (said && state !== 'failed' && state !== 'loading') {
       keep.title = said;
@@ -249,6 +267,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
     if (state === 'too-short') return void keep.append(LEAF_COPY.tooShort);
     if (state === 'yielded') return void keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`);
+    // the live loop's own state (a slow save, not saved) takes the keep line's place while it lasts
+    if (keepShown) {
+      keep.title = keepShown;
+      return void keep.append(keepShown);
+    }
     const k = keepParts(o);
     const text = `dimension in ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`;
     keep.title = text;
@@ -297,7 +320,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
   function drawRail(state: LeafState): void {
     const s = st();
-    const off = state !== 'open' && state !== 'empty';
+    const off = (state !== 'open' && state !== 'empty') || inert !== null;
     rail.className = `bd-rail${off ? ' yielded' : ''}`;
     const lay = railLayout(boardHeight() || 9999, s?.tool ?? 'select');
     const style = s?.style ?? { line: CONTENT_DEFAULTS.line, fill: null, weight: 'fine' as BoardWeight };
@@ -695,6 +718,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const WAKE_HOLD_MS = 500;
   let wakeUntil = 0;
   const onWake = (e: Event): void => {
+    // held still: a press does nothing at all (it does not wake the board either)
+    if (inert !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (!yielded()) {
       if (performance.now() < wakeUntil) {
         e.preventDefault();
@@ -743,9 +772,39 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     retry: start,
     say,
     forget,
+    setInert(why) {
+      if (why === inert) return;
+      inert = why;
+      el.dataset.inert = why ?? '';
+      if (why) {
+        // one line, announced once; whatever was being said gives way to it
+        said = '';
+        clearTimeout(saidTimer);
+        saidLine.textContent = INERT_COPY[why];
+        trayOpen = false;
+        menu = null;
+      } else saidLine.textContent = '';
+      railKey = '';
+      draw();
+    },
+    setKeep(line) {
+      if (line === keepLine) return;
+      keepLine = line;
+      clearTimeout(keepTimer);
+      if (line === null || line !== 'Saving…') {
+        keepShown = line;
+        return draw();
+      }
+      // a save is shown only once it is slow
+      keepTimer = setTimeout(() => {
+        keepShown = keepLine;
+        draw();
+      }, KEEP_SLOW_MS);
+    },
     destroy() {
       generation++;
       clearTimeout(saidTimer);
+      clearTimeout(keepTimer);
       for (const off of offs.splice(0)) off();
       window.removeEventListener('blur', forget);
       clip.clear();

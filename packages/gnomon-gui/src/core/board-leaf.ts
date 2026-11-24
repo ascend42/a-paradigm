@@ -74,21 +74,47 @@ export const CLIP_COPY = {
  * proposed for Luna: the pass that mounts the leaf in the app owns the keep line's words. Plain words only: a
  * notice's `code`, `field` and `why` are never shown. Every line fits the leaf at a 1024 window.
  */
-export function noticeLine(n: { about: string; code: string; lost: number }): string {
-  if (n.about === 'link') return 'Not saved · reconnecting';
-  if (n.code === 'link-down') return 'The link is down · that change wasn’t saved';
+export function noticeLine(n: { about: string; code: string; lost: number; why?: string | null }): string {
+  if (n.code === 'link-down' && n.about !== 'link') return 'The link is down · that change wasn’t saved';
   if (n.code === 'redo-unavailable') return 'Redo isn’t on the board yet';
   if (n.code === 'undo-nothing') return 'Nothing to undo';
-  if (n.about === 'undo') return 'That can’t be undone any more';
+  if (n.code === 'reconnected') return 'Reconnected · everything here is saved';
+  if (n.about === 'link' && n.code === 'link-down') return INERT_COPY['link-down'];
+  if (n.code === 'out-of-date') return INERT_COPY['out-of-date'];
+  if (n.code === 'closing') return 'The board is folding · that change wasn’t made';
+  if (n.code === 'not-saved') return n.lost > 1 ? `${n.lost} changes weren’t saved before the link came back` : 'One change wasn’t saved before the link came back';
+  if (n.code === 'not-undoable') return n.why === 'delete' ? 'Nothing was deleted · a delete takes 64 marks at most' : 'Nothing was changed · that is too much for one change';
+  if (n.about === 'undo') return 'That was too much to undo · it stays as it is';
   if (n.about === 'open') return 'The dimension didn’t open · try again';
-  if (n.about === 'close') return 'The dimension didn’t close · try again';
+  // (a fold is sent only after what was pending has settled: what was drawn is in the log)
+  if (n.about === 'close') return 'Your marks are saved · the board didn’t fold · try again';
   if (n.code === 'hash-mismatch') return 'This board may be out of date · fold it and open it again';
   if (n.code === 'too-large' || n.code === 'row-too-large') return 'That is too much for one change · do it in smaller parts';
   if (n.code === 'busy') return 'Too many changes are waiting · try again in a moment';
   if (n.code === 'not-sent' || n.code === 'gesture-refused') return 'That change wasn’t sent · do it again';
-  if (n.code === 'timeout' || n.code === 'no-answer') return 'That change wasn’t saved · do it again';
+  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes weren’t saved · do them again` : 'That change wasn’t saved · do it again';
   return n.lost > 1 ? `${n.lost} changes weren’t kept · the board is as it was` : 'That change wasn’t kept · the board is as it was';
 }
+
+/** What the leaf shows, for as long as it lasts, while the board is held still (the link is down; the fold is out of date). */
+export const INERT_COPY = {
+  'link-down': 'Not saved · reconnecting',
+  'out-of-date': 'This board is out of date · fold it and open it again',
+} as const;
+export type LeafInert = keyof typeof INERT_COPY;
+
+/**
+ * The keep line's state of the live loop, from `DimSession.status()`: null while everything is saved (the leaf then
+ * shows its usual keep line). Minimal words, in the keep line's own slot; the final words are the next pass's.
+ */
+export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number }): string | null {
+  if (s.link === 'down') return INERT_COPY['link-down'];
+  if (s.keep === 'saving') return 'Saving…';
+  if (s.keep === 'not-saved') return 'Not saved';
+  return null;
+}
+/** A save shows as `Saving…` only when it has lasted this long (a quick save never flickers the line). */
+export const KEEP_SLOW_MS = 600;
 
 export type OpenedHow = 'command' | 'menu' | 'offer';
 /** '<how>' of the keep line: '/board', 'the ⋯ menu', '<agent>’s offer'. */

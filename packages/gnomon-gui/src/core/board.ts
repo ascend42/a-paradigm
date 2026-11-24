@@ -212,6 +212,12 @@ export interface BoardHandle {
   /** Every non-deleted mark, in paint order. */
   marks(): BoardMarkView[];
   view(): BoardView;
+  /**
+   * Put the viewport where it was (the pan and the zoom of an earlier `view()`): a board mounted again for the same
+   * dimension after a reconnect opens where the person was looking. Never an edit; values that are not finite, or
+   * a zoom outside 10% to 3000%, are ignored.
+   */
+  setView(view: Pick<BoardView, 'scrollX' | 'scrollY' | 'zoom'>): void;
   /** Be told when `marks()` or `view()` would answer differently (a mark drawn or moved, a pan, a zoom, a resize). */
   onScene(listener: () => void): () => void;
   /** Give the board the keyboard (its drawing surface takes focus; the page does not scroll). */

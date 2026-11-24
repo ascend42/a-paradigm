@@ -1189,6 +1189,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           const selected = api.getAppState().selectedElementIds as Record<string, unknown>;
           return (live() as unknown as Element[]).map((el) => viewOf(el, selected));
         },
+        setView(v): void {
+          live();
+          if (!v || ![v.scrollX, v.scrollY, v.zoom].every((n) => Number.isFinite(n)) || v.zoom < 0.1 || v.zoom > 30) return;
+          api.updateScene({ appState: { scrollX: v.scrollX, scrollY: v.scrollY, zoom: { value: v.zoom } } as never, captureUpdate: CaptureUpdateAction.NEVER });
+          announce();
+          sceneChanged();
+        },
         view(): BoardView {
           live();
           const s = api.getAppState();

@@ -123,24 +123,54 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('end')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes + 4, sameAsMod: true });
   }, 120_000);
 
-  it('link down: an edit is put back and said; link up: a new session and a new leaf, and a drawn mark persists again', async () => {
-    const down = await real([facts('start'), { read: `(${L}.down(), 1)`, as: 'd' }, { wait: 300 }, facts('down'), ...drawRect, facts('edit'), { read: `${L}.leaf.el.isConnected`, as: 'leafStays' }], null, 'live-link-down');
+  it('B4: link down holds the board still for as long as it lasts: the line stays past six seconds, the rail is dimmed, and a draw, a paste and a key add nothing and raise nothing', async () => {
+    const down = await real([
+      facts('start'), { read: `(${L}.down(), 1)`, as: 'd' }, { wait: 7000 }, facts('down'),
+      { read: `({ inert: ${L}.leaf.el.dataset.inert, rail: document.querySelector('#preview-board .bd-rail').className, off: [...document.querySelectorAll('#preview-board .bd-rail [data-tool]')].every((b) => b.getAttribute('aria-disabled') === 'true') })`, as: 'held' },
+      ...drawRect, { paste: 'words while down' }, { wait: 300 }, { at: [272, 86], press: true }, { key: 'Delete' }, { wait: 300 },
+      facts('after'), { read: `${L}.leaf.el.isConnected`, as: 'leafStays' },
+    ], null, 'live-link-down');
     const f = (k: string): Facts => down[k] as Facts;
     expect(down.errors).toEqual([]);
+    expect(down.held).toEqual({ inert: 'link-down', rail: 'bd-rail yielded', off: true });
     expect(f('down')).toMatchObject({ link: 'down', notices: ['link:link-down'], line: 'Not saved · reconnecting' });
-    expect(f('edit')).toMatchObject({ link: 'down', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['link:link-down', 'edit:link-down'], line: 'The link is down · that change wasn’t saved' });
+    // nothing was shown and then taken away: no mark, no row, no further notice, the same line
+    expect(f('after')).toMatchObject({ link: 'down', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, selected: 0, notices: ['link:link-down'], line: 'Not saved · reconnecting' });
     expect(down.leafStays).toBe(true);
+  }, 120_000);
+
+  it('B6: link up: a new session and a new leaf that opens where the old one was looking and says the link is back; a drawn mark persists again', async () => {
     const up = await real([
       facts('start'),
-      { read: `(globalThis.__old = { session: ${L}.session, leaf: ${L}.leaf }, ${L}.down(), 1)`, as: 'd' }, { wait: 300 },
+      { read: `(${B}.zoomIn(), 1)`, as: 'z' }, { wait: 200 }, { wheel: '#preview-board .bd-stage' }, { wait: 200 },
+      { read: `(globalThis.__old = { session: ${L}.session, leaf: ${L}.leaf, view: ${B}.view() }, ${L}.down(), 1)`, as: 'd' }, { wait: 300 },
       { await: `${L}.up().then(() => new Promise((r) => setTimeout(r, 1500))).then(() => 1)`, as: 'upped' },
-      { read: `({ newSession: ${L}.session !== globalThis.__old.session, oldDead: !globalThis.__old.session.alive, oldLeafGone: !globalThis.__old.leaf.el.isConnected, newLeaf: ${L}.leaf !== globalThis.__old.leaf && ${L}.leaf.el.isConnected, leaves: document.querySelectorAll('#preview-board .bd-leaf').length })`, as: 'rebuilt' },
-      facts('back'), ...drawRect, facts('drawn'),
+      { read: `({ newSession: ${L}.session !== globalThis.__old.session, oldDead: !globalThis.__old.session.alive, oldLeafGone: !globalThis.__old.leaf.el.isConnected, newLeaf: ${L}.leaf !== globalThis.__old.leaf && ${L}.leaf.el.isConnected, leaves: document.querySelectorAll('#preview-board .bd-leaf').length, inert: ${L}.leaf.el.dataset.inert || '' })`, as: 'rebuilt' },
+      { read: `({ was: [globalThis.__old.view.scrollX, globalThis.__old.view.scrollY, globalThis.__old.view.zoom], now: [${B}.view().scrollX, ${B}.view().scrollY, ${B}.view().zoom] })`, as: 'view' },
+      facts('back'), { read: `(${B}.zoomReset(), 1)`, as: 'z2' }, { wait: 200 }, ...drawRect, facts('drawn'),
     ], null, 'live-link-up');
     const g = (k: string): Facts => up[k] as Facts;
     expect(up.errors).toEqual([]);
-    expect(up.rebuilt).toEqual({ newSession: true, oldDead: true, oldLeafGone: true, newLeaf: true, leaves: 1 });
-    expect(g('back')).toMatchObject({ link: 'up', keep: 'saved', canUndo: false, nodes: g('start').nodes, sameAsMod: true, drift: 0 });
+    expect(up.rebuilt).toEqual({ newSession: true, oldDead: true, oldLeafGone: true, newLeaf: true, leaves: 1, inert: '' });
+    const view = up.view as { was: number[]; now: number[] };
+    expect(view.was[2]).toBeGreaterThan(1);
+    expect(view.was[1]).not.toBe(0);
+    expect(view.now).toEqual(view.was);
+    expect(g('back')).toMatchObject({ link: 'up', keep: 'saved', canUndo: false, nodes: g('start').nodes, sameAsMod: true, line: 'Reconnected · everything here is saved' });
     expect(g('drawn')).toMatchObject({ keep: 'saved', pending: 0, canUndo: true, nodes: g('start').nodes + 1, rows: g('start').rows + 1, sameAsMod: true, stored: true });
   }, 180_000);
+
+  it('B5: a slow save is shown, and when the mod never answers the marks drawn meanwhile fall together with one line', async () => {
+    const a = await real([
+      facts('start'), { read: `(${L}.mod.silent = true, 1)`, as: 'silent' },
+      ...drawRect, { wait: 700 }, facts('slow'),
+      { press: '#preview-board [data-key="tool:rect"]' }, { drag: [[600, 300], [640, 330], [680, 360]] }, { wait: 300 }, facts('two'),
+      { wait: 8600 }, facts('gone'),
+    ], null, 'live-slow-save');
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('slow')).toMatchObject({ keep: 'saving', pending: 1, nodes: f('start').nodes + 1, line: 'Saving…', notices: [] });
+    expect(f('two')).toMatchObject({ keep: 'saving', pending: 2, nodes: f('start').nodes + 2, line: 'Saving…' });
+    expect(f('gone')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['edit:timeout'], line: '2 changes weren’t saved · do them again' });
+  }, 120_000);
 });

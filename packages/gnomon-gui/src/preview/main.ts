@@ -16,7 +16,7 @@ import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey }
 import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
 import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
 import { followLog, GnomonClient } from '../core/client.js';
-import { noticeLine } from '../core/board-leaf.js';
+import { keepStateLine, noticeLine } from '../core/board-leaf.js';
 import { DimSessions, type DimSession } from '../core/dim-session.js';
 import { DimStore } from '../core/dim-store.js';
 import { GuiStore } from '../core/store.js';
@@ -189,10 +189,20 @@ async function openLiveBoard(host: HTMLElement, key: PreviewKey, load: () => Pro
       (globalThis as { gnomonPreviewLeaf?: unknown }).gnomonPreviewLeaf = leaf;
       session.bindLeaf(leaf);
       session.onChange((c) => {
+        if (!session.alive) return;
+        // the keep line's place shows the loop's own state while it lasts (a slow save, not saved)
+        leaf.setKeep(keepStateLine(c.status));
         if (!c.notice) return;
         live.notices.push(c.notice);
-        if (session.alive) leaf.say(noticeLine(c.notice));
+        // (the loss of the link is said by the held-still line itself, for as long as it lasts)
+        if (!(c.notice.about === 'link' && c.notice.code === 'link-down')) leaf.say(noticeLine(c.notice));
       });
+      // what the session was told before the leaf existed (what a reconnect lost, or that it is back)
+      const told = session.lastNotice();
+      if (told) {
+        live.notices.push(told);
+        leaf.say(noticeLine(told));
+      }
     });
   // a reconnect destroys the session and its leaf: the new session gets a new leaf
   sessions.onEvent((e) => void (e.type === 'rebuilt' && mount(e.session)));

@@ -358,7 +358,12 @@ describe('#gui-dim-session link and lifecycle', () => {
     await flush(DIM_LIVE_TIMEOUT_MS + 100);
     expect(s.status()).toMatchObject({ keep: 'saved', link: 'down', pending: 0 });
     expect(h.last().nodes.size).toBe(0);
-    expect(n.slice(2).map((x) => x.code)).toEqual(['link-down', 'link-down']);
+    // what was pending at the loss falls under the ONE line the loss raised: no notice of its own; it is counted
+    expect(n.slice(2)).toEqual([]);
+    const [back] = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:B' });
+    expect(back!.lastNotice()).toEqual({ about: 'link', code: 'not-saved', field: 'ops', why: null, lost: 2 });
+    expect(leaf.destroy).toHaveBeenCalledTimes(1);
+    leaf.destroy.mockClear();
     expect(w.ops()).toHaveLength(1); // the second batch never went
     expect(leaf.destroy).not.toHaveBeenCalled();
   });
@@ -562,7 +567,7 @@ describe('#gui-dim-session review of PR #118, group A: nothing said lost is then
     s.edit([rect(1)], press());
     w.sessions.linkDown();
     await flush(DIM_LIVE_TIMEOUT_MS + 10);
-    expect(n.map((x) => `${x.about}:${x.code}`)).toEqual(['link:link-down', 'edit:link-down']);
+    expect(n.map((x) => `${x.about}:${x.code}`)).toEqual(['link:link-down']); // one line for the loss; the batch is counted under it
     expect(s.status().pending).toBe(0);
     w.answer(w.calls[0]!);
     await flush(1000);
@@ -742,6 +747,50 @@ describe('#gui-dim-session review of PR #118, group A: nothing said lost is then
     const fresh = new DimSessions({ store: v.store });
     fresh.connect({ client: v.client as never, principal: ME, connId: 'conn:Z' });
     expect(fresh.resume({ dim: DIM, hsid: HSID }).status()).toMatchObject({ verified: null, checkedSeq: null, readOnly: false });
+  });
+});
+
+describe('#gui-dim-session review of PR #118, group B: link down as a person sees it', () => {
+  it('B4: at the loss the leaf is held still (not destroyed) and ONE notice is raised, even with a mark in flight whose call fails at once; the leaf is let go only by the rebuild', async () => {
+    const w = world();
+    const { s, h, n } = await opened(w);
+    const leaf = { destroy: vi.fn(), forget: vi.fn(), setInert: vi.fn() };
+    s.bindLeaf(leaf);
+    h.edit([rect(1)], press());
+    await flush();
+    w.sessions.linkDown();
+    // the in-flight call fails the way the client fails it when the socket closes
+    w.ops()[0]!.reject(new RpcError({ code: 'DELIVERY_UNKNOWN', reason: 'delivery-unknown', message: 'x', next: [], data: null }));
+    await flush(DIM_LIVE_TIMEOUT_MS * 2);
+    expect(leaf.setInert.mock.calls).toEqual([['link-down']]);
+    expect(leaf.destroy).not.toHaveBeenCalled();
+    expect(n).toEqual([{ about: 'link', code: 'link-down', field: 'ops', why: null, lost: 0 }]);
+    expect(s.status()).toMatchObject({ link: 'down', pending: 0 });
+    expect(h.last().nodes.size).toBe(0);
+    // a leaf bound while the link is down is held still from the start
+    const late = { destroy: vi.fn(), forget: vi.fn(), setInert: vi.fn() };
+    s.bindLeaf(late);
+    expect(late.setInert).toHaveBeenCalledWith('link-down');
+    const [t] = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:B' });
+    expect(t!.lastNotice()).toMatchObject({ about: 'link', code: 'not-saved', lost: 1 });
+  });
+
+  it('B6: the rebuilt session opens its board where the old one was looking, and says the link is back', async () => {
+    const w = world({ auto: true });
+    const { s, h } = await opened(w);
+    (h.handle as unknown as { view: () => unknown }).view = () => ({ scrollX: -420, scrollY: 77, zoom: 1.5, width: 800, height: 600 });
+    w.sessions.linkDown();
+    const [t] = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:B' });
+    expect(s.lastView).toEqual({ scrollX: -420, scrollY: 77, zoom: 1.5 });
+    const h2 = fakeHandle();
+    const setView = vi.fn();
+    (h2.handle as unknown as { setView: unknown }).setView = setView;
+    t!.attachHandle(h2.handle);
+    expect(setView.mock.calls).toEqual([[{ scrollX: -420, scrollY: 77, zoom: 1.5 }]]);
+    expect(t!.lastNotice()).toEqual({ about: 'link', code: 'reconnected', field: 'ops', why: null, lost: 0 });
+    // only once
+    t!.attachHandle(h2.handle);
+    expect(setView).toHaveBeenCalledTimes(1);
   });
 });
 

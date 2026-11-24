@@ -58,7 +58,7 @@
 import { DIM_FIELDS, DIM_KINDS, DIM_LIMITS, DIM_REFUSAL_CODES, canonicalJson, foldDim, isPlainObject, validateDimOps } from '@a-company/gnomon-contracts';
 import type { DimActor, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
 import { DIM_ACTION_ROWS, fitsOneDimRow, packDimRows } from './dim-rows.js';
-import { planUndo } from './dim-undo.js';
+import { DIM_UNDO_LIMITS, invertDimOps, planUndo } from './dim-undo.js';
 import type { Gesture } from './gesture.js';
 
 /** How long a batch may wait for its ack and row before it is dropped. */
@@ -71,7 +71,8 @@ export const DIM_LIVE_LIMITS = Object.freeze({ pending: 16, seen: 256, undo: 64 
 export interface DimNotice {
   /**
    * A `DimRefusalCode`, a DIM_COMMAND_REFUSALS code of the mod, or: `timeout` (no answer in time), `link-down`,
-   * `busy` (too many edits waiting), `too-large` (one action over DIM_ACTION_ROWS rows), `row-too-large` (one op
+   * `busy` (too many edits waiting), `not-undoable` (the action's inverse would be over the undo bound; `why` is
+   * `delete` for a delete of too many marks), `undo-too-large` (an entry whose inverse can never be sent), `too-large` (one action over DIM_ACTION_ROWS rows), `row-too-large` (one op
    * fits no row), `not-sent`, `gesture-refused`, `read-only`, `no-answer`, `refused` (the sender's codes,
    * core/mod-command.ts), `undo-nothing`, `undo-too-many-ops`, `undo-too-many-rows`, `undo-invalid`.
    */
@@ -300,6 +301,16 @@ export class DimLive {
     this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture, more: !next.last });
   }
 
+  /** Why these ops, applied to `base`, could not be undone within the undo bound; null when they can. */
+  #notUndoable(base: DimState, ops: readonly DimOp[]): 'too-many-ops' | 'too-many-rows' | null {
+    let n = 0;
+    // (ids for the count only: a re-added node's id is as long as any other)
+    const inverse = invertDimOps(base, ops, () => `0000000000000000000${String(n++).padStart(7, '0')}`, base);
+    if (inverse.length > DIM_UNDO_LIMITS.ops) return 'too-many-ops';
+    const rows = packDimRows(inverse);
+    return rows === null || rows.length > DIM_ACTION_ROWS ? 'too-many-rows' : null;
+  }
+
   /** Queue the rows of ONE action (already packed). All or nothing: false when they do not all fit the pending bound. */
   #enqueue(rows: DimOp[][], gesture: Gesture, undo: UndoEntry | null): boolean {
     const now = this.#d.now();
@@ -307,7 +318,8 @@ export class DimLive {
     if (rows.length === 1 && !undo && last && !last.undo && last.group === null) {
       // one row's worth joins the single-row batch still waiting, when both fit one row together
       const merged = [...last.ops, ...rows[0]!];
-      if (merged.length <= DIM_LIMITS.opsPerRow && fitsOneDimRow(merged)) {
+      // (the merged batch is one undo entry: it must stay undoable as one)
+      if (merged.length <= DIM_LIMITS.opsPerRow && fitsOneDimRow(merged) && !this.#notUndoable(this.#fold(this.#overlay().filter((b) => b !== last)), merged)) {
         last.ops = merged;
         last.key = canonicalJson(merged);
         // the NEWEST stamp rides the batch: it has the most life and uses left, and stamps are sent in rising order
@@ -358,6 +370,12 @@ export class DimLive {
     const rows = packDimRows(ok);
     if (rows === null) return refuse('row-too-large');
     if (rows.length > DIM_ACTION_ROWS) return refuse('too-large');
+    // EVERY ACTION THAT IS SENT CAN BE UNDONE (Aegis B3 stands: 64 inverse ops, 4 rows). One whose inverse would be
+    // over the undo bound is refused here, whole, before anything is shown as kept
+    if (!undo) {
+      const why = this.#notUndoable(this.view(), ok);
+      if (why) return refuse('not-undoable', ok.every((op) => op.type === 'delete') ? 'delete' : why);
+    }
     if (!this.#enqueue(rows, gesture, undo)) return refuse('busy');
     this.#pump();
     return { changed: true, resync: notice !== null, notice };
@@ -376,10 +394,19 @@ export class DimLive {
     const entry = this.#undo[this.#undo.length - 1];
     if (!entry) return fail('undo-nothing');
     if (!this.#linkUp) return fail('link-down');
-    const plan = planUndo({ before: this.#d.stateAt(entry.rows[0]!.seq - 1), rows: entry.rows.map((r) => r.ops), current: this.view(), actor: this.#d.me, mint: this.#d.mint });
+    // each row is inverted against the state just before THAT row: what another hand changed between two rows of
+    // the action is what comes back, never an older value
+    const plan = planUndo({ before: this.#d.stateAt(entry.rows[0]!.seq - 1), befores: entry.rows.map((r) => this.#d.stateAt(r.seq - 1)), rows: entry.rows.map((r) => r.ops), current: this.view(), actor: this.#d.me, mint: this.#d.mint });
     if (!plan.ok) {
       this.#undo.pop();
       return plan.code === 'invalid' ? fail('undo-invalid', plan.refusal?.field ?? 'ops', plan.refusal?.code ?? null, true) : fail(`undo-${plan.code}`, 'ops', null, true);
+    }
+    // an inverse that can never be sent (it fits no row, or needs more rows than one stamp carries) must not wedge
+    // the list: the entry goes, with one notice, and the older ones stay reachable
+    const rows = packDimRows(plan.ops);
+    if (rows === null || rows.length > DIM_ACTION_ROWS) {
+      this.#undo.pop();
+      return fail('undo-too-large', 'ops', null, true);
     }
     return this.#local(plan.ops, gesture, entry);
   }
@@ -531,7 +558,17 @@ export class DimLive {
     const since = f ? this.#waitingSince(f) : null;
     if (f && since !== null && now - since >= DIM_LIVE_TIMEOUT_MS) {
       if (f.landed && f.ackSeq === null) return this.#settleFromRow(f, f.landed);
-      return this.#drop(f, { code: this.#linkUp ? 'timeout' : 'link-down', field: 'ops', why: f.ackAt !== null ? 'no-row' : 'no-ack' });
+      // no answer at all: the mod is not answering, so what waits behind would only fall one batch at a time. The
+      // whole queue goes with it, under ONE notice
+      const stalled = f.ackAt === null;
+      let behind = 0;
+      if (stalled) {
+        behind = this.#queue.reduce((n, b) => n + b.ops.length, 0);
+        this.#queue = [];
+      }
+      const r = this.#drop(f, { code: this.#linkUp ? 'timeout' : 'link-down', field: 'ops', why: f.ackAt !== null ? 'no-row' : 'no-ack' });
+      if (r.notice) r.notice.lost += behind;
+      return r;
     }
     if (!this.#linkUp) {
       const stale = this.#queue.find((b) => now - b.at >= DIM_LIVE_TIMEOUT_MS);

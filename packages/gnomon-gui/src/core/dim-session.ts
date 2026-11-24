@@ -37,7 +37,7 @@
  */
 import { DIM_MOD_ID, dimHash, isPlainObject } from '@a-company/gnomon-contracts';
 import type { DimActor, DimOp, DimState } from '@a-company/gnomon-contracts';
-import type { BoardHandle } from './board.js';
+import type { BoardHandle, BoardView } from './board.js';
 import type { GnomonClient } from './client.js';
 import { DIM_COMMAND_REFUSALS, DimLive, dimAckOf, type DimAck, type DimLiveBatch, type DimLiveResult, type DimLiveStatus, type DimNotice } from './dim-live.js';
 import type { DimStore } from './dim-store.js';
@@ -230,6 +230,11 @@ export class DimSession {
   readonly #partial: boolean;
   #verified: boolean | null = null;
   #lost = 0;
+  /** ops of batches that were pending when the link went down and have fallen since (said once, when the link is back) */
+  #downLost = 0;
+  #lastView: Pick<BoardView, 'scrollX' | 'scrollY' | 'zoom'> | null = null;
+  /** @internal where the board of the session this one replaces was looking */
+  startView: Pick<BoardView, 'scrollX' | 'scrollY' | 'zoom'> | null = null;
   #listeners = new Set<(c: DimSessionChange) => void>();
   #last: DimSessionNotice | null = null;
   /** resolves true once `dim.open` answered ok (at once for a resumed session), false when it failed */
@@ -369,7 +374,7 @@ export class DimSession {
     const settle = (ack: DimAck): void => {
       // a row that failed takes the rest of its action with it: nothing more comes on that stamp
       if (!ack.ok) this.#release(batch.gesture);
-      if (!this.#dead) this.#after(this.#live.ack(batch.id, ack), 'edit');
+      if (!this.#dead) this.#after(this.#live.ack(batch.id, ack), 'edit', true);
     };
     void this.#opened
       .then((ok) => {
@@ -391,7 +396,7 @@ export class DimSession {
     if (at === null) return;
     this.#timer = d.setTimer(() => {
       this.#timer = null;
-      if (!this.#dead) this.#after(this.#live.timeout(), 'edit');
+      if (!this.#dead) this.#after(this.#live.timeout(), 'edit', true);
     }, Math.max(0, at - d.now()));
   }
 
@@ -400,8 +405,15 @@ export class DimSession {
     if (h && h.isAlive()) h.render(this.#live.view());
   }
 
-  #after(r: DimLiveResult, about: DimSessionNotice['about']): void {
+  /** `settling`: the result is of a batch that was already pending (an answer, the timer), not of something the person just did. */
+  #after(r: DimLiveResult, about: DimSessionNotice['about'], settling = false): void {
     if (this.#dead) return;
+    // the link is down and the board says so for as long as it lasts: what was pending falls under THAT line, not
+    // under a notice of its own. It is counted, and said once when the link is back.
+    if (settling && r.notice && this.#x.link() === null) {
+      this.#downLost += r.notice.lost;
+      r = { ...r, notice: null };
+    }
     // the stamp I hold the gate for rides no pending batch any more (its rows were dropped by the timeout, a
     // refusal, or the check of what still holds): it has no more to send, so the gate goes NOW, whatever else waits
     if (this.#held && this.#heldFor === 'edit' && !this.#live.rides(this.#held)) this.#release(this.#held);
@@ -462,6 +474,11 @@ export class DimSession {
     return this.#lost;
   }
 
+  /** Where this session's board was looking when the session went (null: it had no board). */
+  get lastView(): Pick<BoardView, 'scrollX' | 'scrollY' | 'zoom'> | null {
+    return this.#lastView;
+  }
+
   /** How many ops are pending now. */
   pendingOps(): number {
     return this.#dead ? 0 : this.#live.pendingOps();
@@ -494,13 +511,25 @@ export class DimSession {
   bindLeaf(leaf: DimSessionLeaf): void {
     if (this.#dead) return leaf.destroy();
     this.#leaf = leaf;
+    // a leaf handed to a session that is already held still is held still too
+    if (this.#readOnly) leaf.setInert?.('out-of-date');
+    else if (this.#x.link() === null) leaf.setInert?.('link-down');
   }
 
   /** The board handle of this session's leaf: its edits and its undo key come here, and it is rendered from `view()`. One handle. */
   attachHandle(handle: BoardHandle): void {
     for (const off of this.#offs.splice(0)) off();
-    this.#handle = handle;
     if (this.#dead) return;
+    this.#handle = handle;
+    // the board opens where the one it replaces was looking
+    if (this.startView) {
+      try {
+        handle.setView(this.startView);
+      } catch {
+        /* the view is a convenience: the board still opens */
+      }
+      this.startView = null;
+    }
     this.#offs.push(
       handle.onEdit((ops, cause) => this.edit(ops, cause)),
       handle.onUndoKey((event, redo) => (redo ? this.#emit({ about: 'undo', code: 'redo-unavailable', field: 'ops', why: null, lost: 0 }) : this.undo(event))),
@@ -550,6 +579,7 @@ export class DimSession {
   linkDown(): void {
     if (this.#dead) return;
     this.#leaf?.forget();
+    this.#leaf?.setInert?.('link-down');
     this.#release(this.#held);
     const r = this.#live.link(false);
     this.#after(r, 'link');
@@ -606,7 +636,13 @@ export class DimSession {
   destroy(why: DimSessionEnd = 'switch'): void {
     if (this.#dead) return;
     this.#dead = true;
-    this.#lost = this.#live.pendingOps();
+    this.#lost = this.#live.pendingOps() + this.#downLost;
+    try {
+      const v = this.#handle && this.#handle.isAlive() ? this.#handle.view() : null;
+      if (v) this.#lastView = { scrollX: v.scrollX, scrollY: v.scrollY, zoom: v.zoom };
+    } catch {
+      /* a handle that cannot answer has no view to carry */
+    }
     this.#release(this.#held);
     if (this.#phase !== 'closed' && this.#phase !== 'failed') this.#phase = 'closed';
     if (this.#timer !== null) this.#x.deps.clearTimer(this.#timer);
@@ -684,8 +720,9 @@ export class DimSessions {
       old.destroy('link');
       if (!was) continue;
       const session = this.resume({ dim, hsid });
-      // what was pending went with the old connection: said once, on the new session
-      if (old.lost > 0) session.note({ about: 'link', code: 'not-saved', field: 'ops', why: null, lost: old.lost });
+      session.startView = old.lastView;
+      // the link is back: said once on the new session, with what was pending and went with the old connection
+      session.note({ about: 'link', code: old.lost > 0 ? 'not-saved' : 'reconnected', field: 'ops', why: null, lost: old.lost });
       out.push(session);
       this.#tell({ type: 'rebuilt', from: old, session, lost: old.lost });
     }
