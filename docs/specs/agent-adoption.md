@@ -4,11 +4,13 @@
 >
 > Agents declare capabilities as scoped permissions. Users adopt agents with informed consent. `paradigm shift` guarantees all core files exist. Post-shift recommendations surface what needs attention. Updates use EULA-style scope diffs for quick approval.
 
+**Not in the product:** the marketplace parts of this design cannot be used today. `paradigm agent install`, `search` and `publish` and the registry they talked to (nevr.land) were removed in 8.0.2. The marketplace paragraph and the `paradigm agents install @scope/agent` diagram below are kept as design history only.
+
 ## North Star
 
 You run `paradigm shift` in a new Next.js project. Shift detects the project type, creates every core file, and presents your agent team in a batch summary: 8 core agents + 2 detected ecosystem agents (typescript, web). Each shows its role and default scopes. You hit Enter to accept all defaults. Shift writes the adoption records, creates smart-default agent profiles, and outputs 3 recommendations: edit `.purpose`, configure security deny-paths, verify with `paradigm doctor`.
 
-Later, you install a marketplace agent from nevr.land: `paradigm agents install @taxco/tax-optimizer`. It shows its 4 scoped permissions (read:financial-data, tool:calculator, tool:web-search, read:bank-statements) with plain-English descriptions. You approve with `y`. The adoption is recorded.
+Later (design history, removed in 8.0.2), you install a marketplace agent from a registry: `paradigm agents install @taxco/tax-optimizer`. It shows its 4 scoped permissions (read:financial-data, tool:calculator, tool:web-search, read:bank-statements) with plain-English descriptions. You approve with `y`. The adoption is recorded.
 
 A week later, the tax agent ships v1.3.0 with a new scope: `write:reports`. Your terminal shows the diff — 1 new scope, 3 unchanged. You approve in 2 seconds. The agent runs with updated permissions.
 
@@ -34,9 +36,9 @@ paradigm shift (first run)
     └── Step 6: Post-shift recommendations ◄── NEW
           └── Conditional, max 3-4 items, copy-paste commands
 
-paradigm agents install @scope/agent (marketplace)
+paradigm agents install @scope/agent (marketplace — design history, removed in 8.0.2)
     │
-    ├── Fetch manifest from nevr.land
+    ├── Fetch manifest from the registry
     ├── Present adoption card (scopes, capabilities, pricing)
     ├── User approves scopes (y/n)
     └── Write to adoptions.yaml, create local .agent file

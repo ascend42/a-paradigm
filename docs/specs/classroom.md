@@ -72,9 +72,9 @@ Cadence: the autonomous term rides the harness `/loop` or `/schedule` skill — 
 
 **Phase 3 (falsifiability hardening):** standing poison-pill control + peer-catch-rate; Loid-exclusion filter at the prior read; doctor alarms + guard-class block on rising repeat-failure-rate.
 
-**Deferred:** `class roster`+`report` bench/recruit (needs ≥2 terms of data); `process.syllabus` self-grading; outside-the-loop `field_survival` backfill automation; cross-project scenario propagation (needs the registry channel — nevr.land); auto-authored refinements (gate behind a proven-honest cohort).
+**Deferred:** `class roster`+`report` bench/recruit (needs ≥2 terms of data); `process.syllabus` self-grading; outside-the-loop `field_survival` backfill automation; cross-project scenario propagation (needs a registry channel; none exists since nevr.land support was removed in 8.0.2); auto-authored refinements (gate behind a proven-honest cohort).
 
-**Scope flagged by the decision, sequenced after the MVP proves the model:** update Paradigm University with the new agent-learning handling (agent-facing + human docs); assess nevr.land impact (the field-feedback/reinforcement history *is* calibration → strengthens the non-portable-calibration moat).
+**Scope flagged by the decision, sequenced after the MVP proves the model:** update Paradigm University with the new agent-learning handling (agent-facing + human docs); the registry impact assessment the decision named is moot, because nevr.land support was removed in 8.0.2.
 
 ## Open questions (need a call)
 
