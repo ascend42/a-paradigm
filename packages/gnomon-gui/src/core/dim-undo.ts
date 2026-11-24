@@ -9,6 +9,10 @@
  *    to the negated move;
  *  - delete inverts to an add with a NEW id, because an id is never reused, plus updates of every `from`, `to` and
  *    `parent` that pointed at the old id. Every later mention of the old id in the inverse is renamed too.
+ *  - given the board as it stands now (`current`), the inverse is fitted to it: a re-added node carries no link to
+ *    a node that has since gone (the validator would refuse the whole undo for it), a restored link to such a node
+ *    becomes no link, and only a node whose `from`, `to` or `parent` STILL names the old id is re-pointed (a link
+ *    someone re-pointed since is theirs and is left alone).
  *
  * B3 bounds, held by `planUndo`: inverses come only from this page's own CONFIRMED batches (the caller passes the
  * ops of rows the log returned, never pending ones); the inverse goes through `validateDimOps` against the board
@@ -34,7 +38,7 @@ const step = (state: DimState, op: unknown): DimState => foldDim([{ seq: Number.
  * has no inverse. `mint` gives a fresh node id for each re-added node. Result order: re-adds first (frames, then
  * marks, then arrows, so each may cite the one before), then the other inverses, last op first.
  */
-export function invertDimOps(before: DimState, ops: readonly DimOp[], mint: () => string): DimOp[] {
+export function invertDimOps(before: DimState, ops: readonly DimOp[], mint: () => string, current?: DimState): DimOp[] {
   let state = before.dim === null ? { ...before, dim: '' } : before;
   const adds: Array<{ tier: number; op: DimOp }> = [];
   const rest: DimOp[][] = [];
@@ -66,8 +70,8 @@ export function invertDimOps(before: DimState, ops: readonly DimOp[], mint: () =
           renamed.set(op.id, id);
           const kind = own(cur.node, 'kind');
           adds.push({ tier: kind === 'frame' ? 0 : kind === 'arrow' ? 2 : 1, op: { type: 'add', node: { ...clone(cur.node), id } as unknown as DimNode } });
-          // what pointed at it then points at the re-added node
-          for (const [otherId, other] of state.nodes) {
+          // what pointed at it then, and still does now, points at the re-added node
+          for (const [otherId, other] of (current ?? state).nodes) {
             if (otherId === op.id) continue;
             const patch: Record<string, unknown> = {};
             for (const k of LINK_KEYS) if (own(other.node, k) === op.id) patch[k] = id;
@@ -82,13 +86,23 @@ export function invertDimOps(before: DimState, ops: readonly DimOp[], mint: () =
   const name = (id: string): string => renamed.get(id) ?? id;
   const out: DimOp[] = [...adds.sort((a, b) => a.tier - b.tier).map((a) => a.op), ...rest.reverse().flat()];
   // an id that was deleted is gone for good: every mention of it becomes the re-added node's id
+  const readded = new Set(renamed.values());
+  const there = (id: string): boolean => !current || current.nodes.has(id) || readded.has(id);
   for (const op of out) {
     if (op.type === 'add') {
       const node = op.node as unknown as Record<string, unknown>;
-      for (const k of LINK_KEYS) if (typeof node[k] === 'string') node[k] = name(node[k] as string);
+      for (const k of LINK_KEYS) {
+        if (typeof node[k] !== 'string') continue;
+        node[k] = name(node[k] as string);
+        if (!there(node[k] as string)) delete node[k];
+      }
     } else if (op.type === 'update') {
       op.id = name(op.id);
-      for (const k of LINK_KEYS) if (typeof op.patch[k] === 'string') op.patch[k] = name(op.patch[k] as string);
+      for (const k of LINK_KEYS) {
+        if (typeof op.patch[k] !== 'string') continue;
+        op.patch[k] = name(op.patch[k] as string);
+        if (!there(op.patch[k] as string)) op.patch[k] = null;
+      }
     } else if (op.type === 'move') op.ids = [...new Set(op.ids.map(name))];
     else if (op.type === 'delete') op.id = name(op.id);
   }
@@ -107,7 +121,7 @@ export type UndoPlan =
  */
 export function planUndo(o: { before: DimState; rows: ReadonlyArray<readonly DimOp[]>; current: DimState; actor: DimActor; mint: () => string }): UndoPlan {
   if (o.rows.length > DIM_UNDO_LIMITS.rows) return { ok: false, code: 'too-many-rows' };
-  const ops = invertDimOps(o.before, o.rows.flat(), o.mint);
+  const ops = invertDimOps(o.before, o.rows.flat(), o.mint, o.current);
   if (ops.length === 0) return { ok: false, code: 'nothing' };
   if (ops.length > DIM_UNDO_LIMITS.ops) return { ok: false, code: 'too-many-ops' };
   const v = validateDimOps(o.current, ops, o.actor);

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DIM_KINDS, dimHash } from '@a-company/gnomon-contracts';
 import type { DimOp, DimRow } from '@a-company/gnomon-contracts';
-import { DIM_LIVE_LIMITS, DIM_LIVE_TIMEOUT_MS, DimLive, dimAckOf } from '../src/core/dim-live.js';
+import { DIM_COMMAND_REFUSALS, DIM_LIVE_LIMITS, DIM_LIVE_SEND_GAP_MS, DIM_LIVE_TIMEOUT_MS, DimLive, dimAckOf } from '../src/core/dim-live.js';
 import type { DimLiveBatch } from '../src/core/dim-live.js';
 import { DimStore } from '../src/core/dim-store.js';
 import { gestureOf } from '../src/core/gesture.js';
@@ -18,98 +18,236 @@ const ME = { cls: 'human' as const, principal: 'p:me/human' };
 const HUMAN = { principal: 'p:me/human', surface: 'gui' };
 const ULID = (n: number): string => `01JD1M11VE${String(n).padStart(16, '0')}`;
 const rect = (n: number, extra: Record<string, unknown> = {}): DimOp => ({ type: 'add', node: { id: ULID(n), kind: 'rect', x: n, y: 0, z: 'V', w: 10, h: 10, ...extra } as never });
-const press = (now: number) => gestureOf({ isTrusted: true, type: 'pointerup' }, now);
+const press = (now: number) => gestureOf({ isTrusted: true, type: 'pointerup' }, now)!;
 
 /** A store, a controller, a clock and a fake mod that appends on demand. */
-function rig() {
+function rig(o: { connId?: string; stamp?: unknown } = {}) {
+  const STAMP = o.stamp ?? HUMAN;
   const store = new DimStore();
   let seq = 1;
   let now = 1000;
   let minted = 700;
   const sent: DimLiveBatch[] = [];
   store.apply([{ seq: seq++, kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, title: 'Live', attached: ['hsid-1'], opened: 'command', relayedFor: HUMAN } }]);
-  const live = new DimLive({ dim: DIM, me: ME, stateAt: (s) => store.stateAt(DIM, s), send: (b) => void sent.push(b), now: () => now, mint: () => ULID(minted++) });
+  const live = new DimLive({ dim: DIM, me: ME, ...(o.connId ? { connId: o.connId } : {}), stateAt: (s) => store.stateAt(DIM, s), send: (b) => void sent.push(b), now: () => now, mint: () => ULID(minted++) });
+  /** the row object only: the store has not folded it yet */
+  const make = (ops: readonly DimOp[], relayedFor: unknown = STAMP): DimRow => ({ seq: seq++, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: [...ops], relayedFor } });
   /** the mod appends a row with these ops; returns the row as the subscription would deliver it */
-  const append = (ops: readonly DimOp[], relayedFor: unknown = HUMAN): DimRow => {
-    const row = { seq: seq++, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: [...ops], relayedFor } };
-    return store.apply([row]).get(DIM)![0]!;
+  const append = (ops: readonly DimOp[], relayedFor: unknown = STAMP): DimRow => store.apply([make(ops, relayedFor)]).get(DIM)![0]!;
+  /** let the send gap pass and tick, so a queued batch goes out */
+  const gap = (): void => {
+    now += DIM_LIVE_SEND_GAP_MS;
+    live.timeout();
   };
-  return { store, live, sent, append, tick: (ms: number) => (now += ms), now: () => now, nodes: () => [...live.view().nodes.keys()], confirmedNodes: () => [...store.stateAt(DIM).nodes.keys()] };
+  return { store, live, sent, append, make, gap, tick: (ms: number) => (now += ms), now: () => now, nodes: () => [...live.view().nodes.keys()], confirmedNodes: () => [...store.stateAt(DIM).nodes.keys()] };
 }
+
+const OK = { changed: true, resync: false, notice: null };
+const NOTHING = { changed: false, resync: false, notice: null };
+const confirmNext = (r: ReturnType<typeof rig>): DimRow => {
+  const b = r.sent[r.sent.length - 1]!;
+  const row = r.append(b.ops);
+  r.live.ack(b.id, { ok: true, seq: row.seq, refused: [] });
+  r.live.row(row);
+  r.gap();
+  return row;
+};
 
 describe('#gui-dim-live the write path', () => {
   it('view is the confirmed fold plus pending batches drawn as me; ack then row confirms', () => {
     const r = rig();
-    expect(r.live.status()).toMatchObject({ keep: 'saved', pending: 0, inFlight: false, canUndo: false });
-    expect(r.live.local([rect(1)], press(r.now()))).toEqual({ changed: true, notice: null });
+    expect(r.live.status()).toEqual({ keep: 'saved', link: 'up', pending: 0, inFlight: false, canUndo: false, since: null });
+    expect(r.live.local([rect(1)], press(r.now()))).toEqual(OK);
     expect(r.sent).toHaveLength(1);
     expect(r.sent[0]).toMatchObject({ id: 1, ops: [rect(1)] });
     expect(r.nodes()).toEqual([ULID(1)]);
     expect(r.confirmedNodes()).toEqual([]);
     expect(r.live.view().nodes.get(ULID(1))!.by).toEqual({ cls: 'human', principal: 'p:me/human' });
     expect(r.live.view().seq).toBe(1);
-    expect(r.live.status()).toMatchObject({ keep: 'saving', pending: 1, inFlight: true });
-    const row = r.append(r.sent[0]!.ops);
-    expect(r.live.ack(1, { ok: true, seq: row.seq, refused: [] })).toEqual({ changed: false, notice: null });
+    expect(r.live.status()).toMatchObject({ keep: 'saving', pending: 1, inFlight: true, canUndo: false, since: 1000 });
+    const row = r.append(r.sent[0]!.ops, { principal: 'p:someone/else', surface: 'gui' });
+    expect(r.live.ack(1, { ok: true, seq: row.seq, refused: [] })).toEqual(NOTHING);
     expect(r.live.status().inFlight).toBe(true);
-    expect(r.live.row(row)).toEqual({ changed: true, notice: null });
-    expect(r.live.status()).toMatchObject({ keep: 'saved', pending: 0, inFlight: false, canUndo: true });
+    expect(r.live.row(row)).toEqual(OK);
+    expect(r.live.status()).toMatchObject({ keep: 'saved', pending: 0, inFlight: false, canUndo: true, since: null });
     expect(dimHash(r.live.view())).toBe(dimHash(r.store.stateAt(DIM)));
   });
 
-  it('reorder: a row that arrives before its ack confirms when the ack names it', () => {
+  it('8. an edit with no gesture is never shown: not-sent notice, resync, nothing pending', () => {
     const r = rig();
-    r.live.local([rect(1), rect(2, { label: 'no' })], press(r.now()));
-    // the mod kept one op of two, so the row does not carry the batch's ops verbatim
-    const other = r.append([rect(50)], { principal: 'p:me/session', surface: 'bridge', agent: 'kit' });
-    r.live.row(other);
-    const row = r.append([rect(1)]);
-    r.live.row(row);
-    expect(r.live.status().inFlight).toBe(true);
-    const res = r.live.ack(1, { ok: true, seq: row.seq, refused: [{ field: 'label', code: 'secret' }] });
-    expect(res).toEqual({ changed: true, notice: { code: 'secret', field: 'label', why: null, lost: 1 } });
-    expect(r.live.status()).toMatchObject({ pending: 0, inFlight: false });
-    expect(r.nodes().sort()).toEqual([ULID(1), ULID(50)]);
+    expect(r.live.local([rect(1)], null)).toEqual({ changed: false, resync: true, notice: { code: 'not-sent', field: 'ops', why: 'gesture-missing', lost: 1 } });
+    expect(r.nodes()).toEqual([]);
+    expect(r.sent).toEqual([]);
+    expect(r.live.status().pending).toBe(0);
   });
 
-  it('reorder: a row carrying exactly the in-flight ops under my stamp confirms at once; the late ack is ignored', () => {
+  it('8. the NEWEST stamp rides a coalesced batch, and a stamp-less edit never replaces a queued stamp', () => {
     const r = rig();
-    r.live.local([rect(1)], press(r.now()));
-    r.live.local([{ type: 'move', ids: [ULID(1)], dx: 5, dy: 0 }], press(r.now()));
-    const row = r.append(r.sent[0]!.ops);
+    const g1 = press(r.now());
+    const g2 = press(r.now());
+    const g3 = press(r.now());
+    r.live.local([rect(1)], g1);
+    r.live.local([rect(2)], g2);
+    r.live.local([rect(3)], g3);
+    expect(r.live.local([rect(4)], null).notice?.code).toBe('not-sent');
+    confirmNext(r);
+    expect(r.sent[0]!.gesture).toBe(g1);
+    expect(r.sent[1]).toMatchObject({ ops: [rect(2), rect(3)] });
+    expect(r.sent[1]!.gesture).toBe(g3);
+  });
+
+  it('12. a row of mine that lands before its ack and differs from what was sent is never applied twice', () => {
+    const r = rig({ connId: 'conn:me' });
+    const mine = { ...HUMAN, connId: 'conn:me' };
+    r.live.local([rect(1, { x: 1 })], press(r.now()));
+    r.live.row(r.append(r.sent[0]!.ops, mine));
+    r.gap();
+    // Probe's case: a move and an update of a node someone has just deleted; the mod keeps only the move
+    r.live.row(r.append([rect(2)], mine));
+    r.live.row(r.append([{ type: 'delete', id: ULID(2) }], { principal: 'p:me/session', surface: 'bridge', agent: 'kit' }));
+    const sentOps: DimOp[] = [{ type: 'move', ids: [ULID(1)], dx: 5, dy: 0 }, { type: 'update', id: ULID(1), patch: { w: 77 } }];
+    r.live.local(sentOps, press(r.now()));
+    expect(r.live.view().nodes.get(ULID(1))!.node).toMatchObject({ x: 6, w: 77 });
+    const row = r.append([sentOps[0]!], mine);
+    expect(r.live.row(row)).toEqual(OK);
+    // before the ack: the row is in, the batch is no longer laid over it (x is 6, never 11)
+    expect(r.live.view().nodes.get(ULID(1))!.node).toMatchObject({ x: 6, w: 10 });
+    expect(r.live.status()).toMatchObject({ inFlight: true, pending: 1 });
+    expect(r.live.ack(2, { ok: true, seq: row.seq, refused: [{ field: 'w', code: 'field-range' }] })).toEqual({ changed: true, resync: true, notice: { code: 'field-range', field: 'w', why: null, lost: 1 } });
+    expect(r.live.status()).toMatchObject({ inFlight: false, pending: 0, canUndo: true });
+    // the undo entry is what the ROW carried
+    r.gap();
+    r.live.undo(press(r.now()));
+    expect(r.sent[r.sent.length - 1]!.ops).toEqual([{ type: 'move', ids: [ULID(1)], dx: -5, dy: 0 }]);
+  });
+
+  it('12. the ack is lost after my row landed: the row stands, the ops it lacks are reported, and it can be undone', () => {
+    const r = rig();
+    r.live.local([rect(1), rect(2)], press(r.now()));
+    const row = r.append([rect(1)]);
     r.live.row(row);
-    // confirmed, and the queued move went out: the mark is never drawn moved twice
-    expect(r.sent.map((b) => b.id)).toEqual([1, 2]);
-    expect(r.live.view().nodes.get(ULID(1))!.node.x).toBe(6);
-    expect(r.live.ack(1, { ok: true, seq: row.seq, refused: [] })).toEqual({ changed: false, notice: null });
-    // the same ops from another hand do not confirm mine
+    expect(r.nodes()).toEqual([ULID(1)]);
+    r.tick(DIM_LIVE_TIMEOUT_MS);
+    expect(r.live.timeout()).toEqual({ changed: true, resync: true, notice: { code: 'ops-refused', field: 'ops', why: 'no-ack', lost: 1 } });
+    expect(r.nodes()).toEqual([ULID(1)]);
+    expect(r.live.status()).toMatchObject({ pending: 0, canUndo: true });
+    // the same through a failed send that may have been delivered
     const r2 = rig();
-    r2.live.local([rect(1)], press(r2.now()));
-    r2.live.row(r2.append([rect(1)], { principal: 'p:other/human', surface: 'gui' }));
+    r2.live.local([rect(1), rect(2)], press(r2.now()));
+    r2.live.row(r2.append([rect(1), rect(2)].slice(0, 1)));
+    expect(r2.live.ack(1, { ok: false, code: 'no-answer' }).notice).toEqual({ code: 'ops-refused', field: 'ops', why: 'no-ack', lost: 1 });
+    expect(r2.live.status().canUndo).toBe(true);
+    // a definite refusal is not rescued by a row: the batch is dropped
+    const r3 = rig();
+    r3.live.local([rect(1), rect(2)], press(r3.now()));
+    r3.live.row(r3.append([rect(9)]));
+    expect(r3.live.ack(1, { ok: false, code: 'read-only', why: 'command-read' }).notice).toMatchObject({ code: 'read-only', lost: 2 });
+  });
+
+  it('12. view() is safe whichever comes first, the store folding a row or row() being told', () => {
+    const r = rig();
+    r.live.local([rect(1), { type: 'move', ids: [ULID(1)], dx: 5, dy: 0 }], press(r.now()));
+    expect(r.live.view().nodes.get(ULID(1))!.node.x).toBe(6);
+    // the store folds first; row() has not been called yet
+    const row = r.append(r.sent[0]!.ops);
+    expect(r.store.stateAt(DIM).nodes.get(ULID(1))!.node.x).toBe(6);
+    expect(r.live.view().nodes.get(ULID(1))!.node.x).toBe(6);
+    expect(r.live.view().seq).toBe(1);
+    r.live.row(row);
+    expect(r.live.view().nodes.get(ULID(1))!.node.x).toBe(6);
+    expect(r.live.view().seq).toBe(row.seq);
+    // row() first, the store after: the view is the confirmed state without the row, with no overlay of it
+    const r2 = rig();
+    r2.live.local([rect(1), { type: 'move', ids: [ULID(1)], dx: 5, dy: 0 }], press(r2.now()));
+    const later = r2.make(r2.sent[0]!.ops);
+    r2.live.row(later);
+    expect(r2.live.status().pending).toBe(0);
+    r2.store.apply([later]);
+    expect(r2.live.view().nodes.get(ULID(1))!.node.x).toBe(6);
+  });
+
+  it('13. early confirm reads the stamp by own keys and tells another tab of the same principal apart by connId', () => {
+    const ops = [rect(1)];
+    // another tab: same principal, another connection
+    const r = rig({ connId: 'conn:me' });
+    r.live.local(ops, press(r.now()));
+    r.live.row(r.append(ops, { ...HUMAN, connId: 'conn:other-tab' }));
+    expect(r.live.status().inFlight).toBe(true);
+    // my connection
+    const r1 = rig({ connId: 'conn:me' });
+    r1.live.local(ops, press(r1.now()));
+    r1.live.row(r1.append(ops, { ...HUMAN, connId: 'conn:me' }));
+    expect(r1.live.status().inFlight).toBe(false);
+    // a stamp read through a prototype is no stamp
+    const r2 = rig();
+    r2.live.local(ops, press(r2.now()));
+    r2.live.row(r2.append(ops, Object.create(HUMAN)));
+    r2.live.row(r2.append(ops, Object.assign(Object.create({ principal: 'p:me/human' }), { surface: 'gui' })));
     expect(r2.live.status().inFlight).toBe(true);
+    // an agent row under my principal, or another surface, is not mine
+    r2.live.row(r2.append(ops, { ...HUMAN, agent: 'kit' }));
+    r2.live.row(r2.append(ops, { principal: 'p:me/human', surface: 'cli' }));
+    expect(r2.live.status().inFlight).toBe(true);
+    // with no connId known to the page, the principal decides (stated: two tabs cannot be told apart then)
+    const r3 = rig();
+    r3.live.local(ops, press(r3.now()));
+    r3.live.row(r3.append(ops, { ...HUMAN, connId: 'conn:any' }));
+    expect(r3.live.status().inFlight).toBe(false);
+  });
+
+  it('13. more early rows than the buffer holds: the acked row still confirms, never a false no-row drop', () => {
+    // the host stamps this page's rows with a principal the page does not expect, so no row is taken for mine early
+    const r = rig({ stamp: { principal: 'p:me/other-form', surface: 'gui' } });
+    r.live.local([rect(1)], press(r.now()));
+    const mineRow = r.append(r.sent[0]!.ops);
+    r.live.row(mineRow);
+    for (let i = 0; i < DIM_LIVE_LIMITS.seen + 20; i++) r.live.row(r.append([rect(1000 + i)], { principal: 'p:me/session', surface: 'bridge', agent: 'kit' }));
+    expect(r.live.status().inFlight).toBe(true);
+    expect(r.live.ack(1, { ok: true, seq: mineRow.seq, refused: [] })).toEqual(OK);
+    expect(r.live.status()).toMatchObject({ inFlight: false, pending: 0, canUndo: true });
+    r.tick(DIM_LIVE_TIMEOUT_MS * 2);
+    expect(r.live.timeout()).toEqual(NOTHING);
+    // the buffer starts empty for the next send: an old row's seq is not mistaken for the new batch's
+    r.live.local([rect(2)], press(r.now()));
+    expect(r.live.ack(2, { ok: true, seq: 999_999, refused: [] })).toEqual(NOTHING);
+    expect(r.live.status().inFlight).toBe(true);
   });
 
   it('one send in flight; queued edits coalesce up to 64 ops, then start another batch', () => {
     const r = rig();
     r.live.local([rect(1)], press(r.now()));
-    const g2 = press(r.now());
-    const g3 = press(r.now());
-    r.live.local([rect(2)], g2);
-    r.live.local([rect(3), rect(4)], g3);
+    r.live.local([rect(2)], press(r.now()));
+    r.live.local([rect(3), rect(4)], press(r.now()));
     expect(r.sent).toHaveLength(1);
     expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
     const many: DimOp[] = [];
     for (let i = 0; i < 62; i++) many.push(rect(100 + i));
     r.live.local(many, press(r.now()));
     expect(r.live.status().pending).toBe(3);
-    const row = r.append(r.sent[0]!.ops);
-    r.live.ack(1, { ok: true, seq: row.seq, refused: [] });
-    r.live.row(row);
+    confirmNext(r);
     expect(r.sent).toHaveLength(2);
     expect(r.sent[1]!.ops).toHaveLength(64);
     expect(r.sent[1]!.ops.slice(0, 3)).toEqual([rect(2), rect(3), rect(4)]);
     expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
     expect(r.nodes()).toHaveLength(66);
+  });
+
+  it('18. sends are spaced: a queued batch waits for the gap, and nextDeadline says when', () => {
+    const r = rig();
+    r.live.local([rect(1)], press(r.now()));
+    r.live.local([rect(2)], press(r.now()));
+    const row = r.append(r.sent[0]!.ops);
+    r.live.row(row);
+    // confirmed at the same instant it was sent: the next one is not sent yet
+    expect(r.sent).toHaveLength(1);
+    expect(r.live.status()).toMatchObject({ inFlight: false, pending: 1 });
+    expect(r.live.nextDeadline()).toBe(1000 + DIM_LIVE_SEND_GAP_MS);
+    r.tick(DIM_LIVE_SEND_GAP_MS - 1);
+    expect(r.live.timeout()).toEqual(NOTHING);
+    r.tick(1);
+    expect(r.live.timeout()).toEqual(OK);
+    expect(r.sent).toHaveLength(2);
+    expect(DIM_LIVE_SEND_GAP_MS).toBeGreaterThanOrEqual(1000 / 20);
   });
 
   it('an edit of more than 64 ops is split into rows; too many waiting edits are refused whole with a notice', () => {
@@ -121,34 +259,38 @@ describe('#gui-dim-live the write path', () => {
     expect(r.sent[0]!.ops).toHaveLength(64);
     const big: DimOp[] = [];
     for (let i = 0; i < 64 * DIM_LIVE_LIMITS.pending; i++) big.push(rect(1000 + i));
-    expect(r.live.local(big, press(r.now()))).toEqual({ changed: false, notice: { code: 'busy', field: 'ops', why: null, lost: big.length } });
+    expect(r.live.local(big, press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'busy', field: 'ops', why: null, lost: big.length } });
     expect(r.live.status().pending).toBe(3);
     expect(r.nodes()).toHaveLength(130);
   });
 
-  it('a locally refused op is named and never queued; a secret queues nothing', () => {
+  it('14. a locally refused op is named with resync and never queued; a secret queues nothing', () => {
     const r = rig();
     const res = r.live.local([rect(1), rect(2, { link: 'https://x.example' }), rect(3, { color: 'url(x)' })], press(r.now()));
-    expect(res).toEqual({ changed: true, notice: { code: 'field-unknown', field: 'unknown', why: null, lost: 2 } });
+    expect(res).toEqual({ changed: true, resync: true, notice: { code: 'field-unknown', field: 'unknown', why: null, lost: 2 } });
     expect(r.sent[0]!.ops).toEqual([rect(1)]);
     const s = r.live.local([rect(4), rect(5, { label: 'AKIAIOSFODNN7EXAMPLE secret key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' })], press(r.now()));
-    expect(s.changed).toBe(false);
-    expect(s.notice).toMatchObject({ code: 'secret', lost: 2 });
+    expect(s).toMatchObject({ changed: false, resync: true, notice: { code: 'secret', lost: 2 } });
     expect(r.live.status().pending).toBe(1);
-    expect(r.live.local([], press(r.now()))).toEqual({ changed: false, notice: null });
+    expect(r.live.local([], press(r.now()))).toEqual(NOTHING);
   });
 });
 
 describe('#gui-dim-live a mark never vanishes silently', () => {
-  it('refusal: the batch is dropped with one notice naming the field and the code', () => {
+  it('refusal: the batch is dropped with one notice naming the field and the code, and the caller is told to resync', () => {
     const r = rig();
     r.live.local([rect(1)], press(r.now()));
-    expect(r.live.ack(1, { ok: true, seq: null, refused: [{ field: 'z', code: 'z-bad' }] })).toEqual({ changed: true, notice: { code: 'z-bad', field: 'z', why: null, lost: 1 } });
+    expect(r.live.ack(1, { ok: true, seq: null, refused: [{ field: 'z', code: 'z-bad' }] })).toEqual({ changed: true, resync: true, notice: { code: 'z-bad', field: 'z', why: null, lost: 1 } });
     expect(r.nodes()).toEqual([]);
     expect(r.live.status()).toMatchObject({ keep: 'saved', pending: 0, inFlight: false, canUndo: false });
+    r.gap();
     r.live.local([rect(2)], press(r.now()));
-    expect(r.live.ack(2, { ok: false, code: 'gesture-refused', why: 'spent' })).toEqual({ changed: true, notice: { code: 'gesture-refused', field: 'ops', why: 'spent', lost: 1 } });
-    expect(r.live.ack(2, { ok: false, code: 'refused' })).toEqual({ changed: false, notice: null });
+    expect(r.live.ack(2, { ok: false, code: 'gesture-refused', why: 'spent' })).toEqual({ changed: true, resync: true, notice: { code: 'gesture-refused', field: 'ops', why: 'spent', lost: 1 } });
+    expect(r.live.ack(2, { ok: false, code: 'refused' })).toEqual(NOTHING);
+    // a long stroke the mod will not hold in one row: the notice carries its code (splitting is a later pass)
+    r.gap();
+    r.live.local([rect(3)], press(r.now()));
+    expect(r.live.ack(3, dimAckOf({ ok: false, code: 'row-too-large', fix: 'x' })).notice).toEqual({ code: 'row-too-large', field: 'ops', why: null, lost: 1 });
   });
 
   it('timeout: 8 s with no ack and no row drops the batch; not before', () => {
@@ -156,15 +298,15 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
     r.live.local([rect(1)], press(r.now()));
     expect(r.live.nextDeadline()).toBe(r.now() + DIM_LIVE_TIMEOUT_MS);
     r.tick(DIM_LIVE_TIMEOUT_MS - 1);
-    expect(r.live.timeout()).toEqual({ changed: false, notice: null });
+    expect(r.live.timeout()).toEqual(NOTHING);
     r.tick(1);
-    expect(r.live.timeout()).toEqual({ changed: true, notice: { code: 'timeout', field: 'ops', why: 'no-ack', lost: 1 } });
+    expect(r.live.timeout()).toEqual({ changed: true, resync: true, notice: { code: 'timeout', field: 'ops', why: 'no-ack', lost: 1 } });
     expect(r.nodes()).toEqual([]);
     expect(r.live.nextDeadline()).toBeNull();
     // the row turns up after all: it is simply the confirmed state, and the late ack is ignored
     const row = r.append(r.sent[0]!.ops);
     r.live.row(row);
-    expect(r.live.ack(1, { ok: true, seq: row.seq, refused: [] })).toEqual({ changed: false, notice: null });
+    expect(r.live.ack(1, { ok: true, seq: row.seq, refused: [] })).toEqual(NOTHING);
     expect(r.nodes()).toEqual([ULID(1)]);
     expect(r.live.status().canUndo).toBe(false);
   });
@@ -191,10 +333,11 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
     expect(r.live.status().pending).toBe(3);
     const res = r.live.ack(1, { ok: false, code: 'read-only', why: 'command-read' });
     // lost: the add, the move of it and the update of it
-    expect(res).toEqual({ changed: true, notice: { code: 'read-only', field: 'ops', why: 'command-read', lost: 3 } });
+    expect(res).toEqual({ changed: true, resync: true, notice: { code: 'read-only', field: 'ops', why: 'command-read', lost: 3 } });
     expect(r.live.view().nodes.has(ULID(1))).toBe(false);
     expect(r.live.view().nodes.get(ULID(2))!.node.w).toBe(30);
-    // the survivors went out
+    // the survivors go out
+    r.gap();
     expect(r.sent[1]!.ops[0]).toEqual(rect(2));
     expect(r.sent[1]!.ops).toHaveLength(63);
     expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
@@ -204,19 +347,18 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
     const r = rig();
     r.live.local([rect(1)], press(r.now()));
     r.live.local([rect(2)], press(r.now()));
-    expect(r.live.link(false)).toEqual({ changed: true, notice: null });
-    expect(r.live.link(false)).toEqual({ changed: false, notice: null });
-    expect(r.live.status()).toMatchObject({ keep: 'not-saved', link: 'down', pending: 2 });
-    expect(r.live.local([rect(3)], press(r.now()))).toEqual({ changed: false, notice: { code: 'link-down', field: 'ops', why: null, lost: 1 } });
-    expect(r.live.undo(press(r.now())).notice?.code).toBe('undo-nothing');
+    expect(r.live.link(false)).toEqual(OK);
+    expect(r.live.link(false)).toEqual(NOTHING);
+    expect(r.live.status()).toMatchObject({ keep: 'not-saved', link: 'down', pending: 2, since: 1000 });
+    expect(r.live.local([rect(3)], press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'link-down', field: 'ops', why: null, lost: 1 } });
     r.tick(DIM_LIVE_TIMEOUT_MS);
     // the in-flight batch first; the queued one was not sent meanwhile
-    expect(r.live.timeout()).toEqual({ changed: true, notice: { code: 'link-down', field: 'ops', why: 'no-ack', lost: 1 } });
+    expect(r.live.timeout()).toEqual({ changed: true, resync: true, notice: { code: 'link-down', field: 'ops', why: 'no-ack', lost: 1 } });
     expect(r.sent).toHaveLength(1);
-    expect(r.live.timeout()).toEqual({ changed: true, notice: { code: 'link-down', field: 'ops', why: null, lost: 1 } });
+    expect(r.live.timeout()).toEqual({ changed: true, resync: true, notice: { code: 'link-down', field: 'ops', why: null, lost: 1 } });
     expect(r.live.status()).toMatchObject({ keep: 'saved', link: 'down', pending: 0 });
     expect(r.nodes()).toEqual([]);
-    expect(r.live.timeout()).toEqual({ changed: false, notice: null });
+    expect(r.live.timeout()).toEqual(NOTHING);
   });
 
   it('link back up within the timeout sends what is still queued', () => {
@@ -228,6 +370,7 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
     r.live.link(false);
     r.live.ack(1, { ok: false, code: 'link-down' });
     expect(r.sent).toHaveLength(1);
+    r.tick(DIM_LIVE_SEND_GAP_MS);
     r.live.link(true);
     expect(r.sent).toHaveLength(2);
     expect(r.sent[1]!.ops).toEqual([rect(2)]);
@@ -235,27 +378,17 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
 });
 
 describe('#gui-dim-live undo (Aegis B3)', () => {
-  const confirmNext = (r: ReturnType<typeof rig>): DimRow => {
-    const b = r.sent[r.sent.length - 1]!;
-    const row = r.append(b.ops);
-    r.live.ack(b.id, { ok: true, seq: row.seq, refused: [] });
-    r.live.row(row);
-    return row;
-  };
-
   it('undoes only confirmed rows of this page, newest first, as a validated inverse sent like any edit', () => {
     const r = rig();
     // another hand's row is never an undo entry
     r.live.row(r.append([rect(40)], { principal: 'p:me/session', surface: 'bridge', agent: 'kit' }));
-    expect(r.live.undo(press(r.now()))).toEqual({ changed: false, notice: { code: 'undo-nothing', field: 'ops', why: null, lost: 0 } });
+    expect(r.live.undo(press(r.now()))).toEqual({ changed: false, resync: false, notice: { code: 'undo-nothing', field: 'ops', why: null, lost: 0 } });
     r.live.local([rect(1)], press(r.now()));
-    // pending, not confirmed: still nothing to undo
-    expect(r.live.undo(press(r.now())).notice?.code).toBe('undo-nothing');
     confirmNext(r);
     r.live.local([{ type: 'move', ids: [ULID(1)], dx: 5, dy: 5 }], press(r.now()));
     confirmNext(r);
     const g = press(r.now());
-    expect(r.live.undo(g)).toEqual({ changed: true, notice: null });
+    expect(r.live.undo(g)).toEqual(OK);
     expect(r.sent[2]).toMatchObject({ ops: [{ type: 'move', ids: [ULID(1)], dx: -5, dy: -5 }], gesture: g });
     confirmNext(r);
     // the undo's own row is not an undo entry (no redo in S1.3): the next undo takes the add
@@ -266,32 +399,104 @@ describe('#gui-dim-live undo (Aegis B3)', () => {
     expect(r.confirmedNodes()).toEqual([ULID(40)]);
   });
 
+  it('8. undo with no gesture burns nothing: holding the key down repeats with a null stamp', () => {
+    const r = rig();
+    r.live.local([rect(1)], press(r.now()));
+    confirmNext(r);
+    for (let i = 0; i < 5; i++) expect(r.live.undo(null)).toEqual({ changed: false, resync: false, notice: { code: 'not-sent', field: 'ops', why: 'gesture-missing', lost: 0 } });
+    expect(r.sent).toHaveLength(1);
+    expect(r.live.status()).toMatchObject({ canUndo: true, pending: 0 });
+    expect(r.live.undo(press(r.now())).changed).toBe(true);
+    expect(r.sent[1]!.ops).toEqual([{ type: 'delete', id: ULID(1) }]);
+  });
+
+  it('9. the entry leaves the list only when its inverse is confirmed: a failed send keeps it', () => {
+    for (const fail of ['refused', 'timeout'] as const) {
+      const r = rig();
+      r.live.local([rect(1)], press(r.now()));
+      confirmNext(r);
+      r.live.undo(press(r.now()));
+      expect(r.live.status()).toMatchObject({ canUndo: false, pending: 1 });
+      if (fail === 'refused') expect(r.live.ack(2, { ok: false, code: 'gesture-refused', why: 'spent' }).notice?.code).toBe('gesture-refused');
+      else {
+        r.tick(DIM_LIVE_TIMEOUT_MS);
+        expect(r.live.timeout().notice?.code).toBe('timeout');
+      }
+      // the mark is back on the board and the undo is still there
+      expect(r.nodes()).toEqual([ULID(1)]);
+      expect(r.live.status()).toMatchObject({ canUndo: true, pending: 0 });
+      r.gap();
+      expect(r.live.undo(press(r.now()))).toEqual(OK);
+      expect(r.sent[r.sent.length - 1]!.ops).toEqual([{ type: 'delete', id: ULID(1) }]);
+      confirmNext(r);
+      expect(r.live.status().canUndo).toBe(false);
+      expect(r.confirmedNodes()).toEqual([]);
+    }
+  });
+
+  it('10. an entry that can never be undone is dropped with one notice and the older ones stay reachable', () => {
+    const r = rig();
+    r.live.local([rect(1)], press(r.now()));
+    confirmNext(r);
+    r.live.local([rect(2)], press(r.now()));
+    confirmNext(r);
+    r.live.local([{ type: 'update', id: ULID(2), patch: { w: 99 } }], press(r.now()));
+    confirmNext(r);
+    // someone deletes mark 2: the top entry (the update of it) and the one under it (the add of it) can never apply
+    r.live.row(r.append([{ type: 'delete', id: ULID(2) }], { principal: 'p:me/session', surface: 'bridge', agent: 'kit' }));
+    const sent = r.sent.length;
+    expect(r.live.undo(press(r.now()))).toEqual({ changed: true, resync: false, notice: { code: 'undo-invalid', field: 'id', why: 'id-missing', lost: 0 } });
+    expect(r.live.undo(press(r.now())).notice).toMatchObject({ code: 'undo-invalid', why: 'id-missing' });
+    expect(r.sent).toHaveLength(sent);
+    expect(r.live.status().canUndo).toBe(true);
+    // the oldest entry is reached
+    expect(r.live.undo(press(r.now()))).toEqual(OK);
+    expect(r.sent[sent]!.ops).toEqual([{ type: 'delete', id: ULID(1) }]);
+  });
+
+  it('10. undo of my delete after someone removed what it was tied to: the mark comes back without the dead links', () => {
+    const r = rig();
+    r.live.local([{ type: 'add', node: { id: ULID(1), kind: 'frame', x: 0, y: 0, z: 'V', w: 100, h: 100 } }, rect(2, { parent: ULID(1) })], press(r.now()));
+    confirmNext(r);
+    r.live.local([{ type: 'delete', id: ULID(2) }], press(r.now()));
+    confirmNext(r);
+    r.live.row(r.append([{ type: 'delete', id: ULID(1) }], { principal: 'p:me/session', surface: 'bridge', agent: 'kit' }));
+    expect(r.live.undo(press(r.now()))).toEqual(OK);
+    expect(r.sent[r.sent.length - 1]!.ops).toEqual([{ type: 'add', node: { id: ULID(700), kind: 'rect', x: 2, y: 0, z: 'V', w: 10, h: 10 } }]);
+  });
+
+  it('11. undo does nothing while a batch of mine is pending, and canUndo is false until it confirms', () => {
+    const r = rig();
+    r.live.local([rect(1)], press(r.now()));
+    confirmNext(r);
+    r.live.local([rect(2)], press(r.now()));
+    expect(r.live.status()).toMatchObject({ canUndo: false, pending: 1 });
+    expect(r.live.undo(press(r.now()))).toEqual(NOTHING);
+    expect(r.sent).toHaveLength(2);
+    expect(r.nodes().sort()).toEqual([ULID(1), ULID(2)]);
+    confirmNext(r);
+    expect(r.live.status().canUndo).toBe(true);
+    // it now undoes the mark just drawn, not the one before it
+    r.live.undo(press(r.now()));
+    expect(r.sent[2]!.ops).toEqual([{ type: 'delete', id: ULID(2) }]);
+    // and an undo in flight blocks the next undo too
+    expect(r.live.undo(press(r.now()))).toEqual(NOTHING);
+  });
+
   it('undo of a delete re-adds under a minted id; an undo is never merged into a queued edit', () => {
     const r = rig();
     r.live.local([rect(1)], press(r.now()));
     confirmNext(r);
     r.live.local([{ type: 'delete', id: ULID(1) }], press(r.now()));
     confirmNext(r);
-    r.live.local([rect(2)], press(r.now()));
-    r.live.local([rect(3)], press(r.now()));
     expect(r.live.undo(press(r.now())).changed).toBe(true);
+    r.live.local([rect(3)], press(r.now()));
     r.live.local([rect(4)], press(r.now()));
-    // in flight: rect 2; queued: [rect 3], [undo], [rect 4]
-    expect(r.live.status().pending).toBe(4);
+    // in flight: the undo; queued: one batch of the two edits
+    expect(r.live.status().pending).toBe(2);
+    expect(r.sent[2]!.ops).toHaveLength(1);
     expect(r.live.view().nodes.get(ULID(700))!.node).toMatchObject({ kind: 'rect', x: 1 });
     expect(r.live.view().gone.has(ULID(1))).toBe(true);
-  });
-
-  it('an inverse that no longer validates is refused whole with a notice, and nothing is sent', () => {
-    const r = rig();
-    r.live.local([rect(1)], press(r.now()));
-    confirmNext(r);
-    r.live.local([{ type: 'update', id: ULID(1), patch: { w: 99 } }], press(r.now()));
-    confirmNext(r);
-    r.live.row(r.append([{ type: 'delete', id: ULID(1) }]));
-    const before = r.sent.length;
-    expect(r.live.undo(press(r.now()))).toEqual({ changed: false, notice: { code: 'undo-invalid', field: 'id', why: 'id-missing', lost: 0 } });
-    expect(r.sent).toHaveLength(before);
   });
 
   it('remembers a bounded number of undo entries', () => {
@@ -312,19 +517,25 @@ describe('#gui-dim-live undo (Aegis B3)', () => {
 });
 
 describe('#gui-dim-live helpers and source rules', () => {
-  it('dimAckOf reads the mod result, bare or wrapped, and never echoes input', () => {
-    expect(dimAckOf({ seq: 9, refused: [] })).toEqual({ ok: true, seq: 9, refused: [] });
-    expect(dimAckOf({ result: { seq: 9, refused: [{ index: 0, field: 'z', code: 'z-bad', fix: 'x' }] } })).toEqual({ ok: true, seq: 9, refused: [{ field: 'z', code: 'z-bad' }] });
-    expect(dimAckOf({ refused: [{ field: 'text', code: 'secret' }] })).toEqual({ ok: true, seq: null, refused: [{ field: 'text', code: 'secret' }] });
-    expect(dimAckOf({ refused: 'not-attached' })).toEqual({ ok: false, code: 'refused', why: 'not-attached' });
-    expect(dimAckOf({ refused: '<b>x</b>' })).toEqual({ ok: false, code: 'refused', why: null });
-    expect(dimAckOf(null)).toEqual({ ok: false, code: 'refused', why: null });
-    expect(dimAckOf({ seq: '9' })).toEqual({ ok: true, seq: null, refused: [] });
+  it('18. dimAckOf reads the mod’s real replies exactly, and nothing else', () => {
+    expect(dimAckOf({ ok: true, dim: DIM, seq: 9, applied: 2, refused: [] })).toEqual({ ok: true, seq: 9, refused: [] });
+    // partial application: the row was appended, `refused` lists the ops left out
+    expect(dimAckOf({ ok: true, dim: DIM, seq: 9, applied: 1, refused: [{ index: 1, field: 'z', code: 'z-bad', fix: 'x' }] })).toEqual({ ok: true, seq: 9, refused: [{ field: 'z', code: 'z-bad' }] });
+    // refusals that name ops: the first op refusal is the notice, the mod's code is the why
+    expect(dimAckOf({ ok: false, code: 'ops-refused', fix: 'x', refused: [{ index: 0, field: 'w', code: 'field-range', fix: 'y' }] })).toEqual({ ok: false, code: 'field-range', field: 'w', why: 'ops-refused' });
+    expect(dimAckOf({ ok: false, code: 'secret', fix: 'x', refused: [{ index: 0, field: 'text', code: 'secret', rule: 'aws' }] })).toEqual({ ok: false, code: 'secret', field: 'text', why: 'secret' });
+    for (const code of DIM_COMMAND_REFUSALS) expect(dimAckOf({ ok: false, code, fix: 'a fixed sentence' })).toEqual({ ok: false, code, why: null });
+    expect(DIM_COMMAND_REFUSALS).toHaveLength(20);
+    // input is never echoed: an unlisted code, field or op code becomes a fixed word
+    expect(dimAckOf({ ok: false, code: '<b>x</b>', fix: 'x' })).toEqual({ ok: false, code: 'refused', why: null });
+    expect(dimAckOf({ ok: true, seq: 9, refused: [{ field: '<i>', code: 'made-up' }] })).toEqual({ ok: true, seq: 9, refused: [{ field: 'unknown', code: 'refused' }] });
+    // not a reply of the mod
+    for (const bad of [null, undefined, 'ok', [], {}, { seq: 9, refused: [] }, { result: { ok: true, seq: 9 } }, { ok: true }, { ok: true, seq: '9' }, { ok: true, seq: 0 }, { ok: 'true', seq: 9 }, { ok: false }]) expect(dimAckOf(bad)).toEqual({ ok: false, code: 'refused', why: null });
   });
 
   it('a row of another dimension changes nothing', () => {
     const r = rig();
-    expect(r.live.row({ seq: 50, kind: DIM_KINDS.op, payload: { v: 1, dim: 'dim:01JD1MVECT0R00000000000009', ops: [] } })).toEqual({ changed: false, notice: null });
+    expect(r.live.row({ seq: 50, kind: DIM_KINDS.op, payload: { v: 1, dim: 'dim:01JD1MVECT0R00000000000009', ops: [] } })).toEqual(NOTHING);
   });
 
   it('has no timer, no DOM, no log line and no row-by-row fold', () => {

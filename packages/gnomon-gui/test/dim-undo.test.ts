@@ -101,7 +101,7 @@ describe('#gui-dim-undo invertDimOps', () => {
       { type: 'delete', id: ULID(3) },
       { type: 'delete', id: ULID(4) },
     ]);
-    expect(inverse.map((o) => o.type)).toEqual(['add', 'add', 'update', 'move', 'update']);
+    expect(inverse.map((o) => o.type)).toEqual(['add', 'add', 'move', 'update']);
     expect(JSON.stringify(inverse)).not.toContain(ULID(3));
     expect(JSON.stringify(inverse)).not.toContain(ULID(4));
     const ellipse = back.nodes.get(ULID(500))!.node;
@@ -179,5 +179,40 @@ describe('#gui-dim-undo planUndo (Aegis B3)', () => {
     const before = foldDim([opRow(3, [{ type: 'add', node: { id: ULID(8), kind: 'acme:chart', x: 0, y: 0, z: 'Z' } }])], undefined, base());
     const ops: DimOp[] = [{ type: 'move', ids: [ULID(3)], dx: 1, dy: 0 }, { type: 'delete', id: ULID(8) }];
     expect(planUndo({ before, rows: [ops], current: apply(before, ops, 10), actor: ME, mint: minter() })).toMatchObject({ ok: false, code: 'invalid', refusal: { code: 'kind-not-core' } });
+  });
+
+  it('10. a re-added node carries no link to a node that has gone since, and a restored link to one becomes no link', () => {
+    const before = base();
+    // I delete the rect (child of the frame, the arrow's `from`) and clear the arrow's `to`
+    const ops: DimOp[] = [{ type: 'update', id: ULID(4), patch: { to: null } }, { type: 'delete', id: ULID(2) }];
+    // since then someone deleted the frame and the ellipse
+    const current = apply(apply(before, ops, 10), [{ type: 'delete', id: ULID(1) }, { type: 'delete', id: ULID(3) }], 11);
+    const plan = planUndo({ before, rows: [ops], current, actor: ME, mint: minter() });
+    expect(plan).toEqual({
+      ok: true,
+      ops: [
+        { type: 'add', node: { id: ULID(500), kind: 'rect', x: 10, y: 10, z: 'W', w: 50, h: 40, fill: 'lemon', label: 'a' } },
+        { type: 'update', id: ULID(4), patch: { from: ULID(500) } },
+        { type: 'update', id: ULID(4), patch: { to: null } },
+      ],
+    });
+    // without the board as it stands, the links are kept as they were (and the validator refuses them)
+    expect(JSON.stringify(invertDimOps(before, ops, minter()))).toContain(`"parent":"${ULID(1)}"`);
+  });
+
+  it('10. only a link that STILL names the old id is re-pointed: a re-point made since is left alone', () => {
+    const before = base();
+    const ops: DimOp[] = [{ type: 'delete', id: ULID(2) }];
+    const other: DimOp = { type: 'add', node: { id: ULID(9), kind: 'rect', x: 0, y: 99, z: 'Z', w: 5, h: 5 } };
+    // someone re-pointed the arrow's `from` at another mark after my delete
+    const current = apply(apply(apply(before, ops, 10), [other], 11), [{ type: 'update', id: ULID(4), patch: { from: ULID(9) } }], 12);
+    const plan = planUndo({ before, rows: [ops], current, actor: ME, mint: minter() });
+    expect(plan.ok && plan.ops.map((o) => o.type)).toEqual(['add']);
+    const back = apply(current, plan.ok ? plan.ops : [], 13);
+    expect(back.nodes.get(ULID(4))!.node.from).toBe(ULID(9));
+    expect(back.nodes.get(ULID(500))!.node.parent).toBe(ULID(1));
+    // and with nobody in between, the stale link is re-pointed as before
+    const quiet = planUndo({ before, rows: [ops], current: apply(before, ops, 10), actor: ME, mint: minter() });
+    expect(quiet.ok && quiet.ops[1]).toEqual({ type: 'update', id: ULID(4), patch: { from: ULID(500) } });
   });
 });
