@@ -14,8 +14,12 @@
  * loader. Since S1.1 the engine is a bare drawing surface (its own toolbar,
  * menus and panels are removed at build time) and the handle is what a rail
  * drives it with: tools, line, fill and weight from content-palette tokens,
- * zoom, undo and redo, the theme. The stored shape vocabulary arrives with S1.3.
+ * zoom, the theme. Since S1.3 (pass P3b) the board is a VIEW of a folded
+ * dimension (`dim-shape:v1`): `render(state)` draws it, `onEdit` reports what a
+ * person changed as ops, and the engine's own history is not used (undo is the
+ * host's: `onUndoKey`). Only types are imported from the contracts here.
  */
+import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 
 /** Bundle-relative paths of the board chunk (scripts/board-build.mjs emits exactly these names). */
 export const BOARD_SCRIPT = 'board/board.js';
@@ -53,19 +57,21 @@ export interface BoardStyleRefusal {
 
 /**
  * Who drew a mark, as the HOST knows it (design component author-seal: three hands). `human` is you; `agent` is an
- * agent the host named (`id` is the host-stamped author id the seal is worked out from, `name` the text beside
- * it); `unknown` is a mark with no author the host vouches for. The handle keeps it in a record of its OWN, keyed
- * by element id and written only by `add`; it is never read from an element, so nothing pasted, dropped or copied
- * can carry one (a copy of an agent's mark is a new element and is yours). Until S1.3 maps real rows, only the
- * fixture calls `add` with an author.
+ * agent the host named (`id` is the host-stamped agent id the seal is worked out from, `name` the text beside it:
+ * the same id until a later pass gives agents display names); `unknown` is a mark with no author the host vouches
+ * for. It is read ONLY from the `by` of the folded dimension the board last rendered, never from an element, so
+ * nothing pasted, dropped or copied can carry one.
  */
 export type BoardAuthor = { cls: 'human' } | { cls: 'agent'; id: string; name: string } | { cls: 'unknown' };
 
 /** What the host layer needs to know about one mark, to lay DOM over it. Scene units; see BoardView for the screen. */
 export interface BoardMarkView {
+  /** the ENGINE's id of the element (minted by the handle; never the node id) */
   id: string;
+  /** the node id in the rendered dimension; null for a mark drawn since the last render and for a label */
+  node: string | null;
   /** `stub`: a node of a kind this build cannot draw (fallback-node); `other`: an engine element outside the rail's kinds */
-  kind: 'sticky' | 'rect' | 'ellipse' | 'arrow' | 'frame' | 'stroke' | 'text' | 'stub' | 'other';
+  kind: 'sticky' | 'rect' | 'ellipse' | 'diamond' | 'arrow' | 'frame' | 'stroke' | 'text' | 'stub' | 'other';
   /** bounding box */
   x: number;
   y: number;
@@ -115,24 +121,6 @@ export interface BoardRefusal {
   detail?: string;
 }
 
-/** A mark added through the handle (enough for the fixture and the probes; not the stored shape vocabulary). */
-export interface BoardMark {
-  type: 'rectangle' | 'ellipse' | 'text' | 'sticky' | 'arrow' | 'frame' | 'stub';
-  /** who drew it (default: you). An agent's or an unknown hand's mark is drawn dashed; that is derived, never set */
-  by?: BoardAuthor;
-  /** a stub's kind */
-  kind?: string;
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  text?: string;
-  /** content-palette tokens; a token that fails the palette's check draws as ink (line) or as no fill */
-  line?: string;
-  fill?: string | null;
-  weight?: BoardWeight;
-}
-
 /** What a rail needs to draw itself; read with `state()` or pushed to `onState` listeners when it changes. */
 export interface BoardState {
   tool: BoardTool;
@@ -149,8 +137,32 @@ export interface BoardState {
 }
 
 export interface BoardHandle {
-  /** Append marks to the scene; returns the scene's element count afterwards. */
-  add(marks: readonly BoardMark[]): number;
+  /**
+   * Draw a folded dimension. The scene is DIFFED against it and updated outside the engine's history; a mark being
+   * drawn, dragged or typed at that moment is left alone and is diffed against this state when the gesture ends.
+   * NEVER fires `onEdit` (Aegis A1): a rendered row is not a gesture. Authorship, sticky and stub are read from
+   * this state only.
+   */
+  render(state: DimState): void;
+  /**
+   * Be told what a person changed, as ops against the state last rendered: once at pointer-up (a drag is one
+   * `move`), at a text commit, at a delete, at a restyle of the selection. Never for a selection, a pan, a zoom, a
+   * hover or a render. `cause` is the trusted DOM event that ended the gesture (the last pointerup or keydown the
+   * board saw), for the gesture stamp; null when there was none. The ops are NOT validated here. A change that
+   * maps to no op (a fallback mark moved) is undone on the board and not reported. Returns the unsubscribe.
+   */
+  onEdit(listener: (ops: DimOp[], cause: Event | null) => void): () => void;
+  /**
+   * Be told when Cmd/Ctrl+Z (`redo` false) or Cmd/Ctrl+Shift+Z / Ctrl+Y (`redo` true) is pressed in the board while
+   * no text is being typed. The engine has no undo of its own (boards S1.3): the host inverts ops. The event is
+   * the listener's own trusted keydown; its default is prevented. Returns the unsubscribe.
+   */
+  onUndoKey(listener: (event: KeyboardEvent, redo: boolean) => void): () => void;
+  /**
+   * While yielded (a card has the keyboard) the board reports no edit and the engine's document-level keyup and
+   * gesture listeners do nothing (G-DDL-08).
+   */
+  setYielded(on: boolean): void;
   /** Non-deleted elements in the scene. */
   count(): number;
   /** Choose a rail tool. Throws on anything that is not in BOARD_TOOLS. */
@@ -169,8 +181,6 @@ export interface BoardHandle {
   zoomReset(): void;
   /** Fit everything drawn into the pane. */
   zoomToFit(): void;
-  undo(): void;
-  redo(): void;
   state(): BoardState;
   /** Be told when `state()` would answer differently. Returns the unsubscribe. */
   onState(listener: (state: BoardState) => void): () => void;

@@ -24,12 +24,20 @@ export type OverlayItem =
   | { type: 'pin'; id: string; left: number; top: number }
   /** the unknown hand's hollow pin */
   | { type: 'hollow'; id: string; left: number; top: number }
-  /** an agent's seal: a scrap's pin head, the top edge of its text, or the first point of its selected drawn mark */
+  /** an agent's seal: a scrap's pin head, the top edge of its text, the first point of its stroke or frame, or the first point of its selected drawn mark */
   | { type: 'seal'; id: string; left: number; top: number; seal: Seal; name: string; on: 'pin' | 'text' | 'mark' }
   /** the dashed box round a text that is not yours (always on) */
   | { type: 'textbox'; id: string; left: number; top: number; width: number; height: number }
   /** a stub's words, over its scrap */
   | { type: 'stub'; id: string; left: number; top: number; width: number; height: number; kind: string; dashed: boolean };
+
+/**
+ * The kinds whose stroke the engine draws dashed for a hand that is not yours. It does NOT dash a freehand stroke
+ * (a filled outline), a frame (its own fixed edge) or a text (glyphs): for those the mark the host lays over them
+ * is the whole distinction, so it is always on, not only while the mark is selected (boards S1.3 pass P3b;
+ * test/board-dim.test.ts compares the engine's pixels per kind).
+ */
+export const ENGINE_DASHES: ReadonlySet<BoardMarkView['kind']> = new Set(['rect', 'sticky', 'ellipse', 'diamond', 'arrow', 'stub']);
 
 /** An agent text's box stands this far off the glyphs. */
 export const TEXTBOX_PAD = 4;
@@ -53,9 +61,9 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView): 
       const at = m.kind === 'text' ? { left: head.left, top: head.top - TEXTBOX_TOP } : head;
       if (m.author.cls === 'agent') out.push({ type: 'seal', id: m.id, ...at, seal: sealOf(m.author.id, m.author.name), name: m.author.name, on: m.kind === 'text' ? 'text' : 'pin' });
       else out.push({ type: hand === 'you' ? 'pin' : 'hollow', id: m.id, ...at });
-    } else if (m.selected && m.author.cls === 'agent') {
+    } else if ((m.selected || !ENGINE_DASHES.has(m.kind)) && m.author.cls === 'agent') {
       out.push({ type: 'seal', id: m.id, ...toScreen(view, m.firstX, m.firstY), seal: sealOf(m.author.id, m.author.name), name: m.author.name, on: 'mark' });
-    } else if (m.selected && hand === 'unknown') out.push({ type: 'hollow', id: m.id, ...toScreen(view, m.firstX, m.firstY) });
+    } else if ((m.selected || !ENGINE_DASHES.has(m.kind)) && hand === 'unknown') out.push({ type: 'hollow', id: m.id, ...toScreen(view, m.firstX, m.firstY) });
   }
   return out;
 }

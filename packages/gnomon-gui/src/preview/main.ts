@@ -16,7 +16,8 @@ import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-ker
 import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
 import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
-import { loadBoard, type BoardMark, type BoardModule } from '../core/board.js';
+import { loadBoard, type BoardModule } from '../core/board.js';
+import { boardFixture, fixtureState } from './board-fixture.js';
 import { mountBoardLeaf } from '../ui/board-leaf.js';
 import { cardHasFocus } from '../ui/card-focus.js';
 
@@ -31,25 +32,9 @@ document.addEventListener('securitypolicyviolation', (e) => {
  * #gui-board DEV fixture (boards S1.1): the board leaf over the chat header and the chat, stopping above the
  * pinned cards and the composer, through the real loader, in the page's theme. `?board=` picks a state: open
  * (default), tray, empty, yielded, loading, failed, crashed, short (the rail folds) or tiny (too short to draw).
- * The marks carry the fixture's own sample authors: the hands are real only from S1.3. Sized with CSSOM.
+ * The marks are rows folded by `foldDim` (src/preview/board-fixture.ts) and drawn with `handle.render`; an edit made
+ * on the board is appended as a row of yours and rendered back, as the live leaf will do. Sized with CSSOM.
  */
-const ARKY = { cls: 'agent', id: 'arky', name: 'Arky' } as const;
-const LUNA = { cls: 'agent', id: 'luna', name: 'Luna' } as const;
-const QUILL = { cls: 'agent', id: 'quill', name: 'Quill' } as const;
-const SAMPLE_MARKS: BoardMark[] = [
-  { type: 'frame', x: 24, y: 28, width: 330, height: 262, text: 'auth handoff' },
-  { type: 'sticky', x: 44, y: 56, width: 132, height: 76, text: 'token expires\nbefore the retry' },
-  { type: 'rectangle', x: 212, y: 56, width: 120, height: 60, line: 'cobalt', fill: 'sky', text: 'broker' },
-  { type: 'ellipse', x: 212, y: 168, width: 120, height: 64, line: 'leaf', fill: 'leaf', text: 'kernel', by: ARKY },
-  { type: 'arrow', x: 258, y: 120, width: 14, height: 44, line: 'raspberry', weight: 'bold' },
-  { type: 'arrow', x: 180, y: 92, width: 28, height: 0, line: 'graphite', by: ARKY },
-  { type: 'sticky', x: 44, y: 160, width: 132, height: 60, fill: 'orchid', text: 'who signs\nthe second hop?', by: LUNA },
-  { type: 'text', x: 48, y: 250, text: 'checked against the log', by: QUILL },
-  { type: 'rectangle', x: 212, y: 246, width: 120, height: 30, by: { cls: 'unknown' } },
-  { type: 'stub', x: 380, y: 56, kind: 'live:session' },
-  { type: 'stub', x: 380, y: 136, kind: 'allow:approved-by-you', by: ARKY },
-];
-
 async function openBoardFixture(): Promise<void> {
   const pane = document.getElementById('pane-transcript');
   const feed = pane?.querySelector('.feed') as HTMLElement | null;
@@ -92,8 +77,17 @@ async function openBoardFixture(): Promise<void> {
       cardFocused: () => cardHasFocus(document),
       onFold: () => diag('board fold asked'),
       onReady: (handle) => {
-        if (variant !== 'empty') handle.add(SAMPLE_MARKS);
-        (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
+        // the fixture's stand-in for the live loop: an edit becomes a row of yours and the fold is rendered back
+        const fx = boardFixture(variant === 'empty' ? 'empty' : (new URLSearchParams(location.search).get('marks') ?? 'sample'));
+        handle.render(fx.state());
+        handle.onEdit((ops, cause) => {
+          fx.edits.push({ ops, cause: cause ? cause.type : null });
+          if (!fx.held) handle.render(fx.apply(ops));
+        });
+        handle.onUndoKey((_e, redo) => void fx.undoKeys.push(redo ? 'redo' : 'undo'));
+        (globalThis as { gnomonPreviewBoard?: unknown; gnomonPreviewDim?: unknown }).gnomonPreviewBoard = handle;
+        (globalThis as { gnomonPreviewDim?: unknown }).gnomonPreviewDim = fx;
+        (globalThis as { gnomonPreviewState?: unknown }).gnomonPreviewState = fixtureState;
         handle.onAttempt((a) => diag(`board attempt ${a.kind} types=${a.types.join(',')} files=${a.files}`));
         void loadBoard().then(async (m) => {
           document.documentElement.dataset.previewBoard = m.BOARD_ENGINE;

@@ -46,7 +46,7 @@ export const BOARD_FONT_METRICS = Object.freeze({ unitsPerEm: 1000, ascender: 10
 export const boardLineHeight = (m) => (m.ascender - m.descender + m.lineGap) / m.unitsPerEm;
 
 /** The engine reads its colours and its key allowlist from the Gnomon tree (src/board/skin.ts), never from literals. */
-const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse,gnomonBoardAdmit}from"gnomon-board:skin";';
+const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse,gnomonBoardAdmit,gnomonBoardYielded}from"gnomon-board:skin";';
 
 const SVG_BLOB = (expr) => `URL.createObjectURL(new Blob([${expr}],{type:H.svg}))`;
 
@@ -382,10 +382,46 @@ export const PATCHES = Object.freeze([
   {
     id: 'api-run-action',
     file: 'index.js',
-    why: 'the rail drives zoom, undo and redo from outside the engine: the imperative API gains one method that runs one of SIX registered actions by name and no other (the closed list is in the patch itself: zoomIn, zoomOut, resetZoom, zoomToFit, undo, redo), with no value',
+    why: 'the rail drives zoom from outside the engine: the imperative API gains one method that runs one of FOUR registered actions by name and no other (the closed list is in the patch itself: zoomIn, zoomOut, resetZoom, zoomToFit), with no value. Undo and redo left this list and the key allowlist in S1.3: the engine history is not used, undo is an inverse op sent by the host',
     find: 'history:{clear:this.resetHistory},',
-    replace: 'history:{clear:this.resetHistory},gnomonAction:p=>{["zoomIn","zoomOut","resetZoom","zoomToFit","undo","redo"].includes(p)&&this.actionManager.executeAction(this.actionManager.actions[p],"api")},',
+    replace: 'history:{clear:this.resetHistory},gnomonAction:p=>{["zoomIn","zoomOut","resetZoom","zoomToFit"].includes(p)&&this.actionManager.executeAction(this.actionManager.actions[p],"api")},',
     expect: 1,
+  },
+  {
+    id: 'yield-keyup',
+    file: 'index.js',
+    why: 'while the board has yielded the keyboard to a card (handle.setYielded, G-DDL-08) the engine keyup listener, which sits on the document, does nothing: a Space released over a card no longer resets the board cursor or tool',
+    find: 'C(this,"onKeyUp",Fe(t=>{if(t.key===y.SPACE&&',
+    replace: 'C(this,"onKeyUp",Fe(t=>{if(gnomonBoardYielded())return;if(t.key===y.SPACE&&',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'yield-gesture-start',
+    file: 'index.js',
+    why: 'while yielded, a pinch that starts anywhere on the page does not arm a board zoom (the engine gesture listeners sit on the document)',
+    find: 'C(this,"onGestureStart",Fe(t=>{t.preventDefault(),',
+    replace: 'C(this,"onGestureStart",Fe(t=>{if(gnomonBoardYielded())return;t.preventDefault(),',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'yield-gesture-change',
+    file: 'index.js',
+    why: 'while yielded, a pinch does not zoom the board',
+    find: 'C(this,"onGestureChange",Fe(t=>{if(t.preventDefault(),',
+    replace: 'C(this,"onGestureChange",Fe(t=>{if(gnomonBoardYielded())return;if(t.preventDefault(),',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'yield-gesture-end',
+    file: 'index.js',
+    why: 'while yielded, the end of a pinch does not touch the board selection',
+    find: 'C(this,"onGestureEnd",Fe(t=>{t.preventDefault(),',
+    replace: 'C(this,"onGestureEnd",Fe(t=>{if(gnomonBoardYielded())return;t.preventDefault(),',
+    expect: 1,
+    prepend: SKIN_IMPORT,
   },
   {
     id: 'skin-selection',

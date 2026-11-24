@@ -7,9 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, emptyDimState, foldDim, validateDimOps } from '@a-company/gnomon-contracts';
 import type { DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
-import { DIM_ENGINE_KEYS, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
+import { DIM_ENGINE_KEYS, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
 import type { DimMapIds, EngineElement } from '../src/board/dim-map.js';
-import { BOARD_TYPES, FILLABLE, normalOf } from '../src/board/normal.js';
+import { BOARD_TYPES, FILLABLE, normalOf, offNormal } from '../src/board/normal.js';
+import { fixtureRows } from '../src/preview/board-fixture.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIM = 'dim:01JD1MVECT0R00000000000001';
@@ -453,19 +454,44 @@ describe('#gui-dim-map review fixes (PR #113)', () => {
     expect(elementsToOps(state, bound as never, ids, STYLE)).toEqual([{ type: 'update', id: ULID(2), patch: { label: 'label' } }]);
   });
 
-  it('6. PINNED: three disagreements with normal.ts that the wiring pass must resolve on purpose', () => {
-    const state = fold(opRow(2, [add({ id: ULID(1), kind: 'diamond', x: 0, y: 0, z: 'V', w: 9, h: 9, fill: 'lemon' }), add({ id: ULID(2), kind: 'arrow', x: 0, y: 0, z: 'W', points: [0, 0, 5, 5], head: 'both' }), add({ id: ULID(3), kind: 'arrow', x: 0, y: 0, z: 'X', points: [0, 0, 5, 5], head: 'none' })]));
-    const [diamond, both, none] = dimToElements(state, 'day', idTable());
-    // (a) this map emits a diamond; normal.ts would remove it
+  it('6. AGREES with normal.ts: a diamond is a board type and takes a fill, and an arrow keeps the heads its `head` says', () => {
+    const state = fold(opRow(2, [add({ id: ULID(1), kind: 'diamond', x: 0, y: 0, z: 'V', w: 9, h: 9, fill: 'lemon' }), add({ id: ULID(2), kind: 'arrow', x: 0, y: 0, z: 'W', points: [0, 0, 5, 5], head: 'both' }), add({ id: ULID(3), kind: 'arrow', x: 0, y: 0, z: 'X', points: [0, 0, 5, 5], head: 'none' }), add({ id: ULID(4), kind: 'arrow', x: 0, y: 0, z: 'Y', points: [0, 0, 5, 5] })]));
+    const [diamond, both, none, end] = dimToElements(state, 'day', idTable());
+    // (a) the map emits a diamond and the board holds one
     expect(diamond!.type).toBe('diamond');
-    expect(BOARD_TYPES.has('diamond')).toBe(false);
-    // (b) this map fills a diamond; normal.ts would paint the fill out
+    expect(BOARD_TYPES.has('diamond')).toBe(true);
+    // (b) the map fills a diamond and the normal form keeps the fill
+    expect(FILLABLE.has('diamond')).toBe(true);
+    expect(normalOf(diamond!, { line: 'ink', fill: 'lemon' }, 'day').backgroundColor).toBe(diamond!.backgroundColor);
     expect(diamond!.backgroundColor).not.toBe('transparent');
-    expect(FILLABLE.has('diamond')).toBe(false);
-    expect(normalOf({ type: 'diamond' }, { line: 'ink', fill: 'lemon' }, 'day').backgroundColor).toBe('transparent');
-    // (c) this map draws head `both` and `none`; normal.ts forces one end head on every arrow
-    expect([both!.startArrowhead, both!.endArrowhead, none!.startArrowhead, none!.endArrowhead]).toEqual(['arrow', 'arrow', null, null]);
-    expect(normalOf({ type: 'arrow' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow' });
+    // (c) none, end and both survive the normal form, which fixes only the SHAPE of a head
+    for (const el of [both!, none!, end!]) expect(normalOf(el, null, 'day')).toMatchObject({ startArrowhead: el.startArrowhead, endArrowhead: el.endArrowhead });
+    expect([both!.startArrowhead, both!.endArrowhead, none!.startArrowhead, none!.endArrowhead, end!.startArrowhead, end!.endArrowhead]).toEqual(['arrow', 'arrow', null, null, null, 'arrow']);
+    // a pasted stock head becomes the open arrow, and a start head never stands alone
+    expect(normalOf({ type: 'arrow', startArrowhead: 'triangle', endArrowhead: null }, null, 'day')).toMatchObject({ startArrowhead: 'arrow', endArrowhead: 'arrow' });
+    expect(normalOf({ type: 'arrow', startArrowhead: null, endArrowhead: 'dot' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow' });
+  });
+
+  it('6b. the whole kind and style matrix, per hand: the normal form changes nothing the map emitted, and reading it back yields no op', () => {
+    // every kind, weight, fill, head, label and rotation, once for you, once for an agent, once for the unknown hand
+    const state = foldDim(fixtureRows('matrix'));
+    expect(new Set([...state.nodes.values()].map((n) => n.by.cls))).toEqual(new Set(['human', 'agent', 'unknown']));
+    for (const theme of ['day', 'night'] as const) {
+      const ids = idTable();
+      const els = dimToElements(state, theme, ids);
+      expect(new Set(els.map((e) => e.type))).toEqual(new Set(['frame', 'freedraw', 'text', 'rectangle', 'ellipse', 'diamond', 'arrow']));
+      const completed = els.map((el) => {
+        const label = el.type === 'text' && typeof el.containerId === 'string';
+        const fnode = label ? undefined : state.nodes.get(ids.nodeOf(el.id));
+        const by = !fnode || fnode.by.cls === 'human' ? undefined : fnode.by.cls === 'agent' ? { cls: 'agent' as const, id: fnode.by.agent!, name: fnode.by.agent! } : { cls: 'unknown' as const };
+        const stamp = { line: el.customData!.gnomon.line, fill: el.customData!.gnomon.fill, ...(fnode && dimIsFallback(fnode.node) ? { kind: 'stub' as const } : {}), ...(by ? { by } : {}) };
+        expect(BOARD_TYPES.has(el.type), el.type).toBe(true);
+        // a fourth disagreement would show here: the normal form may ADD keys, never change one the map set
+        expect(offNormal(el, stamp, theme), `${theme} ${el.type} ${el.id}`).toBe(false);
+        return { ...el, ...normalOf(el, stamp, theme) };
+      });
+      expect(elementsToOps(state, completed as never, ids, STYLE)).toEqual([]);
+    }
   });
 
   it('7. a mark placed next to equal, malformed and exhausted order keys gets a legal key and never throws', () => {

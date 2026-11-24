@@ -67,10 +67,23 @@ export function applySkin(theme: ContentTheme): void {
 }
 
 /**
- * The engine actions a key may run (patch `key-actions-allowlist`): undo, redo, delete the selection, select all,
+ * The engine actions a key may run (patch `key-actions-allowlist`): delete the selection, select all,
  * zoom in and out, and finishing a mark with Esc or Enter. ⌘0 is the host's (it fits everything; Mika's ruling). Every other engine shortcut matches nothing.
  */
-export const gnomonBoardKeyActions: ReadonlySet<string> = new Set(['undo', 'redo', 'deleteSelectedElements', 'selectAll', 'zoomIn', 'zoomOut', 'finalize']);
+export const gnomonBoardKeyActions: ReadonlySet<string> = new Set(['deleteSelectedElements', 'selectAll', 'zoomIn', 'zoomOut', 'finalize']);
+
+/** The board hosts that have yielded the keyboard to a card (handle.setYielded). */
+const yieldedHosts = new Set<object>();
+/** Set by the handle; cleared at unmount. */
+export function setBoardYielded(host: object, on: boolean): void {
+  if (on) yieldedHosts.add(host);
+  else yieldedHosts.delete(host);
+}
+/**
+ * Read by the patched engine (patches `yield-keyup`, `yield-gesture-*`): its document-level keyup and gesture
+ * listeners return at once while a board on the page has yielded (G-DDL-08). A page shows one board at a time.
+ */
+export const gnomonBoardYielded = (): boolean => yieldedHosts.size > 0;
 
 /** What the engine refused to do, for the host to say in its own words. */
 export type BoardRefusalKind = 'image' | 'mark';
@@ -89,7 +102,7 @@ export function onBoardRefusal(listener: (what: BoardRefusalKind, detail?: strin
 }
 
 /** The engine element types a board holds (src/board/normal.ts BOARD_TYPES holds the same list; a test compares). */
-export const gnomonBoardTypes: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'arrow', 'frame', 'freedraw', 'text']);
+export const gnomonBoardTypes: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow', 'frame', 'freedraw', 'text']);
 /**
  * Called by the patched engine on every paste or insert, BEFORE it commits anything (patch `paste-types-filtered`):
  * the elements of a board type, and a refusal for each one that is not. An image, an embeddable or an iframe

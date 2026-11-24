@@ -458,6 +458,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       drawFoot();
       drawOver();
       wasYielded = yielded();
+      // while a card has the keyboard the engine's document-level listeners do nothing (G-DDL-08)
+      if (handle?.isAlive()) handle.setYielded(wasYielded);
     } finally {
       drawing = false;
     }

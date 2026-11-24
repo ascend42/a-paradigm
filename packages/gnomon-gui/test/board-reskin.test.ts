@@ -72,12 +72,20 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     expect(src).toMatch(/currentItemStrokeStyle: 'solid',/);
   });
 
-  it('add() hands its skeleton ids to the engine unchanged: the authorship record is keyed by them (review round 2, R1)', () => {
+  it('the handle has no add(), undo() or redo(), keeps no authorship record, and gives the engine only what the map built and the normal form completed (S1.3)', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'board', 'index.ts'), 'utf8');
-    expect(src).toMatch(/convertToExcalidrawElements\(marks\.map\(skeletonOf\) as Skeleton, \{ regenerateIds: false \}\)/);
-    // and it is the only place skeletons go to the engine
-    expect(src.match(/convertToExcalidrawElements\(/g)).toHaveLength(1);
-    expect(src).toMatch(/const id = crypto\.randomUUID\(\);/);
+    expect(src).not.toMatch(/convertToExcalidrawElements/);
+    expect(src).not.toMatch(/\btrusted\b|skeletonOf|\badd\(marks|undo: \(\)|redo: \(\)/);
+    // one place elements enter the scene from a state: dimToElements → complete (normalOf) → restoreElements
+    expect(src.match(/dimToElements\(/g)).toHaveLength(1);
+    expect(src.match(/restoreElements\(/g)).toHaveLength(1);
+    expect(src).toMatch(/const out: Record<string, unknown> = \{ \.\.\.el, \.\.\.normalOf\(/);
+    // every scene update the handle makes is outside the engine's history
+    expect(src.match(/captureUpdate: CaptureUpdateAction\.NEVER/g)!.length).toBe(src.match(/captureUpdate:/g)!.length);
+    // an engine id is minted by the handle and is never the node id
+    expect(src).toMatch(/tie\(\(engineId = `g-\$\{crypto\.randomUUID\(\)\}`\), nodeId\)/);
+    const core = readFileSync(path.join(ROOT, 'src', 'core', 'board.ts'), 'utf8');
+    expect(core).not.toMatch(/\badd\(|\bundo\(\)|\bredo\(\)|interface BoardMark\b/);
   });
 
   it('every S1.1 patch is in the manifest', () => {
@@ -85,11 +93,11 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'paste-types-filtered', 'stroke-exact', 'frame-name-editor', 'frame-name-editor-ink', 'frame-name-editor-keys', 'frame-name-title', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
   });
 
-  it('the rail is nine tools, three weights and seven key actions (⌘0 is the host\'s: it fits); nothing of the engine\'s tool list', () => {
+  it('the rail is nine tools, three weights and five key actions (⌘0 is the host\'s: it fits; undo and redo are the host\'s since S1.3); nothing of the engine\'s tool list', () => {
     expect([...BOARD_TOOLS]).toEqual(TOOLS);
     for (const t of REFUSED_TOOLS as string[]) expect(BOARD_TOOLS as readonly string[]).not.toContain(t);
     expect(BOARD_WEIGHTS).toEqual({ fine: 2, bold: 4, marker: 8 });
-    expect([...gnomonBoardKeyActions].sort()).toEqual(['deleteSelectedElements', 'finalize', 'redo', 'selectAll', 'undo', 'zoomIn', 'zoomOut']);
+    expect([...gnomonBoardKeyActions].sort()).toEqual(['deleteSelectedElements', 'finalize', 'selectAll', 'zoomIn', 'zoomOut']);
   });
 
   it('the skin is the theme tokens and nothing else', () => {

@@ -82,11 +82,10 @@ export interface DimMapStyle {
 }
 
 /**
- * KNOWN DISAGREEMENTS with ./normal.ts, which still holds the S1.1 rules (test/dim-map.test.ts pins all three, so
- * the pass that wires this map into the handle has to resolve them on purpose):
- *  - `diamond` is a core kind here and is not in normal.ts BOARD_TYPES, so the handle's normaliser would remove it;
- *  - `diamond` takes a fill here and is not in normal.ts FILLABLE, so its fill would be painted out;
- *  - an arrow's `head` gives `none` or `both` here, and normal.ts normalOf forces every arrow to one end head.
+ * AGREEMENT with ./normal.ts (boards S1.3 pass P3b; test/dim-map.test.ts holds it for every kind, hand and style):
+ * every type emitted here is in normal.ts BOARD_TYPES, `diamond` takes a fill in both, and an arrow's `head`
+ * (none, end, both) survives normalOf, which fixes only the SHAPE of a head. So completing this map's output
+ * through normalOf and reading it back yields no op.
  */
 const KIND_TYPE: Readonly<Record<DimCoreKind, string>> = { stroke: 'freedraw', rect: 'rectangle', ellipse: 'ellipse', diamond: 'diamond', arrow: 'arrow', text: 'text', frame: 'frame' };
 const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map(DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k]));
@@ -113,6 +112,9 @@ export function dimIsSticky(node: Record<string, unknown>): boolean {
   const fill = own(node, 'fill');
   return own(node, 'kind') === 'rect' && typeof fill === 'string' && CONTENT_SWATCH_NAME_PATTERN.test(fill) && isContentColour(fill, 'fill') && typeof own(node, 'label') === 'string';
 }
+
+/** True when a node is drawn as the fallback box: a kind this build does not know, or a core node without the fields its kind is drawn from. */
+export const dimIsFallback = (node: Record<string, unknown>): boolean => !drawable(node);
 
 /** True when a core node has the fields its kind is drawn from; anything else is drawn as a fallback. */
 function drawable(node: Record<string, unknown>): node is Record<string, unknown> & { kind: DimCoreKind; x: number; y: number } {
