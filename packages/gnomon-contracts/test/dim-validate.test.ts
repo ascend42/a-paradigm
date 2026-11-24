@@ -344,6 +344,17 @@ describe('C4: the secret check', () => {
     expectSecret(add({ ...arrow, id: id(23), label: `​${KEY.slice(14, 20)}‍${KEY.slice(20)}` }));
   });
 
+  it('a node that already matches by itself (an old or later-version row) does not block a clean edit of it', () => {
+    const carried = foldDim([{ seq: 4, kind: DIM_KINDS.op, payload: { v: 2, dim: DIM, relayedFor: stamp(human), ops: [{ type: 'add', node: { id: id(30), kind: 'arrow', x: 0, y: 0, z: 'M', points: [0, 0, 1, 1], rel: KEY.slice(0, 14).toLowerCase(), label: KEY.slice(14) } }] } }], undefined, state);
+    expect(carried.nodes.has(id(30))).toBe(true);
+    expect(validateDimOps(carried, [{ type: 'move', ids: [id(30)], dx: 1, dy: 1 }], human)).toMatchObject({ secret: false, refused: [] });
+    expect(validateDimOps(carried, [{ type: 'update', id: id(30), patch: { head: 'both' } }], human)).toMatchObject({ secret: false, refused: [] });
+    expect(validateDimOps(carried, [{ type: 'delete', id: id(30) }], human)).toMatchObject({ secret: false, refused: [] });
+    expect(validateDimOps(carried, [{ type: 'add', node: rect(30) }], human)).toMatchObject({ secret: false, refused: [{ code: 'id-exists' }] });
+    // but writing a NEW credential onto it is still refused
+    expect(validateDimOps(carried, [{ type: 'update', id: id(30), patch: { label: `x ${AWS}` } }], human).secret).toBe(true);
+  });
+
   it('an injected scanner sees normalised text, and ordinary text passes', () => {
     const seen: string[] = [];
     const res = validateDimOps(state, [text('café Ａ​B')], human, { scan: (t) => (seen.push(t), []) });

@@ -733,6 +733,17 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     const a = scan(norm);
     return norm === text ? a : [...new Set([...a, ...scan(text)])];
   };
+  /** The rules matched by a node's free-text strings read together: all of them joined, and each ordered pair. */
+  const joined = (node: Record<string, unknown> | undefined): Set<string> => {
+    const out = new Set<string>();
+    if (!node) return out;
+    const free: Array<{ field: string; text: string }> = [];
+    for (const k of Object.keys(node).sort()) if (!STRUCTURAL_KEYS.has(k)) stringsOf(node[k], fieldName(k), free, 1);
+    if (free.length < 2) return out;
+    for (const r of hits(free.map((s) => s.text).join(''))) out.add(r);
+    for (const x of free) for (const y of free) if (x !== y) for (const r of hits(x.text + y.text)) out.add(r);
+    return out;
+  };
   const d = draftOf(state);
   const by: DimBy = actor && actor.cls === 'agent' && NON_EMPTY(actor.agent) ? { cls: 'agent', principal: actor.principal, agent: actor.agent } : actor && actor.cls === 'human' ? { cls: 'human', principal: actor.principal } : UNKNOWN_BY;
   const ok: DimOp[] = [];
@@ -752,18 +763,19 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     stringsOf(isPlainObject(op) ? (op.type === 'add' ? op.node : op.type === 'update' ? op.patch : op) : op, 'unknown', own);
     for (const s of own) note(s.field, s.text);
     const { problems, touched } = checkOp(d, op, actor);
+    // what each touched node already matches by itself: an old row is never a reason to refuse a clean edit
+    const before = new Map(touched.map((id) => [id, joined(d.nodes.get(id)?.node)]));
     // the node as it would stand after this op, whether or not the op passes the other checks
     const trial = problems.length === 0 ? d : draftOf(d);
     const applied = applyOp(trial, op, by, null, d.seq);
     if (seen.size === 0) {
       for (const id of touched) {
-        const node = trial.nodes.get(id)?.node;
-        if (!node) continue;
-        const free: Array<{ field: string; text: string }> = [];
-        for (const k of Object.keys(node).sort()) if (!STRUCTURAL_KEYS.has(k)) stringsOf(node[k], fieldName(k), free, 1);
-        if (free.length < 2) continue;
-        note('unknown', free.map((s) => s.text).join(''));
-        for (const a of free) for (const b of free) if (a !== b) note('unknown', a.text + b.text);
+        const was = before.get(id)!;
+        for (const rule of joined(trial.nodes.get(id)?.node)) {
+          if (was.has(rule) || seen.has(rule)) continue;
+          seen.add(rule);
+          secrets.push(refuse(index, { field: 'unknown', code: 'secret' }, { rule }));
+        }
       }
     }
     if (problems.length === 0 && applied) ok.push(copyJson(op) as DimOp);
