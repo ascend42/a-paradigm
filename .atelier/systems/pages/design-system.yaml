@@ -1,0 +1,465 @@
+# Public hero pages design system (product: pages; the static pages GitHub Pages serves from pages/).
+# Layers: foundations, components, zones, content, specimen, rules, absent, decisions.
+# PROPOSAL. Drafted by Luna on 2026-11-23 in session 2026-11-23-hero-pages while the founder was away.
+# Nothing here is accepted. status: proposed = Luna's recommendation awaiting the founder;
+# contested = the founder's eye is asked for by name. Mika has not vetted this file; she codifies it
+# (and may reshape it) once the founder accepts the direction.
+# Every entry traces to a decision (from:). The alternatives Luna rejected are in the session record:
+# .atelier/sessions/2026-11-23-hero-pages/session.yaml
+version: 2
+product: pages
+name: Public hero pages
+extends: none
+status: proposed
+proposed: { session: 2026-11-23-hero-pages, date: 2026-11-23, by: luna, vetted_by: none }
+read: "A developer arrives from the GitHub repo, uses Claude Code or something like it, and is deciding whether this is worth an hour. Five pages tell them what Paradigm, Gnomon and Warpline are, what each is worth in measured numbers, where each one honestly stands, and what to do first. The register is a printed technical folio: ink on a quiet ground, rules instead of boxes, the real artefact on the page, and a status the reader can trust."
+read_from: { session: 2026-11-23-hero-pages, founder_words: "a set of hero pages that explain paradigm, gnomon, and warpline ... 'sexy' and very informative to quantify the value prop ... lets just be clear and upfront about things. we're building it" }
+source_of_truth:
+  - "This file, until pages/ exists. After the build, pages/assets/pages.css holds the tokens and this file names their roles."
+  - "Plate tokens are borrowed verbatim: Gnomon's from .atelier/systems/gnomon/design-system.yaml (foundations.color.day / night), Warpline's from .atelier/systems/warpline/design-system.yaml (foundations.color). The five symbol hues come from .atelier/systems/site/design-system.yaml, darkened or lightened where the site's value fails AA as text."
+governs: [pages, .atelier/systems/pages]
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+foundations:
+  color:
+    # The frame has no accent hue. Links and the primary key are ink. Colour appears in two places
+    # only: the five symbol hues (Paradigm), and inside a product's plate (Gnomon, Warpline).
+    light:
+      surface.ground: "#F4F4F1"     # --ground: the page
+      surface.raised: "#FBFBF9"     # --surface: plates, the command line, proof excerpts
+      surface.sunk: "#E9E9E4"       # --sunk: key hover, slot hatch, a hit node
+      text.primary: "#17181C"       # --ink: 16.1:1 on ground; also every status mark and every strong rule
+      text.secondary: "#4B4D56"     # --ink-2: 7.6:1 on ground; sources, captions, section numerals
+      line.edge: "#70727B"          # --edge: 4.4:1 on ground; slot edges, graph edges (non-text >= 3:1)
+      line.rule: "#D3D3CC"          # --rule: dividers only, never a control's edge
+      text.on-ink: "#FBFBF9"        # --on-ink: label on the filled key
+    dark:
+      surface.ground: "#0E0F13"
+      surface.raised: "#15171D"
+      surface.sunk: "#090A0D"
+      text.primary: "#ECEBE6"       # 16.1:1 on ground
+      text.secondary: "#A4A7B1"     # 8.0:1 on ground
+      line.edge: "#7D818D"          # 4.9:1 on ground
+      line.rule: "#2B2E37"
+      text.on-ink: "#15171D"
+    symbol:
+      # One meaning per hue, as on useparadigm.dev. Each is used as text (the prefix glyph), so each
+      # is a text-safe step: >= 5.8:1 on light ground, >= 6.9:1 on dark ground.
+      component: { light: "#166534", dark: "#4ADE80", glyph: "#" }
+      flow:      { light: "#6D28D9", dark: "#A78BFA", glyph: "$" }
+      gate:      { light: "#B91C1C", dark: "#F87171", glyph: "^" }
+      signal:    { light: "#854D0E", dark: "#EAB308", glyph: "!" }
+      aspect:    { light: "#4B5563", dark: "#9CA3AF", glyph: "~" }
+    plate:
+      # A plate is the one region of a page drawn in the product's own material. Values are the
+      # product system's, verbatim. They never leave the plate or the product's device.
+      gnomon-day:   { ground: "#EDE8DC", sheet: "#F8F5EE", ink: "#16150F", sec: "#5A5850", edge: "#2A2925" }
+      gnomon-night: { ground: "#0F1116", sheet: "#171A21", ink: "#E8F4F0", sec: "#86998F", edge: "#C9DCD6" }
+      warpline:     { ground: "#0B0D14", rule: "#1C2138", text: "#F4F1EA", muted: "#8B8A82", thread-a: "#E9A23B", thread-b: "#2DD4BF", seam: "#7C6FF0" }
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: identity, choice: one-frame-three-plates }
+    contested:
+      warpline-plate-ground: "Warpline's plate keeps its ink loom ground in both themes (the recommendation in its parked draft, color_roles_contested.section-ground: own-ink-ground). docs/warpline-overview.html has a light linen palette instead. Founder's eye."
+  status_roles:
+    # Standing is ink. It reads by its mark's shape and its word, never by a hue (as in Gnomon: status-in-ink).
+    built: "filled square + the word Built"
+    in-progress: "square split on the diagonal, half filled + the words In progress"
+    untested: "hollow square with a dashed edge + the word Untested"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: standing, choice: mark-and-word, founder_words: "lets just be clear and upfront about things. we're building it" }
+  font:
+    display: "Fraunces"            # variable opsz 9..144, wght 400..700; headlines, entry names, row terms
+    sans: "system-ui"              # body and ledes; the reader's own system face, zero bytes
+    mono: "JetBrains Mono"         # 400/600; anything that is real: symbols, commands, numbers, paths, sources, standing
+    stacks:
+      display: '"Fraunces", Georgia, serif'
+      sans: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+      mono: '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace'
+    hosting: "self-hosted woff2 in pages/assets/fonts/, copied from packages/gnomon-gui/static/fonts/ (already in the repo, OFL). No font CDN."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: type, choice: family-faces }
+  type:
+    # px. Fixed steps per breakpoint, no clamp(): the display step is 68 wide and 44 narrow.
+    sizes: [13, 15, 17, 21, 32, 44, 56, 68]
+    roles:
+      meta: { px: 13, face: mono, leading: 1.6, note: "sources, captions, standing, nav, section numerals, code" }
+      small: { px: 15, face: sans, note: "contents entries; the command in the command line (mono)" }
+      body: { px: 17, face: sans, leading: 1.6, measure: "34em on ledes, 66ch on prose" }
+      lede: { px: 21, face: sans, leading: 1.5, narrow: 17 }
+      term: { px: 21, face: display, weight: 600, note: "row terms, minor entry names, h3" }
+      entry: { px: 32, face: display, weight: 600 }
+      h2: { px: 44, face: display, weight: 500, narrow: 32 }
+      numeral: { px: 56, face: mono, weight: 600, note: "the fact line's number, nothing else" }
+      display: { px: 68, face: display, weight: 500, leading: 1.04, narrow: 44, note: "one per page" }
+    weights: [400, 500, 600]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: type, choice: family-faces }
+  space:
+    # A 4px base. Every padding, margin and gap is on the scale. Fixed layout dimensions are listed apart.
+    base: 4
+    scale: [0, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]
+    layout: [72, 104, 136, 160, 520, 800, 1200]   # device column, standing word, ledger state, pair label, command max, short lead, page max
+    roles:
+      page-x: { wide: 32, narrow: 16 }
+      section-y: 64
+      row-y: 24
+      column-gap: { wide: 64, narrow: 48 }
+      margin-column: "2 of 12 columns on wide screens; folds above the heading on narrow"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  radius:
+    none: 0        # the frame is square: plates, rules, proof excerpts, slots, marks
+    key: 2         # keys and the command line
+    gnomon: 3      # inside a Gnomon plate only (Gnomon's --radius)
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  shadow:
+    gnomon-key: "4px 4px 0 (plate edge colour), by day only"   # the one shadow on any page; Gnomon's device
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: devices, choice: sigil-sheet-strand }
+  layout:
+    max-width: 1200
+    grid: "12 columns; hero 6/6 (hub 7/5); sections 2 (margin) + 10"
+    breakpoints: { narrow: 860 }
+    narrow_floor: 320
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  motion:
+    tokens:
+      trace: "120ms linear"     # the ripple: an edge and its nodes change weight when a node is hovered or focused (colour and stroke, no travel)
+      stamp: "400ms cubic-bezier(.3,1.4,.5,1)"   # Gnomon plate only, once, when it scrolls into view: the card is stamped and its log row appears. Gnomon's own token.
+    budget: "one explaining motion per page; none on the hub, none on Warpline, none on Learn"
+    reduced: "prefers-reduced-motion: every motion shows its final state at once"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: motion, choice: one-explaining-motion }
+  target:
+    key-h: 44        # every key, both pointer kinds
+    link-pad-y: 12   # nav links reach 44 by padding
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# Components. Markup is in specimen-hero.html (the class names below are the specimen's).
+components:
+  masthead:
+    role: "The one piece of chrome on every page: the name, the five pages, the repository, the theme."
+    anatomy: ["name (display 21)", "nav: Overview, Paradigm, Gnomon, Warpline, Learn", "Repository ↗", "theme key: Auto · Light · Dark"]
+    device: "the register tick: the masthead's ink rule thickens to 4px under the page you are on"
+    states: [default, hover, focus, current]
+    narrow: "the nav drops to its own row and scrolls sideways; nothing collapses into a menu"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  key:
+    role: "The one button. A page has at most one filled key in view."
+    variants: { default: "raised fill, 1px ink edge, radius 2", pri: "filled ink, on-ink label", in-command: "the Copy key joined to the command line by a rule" }
+    states: [default, hover, focus, pressed, done]
+    state-notes: { done: "Copy says 'Copied' for 2 seconds and announces it in a polite live region; no icon swap", pressed: "1px down; none under reduced motion" }
+    sizes: { min-height: 44, font: "mono 13 / 600" }
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  command-line:
+    role: "A command the reader runs, copyable. The first action on the hub and on each product page."
+    anatomy: ["prompt mark $ (secondary ink, not selectable)", "the command (mono 15)", "Copy key"]
+    states: [default, focus, copied, no-js]
+    state-notes: { no-js: "the Copy key is added by script; without script the command is plain selectable text" }
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  prompt-line:
+    role: "A sentence the reader says to their agent. Used wherever the exercise is a prompt and not a shell command (the teaching audit: 'a person never types an MCP call; they prompt the agent')."
+    anatomy: ["a 4px ink rule on the left", "who it is said to (mono 13, secondary): 'then say to your agent'", "the sentence (sans 17)", "a blank the reader fills, set in mono with a dashed underline"]
+    states: [default, copied, no-js]
+    rule: "Never drawn as a terminal, and never given a $ prompt."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: learning-path, choice: stations, source: ".paradigm/research/hero-pages/teaching-audit.md" }
+  preflight:
+    role: "What must be true before a command will work, as short rows above the command. Gnomon's four requirements; Paradigm's Node version."
+    anatomy: ["one row per requirement: the requirement, and how to check it"]
+    rule: "Rows by rules, plain ink, no check icons and no pass or fail colour: the page cannot know the reader's machine."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: lately-and-limits, choice: dated-rows-and-ledger, source: ".paradigm/research/hero-pages/teaching-audit.md (e)" }
+  link:
+    role: "Ink, underlined 1px at 4px offset; 2px on hover. A link that leaves the pages ends in ↗."
+    states: [default, hover, focus, visited]
+    state-notes: { visited: "unchanged: these are five pages, not a document library" }
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  standing:
+    role: "Where a product or a feature stands: built, in progress or untested. A designed part of the page, with the same weight as a feature, never a footnote or a badge."
+    forms:
+      line: "product level, in the hero under the lede: one row per state that applies (mark, word, what), then an as-of line with the date and the source"
+      ledger: "feature level: one row per feature (state, what it is, evidence), separated by rules, under a 4px ink rule. Rows are ordered built, in progress, untested."
+      mark: "the 12px square alone, hung in the margin beside a feature heading"
+    states: [built, in-progress, untested]
+    definitions:
+      built: "shipped in a published release and exercised by tests or daily use; the evidence names the release"
+      in-progress: "being built or measured now; the evidence names where (a branch, a run)"
+      untested: "exists or is designed but has not been run end to end; the evidence says 'not run yet' and who said so"
+    rules:
+      - "Always the mark and the word together. The mark alone is allowed only beside a heading whose ledger row is on the same page."
+      - "Every row carries evidence and the page carries one as-of date. A row with no evidence is not shown."
+      - "Never a hue, never a pill, never a count animation. The states are three; a fourth is a board."
+      - "On the Warpline page the ledger gains the strand in its first cell: both threads solid beside a built row, the weft dashed beside in progress, the weft cut short and the warp dashed beside untested."
+    a11y: "the mark is aria-hidden; the word carries the state; the ledger is a list or a table with a visible or visually hidden heading"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: standing, choice: mark-and-word, founder_words: "lets just be clear and upfront about things. we're building it and it's time to take it all to the next level in quality and function" }
+  fact-line:
+    role: "One measured number and what it means. The way quantified value is shown."
+    anatomy: ["numeral (mono 56 / 600) + unit (mono 15)", "the claim: one sentence that finishes the number", "the source line: how it was measured · where (a repo path or a command) · the date"]
+    states: [measured, slot, stale]
+    state-notes:
+      slot: "authoring only: the hatched slot says what evidence fills it. A release build refuses to stamp a page that references a slot."
+      stale: "a fact whose measured_on is older than the facts file's stale_after days prints 'measured <date>' in primary ink in its source line; it is not hidden"
+    rules:
+      - "No source, no line. A number without a path or a command does not appear anywhere on the pages, including in prose."
+      - "At most four fact lines in a run, as rows under a 4px rule. Never as tiles."
+      - "The numeral is never animated or counted up."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first }
+  before-after:
+    role: "The same task measured twice, with and without the product."
+    anatomy: ["a plain-words title naming the task", "two rows: label, bar, value with unit", "provenance: the run record"]
+    states: [measured, omitted]
+    rules:
+      - "Both bars share one scale that starts at zero and one unit. The values are printed; the bars only show the ratio."
+      - "Only when both runs used the same task, model and date range, and the run record is linked."
+      - "If either run is missing the block is left out. The hatched state in the specimen is for authoring and never ships."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first }
+  step-chart:
+    role: "The one small chart type: a step line of one series over time, labelled directly."
+    justified_when: "one series, five or more dated measurements taken the same way (for example estimate error after each calibrate run, or blocked sessions per week). Fewer points are fact lines."
+    anatomy: ["step line in ink, 2px", "first and last values printed at their points", "a baseline rule with the first and last date", "provenance"]
+    never: ["a legend", "gridlines", "a second series", "a smoothed curve", "an area fill", "a drawn line with no data behind it"]
+    states: [drawn, omitted]
+    a11y: "role=img with a title and a desc that states the first value, the last value and the dates; the data is also a visually hidden table"
+    budget: "at most one per page; none on the hub or on Warpline"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first }
+  proof-excerpt:
+    role: "The real artefact: a .purpose block, a Stop hook refusal, a signed log row, a decision that supersedes another, a strand."
+    anatomy: ["head: the repo path, and 'lines a to b ↗' linking to the file at a pinned commit", "the lines, numbered as in the file, symbol prefixes in their hues", "provenance"]
+    states: [default, focus, shortened]
+    state-notes: { shortened: "a long line may be cut with ' ...' and the caption says which line", focus: "the pre scrolls sideways and is keyboard focusable when it overflows" }
+    rules: ["Copied from the file by the stamp script, never retyped.", "A 4px ink rule on the left; no window chrome, no traffic-light dots."]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first }
+  provenance:
+    role: "The caption under every exhibit. It says which of three kinds the exhibit is."
+    kinds: { real: "an excerpt or a fact that is in the repo, with its path", illustration: "a drawn example of a product surface, said to be drawn", slot: "authoring only" }
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first }
+  slot:
+    role: "Authoring only. A hatched, dashed place that names the evidence it waits for and who supplies it."
+    states: [block, inline]
+    rules: ["Never ships: the release stamp fails on any slot.", "Never drawn to look like data: no placeholder numeral, no dummy bar length, no sample curve."]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first }
+  plate:
+    role: "The hero exhibit. One per product page, showing the real thing in the product's own material."
+    variants:
+      paradigm: "the frame's raised surface with a 1px ink edge: a real slice of this repo's symbol graph, nodes set as symbol ids with their sigils, and the five-symbol legend"
+      gnomon: "Gnomon's ground (papercraft in light, phosphor in dark): one decision card and the signed, hash-chained log row it produced. An illustration built from the real card markup and a real row format."
+      warpline: "Warpline's ink ground: two branches as threads and one place git cannot see, in violet. Kept small."
+    states: [default, node-hover, node-focus, reduced-motion]
+    rules: ["A product's colours and radius stay inside its plate.", "Inline SVG or HTML, no raster image, so the first screen makes no image request."]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: identity, choice: one-frame-three-plates }
+  sigil:
+    role: "Paradigm's device: a symbol's prefix glyph in mono 600, in its hue, standing on a 4px socket of the same hue."
+    uses: ["the hub entry", "graph nodes and the legend (glyph only, no socket)", "the margin mark of a Paradigm section", "prefixes inside proof excerpts"]
+    rule: "A hue is never used without its glyph, and never for anything but its symbol."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: devices, choice: sigil-sheet-strand }
+  sheet:
+    role: "Gnomon's device: a cut-paper sheet with the one hard cast shadow (4px, down and right, by day); an outlined sheet with no shadow at night."
+    uses: ["the hub entry", "the Gnomon plate's card", "keys drawn inside the Gnomon plate"]
+    rule: "Nothing outside a Gnomon plate or the Gnomon hub entry casts a shadow."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: devices, choice: sigil-sheet-strand }
+  strand:
+    role: "Warpline's device: two threads, amber for one branch and teal for the other, on an ink strip. Solid where woven, dashed or cut where not."
+    uses: ["the hub entry", "the first cell of the Warpline ledger, where the thread's state repeats the row's standing", "the Warpline plate"]
+    rule: "Violet appears only where git is blind (Warpline's rule 1), so never in the ledger."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: devices, choice: sigil-sheet-strand }
+  contents-entry:
+    role: "The hub's index: one row per page, under a 4px rule, separated by hairlines. Not cards, and not equal."
+    anatomy: ["device (72px column)", "name (display; 32 for Paradigm and Gnomon, 21 for Warpline and Learn) with an arrow", "one sentence", "standing line"]
+    states: [default, hover, focus]
+    state-notes: { hover: "the arrow goes from secondary to primary ink; the row does not lift, tint or outline" }
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  claim-rows:
+    role: "A short run of named claims (structure, determinism, calibration) as rows: the term on the left, the sentence and its source on the right."
+    rule: "Never set as three columns."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  lately:
+    role: "What changed recently: the last releases as dated rows on a vertical rule, newest first."
+    anatomy: ["date and version (mono)", "one sentence: the release's own bold lead from CHANGELOG.md", "a standing mark when the release moved something from one state to another", "'All releases ↗' to CHANGELOG.md"]
+    states: [default, empty]
+    state-notes: { empty: "a product with no dated release in the window shows no section, not an empty one" }
+    rules: ["Three to five rows, stamped from CHANGELOG.md; never hand-written.", "It leads with a 'since' fact line only if the dossier supplies one (for example releases since 8.0)."]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: lately-and-limits, choice: dated-rows-and-ledger }
+  limits:
+    role: "What a product does not do, needs, or has not proved. The standing ledger's untested and in-progress rows, plus requirements, set at the same size as the features."
+    placement: "after the proof and before the first step, so a reader meets it before being asked to install"
+    rules: ["Stated as facts in the product's own words, each with the next thing that would change it when one exists.", "No apology, no 'coming soon', no grey small print."]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: lately-and-limits, choice: dated-rows-and-ledger }
+  path:
+    role: "The learning path: one vertical line with numbered stations, read top to bottom."
+    anatomy: ["the line (1px ink) in the margin column", "a station per level: number, what you will be able to do, how long it takes", "two short spurs after level 0: the Gnomon track and the Warpline track"]
+    levels: "the teaching audit's four: 0 See it, 1 Work with it, 2 Trust it, 3 Compound it; plus the two tracks"
+    station:
+      anatomy: ["outcome: one sentence starting 'After this,'", "exercise: one prompt-line or command-line and a 'you should see' proof excerpt", "the one practice that belongs to this level, as a do / instead-of pair with its reason", "'Go deeper ↗' to the guide in the repo"]
+      states: [closed, open, done, current]
+      state-notes:
+        open: "a native details element; opening one does not close the others"
+        done: "the station's square fills when the reader ticks 'I saw it'; kept in localStorage on this device only, with a 'clear' link; without script the tick is absent"
+        current: "the first station not done; its number is set in primary ink"
+    rules: ["A station fits one screen when open. Anything longer belongs in the repo's guides, linked.", "Every station ends in something the reader sees in their own repo.", "Each station has its own anchor."]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: learning-path, choice: stations }
+  practice-pair:
+    role: "A best practice as two short lines: Do, and Instead of, with one line of why."
+    rule: "Lives inside the station it belongs to, and again on the field card. Never a standalone list of twenty."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: learning-path, choice: stations }
+  field-card:
+    role: "The end of the path: every practice pair and every command on one printable sheet."
+    states: [screen, print]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: learning-path, choice: stations }
+  footer:
+    role: "The way back: the repository, the changelog, the licence, the date the facts were last stamped."
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+zones:
+  first-screen:
+    holds: ["masthead", "one display headline", "a lede", "the standing line", "the first action (command-line, and a link or key to the path)", "the plate (product pages) or the contents (hub)"]
+    never: ["a second filled key", "a logo wall, a quote, a star count", "a number without its source"]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  margin:
+    holds: ["section numerals", "a section's sigil or standing mark", "the path's line and station numbers", "the strand (Warpline ledger)"]
+    never: ["copy", "navigation"]
+    narrow: "folds above the heading"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+  section:
+    holds: ["a 1px ink rule on top", "a numeral in the margin", "an h2", "rows or one exhibit"]
+    never: ["an uppercase label above the heading", "a boxed background for the whole section"]
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: structure, choice: folio }
+
+content:
+  position: "Lead with structure, determinism and calibration. 'Context-efficient' and 'learning' are never the headline or the first claim."
+  voice: "Plain and upfront. Confident about what works, open about what does not yet. 'We are building it' is said outright."
+  vocabulary:
+    use: { standing: "the built / in progress / untested component", plate: "a product's hero exhibit", slot: "a place awaiting evidence (authoring only)", "the path": "the learning page" }
+    avoid: ["coming soon", "blazing", "seamless", "supercharge", "10x", "revolutionary", "AI-powered", "trusted by"]
+  unbacked: "Claims the dossier could not back up are not repeated, including from the README: that the Stop hook blocks by default, that sessions use fewer tokens, that learning improves agents, that the budget fuse caps spending."
+  numbers: "Every number comes from pages/facts.json and carries its source. Counts of things in the package are inventory; they may appear once and are never the value claim."
+  status: proposed
+  from: { session: 2026-11-23-hero-pages, founder_position: "lead with structure, determinism, calibration" }
+
+specimen:
+  file: .atelier/systems/pages/specimen-hero.html
+  shows: ["hub first screen", "Paradigm page: hero with the prompt line, section 1 (claim rows), section 2 (fact lines, the real before-after, proof excerpt, chart slot)", "Warpline page lead: the standing ledger with the strand"]
+  numbers_from: ".paradigm/research/hero-pages/evidence-dossier.md (measured 2026-11-23); the symbol count is from Luna's own `paradigm status` run the same day"
+  themes: { light: 'data-theme="light"', dark: 'data-theme="dark"' }
+  not_shown: ["Gnomon plate at full size", "the path", "lately", "footer", "hover and focus states as stills"]
+  from: { session: 2026-11-23-hero-pages }
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+rules:
+  # mechanical (atelier check)
+  - { id: color-on-palette, check: color-off-palette, severity: warn, from: { session: 2026-11-23-hero-pages, board: identity } }
+  - { id: font-on-system, check: font-off-system, severity: warn, from: { session: 2026-11-23-hero-pages, board: type } }
+  - { id: type-on-scale, check: type-off-scale, severity: warn, from: { session: 2026-11-23-hero-pages, board: type } }
+  - { id: spacing-on-scale, check: spacing-off-scale, severity: warn, from: { session: 2026-11-23-hero-pages, board: structure } }
+  - { id: radius-on-scale, check: radius-off-scale, severity: warn, from: { session: 2026-11-23-hero-pages, board: structure } }
+  - id: no-pure-black-white
+    check: color-literal-forbidden
+    args: { values: ["#000", "#000000", "#fff", "#ffffff"] }
+    from: { session: 2026-11-23-hero-pages, board: identity }
+  - id: no-hype
+    check: retired-term
+    args: { values: ["coming soon", "blazing", "seamless", "supercharge", "10x", "revolutionary", "AI-powered", "trusted by"] }
+    from: { session: 2026-11-23-hero-pages, founder_words: "lets just be clear and upfront about things" }
+  # agent-enforced (Mika's review)
+  - id: never-stock
+    rule: "No grid of identical bordered rounded cards, no small uppercase tracked label over a block, no pill badge, no three equal feature columns, no untouched component-kit look. Group by rules and spacing before boxes."
+    from: { decision: "founder house rule (nb-luna-elvanti-never-stock)" }
+  - id: no-source-no-number
+    rule: "A number appears only as a stamped fact with a source and a date. No invented statistic, quote, user count or benchmark, and no chart of data that does not exist."
+    from: { session: 2026-11-23-hero-pages, board: quantified-value }
+  - id: slots-never-ship
+    rule: "A slot is an authoring state. The release stamp fails while any page references one; the section is written to stand without it."
+    from: { session: 2026-11-23-hero-pages, board: quantified-value }
+  - id: standing-is-said-and-drawn
+    rule: "Each product page shows its standing line in the first screen and a standing ledger before the first step. Standing reads by mark and word, never by hue, and every row has evidence."
+    from: { session: 2026-11-23-hero-pages, board: standing }
+  - id: colour-stays-home
+    rule: "The frame is ink on ground. A symbol hue appears only with its glyph. A product's colours appear only in its plate and its device."
+    from: { session: 2026-11-23-hero-pages, board: identity }
+  - id: one-device-each
+    rule: "Paradigm has the sigil, Gnomon the sheet with its hard shadow, Warpline the strand. Each is reused wherever its product appears and nowhere else."
+    from: { session: 2026-11-23-hero-pages, board: devices }
+  - id: structure-first
+    rule: "The first headline and the first claim on any page are about structure, determinism or calibration."
+    from: { decision: "founder position (project_positioning)" }
+  - id: warpline-is-sparse
+    rule: "The Warpline page is the shortest: a headline, a lede, the ledger, one plate, how to try it, the way back. No fact lines until something is measured."
+    from: { session: 2026-11-23-hero-pages, founder_words: "it's fine if warpline is the most sparse as we haven't even really run a full test of it and how it works with a server" }
+  - id: motion-explains
+    rule: "At most one motion per page and it shows how the thing works. Reduced motion shows the final state."
+    from: { session: 2026-11-23-hero-pages, board: motion }
+  - id: aa-and-keys
+    rule: "Text is at least 4.5:1 (3:1 at 24px or larger) on its surface in both themes; control and graph edges at least 3:1; every action is reachable by keyboard with a visible 2px ink focus ring; pointer targets are at least 44px high."
+    from: { decision: "Mika review-checklist" }
+  - id: self-contained
+    rule: "No request leaves the pages' own origin: no font CDN, no analytics, no embedded third-party script or image."
+    from: { session: 2026-11-23-hero-pages, board: build }
+  - id: responsive
+    rule: "Readable from 320px wide with no sideways page scroll; only a pre or the nav may scroll sideways inside itself."
+    from: { session: 2026-11-23-hero-pages, board: structure }
+
+absent:
+  # Deliberately not in this system. Adding one is a board, not a build choice.
+  - "cards in a grid, and any hover lift or tint on a row"
+  - "pill badges, tags and chips of any kind, including for status and versions"
+  - "an uppercase tracked eyebrow above headings"
+  - "an accent hue for the frame; gradients; glow; drop shadows outside the Gnomon plate"
+  - "icons from a set; the only marks are the sigils, the standing squares, the arrow and ↗"
+  - "testimonials, logo walls, star or download counters, comparison tables against named competitors"
+  - "carousels, tabs, modals, sticky calls to action, cookie banners, newsletter forms"
+  - "scroll-triggered entrance animation, parallax, count-up numerals, autoplay video"
+  - "pie, donut, radar and area charts; any chart with a legend"
+  - "screenshots as raster images in the first screen"
+  - "the Academia register and the Obsidian green accent of useparadigm.dev"
+
+overrides:
+  - tell: default-display-serif
+    scope: "headlines, entry names and row terms"
+    reason: "Fraunces is already the display face of Gnomon (day titles) and Warpline (meaning) and is self-hosted in the repo; it is the family's face, not a default reach"
+    status: proposed
+    from: { session: 2026-11-23-hero-pages, board: type, choice: family-faces }
+
+decisions:
+  # All decided by Luna on the default while the founder was away; each waits for the founder.
+  - { session: 2026-11-23-hero-pages, board: identity, choice: one-frame-three-plates, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: governing-system, choice: new-pages-system, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: structure, choice: folio, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: type, choice: family-faces, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: devices, choice: sigil-sheet-strand, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: standing, choice: mark-and-word, decided_by: "luna (default), on the founder's tone direction", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: quantified-value, choice: fact-lines-first, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: lately-and-limits, choice: dated-rows-and-ledger, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: learning-path, choice: stations, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: motion, choice: one-explaining-motion, decided_by: "luna (default)", status: "awaiting the founder" }
+  - { session: 2026-11-23-hero-pages, board: build, choice: pages-folder-and-workflow, decided_by: "luna (default)", status: "awaiting the founder" }

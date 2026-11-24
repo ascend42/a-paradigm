@@ -13,3 +13,12 @@ products:
       - packages/gnomon-wrapper/static
       - packages/gnomon-mods/workshop
     extends: none
+  # Proposed 2026-11-23 (session 2026-11-23-hero-pages), awaiting the founder. Declared so that
+  # `atelier check` can hold the hero pages and their specimen to the proposal. pages/ does not
+  # exist yet; to park the proposal, delete this block.
+  pages:
+    name: Public hero pages
+    paths:
+      - pages
+      - .atelier/systems/pages
+    extends: none

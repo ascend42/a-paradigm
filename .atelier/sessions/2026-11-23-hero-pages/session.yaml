@@ -1,0 +1,161 @@
+id: 2026-11-23-hero-pages
+verb: propose
+scope: "A set of public hero pages served by GitHub Pages: a hub, one page each for Paradigm, Gnomon and Warpline, and a learning path. Static HTML, CSS and JS, no build step to view, no third-party request."
+product: pages
+system: .atelier/systems/pages/
+depth: full
+surface: public web, responsive, light and dark
+mode: new
+by: luna
+started: 2026-11-23
+status: "proposed; every board was decided by Luna on her recommendation because the founder was away overnight and asked for a complete direction to accept or adjust. Nothing is accepted. Mika has not vetted the options or the system proposal (no Mika brief was available in this run)."
+founder_words:
+  - "a set of hero pages that explain paradigm, gnomon, and warpline that will be linked on the github as pages. these should be 'sexy' and very informative to quantify the value prop of these things in the repo and lets reformat how we teach people how to utilize paradigm to its fullest with best practices."
+  - "it's fine if warpline is the most sparse as we haven't even really run a full test of it and how it works with a server and what that even looks like at large"
+  - "lets just be clear and upfront about things. we're building it and it's time to take it all to the next level in quality and function."
+relayed: "The second and third notes, and the note that the value of Paradigm and Gnomon has grown 'as things have continued to transpire lately', were relayed by the session coordinator."
+read: "A developer arriving from the repo, deciding whether this is worth an hour. They leave knowing what each thing is, what it is worth in measured numbers, where it honestly stands, and what to do first."
+outputs:
+  direction: DIRECTION.md
+  system: .atelier/systems/pages/design-system.yaml
+  specimen: .atelier/systems/pages/specimen-hero.html
+  build_brief: BUILD-BRIEF.md
+  declared: ".atelier/systems.yaml gained a `pages` product (paths: pages, .atelier/systems/pages) so `atelier check` can run. Delete that block to park the proposal."
+inputs_arrived_mid_session: ".paradigm/research/hero-pages/evidence-dossier.md and teaching-audit.md were committed while this session ran (5d57c1fd, 643422e0). The specimen copy, the facts shown, the path's levels and the first-screen contents were revised to follow them. Before that, the specimen quoted README claims the dossier could not back up; none remain."
+audit:
+  - "docs/warpline/index.html, system.html, pov.html (July): load Google Fonts; claims run ahead of testing. Not served, not linked."
+  - "docs/warpline-overview.html (October): self-contained, already upfront ('Roughly how far is left'). The better source for Warpline."
+  - "packages/site + .atelier/systems/site (parked): pill chips, an eyebrow label written 19 times, bordered cards; text.muted fails AA in all four palettes. Its symbol hues are kept."
+  - ".atelier/systems/gnomon: papercraft and phosphor tokens used verbatim inside the Gnomon plate."
+  - "README.md: the structure, determinism, calibration order; the source of the draft copy."
+  - "GitHub Pages is not enabled on ascend42/a-paradigm (API 404, checked 2026-11-23)."
+
+boards:
+  identity:
+    question: "One identity for all pages, or each product in its own?"
+    options:
+      A-one-frame-three-plates: "One frame (type, grid, components, no accent hue). Each product keeps its identity in its plate (the hero exhibit, in the product's own material) and its device."
+      B-one-identity: "One look for everything; Gnomon and Warpline are drawn in the frame's ink like Paradigm."
+      C-three-identities: "Each product page wears its product's full system (Obsidian, papercraft, loom); the hub is a neutral switchboard."
+    recommended: A-one-frame-three-plates
+    choice: A-one-frame-three-plates
+    why: "The reader moves between five pages in one visit, so the chrome must not change under them (against C, which also triples the component work and puts two parked systems into production). But 'show the real thing' fails if Gnomon's card is redrawn in a house style it does not have (against B). A keeps one thing to learn and lets each product look like itself exactly where it is being shown."
+    decided_by: "luna (default)"
+  governing-system:
+    question: "Which design system governs the pages?"
+    options:
+      A-new-pages-system: "A new `pages` system under .atelier/systems/pages, extends: none, borrowing named tokens from site (symbol hues), gnomon and warpline (plates)."
+      B-extend-site: "Extend the parked `site` system."
+    recommended: A-new-pages-system
+    choice: A-new-pages-system
+    why: "`site` is parked and unenforced, is a React build with framer-motion, defaults to dark Obsidian with a green accent, and its component set is the pill, eyebrow and card look the house rule forbids; extending it would mean overriding most of it. A new system can be small, static and proposed before anything ships."
+    decided_by: "luna (default)"
+  structure:
+    question: "How are the pages laid out?"
+    options:
+      A-folio: "A printed technical folio: a 12-column grid with a margin column where marks hang, sections divided by ink rules, content as rows; the hub is a contents index of unequal entries."
+      B-console: "A terminal or dashboard look: dark first, mono throughout, panels."
+      C-landing: "A conventional product landing page: centred hero, feature blocks, alternating image and text."
+    recommended: A-folio
+    choice: A-folio
+    why: "C is the stock look by construction. B imitates Gnomon on pages that are not Gnomon and reads poorly at length. A carries dense, sourced information and gives the real artefacts room."
+    decided_by: "luna (default)"
+  type:
+    question: "Which faces?"
+    options:
+      A-family-faces: "Fraunces for headlines, system sans for prose, JetBrains Mono for anything real. Fraunces and JetBrains Mono are already self-hosted in the repo."
+      B-mono-spine: "JetBrains Mono for everything, as in Gnomon."
+      C-site-faces: "Geist and Geist Mono, as on useparadigm.dev (new font files to host)."
+      D-system-only: "System faces only, zero font bytes."
+    recommended: A-family-faces
+    choice: A-family-faces
+    why: "Long prose in mono tires a reader who is deciding in an hour (against B). C adds font files and ties the pages to a parked identity. D looks different on every OS and loses the headline's character. A costs about 110 KB unsubset (the brief asks for a subset to stay under 90) and uses what two of the three products already share."
+    cost: "Fraunces trips the default-display-serif tell; recorded as a proposed override."
+    decided_by: "luna (default)"
+  devices:
+    question: "One small crafted device per product."
+    options:
+      A-sigil-sheet-strand: "Paradigm: the sigil (a symbol prefix on its hue socket). Gnomon: the cut sheet with the one hard cast shadow. Warpline: the strand (two threads, solid where woven, loose where not)."
+      B-marks: "Three drawn logo-like marks, one per product."
+      C-pin-and-shadow: "For Gnomon, the pin and lengthening shadow being proposed for boards."
+    recommended: A-sigil-sheet-strand
+    choice: A-sigil-sheet-strand
+    why: "Each A device is taken from the product's own working surface and can carry meaning: the sigil types a symbol, the shadow marks what is Gnomon's, the strand shows what is tested. B is decoration and would amount to new logos. C is still a proposal in another session and depends on a rule that is not in force."
+    decided_by: "luna (default)"
+  standing:
+    question: "How is 'built, in progress, untested' shown?"
+    options:
+      A-mark-and-word: "A crafted standing component: a 12px square (filled, split, hollow and dashed) plus its word, as a line in the hero and as a ledger per feature with evidence on every row. Ink only."
+      B-coloured-status: "Green, amber and grey status labels."
+      C-prose: "A 'Status' paragraph and a limitations note near the foot."
+    recommended: A-mark-and-word
+    choice: A-mark-and-word
+    why: "B is the pill badge and spends hues that already mean symbols. C is the footnote the founder ruled out. A makes status a designed part of the page with the same weight as a feature."
+    decided_by: "luna (default), on the founder's tone direction"
+    open: "Three states only. Whether 'Built' needs a fourth state for 'built but not released' is left to the dossier's findings."
+  quantified-value:
+    question: "How are numbers shown?"
+    options:
+      A-fact-lines-first: "Fact lines as rows (numeral, claim, source); a before and after only for a paired measurement; proof excerpts; one step chart per page at most, only for five or more dated points."
+      B-stat-tiles: "A band of large stat tiles."
+      C-chart-led: "A chart per section."
+    recommended: A-fact-lines-first
+    choice: A-fact-lines-first
+    why: "B is three or four equal cards and invites numbers without sources. C needs data that does not exist yet. A works with one fact or with ten and never needs a placeholder."
+    decided_by: "luna (default)"
+  lately-and-limits:
+    question: "How are recent change and honest limits shown?"
+    options:
+      A-dated-rows-and-ledger: "Lately: three to five dated rows stamped from CHANGELOG.md. Limits: the standing ledger plus requirements, before the first step."
+      B-whats-new-banner: "A 'new' banner in the hero and a roadmap section."
+    recommended: A-dated-rows-and-ledger
+    choice: A-dated-rows-and-ledger
+    why: "A banner dates within a week and a roadmap is a promise. Dated rows from the changelog are true the day they are stamped."
+    decided_by: "luna (default)"
+  learning-path:
+    question: "What form does 'learn Paradigm' take?"
+    options:
+      A-stations: "One vertical line with numbered stations; each opens to an outcome, one exercise with a 'you should see', one practice pair and a link to the guide; ends in a printable field card."
+      B-docs-index: "A grid of guide links by topic."
+      C-course: "A multi-page course with quizzes, like the University."
+    recommended: A-stations
+    choice: A-stations
+    why: "B is the wall of docs the founder wants to leave. C is a product of its own, already exists in Platform, and needs script and state. A is one page, works without script, and every level ends in the reader's own repo."
+    decided_by: "luna (default)"
+    levels: "the teaching audit's four levels plus a Gnomon track and a Warpline track; the audit's thirteen practices distributed to stations"
+  motion:
+    question: "Is there motion?"
+    options:
+      A-one-explaining-motion: "At most one per page, and it explains: the graph's ripple on hover or focus; Gnomon's card stamp and log row, once. None on the hub, Warpline or Learn."
+      B-none: "No motion at all."
+      C-entrances: "Sections fade and rise as they scroll in."
+    recommended: A-one-explaining-motion
+    choice: A-one-explaining-motion
+    why: "C is decoration. B is safe but gives up the one thing motion does well here: showing that touching one symbol touches two flows."
+    decided_by: "luna (default)"
+  build:
+    question: "Where do the pages live and how do they get their numbers?"
+    options:
+      A-pages-folder-and-workflow: "A top-level pages/ folder deployed by a Pages workflow; numbers stamped into committed HTML from one facts.json by a no-dependency script; CI refuses slots."
+      B-docs-on-main: "docs/ on main, branch deploy."
+      C-runtime-facts: "Pages fetch facts.json in the browser."
+    recommended: A-pages-folder-and-workflow
+    choice: A-pages-folder-and-workflow
+    why: "B would publish every spec, plan and old page in docs/ through Jekyll and cannot check anything before publishing. C fails from file://, shows nothing without script and hides the numbers from search."
+    decided_by: "luna (default)"
+
+needs_founder:
+  - "Accept, adjust or reject the direction as a whole (specimen first)."
+  - "Enable GitHub Pages with Source: GitHub Actions. Only the founder can."
+  - "The pages product is declared in .atelier/systems.yaml so checks can run. The founder parked every system but Gnomon on 2026-10-21; this re-opens one. Keep or delete."
+  - "Warpline plate ground: ink in both themes (recommended) or a light linen plate in light theme, as in warpline-overview.html."
+  - "The hub says Gnomon boards are 'in progress (first slice on a branch)'. True in git; is it something to say in public yet?"
+  - "docs/warpline/index.html and its two siblings stay in the repo untouched. Their claims are ahead of the new Warpline page. Leave, mark as historical, or remove?"
+  - "The draft headlines: 'A map of your code that agents can be held to.' / 'Your code, written down where agents answer to it.' / 'Warpline checks a merge by what the code means. It is not yet proven.' (the last stands in for TBD-FOUNDER: warpline-tagline)"
+  - "Three standing states, or a fourth. The dossier has two recorded Warpline results that are neither built, in progress nor untested: the base-rate study (17 of 275 git-clean merges flagged; 0 real breaks at merge among the 18 hits) and the K3 gate, which fired (the calibration advantage did not show). A fourth state, 'Measured, did not hold', would carry them in the ledger. Without it they are fact lines on the Warpline page, or left to the repo. The specimen shows neither yet."
+  - "The Paradigm page shows the one paired study as a real before and after: 71 tool calls without Paradigm, about 95 with, same result. The dossier's product voice recommends saying it ourselves. It is the first chart a reader sees. Confirm."
+  - "The pages do not repeat README lines 6, 7, 13, 14, 15, 17 and 54 where the dossier found them unbacked. The README itself is unchanged."
+needs_mika:
+  - "Vet the options and the system proposal; codify design-system.yaml if the founder accepts."
+  - "Review specimen-hero.html (the UI gate asked for it; no review has been done or recorded)."
+  - "The specimen was rendered at 1440 and 500 wide only. 320 and 390 are unverified."
