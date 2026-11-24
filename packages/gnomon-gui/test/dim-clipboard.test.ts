@@ -213,8 +213,8 @@ describe('#gui-dim-clipboard dimPasteTextOp: a pasted text that is not the regis
     expect([again.node.x - (short.node.x as number), again.node.y - (short.node.y as number)]).toEqual([32, 32]);
     const tall = dimPasteTextOp(Array.from({ length: 100 }, () => 'line').join('\n'), emptyDimState(), { x: 0, y: 300 }, mint, { top: 40 }) as { node: { y: number } };
     expect(tall.node.y).toBe(40 + DIM_PASTE_WRAP.margin);
-    expect((dimPasteTextOp('a\u001b[31mb\u0007\tc\u0000', emptyDimState(), { x: 0, y: 0 }, mint) as { node: { text: string } }).node.text).toBe('a[31mb\tc');
-    for (const blank of ['   ', ' \n\t ', '\u0007\u001b']) expect(dimPasteTextOp(blank, emptyDimState(), { x: 0, y: 0 }, mint)).toBeNull();
+    expect((dimPasteTextOp('a\u001b[31mb\u0007\tc\u0000', emptyDimState(), { x: 0, y: 0 }, mint) as { node: { text: string } }).node.text).toBe('ab\tc');
+    for (const blank of ['   ', ' \n\t ', '\u0007\u0000', '\u001b[2J']) expect(dimPasteTextOp(blank, emptyDimState(), { x: 0, y: 0 }, mint)).toBeNull();
     for (const op of [short, long]) expect(validateDimOps(emptyDimState(), [op], { cls: 'human', principal: 'p:test/you' } as never).refused ?? []).toEqual([]);
   });
 });
@@ -270,9 +270,9 @@ describe('#gui-dim-clipboard review of PR #117: frames, parents and what a cut t
         { type: 'add', node: { id: id(4), kind: 'rect', x: 100, y: 100, z: 'd', w: 50, h: 40 } },
       ] } },
     ] as never);
-    expect(dimClipboardWords('a\u001b[0m‮b‏\r\nc\td')).toBe('a[0mb\nc\td');
+    expect(dimClipboardWords('a\u001b[0m‮b‏\r\nc\td')).toBe('a⟨RLO⟩b⟨RLM⟩\nc\td'); // the contracts sanitizer: the escape sequence goes, a bidi control is its visible glyph
     const clip = new DimClipboard();
-    expect(clip.copy(state, [id(1)]).text).toBe('red[31m evil\ttab');
+    expect(clip.copy(state, [id(1)]).text).toBe('red ⟨RLO⟩evil\ttab');
     // 5,001 joined characters: the stand-in line, and it still pastes back as clones
     expect(clip.copy(state, [id(2), id(3)]).text).toBe(dimStandInLine(2));
     let n = 0;

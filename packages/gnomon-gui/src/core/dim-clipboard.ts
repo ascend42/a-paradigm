@@ -21,7 +21,7 @@
  * The equality can be forced by anything that can read or write the clipboard. It yields only clones of this
  * page's own earlier copy, validated and authored by whoever pastes.
  */
-import { DIM_CORE_KINDS, DIM_LIMITS, DIM_NODE_KEYS, dimZCompare, dimZPlace } from '@a-company/gnomon-contracts';
+import { DIM_CORE_KINDS, DIM_LIMITS, DIM_NODE_KEYS, dimZCompare, dimZPlace, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { DimCoreKind, DimNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 
 export const DIM_CLIPBOARD_LIMITS = Object.freeze({ clones: 64, offset: 16 });
@@ -65,13 +65,14 @@ const STAND_INS: ReadonlySet<string> = new Set(Array.from({ length: DIM_CLIPBOAR
 /** CRLF and lone CR to LF: the form texts are compared in. */
 const lf = (text: string): string => text.replace(/\r\n?/g, '\n');
 /**
- * Words as they may leave for the system clipboard: no control character but a line end and a tab, and no format
- * character (a bidi override, a zero-width mark). A mark an agent wrote must not carry ESC or an override into a
- * terminal the words are pasted in.
+ * Words as they may leave for the system clipboard, and pasted words as they may become a mark: through THE one
+ * sanitizer of the contracts (`sanitizeDisplayText`, §4.5; the GUI defines none of its own). Escape sequences and
+ * other control characters go, hidden characters go, and a bidi control becomes its visible glyph; a line end and a
+ * tab stay. A mark an agent wrote therefore cannot carry ESC or a live override into a terminal the words are
+ * pasted in. The sanitizer is idempotent, so a copy's text still equals itself when it is pasted back.
  */
-export const dimClipboardWords = (text: string): string => lf(text).replace(/[^\P{Cc}\n\t]|\p{Cf}/gu, '');
-/** Pasted words as they may become a mark: no control character but a line end and a tab. */
-export const dimPastedWords = (text: string): string => lf(text).replace(/[^\P{Cc}\n\t]/gu, '');
+export const dimClipboardWords = (text: string): string => sanitizeDisplayText(lf(text)).text;
+export const dimPastedWords = dimClipboardWords;
 /** A scene rectangle (the part of the board in view). */
 export interface DimViewBox {
   x: number;
@@ -216,7 +217,7 @@ export const DIM_PASTE_WRAP = Object.freeze({ w: 360, char: 8.0625, line: 18, ov
 
 /**
  * The one `add` op of a pasted text that is not the register's: a text node holding the words as they were pasted
- * (line ends as LF, control characters removed; never parsed), on top of everything in `current`. Its BOX is
+ * (line ends as LF, through the contracts sanitizer; never parsed), on top of everything in `current`. Its BOX is
  * centred on `at` (the leaf gives the view centre), stepped down and right by `repeat` times the step so a second
  * paste does not sit exactly on the first, and its top is kept at or below `top` (the top of the view) so a long
  * paste starts in view. Null when nothing is left to paste (only white space or control characters). Nothing is

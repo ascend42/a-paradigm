@@ -650,8 +650,8 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     refused(f('blank'), f('lookalike'), [], 'a paste of white space');
     expect(String(a.blankLine)).toContain('dimension in'); // nothing is said: the keep line stands
     contained(f('control'), 'a paste with control characters');
-    expect(f('control').texts).toContain('a[31mbc');
-    expect(a.cleanCopy).toBe('run[2J rm -rf');
+    expect(f('control').texts).toContain('abc');
+    expect(a.cleanCopy).toBe('run ⟨RLO⟩rm -rf'); // no ESC, and the override is a visible glyph, never live
     expect(a.bigCopy).toBe(dimStandInLine(3));
     const back = (a.bigPaste as Edit[]).at(-1)!;
     expect(back.ops).toHaveLength(3);
