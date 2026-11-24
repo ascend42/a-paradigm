@@ -14,8 +14,10 @@ paradigm mcp setup
 paradigm mcp setup --client claude-code
 paradigm mcp setup --client cursor
 paradigm mcp setup --client claude-desktop
-paradigm mcp setup --client all
+paradigm mcp setup --client all   # every detected client, Claude Code included
 ```
+
+**For Claude Code users:** If you use the plugin, do not also configure `claude-code` here (and avoid `--client all`): it writes a second Paradigm server to `.mcp.json`.
 
 **For Claude Code users:** The fastest path is the plugin — see [Claude Code Plugin](#claude-code-plugin) below.
 
@@ -41,10 +43,10 @@ paradigm mcp setup --client all
 
 ### Static vs Dynamic Context
 
-| Approach | How It Works | Token Usage |
-|----------|--------------|-------------|
-| **Static (IDE Rules)** | Load everything at conversation start | ~2000 tokens upfront |
-| **Dynamic (MCP)** | Query only what's needed, when needed | ~100 tokens per query |
+| Approach | How It Works |
+|----------|--------------|
+| **Static (IDE Rules)** | Load everything at conversation start |
+| **Dynamic (MCP)** | Query only what's needed, when needed |
 
 ```
 Static:  [Load all context] → [Work on task]
@@ -56,7 +58,7 @@ Dynamic: [Minimal context] → [Need #checkout info?] → [Query MCP] → [Conti
 
 ### Why Use MCP with Paradigm?
 
-- **Token efficient** — Don't pay for context you don't use
+- **Queried on demand** — the agent asks for the context a task needs. We have not measured a token saving.
 - **Always current** — Reads live project state, not cached files
 - **Targeted answers** — Claude can ask "what depends on X?" and get precise data
 - **Technology agnostic** — Works with any language/framework
@@ -146,13 +148,13 @@ paradigm mcp remove old-project --client all
 
 | Client | Config Type | Config Location |
 |--------|-------------|-----------------|
-| **Claude Code** | User-level (plugin) or project-level | Plugin: automatic. Manual: `~/.claude/claude.json` |
+| **Claude Code** | User-level (plugin) or project-level | Plugin: automatic. Manual: `.mcp.json` at the project root |
 | **Cursor** | Project-level | `.cursor/mcp.json` |
 | **Claude Desktop** | User-level | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | **Continue (VS Code)** | User-level | `~/.continue/config.json` |
 | **Cline (VS Code)** | Project-level | `.cline/mcp.json` |
 
-**Project-level** configs are specific to a project and can be shared with your team.
+**Project-level** configs are specific to a project. `paradigm mcp setup` adds them to `.gitignore` unless you pass `--no-gitignore`.
 **User-level** configs apply to all projects and are stored in your home directory.
 
 ### Claude Code Plugin
@@ -171,7 +173,7 @@ Restart Claude Code after installing. Paradigm's 32 grouped MCP tools (more on d
 
 | | Plugin | `paradigm mcp setup --client claude-code` |
 |---|---|---|
-| **MCP tools** | 32 grouped tools (more on demand), globally for every project | Per-project config in `~/.claude/claude.json` |
+| **MCP tools** | 32 grouped tools (more on demand), globally for every project | Per-project config in `.mcp.json` at the project root |
 | **Enforcement hooks** | Stop, PreToolUse, PostToolUse | Must run `paradigm hooks install --claude-code` separately |
 | **Skills** | `/paradigm:init`, `/paradigm:shift`, `/paradigm:scan`, etc. | Not included |
 | **Agents** | architect, builder, reviewer, security, tester (5 bundled) | Not included |
@@ -195,19 +197,20 @@ Run the automated setup:
 paradigm mcp setup --client claude-code
 ```
 
-Or configure manually by editing `~/.claude/claude.json`:
+This writes `.mcp.json` at the project root. To configure it by hand, create or edit that file:
 
 ```json
 {
   "mcpServers": {
     "your-project": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
-      "cwd": "/path/to/your/project"
+      "command": "paradigm-mcp",
+      "args": ["."]
     }
   }
 }
 ```
+
+`paradigm-mcp` is installed with `npm install -g @a-company/paradigm`. The entry has no `cwd`: Claude Code starts the server from the project folder.
 
 After editing, start a new Claude Code conversation and verify:
 
@@ -221,14 +224,14 @@ You should see `paradigm_status`, `paradigm_search`, `paradigm_ripple`, `paradig
 
 ### Cursor
 
-Create `.cursor/mcp.json` in your project:
+`paradigm mcp setup --client cursor` writes `.cursor/mcp.json` for you, including the setting that tells the server where the project root is. Prefer it. To write the file by hand:
 
 ```json
 {
   "mcpServers": {
     "your-project": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/path/to/your/project"
     }
   }
@@ -253,8 +256,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 {
   "mcpServers": {
     "your-project": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/path/to/your/project"
     }
   }
@@ -272,8 +275,8 @@ Edit `~/.continue/config.json`:
       {
         "transport": {
           "type": "stdio",
-          "command": "npx",
-          "args": ["@a-company/paradigm-mcp"],
+          "command": "paradigm-mcp",
+          "args": ["."],
           "cwd": "/path/to/your/project"
         }
       }
@@ -290,13 +293,13 @@ For user-level configs (Claude Desktop, Continue), add multiple servers:
 {
   "mcpServers": {
     "project-one": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/Users/me/projects/project-one"
     },
     "project-two": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/Users/me/projects/project-two"
     }
   }
@@ -366,7 +369,6 @@ For best results, follow this "query before modify" protocol:
 | Monitoring session | `paradigm_session` (op `health`) every 10-15 tool calls |
 
 **Why this matters:**
-- **Token efficient**: ~100 tokens per query vs ~2000 for reading files
 - **Fresh data**: Always current from live project index
 - **Safer changes**: Understand impact before modifying
 
@@ -410,28 +412,12 @@ Pass environment variables to the MCP server:
 {
   "mcpServers": {
     "paradigm": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/path/to/project",
       "env": {
         "DEBUG": "paradigm:*"
       }
-    }
-  }
-}
-```
-
-### Using a Specific Version
-
-Pin to a specific version:
-
-```json
-{
-  "mcpServers": {
-    "paradigm": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp@0.1.0"],
-      "cwd": "/path/to/project"
     }
   }
 }
@@ -467,13 +453,13 @@ For development, point to your local build:
 
 ### Claude Code: Manual MCP config not working
 
-1. **Check `~/.claude/claude.json`** — Confirm the `mcpServers` entry exists and `cwd` points to a valid Paradigm project
+1. **Check `.mcp.json` at the project root** — Confirm the `mcpServers` entry exists
 2. **Verify JSON syntax** — Use a JSON validator to check for syntax errors
 3. **Run `paradigm mcp status`** — Confirms whether the config file was written correctly
 4. **Test the MCP server directly**:
    ```bash
    cd /path/to/your/project
-   npx @a-company/paradigm-mcp
+   paradigm-mcp
    ```
    If it starts without errors, the server is functional and the issue is in the config.
 5. **Start a new conversation** — MCP config is read at conversation start, not mid-session
@@ -502,16 +488,16 @@ New MCP servers are **disabled by default** in Cursor. You must manually enable 
 4. **Restart the AI client completely** — Quit and relaunch, don't just close the window
 5. **For Cursor:** Ensure the server is enabled in Settings → Tools
 
-### "npx command not found"
+### "paradigm-mcp: command not found"
 
 1. **Check Node.js installation** — Run `node --version` in terminal
-2. **Use full path to npx** — Try `/usr/local/bin/npx` (macOS) or the full path on Windows
+2. **Check the global install** — Run `npm install -g @a-company/paradigm`, then `which paradigm-mcp`
 
 ### "Symbol not found" errors
 
 1. **Run `paradigm status`** — Ensure your project has symbols indexed
 2. **Check .purpose files** — Verify your features/components are defined
-3. **Refresh the index** — Run `paradigm constellation` to rebuild
+3. **Refresh the index** — Run `paradigm reindex` to rebuild
 
 ### Server crashes or errors
 
@@ -520,7 +506,7 @@ Check the server logs:
 ```bash
 # Run the MCP server directly to see output
 cd /path/to/your/project
-npx @a-company/paradigm-mcp
+paradigm-mcp
 ```
 
 Look for error messages about missing files or parsing issues.
@@ -548,7 +534,7 @@ paradigm mcp setup --client cursor --force
 ## Next Steps
 
 - **Add project context** — Run `paradigm shift` to generate `.paradigm/`, `.purpose`, and `portal.yaml` in your project
-- **Explore CLI Commands** — Use `paradigm beacon`, `paradigm ripple`, and `paradigm constellation` for richer AI context
+- **Explore CLI Commands** — Use `paradigm ripple <symbol>` to see what a change affects and `paradigm doctor` for a health check
 - **Read the Quick Start Guide** — See [docs/guides/quick-start.md](quick-start.md) for step-by-step setup
 
 ---

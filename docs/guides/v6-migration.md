@@ -368,9 +368,9 @@ Add Rune to your roster:
 paradigm shift   # detects your stack, adds Rune and other applicable archetypes
 ```
 
-### v6.2.0 — Atlas agent + `arch.yaml`
+### v6.2.0 — Cartographer agent + `arch.yaml`
 
-Atlas (cartographer archetype) joined the roster. He generates and maintains **`arch.yaml`** — a structured architectural map committed alongside `.purpose` files. New MCP tools: `paradigm_graph` (op `arch_status`), `paradigm_graph` (op `arch_diagram`).
+The cartographer agent (Topo) joined the roster. He generates and maintains **`arch.yaml`** — a structured architectural map committed alongside `.purpose` files. New MCP tools: `paradigm_graph` (op `arch_status`), `paradigm_graph` (op `arch_diagram`).
 
 `arch.yaml` is a new artifact type. Commit it. No breaking change — purely additive.
 

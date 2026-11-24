@@ -1,8 +1,8 @@
 # Paradigm Documentation
 
-Complete guides and references for using Paradigm - the AI-native project structure framework.
+Guides and command references for Paradigm.
 
-## 📚 Documentation Hub
+## Documentation Hub
 
 ### Getting Started
 - [Quick Start Guide](./guides/quick-start.md) - Complete setup walkthrough
@@ -15,11 +15,6 @@ Complete guides and references for using Paradigm - the AI-native project struct
 - [`paradigm sync`](./commands/sync.md) - Regenerate IDE instruction files
 - [`paradigm mcp setup`](./commands/mcp-setup.md) - Configure MCP for AI clients
 
-**AI Context Generation:**
-- [`paradigm beacon`](./commands/beacon.md) - Generate quick-start orientation for AI
-- [`paradigm constellation`](./commands/constellation.md) - Build complete symbol relationship graph
-- [`paradigm index`](./commands/index.md) - Generate visual discovery index
-
 **Analysis & Safety:**
 - [`paradigm ripple`](./commands/ripple.md) - Analyze symbol impact before changes
 - [`paradigm doctor`](./commands/doctor.md) - Run health checks on Paradigm setup
@@ -29,74 +24,68 @@ Complete guides and references for using Paradigm - the AI-native project struct
 - [Paradigm Logger](../.paradigm/specs/logger.md) - Structured logging specification
 - [Purpose Files](./guides/quick-start.md) - Feature and component context files
 
-### Guides
-- [Content Guide](./private/content-guide.md) - Writing effective Paradigm content
-- [Tutorial Project](./private/tutorial-project.md) - Learn by building
-
-## 📖 Reading Order
+## Reading Order
 
 **For new users:**
 1. Start with [Quick Start Guide](./guides/quick-start.md)
 2. Run `paradigm shift` to set up your project, then explore the command docs below
 3. Understand [`paradigm sync`](./commands/sync.md) for keeping IDE files fresh
-4. Learn [`paradigm beacon`](./commands/beacon.md) and [`paradigm constellation`](./commands/constellation.md) for AI context
 
 **For daily development:**
 1. Use [`paradigm ripple`](./commands/ripple.md) before every significant change
 2. Run [`paradigm doctor`](./commands/doctor.md) when troubleshooting
-3. Keep AI context fresh with [`paradigm beacon`](./commands/beacon.md)
 
 **For advanced usage:**
-1. [`paradigm index`](./commands/index.md) - Visual discovery with screenshots
-2. [`paradigm mcp setup`](./commands/mcp-setup.md) - Dynamic AI tool integration
-3. [Symbol System](../CLAUDE.md#symbol-system) - Deep dive into Paradigm's structure
+1. [`paradigm mcp setup`](./commands/mcp-setup.md) - MCP for Cursor, Claude Desktop, Continue and Cline
+2. [Symbol System](../CLAUDE.md#symbol-system) - Deep dive into Paradigm's structure
 
-## 🔍 Quick Command Lookup
+## Quick Command Lookup
 
 | Command | Use Case | Frequency |
 |---------|----------|-----------|
 | `paradigm shift` | Initialize and configure new project | Once per project |
 | `paradigm sync` | Update IDE files | After config changes |
-| `paradigm beacon` | Generate AI orientation | Weekly or after features |
-| `paradigm constellation` | Build symbol graph | With beacon |
 | `paradigm ripple #symbol` | Check change impact | Before every modification |
 | `paradigm doctor` | Health check | When troubleshooting |
-| `paradigm index` | Visual discovery | Optional, for screenshots |
-| `paradigm mcp setup` | Configure AI tools | Once per machine |
+| `paradigm mcp setup --client <client>` | Add the MCP server to Cursor, Claude Desktop, Continue or Cline | Once per project or machine, depending on the client |
 
-## 💡 Common Workflows
+## Common Workflows
 
 ### New Project Setup
 ```bash
-paradigm shift --quick
-paradigm sync --all
-paradigm mcp setup --client all
-paradigm beacon && paradigm constellation
-paradigm doctor
+npm install -g @a-company/paradigm
+cd your-project
+paradigm shift
 ```
+
+If you use Claude Code, also install the plugin. In Claude Code:
+
+```
+/plugin marketplace add ascend42/a-paradigm
+/plugin install paradigm@a-paradigm
+```
+
+For Cursor, Claude Desktop, Continue or Cline, run `paradigm mcp setup --client <client>` instead (`cursor`, `claude-desktop`, `continue` or `cline`). `--client all` also configures Claude Code when it detects it, which duplicates the plugin's server. Compliance checks are off until you run `paradigm enforcement set <level>`.
 
 ### Before Refactoring
 ```bash
-paradigm ripple #feature-to-change
+paradigm ripple "#feature-to-change"
 # Review impact, then make changes
-paradigm beacon --refresh
 ```
 
-### Weekly Maintenance
+### After an Upgrade
 ```bash
-paradigm beacon --refresh
-paradigm constellation
 paradigm doctor
 ```
 
-## 🔗 External Resources
+## External Resources
 
 - [Paradigm GitHub Repository](https://github.com/ascend42/a-paradigm)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Contributing Guide](../CONTRIBUTING.md)
 - [Changelog](../CHANGELOG.md)
 
-## 📝 Contributing to Docs
+## Contributing to Docs
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on improving documentation.
 

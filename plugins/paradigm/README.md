@@ -1,8 +1,7 @@
 # Paradigm — Claude Code Plugin
 
-AI-native project architecture for Claude Code. One install gives you structured
-context, enforcement hooks, multi-agent orchestration, and 32 grouped MCP tools (more on demand) — in
-every project, automatically.
+The Paradigm plugin for Claude Code. One install adds the hooks, skills, agents and the
+MCP server (32 tools by default, more on demand) to every project.
 
 ## Installation
 
@@ -21,52 +20,78 @@ server wires automatically on install, and the enforcement hooks start automatic
 
 | Hook | Event | Behavior |
 |---|---|---|
-| Stop | Session end | Validates compliance at session end. With the default `none` enforcement preset, runs advisory-only. Activate checks via `paradigm presets` or by rostering Rune (`paradigm shift`). |
+| Stop | Session end | Validates compliance at session end. A new project starts at enforcement level `none`, where every check is off and nothing blocks. Turn checks on with `paradigm enforcement set <level>` (`minimal`, `balanced` or `strict`). Rune, the compliance agent, is on the default roster of a new project; that alone turns no check on. The aspect advisory and aspect drift checks report only when he is on the roster and the level enables them. On an older project without him: `paradigm agent roster add compliance`. |
 | PreToolUse | Before `git commit` | Auto-rebuilds symbol index before commits |
 | PostToolUse | After file edits | Advisory reminder about .purpose coverage |
 
 ### 32 grouped MCP tools, more on demand (automatic)
 
-All tools are available immediately — no configuration needed:
+The server lists 32 tools by default: 11 single tools and 21 grouped families. A family takes an `op` argument, for example `paradigm_lore` with `op: "record"`. Older names of the form `paradigm_<family>_<op>` refer to the same operations.
 
-| Category | Tools | Purpose |
-|---|---|---|
-| Core | `paradigm_status`, `paradigm_search`, `paradigm_ripple`, `paradigm_related` | Symbol discovery and impact analysis |
-| Navigation | `paradigm_navigate` | Find, explore, and get context for symbols |
-| Purpose Management | `paradigm_purpose_*` (13 tools) | Create and manage .purpose files |
-| Portal / Auth | `paradigm_portal_*`, `paradigm_gates_for_route` | Authorization gate management |
-| Wisdom | `paradigm_wisdom_*` (4 tools) | Team learning — antipatterns and decisions |
-| History | `paradigm_history_*` (4 tools) | Implementation tracking and fragility scores |
-| Flows | `paradigm_flow` (op `affected`), `paradigm_flow` (op `check`) | Multi-step flow validation |
-| Sentinel | `paradigm_sentinel_*` (18 tools) | Incident tracking and pattern detection |
-| Lore | `paradigm_lore_*` (8 tools) | Project timeline and session recording |
-| Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent` (op `prompt`) | Multi-agent task coordination |
-| Governance | `paradigm_pm` (op `preflight`), `paradigm_pm` (op `postflight`) | Pre/post-task compliance |
-| Tags | `paradigm_tags`, `paradigm_tags` (op `suggest`) | Symbol classification |
-| Context | `paradigm_session` (op `health`), `paradigm_session_*`, `paradigm_session` (op `handoff_prepare`) | Session management |
-| Index | `paradigm_reindex` | Rebuild symbol index |
+| Tool | Purpose |
+|---|---|
+| `paradigm_status` | Project overview and symbol counts |
+| `paradigm_search` | Find symbols by name, description or tag |
+| `paradigm_navigate` | Find a symbol, explore an area, or get the files for a task |
+| `paradigm_related` | What a symbol uses and what uses it |
+| `paradigm_ripple` | What a change to a symbol affects |
+| `paradigm_gates_for_route` | Suggest gates for a route |
+| `paradigm_reindex` | Rebuild the symbol index from `.purpose` files |
+| `paradigm_retrieve` | Read back a large result a tool saved to disk |
+| `paradigm_orchestrate_inline` | Plan and coordinate a multi-agent task |
+| `paradigm_propose_block` | Record a soft-block for the Stop hook |
+| `paradigm_tool_activate` | Switch on an on-demand tool for the session |
+
+| Family | Purpose |
+|---|---|
+| `paradigm_purpose` | Edit `.purpose` files and `portal.yaml` gates and routes |
+| `paradigm_lore` | Session records, timeline, assessments, calibration |
+| `paradigm_decision` | Decision stream |
+| `paradigm_wisdom` | Antipatterns and decisions per symbol, experts |
+| `paradigm_history` | Symbol change history and fragility |
+| `paradigm_journal` | Agent journal and work log |
+| `paradigm_notebook` | Agent notebooks |
+| `paradigm_session` | Session health, recovery, checkpoints, handoff |
+| `paradigm_task` | Tasks |
+| `paradigm_agent` | Agent roster, profiles, expertise, prompts |
+| `paradigm_protocol` | Repeatable protocols |
+| `paradigm_aspect` | Aspects: anchors, graph, drift |
+| `paradigm_tags` | Tag bank |
+| `paradigm_flow` | Flows |
+| `paradigm_graph` | Symbol graph slices and architecture |
+| `paradigm_captain` | Captain (Cid): brief, debrief, board |
+| `paradigm_pm` | Preflight before and postflight after implementation |
+| `paradigm_docs` | Generated docs |
+| `paradigm_ambient` | Ambient learning: nominations, events, context, promotion |
+| `paradigm_compliance` | Compliance findings and enforcement |
+| `paradigm_authority` | Claim or release a scope |
+
+Other families, such as `paradigm_sentinel`, `paradigm_symphony` and `paradigm_university`, are off by default. Switch one on with `paradigm_tool_activate`, or list it under `mcp.tools.enable` in `.paradigm/config.yaml`.
 
 ### Skills (user-invoked)
 
 | Skill | Purpose |
 |---|---|
-| `/paradigm:shift` | Full one-command setup (init + scan + hooks + CLAUDE.md) |
-| `/paradigm:init` | Minimal init — initialize Paradigm structure only |
-| `/paradigm:scan` | Rebuild symbol index after file changes |
-| `/paradigm:doctor` | Health check for Paradigm configuration |
+| `/paradigm:shift` | Full one-command setup (init, scan, hooks, CLAUDE.md, doctor) |
+| `/paradigm:init` | Initialize the Paradigm structure only |
+| `/paradigm:scan` | Rebuild the symbol index after file changes |
+| `/paradigm:doctor` | Health check for the Paradigm setup |
 | `/paradigm:lore` | Record a lore entry for the current session |
 | `/paradigm:preflight` | Pre-task compliance check |
 | `/paradigm:postflight` | Post-task compliance check |
 | `/paradigm:review` | Review recent changes for Paradigm compliance and quality |
-| `/paradigm:sentinel` | Triage and manage incidents |
-| `/paradigm:observe` | View live logs, metrics, and traces from Sentinel |
-| `/paradigm:agents` | Manage your agent team — roster, onboard, bench/activate |
-| `/paradigm:teach` | Teach an agent a new behavior or pattern |
-| `/paradigm:team` | Show what your agent team did this session |
-| `/paradigm:health` | Agent learning health dashboard |
 | `/paradigm:ripple` | Impact analysis before modifying a symbol |
 | `/paradigm:protocol` | Search for or record a repeatable implementation protocol |
 | `/paradigm:handoff` | Prepare a context handoff for the next session |
+| `/paradigm:agents` | Manage your agent team: roster, onboard, bench and activate |
+| `/paradigm:teach` | Teach an agent a new behavior or pattern |
+| `/paradigm:team` | Show what your agent team did this session |
+| `/paradigm:health` | Agent learning health dashboard |
+| `/paradigm:class` | Convene the Classroom: agents propose learnings, peers test them, you sign off |
+| `/paradigm:study-hall` | Agents drill their curriculum and stage candidate learnings for the next class |
+| `/paradigm:forage` | Send an agent to research a topic on the web and return cited candidate learnings |
+| `/paradigm:sentinel` | Triage and manage incidents |
+| `/paradigm:observe` | View live logs, metrics and traces from Sentinel |
 | `/paradigm:conduct` | Register this session with Conductor |
 
 ### Agents (specialized subagents)
@@ -78,9 +103,6 @@ All tools are available immediately — no configuration needed:
 | `tester` | inherit | Test writing, test execution, coverage |
 | `reviewer` | inherit | Code review, quality analysis (read-only) |
 | `security` | inherit | Security analysis, auth review (read-only) |
-| `documentor` | inherit | Updates .purpose files and portal.yaml after implementation (always runs last) |
-| `ftux` | inherit | First-time user experience simulation — surfaces onboarding friction |
-| `captain` | inherit | Navigation, coverage tracking, session recovery |
 
 ## Getting Started
 
@@ -98,7 +120,7 @@ CLAUDE.md is **advisory** — agents can and do ignore it. Paradigm's hooks are
 
 1. **PostToolUse** tracks every source file modification after an edit
 2. **Stop** validates compliance at session end
-3. If violations are found and enforcement is active, the session is blocked with a list of what needs fixing (with the default `none` preset, Stop runs advisory-only until you add Rune or change the preset)
+3. If violations are found and enforcement is active, the session is blocked with a list of what needs fixing (at the default level `none`, every check is off and nothing blocks until you run `paradigm enforcement set <level>`)
 4. The agent fixes violations and completes the session
 
 ### Task-Size Tiers
@@ -115,7 +137,7 @@ CLAUDE.md is **advisory** — agents can and do ignore it. Paradigm's hooks are
 |---|---|---|
 | **Scope** | Every project automatically | One project at a time |
 | **Hooks** | Bundled in plugin, active for all projects | Copied to `.claude/hooks/` in the project |
-| **MCP** | Configured globally via plugin | `.mcp.json` or `~/.claude/claude.json` per project |
+| **MCP** | Configured globally via plugin | `.mcp.json` at the project root |
 | **Skills** | `/paradigm:init`, `/paradigm:shift`, etc. | None (skills are plugin-only) |
 | **Rules** | CLAUDE.md protocol injected globally | `CLAUDE.md` generated per-project by `paradigm sync claude` |
 | **Agents** | architect, builder, reviewer, tester, security | None (agents are plugin-only) |
@@ -131,9 +153,9 @@ After restarting Claude Code, open a new conversation and ask:
 What Paradigm tools do you have access to?
 ```
 
-Claude should list `paradigm_status`, `paradigm_ripple`, `paradigm_navigate`, and 50+ others.
+Claude should list `paradigm_status`, `paradigm_ripple`, `paradigm_navigate` and the rest of the 32 default tools.
 
-To verify hooks are active, start a new conversation and confirm Claude lists `paradigm_status` and related tools. With the default `none` enforcement preset, compliance checks are advisory — run `paradigm presets` to activate them.
+Compliance checks are off until you turn them on. `paradigm enforcement status` shows the current level; `paradigm enforcement set <level>` changes it.
 
 ## Migrating from Per-Project Setup
 
