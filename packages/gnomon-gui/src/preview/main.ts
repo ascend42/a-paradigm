@@ -25,7 +25,12 @@ document.addEventListener('securitypolicyviolation', (e) => {
   void fetch('/diag', { method: 'POST', body: row }).catch(() => undefined);
 });
 
-/** #gui-board DEV fixture: the board over the transcript's feed, through the real loader. Sized with CSSOM (no inline style). */
+/**
+ * #gui-board DEV fixture (boards S1.1): the reskinned engine over the transcript's feed, through the real loader,
+ * in the page's theme, with a few marks in content-palette colours. The engine draws on the desk ground (the
+ * --ground token; the board-leaf's fill). Sized with CSSOM (no inline style). This is the bare surface: the rail,
+ * the tray and the leaf's own states are the host layer that follows.
+ */
 async function openBoardFixture(): Promise<void> {
   const feed = document.querySelector('#pane-transcript .feed') as HTMLElement | null;
   if (!feed) return;
@@ -34,22 +39,27 @@ async function openBoardFixture(): Promise<void> {
   host.style.position = 'absolute';
   host.style.inset = '0';
   host.style.zIndex = '5';
-  host.style.background = '#fff';
+  host.style.background = 'var(--ground)';
   if (getComputedStyle(feed).position === 'static') feed.style.position = 'relative';
   feed.appendChild(host);
   try {
     const board = await loadBoard();
-    const handle = await board.mountBoard(host, { onError: (err) => void fetch('/diag', { method: 'POST', body: `board error ${err.message}` }).catch(() => undefined) });
+    const handle = await board.mountBoard(host, { theme: PREVIEW.theme, onError: (err) => void fetch('/diag', { method: 'POST', body: `board error ${err.message}` }).catch(() => undefined) });
     handle.add([
-      { type: 'rectangle', x: 80, y: 80, width: 200, height: 110 },
-      { type: 'ellipse', x: 360, y: 90, width: 160, height: 100 },
-      { type: 'text', x: 100, y: 230, text: 'board engine under the CSP (S1.0)' },
+      { type: 'frame', x: 24, y: 28, width: 330, height: 250, text: 'auth handoff' },
+      { type: 'sticky', x: 44, y: 56, width: 132, height: 76, text: 'token expires\nbefore the retry' },
+      { type: 'rectangle', x: 212, y: 56, width: 120, height: 60, line: 'cobalt', fill: 'sky', text: 'broker' },
+      { type: 'ellipse', x: 212, y: 168, width: 120, height: 64, line: 'leaf', fill: 'leaf', text: 'kernel' },
+      { type: 'arrow', x: 258, y: 120, width: 14, height: 44, line: 'raspberry', weight: 'bold' },
+      { type: 'arrow', x: 180, y: 92, width: 28, height: 0, line: 'graphite' },
+      { type: 'text', x: 44, y: 176, text: 'who signs\nthe second hop?', line: 'orchid' },
+      { type: 'text', x: 44, y: 240, text: 'board engine, reskinned (S1.1)' },
     ]);
     (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
     document.documentElement.dataset.previewBoard = board.BOARD_ENGINE;
     // a positive row: "no CSP rows" only means something when the board is known to have mounted
     await new Promise((r) => setTimeout(r, 300)); // the marks are counted after they have had time to be wiped
-    void fetch('/diag', { method: 'POST', body: `board ready ${board.BOARD_ENGINE} marks=${handle.count()} surface=${PREVIEW.surface}` }).catch(() => undefined);
+    void fetch('/diag', { method: 'POST', body: `board ready ${board.BOARD_ENGINE} marks=${handle.count()} theme=${handle.state().theme} surface=${PREVIEW.surface}` }).catch(() => undefined);
   } catch (err) {
     host.textContent = `The board did not load: ${err instanceof Error ? err.message : String(err)}`;
     void fetch('/diag', { method: 'POST', body: `board load failed ${err instanceof Error ? err.message : String(err)}` }).catch(() => undefined);
