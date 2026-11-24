@@ -2,6 +2,13 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  unique-record:
+    description: 'unique-record.ts writeUniqueRecord(dir, idFor, contentFor, ext): writes a NEW record file and never overwrites one. The file is created exclusively (flag wx), so a taken id is detected by the filesystem, across processes too. Suffix order: a random 3-digit suffix (the historical id shape), then the following suffixes in order until all 999 are tried, then a random 6-digit suffix (readers match the suffix as \d+). Used by recordJournalEntry (LJ-<date>-<hhmmss>-<n>: two entries in one second used to collide about once in 999 and the second replaced the first), recordDecision (TD-<date>-<n>) and recordWorkLog (WL-<agent>-<date>-<n>), whose id space was 999 per DAY. Not yet covered: writeCompanionLoreEntry in decision-loader.ts (second + 3 digits, .lore file), and the ms + 4-digit ids in event-stream.ts and nomination-engine.ts.'
+    type: utility
+    file: packages/paradigm-mcp/src/utils/unique-record.ts
+    tags: [learning, journal, decisions, data-integrity]
+    tests:
+      - packages/paradigm-mcp/src/utils/unique-record.test.ts
   warpline-status:
     description: "T-2026-11-12-001 getWarplineStatus(rootDir) — the paradigm_status warpline field: {mode: native|git, start: 'warpline orient', synced: CLAUDE.md has exactly one whole-line block outside fenced code (hasSingleWarplineBlock)}, or null. Mirrors packages/paradigm core/warpline-detect.ts (the MCP server does not depend on the CLI package): .warpline/ dir or .warpignore file, git mode when .git exists in the root or any ancestor folder, integrations.warpline.guidance off hides it. File reads only, never throws; a test pins the begin marker to the CLI constant."
     file: warpline-status.ts
