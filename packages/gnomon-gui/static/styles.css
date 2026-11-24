@@ -1888,6 +1888,7 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-note { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(300px, calc(100% - 32px)); transform: translate(-50%, -50%); box-sizing: border-box; padding: 16px 16px 12px; pointer-events: none; }
 .bd-note p { margin: 0 0 4px; color: var(--sec); }
 .bd-note .bd-en-t { font-size: var(--fs-reading); font-weight: 600; color: var(--ink); }
-.bd-foot .bd-said { margin-left: auto; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-said-line { color: var(--ink); }
+.bd-said-line[hidden] { display: none; }
 .bd-foot .bd-more-hands { white-space: nowrap; }
 .bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }

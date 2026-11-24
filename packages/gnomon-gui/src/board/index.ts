@@ -21,9 +21,10 @@ import { createRoot } from 'react-dom/client';
 import { CaptureUpdateAction, convertToExcalidrawElements, Excalidraw, exportToBlob, mutateElement, newElementWith } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import './skin.css';
-import { CONTENT_DEFAULTS, contentColourCheck, resolveContentColour } from '@a-company/gnomon-contracts';
+import { CONTENT_DEFAULTS, contentColourCheck } from '@a-company/gnomon-contracts';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
 import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMark, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
+import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, fillColour, lineColour, normalOf, offNormal, strokeStyleOf } from './normal.js';
 import { applySkin, gnomonBoardSkin, onBoardRefusal } from './skin.js';
 
 declare const __GNOMON_BOARD_ENGINE__: string;
@@ -32,9 +33,8 @@ declare const __GNOMON_BOARD_ENGINE__: string;
 export const BOARD_ENGINE: string = __GNOMON_BOARD_ENGINE__;
 
 /** The one text face (patches font-family-table, font-registry-empty): its engine family id, name and size. */
-export const BOARD_FONT_ID = 10;
+export { BOARD_FONT_ID, BOARD_FONT_SIZE };
 export const BOARD_FONT_FAMILY = 'JetBrains Mono';
-export const BOARD_FONT_SIZE = 13.5;
 
 type StockApi = Parameters<NonNullable<Parameters<typeof Excalidraw>[0]['excalidrawAPI']>>[0];
 /** The imperative API plus the one method patch `api-run-action` adds. */
@@ -54,6 +54,7 @@ interface Element {
   readonly height: number;
   readonly points?: ReadonlyArray<readonly [number, number]>;
   readonly containerId?: string | null;
+  readonly strokeWidth?: number;
   readonly customData?: Record<string, unknown>;
 }
 /** `newElementWith` over the structural type: a changed copy of the same element. */
@@ -78,8 +79,6 @@ const authorOf = (v: unknown): BoardAuthor | undefined => {
   if (a && a.cls === 'agent' && typeof a.id === 'string' && a.id.length > 0 && typeof a.name === 'string') return { cls: 'agent', id: a.id, name: a.name };
   return { cls: 'unknown' };
 };
-/** Solid means the host vouches for you; every other hand is dashed. Derived from the author, never an input. */
-const strokeStyleOf = (by: BoardAuthor | undefined): 'solid' | 'dashed' => (by && by.cls !== 'human' ? 'dashed' : 'solid');
 const VIEW_KIND: Readonly<Record<string, BoardMarkView['kind']>> = { rectangle: 'rect', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text' };
 /** A stub is never smaller than this (design component fallback-node). */
 const STUB_MIN = { width: 156, height: 52 };
@@ -89,10 +88,7 @@ const RAIL_TOOL: Readonly<Record<EngineTool, BoardTool>> = { selection: 'select'
 /** The engine actions the handle may run through `gnomonAction`. */
 const HANDLE_ACTIONS = ['zoomIn', 'zoomOut', 'resetZoom', 'zoomToFit', 'undo', 'redo'] as const;
 /** Element types whose background is a fill a person chose. */
-const FILLABLE = new Set(['rectangle', 'ellipse', 'diamond']);
 
-const lineColour = (token: unknown, theme: BoardTheme): string => resolveContentColour(token, 'line', theme) ?? gnomonBoardSkin.ink;
-const fillColour = (token: unknown, theme: BoardTheme): string => (token === null ? null : resolveContentColour(token, 'fill', theme)) ?? 'transparent';
 const stampOf = (el: Element): Stamp | null => {
   const g = (el.customData as { gnomon?: Partial<Stamp> } | undefined)?.gnomon;
   if (!g || typeof g.line !== 'string') return null;
@@ -168,7 +164,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const snapshot = (): BoardState => {
         const s = api.getAppState();
-        return { tool, zoom: s.zoom.value, style: { ...style }, theme, marks: api.getSceneElements().length, selected: Object.keys(s.selectedElementIds).length, editingText: s.editingTextElement != null };
+        const els = api.getSceneElements() as unknown as Element[];
+        const ids = new Set(els.map((el) => el.id));
+        return { tool, zoom: s.zoom.value, style: { ...style }, theme, marks: els.filter((el) => !el.containerId).length, selected: Object.keys(s.selectedElementIds).filter((id) => ids.has(id)).length, editingText: s.editingTextElement != null || s.editingFrame != null };
       };
       const announce = (): void => {
         if (dead !== null) return;
@@ -180,13 +178,12 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const pushCurrent = (): void => api.updateScene({ appState: current() as never, captureUpdate: CaptureUpdateAction.NEVER });
       /** The colours a stamped mark has in this theme. A mark with no stamp is ink with no fill. */
-      const painted = (el: Element): { strokeColor: string; backgroundColor: string; strokeStyle: 'solid' | 'dashed' } => {
-        const g = stampOf(el);
-        return { strokeColor: lineColour(g?.line ?? CONTENT_DEFAULTS.line, theme), backgroundColor: fillColour(g && FILLABLE.has(el.type) ? g.fill : null, theme), strokeStyle: strokeStyleOf(g?.by) };
-      };
-      const mismatched = (el: Element): boolean => {
-        const want = painted(el);
-        return el.strokeColor !== want.strokeColor || el.backgroundColor !== want.backgroundColor || (el.strokeStyle !== undefined && el.strokeStyle !== want.strokeStyle);
+      // every mark is held to its normal form (src/board/normal.ts): token colours, a derived stroke, one look
+      const painted = (el: Element): Record<string, unknown> => normalOf(el, stampOf(el), theme);
+      const mismatched = (el: Element): boolean => offNormal(el, stampOf(el), theme);
+      const refusedListeners = new Set<(r: BoardRefusal) => void>();
+      const refuse = (r: BoardRefusal): void => {
+        if (dead === null) for (const l of [...refusedListeners]) l(r);
       };
       const sceneListeners = new Set<() => void>();
       const sceneChanged = (): void => {
@@ -209,6 +206,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           firstX: el.x,
           firstY: el.y,
           author: g?.by ?? HUMAN,
+          line: g?.line ?? CONTENT_DEFAULTS.line,
+          fill: g?.fill ?? null,
           selected: selected[el.id] === true,
           ...(g?.stubKind !== undefined ? { stubKind: g.stubKind } : {}),
           ...(el.containerId ? { labelOf: el.containerId } : {}),
@@ -220,7 +219,15 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         recolouring = true;
         try {
           const all = api.getSceneElementsIncludingDeleted();
-          api.updateScene({ elements: all.map((el) => (mismatched(el) ? changed(el, painted(el)) : el)), appState: current() as never, captureUpdate: CaptureUpdateAction.NEVER });
+          const dropped: string[] = [];
+          const next = all.map((el) => {
+            if (!mismatched(el)) return el;
+            if (BOARD_TYPES.has(el.type)) return changed(el, painted(el));
+            dropped.push(el.type); // an image, an embed, an iframe, a diamond, a line: not a board kind
+            return changed(el, { isDeleted: true });
+          });
+          api.updateScene({ elements: next, appState: current() as never, captureUpdate: CaptureUpdateAction.NEVER });
+          for (const type of dropped) refuse({ what: type === 'image' ? 'image' : 'mark', why: type === 'image' ? 'no-image-kind' : 'not-a-board-kind', detail: type });
         } finally {
           recolouring = false;
         }
@@ -240,7 +247,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         let repaint = false;
         for (const el of elements) {
           if (!stampOf(el)) {
-            const stamp: Stamp = { line: style.line, fill: FILLABLE.has(el.type) ? fillToken() : null, ...(tool === 'sticky' && el.type === 'rectangle' ? { kind: 'sticky' as const } : {}) };
+            // a label inside a sticky or a shape is always the default ink, whatever line is current
+            const stamp: Stamp = { line: (el as unknown as Element).containerId ? CONTENT_DEFAULTS.line : style.line, fill: FILLABLE.has(el.type) ? fillToken() : null, ...(tool === 'sticky' && el.type === 'rectangle' ? { kind: 'sticky' as const } : {}) };
             mutateElement(el as never, { customData: { ...el.customData, gnomon: stamp } } as never, false);
           }
           if (mismatched(el) && el.id !== appState.newElement?.id) repaint = true;
@@ -259,12 +267,37 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const onPaste = attempt('paste');
       const onDrop = attempt('drop');
-      host.addEventListener('paste', onPaste, true);
-      host.addEventListener('drop', onDrop, true);
-      const refusedListeners = new Set<(r: BoardRefusal) => void>();
-      const unsubscribeRefusal = onBoardRefusal((what) => {
-        if (dead === null) for (const l of [...refusedListeners]) l({ what, why: 'no-image-kind' });
-      });
+      const unsubscribeRefusal = onBoardRefusal((what) => refuse({ what, why: 'no-image-kind' }));
+      // A drop that carries files never reaches the engine: a dropped scene file replaced the whole board with the
+      // stock look and raised an img-src refusal, and a library file filled a Library nobody can open (Mika, S1.1
+      // pass A finding 1). The pointer says so while it hovers.
+      const onDragOver = (e: DragEvent): void => {
+        if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'none';
+      };
+      const onFileDrop = (e: DragEvent): void => {
+        onDrop(e);
+        const files = [...(e.dataTransfer?.files ?? [])];
+        if (files.length === 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        for (const f of files) {
+          const name = f.name.toLowerCase();
+          const what: BoardRefusal['what'] = f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/.test(name) ? 'image' : name.endsWith('.excalidrawlib') ? 'library-file' : name.endsWith('.excalidraw') || name.endsWith('.json') ? 'scene-file' : 'file';
+          refuse({ what, why: what === 'image' ? 'no-image-kind' : 'no-file-drop' });
+        }
+      };
+      // tab-separated text would open the engine's chart dialog, which is not built: nothing happens, so say so
+      const onTablePaste = (e: ClipboardEvent): void => {
+        onPaste(e);
+        const rows = (e.clipboardData?.getData('text/plain') ?? '').trim().split(/\r?\n/);
+        if (rows.length >= 2 && rows.every((r) => r.includes('\t'))) refuse({ what: 'table', why: 'no-table-kind' });
+      };
+      host.addEventListener('dragover', onDragOver, true);
+      host.addEventListener('paste', onTablePaste, true);
+      host.addEventListener('drop', onFileDrop, true);
       const run = (name: (typeof HANDLE_ACTIONS)[number]): void => {
         live();
         api.gnomonAction(name);
@@ -294,7 +327,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         add(marks: readonly BoardMark[]): number {
           const before = live();
           const added = convertToExcalidrawElements(marks.map(skeletonOf) as Skeleton);
-          api.updateScene({ elements: [...before, ...added] });
+          // never an undo step: the first undo after it used to take every added mark with it (Mika, pass A finding 2)
+          api.updateScene({ elements: [...before, ...added], captureUpdate: CaptureUpdateAction.NEVER });
           announce();
           return live().length;
         },
@@ -303,7 +337,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           live();
           if (!BOARD_TOOLS.includes(next)) throw new Error(`the board has no ${String(next)} tool`);
           tool = next;
-          pushCurrent();
+          // choosing a drawing tool lets go of the selection, so the first click draws (it used to only deselect)
+          api.updateScene({ appState: { ...current(), ...(next === 'select' || next === 'hand' ? {} : { selectedElementIds: {}, selectedGroupIds: {} }) } as never, captureUpdate: CaptureUpdateAction.NEVER });
           api.setActiveTool({ type: ENGINE_TOOL[next] });
           announce();
         },
@@ -325,7 +360,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             if (!selected[el.id] || el.isDeleted) return el;
             const old = stampOf(el) ?? { line: CONTENT_DEFAULTS.line, fill: null };
             if (old.kind === 'stub') return el; // a stub is moved and deleted, never restyled
-            const stamp: Stamp = { ...old, ...(next.line !== undefined ? { line: next.line } : {}), ...(next.fill !== undefined && FILLABLE.has(el.type) ? { fill: next.fill ?? (old.kind === 'sticky' ? CONTENT_DEFAULTS.stickyFill : null) } : {}) };
+            const label = !!(el as unknown as Element).containerId;
+            if (label && next.fill === undefined && next.weight === undefined) return el; // a label stays the default ink
+            const stamp: Stamp = { ...old, ...(next.line !== undefined && !label ? { line: next.line } : {}), ...(next.fill !== undefined && FILLABLE.has(el.type) ? { fill: next.fill ?? (old.kind === 'sticky' ? CONTENT_DEFAULTS.stickyFill : null) } : {}) };
             touched = true;
             return changed(el, {
               strokeColor: lineColour(stamp.line, theme),
@@ -376,7 +413,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           attemptListeners.add(listener);
           return () => void attemptListeners.delete(listener);
         },
-        onRefused(listener) {
+        onRefusal(listener) {
           refusedListeners.add(listener);
           return () => void refusedListeners.delete(listener);
         },
@@ -391,8 +428,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           unsubscribe();
           unsubscribeScroll();
           unsubscribeRefusal();
-          host.removeEventListener('paste', onPaste, true);
-          host.removeEventListener('drop', onDrop, true);
+          host.removeEventListener('paste', onTablePaste, true);
+          host.removeEventListener('drop', onFileDrop, true);
+          host.removeEventListener('dragover', onDragOver, true);
           stateListeners.clear();
           sceneListeners.clear();
           attemptListeners.clear();

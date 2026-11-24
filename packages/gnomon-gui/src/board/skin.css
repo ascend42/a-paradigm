@@ -8,9 +8,10 @@
   color: var(--ink);
   font-family: var(--mono, "JetBrains Mono", ui-monospace, monospace);
 }
-/* the surface takes focus so its keys work; the ring is the leaf's to draw, not the browser's */
-.excalidraw.excalidraw-container:focus,
-.excalidraw.excalidraw-container:focus-visible { outline: none; }
+/* the surface takes focus so its keys work: a keyboard user sees where they are (2px in the key edge, inside the
+   pane so no neighbour is covered); a pointer press draws no ring */
+.excalidraw.excalidraw-container:focus { outline: none; }
+.excalidraw.excalidraw-container:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
 .excalidraw .excalidraw__canvas { background: transparent; }
 /* the text being typed: the one face, the theme caret, the theme selection */
 .excalidraw .excalidraw-wysiwyg,
@@ -23,5 +24,5 @@
   background: var(--fold, Highlight);
   color: var(--ink);
 }
-/* a frame's title: the system's 11.5 / 600 label in the secondary ink */
-.excalidraw .frame-name { font-weight: 600; letter-spacing: 0; }
+/* the frame title being renamed: the theme's selection, never the browser's blue */
+.excalidraw input::selection { background: var(--fold, Highlight); color: var(--ink); }

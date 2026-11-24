@@ -14,7 +14,7 @@
  */
 import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, dimKindName, resolveContentColour } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, refusalLine, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -111,19 +111,22 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const head = h('div', 'lp-head bd-head', {}, h('span', 'bd-g', { 'aria-hidden': 'true' }, '◰'), titleEl, h('span', 'bd-medium', {}, LEAF_COPY.medium), h('button', 'key quiet rename-btn', { type: 'button', 'aria-label': 'Rename dimension', 'aria-disabled': 'true', title: 'Rename arrives with the live board' }, '✎'), h('span', 'spacer'), headKey, escKey);
   const keep = h('div', 'lp-keep bd-keep');
   const rail = h('div', 'bd-rail', { role: 'radiogroup', 'aria-label': 'Board tools', 'aria-orientation': 'vertical' });
-  const boardHost = h('div', 'bd-board');
+  // the drawing surface is one region with a name; its description is the empty note's hint (design `tab_order`)
+  const boardHost = h('div', 'bd-board', { role: 'application', 'aria-roledescription': 'board', 'aria-label': `Board: ${o.title}`, 'aria-description': LEAF_COPY.emptyHint });
+  // what the board refused is said here, under the head, and announced
+  const saidLine = h('div', 'lp-keep bd-keep bd-said-line', { role: 'status', 'aria-live': 'polite', hidden: true });
   const over = h('div', 'bd-over', { 'aria-hidden': 'true' });
   const tray = h('div', 'bd-tray', { role: 'group', 'aria-label': 'Line and fill', hidden: true });
   const note = h('div', 'bd-scrap bd-note', { hidden: true });
   const stage = h('div', 'bd-stage', {}, boardHost, over, tray, note);
   const foot = h('div', 'bd-foot', { 'aria-label': 'Hands on this board' });
-  const el = h('div', 'bd-leaf', { role: 'region', 'aria-label': `Board: ${o.title}` }, head, keep, h('div', 'bd-body', {}, rail, stage), foot);
+  const el = h('div', 'bd-leaf', { role: 'region', 'aria-label': `Dimension: ${o.title}` }, head, keep, saidLine, h('div', 'bd-body', {}, rail, stage), foot);
   parent.appendChild(el);
 
   const st = (): BoardState | null => (handle && handle.isAlive() ? handle.state() : null);
   const leafState = (): LeafState => leafStateOf({ load, alive: !handle || handle.isAlive(), boardHeight: boardHeight(), cardFocused: o.cardFocused(), marks: st()?.marks ?? 0 });
   /** the height the board has (or would have, when the body is hidden): the leaf less its head, keep line and foot */
-  const boardHeight = (): number => Math.max(0, el.clientHeight - head.offsetHeight - keep.offsetHeight - FOOT_HEIGHT);
+  const boardHeight = (): number => Math.max(0, el.clientHeight - head.offsetHeight - keep.offsetHeight - saidLine.offsetHeight - FOOT_HEIGHT);
   const yielded = (): boolean => load === 'ready' && o.cardFocused();
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
@@ -359,8 +362,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.name), ' ', name, ` ${f.n}`));
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
-    const line = said ? h('span', 'bd-said', { role: 'status', title: said }, said) : null;
-    foot.replaceChildren(...kids, ...(line ? [line] : []));
+    const line: HTMLElement | null = null;
+    saidLine.hidden = !said;
+    saidLine.title = said;
+    if (saidLine.textContent !== said) saidLine.textContent = said;
+    foot.replaceChildren(...kids);
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
@@ -421,7 +427,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
           if (mine !== generation) return hd.unmount();
           handle = hd;
           load = 'ready';
-          offs.push(hd.onState(() => draw()), hd.onScene(() => (drawOver(), drawFoot())), hd.onRefused(() => say(LEAF_COPY.imageRefused)));
+          offs.push(hd.onState(() => draw()), hd.onScene(() => (drawOver(), drawFoot())), hd.onRefusal((r) => say(refusalLine(r.what))));
           o.onReady?.(hd);
           draw();
           if (!o.cardFocused()) hd.focus(); // opening moves focus to the board, unless a card has the keys
@@ -434,6 +440,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const onKey = (e: KeyboardEvent): void => {
     const active = document.activeElement;
     const s = st();
+    // a field of the engine's own (a text being typed, a frame title being renamed) keeps every key
+    if (isField(active) && boardHost.contains(active)) return;
     if (e.key === 'Escape' && !o.cardFocused() && el.contains(active) && !s?.editingText && (!s || s.tool === 'select')) {
       // Esc order: a text edit or the tool first (the rail action below), then the tray, then the leaf folds
       if (menu) return void ((menu = null), draw(), e.stopPropagation());

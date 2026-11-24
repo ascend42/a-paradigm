@@ -34,9 +34,21 @@ export const LEAF_COPY = {
   tryAgain: 'Try again',
   stubNote: 'not drawn by this Gnomon · kept as it is',
   unknownHand: 'unknown hand',
-  /** NOT in the design (pass B item 0b): proposed here for Luna; what happened, then what to do */
-  imageRefused: 'Images can’t go on a board yet · draw or write it instead',
 } as const;
+
+/**
+ * What the leaf says under its head when the board refused something. NOT in the design: proposed here for Luna
+ * (what happened, then what to do; no code, no engine word). One line per kind of core/board.ts BoardRefusal.
+ */
+export const REFUSAL_COPY = {
+  image: 'Images can’t go on a board yet · draw or write it instead',
+  'scene-file': 'A board file can’t be dropped here · this board keeps its own marks',
+  'library-file': 'A library file can’t be dropped here · draw the shapes you need',
+  file: 'Files can’t be dropped on a board · write or draw it instead',
+  table: 'A pasted table can’t be drawn yet · paste it into a text instead',
+  mark: 'Part of what you pasted isn’t a board mark · it was left out',
+} as const;
+export const refusalLine = (what: keyof typeof REFUSAL_COPY): string => REFUSAL_COPY[what];
 
 export type OpenedHow = 'command' | 'menu' | 'offer';
 /** '<how>' of the keep line: '/board', 'the ⋯ menu', '<agent>’s offer'. */

@@ -33,16 +33,16 @@
           "gzip": 199
         },
         "board/board.css": {
-          "bytes": 143674,
-          "gzip": 22450
+          "bytes": 143751,
+          "gzip": 22458
         },
         "board/board.js": {
-          "bytes": 1271845,
-          "gzip": 408239
+          "bytes": 1276974,
+          "gzip": 410170
         }
       },
-      "totalBytes": 1529836,
-      "totalGzip": 441397
+      "totalBytes": 1535042,
+      "totalGzip": 443336
     },
     "staticFindings": [],
     "engines": {
@@ -57,18 +57,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 51,
-          "mounted": 71
+          "module": 56,
+          "mounted": 78
         },
         "firstRun": {
-          "wallMs": 15055,
+          "wallMs": 19861,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 50,
-            "mounted": 71
+            "module": 47,
+            "mounted": 68
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -78,7 +78,7 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 5,
+          "finalCount": 17,
           "cursors": {
             "select": "",
             "sticky": "crosshair",
@@ -89,6 +89,23 @@
             "frame": "crosshair",
             "stroke": "crosshair",
             "hand": "grab"
+          },
+          "hostView": {
+            "marks": [
+              "rect:human:40,40,160,80",
+              "ellipse:human:240,40,120,80",
+              "text:human:60,160,113,18",
+              "rect:human:500,300,140,100",
+              "stroke:human:700,300,120,120"
+            ],
+            "view": {
+              "scrollX": 0,
+              "scrollY": 0,
+              "zoom": 1,
+              "width": 1280,
+              "height": 800
+            },
+            "focus": true
           },
           "toolState": {
             "select": "select",
@@ -124,7 +141,13 @@
             "afterKey": "select",
             "handle": "refused",
             "node": false,
-            "addedByDrop": 0
+            "addedByDrop": 0,
+            "refused": [
+              "image:no-image-kind"
+            ],
+            "attempts": [
+              "drop:1"
+            ]
           },
           "toolKeys": {
             "1": "select",
@@ -182,36 +205,36 @@
               "marks": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 28941
+                "pngBytes": 28854
               },
               "selected": 1,
               "selection": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 29715
+                "pngBytes": 29598
               },
               "marquee": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 31371
+                "pngBytes": 31284
               },
               "multiSelected": 2,
               "multi": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 31203
+                "pngBytes": 31239
               },
               "binding": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 31578
+                "pngBytes": 31443
               },
               "arrowAdded": 1,
               "afterUndo": 0,
               "guides": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 30252
+                "pngBytes": 30120
               },
               "caret": {
                 "caretColor": "rgb(22, 21, 15)",
@@ -226,36 +249,36 @@
               "marks": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 28917
+                "pngBytes": 28836
               },
               "selected": 1,
               "selection": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 29685
+                "pngBytes": 29574
               },
               "marquee": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 31416
+                "pngBytes": 31293
               },
               "multiSelected": 2,
               "multi": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 31095
+                "pngBytes": 31149
               },
               "binding": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 31515
+                "pngBytes": 31368
               },
               "arrowAdded": 1,
               "afterUndo": 0,
               "guides": {
                 "width": 1280,
                 "height": 800,
-                "pngBytes": 30174
+                "pngBytes": 30021
               },
               "caret": {
                 "caretColor": "rgb(232, 244, 240)",
@@ -265,6 +288,62 @@
                 "editing": true
               },
               "count": 5
+            }
+          },
+          "fix": {
+            "undo": {
+              "afterDraw": 2,
+              "afterUndo": 1
+            },
+            "textAfterShape": {
+              "selectedBefore": 1,
+              "selectedAfterTool": 0,
+              "editing": true
+            },
+            "sceneDrop": {
+              "added": 0,
+              "said": [
+                "scene-file"
+              ],
+              "dragStopped": true
+            },
+            "paste": {
+              "unsupported": "the synthetic paste did not reach the engine"
+            },
+            "frame": {
+              "title": "a frame title that is long enough to be cut off",
+              "weight": "600",
+              "editor": {
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "11.5px",
+                "fontWeight": "600",
+                "color": "rgb(22, 21, 15)",
+                "radius": "0px",
+                "editing": true
+              },
+              "afterEsc": {
+                "input": false,
+                "editing": false
+              }
+            },
+            "label": {
+              "lines": [
+                "ink"
+              ],
+              "marksAdded": 1,
+              "countAdded": 1
+            }
+          },
+          "colours": {
+            "day": {
+              "width": 1280,
+              "height": 800,
+              "pngBytes": 35415
+            },
+            "night": {
+              "width": 1280,
+              "height": 800,
+              "pngBytes": 35427
             }
           },
           "narrow": {
@@ -277,13 +356,13 @@
               "pngBytes": 8007
             }
           },
-          "stateEvents": 34,
+          "stateEvents": 53,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 13332,
-            "ms": 17
+            "bytes": 32360,
+            "ms": 23
           },
           "violationCount": 0,
           "violations": [],
@@ -339,18 +418,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 32,
-          "mounted": 52
+          "module": 33,
+          "mounted": 54
         },
         "firstRun": {
-          "wallMs": 15158,
+          "wallMs": 20870,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 32,
-            "mounted": 51
+            "module": 58,
+            "mounted": 113
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -360,7 +439,7 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 5,
+          "finalCount": 18,
           "cursors": {
             "select": "",
             "sticky": "crosshair",
@@ -371,6 +450,23 @@
             "frame": "crosshair",
             "stroke": "crosshair",
             "hand": "grab"
+          },
+          "hostView": {
+            "marks": [
+              "rect:human:40,40,160,80",
+              "ellipse:human:240,40,120,80",
+              "text:human:60,160,113,18",
+              "rect:human:500,300,140,100",
+              "stroke:human:700,300,120,120"
+            ],
+            "view": {
+              "scrollX": 0,
+              "scrollY": 0,
+              "zoom": 1,
+              "width": 1280,
+              "height": 800
+            },
+            "focus": true
           },
           "toolState": {
             "select": "select",
@@ -406,7 +502,13 @@
             "afterKey": "select",
             "handle": "refused",
             "node": false,
-            "addedByDrop": 0
+            "addedByDrop": 0,
+            "refused": [
+              "image:no-image-kind"
+            ],
+            "attempts": [
+              "drop:1"
+            ]
           },
           "toolKeys": {
             "1": "select",
@@ -464,36 +566,36 @@
               "marks": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 93756
+                "pngBytes": 93999
               },
               "selected": 1,
               "selection": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 95523
+                "pngBytes": 95748
               },
               "marquee": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 95958
+                "pngBytes": 96201
               },
               "multiSelected": 2,
               "multi": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 95712
+                "pngBytes": 95943
               },
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 101079
+                "pngBytes": 101199
               },
               "arrowAdded": 1,
               "afterUndo": 0,
               "guides": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 96318
+                "pngBytes": 96603
               },
               "caret": {
                 "caretColor": "rgb(22, 21, 15)",
@@ -508,36 +610,36 @@
               "marks": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 94803
+                "pngBytes": 95076
               },
               "selected": 1,
               "selection": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 96792
+                "pngBytes": 97041
               },
               "marquee": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 96990
+                "pngBytes": 97326
               },
               "multiSelected": 2,
               "multi": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 96921
+                "pngBytes": 97263
               },
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 102198
+                "pngBytes": 102321
               },
               "arrowAdded": 1,
               "afterUndo": 0,
               "guides": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 97503
+                "pngBytes": 97863
               },
               "caret": {
                 "caretColor": "rgb(232, 244, 240)",
@@ -547,6 +649,76 @@
                 "editing": true
               },
               "count": 5
+            }
+          },
+          "fix": {
+            "undo": {
+              "afterDraw": 2,
+              "afterUndo": 1
+            },
+            "textAfterShape": {
+              "selectedBefore": 1,
+              "selectedAfterTool": 0,
+              "editing": true
+            },
+            "sceneDrop": {
+              "added": 0,
+              "said": [
+                "scene-file"
+              ],
+              "dragStopped": true
+            },
+            "paste": {
+              "added": 1,
+              "said": [
+                "mark:diamond",
+                "mark:line"
+              ],
+              "found": true,
+              "edgeGaps": 0,
+              "fillAlpha": 0,
+              "edgeRgb": [
+                22,
+                21,
+                15
+              ],
+              "line": "ink",
+              "fillToken": null
+            },
+            "frame": {
+              "title": "a frame title that is long enough to be cut off",
+              "weight": "600",
+              "editor": {
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "11.5px",
+                "fontWeight": "600",
+                "color": "rgb(22, 21, 15)",
+                "radius": "0px",
+                "editing": true
+              },
+              "afterEsc": {
+                "input": false,
+                "editing": false
+              }
+            },
+            "label": {
+              "lines": [
+                "ink"
+              ],
+              "marksAdded": 1,
+              "countAdded": 1
+            }
+          },
+          "colours": {
+            "day": {
+              "width": 2560,
+              "height": 1600,
+              "pngBytes": 115560
+            },
+            "night": {
+              "width": 2560,
+              "height": 1600,
+              "pngBytes": 116955
             }
           },
           "narrow": {
@@ -559,13 +731,13 @@
               "pngBytes": 23544
             }
           },
-          "stateEvents": 34,
+          "stateEvents": 56,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 14882,
-            "ms": 14
+            "bytes": 37187,
+            "ms": 13
           },
           "violationCount": 0,
           "violations": [],
@@ -628,5 +800,5 @@
     "G-DDL-07",
     "S25-M3"
   ],
-  "at": "2026-11-24T09:45:50.961Z"
+  "at": "2026-11-24T10:35:21.968Z"
 }

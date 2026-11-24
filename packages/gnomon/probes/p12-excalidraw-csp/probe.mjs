@@ -41,7 +41,8 @@ function withoutCaptures(run) {
   const shot = (s) => (s && typeof s.png === 'string' ? { width: s.width, height: s.height, pngBytes: Math.floor((s.png.length * 3) / 4) } : s);
   const skin = run.skin ? Object.fromEntries(Object.entries(run.skin).map(([theme, s]) => [theme, Object.fromEntries(Object.entries(s ?? {}).map(([k, v]) => [k, shot(v)]))])) : run.skin;
   const narrow = run.narrow ? { ...run.narrow, capture: shot(run.narrow.capture) } : run.narrow;
-  return { ...run, skin, narrow };
+  const colours = run.colours ? Object.fromEntries(Object.entries(run.colours).map(([k, v]) => [k, shot(v)])) : run.colours;
+  return { ...run, skin, narrow, colours };
 }
 
 const median = (xs) => {

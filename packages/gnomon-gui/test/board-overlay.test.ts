@@ -11,7 +11,7 @@ const VIEW: BoardView = { scrollX: 0, scrollY: 0, zoom: 1, width: 800, height: 6
 const YOU: BoardAuthor = { cls: 'human' };
 const ARKY: BoardAuthor = { cls: 'agent', id: 'arky', name: 'Arky' };
 const NOBODY: BoardAuthor = { cls: 'unknown' };
-const mark = (o: Partial<BoardMarkView> & { id: string; kind: BoardMarkView['kind'] }): BoardMarkView => ({ x: 100, y: 50, width: 120, height: 80, firstX: 100, firstY: 50, author: YOU, selected: false, ...o });
+const mark = (o: Partial<BoardMarkView> & { id: string; kind: BoardMarkView['kind'] }): BoardMarkView => ({ x: 100, y: 50, width: 120, height: 80, firstX: 100, firstY: 50, author: YOU, line: 'ink', fill: null, selected: false, ...o });
 
 describe('#gui-board overlay transform', () => {
   it('screen = (scene + scroll) × zoom', () => {

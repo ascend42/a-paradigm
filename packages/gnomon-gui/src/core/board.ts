@@ -73,6 +73,9 @@ export interface BoardMarkView {
   firstX: number;
   firstY: number;
   author: BoardAuthor;
+  /** the mark's content-palette tokens (a label is always the default line) */
+  line: string;
+  fill: string | null;
   selected: boolean;
   /** a stub's kind exactly as it was given (the host pattern-checks it before showing it) */
   stubKind?: string;
@@ -97,10 +100,17 @@ export interface BoardAttempt {
   files: number;
 }
 
-/** Something the engine refused to do. `image`: a file-based image insert; the board has no image kind until S2. */
+/**
+ * Something the board refused, for the leaf to say in its own words (the engine shows nothing).
+ *  - `image`: an image insert (a picked, pasted or dropped image, SVG source or HTML carrying one); no image kind until S2
+ *  - `scene-file`, `library-file`, `file`: a file dropped on the board; the drop never reaches the engine
+ *  - `table`: tab-separated text pasted (the engine's chart dialog is not built into the board)
+ *  - `mark`: a pasted mark of a kind the board does not have (`detail` names the engine type); it was removed
+ */
 export interface BoardRefusal {
-  what: 'image';
-  why: 'no-image-kind';
+  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'table' | 'mark';
+  why: 'no-image-kind' | 'no-file-drop' | 'no-table-kind' | 'not-a-board-kind';
+  detail?: string;
 }
 
 /** A mark added through the handle (enough for the fixture and the probes; not the stored shape vocabulary). */
@@ -128,10 +138,11 @@ export interface BoardState {
   zoom: number;
   style: BoardStyle;
   theme: BoardTheme;
-  /** non-deleted marks */
+  /** non-deleted marks; a label inside a sticky or a shape is part of its mark, not one more */
   marks: number;
+  /** selected marks that exist (never an id of something refused or undone) */
   selected: number;
-  /** true while a text is being typed: single-letter tool keys must not act */
+  /** true while a text or a frame's title is being typed: single-letter tool keys must not act */
   editingText: boolean;
 }
 
@@ -170,10 +181,13 @@ export interface BoardHandle {
   focus(): void;
   /** True while focus is inside the board (the surface or a text being typed). */
   hasFocus(): boolean;
-  /** Be told about a paste or a drop on the board. The handle neither acts on it nor stops it. */
+  /**
+   * Be told about a paste or a drop on the board, before the engine. A paste is reported and left alone (S1.3
+   * intercepts it: condition C8); a drop that carries files is stopped here and also reported as a refusal.
+   */
   onAttempt(listener: (attempt: BoardAttempt) => void): () => void;
-  /** Be told when the engine refused something, so the leaf can say so. The engine itself shows nothing. */
-  onRefused(listener: (refusal: BoardRefusal) => void): () => void;
+  /** Be told when the board refused something, so the leaf can say so. The engine itself shows nothing. */
+  onRefusal(listener: (refusal: BoardRefusal) => void): () => void;
   /** The scene as a PNG on the theme's ground, rendered on a canvas (the GUI never exports SVG, §12.7). */
   exportPng(): Promise<Blob>;
   /**

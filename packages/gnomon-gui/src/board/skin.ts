@@ -22,7 +22,7 @@ export interface BoardSkin {
   sec: string;
   /** --sheet: handle fill, the eraser ring's fill */
   sheet: string;
-  /** --key-edge: selection border, handle edge, chosen point */
+  /** --ink: selection border, handle edge, chosen point, the frame title editor's rule */
   selection: string;
   handle: string;
   handleHover: string;
@@ -36,21 +36,25 @@ export interface BoardSkin {
 
 const alpha = (hex: string, a: number): string => `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${a})`;
 
+/** The three derived alphas, all of the theme ink: a hovered line point, the binding highlight, the marquee wash. */
+export const SKIN_ALPHA = { handleHover: 0.4, binding: 0.14, wash: 0.06 } as const;
+
 /** The skin of one theme, derived from the theme tokens only. */
 export function skinOf(theme: ContentTheme): BoardSkin {
   const t = CONTENT_THEME_TOKENS[theme];
   const ink = t['text.primary'];
-  const edge = t['line.key-edge'];
   return {
     ink,
     sec: t['text.secondary'],
     sheet: t['surface.sheet'],
-    selection: edge,
+    // the selection is the ink in both themes: night --key-edge sits inside the reserved distance of sea-grey
+    // (Mika's ruling, S1.1 pass A)
+    selection: ink,
     handle: t['surface.sheet'],
-    handleHover: alpha(edge, 0.4),
+    handleHover: alpha(ink, SKIN_ALPHA.handleHover),
     guide: ink,
-    binding: alpha(ink, 0.14),
-    wash: alpha(ink, 0.06),
+    binding: alpha(ink, SKIN_ALPHA.binding),
+    wash: alpha(ink, SKIN_ALPHA.wash),
     frame: t['text.secondary'],
   };
 }
@@ -64,9 +68,9 @@ export function applySkin(theme: ContentTheme): void {
 
 /**
  * The engine actions a key may run (patch `key-actions-allowlist`): undo, redo, delete the selection, select all,
- * zoom in, out and to 100%, and finishing a mark with Esc or Enter. Every other engine shortcut matches nothing.
+ * zoom in and out, and finishing a mark with Esc or Enter. ⌘0 is the host's (it fits everything; Mika's ruling). Every other engine shortcut matches nothing.
  */
-export const gnomonBoardKeyActions: ReadonlySet<string> = new Set(['undo', 'redo', 'deleteSelectedElements', 'selectAll', 'zoomIn', 'zoomOut', 'resetZoom', 'finalize']);
+export const gnomonBoardKeyActions: ReadonlySet<string> = new Set(['undo', 'redo', 'deleteSelectedElements', 'selectAll', 'zoomIn', 'zoomOut', 'finalize']);
 
 /** What the engine refused to do, for the host to say in its own words. `image`: a file-based image insert. */
 export type BoardRefusalKind = 'image';

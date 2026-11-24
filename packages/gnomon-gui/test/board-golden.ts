@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect } from 'vitest';
-import { CONTENT_RESERVED_COLOURS, CONTENT_THEME_TOKENS, coloursClear, isNeutralColour } from '@a-company/gnomon-contracts';
+import { CONTENT_RESERVED_COLOURS, CONTENT_SWATCH_NAMES, CONTENT_THEME_TOKENS, contentColourCheck, coloursClear, isNeutralColour, resolveContentColour } from '@a-company/gnomon-contracts';
 // @ts-expect-error plain .mjs (the zero-dependency probe harness)
 import { BOARD_FONT, BOARD_FONT_STRING, GROUND } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
 // @ts-expect-error plain .mjs build script (no types)
@@ -29,13 +29,9 @@ export const nearReserved = (hex: string): boolean => RESERVED.some((r) => !colo
 const rgb = (hex: string): [number, number, number] => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 /** How far (per channel) a pixel may sit from the straight mix of two theme colours and still be that mix. */
 const MIX_SLACK = 4;
-/**
- * True when a pixel is one of the theme's own colours (a theme token or the desk ground) or an antialiased mix of
- * two of them: every channel within MIX_SLACK of a·A + (1 − a)·B for one a in [0, 1]. Such a pixel is the theme
- * drawing itself (a selection edge in --key-edge over the ground), not an engine colour.
- */
-export function isThemeMix(hex: string, theme: Theme): boolean {
-  const own = [...new Set<string>([...Object.values(CONTENT_THEME_TOKENS[theme]), (GROUND as Record<Theme, string>)[theme]])].map(rgb);
+/** True when a pixel is one of `palette` or an antialiased mix of two of them (every channel within MIX_SLACK). */
+export function isMixOf(hex: string, palette: readonly string[]): boolean {
+  const own = [...new Set(palette)].map(rgb);
   const p = rgb(hex);
   for (const a of own) {
     for (const b of own) {
@@ -49,18 +45,29 @@ export function isThemeMix(hex: string, theme: Theme): boolean {
 }
 
 /**
- * Chromatic pixels of a capture inside the reserved distance. The theme's own colours and their antialiased mixes
- * are counted apart (`tokens`), never dropped silently.
+ * What a capture holds that it must not (Mika's pass A finding 8). `stray`: every chromatic pixel that is not one of
+ * the theme's own colours, a colour in `extra` (the content colours a capture was drawn with), or a mix of two of
+ * them: an engine blue or violet is stray wherever it sits, not only near a reserved colour, and ONE pixel fails.
+ * `reserved`: every chromatic pixel inside the minimum distance of a reserved colour, with no exemption (the
+ * selection is the ink, so no theme colour the board draws with sits there).
  */
-export function reservedPixels(png: Png, theme: Theme): { bad: Array<[string, number]>; tokens: number } {
-  const bad: Array<[string, number]> = [];
-  let own = 0;
+export function strayPixels(png: Png, theme: Theme, extra: readonly string[] = []): { stray: Array<[string, number]>; reserved: Array<[string, number]> } {
+  const palette = [...Object.values(CONTENT_THEME_TOKENS[theme]), (GROUND as Record<Theme, string>)[theme], ...extra];
+  const stray: Array<[string, number]> = [];
+  const reserved: Array<[string, number]> = [];
   for (const [hex, n] of pixelColours(png) as Map<string, number>) {
-    if (isNeutralColour(hex) || !nearReserved(hex)) continue;
-    if (isThemeMix(hex, theme)) own += n;
-    else bad.push([hex, n]);
+    if (isNeutralColour(hex)) continue;
+    if (!isMixOf(hex, palette)) stray.push([hex, n]);
+    if (nearReserved(hex) && !extra.some((c) => isMixOf(hex, [c, (GROUND as Record<Theme, string>)[theme], ...Object.values(CONTENT_THEME_TOKENS[theme])]))) reserved.push([hex, n]);
   }
-  return { bad, tokens: own };
+  return { stray, reserved };
+}
+
+/** Every colour the content-colour capture is drawn with, for a theme: each named line and fill value. */
+export function contentColours(theme: Theme): string[] {
+  const out: string[] = [];
+  for (const name of CONTENT_SWATCH_NAMES) for (const role of ['line', 'fill'] as const) if (contentColourCheck(name, role).ok) out.push(resolveContentColour(name, role, theme)!);
+  return [...new Set(out)];
 }
 
 /** Golden compare on DECODED pixels (never file bytes): the share of pixels with any channel more than 48 apart. */
@@ -80,6 +87,7 @@ type Shot = { width: number; height: number; png: string };
 export interface LiveRun {
   skin?: Record<Theme, Record<string, Shot>>;
   narrow?: { capture: Shot };
+  colours?: Record<Theme, Shot>;
   canvasFonts?: string[];
   stockNodes?: string[];
   requests?: Array<{ path: string }>;
@@ -96,9 +104,22 @@ export function checkLiveReskin(name: string, family: string, r: LiveRun): void 
   // the only font request is the bundle's own face: no Excalifont, Virgil or CDN path
   expect([...new Set((r.requests ?? []).map((q) => q.path).filter((p) => /font|woff|ttf/i.test(p)))], name).toEqual([`/${BOARD_FONT}`]);
   const shots: Array<[string, Theme, Shot]> = [...THEMES.flatMap((t) => SHOTS.map((s) => [`${s}-${t}`, t, r.skin![t]![s]!] as [string, Theme, Shot])), ['narrow-day', 'day', r.narrow!.capture]];
+  // one capture per theme with a mark in every content colour: exactly those colours and the theme's own
+  for (const theme of THEMES) {
+    const png = decodePng(Buffer.from(r.colours![theme]!.png, 'base64')) as Png;
+    expect(strayPixels(png, theme, contentColours(theme)).stray, `${name} colours-${theme}`).toEqual([]);
+    shots.push([`colours-${theme}`, theme, r.colours![theme]!]);
+  }
   for (const [shot, theme, cap] of shots) {
+    if (shot.startsWith('colours-')) {
+      const png = decodePng(Buffer.from(cap.png, 'base64')) as Png;
+      if (family !== 'chromium' || png.width !== 1280) continue;
+      if (process.env.GNOMON_UPDATE_GOLDENS === '1') writeFileSync(path.join(GOLDENS, `${shot}.png`), Buffer.from(cap.png, 'base64'));
+      else expect(differingShare(golden(shot), png), `${name} ${shot}`).toBeLessThanOrEqual(TOLERANCE.share);
+      continue;
+    }
     const png = decodePng(Buffer.from(cap.png, 'base64')) as Png;
-    expect(reservedPixels(png, theme).bad, `${name} ${shot}`).toEqual([]);
+    expect(strayPixels(png, theme), `${name} ${shot}`).toEqual({ stray: [], reserved: [] });
     if (family !== 'chromium' || png.width !== golden(shot).width) continue; // goldens are Chromium at device pixel ratio 1
     if (process.env.GNOMON_UPDATE_GOLDENS === '1') {
       if (!existsSync(GOLDENS)) mkdirSync(GOLDENS, { recursive: true });

@@ -113,6 +113,9 @@ const DRIVER = `'use strict';
     pointer(canvas, 'pointerdown', x0, y0, 1);
     await wait(30);
     for (var i = 1; i <= 6; i++) { pointer(canvas, 'pointermove', x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * i) / 6, 1); await wait(15); }
+    // the engine applies a move on the next animation frame: a release that lands before that frame keeps the mark at
+    // the move before (seen as a 117 x 83 rectangle in about one Chrome run in six), so the last move is given a frame
+    await wait(60);
     pointer(canvas, 'pointerup', x1, y1, 0);
     await wait(120);
   };
@@ -208,7 +211,7 @@ const DRIVER = `'use strict';
     // the refusal reaches the host through the handle (the engine shows nothing itself), and a drop is reported
     var refusals = [];
     var attempts = [];
-    var offRefused = h.onRefused(function (r) { refusals.push(r.what + ':' + r.why); });
+    var offRefused = h.onRefusal(function (r) { refusals.push(r.what + ':' + r.why); });
     var offAttempt = h.onAttempt(function (a) { attempts.push(a.kind + ':' + a.files); });
     key({ key: '9', code: 'Digit9' });
     await wait(150);
@@ -358,6 +361,100 @@ const DRIVER = `'use strict';
     boardEl.classList.remove('narrow');
     window.dispatchEvent(new Event('resize'));
     await wait(300);
+    // Mika's S1.1 pass A findings, each replayed on the shipped chunk (day theme, select tool).
+    R.phase = 'fixes';
+    R.fix = {};
+    var said = [];
+    var offSaid = h.onRefusal(function (r) { said.push(r.what + (r.detail ? ':' + r.detail : '')); });
+    h.setTheme('day'); h.setTool('select'); await click(1100, 700);
+    // 2. a programmatic add is never an undo step: add, one user action, one undo: the added mark stays
+    var c0 = h.count();
+    h.add([{ type: 'rectangle', x: 900, y: 480, width: 120, height: 80 }]);
+    h.setTool('rect'); await wait(60); await drag(canvas, 1060, 480, 1160, 540);
+    R.fix.undo = { afterDraw: h.count() - c0 };
+    h.undo(); await wait(150);
+    R.fix.undo.afterUndo = h.count() - c0;
+    // 5. with the last-made mark still selected, choosing Text and clicking starts a text at once
+    h.setTool('rect'); await wait(60); await drag(canvas, 1060, 560, 1160, 620);
+    R.fix.textAfterShape = { selectedBefore: h.state().selected };
+    h.setTool('text'); await wait(60);
+    R.fix.textAfterShape.selectedAfterTool = h.state().selected;
+    await click(700, 650);
+    R.fix.textAfterShape.editing = h.state().editingText;
+    var ta2 = document.querySelector('textarea.excalidraw-wysiwyg');
+    if (ta2) ta2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(150); h.setTool('select');
+    // 1. a dropped scene file never reaches the engine
+    var c1 = h.count();
+    said.length = 0;
+    try {
+      var over = new DragEvent('dragover', { bubbles: true, cancelable: true, composed: true, clientX: 900, clientY: 600, dataTransfer: (function () { var d = new DataTransfer(); d.items.add(new File(['{}'], 'x.excalidraw', { type: 'application/json' })); return d; })() });
+      container.dispatchEvent(over);
+      drop(new File([JSON.stringify({ type: 'excalidraw', version: 2, source: 'probe', elements: [{ type: 'rectangle', id: 'scene-rect', x: 10, y: 10, width: 300, height: 200, strokeStyle: 'dashed', roughness: 2 }], appState: { viewBackgroundColor: '#ffffff' } })], 'probe.excalidraw', { type: 'application/json' }));
+      await wait(700);
+      R.fix.sceneDrop = { added: h.count() - c1, said: said.slice(), dragStopped: over.defaultPrevented };
+    } catch (e) { R.fix.sceneDrop = { unsupported: String(e).slice(0, 200) }; }
+    // 3. pasted engine content: a dashed, rough, hachured, translucent, rounded rectangle arrives solid and exact;
+    //    a diamond and a line are removed and said
+    var c2 = h.count();
+    said.length = 0;
+    try {
+      var el = function (type, x, extra) { return Object.assign({ type: type, id: 'paste-' + type, x: x, y: 0, width: 160, height: 90, angle: 0, strokeColor: '#e03131', backgroundColor: '#ffc9c9', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, seed: 1, version: 1, versionNonce: 1, isDeleted: false, groupIds: [], frameId: null, boundElements: null, updated: 1, link: 'https://example.invalid/', locked: false }, extra || {}); };
+      var clip = JSON.stringify({ type: 'excalidraw/clipboard', elements: [el('rectangle', 0), el('diamond', 200), el('line', 400, { points: [[0, 0], [100, 50]] })], files: {} });
+      container.focus();
+      pointer(canvas, 'pointermove', 900, 300, 0);
+      // the engine pastes where the mouse last was, and only when that point is inside the board
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 250, clientY: 420 }));
+      var pd = new DataTransfer(); pd.setData('text/plain', clip);
+      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: pd }));
+      await wait(900);
+      var pasted = h.marks().filter(function (m) { return m.kind === 'rect' && Math.round(m.width) === 160 && Math.round(m.height) === 90; })[0];
+      R.fix.paste = { added: h.count() - c2, said: said.slice().sort(), found: !!pasted };
+      // a synthetic paste event that the engine ignores proves nothing either way: say so instead of passing
+      if (R.fix.paste.added === 0 && said.length === 0) R.fix.paste = { unsupported: 'the synthetic paste did not reach the engine' };
+      if (pasted) {
+        await click(1100, 700); await wait(150);
+        var v = h.view(), g2 = staticCanvas.getContext('2d'), prof = {}, gaps = 0;
+        var px = function (sx, sy) { return g2.getImageData(Math.round((sx + v.scrollX) * v.zoom * dpr), Math.round((sy + v.scrollY) * v.zoom * dpr), 1, 1).data; };
+        for (var qx = pasted.x + 12; qx < pasted.x + pasted.width - 12; qx += 3) { if (px(qx, pasted.y)[3] < 128) gaps++; }
+        var mid = px(pasted.x + pasted.width / 2, pasted.y + pasted.height / 2), edge = px(pasted.x + 40, pasted.y);
+        R.fix.paste.edgeGaps = gaps; R.fix.paste.fillAlpha = mid[3]; R.fix.paste.edgeRgb = [edge[0], edge[1], edge[2]]; R.fix.paste.line = pasted.line; R.fix.paste.fillToken = pasted.fill;
+      }
+    } catch (e) { R.fix.paste = { unsupported: String(e).slice(0, 200) }; }
+    // 4. the frame title editor wears the system, and Esc ends it
+    h.add([{ type: 'frame', x: 60, y: 560, width: 220, height: 120, text: 'a frame title that is long enough to be cut off' }]);
+    await wait(200);
+    var ft = document.querySelector('.excalidraw [id*="-frame-name-"]');
+    R.fix.frame = { title: ft ? ft.getAttribute('title') : null, weight: ft ? getComputedStyle(ft).fontWeight : null };
+    if (ft) {
+      ft.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, composed: true }));
+      await wait(200);
+      var fi = ft.querySelector('input');
+      if (fi) {
+        var fcs = getComputedStyle(fi);
+        R.fix.frame.editor = { fontFamily: fcs.fontFamily, fontSize: fcs.fontSize, fontWeight: fcs.fontWeight, color: fcs.color, radius: fcs.borderTopLeftRadius, editing: h.state().editingText };
+        fi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await wait(250);
+        R.fix.frame.afterEsc = { input: !!document.querySelector('.excalidraw [id*="-frame-name-"] input'), editing: h.state().editingText };
+      }
+    }
+    // 7. a label typed into a shape is the default ink whatever line is current; the state counts marks, not labels
+    h.setStyle({ line: 'raspberry' });
+    var m0 = h.state().marks;
+    h.add([{ type: 'sticky', x: 320, y: 560, width: 120, height: 70, text: 'label' }]);
+    await wait(200);
+    var lab = h.marks().filter(function (m) { return !!m.labelOf; });
+    R.fix.label = { lines: lab.map(function (m) { return m.line; }), marksAdded: h.state().marks - m0, countAdded: lab.length };
+    h.setStyle({ line: 'ink' });
+    offSaid();
+    // 8. one capture per theme with a mark in every content colour: only those colours and the theme's own may show
+    R.phase = 'colours';
+    var pairs = [['ink', 'paper'], ['graphite', 'lemon'], ['leaf', 'leaf'], ['sky', 'sky'], ['cobalt', 'cobalt'], ['orchid', 'orchid'], ['raspberry', 'raspberry']];
+    h.add(pairs.map(function (p, n) { return { type: n % 2 ? 'ellipse' : 'rectangle', x: 480 + n * 100, y: 40, width: 80, height: 60, line: p[0], fill: p[1], weight: n % 2 ? 'bold' : 'fine' }; }));
+    await click(1100, 760);
+    R.colours = {};
+    for (var ci = 0; ci < 2; ci++) { h.setTheme(['day', 'night'][ci]); await wait(250); R.colours[['day', 'night'][ci]] = await capture(['day', 'night'][ci]); }
+    h.setTheme('day');
     off();
     R.stateEvents = states;
     R.canvasFontsEnd = Object.keys(FONTS_SEEN);
@@ -522,6 +619,16 @@ export function reskinProblems(r) {
     if (!s.caret || s.caret.editing !== true || !/^"?JetBrains Mono"?, monospace$/.test(s.caret.fontFamily) || s.caret.caretColor !== RGB_INK[theme]) p.push(`${theme}: the text caret: ${JSON.stringify(s.caret)}`);
   }
   if (!r.narrow || r.narrow.stock?.length !== 0 || Math.round(r.narrow.width) !== NARROW.width || !r.narrow.capture?.png) p.push(`the ${NARROW.width}px board: ${JSON.stringify({ ...r.narrow, capture: r.narrow?.capture ? '(png)' : null })}`);
+  const f = r.fix ?? {};
+  if (f.undo?.afterDraw !== 2 || f.undo?.afterUndo !== 1) p.push(`an undo after a programmatic add took the added marks with it: ${JSON.stringify(f.undo)}`);
+  if (!(f.textAfterShape?.selectedBefore === 1 && f.textAfterShape?.selectedAfterTool === 0 && f.textAfterShape?.editing === true)) p.push(`text did not start on the first click after a shape: ${JSON.stringify(f.textAfterShape)}`);
+  if (!f.sceneDrop || (!f.sceneDrop.unsupported && (f.sceneDrop.added !== 0 || f.sceneDrop.said?.join() !== 'scene-file' || f.sceneDrop.dragStopped !== true))) p.push(`a dropped scene file reached the board: ${JSON.stringify(f.sceneDrop)}`);
+  const pa = f.paste;
+  if (!pa || (!pa.unsupported && (pa.added !== 1 || pa.said?.join() !== 'mark:diamond,mark:line' || pa.found !== true || pa.edgeGaps !== 0 || pa.fillAlpha !== 0 || pa.edgeRgb?.join() !== '22,21,15' || pa.line !== 'ink' || pa.fillToken !== null))) p.push(`pasted engine content kept its stock look: ${JSON.stringify(pa)}`);
+  const fr = f.frame ?? {};
+  if (fr.title !== 'a frame title that is long enough to be cut off' || fr.weight !== '600' || !fr.editor || !/^"?JetBrains Mono"?, monospace$/.test(fr.editor.fontFamily) || fr.editor.fontSize !== '11.5px' || fr.editor.fontWeight !== '600' || fr.editor.color !== RGB_INK.day || fr.editor.radius !== '0px' || fr.editor.editing !== true || fr.afterEsc?.input !== false || fr.afterEsc?.editing !== false) p.push(`the frame title: ${JSON.stringify(fr)}`);
+  if (f.label?.lines?.join() !== 'ink' || f.label?.marksAdded !== 1) p.push(`a label in a sticky: ${JSON.stringify(f.label)}`);
+  for (const theme of ['day', 'night']) if (!r.colours?.[theme]?.png) p.push(`no ${theme} content-colour capture`);
   if (!(r.stateEvents > 0)) p.push('the handle announced no state change');
   return p;
 }
@@ -575,7 +682,7 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
           const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
+            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, colours: report.colours, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
           } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });

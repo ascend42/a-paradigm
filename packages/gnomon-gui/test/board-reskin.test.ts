@@ -19,10 +19,10 @@
  * the ONE engine run of test/board-csp.test.ts (checkLiveReskin in test/board-golden.ts), because two WKWebView
  * windows driven at once interfere with each other. On CI the probes job runs P12.
  *
- * Two limits, stated: (1) the text caret is DOM, not canvas, so it is checked as computed style (face, size,
- * caret colour), not as pixels; (2) a theme token is not a finding: night `--key-edge` (#C9DCD6), the colour the
- * design gives selection, is itself inside the minimum distance of night sea-grey, so pixels that are a theme
- * token of the capture's theme, or an antialiased mix of two of the theme's own colours, are exempt (and counted).
+ * The pixel rule (Mika's pass A finding 8): on the ink-only goldens ANY chromatic pixel that is not a mix of the
+ * theme's own colours fails, one pixel is enough, and none may sit near a reserved colour, with no exemption (the
+ * selection is the ink in both themes). One golden per theme holds a mark in every content colour and allows
+ * exactly those. One limit, stated: the text caret is DOM, not canvas, so it is checked as computed style.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -36,8 +36,8 @@ import { colourLiterals, pixelColours } from '../scripts/board-colours.mjs';
 // @ts-expect-error plain .mjs build script (no types)
 import { COLOUR_ALLOWLIST, PATCHES } from '../scripts/board-patches.mjs';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../src/core/board.js';
-import { gnomonBoardKeyActions, skinOf } from '../src/board/skin.js';
-import { differingShare, golden, GOLDENS, isThemeMix, nearReserved, RESERVED, reservedPixels, SHOTS, THEMES, type Theme } from './board-golden.js';
+import { gnomonBoardKeyActions, SKIN_ALPHA, skinOf } from '../src/board/skin.js';
+import { contentColours, differingShare, golden, GOLDENS, isMixOf, nearReserved, RESERVED, SHOTS, strayPixels, THEMES, type Theme } from './board-golden.js';
 import { RESKIN_CLEAN } from './board-reskin-sample.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,33 +65,37 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     expect(js).toMatch(/\("JetBrains Mono",\{uri:"\.\.\/fonts\/JetBrainsMono-Regular\.woff2"\}\)/);
     for (const family of ['Excalifont', 'Virgil', 'Nunito', 'Comic Shanns', 'Cascadia', 'Lilita One', 'Liberation Sans', 'Helvetica']) expect(js, family).not.toMatch(new RegExp(`\\("${family}"[,)]`));
     const src = readFileSync(path.join(ROOT, 'src', 'board', 'index.ts'), 'utf8');
-    expect(src).toMatch(/BOARD_FONT_SIZE = 13\.5;/);
-    expect(src).toMatch(/BOARD_FONT_ID = 10;/);
+    const normal = readFileSync(path.join(ROOT, 'src', 'board', 'normal.ts'), 'utf8');
+    expect(normal).toMatch(/BOARD_FONT_SIZE = 13\.5;/);
+    expect(normal).toMatch(/BOARD_FONT_ID = 10;/);
     expect(src).toMatch(/currentItemRoughness: 0,/);
     expect(src).toMatch(/currentItemStrokeStyle: 'solid',/);
   });
 
   it('every S1.1 patch is in the manifest', () => {
     const ids = (PATCHES as Array<{ id: string }>).map((p) => p.id);
-    for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
+    for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'stroke-exact', 'frame-name-editor', 'frame-name-editor-ink', 'frame-name-editor-keys', 'frame-name-title', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
   });
 
-  it('the rail is nine tools, three weights and eight key actions; nothing of the engine\'s tool list', () => {
+  it('the rail is nine tools, three weights and seven key actions (⌘0 is the host\'s: it fits); nothing of the engine\'s tool list', () => {
     expect([...BOARD_TOOLS]).toEqual(TOOLS);
     for (const t of REFUSED_TOOLS as string[]) expect(BOARD_TOOLS as readonly string[]).not.toContain(t);
     expect(BOARD_WEIGHTS).toEqual({ fine: 2, bold: 4, marker: 8 });
-    expect([...gnomonBoardKeyActions].sort()).toEqual(['deleteSelectedElements', 'finalize', 'redo', 'resetZoom', 'selectAll', 'undo', 'zoomIn', 'zoomOut']);
+    expect([...gnomonBoardKeyActions].sort()).toEqual(['deleteSelectedElements', 'finalize', 'redo', 'selectAll', 'undo', 'zoomIn', 'zoomOut']);
   });
 
   it('the skin is the theme tokens and nothing else', () => {
     for (const theme of THEMES) {
       const t = CONTENT_THEME_TOKENS[theme];
       const s = skinOf(theme);
-      expect([s.ink, s.sec, s.sheet, s.selection, s.handle, s.guide, s.frame]).toEqual([t['text.primary'], t['text.secondary'], t['surface.sheet'], t['line.key-edge'], t['surface.sheet'], t['text.primary'], t['text.secondary']]);
-      for (const wash of [s.handleHover, s.binding, s.wash]) expect((colourLiterals(wash) as Array<{ hex: string }>).map((l) => l.hex)).toEqual([wash === s.handleHover ? t['line.key-edge'] : t['text.primary']]);
+      expect([s.ink, s.sec, s.sheet, s.selection, s.handle, s.guide, s.frame]).toEqual([t['text.primary'], t['text.secondary'], t['surface.sheet'], t['text.primary'], t['surface.sheet'], t['text.primary'], t['text.secondary']]);
+      for (const wash of [s.handleHover, s.binding, s.wash]) expect((colourLiterals(wash) as Array<{ hex: string }>).map((l) => l.hex)).toEqual([t['text.primary']]);
     }
     // the harness composes captures on the desk ground and expects each theme's ink for the caret: the same tokens
     const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    // the selection is the ink in both themes (Mika's ruling): night key-edge sits inside the distance of sea-grey
+    expect(coloursClear(CONTENT_THEME_TOKENS.night['line.key-edge'], CONTENT_RESERVED_COLOURS.night['sea-grey']!)).toBe(false);
+    expect(SKIN_ALPHA).toEqual({ handleHover: 0.4, binding: 0.14, wash: 0.06 });
     for (const theme of THEMES) expect(new RegExp(`\\[data-theme="${theme}"\\] \\{[^}]*--ground: (#[0-9A-F]{6});`).exec(css)?.[1]).toBe((GROUND as Record<Theme, string>)[theme]);
     for (const theme of THEMES) expect((RGB_INK as Record<Theme, string>)[theme]).toBe(`rgb(${[1, 3, 5].map((i) => parseInt(CONTENT_THEME_TOKENS[theme]['text.primary'].slice(i, i + 2), 16)).join(', ')})`);
   });
@@ -137,22 +141,36 @@ describe('G-DDL-07 no colour literal near a reserved colour outside the per-patc
 });
 
 describe('G-DDL-07 the day and night goldens (decoded pixels)', () => {
-  const names = [...THEMES.flatMap((t) => SHOTS.map((s) => `${s}-${t}`)), 'narrow-day'];
+  const ink = [...THEMES.flatMap((t) => SHOTS.map((s) => `${s}-${t}`)), 'narrow-day'];
+  const names = [...ink, 'colours-day', 'colours-night'];
+  const themeOf = (name: string): Theme => (name.endsWith('-night') ? 'night' : 'day');
 
   it('the goldens are exactly the expected set', () => {
     expect(readdirSync(GOLDENS).filter((f) => f.endsWith('.png')).sort()).toEqual(names.map((n) => `${n}.png`).sort());
   });
 
-  it.each(names)('%s holds no chromatic pixel within the minimum distance of a reserved colour', (name) => {
-    const theme = name.endsWith('-night') ? 'night' : 'day';
+  it.each(ink)('%s (ink only): not ONE chromatic pixel that is not a mix of the theme\'s own colours, and none near a reserved colour', (name) => {
+    const theme = themeOf(name);
     const png = golden(name);
-    const { bad } = reservedPixels(png, theme);
-    expect(bad).toEqual([]);
+    expect(strayPixels(png, theme)).toEqual({ stray: [], reserved: [] });
     // it is a capture of the board on that theme's ground, not a blank or a white slab
     const colours = pixelColours(png) as Map<string, number>;
     expect((colours.get((GROUND as Record<Theme, string>)[theme]) ?? 0) / (png.width * png.height)).toBeGreaterThan(0.5);
     expect(colours.has('#FFFFFF')).toBe(false);
     expect(colours.size).toBeGreaterThan(20);
+  });
+
+  it.each(['colours-day', 'colours-night'])('%s: a mark in every content colour, and exactly those colours beside the theme\'s own', (name) => {
+    const theme = themeOf(name);
+    const png = golden(name);
+    const allowed = contentColours(theme);
+    expect(allowed).toHaveLength(14); // ink, graphite and five hues as lines; paper, lemon and five hues as fills
+    expect(strayPixels(png, theme, allowed).stray).toEqual([]);
+    // every content colour is really in the capture (the allowlist is exact, not generous)
+    const colours = pixelColours(png) as Map<string, number>;
+    for (const c of allowed) expect(colours.get(c) ?? 0, `${name} ${c}`).toBeGreaterThan(20);
+    // and without the allowlist the same capture fails: the rule sees content colours
+    expect(strayPixels(png, theme).stray.length).toBeGreaterThan(5);
   });
 
   it('the states differ from the plain marks: selection, the marquee, the binding highlight and the guides were drawn', () => {
@@ -164,16 +182,18 @@ describe('G-DDL-07 the day and night goldens (decoded pixels)', () => {
     expect([png.width, png.height]).toEqual([NARROW.width, NARROW.height]);
   });
 
-  it('the theme-mix exemption is narrow: an engine violet, a red guide and a blue marquee are not theme mixes', () => {
-    for (const theme of THEMES) for (const engine of ['#6965DB', '#A8A5FF', '#FF6B6B', '#0076FF', '#5E5AD8', '#B4382A', '#A8CFCB']) expect(isThemeMix(engine, theme), `${engine} ${theme}`).toBe(false);
-    expect(isThemeMix('#C9DCD6', 'night')).toBe(true);
-    expect(isThemeMix('#BDCFC9', 'night')).toBe(true); // key-edge over the night ground, antialiased
-  });
-
-  it('the exempt theme token is counted, not hidden: night key-edge sits inside the distance of night sea-grey', () => {
-    expect(coloursClear(CONTENT_THEME_TOKENS.night['line.key-edge'], CONTENT_RESERVED_COLOURS.night['sea-grey']!)).toBe(false);
-    expect(reservedPixels(golden('marquee-night'), 'night').tokens).toBeGreaterThan(0);
-    for (const theme of THEMES) for (const shot of SHOTS) if (theme === 'day') expect(reservedPixels(golden(`${shot}-${theme}`), theme).tokens, `${shot}-${theme}`).toBe(0);
+  it('the rule sees a stock colour come back: one pixel of an engine colour is stray, wherever it is and in either theme', () => {
+    const palette = (theme: Theme): string[] => [...Object.values(CONTENT_THEME_TOKENS[theme]), (GROUND as Record<Theme, string>)[theme]];
+    // the engine's violets and blues, its red guide, a reserved colour: none is a mix of a theme's own colours
+    for (const theme of THEMES) for (const engine of ['#6965DB', '#A8A5FF', '#5E5AD8', '#0076FF', '#1971C2', '#FF6B6B', '#B4382A', '#A8CFCB']) expect(isMixOf(engine, palette(theme)), `${engine} ${theme}`).toBe(false);
+    // planted: ONE violet pixel in an otherwise clean golden is reported (the 0.2% compare tolerance would pass it)
+    for (const theme of THEMES) {
+      const png = golden(`selection-${theme}`);
+      const planted = { ...png, data: Buffer.from(png.data) };
+      planted.data.set([0x69, 0x65, 0xdb], 4 * png.channels);
+      expect(strayPixels(planted, theme).stray).toEqual([['#6965DB', 1]]);
+      expect(differingShare(png, planted)).toBeLessThan(0.002);
+    }
   });
 });
 
@@ -199,6 +219,13 @@ describe('G-DDL-07 predicate: what a clean reskin run reports (every OS)', () =>
     ['a rough edge', { edge: { profiles: 5, opaque: 40 } }, /not exact \(roughness 0\)/],
     ['a missing capture', { skin: { day: RESKIN_CLEAN.skin && (RESKIN_CLEAN.skin as Record<string, unknown>).day, night: { ...((RESKIN_CLEAN.skin as Record<string, object>).night), guides: null } } }, /no night guides capture/],
     ['a caret in another face', { skin: { day: { ...((RESKIN_CLEAN.skin as Record<string, object>).day), caret: { caretColor: 'rgb(22, 21, 15)', fontFamily: 'Virgil', editing: true } }, night: (RESKIN_CLEAN.skin as Record<string, unknown>).night } }, /day: the text caret/],
+    ['an undo that takes programmatic adds with it', { fix: { ...(RESKIN_CLEAN.fix as object), undo: { afterDraw: 2, afterUndo: 0 } } }, /undo after a programmatic add/],
+    ['a click after a shape that only deselects', { fix: { ...(RESKIN_CLEAN.fix as object), textAfterShape: { selectedBefore: 1, selectedAfterTool: 1, editing: false } } }, /text did not start on the first click/],
+    ['a dropped scene file that reached the engine', { fix: { ...(RESKIN_CLEAN.fix as object), sceneDrop: { added: 1, said: [], dragStopped: false } } }, /dropped scene file reached the board/],
+    ['a pasted dashed mark that stayed dashed', { fix: { ...(RESKIN_CLEAN.fix as object), paste: { added: 1, said: ['mark:diamond', 'mark:line'], found: true, edgeGaps: 9, fillAlpha: 0, edgeRgb: [22, 21, 15], line: 'ink', fillToken: null } } }, /pasted engine content kept its stock look/],
+    ['a stock frame title editor', { fix: { ...(RESKIN_CLEAN.fix as object), frame: { title: 'a frame title that is long enough to be cut off', weight: '600', editor: { fontFamily: 'Times', fontSize: '14px', fontWeight: '400', color: 'rgb(61, 61, 61)', radius: '4px', editing: true }, afterEsc: { input: true, editing: true } } } }, /the frame title/],
+    ['a label in the current line colour', { fix: { ...(RESKIN_CLEAN.fix as object), label: { lines: ['raspberry'], marksAdded: 1 } } }, /a label in a sticky/],
+    ['a missing content-colour capture', { colours: { day: RESKIN_CLEAN.colours && (RESKIN_CLEAN.colours as Record<string, unknown>).day } }, /no night content-colour capture/],
     ['a colour that fails the palette accepted as a line', { style: { ...(RESKIN_CLEAN.style as object), refusedFill: { ok: true } } }, /style through the handle/],
     ['zoom that does not move', { zoom: { start: 1, afterIn: 1, afterOut: 1, afterReset: 1 } }, /zoom through the handle/],
   ] as Array<[string, Record<string, unknown>, RegExp]>)('not clean: %s', (_name, patch, why) => {

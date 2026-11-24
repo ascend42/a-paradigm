@@ -72,6 +72,7 @@ describe('#gui-board patch manifest is pinned (a dropped patch is a failure, not
       'library-tab-removed @ index.js x1',
       'image-tool-removed @ chunk-K2UTITRG.js x1',
       'roughness-zero @ chunk-K2UTITRG.js x1',
+      'stroke-exact @ chunk-K2UTITRG.js x1',
       'skin-frame @ chunk-K2UTITRG.js x1',
       'skin-marquee @ chunk-K2UTITRG.js x2',
       'layer-ui-removed @ index.js x1',
@@ -85,6 +86,10 @@ describe('#gui-board patch manifest is pinned (a dropped patch is a failure, not
       'key-dialogs-removed @ index.js x1',
       'key-tools-removed @ index.js x1',
       'text-size-keys-removed @ index.js x1',
+      'frame-name-editor @ index.js x1',
+      'frame-name-editor-ink @ index.js x1',
+      'frame-name-editor-keys @ index.js x1',
+      'frame-name-title @ index.js x1',
       'api-run-action @ index.js x1',
       'skin-selection @ index.js x1',
       'skin-point-hover @ index.js x1',
@@ -98,7 +103,6 @@ describe('#gui-board patch manifest is pinned (a dropped patch is a failure, not
       'lodash-throttle-root @ lodash.throttle/index.js x1',
       'css-engine-violets @ index.css x7',
       'css-ui-font-faces @ index.css x4',
-
     ]);
   });
 

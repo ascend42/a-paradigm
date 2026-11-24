@@ -139,7 +139,7 @@ components:
       Handle additions: marks() (id, kind, box, first point, author,
       selected, a stub's kind, a label's owner), view(), onScene, focus,
       hasFocus, onAttempt (a paste or a drop is reported from the capture
-      phase and neither acted on nor stopped), onRefused. A mark's author
+      phase), onRefusal. A mark's author
       slot (human, agent with id and name, unknown) is set only through add
       (the fixture) until S1.3 maps real rows; a mark that is not yours is
       drawn with the engine's dashed stroke, derived from the author on every
@@ -172,7 +172,54 @@ components:
       not the design's 6 4; a stub's words are screen-size text over a rect
       that scales with zoom. The image-refused line is not in the design
       (proposed copy in core/board-leaf.ts).
-      Known and left for later slices: React and Excalidraw carry HTML sinks
+      Mika's review of pass A (2026-11-24), folded in. (1) A drop that
+      carries files is stopped in the capture phase and never reaches the
+      engine (a dropped scene file replaced the board with the stock look);
+      dragover sets dropEffect none; the handle reports scene-file,
+      library-file, image or file. (2) add() is never an undo step (the first
+      undo after it used to empty the board). (3) Every element is held to
+      one normal form on every change (src/board/normal.ts: solid unless the
+      host names another hand, roughness 0, solid fill, opacity 100, square,
+      no link, the nearest of the weights 2, 4, 8, text in the one face and
+      size); an element that is not a rectangle, ellipse, arrow, frame,
+      freedraw or text is deleted and reported. (4) Patches
+      frame-name-editor, frame-name-editor-ink, frame-name-editor-keys and
+      frame-name-title: the frame title editor is 11.5 / 600 JetBrains Mono
+      in the theme ink, square; Esc and Enter end it; the title is weight
+      600 and carries title=. (5) setTool for a drawing tool clears the
+      selection, so the first click draws. (6) Patch stroke-exact: a
+      freehand stroke is as wide as its weight, with no taper. (7) A label
+      inside a sticky or a shape is always the default ink. (8) The golden
+      rule is strict: on the ink-only goldens one chromatic pixel that is
+      not a mix of the theme's own colours fails, none may sit near a
+      reserved colour, and colours-day / colours-night hold a mark in each
+      of the 14 content colours and allow exactly those. state().selected
+      counts existing marks and state().marks leaves labels out. Rulings:
+      the selection is --ink in both themes (night --key-edge sits inside
+      the reserved distance of sea-grey); the three derived alphas, all of
+      the ink, are 0.4 (a hovered line point), 0.14 (the binding highlight)
+      and 0.06 (the marquee wash); resetZoom left the key allowlist and
+      Cmd+0 is the host's fit; diamond left FILLABLE. The board surface has
+      a 2px --key-edge ring at :focus-visible; in the leaf it is a named
+      region (role application, aria-label, aria-description) and a refusal
+      is said in a status line under the head.
+      A paste of engine clipboard content (a dashed, rough, hachured,
+      translucent, rounded rectangle with a diamond and a line) is replayed
+      live in WKWebView by the P12 harness: one solid ink rectangle stays
+      and the other two are removed and reported. In Chrome the synthetic
+      paste event did not reach the engine's paste handler, so the harness
+      reports it as unsupported there; the rule itself is unit-tested in
+      test/board-normal.test.ts. Not fixed: double-clicking an arrow made
+      through add() logs "Linear element is not normalized"; the canvas
+      fallback text is still the engine's "Drawing canvas".
+      For S1.3 (carried, not built): the binding highlight is under 3:1;
+      Alt-drag duplicates a mark while Cmd+D is off; drawing by keyboard
+      alone is impossible; Luna's open questions (square or rounded
+      handles, stroke taper, sticky text size, whether layer order,
+      grouping and alignment are gone on purpose); the stub's fixed line
+      does not fit the design's 156 by 52 minimum; contracts' dimKindName
+      answers `unknown` for a kind that fails the grammar, a word the stub
+      design forbids; the refusal lines are proposed copy, not the design's.
       Known and left for later slices: React and Excalidraw carry HTML sinks
       (the kernel's bundle scan exempts board/* from that one clause);
       react-style-singleton can inject a <style> for a modal popover.
@@ -186,6 +233,7 @@ components:
     tests:
       - test/board-reskin.test.ts
       - test/board-font.test.ts
+      - test/board-normal.test.ts
       - test/board-seal.test.ts
       - test/board-rail.test.ts
       - test/board-tray.test.ts
