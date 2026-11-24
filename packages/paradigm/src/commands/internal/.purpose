@@ -7,7 +7,7 @@ components:
   internal-commands:
     description: >-
       The hidden `paradigm internal` command namespace, registered in the CLI entry point with `hidden: true`. Parent of the hook-side helpers in this directory (active-remediations, learning-guard, learn-path); not for direct use.
-    type: tool
+    type: command-group
     file: packages/paradigm/src/index.ts
     tags:
       - internal

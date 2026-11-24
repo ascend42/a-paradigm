@@ -619,7 +619,7 @@ components:
     description: Launches the Sentinel codebase intelligence UI
     type: service
   university-launcher:
-    description: Launches the Paradigm University learning platform
+    description: Starts the Platform with only the Academy section enabled and opens it (the standalone University UI and server were retired in 7.11.0; content packs live in the Academy)
     type: service
     file: src/commands/university/serve.ts
   triage-handler:
