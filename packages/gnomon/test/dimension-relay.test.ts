@@ -24,6 +24,7 @@ import { createModRelayPort } from '../src/kernel/modhost/index.js';
 import { connectGnomon, createKernelDispatcher, listenSocket, SocketAuthenticator } from '../src/kernel/socket/index.js';
 import { createWebEndpointForTest, unsandboxedModLauncher } from '../src/kernel/testing.js';
 import type { WebEndpoint } from '../src/kernel/web/index.js';
+import { runDimCommand } from '../src/cli/dim-cli.js';
 import { PKG_ROOT } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
 import { DIMENSION, DIMENSION_TREE, DIM_ROW_KINDS, dimId, fakeLog, installDimension, rectOp, ulid } from './dimension-helpers.js';
@@ -241,6 +242,34 @@ describe("#dimension-mod on the real kernel log (S1.3): a mod's own log.read", (
       await h.start(DIMENSION);
       const again = await run('dim.open', { dim, opened: 'command' });
       expect([again.ok, again.hash]).toEqual([true, closed.hash]);
+
+      // #dim-cli over the same VERIFIED log: `gnomon dim replay` prints the mod's hash, and a mark's text cannot forge a line
+      expect(await run('dim.op', { dim, ops: [{ type: 'add', node: { id: ulid(3), kind: 'text', x: 0, y: 0, z: 'W', text: 'note\nREFUSED  FORGED  line\u001b[2J\u202e' } }] })).toMatchObject({ ok: true, applied: 1 });
+      const last = await run('dim.close', { dim });
+      await h.stopAll();
+      await d.shutdown('signal');
+      const cli = async (argv: string[]): Promise<{ code: number; out: string; err: string }> => {
+        const out: string[] = [];
+        const err: string[] = [];
+        const code = await runDimCommand(argv, { stdout: { write: (x: string) => out.push(x) }, stderr: { write: (x: string) => err.push(x) } });
+        return { code, out: out.join(''), err: err.join('') };
+      };
+      const replay = await cli(['replay', dim, t.home]);
+      expect([replay.code, replay.err]).toEqual([0, '']);
+      expect(replay.out).toContain(`hash         ${String(last.hash)}`);
+      expect(replay.out).toContain('title        Real log');
+      expect(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(replay.out.replace(/\n/g, ''))).toBe(false);
+      expect(replay.out.split('\n').filter((line) => line.startsWith('REFUSED'))).toEqual([]);
+      expect(replay.out.split('\n').filter((line) => line.includes('by human'))).toHaveLength(2);
+      // --to: the state as it stood after the second row (two marks, before the delete)
+      const early = JSON.parse((await cli(['replay', dim, '--to', String(page.rows[1]!.seq), t.home, '--json'])).out) as { view: { nodes: unknown[] }; hash: string };
+      expect([early.view.nodes.length, early.hash]).toEqual([2, dimHash(foldDim(human, page.rows[1]!.seq))]);
+      const stats = JSON.parse((await cli(['stats', t.home, '--json'])).out) as { dimensions: Record<string, { reopens: number; agentMarks: unknown; opsBySession: Record<string, number>; closedQuick: number }>; notes: string[] };
+      expect(stats.dimensions[dim]).toMatchObject({ reopens: 2, agentMarks: { added: 0, surviving: 0 }, opsBySession: { [LIVE]: 3 }, closedQuick: 1 }); // the reopen that was closed again untouched
+      expect(stats.notes[0]).toContain("undoing a delete of an agent's mark");
+      expect((await cli(['stats', dim, t.home])).out).toContain('reopens');
+      // a dimension the log does not hold, and a log that does not verify, are refused
+      expect((await cli(['replay', dimId(99), t.home])).code).toBe(1);
     },
     SOCKET_MS,
   );
