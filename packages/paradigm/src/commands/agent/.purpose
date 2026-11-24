@@ -47,10 +47,10 @@ signals:
   expertise-updated:
     description: Emitted when agent expertise auto-updates after lore recording
     tags: [agent-identity]
-  !scopes-approved:
+  scopes-approved:
     description: Emitted when a user approves an agent's scoped permissions
     tags: [agent-identity, scopes]
-  !scopes-denied:
+  scopes-denied:
     description: Emitted when a user denies an agent's scope update
     tags: [agent-identity, scopes]
 

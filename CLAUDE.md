@@ -43,11 +43,11 @@ Use these prefixes in documentation and commits:
 - Keep gates minimal - one responsibility per gate
 - Use signals for side effects, not direct state mutations
 - **Logging:** Library code (packages/paradigm-mcp, packages/sentinel, etc.) — use Paradigm logger, never console.log
-- **CLI output:** CLI commands (packages/paradigm/src/commands/) — use `cli-output.ts` helpers (`out()`, `success()`, `warn()`, `error()`, `dim()`, `header()`, `kv()`, `json()`) for user-facing output. Raw console.log is acceptable but helpers are preferred for consistency
+- **CLI output:** CLI commands (packages/paradigm/src/commands/) — use the `packages/paradigm/src/utils/cli-output.ts` helpers (`out()`, `success()`, `warn()`, `error()`, `dim()`, `header()`, `kv()`, `json()`) for user-facing output. Raw console.log is acceptable but helpers are preferred for consistency
 
 ## UI Design Systems (Atelier)
 
-- **Gnomon console** (`packages/gnomon-gui/{src,static}`, `packages/gnomon-wrapper/static`, `packages/gnomon-mods/workshop`) is governed by `.atelier/systems/gnomon/` (`design-system.yaml`, `DESIGN.md`, `specimen.html`). Gnomon is desktop-only for now.
+- **Gnomon console** (`packages/gnomon-gui/{src,static}`, `packages/gnomon-wrapper/static`, `packages/gnomon-mods/workshop`) is governed by `.atelier/systems/gnomon/design-system.yaml`, `.atelier/systems/gnomon/DESIGN.md` and `.atelier/systems/gnomon/specimen.html`. Gnomon is desktop-only for now.
 - Find a file's system with `atelier system which <file>`. Run `atelier check <files>` on every UI change before calling it done, and have `atelier-mika` review it.
 - New UI uses the existing components and zones. A new pattern is proposed to the system first, never shipped as a one-off.
 - Warpline, Platform and the site have parked drafts in `.atelier/systems/<id>/` and are not enforced yet.
@@ -95,7 +95,7 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 
 **Tool names:** Paradigm tools are documented as `paradigm_status`, `paradigm_ripple`, etc. When loaded as a Claude Code plugin, the same tools may appear as `plugin_paradigm_paradigm_status`, `plugin_paradigm_paradigm_ripple`, etc. Both names refer to the same tool — use whichever appears in your available tool list.
 
-**Orchestration modes:** `paradigm_orchestrate_inline` supports two execution models. In Claude Code, agents launch as isolated Task tool contexts (true multi-agent — separate memory per agent). In Cursor and other IDEs without Task tool support, agents run sequentially in the same context (sequential roleplay). The active mode is configured via `orchestration.default_mode` in `agents.yaml` (defaults to `faceted`).
+**Orchestration modes:** `paradigm_orchestrate_inline` supports two execution models. In Claude Code, agents launch as isolated Task tool contexts (true multi-agent — separate memory per agent). In Cursor and other IDEs without Task tool support, agents run sequentially in the same context (sequential roleplay). The active mode is configured via `orchestration.default_mode` in `.paradigm/agents.yaml` (defaults to `faceted`).
 
 **Adoption contracts:** Agent permission scopes declared in `.agent` files are advisory text injected into agent prompts. They represent intent and guide agent behavior — they are not wired to Claude Code's tool permission system. A "denied" scope is a recommendation, not a hard block. If hard enforcement is required, pair adoption contracts with Claude Code tool permission controls.
 
@@ -131,7 +131,7 @@ The stop hook **BLOCKS** if source files were modified without .purpose updates.
 - Rename/delete symbol → update all references
 - Record lore via `paradigm_lore` (op `record`) for sessions modifying 3+ files
 - Use Paradigm logger (`log.component()`, `log.gate()`, etc.) for library code — never raw console.log
-- Use `cli-output.ts` helpers for CLI command output (see `packages/paradigm/src/utils/cli-output.ts`)
+- Use the `packages/paradigm/src/utils/cli-output.ts` helpers for CLI command output
 
 **Auth requires portal.yaml** if your code has JWT, role checks, ownership checks, or protected endpoints.
 
@@ -226,14 +226,14 @@ Detailed guidance is available via MCP resources — load only what you need:
 
 | Guide | When to read |
 |-------|--------------|
-| [`quick-start.md`](./docs/guides/quick-start.md) | First-time install + setup |
-| [`mcp-setup.md`](./docs/guides/mcp-setup.md) | MCP server configuration per IDE |
-| [`agents.md`](./docs/guides/agents.md) | Roster, onboard, bench/activate, install agents |
-| [`decisions.md`](./docs/guides/decisions.md) | `paradigm_decision` (op `record`) + the post-v6.0 decision store |
-| [`v6-migration.md`](./docs/guides/v6-migration.md) | Upgrading from v5.x; the six breaking changes |
-| [`university.md`](./docs/guides/university.md) | Multi-tenant content packs + PLSAT |
-| [`sentinel-upgrade.md`](./docs/guides/sentinel-upgrade.md) | Sentinel incident-tracking upgrade |
-| [`symphony-quickstart.md`](./docs/guides/symphony-quickstart.md) | Symphony multi-agent relay |
+| [`docs/guides/quick-start.md`](./docs/guides/quick-start.md) | First-time install + setup |
+| [`docs/guides/mcp-setup.md`](./docs/guides/mcp-setup.md) | MCP server configuration per IDE |
+| [`docs/guides/agents.md`](./docs/guides/agents.md) | Roster, onboard, bench/activate, install agents |
+| [`docs/guides/decisions.md`](./docs/guides/decisions.md) | `paradigm_decision` (op `record`) + the post-v6.0 decision store |
+| [`docs/guides/v6-migration.md`](./docs/guides/v6-migration.md) | Upgrading from v5.x; the six breaking changes |
+| [`docs/guides/university.md`](./docs/guides/university.md) | Multi-tenant content packs + PLSAT |
+| [`docs/guides/sentinel-upgrade.md`](./docs/guides/sentinel-upgrade.md) | Sentinel incident-tracking upgrade |
+| [`docs/guides/symphony-quickstart.md`](./docs/guides/symphony-quickstart.md) | Symphony multi-agent relay |
 
 ## Directory Structure
 

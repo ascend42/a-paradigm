@@ -388,7 +388,7 @@ components:
       - test/strictness-levels.test.ts
     oracles: [G-STR-01, G-STR-04]
     anchors:
-      - src/kernel/broker/strictness.ts
-      - src/kernel/broker/run-mode.ts
-      - src/kernel/socket/dispatch.ts
-      - src/kernel/lifecycle/daemon.ts
+      - packages/gnomon/src/kernel/broker/strictness.ts
+      - packages/gnomon/src/kernel/broker/run-mode.ts
+      - packages/gnomon/src/kernel/socket/dispatch.ts
+      - packages/gnomon/src/kernel/lifecycle/daemon.ts

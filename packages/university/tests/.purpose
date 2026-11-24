@@ -17,7 +17,7 @@ components:
       university-core's loadPackIndex sees the stable 12-path set.
     type: test
     anchors:
-      - plsat-migration.test.ts:1-500
+      - plsat-migration.test.ts
     tags:
       - test
       - regression

@@ -135,5 +135,5 @@ components:
       - test/loop-act.test.ts
       - test/empty-hooks.test.ts
     anchors:
-      - src/kernel/git/scratch.ts
-      - src/kernel/git/index.ts
+      - packages/gnomon/src/kernel/git/scratch.ts
+      - packages/gnomon/src/kernel/git/index.ts
