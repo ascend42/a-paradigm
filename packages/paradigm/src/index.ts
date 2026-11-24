@@ -466,8 +466,8 @@ program
 // paradigm cost
 program
   .command('cost [path]')
-  .description('Analyze token costs for AI context')
-  .option('-d, --detailed', 'Show detailed breakdown by file')
+  .description('Show the size of the project Paradigm files in estimated tokens (characters / 3.5). Sizes only: it does not measure what a session loads')
+  .option('-d, --detailed', 'List the five largest .purpose files')
   .option('--json', 'Output as JSON')
   .action(async (path, options) => {
     const { costCommand } = await import('./commands/cost.js');

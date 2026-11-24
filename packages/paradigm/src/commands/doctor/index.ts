@@ -1471,8 +1471,9 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
 
       console.log(`${parts.join(', ')} found.\n`);
       console.log(chalk.gray('Run the suggested commands to fix issues.'));
-      // Point only at help that exists: the troubleshooting doc is not part
-      // of a fresh project, so name it only when the file is really there.
+      // Point only at help that exists: not every project has the
+      // troubleshooting doc (shift and init create it; older or hand-made
+      // projects may not), so name it only when the file is really there.
       if (fs.existsSync(path.join(cwd, TROUBLESHOOTING_DOC))) {
         console.log(chalk.gray(`Troubleshooting guide: ${TROUBLESHOOTING_DOC}`));
       }

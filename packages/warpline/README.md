@@ -13,10 +13,10 @@
   - `--json` emits `orient:v1`: `schema`, `root`, `mode`, `initialized`, `selvage`, `enclosingRoot`, `agentGuide {agentsMd, claudeMd}`, `daemon {state, mcpConfigured, mcpTokens}`, `agent {id, source}`, `position`, `next [{verb, command}]`, `nextBecause`, `humanOnly [{verb, command}]`, `limits`. Field meanings: `docs/specs/warpline-flows.md` §4.
   - **Additive only:** `orient:v1` only ever gains fields (enum sets only grow); nothing is removed, renamed or retyped without a new schema (`orient:v2`). Ignore fields you do not know.
 
-**Read instruments (run on any git repo):**
+**Instruments that leave git history and your files alone (run on any git repo):**
 
-- `warpline oracle <A> <B>` — predict a merge from meaning, run git's real merge, score where they agree or diverge.
-- `warpline weave --preview <A> <B>` / `warpline consolidate <refs...>` — pre-merge forecast; N-way fold forecast.
+- `warpline oracle <A> <B>` — predict a merge from meaning, run git's real merge, score where they agree or diverge. It is not write-free: it records its result under `.warpline/` in the repo it runs in (a row in `oracle.jsonl`, plus `states/` and `warp/`), creating the directory if it is not there, and it reads each ref through a temporary `git worktree` that it removes. Add `.warpline/` to `.gitignore` if you only want to try it.
+- `warpline weave --preview <A> <B>` / `warpline consolidate <refs...>` — pre-merge forecast; N-way fold forecast. These write nothing.
 - `warpline diff` / `warpline status` — semantic diff; a rename is the empty delta.
 - `warpline lifeline <symbol>` — meaning-aware blame that survives file renames.
 - The TS code-lens lifts real TypeScript function bodies into meaning (checker-resolved references, deterministic, pinned compiler) — no `.purpose` files required.

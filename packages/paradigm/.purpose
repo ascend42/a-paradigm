@@ -484,10 +484,10 @@ components:
     description: Validates .purpose files against schema
     type: utility
   cost-handler:
-    description: Handles paradigm cost command
+    description: Handles paradigm cost. Prints the size of .purpose files, portal files, scan-index.json and Cursor rules in estimated tokens, states how they were counted, and makes no savings or reduction claim
     type: handler
   token-estimator:
-    description: Estimates token counts for context files
+    description: Estimates a file's token size as characters / 3.5 rounded up (a size estimate, not a tokenizer count)
     type: utility
   scan-handler:
     description: Handles paradigm scan command

@@ -277,7 +277,7 @@ Symmetric story for the other v5.38.0 hardening: `writeAndConfirm`'s atomic-writ
 Even if you skip v5.39.0, these arrive in v6.0:
 
 - **Multi-tenant University.** Three pack tenancies: `first-party` (installed npm packs), `project` (`.paradigm/university/`), `external`. New CLI selectors `--pack`, `--project`, `--discipline`. New `paradigm_university` (op `pack_list`) MCP tool.
-- **Privacy-preserving local metrics.** `.paradigm/university/.metrics/snapshot-YYYY-MM-DD.json`. Counts only — no titles, no content, no identifiers. 90-day local retention. `metrics.remote_consent: pending` seeded so v6.1 can prompt for opt-in without a schema migration.
+- **Privacy-preserving local metrics.** `.paradigm/university/.metrics/snapshot-YYYY-MM-DD.json`. Counts only — no titles, no content, no identifiers. 90-day local retention. `metrics.remote_consent: pending` is seeded as a reserved key; nothing acts on it and no metrics are sent anywhere.
 - **Companion-lore pattern.** `paradigm_decision` (op `record`) writes a companion lore insight entry with `references.decision_id` automatically.
 - **`TeamDecision` ADR fields.** `context`, `consequences`, `date`, `migrated_from`, `supersedes[]` (inverse of existing `superseded_by`).
 - **`LoreEntry.references`** — `{ decision_id?, wisdom_id?, notebook_id?, protocol_id? }`. Lore stays a timeline; canonical structured storage is in the referenced store.

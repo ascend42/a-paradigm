@@ -813,8 +813,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },
     { path: 'AGENTS.md', desc: 'Universal AI agent instructions' },
     { path: '.cursor/rules/', desc: 'Cursor AI instructions', isDir: true },
-    { path: '.claude/hooks/', desc: 'Claude Code enforcement hooks', isDir: true, optional: true },
-    { path: '.cursor/hooks/', desc: 'Cursor enforcement hooks', isDir: true, optional: true },
+    { path: '.claude/hooks/', desc: 'Claude Code hooks (checks follow your enforcement level)', isDir: true, optional: true },
+    { path: '.cursor/hooks/', desc: 'Cursor hooks (checks follow your enforcement level)', isDir: true, optional: true },
   ];
 
   // Add workspace file if it was configured

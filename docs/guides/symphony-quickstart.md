@@ -208,15 +208,7 @@ paradigm symphony join --remote localhost:3939
 
 > **Note:** SSH tunnels require both users to have SSH access to the same server. The tunnel is encrypted but the Symphony relay itself uses plain `ws://` — the SSH layer provides the security.
 
-#### Roadmap: nevr.land Relay
-
-A hosted relay at `relay.nevr.land` is on the roadmap. Once live, connecting will be as simple as:
-
-```sh
-paradigm symphony join --relay nevr.land
-```
-
-Both users connect outbound (no port forwarding), relay bridges them, auth via nevr.land accounts. Until then, use one of the options above.
+There is no hosted relay. The options above are the ways to connect two machines.
 
 ### Managing Peers
 

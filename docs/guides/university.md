@@ -420,7 +420,7 @@ The `loadPortalConfigLegacy` back-compat shim introduced in v5.37.12 is removed 
 
 - **Promotion pipelines** — notebook → project pack, decision cluster → path auto-draft, protocol → runbook. Reducing the authoring cost for content that already exists in other Paradigm surfaces.
 - **Compliance enforcement tooling** — `paradigm compliance audit`, retention workers, revocation workers, invalidation on `policy_hash` drift. Schema landed in v5.39/v6.0 so the tooling can be added without another breaking change.
-- **Remote metrics opt-in** — reads `metrics.remote_consent: pending` and prompts. Target endpoint is `nevr.land/telemetry`. Entirely opt-in.
+- **Remote metrics opt-in** — the `metrics.remote_consent` config key is reserved for it. The config schema validates the key and nothing acts on it: no endpoint exists and Paradigm sends no metrics anywhere.
 - **Claude University** — a separate site, not a Paradigm tenant. Tracking at `project_claude_learning_site.md`. The framework bits that make it feasible (pack discovery, timed quizzes, presentational credentials) have shipped.
 - **Authoring UI for non-developers** — web CRUD for quizzes/paths, "suggest edit" PR flow. Conditional on adoption data.
 - **Glossary type, collapsing guide/runbook** — schema tidy-up deferred to avoid churn during the multi-tenant rollout.

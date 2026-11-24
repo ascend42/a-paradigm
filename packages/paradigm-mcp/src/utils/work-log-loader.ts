@@ -24,6 +24,16 @@ function workLogIdFor(agent: string, date: string, suffix: string): string {
   return `WL-${sanitized}-${date}-${suffix}`;
 }
 
+/**
+ * The date folder an id belongs to, from `WL-<agent>-<date>-<suffix>`.
+ * The agent part may itself contain hyphens (`ui-builder`), so the date is the
+ * LAST `YYYY-MM-DD` that is followed by a suffix, not the second field.
+ */
+export function workLogDateFromId(id: string): string | null {
+  const match = /^WL-.+-(\d{4}-\d{2}-\d{2})-[^-]+$/.exec(id);
+  return match ? match[1] : null;
+}
+
 function getDateDir(rootDir: string, date: string): string {
   return path.join(rootDir, WORK_LOG_DIR, date);
 }
@@ -118,10 +128,9 @@ export function loadWorkLogEntry(rootDir: string, id: string): WorkLogEntry | nu
   const baseDir = path.join(rootDir, WORK_LOG_DIR);
   if (!fs.existsSync(baseDir)) return null;
 
-  // Extract date from ID format: WL-{agent}-{date}-{counter}
-  const match = id.match(/WL-[^-]+-(\d{4}-\d{2}-\d{2})-/);
-  if (match) {
-    const filePath = path.join(baseDir, match[1], `${id}.yaml`);
+  const date = workLogDateFromId(id);
+  if (date) {
+    const filePath = path.join(baseDir, date, `${id}.yaml`);
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf8');
       return yaml.load(content) as WorkLogEntry;

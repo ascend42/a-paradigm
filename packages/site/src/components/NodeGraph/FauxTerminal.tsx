@@ -149,12 +149,21 @@ export function FauxTerminal({ scenarioRef, terminalLines, terminalLinesB }: Fau
     ));
 
   return (
-    <div className={styles.terminal} data-phase={display.phase}>
+    <div
+      className={styles.terminal}
+      data-phase={display.phase}
+      role="figure"
+      aria-label="Illustration of an agent session. This is not real output."
+    >
       <div className={styles.chrome}>
         <span className={styles.dot} data-color="red" />
         <span className={styles.dot} data-color="yellow" />
         <span className={styles.dot} data-color="green" />
-        {display.isDual && <span className={styles.chromeLabel}>symphony</span>}
+        {/* The lines below are scripted for the animation (LiveGraph SCENARIOS),
+            not captured from a run. The caption must stay visible. */}
+        <span className={styles.chromeNote}>
+          {display.isDual ? 'symphony · ' : ''}illustration, not real output
+        </span>
       </div>
       {display.isDual ? (
         <>
