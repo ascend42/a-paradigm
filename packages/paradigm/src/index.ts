@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'node:module';
 import { registerUtilCommands } from './commands/util/index.js';
+import { ENFORCEMENT_SET_DESCRIPTION } from './core/enforcement/types.js';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
@@ -3258,7 +3259,7 @@ const enforcementCmd = program
 
 enforcementCmd
   .command('set <level>')
-  .description('Set enforcement level preset (strict, balanced, minimal)')
+  .description(ENFORCEMENT_SET_DESCRIPTION)
   .action(async (level) => {
     const { enforcementSetCommand } = await import('./commands/enforcement.js');
     await enforcementSetCommand(level);

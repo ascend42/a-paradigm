@@ -9,7 +9,18 @@
 // ENFORCEMENT LEVELS & SEVERITY
 // ═══════════════════════════════════════════════════════════════════
 
-export type EnforcementLevel = 'strict' | 'balanced' | 'minimal' | 'none';
+/**
+ * Every valid enforcement level, strictest first. The single source of truth:
+ * the type, `isValidLevel`, CLI help and error messages all derive from it.
+ * `none` (every check off) is the default.
+ */
+export const ENFORCEMENT_LEVELS = ['strict', 'balanced', 'minimal', 'none'] as const;
+
+export type EnforcementLevel = typeof ENFORCEMENT_LEVELS[number];
+
+/** Help text of `paradigm enforcement set <level>`: names every valid level. */
+export const ENFORCEMENT_SET_DESCRIPTION =
+  `Set enforcement level preset (${ENFORCEMENT_LEVELS.join(', ')}). none turns every check off and is the default`;
 
 export type CheckSeverity = 'block' | 'warn' | 'off';
 

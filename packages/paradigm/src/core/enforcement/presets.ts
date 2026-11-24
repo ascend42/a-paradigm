@@ -10,7 +10,7 @@
  */
 
 import type { CheckId, CheckSeverity, EnforcementLevel } from './types.js';
-import { CHECK_IDS } from './types.js';
+import { CHECK_IDS, ENFORCEMENT_LEVELS } from './types.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // PRESET DEFINITIONS
@@ -123,5 +123,5 @@ export function isValidSeverity(s: string): s is CheckSeverity {
  * Validate that a level value is known.
  */
 export function isValidLevel(l: string): l is EnforcementLevel {
-  return l === 'strict' || l === 'balanced' || l === 'minimal' || l === 'none';
+  return (ENFORCEMENT_LEVELS as readonly string[]).includes(l);
 }
