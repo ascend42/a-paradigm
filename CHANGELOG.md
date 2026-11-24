@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Generated CLAUDE.md states the real enforcement level** (`#enforcement-section`, `#claude-adapter`). The "Automatic Enforcement" section used to say "The stop hook **BLOCKS**" in every project. It is now written from the project's resolved level (preset plus per-check overrides): at the default `none` it says the checks are off and names `paradigm enforcement set <level>`; at `minimal` it says the hook warns but never blocks; otherwise it lists what blocks and what warns. Run `paradigm sync` after changing the level to refresh the file.
+- **`paradigm shift` ends with a first action** (`#shift-first-prompt`, `#ShiftCommand`). Shift used to close by telling you to hand-edit `.purpose`. It now ends with one prompt to paste to your agent: "Map this codebase with Paradigm: draft .purpose files for the main directories, then tell me what would be affected if I changed <a module I know>." The recommendation `paradigm doctor --verify` (an option that does not exist) is now `paradigm doctor`.
 
 ## [8.1.3] — 2026-11-12
 
