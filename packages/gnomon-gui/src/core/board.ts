@@ -39,8 +39,13 @@ export interface BoardHandle {
   setTool(tool: BoardTool): void;
   /** The scene as a PNG, rendered on a canvas (the GUI never exports SVG, §12.7). */
   exportPng(): Promise<Blob>;
-  /** Be told when the engine throws AFTER the mount resolved (a render crash); the caller shows it and unmounts. */
+  /**
+   * Be told when the engine throws AFTER the mount resolved (a render crash); the caller shows it and unmounts.
+   * With no listener registered the error is not swallowed: it goes to the page's error event (reportError).
+   */
   onError(listener: (error: Error) => void): void;
+  /** False once the engine has crashed or the board was unmounted; add, count, setTool and exportPng then throw. */
+  isAlive(): boolean;
   unmount(): void;
 }
 
@@ -55,8 +60,9 @@ export interface BoardModule {
   /** `<name>@<version>` of the engine built into the chunk. */
   readonly BOARD_ENGINE: string;
   /**
-   * Mount a board into `host` (which must have a size). Resolves once the engine's API is live; rejects (and
-   * unmounts) when the engine throws first or does not come up within `timeoutMs`.
+   * Mount a board into `host` (which must have a size). Resolves once the engine has finished initialising its
+   * scene, so a mark added in the same tick stays; rejects (and unmounts) when the engine throws first or does not
+   * come up within `timeoutMs`.
    */
   mountBoard(host: HTMLElement, options?: BoardMountOptions): Promise<BoardHandle>;
 }
@@ -75,6 +81,9 @@ interface LoaderDoc {
   createElement(tag: 'link'): LoaderLink;
 }
 
+/** How long the chunk and its stylesheet may take to load before the open fails. */
+export const LOAD_TIMEOUT_MS = 20_000;
+
 let pending: Promise<BoardModule> | null = null;
 
 /** The absolute URL of a bundle member, resolved against the page (never a second origin). */
@@ -85,7 +94,7 @@ export const boardUrl = (member: string, baseURI: string): string => new URL(mem
  * both have loaded, so a board never mounts unstyled. A failed load is not cached and leaves no link behind: the
  * next open starts clean, and the caller shows the failure.
  */
-export function loadBoard(doc: LoaderDoc = document as unknown as LoaderDoc, importer: (url: string) => Promise<unknown> = (url) => import(/* @vite-ignore */ url)): Promise<BoardModule> {
+export function loadBoard(doc: LoaderDoc = document as unknown as LoaderDoc, importer: (url: string) => Promise<unknown> = (url) => import(/* @vite-ignore */ url), timeoutMs: number = LOAD_TIMEOUT_MS): Promise<BoardModule> {
   if (pending) return pending;
   const link = doc.createElement('link');
   link.rel = 'stylesheet';
@@ -96,7 +105,14 @@ export function loadBoard(doc: LoaderDoc = document as unknown as LoaderDoc, imp
     link.onerror = () => reject(new Error('the board stylesheet did not load'));
   });
   doc.head.appendChild(link);
-  const p = Promise.all([importer(boardUrl(BOARD_SCRIPT, doc.baseURI)), styled]).then(([m]) => {
+  // a stylesheet or module that never settles (a stalled connection) is a failed load, not a board that never opens
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('the board did not load in time')), timeoutMs);
+  });
+  const loaded = Promise.all([importer(boardUrl(BOARD_SCRIPT, doc.baseURI)), styled]);
+  loaded.catch(() => undefined); // the race below reports it; a late rejection after a timeout is not unhandled
+  const p = Promise.race([loaded, timedOut]).finally(() => clearTimeout(timer)).then(([m]) => {
     const mod = m as Partial<BoardModule> | null;
     if (!mod || typeof mod.mountBoard !== 'function' || typeof mod.BOARD_ENGINE !== 'string') throw new Error('the board chunk did not export mountBoard');
     return mod as BoardModule;

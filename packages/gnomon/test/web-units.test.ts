@@ -240,7 +240,7 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:8d6bb92d2b6c3e53e36f548c96583a9ae6093ee33f933dae8dc63a3ffeccf932');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:2b4a9759a34c70fdd3d3e1b4602a6db586bda133fc595faab3ef2ac69c59f625');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
@@ -306,10 +306,14 @@ describe('G-WEB-08 bundle pin', () => {
       }
       if (n.endsWith('.svg')) expect(s, n).not.toMatch(/<script|foreignObject|\son[a-z]+=|href/i); // Aegis S1 L2: an SVG is an image, never active
       expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|document\.write/);
-      // HTML sinks: none in the GUI's own code. The board chunk is a third-party engine (React's DOM renderer and
-      // Excalidraw's library previews carry innerHTML/outerHTML); it is fenced by the same CSP, by its own scan
-      // (packages/gnomon-gui/test/board-scan.test.ts) and by G-DDL-06, and Gnomon's board code hands it no HTML.
-      if (!n.startsWith('board/')) expect(s, n).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
+      // HTML sinks: none in the GUI's own code. The board chunk is a third-party engine whose sinks cannot be
+      // removed without a fork (React's DOM renderer, Excalidraw's SVG export and library previews), so they are
+      // PINNED BY EXACT COUNT in board.js and absent everywhere else under board/: a new sink from an engine bump
+      // fails here and is read before it ships. `dangerouslySetInnerHTML:` counts props PASSED (0: the 13 bare
+      // mentions are React's own prop handling); Gnomon's board code hands the engine no HTML.
+      const sinks = { innerHTML: (s.match(/\.innerHTML\b/g) ?? []).length, outerHTML: (s.match(/\.outerHTML\b/g) ?? []).length, insertAdjacentHTML: (s.match(/insertAdjacentHTML/g) ?? []).length, dangerouslySetInnerHTMLProp: (s.match(/dangerouslySetInnerHTML:/g) ?? []).length };
+      if (n === 'board/board.js') expect(sinks, n).toEqual({ innerHTML: 7, outerHTML: 5, insertAdjacentHTML: 0, dangerouslySetInnerHTMLProp: 0 });
+      else expect(s, n).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }
   });

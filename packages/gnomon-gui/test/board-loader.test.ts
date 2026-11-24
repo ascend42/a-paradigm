@@ -63,6 +63,14 @@ describe('#gui-board loader', () => {
     expect(await p).toBe(good);
   });
 
+  it('a stylesheet that never settles fails the load after the timeout, removes its link, and the next open starts clean', async () => {
+    const doc = fakeDoc(['never' as never, 'load']);
+    await expect(loadBoard(doc, () => Promise.resolve(good), 30)).rejects.toThrow('the board did not load in time');
+    await Promise.resolve();
+    expect(doc.live()).toEqual([]);
+    await expect(loadBoard(doc, () => Promise.resolve(good), 30)).resolves.toBe(good);
+  });
+
   it('a stylesheet that fails rejects the load, removes its link, and the next open starts clean', async () => {
     const doc = fakeDoc(['error', 'load']);
     await expect(loadBoard(doc, () => Promise.resolve(good))).rejects.toThrow('the board stylesheet did not load');

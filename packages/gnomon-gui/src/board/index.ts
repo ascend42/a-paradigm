@@ -32,14 +32,23 @@ const skeletonOf = (m: BoardMark): Record<string, unknown> =>
 const DEFAULT_MOUNT_TIMEOUT_MS = 15_000;
 const asError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
+/** How often the mount looks at the engine's loading flag while it initialises its scene. */
+const READY_POLL_MS = 5;
+
 export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): Promise<BoardHandle> {
   return new Promise<BoardHandle>((resolve, reject) => {
     const listeners: Array<(error: Error) => void> = options.onError ? [options.onError] : [];
     let settled = false;
-    // before the mount resolves an engine error rejects it; afterwards it goes to the handle's listeners
+    let dead: string | null = null;
+    // Before the mount resolves an engine error rejects it. Afterwards the board is dead: its listeners are told,
+    // and with none registered the error goes to the page's error event instead of nowhere (these two root
+    // options REPLACE React's default reporting).
     const crashed = (e: unknown): void => {
-      if (!settled) fail(asError(e));
-      else for (const l of [...listeners]) l(asError(e));
+      const error = asError(e);
+      if (!settled) return fail(error);
+      dead ??= error.message || 'the engine threw';
+      if (listeners.length === 0) return void globalThis.reportError(error);
+      for (const l of [...listeners]) l(error);
     };
     // React 19 root options (the workspace's hoisted @types/react-dom is the 18 line, which does not know them yet)
     const rootOptions = { onUncaughtError: crashed, onCaughtError: crashed };
@@ -48,27 +57,47 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(poll);
       root.unmount();
       reject(e);
     };
     const timer = setTimeout(() => fail(new Error('the board engine did not come up in time')), options.timeoutMs ?? DEFAULT_MOUNT_TIMEOUT_MS);
-    const ready = (api: Api): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      const live = (): ReturnType<Api['getSceneElements']> => api.getSceneElements();
-      resolve({
+    let poll: ReturnType<typeof setTimeout> | undefined;
+    const handleOf = (api: Api): BoardHandle => {
+      const live = (): ReturnType<Api['getSceneElements']> => {
+        if (dead !== null) throw new Error(`the board engine has stopped: ${dead}`);
+        return api.getSceneElements();
+      };
+      return {
         add(marks: readonly BoardMark[]): number {
+          const before = live();
           const added = convertToExcalidrawElements(marks.map(skeletonOf) as Skeleton);
-          api.updateScene({ elements: [...live(), ...added] });
+          api.updateScene({ elements: [...before, ...added] });
           return live().length;
         },
         count: () => live().length,
-        setTool: (tool: BoardTool) => api.setActiveTool({ type: tool }),
-        exportPng: () => exportToBlob({ elements: live(), appState: { ...api.getAppState(), exportBackground: true }, files: api.getFiles(), mimeType: 'image/png' }),
+        setTool: (tool: BoardTool) => void (live(), api.setActiveTool({ type: tool })),
+        exportPng: async () => exportToBlob({ elements: live(), appState: { ...api.getAppState(), exportBackground: true }, files: api.getFiles(), mimeType: 'image/png' }),
         onError: (listener) => void listeners.push(listener),
-        unmount: () => root.unmount(),
-      });
+        isAlive: () => dead === null,
+        unmount: () => {
+          dead ??= 'unmounted';
+          root.unmount();
+        },
+      };
+    };
+    // The engine hands out its API while it is still constructing; its scene is initialised later (an async step
+    // that REPLACES the scene's elements and then clears `isLoading`). Resolving before that would let a mark
+    // added in the same tick be wiped a few milliseconds on, so the mount waits for the flag.
+    const ready = (api: Api): void => {
+      const check = (): void => {
+        if (settled) return;
+        if (api.getAppState().isLoading) return void (poll = setTimeout(check, READY_POLL_MS));
+        settled = true;
+        clearTimeout(timer);
+        resolve(handleOf(api));
+      };
+      check();
     };
     root.render(
       createElement(Excalidraw, {
