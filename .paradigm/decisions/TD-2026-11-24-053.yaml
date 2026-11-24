@@ -1,0 +1,35 @@
+id: TD-2026-11-24-053
+timestamp: '2026-11-24T06:21:52.470Z'
+title: 'Gnomon: "dimensions" are the space; boards and doodles are mediums inside them'
+decision: >-
+  The shared surface is named a dimension: the space where things are rendered and played with. Mediums are the named
+  pieces that display things inside a dimension: the board (whiteboard, built in S1), the doodle (freehand), and later
+  ones. The permanent names (event kinds modns.gnomon.dimension.*, ref scheme dim, vocabulary dim-shape:v1, store
+  .paradigm/dimensions/) belong to the dimension, not to a medium. "Doodle" is no longer the name of the system (spec
+  §12.7); the rename lands in the S1.2 contract move, before the first permanent op in S1.3. Short form `dim` in code
+  and refs.
+rationale: >-
+  Founder, 2026-11-23: "dimensions are the space where they are, and the mediums of which things are displayed are the
+  named pieces like boards or doodles." A generic name for the space fits where Gnomon is going (live context display,
+  voice and gesture, spatial rendering), and op rows are permanent, so the name must be settled before S1.3. `dim`
+  avoids the collision with width/height in drawing code.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: neutral
+  - id: advocate
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#doodle-mod'
+  - '#gnomon'
+status: active
+tags:
+  - gnomon
+  - dimensions
+  - boards
+  - naming
+  - T-2026-11-24-001

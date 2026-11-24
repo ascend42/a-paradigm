@@ -1,0 +1,50 @@
+id: TD-2026-11-24-872
+timestamp: '2026-11-24T06:23:23.709Z'
+title: 'Gnomon dimensions S1: scale amendments approved; contract moves batched and signed off'
+decision: >-
+  The founder approved .paradigm/research/gnomon-canvas/s1-scale-amendments.md on 2026-11-23. (1) Contract sign-offs:
+  one modAbiId move (relayedFor on tool.call; optional hsid, agent, turn, surface on RelayedFor, stamped on tool.call
+  only) and one clientApiId move (dim-shape:v1, content-palette:v1, reserved first-party names, ref scheme dim, 'canvas'
+  in OFFER_REACHES), both at S1.2, replacing the plan's three sign-offs. (2) After the T-DDL-01 gate, the live tray
+  (S6a) comes before images (S2). (3) The T-DDL-01 four-week clock starts at S1.4. (4) If the bar is missed, the
+  whiteboard medium stops but the dimension model continues and the live tray is tried. Dimensions belong to the project
+  with sessions attached. Aegis's review of the amendments is pending and its conditions bind.
+rationale: >-
+  Op rows, contract ids and names are permanent, so they are shaped now for later mediums (live nodes, Constellation,
+  mod kinds, voice, spatial) while S1 stays the same size: open kind grammar with closed writes and a tolerant fold,
+  first-class relations, refs on nodes, host-stamped provenance. Batching avoids a second and third clientApiId move.
+  The live tray is the part only Gnomon can do, so it outranks images and survives a missed whiteboard bar.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: dx
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: abstained
+alternatives_considered:
+  - option: Free data bag on non-core kinds, reserved pending state and accept/reject ops in v1
+    rejected_because: No reader before S4/S5; bends Aegis's no-customData condition; the tolerant fold already carries unknown fields
+  - option: Images (S2) before the live tray
+    rejected_because: Founder chose the live tray first, accepting that screenshot paste stays missing longer
+symbols_affected:
+  - '#doodle-mod'
+  - '#gnomon'
+status: active
+tags:
+  - gnomon
+  - dimensions
+  - boards
+  - contracts
+  - T-2026-11-24-001
