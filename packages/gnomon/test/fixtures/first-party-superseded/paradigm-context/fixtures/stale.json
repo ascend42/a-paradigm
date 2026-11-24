@@ -1,0 +1,69 @@
+{
+  "view": "paradigm-context.sheet",
+  "input": {
+    "paradigm": {
+      "v": "paradigm-slice:v1",
+      "state": "ok",
+      "project": 0,
+      "name": "ledgerette",
+      "at": "2026-10-20",
+      "newest": "2026-08-30",
+      "tasks": {
+        "open": 1,
+        "high": 0,
+        "items": [
+          {
+            "id": "T-2026-08-12-002",
+            "title": "Typecheck packages/ledger after the Cents migration",
+            "priority": "medium"
+          }
+        ],
+        "count": {
+          "n": 1,
+          "of": 1
+        }
+      },
+      "decisions": {
+        "items": [
+          {
+            "id": "TD-2026-08-30-118",
+            "title": "Money is integer cents end to end",
+            "date": "2026-08-30"
+          }
+        ],
+        "count": {
+          "n": 1,
+          "of": 3
+        }
+      },
+      "lore": {
+        "items": [
+          {
+            "id": "L-2026-08-29-matt-101500-001",
+            "title": "Ledger import lands",
+            "type": "milestone"
+          }
+        ],
+        "count": {
+          "n": 1,
+          "of": 4
+        }
+      },
+      "symbols": [
+        "#ledger-post",
+        "$import-flow"
+      ],
+      "skipped": {
+        "malformed": 0,
+        "refused": 1,
+        "secret": 2,
+        "truncated": false
+      }
+    }
+  },
+  "width": 40,
+  "prefs": {
+    "motion": "full",
+    "theme": "day"
+  }
+}

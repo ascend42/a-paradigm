@@ -1,0 +1,80 @@
+{
+  "view": "ledger.strip",
+  "input": {
+    "fixtureEvents": [
+      {
+        "kind": "session.open",
+        "payload": {
+          "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA",
+          "backend": "claude",
+          "project": 2
+        }
+      },
+      {
+        "kind": "turn.usage",
+        "payload": {
+          "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA",
+          "tokens": 40000
+        }
+      },
+      {
+        "kind": "turn.result",
+        "payload": {
+          "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA",
+          "tokens": 0,
+          "tokensIn": 12000,
+          "tokensOut": 4000,
+          "cacheRead": 90000,
+          "cacheWrite": 8000,
+          "costMicros": 210000
+        }
+      },
+      {
+        "kind": "session.compacted",
+        "payload": {
+          "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA",
+          "tokensBefore": 180000,
+          "tokensAfter": 52000
+        }
+      },
+      {
+        "kind": "turn.result",
+        "payload": {
+          "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA",
+          "tokens": 0,
+          "tokensIn": 15000,
+          "tokensOut": 5000,
+          "cacheRead": 39000,
+          "cacheWrite": 18000,
+          "costMicros": 210000
+        }
+      },
+      {
+        "kind": "session.compacted",
+        "payload": {
+          "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA",
+          "tokensBefore": 190000,
+          "tokensAfter": 41000
+        }
+      },
+      {
+        "kind": "budget.breaker.open",
+        "payload": {
+          "dimension": "tokens"
+        }
+      },
+      {
+        "kind": "permit.deny",
+        "payload": {
+          "dimension": "api-billing-path"
+        }
+      }
+    ],
+    "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA"
+  },
+  "width": 80,
+  "prefs": {
+    "motion": "full",
+    "theme": "day"
+  }
+}

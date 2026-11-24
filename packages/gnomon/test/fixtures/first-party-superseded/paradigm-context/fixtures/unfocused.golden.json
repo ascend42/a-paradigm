@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "◌",
+          "tone": "quiet"
+        },
+        {
+          "type": "Text",
+          "text": "paradigm"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "focus a live session to see its project context",
+      "tone": "quiet"
+    }
+  ]
+}

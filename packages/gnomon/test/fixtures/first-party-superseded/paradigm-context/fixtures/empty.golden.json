@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "●",
+          "tone": "hue-5"
+        },
+        {
+          "type": "Text",
+          "text": "fresh-repo"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "nothing yet: no tasks, decisions or lore",
+      "tone": "quiet"
+    }
+  ]
+}
