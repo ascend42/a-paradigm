@@ -72,6 +72,7 @@ export {
   getSymbolsByTag,
   getAllTags,
   getSymbolCounts,
+  collapseRepeatedPrefix,
   getUndeclaredCount,
   isDeclared,
   getAllSymbols,

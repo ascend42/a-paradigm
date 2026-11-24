@@ -11,6 +11,7 @@ import {
   getSymbol,
   getSymbolsByType,
   getSymbolCounts,
+  resolveSymbol,
   getAllSymbols,
   type SymbolType,
 } from '@a-company/premise-core';
@@ -159,7 +160,7 @@ export function registerResources(server: Server, getContext: () => ProjectConte
       // paradigm://symbol/{symbol} - Single symbol details
       if (resourcePath.startsWith('symbol/')) {
         const symbolStr = decodeURIComponent(resourcePath.replace('symbol/', ''));
-        const entry = getSymbol(ctx.index, symbolStr);
+        const entry = getSymbol(ctx.index, symbolStr) ?? resolveSymbol(ctx.index, symbolStr).entry;
 
         if (!entry) {
           const text = JSON.stringify({

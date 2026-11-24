@@ -139,21 +139,37 @@ export function buildSymbolIndex(result: AggregationResult): SymbolIndex {
 }
 
 /**
+ * Collapse a repeated leading symbol prefix: "$$name" -> "$name", "^^gate" ->
+ * "^gate" (all five prefixes). Anything else is returned unchanged.
+ */
+export function collapseRepeatedPrefix(symbol: string): string {
+  return symbol.replace(/^([#$^!~])\1+/, '$1');
+}
+
+/**
  * Resolve a USER-TYPED symbol to its canonical entry (input boundaries only —
  * ripple, related, navigate, graph-slice roots; never edges):
  *  1. exact full-symbol hit ("^authenticated");
  *  2. prefixed, case-insensitive ("^Authenticated") — unique hit with that prefix;
  *  3. bare name ("authenticated") — unique hit across all prefixes.
+ * A repeated leading prefix ("$$fleet-switch") is collapsed first.
  * Anything else returns `entry: undefined` with the matches as `candidates`
  * (several → ambiguous, none → unknown).
  */
 export function resolveSymbol(
   index: SymbolIndex,
-  q: string,
+  input: string,
 ): { entry?: SymbolEntry; candidates: SymbolEntry[] } {
+  const asTyped = index.bySymbol.get(input);
+  if (asTyped) return { entry: asTyped, candidates: [asTyped] };
+  if (!input) return { candidates: [] };
+
+  // "$$fleet-switch" is "$fleet-switch": a key that repeated its section's prefix
+  // used to be indexed double-prefixed, and those ids are still written in saved
+  // graphs, lore and decisions. Read them as the symbol they name.
+  const q = collapseRepeatedPrefix(input);
   const exact = index.bySymbol.get(q);
   if (exact) return { entry: exact, candidates: [exact] };
-  if (!q) return { candidates: [] };
 
   const prefixed = isValidPrefix(q[0]) || isLegacyPrefix(q[0]);
   const matches = prefixed
