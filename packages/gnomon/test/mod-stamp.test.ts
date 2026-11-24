@@ -184,7 +184,7 @@ describe('G-MOD-14: only a human-class caller earns a surface; a row without pri
     }
   });
 
-  it('per caller class, through the relay port and the host: a non-human command row has no surface and folds as the unknown hand', async () => {
+  it('per caller class, through the relay port and the host: a non-human command stamp has no surface and folds as the unknown hand; real tool-path rows back the fold', async () => {
     const { h, rows } = await both();
     const port = createModRelayPort(h);
     const classes = ['human', 'agent', 'session', 'mod', 'voice'] as const;
@@ -205,6 +205,20 @@ describe('G-MOD-14: only a human-class caller earns a surface; a row without pri
     ]);
     expect(sent.map((rf) => rf.surface)).toEqual(['cli', undefined, undefined, undefined, undefined]);
     expect(classes.map((_c, i) => state.nodes.get(node(i).id as string)!.by.cls)).toEqual(['human', 'unknown', 'unknown', 'unknown', 'unknown']);
+    // Commands above append nothing (the read cap), so REAL appended rows come from the tool path, which may write:
+    // an entitled mod (gnomon-published) called with a stamp that is not whole is sent and stamped with nothing,
+    // and an unentitled mod's stamp carries no principal. Both rows are in the log, and both fold as the unknown hand.
+    await h.callTool(FIRST_PARTY_PROBE, 'probe.write', { who: true, op: 'append.forged' }, { toolRelayedFor: { ...TOOL, agent: '' } as never });
+    await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' }, { toolRelayedFor: { ...TOOL } });
+    expect(rows.map((r) => [r.kind, r.payload.relayedFor])).toEqual([
+      ['modns.gnomon.probe.done', undefined],
+      ['modns.acme.probe.done', { surface: 'bridge', agent: 'kit' }],
+    ]);
+    const real = foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['hs-1'], opened: 'command' } },
+      ...rows.map((r, i) => ({ seq: 2 + i, kind: DIM_KINDS.op, payload: { ...r.payload, v: 1, dim, ops: [{ type: 'add', node: node(i) }] } })),
+    ]);
+    expect(rows.map((_r, i) => real.nodes.get(node(i).id as string)!.by)).toEqual([{ cls: 'unknown', principal: 'unknown' }, { cls: 'unknown', principal: 'unknown' }]);
   });
 });
 

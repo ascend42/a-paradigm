@@ -214,11 +214,12 @@ describe('G-MOD-17: the command read cap over a real unix socket, per caller cla
       return { kind, cred: { principalId: entry.principalId, deviceId: entry.deviceId, signer } };
     });
     const sock = path.join(t.home, 'g.sock');
+    const authed: Array<{ connId: unknown; principal: unknown; principalKind: unknown }> = [];
     const dispatcher = createKernelDispatcher({
       authenticator: new SocketAuthenticator({ home: t.home, endpointPath: sock, kernelSigner: kernel, trust: root }),
       status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: kernel.keyId, custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: root.rootKeyId }) },
       mods: createModRelayPort(h),
-      log: async () => undefined,
+      log: async (k, p, ids) => void (k === 'socket.auth.ok' && authed.push({ connId: ids?.connId, principal: p.principal, principalKind: p.principalKind })),
     });
     const srv = await listenSocket({ socketPath: sock, handle: dispatcher.handle, onConnect: dispatcher.onConnect, onDisconnect: dispatcher.onDisconnect });
     cleanups.push(() => srv.close());
@@ -232,7 +233,8 @@ describe('G-MOD-17: the command read cap over a real unix socket, per caller cla
     for (const { kind, cred } of creds) {
       const s = await connectGnomon({ socketPath: sock, client: { name: 't', version: '0', surface: 'cli' }, serverKey, device: cred });
       cleanups.push(() => s.conn.close());
-      expect(((await s.conn.call('status', {})) as { result?: { principalKind?: string }; error?: unknown }).result?.principalKind ?? kind).toBe(kind);
+      // the class the KERNEL authenticated this connection as: its own socket.auth.ok row for this connId (status is refused for some classes)
+      expect(authed.filter((x) => x.connId === s.connId)).toEqual([{ connId: s.connId, principal: cred.principalId, principalKind: kind }]);
       for (const name of [FIRST_PARTY_PROBE, 'acme.probe']) {
         // a stamp, a forged relayedFor and a focus on a live session ride along: none of them earns a write
         const call = async (args: Record<string, unknown>): Promise<Out> => (await s.conn.call('mod.command', { name, commandId: 'probe.who', args: { ...args, gesture: { n: 1, kind: 'pointer' }, focus: { hsid: LIVE } }, relayedFor: { principal: 'p:evil/x', surface: 'gui' } })) as Out;

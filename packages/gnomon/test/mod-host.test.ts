@@ -79,10 +79,14 @@ describe('mod-abi:v1 lifecycle (§12.3, G-MOD-01)', () => {
     cleanups.push(() => h.stopAll());
     await h.start('example.hello');
     // S1.3 (G-MOD-17, Aegis B1): a third-party mod's command is read-only on every surface, the GUI included, so
-    // hello.bump's state.set is refused and the command fails; the same count kept by its write TOOL is unaffected
-    await expect(h.relayCommand({ name: 'example.hello', commandId: 'hello.bump', principal: 'p:abcdefgh/matt', connId: 'c1', surface: 'gui', principalClass: 'human' })).rejects.toMatchObject({ modCode: 'MOD_ERROR' });
-    expect(r.events.find((e) => e.kind === 'mod.effect.refused')?.payload).toMatchObject({ name: 'example.hello', effect: 'write', method: 'state.set' });
+    // the example's command only reads (hello.show) and its write is in the hello.count tool, which adds one per call
+    const show = () => h.relayCommand({ name: 'example.hello', commandId: 'hello.show', principal: 'p:abcdefgh/matt', connId: 'c1', surface: 'gui', principalClass: 'human' });
+    expect(await show()).toEqual({ count: 0 });
     expect(await h.callTool('example.hello', 'hello.count', {})).toEqual({ count: 1 });
+    expect(await h.callTool('example.hello', 'hello.count', {})).toEqual({ count: 2 });
+    expect(await show()).toEqual({ count: 2 });
+    // the example as shipped trips no effect refusal
+    expect(r.events.filter((e) => e.kind === 'mod.effect.refused')).toEqual([]);
     const v = await h.relayView({ name: 'example.hello', viewId: 'hello.panel', input: { name: 'matt' }, principal: 'p:abcdefgh/matt', connId: 'c1' });
     expect(v.label).toBe('mod:example.hello');
     expect(JSON.stringify(v.block)).toContain('hello, matt');

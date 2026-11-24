@@ -5,7 +5,7 @@
   "name": "hello",
   "version": "1.0.0",
   "abi": "mod-abi:v1",
-  "description": "The example mod (spec §12.4): one view, one command, one read-only tool and a per-mod counter in state.",
+  "description": "The example mod (spec §12.4): one view, one read-only command, one read-only tool and a write tool that keeps a per-mod counter in state.",
   "provides": {
     "tools": [
       { "name": "hello.greet", "effects": ["read"] },
@@ -13,7 +13,7 @@
     ],
     "views": [{ "id": "hello.panel", "slot": "panel", "placement": "append", "fixtures": ["fixtures/panel.json"] }],
     "events": ["modns.example.hello.greeted"],
-    "commands": [{ "id": "hello.bump", "title": "Bump the hello counter" }]
+    "commands": [{ "id": "hello.show", "title": "Show the hello counter" }]
   },
   "requires": { "capabilities": ["log.append:modns.example.hello.*"], "egress": "none" }
 }
