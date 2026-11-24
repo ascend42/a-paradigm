@@ -85,4 +85,60 @@
       n.addEventListener('blur', function () { paint(null); });
     });
   });
+
+  /* Gnomon's plate: the card is stamped once, when it comes into view. Without this, and under reduced motion, it is simply stamped. */
+  var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!still && 'IntersectionObserver' in window) {
+    each('.gplate.stamps', function (p) {
+      p.classList.add('wait');
+      var io = new IntersectionObserver(function (es) {
+        if (es[0].isIntersecting) { p.classList.remove('wait'); p.classList.add('land'); io.disconnect(); }
+      }, { threshold: 0.6 });
+      io.observe(p);
+    });
+  }
+
+  /* the path: tick "I saw it" on a station. Kept on this device only. */
+  var path = document.querySelector('.path');
+  if (path) {
+    var seen = [];
+    try { seen = JSON.parse(localStorage.getItem('pages-path') || '[]'); } catch (e) { seen = []; }
+    var clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'path-clear';
+    clear.textContent = 'Clear my ticks';
+    var mark = function () {
+      var first = true;
+      each('.station', function (s) {
+        var on = seen.indexOf(s.id) > -1;
+        s.classList.toggle('done', on);
+        s.classList.toggle('current', !on && first && s.classList.contains('level'));
+        if (!on && s.classList.contains('level')) first = false;
+        s.querySelector('.saw input').checked = on;
+      }, path);
+      clear.hidden = !seen.length;
+      try { localStorage.setItem('pages-path', JSON.stringify(seen)); } catch (e) { /* not stored; still ticked on this page */ }
+    };
+    each('.station', function (s) {
+      var l = document.createElement('label');
+      var c = document.createElement('input');
+      l.className = 'saw';
+      c.type = 'checkbox';
+      l.appendChild(c);
+      l.appendChild(document.createTextNode('I saw it'));
+      c.addEventListener('change', function () {
+        seen = seen.filter(function (x) { return x !== s.id; });
+        if (c.checked) seen.push(s.id);
+        mark();
+      });
+      s.querySelector('.station-body').appendChild(l);
+    }, path);
+    clear.addEventListener('click', function () { seen = []; mark(); });
+    path.parentNode.insertBefore(clear, path.nextSibling);
+    mark();
+    /* a link to a station opens it */
+    var openHash = function () { var el = location.hash && document.getElementById(location.hash.slice(1)); var d = el && el.querySelector && el.querySelector('details'); if (d) d.open = true; };
+    window.addEventListener('hashchange', openHash);
+    openHash();
+  }
 })();

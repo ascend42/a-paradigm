@@ -55,8 +55,8 @@
         <div class="next"><a class="key pri" href="../learn/index.html">Start the path</a><a href="#start">Every step, with the plugin</a></div>
       </div>
 
-      <div class="hero-exhibit">
-        <figure class="plate">
+      <figure class="hero-exhibit">
+        <div class="plate">
           <!-- graph:paradigm.init-command features=shift-command,init-command agrees=paradigm-ripple -->
 <svg class="graph" viewBox="0 0 424 216" role="group" aria-labelledby="g-title g-desc">
 <title id="g-title">A slice of this repository’s symbol graph</title>
@@ -116,17 +116,17 @@
   Direct dependents: 2</pre>
 <!-- /capture -->
           </div>
+        </div>
+        <div class="fact lead">
+          <div class="fact-n"><!-- fact:paradigm.tools-tokens round=100 -->7,800<!-- /fact --><small>tokens, about</small></div>
+          <p class="fact-claim">for the whole default tool list an agent loads: <!-- fact:paradigm.tools-default -->32<!-- /fact --> tools, cut from about <!-- fact:paradigm.tools-before.tools -->134<!-- /fact --> tools and <!-- fact:paradigm.tools-before.tokens -->30,000<!-- /fact --> tokens in <!-- ref:release.tool-budget -->7.13.0<!-- /ref -->. A test fails the build above <!-- fact:paradigm.tools-budget.tokens -->8,000<!-- /fact -->.</p>
+          <p class="fact-src">real · <!-- loc:paradigm.budget-test --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm-mcp/src/tools/tools-list-budget.test.ts#L18-L19">packages/paradigm-mcp/src/tools/tools-list-budget.test.ts, lines 18 to 19</a><!-- /loc --> · run <!-- fact:paradigm.tools-tokens.measured -->2026-11-23<!-- /fact --> · the earlier figures: <!-- fact:paradigm.tools-before.source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L441">CHANGELOG.md:441</a><!-- /fact -->, recorded <!-- fact:paradigm.tools-before.measured -->2026-09-29<!-- /fact -->, not re-run · <a href="#measured">how it is estimated</a></p>
+        </div>
           <ul class="legend" aria-label="The five symbols">
             <li><b class="s-c">#</b> component</li><li><b class="s-f">$</b> flow</li><li><b class="s-g">^</b> gate</li><li><b class="s-s">!</b> signal</li><li><b class="s-a">~</b> aspect</li>
           </ul>
           <figcaption class="prov"><b>real</b><code>#init-handler</code> sits in two features. That is the question <code>paradigm ripple '#init-handler'</code> answers: <!-- fact:paradigm.ripple-example -->2<!-- /fact --> direct dependents, <code>#shift-command</code> and <code>#init-command</code>. The edges are the file's. The layout is drawn. <!-- loc:paradigm.init-command --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/.purpose#L29-L40">packages/paradigm/.purpose, lines 29 to 40</a><!-- /loc --> · <!-- loc:paradigm.ripple-answer --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-ripple.txt">pages/captures/paradigm-ripple.txt</a><!-- /loc -->, run <!-- fact:paradigm.ripple-example.measured -->2026-11-23<!-- /fact --></figcaption>
-        </figure>
-        <div class="fact lead">
-          <div class="fact-n"><!-- fact:paradigm.tools-tokens round=100 -->7,800<!-- /fact --><small>tokens, about</small></div>
-          <p class="fact-claim">for the whole default tool list an agent loads: <!-- fact:paradigm.tools-default -->32<!-- /fact --> tools, cut from about <!-- fact:paradigm.tools-before.tools -->134<!-- /fact --> tools and <!-- fact:paradigm.tools-before.tokens -->30,000<!-- /fact --> tokens in <!-- ref:release.tool-budget -->7.13.0<!-- /ref -->. A test fails the build above <!-- fact:paradigm.tools-budget.tokens -->8,000<!-- /fact -->.</p>
-          <p class="fact-src">real · <!-- loc:paradigm.budget-test --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm-mcp/src/tools/tools-list-budget.test.ts#L18-L19">packages/paradigm-mcp/src/tools/tools-list-budget.test.ts, lines 18 to 19</a><!-- /loc --> · run <!-- fact:paradigm.tools-tokens.measured -->2026-11-23<!-- /fact --> (<!-- fact:paradigm.tools-tokens -->7,793<!-- /fact -->, estimated as length divided by four, not counted by a tokenizer) · the earlier figures are the ones recorded in <!-- fact:paradigm.tools-before.source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L441">CHANGELOG.md:441</a><!-- /fact --> on <!-- fact:paradigm.tools-before.measured -->2026-09-29<!-- /fact -->, and were not re-measured</p>
-        </div>
-      </div>
+      </figure>
     </div>
 
     <section class="section" id="holds" aria-labelledby="holds-h">
@@ -359,10 +359,10 @@
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Whether Paradigm saves tokens or improves results in use</div><div class="ledger-ev">the one paired study: same results, more tool calls, too small</div></li>
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Whether what agents learn improves their work</div><div class="ledger-ev">paradigm doctor: FLATLINE, no survival evidence</div></li>
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">The learning loop has recorded no journals here</div><div class="ledger-ev">paradigm doctor, 2026-11-23: &quot;FLATLINE: 0 journals / 20 completions&quot;; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a></div></li>
-<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">This repository is not a working Warpline example: dogfooding here stopped on 2026-11-09 and its ledger fails <code>warpline health</code></div><div class="ledger-ev">warpline health (dossier, 2026-11-23): UNSOUND, 63 failures of 374; decision TD-2026-11-09-865; commit 96e234ef</div></li>
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Token estimates rebuilt from measured use: the command exists, this repo has no data for it</div><div class="ledger-ev">dossier 3A, P12</div></li>
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Decisions that replace earlier ones, as structured records: the fields exist, 0 of 138 files use them</div><div class="ledger-ev">grep, 2026-11-23</div></li>
-<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Releases you can rebuild from a git tag: there are no tags</div><div class="ledger-ev">git tag | wc -l</div></li>
+<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">This repository is not a working Warpline example: dogfooding here stopped on 2026-11-09 and its ledger fails <code>warpline health</code></div><div class="ledger-ev">warpline health (dossier, 2026-11-23): UNSOUND, 63 failures of 374; decision TD-2026-11-09-865; commit 96e234ef</div></li>
+<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">Releases you can rebuild from a git tag: there are no tags</div><div class="ledger-ev">git tag | wc -l</div></li>
 <!-- /standing -->
         </ul>
         <p class="mono quiet">as of <!-- fact:as_of -->2026-11-23<!-- /fact --> · every row is stamped from pages/facts.json</p>

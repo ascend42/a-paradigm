@@ -3,8 +3,7 @@ description: >
   The public hero pages GitHub Pages serves: a hub and one page each for Paradigm, Gnomon, Warpline
   and the learning path. Plain static files, complete from file:// with scripting off, with no request
   to any other origin. Every number is stamped into the committed HTML from facts.json; nothing numeric
-  is typed by hand. Design system: .atelier/systems/pages/. Built so far: the hub, the Paradigm page
-  and the 404. Gnomon, Warpline and Learn are listed in build/pages.json as not built yet.
+  is typed by hand. Design system: .atelier/systems/pages/. All five pages and the 404 are built.
 
 components:
   pages-stamp:
@@ -40,6 +39,18 @@ components:
     tags: [site, ui]
   pages-paradigm:
     description: paradigm/index.html. Seven sections - hero with the symbol graph plate, the three claims, what has been measured, one session, lately, the standing ledger with limits, and the first thing to do.
+    type: view
+    tags: [site, ui]
+  pages-gnomon:
+    description: gnomon/index.html. Seven sections - hero with the requirements preflight and a drawn decision card (an illustration, said to be one; no real card or log row was captured), what it holds, the four verification commands with their recorded output, the desk drawn in Gnomon's own palette, lately, the standing ledger with limits, and the first thing to do. The card's stamp is the page's one motion.
+    type: view
+    tags: [site, ui]
+  pages-warpline:
+    description: warpline/index.html. The shortest page - the standing ledger with the strand as the lead, one fact line for the base-rate study, the idea as one plate, the one real oracle run (an agreement), and the way back to the repository.
+    type: view
+    tags: [site, ui]
+  pages-learn:
+    description: learn/index.html. The path - four numbered stations and two spurs as native details elements, each with an outcome, one exercise, its practice and a guide link; the thirteen practices as Do, Instead of, Why; and a field card that prints alone on one sheet. Ticks are kept on the reader's device only.
     type: view
     tags: [site, ui]
   pages-symbol-graph:

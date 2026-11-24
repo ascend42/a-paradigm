@@ -15,6 +15,7 @@
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   --trace: 120ms linear;
+  --stamp: 400ms cubic-bezier(.3,1.4,.5,1);
   color-scheme: light dark;
 }
 
@@ -201,8 +202,9 @@ code { font-family: var(--mono); font-size: 15px; }
 .plate .proof { margin-top: 12px; background: var(--sunk); }
 .plate .proof pre { padding: 8px 16px; }
 .plate .legend { margin-top: 12px; padding-top: 8px; }
-.plate > .prov { display: block; margin-top: 8px; }
-.plate > .prov b { margin-right: 8px; }
+.hero-exhibit > .prov { display: block; margin-top: 16px; }
+.hero-exhibit > .prov b { margin-right: 8px; }
+.hero-exhibit > .legend { margin-top: 16px; }
 .hero-exhibit > * + * { margin-top: 24px; }
 
 /* the symbol graph. A node is a symbol id, not a circle. Hover or focus a node and the change ripples to what depends on it. */
@@ -284,6 +286,8 @@ code { font-family: var(--mono); font-size: 15px; }
 .proof-head > * { padding: 12px 0; }
 .proof pre { margin: 0; padding: 16px 24px; max-width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; }
 .proof pre:focus-visible { outline-offset: -2px; }
+/* one long line of a real file, shown whole */
+.proof pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .proof pre .ln { color: var(--ink-2); user-select: none; display: inline-block; width: 32px; }
 .proof pre b { font-weight: 600; }
 .proof-cut { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); padding: 0 24px 12px; }
@@ -344,6 +348,143 @@ code { font-family: var(--mono); font-size: 15px; }
 .lead-short { padding: 64px 0 96px; max-width: 800px; }
 .lead-short > * + * { margin-top: 24px; }
 
+/* preflight: what must be true before the command will work. Plain rows; the page cannot know your machine. */
+.preflight { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink); max-width: 520px; counter-reset: pre; }
+.preflight li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 0 8px; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 15px; line-height: 1.5; counter-increment: pre; }
+.preflight li::before { content: counter(pre); font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); padding-top: 4px; }
+.preflight-note { font-size: 15px; max-width: 520px; }
+
+/* ── Gnomon's plate: its own ground, papercraft by day and phosphor by night. Its colours, radius and shadow stay inside. ── */
+.gplate { background: var(--g-ground); color: var(--g-ink); border: 1px solid var(--g-edge); padding: 24px; }
+.gplate .prov { color: var(--g-sec); margin-top: 24px; }
+.gplate .prov b { color: var(--g-ink); }
+.gcard { background: var(--g-sheet); border: 1px solid var(--g-edge); border-radius: 3px; box-shadow: var(--g-shadow); padding: 20px; max-width: 440px; position: relative; }
+.gcard-head { display: flex; justify-content: space-between; gap: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-sec); padding-bottom: 12px; border-bottom: 1px solid var(--g-sec); }
+.gcard-what { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; margin-top: 16px; }
+.gbars { display: grid; gap: 8px; margin: 16px 0 20px; }
+.gbars i, .dz i { display: block; height: 4px; background: var(--g-sec); border-radius: 3px; }
+.w-a { width: 92%; } .w-b { width: 68%; } .w-c { width: 44%; } .w-d { width: 80%; }
+.gkeys { display: flex; flex-wrap: wrap; gap: 12px; }
+.gkey { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.6; min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; border: 1px solid var(--g-edge); border-radius: 3px; background: var(--g-sheet); color: var(--g-ink); }
+.gkey.pri { background: var(--g-ink); color: var(--g-on-ink); box-shadow: var(--g-shadow); }
+/* the stamp: lands straight, once. The one motion on the Gnomon page. */
+.gstamp { position: absolute; right: 20px; bottom: 20px; font-family: var(--mono); font-weight: 600; font-size: 21px; line-height: 1.3; padding: 4px 12px; border: 4px solid var(--g-ink); border-radius: 3px; color: var(--g-ink); background: var(--g-sheet); }
+.gplate.wait .gstamp { opacity: 0; }
+.gplate.land .gstamp { animation: stamp var(--stamp) both; }
+@keyframes stamp { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
+.gnotes { list-style: none; margin: 20px 0 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-ink); display: grid; gap: 4px; }
+.gnotes li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 8px; }
+.gnotes li::before { content: ""; width: 8px; height: 8px; background: var(--g-ink); margin-top: 8px; }
+/* the desk, drawn: four regions, named */
+.desk { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 6fr) minmax(0, 4fr); gap: 16px; }
+.dz { border: 1px solid var(--g-edge); border-radius: 3px; background: var(--g-ground); padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
+.dz > b { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.6; }
+.dz > span, .dz small { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-sec); }
+.dz-shop { grid-column: 1 / -1; grid-auto-flow: column; grid-auto-columns: max-content; gap: 8px 32px; align-items: baseline; }
+.drow { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; align-items: center; }
+.drow::before { content: ""; width: 8px; height: 8px; border: 1px solid var(--g-ink); border-radius: 3px; }
+.drow.on::before { background: var(--g-ink); }
+.dsheet { background: var(--g-sheet); border: 1px solid var(--g-edge); border-radius: 3px; padding: 12px; display: grid; gap: 8px; }
+.dsheet.cast { box-shadow: var(--g-shadow); }
+.dsheet .dkeys { display: flex; gap: 8px; margin-top: 4px; }
+.dsheet .dkeys i { width: 48px; height: 12px; background: var(--g-sheet); border: 1px solid var(--g-edge); }
+.dsheet .dkeys i + i { background: var(--g-ink); }
+.dsheet.same { border-left: 4px solid var(--g-ink); }
+.dcomposer { border: 1px solid var(--g-sec); border-radius: 3px; background: var(--g-sheet); height: 48px; margin-top: 8px; }
+.dsay { display: grid; gap: 8px; padding: 4px 0; }
+
+/* ── Warpline: the ledger gains the strand. Woven where built, loose where untested, stopped at a cap where a claim did not hold. ── */
+.ledger.loom .ledger-row { grid-template-columns: 48px 136px minmax(0, 5fr) minmax(0, 4fr); padding: 0; align-items: stretch; }
+.ledger.loom .ledger-row > :not(.thread) { padding: 16px 0; }
+.ledger.loom .ledger-row > .ledger-state, .ledger.loom .ledger-row > .ledger-ev { padding-top: 20px; }
+.thread { background: var(--w-ground); position: relative; box-shadow: inset 1px 0 0 var(--rule), inset -1px 0 0 var(--rule); }
+.thread::before, .thread::after { content: ""; position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--w-a); left: 12px; }
+.thread::after { border-left-color: var(--w-b); left: 24px; }
+.ledger-row.is-progress .thread::after { border-left-style: dashed; }
+.ledger-row.is-untested .thread::after { border-left-style: dotted; bottom: 50%; }
+.ledger-row.is-untested .thread::before { border-left-style: dashed; }
+.ledger-row.is-nothold .thread::after { bottom: 50%; }
+.ledger-row.is-nothold .thread { background: linear-gradient(var(--w-b), var(--w-b)) 20px 50% / 12px 2px no-repeat var(--w-ground); }
+.ledger-foot { margin-top: 48px; }
+/* Warpline's plate: its ink ground in both themes. Two threads and one knot. Kept small. */
+.wplate { background: var(--w-ground); color: var(--w-text); padding: 24px; max-width: 800px; outline: 1px solid var(--rule); }
+.wplate svg { display: block; width: 100%; height: auto; }
+.wplate .wa { stroke: var(--w-a); } .wplate .wb { stroke: var(--w-b); }
+.wplate path { fill: none; stroke-width: 2; }
+.wplate .tick { stroke: var(--w-text); stroke-width: 2; }
+.wplate .knot { fill: var(--w-ground); stroke: var(--w-seam); stroke-width: 4; }
+.wkey { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--w-rule); font-family: var(--mono); font-size: 13px; line-height: 1.6; display: grid; gap: 4px; }
+.wkey li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 12px; align-items: center; }
+.wkey i { display: block; height: 0; border-top: 2px solid var(--w-a); }
+.wkey .kb { border-top-color: var(--w-b); } .wkey .kt { border-top-color: var(--w-text); width: 2px; height: 12px; border-top: 0; background: var(--w-text); margin: 0 auto; }
+.wkey .kk { width: 12px; height: 12px; border: 4px solid var(--w-seam); border-radius: 50%; margin: 0 auto; }
+.wplate .prov { color: var(--w-muted); } .wplate .prov b { color: var(--w-text); }
+.lead-wide { padding: 48px 0 32px; max-width: 800px; }
+.lead-wide > * + * { margin-top: 24px; }
+.lead-wide > .plain + .plain { margin-top: 12px; }
+.lead-block { padding-bottom: 64px; }
+.lead-block > * + * { margin-top: 32px; }
+
+/* ── the path: one line, numbered stations, two spurs ── */
+.path { list-style: none; margin: 0; padding: 0; position: relative; counter-reset: lvl -1; }
+.path::before { content: ""; position: absolute; left: 20px; top: 0; bottom: 0; border-left: 1px solid var(--ink); }
+.station { position: relative; padding: 0 0 24px 72px; }
+.station::before { content: ""; position: absolute; left: 20px; top: 32px; width: 12px; height: 12px; transform: translateX(-50%); background: var(--ground); border: 2px solid var(--ink); }
+.station.done::before { background: var(--ink); }
+.station.spur { padding-left: 136px; }
+.station.spur::before { left: 84px; border-width: 1px; border-style: dashed; }
+.station.spur::after { content: ""; position: absolute; left: 20px; top: 36px; width: 56px; border-top: 1px dashed var(--ink); }
+.station summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 0 16px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.station summary::-webkit-details-marker { display: none; }
+.station summary::after { content: "Open"; font-family: var(--mono); font-size: 13px; line-height: 1.6; text-decoration: underline; text-underline-offset: 4px; padding-top: 16px; }
+.station details[open] summary::after { content: "Close"; }
+.station details[open] summary { border-bottom-color: var(--ink); }
+.station-head { margin: 0; font: inherit; font-weight: 400; min-width: 0; }
+.station-n { font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1.1; color: var(--ink-2); font-variation-settings: "opsz" 144; }
+.station.level .station-n::before { counter-increment: lvl; content: counter(lvl); }
+.station.current .station-n { color: var(--ink); }
+.station-name { font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.1; display: block; padding-top: 8px; }
+.station-when { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); display: block; margin-top: 4px; }
+.station-gets { font-size: 15px; line-height: 1.5; display: block; margin-top: 4px; max-width: 66ch; }
+.station-body { padding: 24px 0 8px 72px; }
+.station-body > * + * { margin-top: 16px; }
+.station-body > p { max-width: 66ch; }
+.station-body > .h3 { margin-top: 32px; }
+.saw { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; font-family: var(--mono); font-size: 13px; font-weight: 600; cursor: pointer; }
+.saw input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
+.path-clear { font-family: var(--mono); font-size: 13px; background: none; border: 0; color: inherit; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; min-height: 44px; padding: 0; margin-left: 72px; }
+/* a practice: Do, Instead of, Why. Rows, with the reason at the same size as the rule. */
+.do { margin: 0; border-top: 1px solid var(--ink); max-width: 800px; }
+.do > div { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 0 16px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.do dt { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.6; padding-top: 4px; }
+.do dd { font-size: 17px; }
+.do .ev dt { font-weight: 400; color: var(--ink-2); }
+.do .ev dd { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; padding-top: 4px; }
+.do .ev dd a { padding: 16px 0; } .do .ev dd code { font-size: 13px; }
+.practices { list-style: none; margin: 0; padding: 0; border-top: 4px solid var(--ink); counter-reset: prac; }
+.practice { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-bottom: 1px solid var(--rule); counter-increment: prac; align-items: start; }
+.practice-name { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; }
+.practice-name::before { content: "P" counter(prac); display: block; font-family: var(--mono); font-weight: 400; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+.practice-at { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); display: block; font-weight: 400; margin-top: 4px; }
+.practice-at a { padding: 16px 0; }
+.practice .do { border-top-color: var(--rule); }
+/* the field card: everything on one printable sheet */
+.field-card { border: 1px solid var(--ink); background: var(--surface); padding: 32px; }
+.field-card > * + * { margin-top: 24px; }
+.field-title { font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.1; }
+.field-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 32px 48px; align-items: start; }
+.field-cols pre { margin: 12px 0 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; border-left: 4px solid var(--ink); padding: 4px 0 4px 16px; }
+.field-cols ol { margin: 12px 0 0; padding: 0 0 0 32px; font-size: 15px; line-height: 1.5; }
+.field-cols ol li { padding: 4px 0; } .field-cols ol code { font-size: 13px; }
+.field-say { font-size: 17px; line-height: 1.5; border-left: 4px solid var(--ink); padding: 4px 0 4px 16px; max-width: 66ch; margin-top: 12px; }
+.field-foot { font-family: var(--mono); font-size: 13px; line-height: 1.6; border-top: 1px solid var(--ink); padding-top: 12px; }
+.ways { list-style: none; margin: 0; padding: 0; border-top: 4px solid var(--ink); }
+.ways li { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 16px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.ways a { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; text-decoration: none; padding: 12px 0; }
+.station-body a, .step-body a, .prose a, .plain a, h4 a { padding: 16px 0; }
+.ways a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.ways span { overflow-wrap: anywhere; }
+
 /* ── four steps: 1280 the display drops a size · 1100 heroes go to one column · 860 rows stack · 620 compact ── */
 @media (max-width: 1279px) { .display { font-size: 56px; } }
 @media (max-width: 1099px) {
@@ -353,9 +494,18 @@ code { font-family: var(--mono); font-size: 15px; }
 @media (min-width: 861px) and (max-width: 1099px) {
   .hero-exhibit { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px; align-items: start; }
   .hero-exhibit > * + * { margin-top: 0; }
+  .hero-exhibit > .legend, .hero-exhibit > .prov { grid-column: 1 / -1; margin-top: 0; }
 }
 @media (max-width: 860px) {
   .wrap { padding: 0 16px; }
+  .practice, .field-cols, .ways li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .field-cols { gap: 24px; }
+  .ledger.loom .ledger-row { grid-template-columns: 48px minmax(0, 1fr); gap: 0 16px; } .ledger.loom .thread { grid-row: 1 / span 3; }
+  .ledger.loom .ledger-row > :not(.thread) { padding: 4px 0; grid-column: 2; } .ledger.loom .ledger-row > .ledger-state { padding-top: 16px; } .ledger.loom .ledger-row > .ledger-ev { padding-bottom: 16px; }
+  .desk { grid-template-columns: minmax(0, 1fr); } .dz-shop { grid-auto-flow: row; grid-auto-columns: auto; }
+  .gplate { padding: 20px; }
+  .station-body { padding-left: 0; }
+  .station-name { font-size: 21px; padding-top: 12px; }
   .h2 { font-size: 32px; } .lede { font-size: 17px; } .lede code { font-size: 15px; }
   .hub { padding: 32px 0 64px; } .hero { padding: 32px 0 48px; }
   .section, .claims > div, .fact, .step, .lately-row, .split { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -373,6 +523,11 @@ code { font-family: var(--mono); font-size: 15px; }
   .stop::before { top: 12px; transform: translate(-50%, -50%); }
 }
 @media (max-width: 620px) {
+  .path::before { left: 8px; } .station { padding-left: 32px; } .station::before { left: 8px; }
+  .station.spur { padding-left: 56px; } .station.spur::before { left: 36px; } .station.spur::after { left: 8px; width: 24px; }
+  .station summary { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 0 12px; } .station-n { font-size: 32px; }
+  .path-clear { margin-left: 32px; }
+  .field-card { padding: 16px; } .gplate { padding: 16px; } .gcard { padding: 16px; } .gstamp { position: static; display: inline-block; margin-top: 12px; }
   .display { font-size: 44px; } .fact-n { font-size: 44px; }
   .plate { padding: 16px; } .plate svg.graph { display: none; } .graph-list { display: block; }
   .cmd .where { display: none; }
@@ -381,7 +536,21 @@ code { font-family: var(--mono); font-size: 15px; }
 @media (prefers-reduced-motion: reduce) {
   .key:active { transform: none; }
   .graph .edge, .graph .node rect, .graph .node text, .graph .node tspan, .entry-name a::after { transition: none; }
+  .gplate.land .gstamp { animation: none; }
+  .gplate.wait .gstamp { opacity: 1; }
 }
+/* print: the field card on one sheet, ink on paper, with no masthead. Ink values are the light theme's, whatever the screen was. */
 @media print {
-  .mast nav, .mast-side, .skip, .key { display: none; }
+  :root, :root[data-theme="dark"], :root[data-theme="light"] { color-scheme: light; --ink: #17181C; --ink-2: #4B4D56; --edge: #70727B; --rule: #D3D3CC; --surface: transparent; --sunk: transparent; }
+  body { background: none; font-size: 13px; }
+  .mast, .skip, .key, .foot, .onward, .saw, .path-clear { display: none; }
+  body:has(.field-card) main > :not(.field-sheet), .field-sheet > :not(.section-body), .field-sheet .section-body > :not(.field-card) { display: none; }
+  .field-sheet { display: block; padding: 0; border: 0; }
+  .wrap { max-width: none; padding: 0; }
+  .field-card { border: 0; padding: 0; }
+  .field-card > * + * { margin-top: 12px; }
+  .field-title { font-size: 21px; }
+  .field-cols { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px; }
+  .field-cols ol { font-size: 13px; } .field-cols ol li { padding: 0; } .field-say { font-size: 13px; }
+  a { text-decoration: none; }
 }

@@ -66,6 +66,7 @@ foundations:
     built: "filled square + the word Built"
     in-progress: "square split on the diagonal, half filled + the words In progress"
     untested: "hollow square with a dashed edge + the word Untested"
+    not-built: "the untested mark (hollow square, dashed edge) + the words Not built"   # builder, 2026-11-23, on the ruling that a row for something that does not exist must not print Untested. A word over an existing mark, not a fifth mark: the marks stay four. Proposed with the rest.
     did-not-hold: "hollow square with a solid edge, struck through by a 2px bar that overshoots it by 2px each side + the words Did not hold"   # mika: the fourth state
     status: proposed
     from: { session: 2026-11-23-hero-pages, board: standing, choice: mark-and-word, founder_words: "lets just be clear and upfront about things. we're building it" }

@@ -19,8 +19,10 @@
   ],
   "standing_states": [
     "built",
+    "did-not-hold",
     "in progress",
-    "untested or not built"
+    "untested",
+    "not built"
   ],
   "facts": [
     {
@@ -947,7 +949,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "whether what agents learn improves their work: no outcome data yet",
           "evidence": "paradigm doctor on this repo, 2026-11-23",
           "facts": [
@@ -1049,7 +1051,7 @@
           "evidence": "companion branch; not on main"
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "Whether Paradigm saves tokens or improves results in use",
           "evidence": "the one paired study: same results, more tool calls, too small",
           "facts": [
@@ -1058,7 +1060,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "Whether what agents learn improves their work",
           "evidence": "paradigm doctor: FLATLINE, no survival evidence",
           "facts": [
@@ -1066,7 +1068,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "The learning loop has recorded no journals here",
           "evidence": "paradigm doctor, 2026-11-23: \"FLATLINE: 0 journals / 20 completions\"; pages/captures/paradigm-doctor.txt",
           "facts": [
@@ -1075,7 +1077,23 @@
           "added": "builder, from the evidence dossier, fact 10 and line 244"
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
+          "what": "Token estimates rebuilt from measured use: the command exists, this repo has no data for it",
+          "evidence": "dossier 3A, P12",
+          "facts": [
+            "paradigm.calibration-data"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Decisions that replace earlier ones, as structured records: the fields exist, 0 of 138 files use them",
+          "evidence": "grep, 2026-11-23",
+          "facts": [
+            "paradigm.supersession"
+          ]
+        },
+        {
+          "state": "not built",
           "what": "This repository is not a working Warpline example: dogfooding here stopped on 2026-11-09 and its ledger fails `warpline health`",
           "evidence": "warpline health (dossier, 2026-11-23): UNSOUND, 63 failures of 374; decision TD-2026-11-09-865; commit 96e234ef",
           "facts": [
@@ -1084,23 +1102,7 @@
           "added": "builder, from the evidence dossier, fact 10 and line 242"
         },
         {
-          "state": "untested or not built",
-          "what": "Token estimates rebuilt from measured use: the command exists, this repo has no data for it",
-          "evidence": "dossier 3A, P12",
-          "facts": [
-            "paradigm.calibration-data"
-          ]
-        },
-        {
-          "state": "untested or not built",
-          "what": "Decisions that replace earlier ones, as structured records: the fields exist, 0 of 138 files use them",
-          "evidence": "grep, 2026-11-23",
-          "facts": [
-            "paradigm.supersession"
-          ]
-        },
-        {
-          "state": "untested or not built",
+          "state": "not built",
           "what": "Releases you can rebuild from a git tag: there are no tags",
           "evidence": "git tag | wc -l",
           "facts": [
@@ -1129,7 +1131,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "on any Mac but the one it was built on",
           "evidence": "33 of 35 probe results from one machine",
           "facts": [
@@ -1220,23 +1222,7 @@
           ]
         },
         {
-          "state": "untested or not built",
-          "what": "A spending cap. Gnomon meters spending and does not stop it",
-          "evidence": "CHANGELOG.md:235; docs/specs/gnomon.md:1893",
-          "facts": [
-            "gnomon.spend"
-          ]
-        },
-        {
-          "state": "untested or not built",
-          "what": "The helper checking which program calls it",
-          "evidence": "CHANGELOG.md:298",
-          "facts": [
-            "gnomon.helper-caller"
-          ]
-        },
-        {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "Loops: specified, off in the app you install",
           "evidence": "CHANGELOG.md:130",
           "facts": [
@@ -1244,12 +1230,7 @@
           ]
         },
         {
-          "state": "untested or not built",
-          "what": "Spawning from contracts, kernel linking, CI signing: specified, not built",
-          "evidence": "CHANGELOG.md:302"
-        },
-        {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "Any machine but the founder's: no outside reports yet",
           "evidence": "dossier section 5",
           "facts": [
@@ -1257,7 +1238,28 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "not built",
+          "what": "A spending cap. Gnomon meters spending and does not stop it",
+          "evidence": "CHANGELOG.md:235; docs/specs/gnomon.md:1893",
+          "facts": [
+            "gnomon.spend"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "The helper checking which program calls it",
+          "evidence": "CHANGELOG.md:298",
+          "facts": [
+            "gnomon.helper-caller"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "Spawning from contracts, kernel linking, CI signing: specified, not built",
+          "evidence": "CHANGELOG.md:302"
+        },
+        {
+          "state": "not built",
           "what": "Intel Macs, Windows, Linux: refused",
           "evidence": "CHANGELOG.md:295",
           "facts": [
@@ -1277,7 +1279,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "not yet run end to end with a server, or at scale",
           "evidence": "founder, 2026-11-23",
           "facts": [
@@ -1289,7 +1291,7 @@
         {
           "state": "built",
           "what": "The command line: init, orient, and the save cycle (fork, propose, admit)",
-          "evidence": "CHANGELOG.md:10; warpline --help",
+          "evidence": "CHANGELOG.md:13 (the agent guide names the save cycle); CHANGELOG.md:14 (warpline orient); warpline --help",
           "facts": [
             "warpline.commands"
           ]
@@ -1311,14 +1313,12 @@
           ]
         },
         {
-          "state": "in progress",
-          "what": "How often it flags a clean merge, and what the flags are worth: measured on three open-source repos",
-          "evidence": "base-rate study, 2026-07",
+          "state": "did-not-hold",
+          "what": "An advantage from calibrating to one codebase. We set the bar before the run, and the run did not clear it",
+          "evidence": "recorded 2026-07-15, not re-run; seeded run, 144 scored admissions; gate K3 fired: 76.7% against 79.3% survival, p = 0.756; .paradigm/research/warpline-dogfood/run-results-full.md (evidence dossier, W4)",
           "facts": [
-            "warpline.base-rate",
-            "warpline.ground-truth",
-            "warpline.tsc",
-            "warpline.llm-judge"
+            "warpline.k3",
+            "warpline.seeded-run"
           ]
         },
         {
@@ -1330,28 +1330,12 @@
           ]
         },
         {
-          "state": "in progress",
+          "state": "untested",
           "what": "Whether an agent with no prior knowledge can use it from the shipped guide alone",
-          "evidence": "CHANGELOG.md:10; no result recorded in the dossier"
+          "evidence": "CHANGELOG.md:20 (the F4 cold-agent runs are set up); no result is recorded"
         },
         {
-          "state": "untested or not built",
-          "what": "Per-codebase calibration: the one test of it failed as designed",
-          "evidence": "K3 fired; run-results-full.md",
-          "facts": [
-            "warpline.k3"
-          ]
-        },
-        {
-          "state": "untested or not built",
-          "what": "Defects that cross two symbols: it missed the one in the study",
-          "evidence": "warpline-llm-judge-falsifier/results.md:45-64",
-          "facts": [
-            "warpline.missed"
-          ]
-        },
-        {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "The field test we wrote down in advance",
           "evidence": "not run; CHANGELOG.md:686",
           "facts": [
@@ -1359,7 +1343,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "A full run with a server, end to end",
           "evidence": "not run; founder, 2026-11-23",
           "facts": [
@@ -1367,7 +1351,7 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "untested",
           "what": "What it looks like at large: many agents, large repositories",
           "evidence": "not run; founder, 2026-11-23",
           "facts": [
@@ -1375,7 +1359,15 @@
           ]
         },
         {
-          "state": "untested or not built",
+          "state": "not built",
+          "what": "Defects that cross two symbols: it missed the one in the study",
+          "evidence": "warpline-llm-judge-falsifier/results.md:45-64",
+          "facts": [
+            "warpline.missed"
+          ]
+        },
+        {
+          "state": "not built",
           "what": "A working example on this repo: our own ledger reads UNSOUND since we stopped using it here",
           "evidence": "warpline health (dossier, 2026-11-23); commit 96e234ef",
           "facts": [
@@ -1496,6 +1488,65 @@
       "used_in": [
         "warpline.md section 3",
         "learn.md Warpline track"
+      ]
+    },
+    "warpline.guide": {
+      "path": "docs/guides/warpline-project-setup.md",
+      "lines": null,
+      "label": "The setup guide ↗",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    },
+    "warpline.changelog": {
+      "path": "CHANGELOG.md",
+      "lines": null,
+      "label": "The changelog ↗",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    },
+    "warpline.studies": {
+      "path": ".paradigm/research/warpline-guard-base-rate/results.md",
+      "lines": null,
+      "label": "The studies ↗",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    },
+    "learn.guide-quick-start": {
+      "path": "docs/guides/quick-start.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-agents": {
+      "path": "docs/guides/agents.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-learning-scopes": {
+      "path": "docs/guides/learning-scopes.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-gnomon": {
+      "path": "packages/gnomon/README.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-warpline": {
+      "path": "docs/guides/warpline-project-setup.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
       ]
     }
   },
@@ -1748,6 +1799,87 @@
     "repo.slug": {
       "value": "ascend42/a-paradigm",
       "source": "pages/build/pages.json (repo); README.md"
+    },
+    "gnomon.proof-stack": {
+      "value": "CHANGELOG.md:231; packages/gnomon/test/approval-broker.test.ts",
+      "source": "facts standing.gnomon.ledger; pages/content/gnomon.md"
+    },
+    "gnomon.proof-log": {
+      "value": "docs/specs/gnomon.md, section 3.2; packages/gnomon/test/kernel-log.test.ts",
+      "source": "facts standing.gnomon.ledger; pages/content/gnomon.md"
+    },
+    "gnomon.proof-sandbox": {
+      "value": "CHANGELOG.md:238; packages/gnomon/test/session-sandbox.test.ts",
+      "source": "facts standing.gnomon.ledger; pages/content/gnomon.md"
+    },
+    "gnomon.desk-source": {
+      "value": ".atelier/systems/gnomon/DESIGN.md:36-46",
+      "source": "pages/content/gnomon.md section 4"
+    },
+    "gnomon.run-id": {
+      "value": "gh run view 43286257168",
+      "source": "facts gnomon.ci-latest"
+    },
+    "warpline.stopped-here": {
+      "value": "2026-11-09",
+      "source": "decision TD-2026-11-09-865; commit 96e234ef"
+    },
+    "warpline.install": {
+      "value": "npm i -g @a-company/warpline",
+      "source": "pages/content/warpline.md section 3"
+    },
+    "learn.p2-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/claude.ts:110",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p3-evidence": {
+      "value": "packages/paradigm/src/core/enforcement/loader.ts:21; docs/guides/v6-migration.md:337-341",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p3-quote": {
+      "value": "largest silent behavioral change in v6.x",
+      "source": "docs/guides/v6-migration.md:337-341"
+    },
+    "learn.p5-evidence": {
+      "value": "docs/guides/v6-migration.md:113-120",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p6-evidence": {
+      "value": "docs/guides/decisions.md, section 3",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p7-evidence": {
+      "value": "docs/guides/agents.md:79",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p8-quote": {
+      "value": "Orchestration threshold: 3 files",
+      "source": "paradigm enforcement status on this repo; pages/captures/counts.txt"
+    },
+    "learn.p10-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/claude.ts:118",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p11-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/index.ts:308-322",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p12-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/claude.ts:157-169",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.guide-default": {
+      "value": "docs/guides/v6-migration.md, section 11",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.guide-decisions": {
+      "value": "docs/guides/decisions.md, sections 1 to 5",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.level-trust-short": {
+      "value": "Level 2",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
     }
-  }
+  },
+  "standing_states_note": "Five printed words over four marks (design system, status_roles). \"not built\" prints the words Not built under the untested mark: the thing does not exist yet, so calling it untested would be untrue. \"did-not-hold\" is a claim measured against a bar set beforehand that did not clear it."
 }

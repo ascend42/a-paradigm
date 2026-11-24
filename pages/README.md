@@ -41,8 +41,10 @@ A region is `<!-- kind:arg key=value -->...<!-- /kind -->`. Leave it empty; the 
 | `ref:<id>` | an entry of `facts.json` `refs`: a release, a level, a requirement that prose names. |
 | `sec:<anchor>` | the number of the section with that id on this page. Section numerals are CSS counters. |
 | `loc:<excerpt-id>` | a linked "path, lines a to b". |
-| `standing:<product>.ledger` | the ledger rows, as `li` for a `ul class="ledger"`. |
-| `excerpt:<id> lines=a-b` | lines of a real file at the pinned commit, numbered, with its head. |
+| `standing:<product>.ledger` | the ledger rows, as `li` for a `ul class="ledger"`. `loom=1` adds the strand cell (Warpline, with `class="ledger loom"`). A row's `state` is `built`, `did-not-hold`, `in progress`, `untested` or `not built`. |
+| `rows:<id>` | one `li` per item of a fact whose value is a list (the Gnomon requirements). |
+| `pn:<practice-id>` | the number of that practice on the Learn page. Practice and station numbers are CSS counters. |
+| `excerpt:<id> lines=a-b` | lines of a real file at the pinned commit, numbered, with its head. `wrap=1` shows a long line whole. |
 | `capture:<name> lines=5\|15,17\|29-30` | lines of `captures/<name>.txt`; a bar is a blank line. `head=0` drops the head. |
 | `lately:<product> rows=n` | changelog rows, each checked against the changelog line. |
 | `bar:<id> of=<id>` | one bar of a before and after, to scale. |
