@@ -16,6 +16,7 @@ import {
   aggregateFromDirectory,
   findDuplicateDeclarations,
   findDanglingReferences,
+  findIsolatedSymbols,
   type SymbolEntry,
   type CodeAnchor,
 } from '@a-company/premise-core';
@@ -193,11 +194,8 @@ function findUndeclaredReferences(symbols: SymbolEntry[]): Array<{ from: string;
 }
 
 function findOrphanedSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; file: string }> {
-  // True orphan = nothing references it AND it references nothing.
-  // Symbols with outgoing refs but no incoming are tree roots — not orphans.
-  return symbols
-    .filter(s => s.declared !== false && s.referencedBy.length === 0 && s.references.length === 0)
-    .map(s => ({ symbol: s.symbol, file: s.filePath }));
+  // One definition, shared with `paradigm doctor` and `paradigm status`.
+  return findIsolatedSymbols(symbols).map(s => ({ symbol: s.symbol, file: s.filePath }));
 }
 
 function resolveAnchorPath(anchorPath: string, rootDir: string, purposeFilePath?: string): string {

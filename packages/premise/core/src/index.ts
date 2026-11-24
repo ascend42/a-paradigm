@@ -89,8 +89,8 @@ export {
 } from './symbol-index.js';
 
 // Symbol integrity — duplicate declarations + dangling references (Phase 1)
-export { findDuplicateDeclarations, findDanglingReferences } from './integrity.js';
-export type { DuplicateDeclaration, DanglingReference } from './integrity.js';
+export { findDuplicateDeclarations, findDanglingReferences, findIsolatedSymbols } from './integrity.js';
+export type { DuplicateDeclaration, DanglingReference, IsolatedSymbol } from './integrity.js';
 
 // Shared frontmatter parser — #frontmatter-parser (D8, 7.12.0)
 export {

@@ -17,6 +17,7 @@ import * as path from 'path';
 import {
   findDuplicateDeclarations,
   findDanglingReferences,
+  findIsolatedSymbols,
   type AggregationResult,
   type SymbolEntry,
   type CodeAnchor,
@@ -267,24 +268,13 @@ function findDuplicateSymbols(
 function findOrphanedSymbols(
   symbols: SymbolEntry[],
 ): IntegrityReport['orphanedSymbols'] {
-  const orphaned: IntegrityReport['orphanedSymbols'] = [];
-
-  for (const sym of symbols) {
-    // Undeclared references are reported as broken references, not orphans.
-    if (sym.declared === false) continue;
-    // True orphan = nothing references it AND it references nothing.
-    // Symbols with outgoing refs but no incoming refs are tree roots
-    // (features, top-level groupings) — structurally expected, not orphans.
-    if (sym.referencedBy.length === 0 && sym.references.length === 0) {
-      orphaned.push({
-        symbol: sym.symbol,
-        file: sym.filePath,
-        referenceCount: 0,
-      });
-    }
-  }
-
-  return orphaned;
+  // One definition (premise-core), shared with the CLI's integrity, doctor and
+  // status: declared, references nothing, referenced by nothing.
+  return findIsolatedSymbols(symbols).map((s) => ({
+    symbol: s.symbol,
+    file: s.filePath,
+    referenceCount: 0,
+  }));
 }
 
 // ============================================================================

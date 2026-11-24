@@ -36,6 +36,9 @@ components:
       declares) is never part of a count a user sees. isDeclared and getUndeclaredCount expose the
       other side, so paradigm status, paradigm doctor and the MCP status tool report one number per
       kind and say how many undeclared references were left out. Tests in src/symbol-counts.test.ts.
+      findIsolatedSymbols in src/integrity.ts is the one definition of an isolated symbol
+      (declared, references nothing, referenced by nothing) used by paradigm integrity, doctor,
+      status and the MCP integrity check.
     file: packages/premise/core/src/symbol-index.ts
     tags:
       - index

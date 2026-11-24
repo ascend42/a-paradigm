@@ -26,6 +26,8 @@ import { filterGitIgnored, resolvePurposeCoverage } from '@a-company/purpose-cor
 import { measureAlwaysOn, ALWAYS_ON_CAP_KEY, type AlwaysOnEntry } from '../../core/always-on-budget.js';
 import { detectWarpline, scanWarplineBlocks } from '../../core/warpline-detect.js';
 import { listProjectFiles, hasDirSegment, type ProjectFileList } from '../../core/project-files.js';
+import { collectProjectCounts } from '../../core/project-counts.js';
+import type { IsolatedSymbol } from '@a-company/premise-core';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -446,108 +448,174 @@ async function checkPurposeCoverage(rootDir: string, projectFiles: ProjectFileLi
 }
 
 // ---------------------------------------------------------------------------
-// Check 5: Orphaned Symbols
+// Check 5: Isolated Symbols
 // ---------------------------------------------------------------------------
 
-interface ScanIndex {
-  $meta?: unknown;
-  components?: Record<string, { id: string; symbol: string; path: string; related?: string[] }>;
-  gates?: Record<string, { id: string; symbol: string; path: string; related?: string[] }>;
-  signals?: Record<string, { id: string; symbol: string; path: string; related?: string[] }>;
-  flows?: Record<string, { id: string; symbol: string; path: string; related?: string[] }>;
-  aspects?: Record<string, { id: string; symbol: string; path: string; related?: string[] }>;
-  [key: string]: unknown;
-}
-
-async function checkOrphanedSymbols(rootDir: string): Promise<ContextAuditResult[]> {
-  const results: ContextAuditResult[] = [];
-  const indexPath = path.join(rootDir, '.paradigm', 'scan-index.json');
-
-  if (!fs.existsSync(indexPath)) {
-    results.push({
-      check: 'orphaned-symbols',
-      status: 'advisory',
-      message: 'No scan-index.json found — run paradigm reindex first',
-    });
-    return results;
-  }
-
-  let index: ScanIndex;
+/**
+ * Isolated symbols, by the ONE definition `paradigm integrity` and `paradigm
+ * status` use (premise-core findIsolatedSymbols on the live index): declared,
+ * references nothing, referenced by nothing.
+ *
+ * This check used to read `related` from the generated scan-index.json, where
+ * flows carry no edges, so it called every symbol reachable only through a flow
+ * step isolated, disagreed with `integrity`, and could not run at all in a
+ * checkout that had not been scanned.
+ */
+async function checkOrphanedSymbols(rootDir: string, isolated?: IsolatedSymbol[]): Promise<ContextAuditResult[]> {
+  let found: IsolatedSymbol[];
   try {
-    index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-  } catch {
-    results.push({
+    found = isolated ?? (await collectProjectCounts(rootDir)).isolated;
+  } catch (e) {
+    return [{
       check: 'orphaned-symbols',
       status: 'advisory',
-      message: 'Could not parse scan-index.json',
-    });
-    return results;
+      message: `Could not build the symbol index: ${(e as Error).message}`,
+    }];
   }
 
-  // Gather all symbols and their related references
-  const categories = ['components', 'gates', 'signals', 'flows', 'aspects'] as const;
-  const allSymbols = new Map<string, string>(); // symbol -> id
-  const referencedSymbols = new Set<string>();
-
-  for (const cat of categories) {
-    const entries = index[cat];
-    if (!entries || typeof entries !== 'object') continue;
-    for (const [id, entry] of Object.entries(entries)) {
-      if (entry.symbol) {
-        allSymbols.set(entry.symbol, id);
-      }
-      // Collect all symbols referenced by other entries
-      if (entry.related && Array.isArray(entry.related)) {
-        for (const ref of entry.related) {
-          referencedSymbols.add(ref);
-        }
-      }
-    }
+  if (found.length === 0) {
+    return [{ check: 'orphaned-symbols', status: 'ok', message: 'All symbols are connected' }];
   }
-
-  // Build set of symbols that DO reference others (have outgoing refs)
-  const hasOutgoingRefs = new Set<string>();
-  for (const cat of categories) {
-    const entries = index[cat];
-    if (!entries || typeof entries !== 'object') continue;
-    for (const [, entry] of Object.entries(entries)) {
-      if (entry.symbol && entry.related && Array.isArray(entry.related) && entry.related.length > 0) {
-        hasOutgoingRefs.add(entry.symbol);
-      }
-    }
-  }
-
-  // True isolates = not referenced AND don't reference anything.
-  // Symbols with outgoing refs but no incoming are tree roots — expected.
-  const isolated: string[] = [];
-  for (const [symbol] of allSymbols) {
-    if (!referencedSymbols.has(symbol) && !hasOutgoingRefs.has(symbol)) {
-      isolated.push(symbol);
-    }
-  }
-
-  if (isolated.length > 0) {
-    results.push({
-      check: 'orphaned-symbols',
-      status: 'advisory',
-      message: `${isolated.length} isolated symbol${isolated.length > 1 ? 's' : ''} (no connections to other symbols)`,
-      details: isolated.slice(0, 20),
-      fix: 'Wire isolated symbols into features or remove them from .purpose files',
-    });
-  } else {
-    results.push({
-      check: 'orphaned-symbols',
-      status: 'ok',
-      message: 'All symbols are connected',
-    });
-  }
-
-  return results;
+  return [{
+    check: 'orphaned-symbols',
+    status: 'advisory',
+    message: `${found.length} isolated symbol${found.length > 1 ? 's' : ''} (declared, with no connection to another symbol)`,
+    details: found.slice(0, 20).map((s) => s.symbol),
+    fix: 'Wire isolated symbols into features or flows, or remove them from .purpose files (paradigm integrity lists them)',
+  }];
 }
 
 // ---------------------------------------------------------------------------
 // Check 6: Stale Portal
 // ---------------------------------------------------------------------------
+
+/**
+ * The static part of a portal route key, lower-cased: the path with its method
+ * removed (any upper-case verb: GET, DELETE, WS, SSE, ALL) up to the first
+ * parameter. "GET /api/projects/:id/files" -> "/api/projects". Empty when the
+ * route has no static segment to look for.
+ */
+export function routeStaticPrefix(route: string): string {
+  const pathPart = route.trim().replace(/^[A-Z]+\s+/, '');
+  const kept: string[] = [];
+  for (const segment of pathPart.split('/')) {
+    if (!segment) continue;
+    if (/^[:{*<[]/.test(segment)) break;
+    kept.push(segment.toLowerCase());
+  }
+  return kept.length > 0 ? `/${kept.join('/')}` : '';
+}
+
+/** Path literals found in source, by the package (or "" for the root) that holds them. */
+type PathLiterals = Map<string, Set<string>>;
+
+/** "packages/api/src/x.ts" -> "packages/api"; anything else -> "". */
+function packageOf(rel: string): string {
+  const parts = rel.split('/');
+  return parts.length > 2 && (parts[0] === 'packages' || parts[0] === 'apps') ? `${parts[0]}/${parts[1]}` : '';
+}
+
+/**
+ * Every string literal that starts with "/" in the given files, reduced to its
+ * static prefix. One regex pass per file; files that cannot be read are skipped.
+ */
+function collectPathLiterals(rootDir: string, files: string[]): PathLiterals {
+  const byPackage: PathLiterals = new Map();
+  const literal = /['"`](\/[A-Za-z0-9_\-./:{}*]*)/g;
+  for (const rel of files) {
+    let content: string;
+    try {
+      content = fs.readFileSync(path.join(rootDir, ...rel.split('/')), 'utf8');
+    } catch {
+      continue;
+    }
+    if (!content.includes('/')) continue;
+    const pkg = packageOf(rel);
+    let set = byPackage.get(pkg);
+    let match: RegExpExecArray | null;
+    literal.lastIndex = 0;
+    while ((match = literal.exec(content)) !== null) {
+      const prefix = routeStaticPrefix(match[1]);
+      if (!prefix) continue;
+      if (!set) byPackage.set(pkg, (set = new Set()));
+      set.add(prefix);
+    }
+  }
+  return byPackage;
+}
+
+function startsAtSegment(literal: string, prefix: string): boolean {
+  return literal === prefix || literal.startsWith(`${prefix}/`);
+}
+
+/**
+ * Is there a literal for this route? Either one literal covers the whole static
+ * prefix (`'/api/projects'`, `'/api/projects/:id'`), or one package holds both
+ * halves of a mounted router: a literal that ends with the head (`'/api'`, or
+ * `'/api/metrics'` for a head of "/metrics") and one that starts with the rest
+ * (`'/projects'`). Segments before the head are not required: a router package
+ * mounted under a longer prefix by another package (a proxy at
+ * `/api/sentinel`) still serves the route.
+ */
+export function hasRouteEvidence(prefix: string, literals: PathLiterals): boolean {
+  for (const set of literals.values()) {
+    for (const lit of set) if (startsAtSegment(lit, prefix)) return true;
+  }
+  const segments = prefix.split('/').filter(Boolean);
+  for (let from = 0; from < segments.length - 1; from++) {
+    for (let cut = from + 1; cut < segments.length; cut++) {
+      const head = `/${segments.slice(from, cut).join('/')}`;
+      const rest = `/${segments.slice(cut).join('/')}`;
+      for (const set of literals.values()) {
+        let mounted = false;
+        for (const lit of set) {
+          if (lit === head || lit.endsWith(head)) {
+            mounted = true;
+            break;
+          }
+        }
+        if (!mounted) continue;
+        for (const lit of set) if (startsAtSegment(lit, rest)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Directory names that hold server route handlers by convention. */
+const HANDLER_DIRS: ReadonlySet<string> = new Set(['routes', 'route', 'api', 'handlers', 'controllers', 'endpoints']);
+/** Those, plus the directories file-routing frameworks serve pages from. */
+const ROUTING_DIRS: ReadonlySet<string> = new Set([...HANDLER_DIRS, 'pages', 'app']);
+
+/**
+ * File-based routing: does this source file's location spell the route? The
+ * route's static segments must appear as consecutive path segments, the last
+ * one being a directory or the file's own name.
+ *
+ * "/api/projects" is matched by "app/api/projects/[id]/route.ts" (the path
+ * spells the route, "api" included) and by "src/routes/projects.ts" (a handler
+ * directory, where the "api" mount is implied). It is not matched by
+ * "src/models/projects.ts", nor by "app/learn/projects/page.tsx": a page that
+ * shares a word with an API route is not its handler.
+ */
+export function isRouteFileFor(prefix: string, relLower: string): boolean {
+  const parts = relLower.split('/');
+  const file = parts[parts.length - 1];
+  parts[parts.length - 1] = file.replace(/\.[a-z0-9]+$/, '');
+  const wanted = prefix.split('/').filter(Boolean);
+  const isApi = wanted[0] === 'api' && wanted.length > 1;
+
+  const under = (segments: string[], dirs: ReadonlySet<string> | null): boolean => {
+    for (let at = 0; at + segments.length <= parts.length; at++) {
+      if (!segments.every((seg, i) => parts[at + i] === seg)) continue;
+      if (dirs === null || parts.slice(0, at).some((dir) => dirs.has(dir))) return true;
+    }
+    return false;
+  };
+
+  if (isApi) return under(wanted, null) || under(wanted.slice(1), HANDLER_DIRS);
+  return under(wanted, ROUTING_DIRS);
+}
 
 async function checkStalePortal(rootDir: string, projectFiles: ProjectFileList): Promise<ContextAuditResult[]> {
   const results: ContextAuditResult[] = [];
@@ -583,54 +651,38 @@ async function checkStalePortal(rootDir: string, projectFiles: ProjectFileList):
     return results;
   }
 
-  // Extract resource prefixes from route patterns
-  // e.g., "GET /api/projects/:id" -> "projects"
   const routePatterns = Object.keys(portal.routes);
   const staleRoutes: string[] = [];
 
-  // Build a list of all source files for heuristic matching
-  const sourceExtensions = ['.ts', '.js', '.py', '.rs', '.go'];
-  const allSourceFiles: string[] = [];
-
-  const sourceSkipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build', 'target']);
-  for (const rel of projectFiles.files) {
-    if (!sourceExtensions.includes(path.extname(rel))) continue;
-    if (hasDirSegment(rel, sourceSkipDirs)) continue;
-    allSourceFiles.push(path.join(rootDir, ...rel.split('/')));
-  }
-
-  // Get all filenames and paths lowercased for matching
-  const filenameLower = allSourceFiles.map(f => ({
-    full: f,
-    name: path.basename(f, path.extname(f)).toLowerCase(),
-    relPath: path.relative(rootDir, f).toLowerCase(),
-  }));
+  // Evidence that a route is implemented is its PATH written as a string
+  // literal in source code: `app.get('/api/projects/:id')`, a router mounted at
+  // `app.use('/api/projects', …)`, `new WebSocketServer({ path: '/ws' })`.
+  // (The check used to accept any source file whose name or path contained the
+  // route's first word, so a route under "reference" passed in any repository
+  // with a file of that name, and it never matched a WS route at all.)
+  const sourceExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.rs', '.go', '.swift'];
+  const sourceSkipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build', 'target', '__tests__', 'tests', 'test', '__fixtures__', 'fixtures']);
+  const sourceFiles = projectFiles.files.filter((rel) =>
+    sourceExtensions.includes(path.extname(rel)) && !hasDirSegment(rel, sourceSkipDirs) && !/\.(test|spec)\.[a-z]+$/.test(rel),
+  );
+  const literals = collectPathLiterals(rootDir, sourceFiles);
+  // File-based routing (a `routes/projects.ts`, an `app/api/projects/[id]/route.ts`)
+  // writes no path literal: the file's own location is the route.
+  const routeFiles = sourceFiles.map((rel) => rel.toLowerCase());
 
   for (const route of routePatterns) {
-    // Extract resource name: "GET /api/projects/:id" -> "projects"
-    const pathPart = route.replace(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/i, '');
-    const segments = pathPart.split('/').filter(s => s && !s.startsWith(':') && s !== 'api');
-
-    if (segments.length === 0) continue;
-
-    // Use the first meaningful segment as the resource name
-    const resource = segments[0].toLowerCase();
-
-    // Heuristic: check if any source file name or path contains the resource name
-    const hasMatch = filenameLower.some(f =>
-      f.name.includes(resource) || f.relPath.includes(resource)
-    );
-
-    if (!hasMatch) {
-      staleRoutes.push(route);
-    }
+    const prefix = routeStaticPrefix(route);
+    if (!prefix) continue;
+    if (hasRouteEvidence(prefix, literals)) continue;
+    if (routeFiles.some((rel) => isRouteFileFor(prefix, rel))) continue;
+    staleRoutes.push(route);
   }
 
   if (staleRoutes.length > 0) {
     results.push({
       check: 'stale-portal',
       status: 'error',
-      message: `${staleRoutes.length} portal route${staleRoutes.length > 1 ? 's' : ''} with no matching implementation file`,
+      message: `${staleRoutes.length} portal route${staleRoutes.length > 1 ? 's' : ''} with no handler found (no source file writes the route's path, and no route file sits at it)`,
       details: staleRoutes,
       fix: 'Implement missing route handlers or remove stale routes from portal.yaml',
     });
@@ -638,7 +690,7 @@ async function checkStalePortal(rootDir: string, projectFiles: ProjectFileList):
     results.push({
       check: 'stale-portal',
       status: 'ok',
-      message: `All ${routePatterns.length} portal routes have matching implementation files`,
+      message: `All ${routePatterns.length} portal routes have a handler path in source`,
     });
   }
 
@@ -951,7 +1003,7 @@ async function checkWarplineGuidance(rootDir: string): Promise<ContextAuditResul
 /**
  * options.projectFiles: the run's shared #project-files list (doctor passes its own); taken here when absent.
  */
-export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string; projectFiles?: ProjectFileList }): Promise<ContextAuditResult[]> {
+export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string; projectFiles?: ProjectFileList; isolated?: IsolatedSymbol[] }): Promise<ContextAuditResult[]> {
   const tracker = log.command('doctor:context-audit').start('Running context audit checks');
   const results: ContextAuditResult[] = [];
   // One file list for every check that used to walk the tree itself
@@ -961,7 +1013,7 @@ export async function runContextAudit(rootDir: string, options?: { quiet?: boole
   results.push(...await checkConventionContradictions(rootDir));
   results.push(...await checkUndocumentedStack(rootDir));
   results.push(...await checkPurposeCoverage(rootDir, projectFiles));
-  results.push(...await checkOrphanedSymbols(rootDir));
+  results.push(...await checkOrphanedSymbols(rootDir, options?.isolated));
   results.push(...await checkStalePortal(rootDir, projectFiles));
   results.push(...await checkInstructionVagueness(rootDir));
   results.push(...await checkConfigSchema(rootDir));

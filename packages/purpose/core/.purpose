@@ -50,6 +50,17 @@ components:
     description: '#validator: Validates parsed purpose data — includes cross-file validation (validateCrossFile) for parent refs, symbol list refs, and flow step refs across all .purpose files'
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
+  purpose-discovery-dot-dirs:
+    description: >-
+      findPurposeFiles in src/aggregator.ts globs with dot true, so a .purpose under a
+      dot-directory the project tracks (.github/workflows, .paradigm/agents) is found and indexed.
+      DEFAULT_PURPOSE_IGNORE keeps tool state and agent checkouts out (.claude, .git, .warpline,
+      .loom, .worktrees, .build, .next, .turbo). With respectGitignore the result matches the
+      CLI's git-based project file list, which this package cannot import. Pinned by
+      packages/paradigm/src/core/project-counts.test.ts.
+    file: packages/purpose/core/src/aggregator.ts
+    tags:
+      - discovery
   purpose-key-normalizer:
     description: >-
       normalizeSymbolKeys in src/parser.ts, shared by both parse entry points. A prefixed top-level

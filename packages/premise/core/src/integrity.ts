@@ -85,3 +85,25 @@ export function findDanglingReferences(symbols: SymbolEntry[]): DanglingReferenc
     .filter((e) => e.declared === false)
     .map((e) => ({ symbol: e.symbol, referencedBy: [...e.referencedBy], filePath: e.filePath }));
 }
+
+/** A declared symbol with no edge to or from any other symbol. */
+export interface IsolatedSymbol {
+  symbol: string;
+  filePath: string;
+}
+
+/**
+ * THE definition of an isolated symbol, shared by `paradigm integrity`,
+ * `paradigm doctor`, `paradigm status` and the MCP integrity check: a DECLARED
+ * symbol that references nothing and that nothing references, on the live
+ * index's edges (structured lists, flow steps, prose mentions, gate prizes).
+ *
+ * A symbol with outgoing references and no incoming ones is a root (a feature,
+ * a top-level grouping), not an isolate. A reference stub is never an isolate:
+ * it is reported as an undeclared reference.
+ */
+export function findIsolatedSymbols(symbols: SymbolEntry[]): IsolatedSymbol[] {
+  return symbols
+    .filter((s) => s.declared !== false && s.referencedBy.length === 0 && s.references.length === 0)
+    .map((s) => ({ symbol: s.symbol, filePath: s.filePath }));
+}

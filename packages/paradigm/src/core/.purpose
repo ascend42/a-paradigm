@@ -142,6 +142,21 @@ components:
     tests:
       - packages/paradigm/src/core/portal-compliance.test.ts
       - packages/paradigm/src/core/project-files.test.ts
+  project-counts:
+    description: >-
+      The numbers Paradigm reports about a project, computed in one place so paradigm status and
+      paradigm doctor cannot disagree. collectProjectCounts returns the .purpose and portal.yaml
+      files from the shared #project-files list, declared symbols per kind from the live index
+      (stubs excluded, reported separately as undeclared references), a gate breakdown (distinct
+      declared gates, how many are in portal.yaml files and how many in .purpose only), the
+      isolated symbols by the premise-core definition that paradigm integrity uses, and the
+      .purpose files the index did not read. countLoreEntries counts entry files under
+      .paradigm/lore/entries (the .lore extension, and yaml for older entries).
+      describeGateCounts and GATE_COUNT_SCOPE give the words printed next to a gate count.
+    type: utility
+    path: project-counts.ts
+    tests:
+      - packages/paradigm/src/core/project-counts.test.ts
   project-files:
     description: "listProjectFiles(rootDir) → {root, source: git|walk, files, fallbackReason?, untrackedCount?}: one list of a project's files per run, root-relative with forward slashes on every OS, sorted. Inside a git work tree it is one `git ls-files -c -o -d -t -s --exclude-standard -z`: tracked files that exist on disk plus untracked-not-ignored ones; a tracked file deleted from disk, a skip-worktree (sparse checkout) entry that is not on disk and a submodule link (mode 160000) are left out; it never descends into nested repositories; inherited GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE are cleared. Fail closed: the list is used for enforcement, so anything that could make git hide a gate file sends it to the directory walk instead, and fallbackReason records why (not-a-git-repo, git-missing, git-timeout, git-failed, no-files-listed, gate-files-ignored). gate-files-ignored comes from a probe run first, `git check-ignore --no-index -- .purpose portal.yaml paradigm-ignore-probe/.purpose paradigm-ignore-probe/portal.yaml`: it is true when the ignore rules match the gate file names themselves (a broad pattern such as `.*` or `*.yaml`, a global excludes file, an enclosing repository that ignores the project), and false for a rule that ignores a particular directory, whose files stay out of the list by design. git gets GIT_TIMEOUT_MS (5 s) so the walk still has time inside the Stop hook's 30 s. PRUNE_DIRS (node_modules, .git, .warpline, .build, .loom) and .claude/worktrees/ are left out in BOTH modes, tracked or not. untrackedCount is git's untracked-not-ignored entry count before pruning. describeFileListSource(list) is the one-line text doctor and compliance-check --timings print. hasDirSegment(rel, names) is the shared skip-list test (directory segments only). Used by #portal-compliance and by `paradigm doctor`."
     type: utility

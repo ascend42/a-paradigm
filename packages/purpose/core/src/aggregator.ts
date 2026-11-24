@@ -156,9 +156,9 @@ export function aggregatePurposes(parsedFiles: ParsedPurposeFile[]): AggregatedP
  * duplicates are resolved last-write-wins — so leaving them in made the WINNING
  * definition depend on build artefacts.
  *
- * Note: glob runs with `dot: false`, so dot-directories are not traversed anyway;
- * the dot entries are listed explicitly so the policy is legible and survives a
- * future `dot: true`.
+ * Note: glob runs with `dot: true`: a `.purpose` under a dot-directory the project
+ * tracks (`.github/workflows/`, `.paradigm/agents/`) is a symbol source like any other.
+ * The dot entries below are what keeps tool state and agent checkouts out.
  */
 export const DEFAULT_PURPOSE_IGNORE: readonly string[] = Object.freeze([
   '**/node_modules/**',
@@ -167,6 +167,7 @@ export const DEFAULT_PURPOSE_IGNORE: readonly string[] = Object.freeze([
   '.claude/**',
   '**/.worktrees/**',
   '.warpline/**',
+  '**/.loom/**',
   '**/build/**',
   '**/.build/**',
   '**/coverage/**',
@@ -202,6 +203,7 @@ export async function findPurposeFiles(rootDir: string, options: FindPurposeFile
   let files = await glob('**/.purpose', {
     cwd: absoluteRoot,
     absolute: true,
+    dot: true,
     ignore: [...DEFAULT_PURPOSE_IGNORE],
   });
 
@@ -213,6 +215,7 @@ export async function findPurposeFiles(rootDir: string, options: FindPurposeFile
       const fallback = await glob('**/.purpose', {
         cwd: absoluteRoot,
         absolute: true,
+        dot: true,
         ignore: [...DEFAULT_PURPOSE_IGNORE, ...NON_GIT_RELEASE_IGNORE],
       });
       const keep = new Set(fallback.map((f) => path.resolve(f)));

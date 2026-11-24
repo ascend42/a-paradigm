@@ -241,51 +241,84 @@ describe('purpose-coverage', () => {
 // ---------------------------------------------------------------------------
 
 describe('orphaned-symbols', () => {
+  // The check reads the live symbol index (the edges `paradigm integrity` uses),
+  // not `related` in a generated scan-index.json.
+  function writePurpose(rootDir: string, lines: string[]): void {
+    const dir = path.join(rootDir, 'src', 'app');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.purpose'), lines.join('\n') + '\n', 'utf8');
+  }
+
   it('detects symbols with zero cross-references', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    writePurpose(rootDir, [
+      'version: "2.0"',
+      'components:',
+      '  lonely-component:',
+      '    description: Nothing mentions this',
+      '  connected-a:',
+      '    description: Uses the other one',
+      '    components: ["#connected-b"]',
+      '  connected-b:',
+      '    description: Used by the first',
+    ]);
+    const results = await runContextAudit(rootDir, { quiet: true });
+    const check = findCheck(results, 'orphaned-symbols');
+    expect(check).toBeDefined();
+    expect(check!.status).toBe('advisory');
+    expect(check!.message).toContain('1 isolated symbol');
+    expect(check!.details).toEqual(['#lonely-component']);
+  });
+
+  it('a flow step is a connection: a component reached only through a flow is not isolated', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    writePurpose(rootDir, [
+      'version: "2.0"',
+      'components:',
+      '  session-row:',
+      '    description: A row',
+      'flows:',
+      '  fleet-switch:',
+      '    description: Switch',
+      '    steps:',
+      '      - component: "#session-row"',
+      '        action: click',
+    ]);
+    const results = await runContextAudit(rootDir, { quiet: true });
+    const check = findCheck(results, 'orphaned-symbols');
+    expect(check!.status).toBe('ok');
+  });
+
+  it('does not depend on scan-index.json: a stale one is ignored', async () => {
     suppressOutput();
     const { rootDir, cleanup: c } = createTempProject({
       withScanIndex: true,
       scanIndexContent: JSON.stringify({
-        $meta: { generatedAt: new Date().toISOString() },
-        components: {
-          'lonely-component': {
-            id: 'lonely-component',
-            symbol: '#lonely-component',
-            path: '/test/.purpose',
-            related: [],
-          },
-          'connected-a': {
-            id: 'connected-a',
-            symbol: '#connected-a',
-            path: '/test/.purpose',
-            related: ['#connected-b'],
-          },
-          'connected-b': {
-            id: 'connected-b',
-            symbol: '#connected-b',
-            path: '/test/.purpose',
-            related: ['#connected-a'],
-          },
-        },
+        components: { ghost: { id: 'ghost', symbol: '#ghost', path: '/x/.purpose', related: [] } },
       }),
     });
     cleanup = c;
     const results = await runContextAudit(rootDir, { quiet: true });
     const check = findCheck(results, 'orphaned-symbols');
     expect(check).toBeDefined();
-    expect(check!.status).toBe('advisory');
-    expect(check!.details).toBeDefined();
-    expect(check!.details!.includes('#lonely-component')).toBe(true);
+    // no .purpose declares anything, so there is nothing to call isolated
+    expect(check!.status).toBe('ok');
   });
 
-  it('reports advisory when no scan index', async () => {
+  it('uses the list the caller already computed', async () => {
     suppressOutput();
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
-    const results = await runContextAudit(rootDir, { quiet: true });
+    const results = await runContextAudit(rootDir, {
+      quiet: true,
+      isolated: [{ symbol: '#given', filePath: path.join(rootDir, '.purpose') }],
+    });
     const check = findCheck(results, 'orphaned-symbols');
-    expect(check).toBeDefined();
-    expect(check!.status).toBe('advisory');
+    expect(check!.details).toEqual(['#given']);
   });
 });
 
@@ -340,6 +373,112 @@ describe('stale-portal', () => {
     const results = await runContextAudit(rootDir, { quiet: true });
     const check = findCheck(results, 'stale-portal');
     expect(check).toBeDefined();
+    expect(check!.status).toBe('ok');
+  });
+
+  function portalWith(rootDir: string, routes: string[]): void {
+    fs.writeFileSync(
+      path.join(rootDir, 'portal.yaml'),
+      ['version: "1.0"', 'gates:', '  authenticated:', '    description: Must be logged in', 'routes:', ...routes.map((r) => `  "${r}": [^authenticated]`)].join('\n'),
+      'utf8',
+    );
+  }
+  function source(rootDir: string, rel: string, content: string): void {
+    const full = path.join(rootDir, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content, 'utf8');
+  }
+
+  it('a WS route is implemented by a WebSocket server path', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['WS /ws']);
+    source(rootDir, 'src/server/ws/index.ts', "const wss = new WebSocketServer({ server, path: '/ws' });\n");
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('ok');
+  });
+
+  it('a WS route with no server path is reported', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['WS /ws']);
+    source(rootDir, 'src/server/index.ts', "app.get('/health', ok);\n");
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('error');
+    expect(check!.details).toEqual(['WS /ws']);
+  });
+
+  it('a file that only shares a word with the route is not a handler', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/courses', 'GET /api/courses/:id', 'GET /api/reference']);
+    // "courses" and "reference" appear in file names and paths, nowhere as a route
+    source(rootDir, 'src/content/courses-loader.ts', 'export const x = 1;\n');
+    source(rootDir, 'src/models/courses.ts', 'export const y = 2;\n');
+    source(rootDir, 'src/docs/reference-index.ts', 'export const z = 3;\n');
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('error');
+    expect(check!.details).toEqual(['GET /api/courses', 'GET /api/courses/:id', 'GET /api/reference']);
+  });
+
+  it('accepts a full path literal, a mounted router, and reports the deeper route nothing serves', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/lore/:id', 'POST /api/tasks', 'GET /api/canvas/state', 'GET /api/canvas/files/:id']);
+    source(rootDir, 'src/server/index.ts', [
+      "app.use('/api/lore', loreRouter);",
+      "app.use('/api', apiRouter);",
+      "apiRouter.post('/tasks', createTask);",
+      "app.get('/api/canvas/state', state);",
+    ].join('\n'));
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('error');
+    expect(check!.details).toEqual(['GET /api/canvas/files/:id']);
+  });
+
+  it('a path literal in a test file is not a handler', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/plsat']);
+    source(rootDir, 'src/server/plsat.test.ts', "request(app).get('/api/plsat');\n");
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('error');
+  });
+
+  it('file-based routing counts: app/api/<route>/route.ts', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/projects/:id']);
+    source(rootDir, 'app/api/projects/[id]/route.ts', 'export async function GET() {}\n');
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('ok');
+  });
+
+  it('a page that shares a word with an API route is not its handler', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/plsat']);
+    source(rootDir, 'src/app/learn/plsat/page.tsx', 'export default function Page() { return null; }\n');
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
+    expect(check!.status).toBe('error');
+  });
+
+  it('a router package mounted under a longer prefix by another package serves the route', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    portalWith(rootDir, ['GET /api/sentinel/metrics/aggregate/:name']);
+    source(rootDir, 'packages/host/src/server.ts', "app.use('/api/sentinel', sentinelRouter);\n");
+    source(rootDir, 'packages/sentinel/src/server/index.ts', "app.use('/api/metrics', createMetricsRouter());\n");
+    source(rootDir, 'packages/sentinel/src/server/metrics.ts', "router.get('/aggregate/:name', handler);\n");
+    const check = findCheck(await runContextAudit(rootDir, { quiet: true }), 'stale-portal');
     expect(check!.status).toBe('ok');
   });
 
