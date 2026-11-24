@@ -29,6 +29,17 @@ features:
       - '#reference-tracker'
       - '#graph-builder'
 components:
+  symbol-counts:
+    description: >-
+      getSymbolCounts in src/symbol-index.ts counts DECLARED symbols only. A reference stub
+      (declared false, created by the aggregator for something a .purpose mentions and nothing
+      declares) is never part of a count a user sees. isDeclared and getUndeclaredCount expose the
+      other side, so paradigm status, paradigm doctor and the MCP status tool report one number per
+      kind and say how many undeclared references were left out. Tests in src/symbol-counts.test.ts.
+    file: packages/premise/core/src/symbol-index.ts
+    tags:
+      - index
+      - counts
   aggregator:
     description: '#aggregator: Main aggregation logic — anchors: strings go through the shared #symbol-index parseAnchorString (heading/block section anchors since 7.12.0), and resolveReferences stringifies symbol data WITHOUT the anchors field so a section anchor like docs/x.md#setup never registers a reference to #setup — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011). INDEX_DISCOVERY ({ respectGitignore: true }, T-2026-10-27-003): the default .purpose loader skips gitignored build/release output, so a packages/gnomon/release/Gnomon.app copy is never indexed and never wins duplicate resolution (test: src/index-discovery-gitignore.test.ts).'
   source-loader:

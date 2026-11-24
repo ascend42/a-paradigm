@@ -50,6 +50,18 @@ components:
     description: '#validator: Validates parsed purpose data — includes cross-file validation (validateCrossFile) for parent refs, symbol list refs, and flow step refs across all .purpose files'
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
+  prose-symbol-filter:
+    description: >-
+      proseSymbolId in src/aggregator.ts decides whether a prefixed token found in a description
+      names a symbol. It trims the punctuation that ends a sentence, and rejects all-caps names
+      (environment variables), ids that are not kebab-case (dotted paths, snake_case, camelCase)
+      and hex colours or colour placeholders after a hash. extractSymbolReferences applies it to
+      prose only; a structured list entry is kept as written so an undeclared reference is still
+      reported. Tests in src/prose-symbols.test.ts.
+    file: packages/purpose/core/src/aggregator.ts
+    tags:
+      - references
+      - parser
   aggregator:
     description: '#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses. findPurposeFiles/getAllPurposeFiles take an opt-in { respectGitignore } (T-2026-10-27-003): drops .purpose files git check-ignore reports (build and release output such as a gitignored packages/gnomon/release/Gnomon.app copy), falling back to NON_GIT_RELEASE_IGNORE (**/release/**) outside a git work tree. Default off; the premise index (INDEX_DISCOVERY), the MCP purpose validate and symbol rename, and `paradigm purpose validate` opt in. getAllPurposeFilesCached passes the same options through.'
   purpose-coverage:

@@ -55,6 +55,7 @@ export {
   extractSignals,
   extractAspects,
   extractSymbolReferences,
+  proseSymbolId,
 } from './aggregator.js';
 
 // Parse cache (#purpose-parse-cache)

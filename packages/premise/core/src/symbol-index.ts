@@ -438,7 +438,12 @@ export function getAllTags(index: SymbolIndex): string[] {
 }
 
 /**
- * Get symbol counts by type (v2)
+ * Count DECLARED symbols by type (v2).
+ *
+ * A reference stub (`declared: false`: something a .purpose mentions but nothing
+ * declares) is not a symbol of the project and is never counted. Every symbol
+ * count a user sees comes from here, so `status`, `doctor` and the MCP status
+ * tool agree. Use getUndeclaredCount for the stubs.
  */
 export function getSymbolCounts(index: SymbolIndex): Record<SymbolType, number> {
   const counts: Record<SymbolType, number> = {
@@ -451,11 +456,23 @@ export function getSymbolCounts(index: SymbolIndex): Record<SymbolType, number> 
 
   for (const [type, symbols] of index.byType) {
     if (type in counts) {
-      counts[type as SymbolType] = symbols.length;
+      counts[type as SymbolType] = symbols.filter(isDeclared).length;
     }
   }
 
   return counts;
+}
+
+/** True unless the entry is a reference stub (`declared: false`). */
+export function isDeclared(entry: SymbolEntry): boolean {
+  return entry.declared !== false;
+}
+
+/** How many index entries are reference stubs: referenced, declared nowhere. */
+export function getUndeclaredCount(index: SymbolIndex): number {
+  let n = 0;
+  for (const entry of index.entries.values()) if (!isDeclared(entry)) n++;
+  return n;
 }
 
 /**

@@ -11,7 +11,9 @@ import {
   aggregateFromDirectory,
   buildSymbolIndex,
   getSymbolCounts,
+  getUndeclaredCount,
 } from '@a-company/premise-core';
+import { dim } from '../utils/cli-output.js';
 import { findPurposeFiles } from '@a-company/purpose-core';
 import { findGateFiles } from '@a-company/portal-core';
 
@@ -82,7 +84,11 @@ export async function statusCommand() {
       const total = Object.values(counts).reduce((a, b) => a + b, 0);
       console.log(chalk.gray('─'.repeat(40)));
       console.log(`  Total:          ${chalk.cyan(total.toString())}`);
-      
+      const undeclared = getUndeclaredCount(index);
+      if (undeclared > 0) {
+        dim(`  Declared symbols only. ${undeclared} undeclared reference${undeclared === 1 ? '' : 's'} not counted (paradigm integrity lists them).`);
+      }
+
       tracker.success('Status retrieved', { symbols: total, files: purposeFiles.length + gateFiles.length });
 
       // Show errors if any

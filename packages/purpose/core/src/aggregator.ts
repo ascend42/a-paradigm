@@ -621,6 +621,44 @@ const SYMBOL_BLOCKLIST = new Set([
   '$virtual', '$schema', '$ref', '$id', '$type',
 ]);
 
+/** Kebab-case id: lowercase words of letters and digits joined by single hyphens. */
+const KEBAB_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+/** A CSS hex colour body (3, 4, 6 or 8 hex digits). */
+const HEX_COLOUR_RE = /^(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/** Hex-shaped words that are colours even without a digit: `fff`, `cccccc`, `aabbcc`. */
+const HEX_REPEAT_RE = /^(?:([a-f])\1{2,3}|(?:([a-f])\2){3,4})$/i;
+/** Placeholders documentation uses for a colour value. */
+const COLOUR_PLACEHOLDERS = new Set(['rgb', 'rgba', 'rrggbb', 'rrggbbaa']);
+
+/**
+ * Decide whether a prefixed token found in PROSE names a Paradigm symbol.
+ *
+ * Prose is full of things that only look like symbols: environment variables
+ * (`$HOME`, `$CLAUDE_PROJECT_DIR`), DOM ids and member paths (`#session.active`),
+ * CSS colours (`#1a2b3c`, `#fff`, `#rrggbb`), and a real symbol followed by the
+ * full stop that ends its sentence (`^peer-paired.`). Returns the id to use (with
+ * sentence punctuation trimmed) or null when the token is not a symbol.
+ *
+ * Only prose goes through this. A structured reference (`gates: [^x]`) is kept
+ * as written, whatever its shape, so a reference to a symbol nobody declared is
+ * still reported.
+ */
+export function proseSymbolId(prefix: string, rawId: string): string | null {
+  // "…guarded by ^peer-paired." ends a sentence; the dot is not part of the id.
+  const id = rawId.replace(/[._-]+$/, '');
+  if (!id) return null;
+  // Environment variables and constants: HOME, XDG_RUNTIME_DIR, N.
+  if (/^[A-Z][A-Z0-9_]*$/.test(id)) return null;
+  // Symbol ids are kebab-case; a dotted path, a snake_case or a camelCase name
+  // in prose is some other kind of identifier.
+  if (!KEBAB_ID_RE.test(id)) return null;
+  if (prefix === '#') {
+    if (COLOUR_PLACEHOLDERS.has(id)) return null;
+    if (HEX_COLOUR_RE.test(id) && (/[0-9]/.test(id) || HEX_REPEAT_RE.test(id))) return null;
+  }
+  return id;
+}
+
 /**
  * Extract symbol references from text using regex (v2)
  *
@@ -637,7 +675,8 @@ function extractSymbolsFromText(text: string): Array<{ symbol: string; type: Ext
 
   while ((match = pattern.exec(text)) !== null) {
     const prefix = match[1];
-    const id = match[2];
+    const id = proseSymbolId(prefix === '%' ? '#' : prefix, match[2]);
+    if (id === null) continue;
 
     let symbol: string;
     let type: ExtractedSymbolRef['type'];

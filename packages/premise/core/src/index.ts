@@ -72,6 +72,8 @@ export {
   getSymbolsByTag,
   getAllTags,
   getSymbolCounts,
+  getUndeclaredCount,
+  isDeclared,
   getAllSymbols,
   parseSymbol,
   createSymbolString,
