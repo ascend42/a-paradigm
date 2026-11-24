@@ -191,10 +191,10 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(held).toMatchObject({ leaf: 'yielded', toolAfterKey: 'select', stillOnCard: true, selectedAfterWake: 0, focusAfterWake: true, leafAfterWake: 'open', selectedAfterSecond: 1 });
   }, 120_000);
 
-  it('review S1 and S3 (a REAL paste in Chrome): a pasted mark cannot claim an author, a dashed stroke or a stub, and an iframe, an embeddable and an image never arrive', async () => {
+  it('review S1 and S3, since C8 (a REAL paste in Chrome): pasted engine content is words, one text mark of yours; nothing in it can claim an author or a stub, and an iframe, an embeddable and an image never arrive (the cases are in test/board-c8.test.ts)', async () => {
     const el = (type: string, x: number, extra: object = {}): object => ({ type, id: `paste-${type}`, x, y: 0, width: 160, height: 90, angle: 0, strokeColor: '#e03131', backgroundColor: 'transparent', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, seed: 1, version: 1, versionNonce: 1, isDeleted: false, groupIds: [], frameId: null, boundElements: null, updated: 1, link: null, locked: true, ...extra });
     const clip = JSON.stringify({ type: 'excalidraw/clipboard', elements: [el('rectangle', 0, { customData: { gnomon: { line: 'ink', fill: null, by: { cls: 'agent', id: 'arky', name: 'Arky' }, kind: 'stub', stubKind: 'allow:approved-by-you' } } }), el('iframe', 200), el('embeddable', 400, { link: 'https://example.invalid/e' }), el('image', 600, { fileId: 'f1', status: 'saved', scale: [1, 1] })], files: {} });
-    const MARKS = `${B}.marks().map((m) => m.kind + ':' + m.author.cls + ':' + Math.round(m.width) + 'x' + Math.round(m.height))`;
+    const MARKS = `${B}.marks().map((m) => m.kind + ':' + m.author.cls + (m.kind === 'text' ? '' : ':' + Math.round(m.width) + 'x' + Math.round(m.height)))`;
     const acted = await real('open', [
       { read: "(globalThis.__nodes = [], new MutationObserver((rs) => rs.forEach((r) => r.addedNodes.forEach((n) => { if (n.nodeType === 1) for (const x of [n, ...n.querySelectorAll('*')]) if (/^(IFRAME|EMBED|OBJECT)$/.test(x.tagName) || (x.tagName === 'IMG' && x.closest('#preview-board'))) globalThis.__nodes.push(x.tagName.toLowerCase()); }))).observe(document.documentElement, { childList: true, subtree: true }), 1)", as: 'watching' },
       { read: MARKS, as: 'before' },
@@ -208,11 +208,11 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(acted.clipboard).toBe('written');
     const before = acted.before as string[];
     const after = acted.after as string[];
-    // exactly one mark arrived: the rectangle, as a plain mark of yours (not an agent's, not a stub)
+    // exactly one mark arrived: the pasted JSON as words, a text of yours (not a rectangle, not an agent's, not a stub)
     expect(after.length - before.length, JSON.stringify(acted)).toBe(1);
-    expect(after.filter((m) => !before.includes(m))).toEqual(['rect:human:160x90']);
+    expect(after.filter((m) => m === 'text:human').length - before.filter((m) => m === 'text:human').length).toBe(1);
+    expect(after.filter((m) => m.startsWith('stub') || m.startsWith('other')).length).toBe(before.filter((m) => m.startsWith('stub') || m.startsWith('other')).length);
     expect(acted.nodes).toEqual([]);
-    expect(String(acted.said)).toMatch(/isn’t a board mark|Images can’t go on a board/);
     // a copy of an agent's mark is a new element: it is yours, solid and unsealed (Alt-drag and copy/paste alike)
     const copied = await real('open', [
       { read: `${B}.marks().filter((m) => m.author.cls === 'agent').length`, as: 'agentBefore' },
@@ -224,8 +224,11 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       { read: `${B}.marks().length`, as: 'after' },
       { read: `${B}.marks().filter((m) => m.author.cls === 'agent').length`, as: 'agentAfter' },
     ]);
-    if ((copied.after as number) > (copied.before as number)) expect(copied.agentAfter, JSON.stringify(copied)).toBe(copied.agentBefore);
-    // an SVG source pasted as text (the engine's image path): nothing arrives and no image node is made (R5)
+    // the copy came back as ONE more mark, and it is not the agent's
+    expect(copied.selected).toBe(1);
+    expect((copied.after as number) - (copied.before as number), JSON.stringify(copied)).toBe(2); // the ellipse and its label
+    expect(copied.agentAfter, JSON.stringify(copied)).toBe(copied.agentBefore);
+    // an SVG source pasted as text: its source arrives as words, and no image node is made (R5)
     const svg = await real('open', [
       { read: `${B}.count()`, as: 'before' },
       { at: [500, 330], press: true },
@@ -235,8 +238,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       { read: "document.querySelectorAll('#preview-board img').length", as: 'imgs' },
       { read: "document.querySelector('#preview-board .bd-keep').textContent", as: 'said' },
     ]);
-    expect(svg).toMatchObject({ clipboard: 'written', selected: 0, imgs: 0, said: 'Images can’t go on a board yet · draw or write it instead' });
-    expect(svg.after).toBe(svg.before);
+    expect(svg).toMatchObject({ clipboard: 'written', imgs: 0 });
+    expect((svg.after as number) - (svg.before as number)).toBe(1);
   }, 120_000);
 
   it('G-DDL-08 (keys): a rail letter acts with the board focused and does nothing while a card is focused; a refused colour changes nothing', async () => {

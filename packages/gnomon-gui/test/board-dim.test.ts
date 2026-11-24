@@ -216,6 +216,78 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
   /** Keep the handle yielded whatever the leaf says on its next draw (the leaf sets it from card focus each frame). */
   const YIELD = { read: `(() => { const h = ${B}; h.setYielded(true); h.setYielded = () => undefined; return 1; })()`, as: 'yielded' };
 
+  // ── P3b-2: the residue of the P3b-1 review ──
+  const BUMP = { read: `(() => { const app = globalThis.__app; const id = ${B}.marks().find((m) => m.node === '${KERNEL}').id; app.scene.replaceAllElements(app.scene.getElementsIncludingDeleted().map((e) => (e.id === id ? { ...e, x: e.x + 10, version: e.version + 1 } : e))); app.scene.triggerUpdate(); return 1; })()`, as: 'bumped' };
+  const SAID = { read: `(globalThis.__said = [], ${B}.onRefusal((r) => globalThis.__said.push(r.what + ':' + r.why)), 1)`, as: 'listening2' };
+
+  it('one handle shows one dimension: a render of another dimension throws and changes nothing', async () => {
+    const a = await real([
+      { read: `${B}.count()`, as: 'before' },
+      { read: `(() => { try { ${B}.render({ ...${D}.state(), dim: 'dim:01JOTHERDIMENSION000000000' }); return 'rendered'; } catch (e) { return String(e.message); } })()`, as: 'other' },
+      { read: `(${B}.render(${D}.state()), ${B}.isAlive())`, as: 'alive' }, { read: `${B}.count()`, as: 'after' }, { read: COUNT, as: 'edits' },
+    ]);
+    expect(a.other).toMatch(/another dimension/);
+    expect(a).toMatchObject({ alive: true, edits: 0, errors: [] });
+    expect(a.after).toBe(a.before);
+  }, 120_000);
+
+  it('an engine change to a mark nobody holds does not ride along with a real gesture on another mark', async () => {
+    const a = await real([
+      WATCH,
+      { hold: [[272, 86], [280, 90], [290, 96]] },
+      BUMP,
+      { release: [300, 104] }, { wait: 300 },
+      { read: EDITS, as: 'edits' }, { read: nodeOf(KERNEL), as: 'kernelNode' }, { read: posOf(KERNEL), as: 'kernel' }, { read: `${B}.drift()`, as: 'drift' },
+    ]);
+    expect(a.errors).toEqual([]);
+    const edits = a.edits as Edit[];
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.ops).toHaveLength(1);
+    expect(edits[0]!.ops[0]).toMatchObject({ type: 'move', ids: [BROKER] });
+    // the untouched mark is where the state has it, on the board and in the fold
+    expect(a.kernelNode).toMatchObject({ x: 212, y: 168 });
+    expect(a.kernel).toEqual([212, 168]);
+    expect(a.drift).toEqual([]);
+  }, 120_000);
+
+  it('after the put-back limit the engine\'s form stands, and a later real edit of that mark reports the person\'s change alone', async () => {
+    const a = await real([
+      WATCH,
+      BUMP, { wait: 400 }, BUMP, { wait: 400 }, BUMP, { wait: 400 },
+      { read: posOf(KERNEL), as: 'standing' }, { read: COUNT, as: 'editsBefore' },
+      // select the mark by its label and recolour it from the tray: one update of the colour, no move
+      { at: [282, 200], press: true }, { read: `${B}.marks().filter((m) => m.selected).map((m) => m.node)`, as: 'selected' },
+      { press: '#preview-board [data-key="ink"]' }, { press: '#preview-board [data-key="line:cobalt"]' }, { wait: 300 },
+      { read: EDITS, as: 'edits' }, { read: posOf(KERNEL), as: 'kernel' }, { read: nodeOf(KERNEL), as: 'kernelNode' }, { read: `${B}.drift()`, as: 'drift' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.standing).toEqual([222, 168]); // the third change was left standing
+    expect(a.editsBefore).toBe(0);
+    expect(a.selected).toEqual([KERNEL]);
+    const edits = a.edits as Edit[];
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.ops).toEqual([{ type: 'update', id: KERNEL, patch: { color: 'cobalt' } }]);
+    // rendered back from the fold: the engine's delta is gone from the board and never reached the state
+    expect(a.kernelNode).toMatchObject({ x: 212, y: 168, color: 'cobalt' });
+    expect(a.kernel).toEqual([212, 168]);
+    expect(a.drift).toEqual([]);
+  }, 120_000);
+
+  it('words over what a label may hold are refused at commit: nothing is reported and the label is as it was', async () => {
+    const a = await real([
+      SAID,
+      { dbl: true, at: [302, 86] }, { wait: 150 }, { paste: 'y'.repeat(201) }, { wait: 250 }, { key: 'Escape' }, { wait: 400 },
+      { read: COUNT, as: 'edits' }, { read: 'globalThis.__said', as: 'said' }, { read: nodeOf(BROKER), as: 'broker' }, { read: `${B}.drift()`, as: 'drift' },
+      { read: `globalThis.gnomonPreviewBoardModule.boardEngineRuns()`, as: 'runs' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.said).toEqual(['text:too-long']);
+    expect(a.edits).toBe(0);
+    expect(a.broker).toMatchObject({ label: 'broker' });
+    expect(a.drift).toEqual([]);
+    expect(a.runs).toEqual({ paste: 0, copy: 0, cut: 0 });
+  }, 120_000);
+
   it('A1: an engine change nobody made is put back once, in a bounded number of scene calls, and the next click reports nothing', async () => {
     const a = await real([
       WATCH,

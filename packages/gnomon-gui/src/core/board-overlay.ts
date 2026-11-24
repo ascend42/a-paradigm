@@ -62,6 +62,10 @@ export const TEXTBOX_TOP = 12;
 /** Half of a seal's 22px box, and how far its rim stands off the first point of a drawn mark. */
 export const SEAL_HALF = 11;
 export const SEAL_GAP = 2;
+/** Half of the unknown hand's 8px hollow pin: it stands its own half plus the gap off the mark, not a seal's (it read as detached). */
+export const PIN_HALF = 4;
+/** A frame narrower than this on screen has no room for its title and a seal on its top edge: the seal stands just outside the right corner. */
+export const FRAME_NARROW = 80;
 
 /**
  * Where the seal or hollow pin of a drawn mark (a stroke, a frame, a selected shape or arrow) is centred, in screen
@@ -73,11 +77,12 @@ export const SEAL_GAP = 2;
  * It is then CLAMPED into the part of the mark's box that is in view, whenever any part is: a mark whose first
  * point is scrolled off still shows whose it is.
  */
-export function markSealPoint(m: Pick<BoardMarkView, 'kind' | 'x' | 'y' | 'width' | 'height' | 'firstX' | 'firstY' | 'secondX' | 'secondY'>, view: BoardView): { left: number; top: number } {
+export function markSealPoint(m: Pick<BoardMarkView, 'kind' | 'x' | 'y' | 'width' | 'height' | 'firstX' | 'firstY' | 'secondX' | 'secondY'>, view: BoardView, half: number = SEAL_HALF): { left: number; top: number } {
   const box = markBox(view, m);
   const first = toScreen(view, m.firstX, m.firstY);
   let at: { left: number; top: number };
-  if (m.kind === 'frame') at = { left: box.left + box.width - SEAL_HALF, top: box.top };
+  // (a narrow frame: just outside the right corner, so the seal never meets a long title)
+  if (m.kind === 'frame') at = { left: box.width < FRAME_NARROW ? box.left + box.width + half + SEAL_GAP : box.left + box.width - half, top: box.top };
   else {
     const second = m.secondX !== undefined && m.secondY !== undefined ? toScreen(view, m.secondX, m.secondY) : null;
     let ux = second ? first.left - second.left : -1;
@@ -85,17 +90,17 @@ export function markSealPoint(m: Pick<BoardMarkView, 'kind' | 'x' | 'y' | 'width
     const len = Math.hypot(ux, uy);
     if (len === 0) [ux, uy] = [-Math.SQRT1_2, -Math.SQRT1_2];
     else [ux, uy] = [ux / len, uy / len];
-    at = { left: first.left + ux * (SEAL_HALF + SEAL_GAP), top: first.top + uy * (SEAL_HALF + SEAL_GAP) };
+    at = { left: first.left + ux * (half + SEAL_GAP), top: first.top + uy * (half + SEAL_GAP) };
   }
   // the part of the mark's box that is in view, grown by the seal's stand-off (a seal rightly stands just outside the box)
-  const pad = SEAL_HALF + SEAL_GAP;
+  const pad = half + SEAL_GAP;
   const visible = box.left < view.width && box.left + box.width > 0 && box.top < view.height && box.top + box.height > 0;
   if (!visible) return at; // nothing of the mark is in view
   // the seal's centre stays within the grown box AND a whole seal inside the viewport
   const clamp = (v: number, lo: number, hi: number, size: number): number => {
-    const a = Math.max(SEAL_HALF, lo);
-    const b = Math.min(size - SEAL_HALF, hi);
-    return b < a ? Math.min(size - SEAL_HALF, Math.max(SEAL_HALF, v)) : Math.min(b, Math.max(a, v));
+    const a = Math.max(half, lo);
+    const b = Math.min(size - half, hi);
+    return b < a ? Math.min(size - half, Math.max(half, v)) : Math.min(b, Math.max(a, v));
   };
   return { left: clamp(at.left, box.left - pad, box.left + box.width + pad, view.width), top: clamp(at.top, box.top - pad, box.top + box.height + pad, view.height) };
 }
@@ -119,7 +124,7 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView): 
       else out.push({ type: hand === 'you' ? 'pin' : 'hollow', id: m.id, ...at });
     } else if ((m.selected || !ENGINE_DASHES.has(m.kind)) && m.author.cls === 'agent') {
       out.push({ type: 'seal', id: m.id, ...markSealPoint(m, view), seal: sealOf(m.author.id, boardAgentName(m.author.name)), name: boardAgentName(m.author.name), on: 'mark' });
-    } else if ((m.selected || !ENGINE_DASHES.has(m.kind)) && hand === 'unknown') out.push({ type: 'hollow', id: m.id, ...markSealPoint(m, view) });
+    } else if ((m.selected || !ENGINE_DASHES.has(m.kind)) && hand === 'unknown') out.push({ type: 'hollow', id: m.id, ...markSealPoint(m, view, PIN_HALF) });
   }
   return out;
 }

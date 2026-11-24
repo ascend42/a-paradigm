@@ -142,6 +142,8 @@ export class DimClipboard {
   }
 }
 
+/** A pasted text with a line over `over` characters is wrapped to a column `w` board units wide, centred on the paste point. */
+export const DIM_PASTE_WRAP = Object.freeze({ over: 48, w: 360 });
 /**
  * The one `add` op of a pasted text that is not the register's: a text node holding the words exactly as they were
  * pasted (line ends as LF; never parsed), with its top-left at `at` (the leaf gives the view centre) and on top of
@@ -151,5 +153,8 @@ export class DimClipboard {
 export function dimPasteTextOp(text: string, current: DimState, at: { x: number; y: number }, mint: () => string): DimOp {
   let top: unknown = null;
   for (const [id, n] of current.nodes) if (top === null || dimZCompare({ z: top, id: '' }, { z: own(n.node, 'z'), id }) < 0) top = own(n.node, 'z');
-  return { type: 'add', node: { id: mint(), kind: 'text', x: Math.round(at.x), y: Math.round(at.y), z: dimZPlace(top, null), text: lf(text) } as unknown as DimNode };
+  const words = lf(text);
+  // a long line is wrapped to a column instead of running off the board (pasted JSON is one line of thousands of characters)
+  const long = words.split('\n').some((line) => line.length > DIM_PASTE_WRAP.over);
+  return { type: 'add', node: { id: mint(), kind: 'text', x: Math.round(at.x - (long ? DIM_PASTE_WRAP.w / 2 : 0)), y: Math.round(at.y), z: dimZPlace(top, null), text: words, ...(long ? { w: DIM_PASTE_WRAP.w } : {}) } as unknown as DimNode };
 }

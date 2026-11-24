@@ -320,7 +320,10 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (op.type === 'update') {
           const st = standing.get(op.id);
           if (!st) return [op];
-          const patch = Object.fromEntries(Object.entries(op.patch as Record<string, unknown>).filter(([k, v]) => st.patch.get(k) !== JSON.stringify(v)));
+          // (a change of place and of something else is ONE update carrying x and y: the engine's own shift is taken out of it)
+          const at = prev.nodes.get(op.id)?.node as { x?: unknown; y?: unknown } | undefined;
+          const shifted = (k: string, v: unknown): boolean => (k === 'x' || k === 'y') && (st.dx !== 0 || st.dy !== 0) && typeof at?.[k] === 'number' && v === (at[k] as number) + (k === 'x' ? st.dx : st.dy);
+          const patch = Object.fromEntries(Object.entries(op.patch as Record<string, unknown>).filter(([k, v]) => st.patch.get(k) !== JSON.stringify(v) && !shifted(k, v)));
           return Object.keys(patch).length > 0 ? [{ ...op, patch } as DimOp] : [];
         }
         if (op.type !== 'move') return [op];
@@ -662,19 +665,23 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         for (const el of scene) if (typeof el.containerId === 'string' && reach.has(el.containerId)) reach.add(el.id);
         // ONLY what the person touched is reported: of those, the elements whose version moved since the last render or report
         const mine = new Set<string>();
-        let cutBack = false;
+        // words over what a row may carry are never read by the map: refused, and the mark (a label's mark with
+        // it, which the engine resized around the words) goes back as it was
+        const tooLong = new Set<string>();
         for (const el of scene) {
-          if (!isDirty(el) || untouched.has(el.id) || !reach.has(el.id)) continue;
-          // words over what a row may carry are never read by the map: refused, and the mark goes back as it was
+          if (!isDirty(el) || !reach.has(el.id) || (el.type !== 'text' && el.type !== 'frame')) continue;
           const label = el.type === 'text' && typeof el.containerId === 'string';
-          const words = el.type === 'text' ? (el.originalText ?? el.text ?? '') : el.type === 'frame' && typeof el.name === 'string' ? el.name : '';
+          const words = el.type === 'text' ? (el.originalText ?? el.text ?? '') : typeof el.name === 'string' ? el.name : '';
           const limit = el.type === 'frame' ? DIM_LIMITS.title : label ? DIM_LIMITS.label : DIM_LIMITS.text;
-          if (words.length > limit) {
-            cutBack = true;
-            refuse({ what: 'text', why: 'too-long', detail: String(limit) });
-            continue;
-          }
-          mine.add(label ? el.containerId! : el.id);
+          if (words.length <= limit) continue;
+          tooLong.add(el.id);
+          if (label) tooLong.add(el.containerId!);
+          refuse({ what: 'text', why: 'too-long', detail: String(limit) });
+        }
+        const cutBack = tooLong.size > 0;
+        for (const el of scene) {
+          if (!isDirty(el) || untouched.has(el.id) || !reach.has(el.id) || tooLong.has(el.id)) continue;
+          mine.add(el.type === 'text' && typeof el.containerId === 'string' ? el.containerId : el.id);
         }
         // a mark in hand is compared with the node it was DRAWN from, so a remote change that landed during the
         // gesture is not undone by the drop: the ops are the person's own delta, applied on top of the newest state
@@ -699,7 +706,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           else strays.push(op);
         }
         // what the engine changed on a mark nobody held stands until the next render, out of every later edit
-        stand(strays);
+        // (a refused text is not standing: it is put back below)
+        const refusedNode = (id: string): boolean => tooLong.has(ids.engineOf(id));
+        stand(strays.filter((op) => !(op.type === 'move' ? op.ids.some(refusedNode) : op.type === 'add' ? refusedNode(op.node.id) : (op.type === 'update' || op.type === 'delete') && refusedNode(op.id))));
         const why = cause;
         rebase();
         disarm();

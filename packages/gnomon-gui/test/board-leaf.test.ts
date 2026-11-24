@@ -2,7 +2,7 @@
  * The board leaf's states and words (design component board-leaf; boards S1.1 pass B), and the two fences round the
  * host layer: nothing the kernel serves can load it yet, and every bd-* class it draws with is in styles.css.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -106,6 +106,16 @@ describe('#gui-board fences', () => {
     for (const cls of used) expect(css, cls).toMatch(new RegExp(`\\.${cls}(?![a-z-])`));
     expect(ui).not.toMatch(/setAttribute\(\s*['"]style['"]|style=\\?["']|innerHTML|insertAdjacentHTML/);
   });
+  it('drift() is diagnostic only: nothing under src/ calls it, so its unfiltered diff is never sent (Aegis, P3b-1 review)', () => {
+    const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : d.name.endsWith('.ts') ? [path.join(dir, d.name)] : []));
+    const callers = walk(root).filter((f) => /\.drift\s*\(|\bdrift\s*\(\s*\)\s*[;,)]/.test(readFileSync(f, 'utf8').replace(/^\s*(\/\/|\*|\/\*).*$/gm, ''))).map((f) => path.relative(root, f));
+    expect(callers).toEqual([]);
+    // it is declared on the handle and defined once, in the chunk
+    expect(readFileSync(path.join(root, 'core', 'board.ts'), 'utf8')).toMatch(/drift\(\): DimOp\[\];/);
+    expect(readFileSync(path.join(root, 'board', 'index.ts'), 'utf8')).toMatch(/drift: \(\) => \(live\(\), diff\(prev\)\),/);
+  });
+
   it('the app never asks for untrusted input to count: `syntheticInput` is the probe harness\'s alone (review batch A3)', () => {
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
     for (const f of ['ui/board-leaf.ts', 'ui/app.ts', 'core/board-leaf.ts', 'preview/main.ts']) expect(readFileSync(path.join(root, f), 'utf8'), f).not.toMatch(/syntheticInput/);

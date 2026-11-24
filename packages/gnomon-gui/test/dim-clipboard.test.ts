@@ -187,3 +187,19 @@ describe('#gui-dim-clipboard', () => {
     expect(ops.find((o) => o.node.text !== undefined)!.node.text).toBe('two\r\nlines');
   });
 });
+
+describe('#gui-dim-clipboard dimPasteTextOp: a pasted text that is not the register\'s', () => {
+  it('is ONE add of a text node holding the words as pasted (never parsed), on top, at the point given; a long line is wrapped to a column', async () => {
+    const { dimPasteTextOp, DIM_PASTE_WRAP } = await import('../src/core/dim-clipboard.js');
+    const { emptyDimState, validateDimOps } = await import('@a-company/gnomon-contracts');
+    let n = 0;
+    const mint = (): string => `01JPASTE00000000000000000${n++}`;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+    const short = dimPasteTextOp('two\r\nlines', emptyDimState(), { x: 10.4, y: 20.6 }, mint) as { type: string; node: Record<string, unknown> };
+    expect(short).toEqual({ type: 'add', node: { id: '01JPASTE000000000000000000', kind: 'text', x: 10, y: 21, z: short.node.z, text: 'two\nlines' } });
+    const long = dimPasteTextOp(svg, emptyDimState(), { x: 500, y: 300 }, mint) as { type: string; node: Record<string, unknown> };
+    expect(long.node).toMatchObject({ kind: 'text', text: svg, w: DIM_PASTE_WRAP.w, x: 500 - DIM_PASTE_WRAP.w / 2, y: 300 });
+    expect(Object.keys(long.node).sort()).toEqual(['id', 'kind', 'text', 'w', 'x', 'y', 'z']);
+    for (const op of [short, long]) expect(validateDimOps(emptyDimState(), [op], { cls: 'human', principal: 'p:test/you' } as never).refused ?? []).toEqual([]);
+  });
+});
