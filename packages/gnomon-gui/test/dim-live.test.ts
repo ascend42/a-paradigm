@@ -213,7 +213,7 @@ describe('#gui-dim-live the write path', () => {
     expect(r.live.status().inFlight).toBe(true);
   });
 
-  it('one send in flight; queued edits coalesce up to 64 ops, then start another batch', () => {
+  it('one send in flight; a queued edit joins the batch still waiting when both fit one row, else it starts another (an action is never cut across two batches)', () => {
     const r = rig();
     r.live.local([rect(1)], press(r.now()));
     r.live.local([rect(2)], press(r.now()));
@@ -226,8 +226,7 @@ describe('#gui-dim-live the write path', () => {
     expect(r.live.status().pending).toBe(3);
     confirmNext(r);
     expect(r.sent).toHaveLength(2);
-    expect(r.sent[1]!.ops).toHaveLength(64);
-    expect(r.sent[1]!.ops.slice(0, 3)).toEqual([rect(2), rect(3), rect(4)]);
+    expect(r.sent[1]!.ops).toEqual([rect(2), rect(3), rect(4)]);
     expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
     expect(r.nodes()).toHaveLength(66);
   });
@@ -250,7 +249,7 @@ describe('#gui-dim-live the write path', () => {
     expect(DIM_LIVE_SEND_GAP_MS).toBeGreaterThanOrEqual(1000 / 20);
   });
 
-  it('an edit of more than 64 ops is split into rows; too many waiting edits are refused whole with a notice', () => {
+  it('an edit of more than 64 ops is split into rows of one group; over DIM_ACTION_ROWS rows, or with too many edits waiting, it is refused whole with a notice', () => {
     const r = rig();
     const many: DimOp[] = [];
     for (let i = 0; i < 130; i++) many.push(rect(100 + i));
@@ -259,9 +258,20 @@ describe('#gui-dim-live the write path', () => {
     expect(r.sent[0]!.ops).toHaveLength(64);
     const big: DimOp[] = [];
     for (let i = 0; i < 64 * DIM_LIVE_LIMITS.pending; i++) big.push(rect(1000 + i));
-    expect(r.live.local(big, press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'busy', field: 'ops', why: null, lost: big.length } });
+    expect(r.live.local(big, press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'too-large', field: 'ops', why: null, lost: big.length } });
     expect(r.live.status().pending).toBe(3);
     expect(r.nodes()).toHaveLength(130);
+    // the pending bound: 3 waiting, then 3 + 3 + 3 + 3 more is 15; a sixth action of 3 rows does not fit 16
+    for (let k = 0; k < 4; k++) {
+      const more: DimOp[] = [];
+      for (let i = 0; i < 130; i++) more.push(rect(5000 + k * 200 + i));
+      expect(r.live.local(more, press(r.now())).changed).toBe(true);
+    }
+    expect(r.live.status().pending).toBe(15);
+    const last: DimOp[] = [];
+    for (let i = 0; i < 130; i++) last.push(rect(9000 + i));
+    expect(r.live.local(last, press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'busy', field: 'ops', why: null, lost: 130 } });
+    expect(r.live.status().pending).toBe(15);
   });
 
   it('14. a locally refused op is named with resync and never queued; a secret queues nothing', () => {
@@ -330,7 +340,7 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
     for (let i = 0; i < 63; i++) many.push(rect(100 + i));
     r.live.local(many, press(r.now()));
     r.live.local([{ type: 'update', id: ULID(1), patch: { w: 20 } }, { type: 'update', id: ULID(2), patch: { w: 30 } }], press(r.now()));
-    expect(r.live.status().pending).toBe(3);
+    expect(r.live.status().pending).toBe(4);
     const res = r.live.ack(1, { ok: false, code: 'read-only', why: 'command-read' });
     // lost: the add, the move of it and the update of it
     expect(res).toEqual({ changed: true, resync: true, notice: { code: 'read-only', field: 'ops', why: 'command-read', lost: 3 } });
@@ -338,9 +348,8 @@ describe('#gui-dim-live a mark never vanishes silently', () => {
     expect(r.live.view().nodes.get(ULID(2))!.node.w).toBe(30);
     // the survivors go out
     r.gap();
-    expect(r.sent[1]!.ops[0]).toEqual(rect(2));
-    expect(r.sent[1]!.ops).toHaveLength(63);
-    expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
+    expect(r.sent[1]!.ops).toEqual([rect(2)]);
+    expect(r.live.status()).toMatchObject({ pending: 3, inFlight: true });
   });
 
   it('link down: nothing is sent, a new edit is refused with a notice, pending rolls back at the timeout', () => {
@@ -543,5 +552,116 @@ describe('#gui-dim-live helpers and source rules', () => {
       const src = readFileSync(path.join(ROOT, 'src', 'core', file), 'utf8');
       expect(src).not.toMatch(/setTimeout|setInterval|requestAnimationFrame|Date\.now|performance\.|document\.|window\.|console\.|foldDimRow/);
     }
+  });
+});
+
+describe('#gui-dim-live rows that fit, and one action is one undo step (P4a)', () => {
+  const text = (n: number, chars: number): DimOp => ({ type: 'add', node: { id: ULID(n), kind: 'text', x: n, y: 0, z: 'V', text: 'w'.repeat(chars) } as never });
+
+  it('an action over the row budget is sent as several rows on ONE stamp, each within the budget, in order; undo takes them all in one step', () => {
+    const r = rig();
+    // 9 marks of 3,900 characters: about 35 KiB, so three rows
+    const ops = Array.from({ length: 9 }, (_, i) => text(1 + i, 3900));
+    const g = press(r.now());
+    expect(r.live.local(ops, g)).toEqual(OK);
+    const pending = r.live.status().pending;
+    expect(pending).toBeGreaterThan(1);
+    expect(pending).toBeLessThanOrEqual(4);
+    const rows: DimRow[] = [];
+    for (let i = 0; i < pending; i++) rows.push(confirmNext(r));
+    expect(r.sent).toHaveLength(pending);
+    expect(r.sent.every((b) => b.gesture === g)).toBe(true);
+    expect(r.sent.flatMap((b) => b.ops)).toEqual(ops);
+    for (const b of r.sent) expect(JSON.stringify(b.ops).length).toBeLessThan(16 * 1024 - 512);
+    expect(r.live.status()).toMatchObject({ pending: 0, canUndo: true });
+    expect(r.nodes()).toHaveLength(9);
+    // ONE undo: nine deletes in one row
+    expect(r.live.undo(press(r.now()))).toEqual(OK);
+    expect(r.sent).toHaveLength(pending + 1);
+    expect(r.sent[pending]!.ops.map((o) => o.type)).toEqual(Array(9).fill('delete'));
+    confirmNext(r);
+    expect(r.nodes()).toEqual([]);
+    expect(r.live.status().canUndo).toBe(false);
+    expect(r.live.undo(press(r.now())).notice?.code).toBe('undo-nothing');
+  });
+
+  it('a 64-clone paste whose clones are heavy is split by size, never over 64 ops a row, and undoes in one step', () => {
+    const r = rig();
+    const ops = Array.from({ length: 64 }, (_, i) => text(1 + i, 600));
+    expect(r.live.local(ops, press(r.now()))).toEqual(OK);
+    const n = r.live.status().pending;
+    expect(n).toBe(3);
+    for (let i = 0; i < n; i++) confirmNext(r);
+    expect(r.nodes()).toHaveLength(64);
+    r.live.undo(press(r.now()));
+    expect(r.sent[n]!.ops).toHaveLength(64);
+    confirmNext(r);
+    expect(r.nodes()).toEqual([]);
+  });
+
+  it('an action that needs more than DIM_ACTION_ROWS rows, or holds one op that fits no row, is refused whole: nothing pending, one notice', () => {
+    const r = rig();
+    const ops = Array.from({ length: 20 }, (_, i) => text(1 + i, 3900));
+    expect(r.live.local(ops, press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'too-large', field: 'ops', why: null, lost: 20 } });
+    const points = Array.from({ length: 2048 }, (_, i) => [i * 1000, -i * 1000]);
+    const res = r.live.local([{ type: 'add', node: { id: ULID(50), kind: 'stroke', x: 0, y: 0, z: 'V', points } as never }], press(r.now()));
+    // the validator or the packer refuses it; either way nothing is queued and it is said
+    expect(res.changed).toBe(false);
+    expect(res.notice).not.toBeNull();
+    expect(r.live.status().pending).toBe(0);
+    expect(r.sent).toEqual([]);
+  });
+
+  it('a refused row of a group takes the rows still waiting with it, under one notice; the rows already kept are one undo entry', () => {
+    const r = rig();
+    const ops = Array.from({ length: 9 }, (_, i) => text(1 + i, 3900));
+    r.live.local(ops, press(r.now()));
+    const n = r.live.status().pending;
+    expect(n).toBe(3);
+    confirmNext(r);
+    const second = r.sent[1]!;
+    const waiting = r.sent.length;
+    const res = r.live.ack(second.id, { ok: false, code: 'gesture-refused', why: 'spent' });
+    expect(res).toEqual({ changed: true, resync: true, notice: { code: 'gesture-refused', field: 'ops', why: 'spent', lost: 9 - r.sent[0]!.ops.length } });
+    expect(r.live.status()).toMatchObject({ pending: 0, canUndo: true });
+    r.gap();
+    expect(r.sent).toHaveLength(waiting); // nothing more went out on that stamp
+    expect(r.nodes()).toHaveLength(r.sent[0]!.ops.length);
+    r.live.undo(press(r.now()));
+    confirmNext(r);
+    expect(r.nodes()).toEqual([]);
+  });
+
+  it('a merged batch never goes over the row budget: a second heavy edit starts its own batch', () => {
+    const r = rig();
+    r.live.local([rect(900)], press(r.now())); // in flight
+    r.live.local([text(1, 3900), text(2, 3900)], press(r.now()));
+    r.live.local([text(3, 3900), text(4, 3900)], press(r.now()));
+    expect(r.live.status().pending).toBe(3);
+    r.live.local([rect(901)], press(r.now()));
+    expect(r.live.status().pending).toBe(3); // a light one still joins the last
+  });
+
+  it('the inverse of a heavy delete is itself packed into rows; the entry leaves the list at its last row', () => {
+    const r = rig();
+    const adds = Array.from({ length: 8 }, (_, i) => text(1 + i, 3900));
+    r.live.local(adds, press(r.now()));
+    while (r.live.status().pending > 0) confirmNext(r);
+    const dels: DimOp[] = adds.map((_, i) => ({ type: 'delete', id: ULID(1 + i) }));
+    r.live.local(dels, press(r.now()));
+    expect(r.live.status().pending).toBe(1);
+    confirmNext(r);
+    expect(r.nodes()).toEqual([]);
+    const before = r.sent.length;
+    expect(r.live.undo(press(r.now()))).toEqual(OK);
+    const rows = r.live.status().pending;
+    expect(rows).toBeGreaterThan(1);
+    confirmNext(r);
+    expect(r.live.status().canUndo).toBe(false); // still pending
+    while (r.live.status().pending > 0) confirmNext(r);
+    expect(r.sent.length - before).toBe(rows);
+    expect(r.nodes()).toHaveLength(8);
+    // the delete is undone; the next undo reaches the adds (their ids are gone: the re-added marks are other nodes)
+    expect(r.live.status().canUndo).toBe(true);
   });
 });

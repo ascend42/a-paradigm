@@ -110,7 +110,8 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
   });
 
   /** The board's host layer (boards S1.1 pass B): it draws round the engine and is handed the loader, never imports it. */
-  const HOST_LAYER = ['core/board-leaf.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'ui/board-leaf.ts'];
+  /** With it since S1.3 P4a: the dimension session (core/dim-session.ts), which is handed a board handle. app.ts imports none of them until the leaf is mounted in the app (P4b). */
+  const HOST_LAYER = ['core/board-leaf.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'core/dim-session.ts', 'ui/board-leaf.ts'];
 
   it('in src, only the dev preview, the loader itself and the host layer name the loader module; only the preview CALLS it', () => {
     const users = walk(SRC)
@@ -140,5 +141,7 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     expect(reached.length).toBeGreaterThan(20);
     expect(reached).toContain('ui/app.ts');
     expect(reached.filter((f) => HOST_LAYER.includes(f) || f === 'core/board.ts' || f.startsWith('board/') || f.startsWith('preview/'))).toEqual([]);
+    // nor the live loop's own modules: the app follows the log and sends no dimension command until P4b mounts the session
+    expect(reached.filter((f) => /^core\/dim-(session|rows|live|undo|clipboard)\.ts$/.test(f))).toEqual([]);
   });
 });
