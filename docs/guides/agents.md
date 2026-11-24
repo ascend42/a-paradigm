@@ -36,16 +36,16 @@ Profiles live in two places:
 | **security** | tier-1 | Audits for auth, secrets, injection, ownership checks. Reads `portal.yaml`. |
 | **tester** | tier-3 | Writes and runs tests. Methodical, conservative. |
 | **documentor** | tier-3 | Final orchestration stage. Updates `.purpose` files, `portal.yaml`, lore. Never touches source code. |
-| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance` (op `promote`) to advance each concern. Rostered on by `paradigm shift`. |
+| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance` (op `promote`) to advance each concern. `paradigm shift` may offer to add him; add him yourself with `paradigm agent roster add compliance`. |
 
 ### Specialty agents
 
 | Agent | Tier | Role |
 |-------|------|------|
 | **ftux (Nora)** | tier-1 | First-time user experience simulator. Reads only user-facing surfaces (README, --help, error strings) — never source. Produces friction reports at `.paradigm/ftux/reports/YYYY-MM-DD.md`. Runs after builder when the task touches a user-visible surface, before documentor. |
-| **captain (Cid)** | tier-1 | Navigation + coverage captain. Briefs the team on what to read before a task; debriefs at the end on what was missed. |
-| **intelligence officer (Loid)** | tier-1 | Learning officer. Synthesizes patterns from postflight verdicts into agent journals → notebooks → wisdom. |
-| **Atlas** (cartographer) | tier-2 | Generates and maintains `arch.yaml` — a structured architectural map committed alongside `.purpose` files. Uses `paradigm_graph` (op `arch_status`) and `paradigm_graph` (op `arch_diagram`). |
+| **Cid** (`cid`, captain) | tier-1 | Navigation + coverage captain. Briefs the team on what to read before a task; debriefs at the end on what was missed. |
+| **Loid** (`forge`, agent intelligence officer) | tier-1 | Learning officer. Synthesizes patterns from postflight verdicts into agent journals → notebooks → wisdom. |
+| **Topo** (`cartographer`) | tier-2 | Generates and maintains `arch.yaml` — a structured architectural map committed alongside `.purpose` files. Uses `paradigm_graph` (op `arch_status`) and `paradigm_graph` (op `arch_diagram`). |
 
 The full list of role tiers (architect, ftux, security, advocate, product, operations, sales, legal, ethicist, futurist all tier-1; many more tier-2 / tier-3) is at `packages/paradigm-mcp/src/tools/orchestration.ts:181`.
 
@@ -138,31 +138,15 @@ paradigm agent deny <id>             # deny pending changes
 
 See §6 below for what these scopes do (and don't).
 
-### Registry (nevr.land)
-
-```bash
-paradigm agent search <query>                    # search nevr.land
-paradigm agent install @scope/name               # install from registry (nevr.land)
-paradigm agent install @scope/name --global      # install globally
-paradigm agent publish --namespace <ns>          # publish to nevr.land
-```
-
-The registry endpoint defaults to `https://nevr-api.onrender.com`; override with `NEVR_REGISTRY_URL`. Source forms accepted by `paradigm agent install`:
-
-- `@scope/name` — fetch the latest from nevr.land
-- `@scope/name@version` — pinned version
-
-The `paradigm:agents` skill (§5 below) also documents a `github:user/repo` install form — that is a skill-level capability that fetches a `.agent` YAML directly from a GitHub repo and saves it to `~/.paradigm/agents/`.
-
 ## 5. The `paradigm:agents` skill
 
-Claude Code users get a higher-level wrapper at `/paradigm:agents`, which combines the CLI commands with status checks and registry-aware install flows. Subcommands recognized by the skill:
+Claude Code users get a higher-level wrapper at `/paradigm:agents`, which combines the CLI commands with status checks. Subcommands recognized by the skill:
 
 - `roster` (default) — show active + benched with expertise summaries
 - `onboard` — check default agents (architect, builder, tester, reviewer, security, documentor) and create + sync any missing
 - `bench <id>`, `activate <id>` — wrap the CLI calls
 - `show <id>` — full agent detail (calls `paradigm_agent` (op `get`))
-- `install <source>` — accepts `github:user/repo[/path]` or `@namespace/name` (nevr.land)
+- `install <source>` — accepts `github:user/repo[/path]`: the skill fetches a `.agent` YAML from a GitHub repo and saves it to `~/.paradigm/agents/`. This is a skill-level step, not a CLI command.
 
 The skill checks `paradigm_ambient` (op `health`) first so it can show Neverland metrics (accept rate, threshold, notebook count) alongside the roster.
 
@@ -299,14 +283,6 @@ paradigm agent create designer --global \
 paradigm agent activate designer
 ```
 
-Or pull one from the registry:
-
-```bash
-paradigm agent search "swift mobile"
-paradigm agent install @somebody/swift-expert --global
-paradigm agent activate swift-expert
-```
-
 ### When an agent stops being useful
 
 ```bash
@@ -375,13 +351,11 @@ contexts:
     lastActive: "2026-04-15T14:22:10Z"
 ```
 
-Registry-installed agents also carry `scope`, `registry`, `distribution`, `installedAt`, and a top-level `tags[]` array.
-
 ---
 
 ## 11. Partners (v6.0.3)
 
-Agents can declare reciprocal **partners** — other agents they pair with for a body of work. Scholar (research) pairs with Sheila (educator). Builder might pair with Tester. The field is structural metadata: it shapes how agents appear next to each other in `agent get`/`agent list` and reserves the surface for future learning-loop coupling.
+Agents can declare reciprocal **partners** — other agents they pair with for a body of work. Scholar (research) pairs with Sheila (educator). Builder might pair with Tester. The field is structural metadata: it shapes how agents appear next to each other in `paradigm agent show`/`agent list` and reserves the surface for future learning-loop coupling.
 
 ### Field shape
 
@@ -393,14 +367,14 @@ partners:
     share_notebooks: off             # off (default) | read | read-write
 ```
 
-`relation` is human-readable context shown in `agent get`. `share_notebooks` is reserved — it currently has no runtime effect; pair-learning will read it.
+`relation` is human-readable context shown in `paradigm agent show`. `share_notebooks` is reserved — it currently has no runtime effect; pair-learning will read it.
 
 ### Reciprocal vs pending
 
-When A lists B and B lists A, the pairing is **reciprocal** — shown with a green ✓ in `agent get`. When A lists B but B doesn't list A back, the pairing is **pending** (yellow ⚠) — legal, mirrors how nevr.land trust contracts will work. One-way is intentional in mentor/lead patterns, accidental in typos; the surface lets you tell at a glance.
+When A lists B and B lists A, the pairing is **reciprocal** — shown with a green ✓ in `paradigm agent show`. When A lists B but B doesn't list A back, the pairing is **pending** (yellow ⚠) — legal. One-way is intentional in mentor/lead patterns, accidental in typos; the surface lets you tell at a glance.
 
 ```
-$ paradigm agent get scholar
+$ paradigm agent show scholar
 
   Partners (1)
     sheila  ✓ reciprocal  — educator-pair
@@ -410,22 +384,12 @@ If a declared partner isn't installed locally:
 
 ```
   Partners (1)
-    sheila  (not installed) — paradigm agent install sheila
+    sheila  (not installed) — paradigm agent sync-global (bundled) or paradigm agent create sheila
 ```
 
 ### Pair notebook namespace (reserved)
 
 Each reciprocal pair has a canonical notebook path: `.paradigm/notebooks/_pairs/{a-b}/` (alphabetically sorted ids, regardless of who declared the pair). The directory is reserved — no learning entries are written there yet. Pair-learning will use it so partner state lives next to the pair, not inside either agent's profile.
-
-### Marketplace primitives (contracts-only)
-
-Three typed shapes are defined in `packages/paradigm/src/commands/agent/registry-types.ts` for the eventual nevr.land marketplace:
-
-- **`PartnerBundle`** — groups partnered agents into a single SKU
-- **`ReciprocalInstallMeta`** — metadata that an agent's install should prompt-install partners
-- **`PartnerCoverage`** — registry-index indicator marking paired agents and showing pairs
-
-These are **contracts only** at v6.0.3. No live consumer wiring; they exist so registry response shapes stay forward-compat when nevr.land lands. Local code surfaces `PartnerCoverage` from registry response when present (graceful default when absent).
 
 ---
 
