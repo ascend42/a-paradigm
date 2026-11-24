@@ -1,0 +1,63 @@
+id: L-2026-11-24-ascend-091211-002
+type: milestone
+timestamp: '2026-11-24T09:12:11.710Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Public hero pages merged: five pages that say what is built, what is not, and where each number comes from'
+summary: 'PR #104 merged into feat/gnomon-dimensions. A hub, pages for Paradigm, Gnomon and Warpline, a Learn path with a printable field card, and a 404, as static files for GitHub Pages. Every number is stamped from one facts file with its source and date; a release check refuses a hand-typed digit. GitHub Pages itself is not yet enabled on the repo.'
+symbols_touched:
+  - '#site'
+  - '#gnomon'
+  - '#warpline'
+learnings:
+  - One facts file with sources, stamped into the pages and enforced by a checker, turns honesty from a habit into a build failure
+  - A page can be both striking and candid; the edge came from true, specific statements and from showing the real artefact
+  - Design review needs to render at phone widths and at the fold; both specimen and build failed there first
+  - A drawing of a product must carry its label inside the frame that will be cropped and shared
+  - Check that new directories are not caught by an existing ignore rule before reporting them committed
+verification:
+  status: pass
+  details:
+    release-check: 6 pages, 0 problems
+    axe: no violations on six pages, both themes
+    ci: '8 of 8 on PR #104'
+    not-run: Lighthouse, a real screen reader, a real phone, Firefox, Safari
+tags:
+  - hero-pages
+  - site
+  - design
+  - atelier
+  - positioning
+  - T-2026-11-24-002
+body: |-
+  How it was made, in one night: an evidence dossier (North, Sage) and a teaching audit (Sheila, Nora, Helix) first; Luna's direction and a proposed `pages` design system; Mika's review of the specimen; copy and a facts file by Wren and Sage; two build passes; Mika's rendered review of the built pages; a fix pass; a final re-check.
+
+  What the pages do that most product pages do not:
+  - State a standing for every claim: built, in progress, untested, not built, or did not hold. "Did not hold" was added by Mika for claims measured against a bar set beforehand that did not clear it: Warpline's calibration gate, and Paradigm's one with-and-without study.
+  - Lead Paradigm with a number a test reproduces (the default MCP tool list at about 7,800 tokens, held under a budget by a test), and say in the caption that the pages make no claim that Paradigm saves tokens or tool calls.
+  - Warpline's headline ends "It is not yet proven."
+  - The Gnomon decision card is a drawing and says so inside the plate: nobody launched Gnomon for the page. Nine content slots are empty with fallback text rather than invented.
+
+  What review changed:
+  - Luna's first specimen quoted README claims the dossier could not back; she revised it when the dossier landed.
+  - Mika found the specimen scrolled sideways on every phone width and no first screen carried a number; later, on the built pages, that the Gnomon "Signed" card had no label in the first screen, two commands were cut off (also the one axe violation), and "17 flags" silently became "18".
+  - Luna wanted the unflattering study as the first chart. Mika made it a table of all three measures further down: two bars from single runs carry false weight, and drawing one measure hid the others.
+  - Her verdict on "sexy": handsome but not striking at the specimen; after the lifts (a live symbol graph agreeing with real ripple output, Gnomon's card as a stack, Warpline's two-thread plate in the first screen) Paradigm, Gnomon and Warpline are striking and Learn is clear.
+
+  Found along the way: `atelier check` does not test the values of CSS custom properties, where these pages keep every colour, so the build carries its own token checker; `.gitignore` excluded `pages/build/`, so the build scripts were not committed in the first pass although reported as such; `warpline oracle` is described as read-only but writes a `.warpline/` folder; one install does not link the `warpline` command.
+
+  Founder's words that set the tone: "lets just be clear and upfront about things. we're building it and it's time to take it all to the next level in quality and function."
+linked_tasks:
+  - T-2026-11-24-002
+  - T-2026-11-24-003
+linked_commits:
+  - ea8f549b
+  - f8867f4b
+  - 143d9552
+  - 1d8cd68d
+git_context:
+  ref: 2d10c4c4341a4f0215d369917bbde27519d1428d
+  branch: feat/gnomon-dims-s1.1
+  dirty: true

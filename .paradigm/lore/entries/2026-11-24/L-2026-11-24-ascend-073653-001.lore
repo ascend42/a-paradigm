@@ -1,0 +1,66 @@
+id: L-2026-11-24-ascend-073653-001
+type: milestone
+timestamp: '2026-11-24T07:36:53.887Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Explaining Paradigm exposed what it gets wrong about itself; two fix PRs merged the same night
+summary: 'Research for the public hero pages (an evidence dossier and a teaching audit) found that Paradigm''s docs and generated files said things the product does not do. Two PRs fixed the first batch and merged into the integration branch feat/gnomon-dimensions: #101 (product) and #100 (docs). Review of #101 also uncovered a Stop-hook bug and a record-overwrite bug.'
+symbols_touched:
+  - '#shift'
+  - '#ide-adapters'
+  - '#hooks'
+  - '#unique-record'
+  - '#site'
+  - '#readme'
+learnings:
+  - Text that describes a mechanism must be derived from the mechanism and pinned to it by a test, or it drifts into a new kind of wrong
+  - A test that fails once in a thousand runs can be a data-loss bug with a one-in-a-thousand rate; read the id scheme before calling it a flake
+  - 'Writing honest public copy is an effective audit: every sentence needs a source, and the sentences without one are the product''s defects'
+  - Reviewers without a shell still find real bugs by reading; the orchestrator re-runs their claims before acting
+verification:
+  status: pass
+  details:
+    paradigm: 1270 passed
+    paradigm-mcp: 1206 passed
+    ci: 'green except probes (macos-15), a known flake fixed by PR #99'
+tags:
+  - hero-pages
+  - onboarding
+  - hooks
+  - docs
+  - review
+  - T-2026-11-24-002
+body: |-
+  What the research found (files in .paradigm/research/hero-pages/):
+  - Enforcement defaults to `none`, while README and the generated CLAUDE.md said the Stop hook blocks.
+  - No measured token or speed saving exists. The site's "90% less context" has no source; the only A/B study (case-study/compare.md) found identical outcomes and more tool calls; `paradigm cost` prints a figure from a hard-coded constant.
+  - Five different setup recipes; commands in docs that no longer exist; manual MCP examples using a package that is not on npm.
+  - The strongest reproducible proofs: the MCP tool budget (32 tools, about 7,800 tokens, test-enforced), a 0-vulnerability install, and Gnomon's notarized app that a stranger can verify in four commands.
+  - This repo's own doctor reports the learning loop as flatlined; calibration has rules but no outcome data.
+
+  What merged:
+  - PR #101: generated CLAUDE.md states the resolved enforcement level, written from the hook and tied to it by a test; shift ends with a first prompt; `paradigm reindex`; AGENTS.md header names the right repo and carries no version; doctor says `shift`.
+  - PR #100: one setup recipe, dead commands and nevr.land registry removed, unmeasured numbers removed, Gnomon's "budget fuse" called a meter.
+
+  Bugs found by review, not by the audit:
+  - The Stop hook reset its advisory buffer at Check 6, discarding every warning from Checks 1-5 (paradigm-common.sh). Present in every hook copy. Users at `balanced` will now see warnings they never saw.
+  - Journal, decision and work-log ids could collide and overwrite: a random 1-999 suffix per second for journals, per day for decisions and work logs. A "flaky test" was the symptom. Fixed with exclusive create and next-free suffix.
+
+  How the first attempt at #101 went wrong: the builder wrote the enforcement text from check ids rather than from the hook, so it was wrong in new ways (claimed warnings the hook never delivered, "blocks until fixed" when the hook blocks once per violation set). The reviewer caught it by reading the hook script line by line.
+
+  Left for the founder (T-2026-11-24-003): Warpline tagline, automatic vs gated learning, `paradigm tutorial`, default enforcement, and whether the hook should fail closed when the CLI is missing even at `none`. Backlog of 17 further items: T-2026-11-24-004.
+linked_tasks:
+  - T-2026-11-24-002
+  - T-2026-11-24-003
+  - T-2026-11-24-004
+linked_commits:
+  - 9072eb27
+  - 4278d081
+  - '60025e33'
+  - 254734de
+git_context:
+  ref: 605e2b1b8a628c5fcc247373b6b62e4258f1f103
+  branch: feat/gnomon-boards-s1.0
+  dirty: true

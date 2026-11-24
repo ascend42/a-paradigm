@@ -1,0 +1,71 @@
+id: L-2026-11-24-ascend-131756-001
+type: milestone
+timestamp: '2026-11-24T13:17:56.546Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Dimensions S1.1 merged: the board wears the Gnomon system, after three rounds that each found what the last one missed'
+summary: 'PR #107 merged into feat/gnomon-dimensions with ten of ten CI jobs green. The Excalidraw engine is reskinned by counted build-time patches with no fork and the CSP untouched; a host layer adds the tool rail, colour tray, author seals and pins, the fallback stub and the leaf''s states. The board stays unreachable from the shipped app until S1.3.'
+symbols_touched:
+  - '#gui-board'
+  - '#gui'
+  - '#gnomon-probes'
+  - '#dimension-mod'
+  - '#contract-content-palette'
+learnings:
+  - Test UI with real pointer and key events; scripted clicks skip the focus path where the bug lived
+  - 'After a fix, look at the artefact: goldens re-taken without looking will faithfully record a broken state'
+  - Key trust records by something the other system cannot rewrite, and assert the round trip through the real engine
+  - A rule that a check must run somewhere should fail on the platform where it runs nowhere; fix the check, not the rule
+  - Rebuild shared workspace libraries before trusting test results on a freshly merged checkout
+verification:
+  status: pass
+  details:
+    ci: '10 of 10 on PR #107, incl. probes on Windows with a real paste'
+    gnomon-gui: 1622 passed with the bundle check
+    mika: three blockers fixed with real input; drawing task completes by pointer and keyboard
+    not-run: WKWebView by hand; a real human drawing session
+tags:
+  - gnomon
+  - dimensions
+  - s1.1
+  - reskin
+  - atelier
+  - authorship
+  - review
+  - T-2026-11-24-001
+body: |-
+  Built by Kit in two passes (engine, then host layer), reviewed by Mika by rendering and by a security and code review, with two fix rounds and a CI round.
+
+  What shipped:
+  - The stock UI layer renders nothing; the image tool is gone; one bundled text face with metrics read from the font file; no roughness; day and night from Gnomon tokens; selection drawn in ink; the phone layout never triggers.
+  - A handle is the only surface the host touches (tools, style, theme, zoom, marks, viewport, focus, paste and drop attempts, refusals).
+  - Three hands: yours solid; an agent's dashed with a seal cut from its id; an unknown hand dashed with a hollow pin.
+  - Oracle G-DDL-07 with pixel goldens that fail on any chromatic pixel that is not a theme mix.
+
+  What each round caught:
+  - Pass A review (Mika, rendering): the first Cmd+Z after any action emptied the board; a dropped scene file replaced it and brought the stock look back; pasted content kept dashed strokes, which only agents may have.
+  - Completed review: with real pointer events, the first press on a rail key was lost and tabbing into the rail overflowed the stack (a redraw on every focus change that refocused, firing focus again). Tests and goldens used scripted clicks and passed. Separately, by reading: authorship could be forged by pasting content that carried its own author stamp.
+  - Round 1 fix introduced the worst bug of the milestone: the new authorship record was keyed by an id the engine replaces, so every agent mark drew as the founder's own. 183 board tests passed, and the re-taken goldens recorded the broken board (the image files shrank by a third because the overlay was gone). Found independently by Aegis reading the engine's dist and by Mika rendering; she proved the one-line fix in the browser without touching disk.
+  - CI round: the honesty gate rejected three unqualified timings in a .purpose note; and the builder's own rule "a check that ran in no engine fails" correctly failed on Windows, where the paste checks only ran under WKWebView. Fixed by driving a real paste through the DevTools protocol in Chromium engines, on every OS.
+
+  Also learned:
+  - The flaky real-engine test was not load: the engine keeps the first pointer move per frame and drops later ones, so two synthetic moves in one frame drew a short rectangle. The first "fix" (a fixed wait) removed the flush that had been rescuing it.
+  - The orchestrator reported a full suite pass as "holds up" while authorship was broken. A green suite is evidence only for what it asserts; after that, the result was looked at, not just counted.
+  - After merging, premise-core and paradigm tests failed on the integrated checkout until the shared libraries were rebuilt: stale dist, not a defect.
+
+  Carried to S1.3 in packages/gnomon-gui/.purpose and s1-scale-amendments.md §10: paste intercepted before the engine (C8); a copied sticky loses its pin; the wake hold swallows quick actions; the scrap shadow; a real-socket agent relay test; nested prototype keys; rename, the Dimensions list and the edge tab.
+linked_tasks:
+  - T-2026-11-24-001
+linked_commits:
+  - 85396f28
+  - c409d014
+  - a294d6ef
+  - b2774c55
+  - 71e502dc
+  - 97f2ae82
+git_context:
+  ref: 85396f281c4e65a0d637f5b5730e3e5ae71b152c
+  branch: verify/integration
+  dirty: true
