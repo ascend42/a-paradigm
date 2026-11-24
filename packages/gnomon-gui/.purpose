@@ -384,6 +384,51 @@ components:
     oracles: [G-DDL-01]
     tests:
       - test/dim-store.test.ts
+  gui-gesture:
+    description: >-
+      #gui-gesture (boards S1.3 pass P3a, s1.3-draft point 2; Aegis A1;
+      G-GUI-04) - the gesture stamp. gestureOf(e, now) mints a stamp only for
+      a trusted pointerup, keydown, click or paste (kinds pointer, key, menu,
+      paste); a synthetic event and a repeated keydown give null. It proves
+      nothing about a human: it fails closed against a GUI code path that
+      forgot the gate and against replay on one connection, and any script
+      in the page can mint it. It is never stored in a row, passed to a mod
+      or reused for approvals or grants. A stamp is numbered at its FIRST
+      send, one above the last stamp sent, from a module-private counter that
+      is never reset (so the number never skips ahead and holds across
+      reconnects); only n and kind are sent, the mint time stays in the page.
+      takeGesture counts a use and refuses a stamp that is missing (null, or
+      an object gestureOf did not mint), older than 10 s by the caller's
+      clock, used 4 times, or numbered below a stamp sent since. No DOM and
+      no timer. Only #gui-mod-command calls takeGesture.
+    path: src/core/gesture.ts
+    type: module
+    tags: [gnomon, gui, gesture, pure]
+    oracles: [G-GUI-04]
+    tests:
+      - test/gesture.test.ts
+  gui-mod-command:
+    description: >-
+      #gui-mod-command (boards S1.3 pass P3a, s1.3-draft point 2; Aegis A1
+      and B1; G-GUI-04) - the ONE sender of the mod command relay.
+      sendModCommand(client, gesture, name, commandId, args, now?) sends
+      {name, commandId, args: {...args, gesture: {n, kind}}} and nothing
+      else. It sends nothing and rejects with a typed ModCommandRefusal when
+      the mod is not on the closed list MOD_COMMAND_MODS (only
+      gnomon.dimension; the kernel does not hold this list), when args is not
+      a plain object or carries hsid, repo or gesture (the host composes the
+      first two from args.focus), or when #gui-gesture refuses the stamp.
+      modCommandFailure(err) reads a rejected send into a closed list of
+      codes: not-sent, gesture-refused (with the kernel's why), read-only
+      (the host's command read cap), link-down, no-answer, refused. A static
+      test holds that the relay's name occurs under src/ only in this file
+      and the preview's fake kernel. Nothing in the app calls it yet.
+    path: src/core/mod-command.ts
+    type: module
+    tags: [gnomon, gui, gesture, relay]
+    oracles: [G-GUI-04]
+    tests:
+      - test/mod-command.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
