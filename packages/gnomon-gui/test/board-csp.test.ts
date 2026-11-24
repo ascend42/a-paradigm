@@ -51,7 +51,12 @@ describe('G-DDL-06 predicate: what counts as a refusal-free run (every OS)', () 
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>|<style|\sstyle=|\son[a-z]+=/i);
     expect(html).not.toMatch(/type="module"/);
     const js = String(files.get('/harness.js'));
-    expect(js).toMatch(/import\('\/board\/board\.js'\)/);
+    // one script, two pages: /pinned.html imports the pinned chunk, / the probe build served beside it
+    expect(js).toMatch(/var BASE = PINNED \? '\/board' : '\/probe-board';/);
+    expect(js).toMatch(/import\(BASE \+ '\/board\.js'\)/);
+    expect(String(files.get('/pinned.html'))).toBe(html);
+    expect([...files.keys()].some((k) => k.startsWith('/probe-board/'))).toBe(false); // no probe build unless one is handed in
+    expect([...(harnessFiles(shippedBoard(), new Map([['board/board.js', Buffer.from('x')]])) as Map<string, unknown>).keys()]).toContain('/probe-board/board.js');
     expect(js).toMatch(/securitypolicyviolation/);
     expect(js).toMatch(/R\.phase = 'library'/);
     // since S1.1 the page walks the rail's tools and checks that the engine's other tools are refused

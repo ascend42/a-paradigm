@@ -129,12 +129,12 @@ const DRIVER = `'use strict';
   // (packages/gnomon-gui/scripts/board-build.mjs, probe: true; never embedded, never served by the kernel), the one
   // build in which this page's synthetic pointer and key events count, and runs every check, the edits included.
   var PINNED = location.pathname === '/pinned.html';
-  var BASE = PINNED ? '' : '/probe';
+  var BASE = PINNED ? '/board' : '/probe-board';
   R.mode = PINNED ? 'pinned' : 'probe';
-  link.href = BASE + '/board/board.css';
+  link.href = BASE + '/board.css';
   document.head.appendChild(link);
   R.phase = 'load';
-  import(BASE + '/board/board.js').then(async function (m) {
+  import(BASE + '/board.js').then(async function (m) {
     R.tModule = Math.round(performance.now() - R.t0);
     R.engine = m.BOARD_ENGINE;
     R.phase = 'mount';
@@ -709,9 +709,9 @@ export function harnessFiles(board = shippedBoard(), probe = null) {
   // the board's one text face lives beside the chunk in the same pinned bundle (../fonts from board/)
   const font = shippedBoardFont();
   if (font) files.set(`/${BOARD_FONT}`, font);
-  // the probe build (never embedded, never shipped) under its own prefix, with the same face beside it
-  for (const [n, b] of probe ?? []) files.set(`/probe/${n}`, b);
-  if (probe && font) files.set(`/probe/${BOARD_FONT}`, font);
+  // the probe build (never embedded, never shipped) in its own directory beside the pinned one, so both ask for
+  // the same face at ../fonts
+  for (const [n, b] of probe ?? []) files.set(`/probe-board/${n.replace(/^board\//, '')}`, b);
   files.set('/pinned.html', INDEX);
   files.set('/index.html', INDEX);
   files.set('/harness.css', CSS);
@@ -980,8 +980,9 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
               ? { mode: 'pinned', wallMs: first.wallMs, stage: first.report.stage, mounted: first.report.mounted === true, engine: first.report.engine, afterAdd: first.report.afterAdd, afterAddSettled: first.report.afterAddSettled, alive: first.report.alive, aliveAfterUnmount: first.report.aliveAfterUnmount, deadHandle: first.report.deadHandle, fix: first.report.fix, syntheticDraw: first.report.syntheticDraw, pasteTrouble: first.report.pasteTrouble, png: first.report.png, violationCount: pv.length, violations: aggregate(pv), errors: first.report.errors ?? [], rejections: first.report.rejections ?? [], requests: rq }
               : { mode: 'pinned', wallMs: first.wallMs, error: NO_REPORT, launcherTail: first.launcherTail, requests: rq };
           }
+          const beforeProbe = server.requests.length;
           const { report, wallMs, launcherTail } = await runPage(server, e, '/', timeoutMs);
-          const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
+          const requests = server.requests.slice(beforeProbe).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
             r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, pasteTrouble: report.pasteTrouble, colours: report.colours, matrix: report.matrix, zoom400: report.zoom400, edits: report.edits, undoKeys: report.undoKeys, handleKeys: report.handleKeys, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
