@@ -248,4 +248,47 @@ components:
       text never shows for this cause; an operator start, or a different pin
       after the Update card, tries once more. status().needsUpdate lists the
       names. G-MOD-14 is the A1 rule above.
+      Dimensions S1.3 pass P1 (Aegis A2, A4, A7, B1; G-MOD-17, G-MOD-18; no
+      contract id moved). These replace what the paragraphs above say about a
+      command's effects and about top-level prototype keys. (1) COMMAND READ
+      CAP, generic to every mod (effects.ts commandCap, applied in effectsFor):
+      a command runs with its mod's declared effects only when the host's own
+      stamp (the pickRelayedFor output, never the request) has an own surface
+      gui AND the mod's publisher is gnomon. Every other command context is
+      capped at read: a human on a device key (surface cli), an agent, session,
+      voice or mod caller (no surface), a third-party mod on any surface, and a
+      direct runCommand with no relayedFor. A capped state.set or log.append is
+      refused EFFECT with cap command-read and logged mod.effect.refused; no
+      row is appended and no state is set. The egress proxy reads the same
+      set, so a capped command opens no tunnel. Consequence: a third-party
+      mod's command cannot write in S1.3 (the SDK example's hello.bump no
+      longer keeps state; its write tool does). Filed for before any
+      third-party mod with commands: a per-command effects field in the
+      manifest. (2) HOST-COMPOSED COMMAND ARGS (host.ts #composeRelayedArgs,
+      every mod, every caller, a host-initiated runCommand included): the
+      client's own keys are copied onto a null-prototype object minus
+      HOST_ARG_KEYS (repo, hsid, focus, paradigm, gesture) and the prototype
+      keys; args that are not a plain object compose to an empty one. For a
+      gnomon-published mod only, the host then sets args.hsid and args.repo,
+      both or neither: the client's focus.hsid when #mayJoin allows the caller
+      (a human any session, an agent or session principal only its own) AND
+      the ModHostOptions.focusRepo port knows it as a live session and returns
+      its repo scope (repo:<16 hex>, the daemon's supervisor.scopeOf through
+      deskRepoScope; never a path). No port, a throw, or any other return
+      value composes neither. #composeRelayedInput (views) now composes onto a
+      null-prototype object and drops prototype keys as well. (3) ROW SCOPE:
+      a joined focus rides the call as CallStamp.scope {repo}; clampModAppend
+      copies it to ModAppendRow.scope and the daemon writes the envelope scope
+      {org: null, team: null, repo}. A mod-supplied scope is never read. (4)
+      PROTOTYPE KEYS AT ANY DEPTH (bridge.ts checkModPayloadKeys): an own
+      __proto__, constructor or prototype key anywhere in a payload, arrays
+      included, refuses the append (LOG, why prototype-key); the walk is
+      iterative and refuses beyond depth 32 (why payload-depth) or 4,096
+      visited keys and elements (why payload-size), before any copy or
+      canonicalisation. A mod-supplied relayedFor is walked too. Tests:
+      test/mod-stamp.test.ts (the per-class table, args survival, the join,
+      row scope, deep keys), test/mod-daemon.test.ts (real unix-socket device
+      connections per class; the real log taking the scope),
+      test/relay-gesture.test.ts (a real GUI connection), test/mod-focus.test.ts.
+      The gesture stamp itself is #socket (socket/gesture.ts, G-MOD-16).
     tags: [kernel, mods, sandbox, M1.11]

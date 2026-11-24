@@ -351,10 +351,34 @@ components:
       the signed daemon-stop card, $daemon-lifecycle daemon-stop;
       test/daemon-stop-verb.test.ts). Its own entries: rules-apply.ts
       (#rules-apply) and rules-revoke.ts (#rules-revoke).
+      Dimensions S1.3 pass P1 (Aegis A1, B1; G-MOD-16; no contract id moved):
+      gesture.ts is the GESTURE STAMP. The dispatcher no longer refuses
+      mod.command on the GUI credential (it answered ENGINE not-implemented
+      M1.10 before); status reports the relay available. A GUI mod.command
+      carries args.gesture {n, kind}, inside the opaque args because a
+      top-level relay param would move modAbiId and clientApiId. takeGesture
+      refuses FORBIDDEN gesture (data.why: not-human, args, missing, malformed,
+      kind, replayed, spent) unless the connection is human class, args is a
+      plain object, n is a safe integer of at least 1 and kind is one of
+      pointer, key, paste, menu. Per connection (ConnAuthState.gesture, two
+      numbers): n above the last one seen starts a new gesture, n equal to it
+      is allowed for up to GESTURE_FANOUT = 4 commands, a lower n is a replay.
+      A refused stamp changes no state. The key is removed before the mod host
+      sees the args. The stamp proves nothing about a human. It fails closed
+      against a GUI code path that forgot the gate, and against replay on one
+      connection. Any holder of the GUI credential or any script in the page
+      can mint it. It is never stored in a row, never passed to a mod, never
+      read by a fold, and never reused for approve, grants or permits. What a
+      command may WRITE is #mod-host's rule (the command read cap, G-MOD-17),
+      which landed in the same commit as this lift. Other credentials send no
+      stamp and need none: their commands are read-only. Tests:
+      test/relay-gesture.test.ts (the pure rule, and a real GUI WebSocket
+      connection to the real mod host), test/web-endpoint.test.ts.
     path: src/kernel/socket/
     type: module
     tags: [gnomon, kernel, socket, paradigm-8, pr-5]
     tests:
+      - test/relay-gesture.test.ts
       - test/ndjson-framing.test.ts
       - test/socket-server.test.ts
       - test/socket-auth.test.ts
