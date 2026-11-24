@@ -27,13 +27,13 @@ afterEach(async () => {
 describe('SUPERSEDED_FIRST_PARTY_PINS', () => {
   it('the vendored old trees hash to exactly the superseded pins (the fixture cannot drift)', () => {
     const hashes = SUPERSEDED_TREES.map((m) => hashOf(path.join(SUPERSEDED_DIR, m), `gnomon.${m}`));
-    expect(new Set(hashes)).toEqual(new Set(SUPERSEDED_FIRST_PARTY_PINS));
+    expect(new Set(hashes)).toEqual(new Set(SUPERSEDED_FIRST_PARTY_PINS.keys()));
     expect(hashes).toHaveLength(SUPERSEDED_FIRST_PARTY_PINS.size);
   });
 
   it('a superseded pin keeps its tier, never aliases, and is disjoint from the current and historical sets', () => {
     const current = ['workshop', 'ledger', 'paradigm-context', 'neurons', 'constellation'].map((m) => hashOf(path.join(SHIPPED, m), `gnomon.${m}`));
-    for (const h of SUPERSEDED_FIRST_PARTY_PINS) {
+    for (const h of SUPERSEDED_FIRST_PARTY_PINS.keys()) {
       expect(deriveTier(h)).toBe('first-party');
       expect(FIRST_PARTY_PACKAGE_HASHES.has(h)).toBe(true);
       expect(HISTORICAL_FIRST_PARTY_PINS.has(h)).toBe(false);

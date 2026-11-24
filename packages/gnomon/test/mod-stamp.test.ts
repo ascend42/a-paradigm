@@ -168,7 +168,7 @@ describe('G-MOD-12: a mod-supplied relayedFor or causes on an append is replaced
   });
 });
 
-describe('A1 (Aegis S1.2 review): only a human-class caller earns a surface', () => {
+describe('G-MOD-14: only a human-class caller earns a surface; a row without principal, surface or a tool agent folds as the unknown hand', () => {
   it('relaySurfaceOf: human gets gui or cli; agent, session, mod, voice, read token and peer get none, on any credential', () => {
     expect(MATRIX_CLASSES).toEqual(['human', 'agent', 'session', 'mod', 'voice', 'readToken', 'peer']);
     for (const cls of MATRIX_CLASSES) {

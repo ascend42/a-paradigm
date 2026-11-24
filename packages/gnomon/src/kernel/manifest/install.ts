@@ -75,12 +75,39 @@ const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
  * Any edit to a tree moves its hash; test/workshop-mod.test.ts and
  * test/ledger-mod.test.ts hold the pins.
  */
-/** Format-2 first-party pins of earlier releases. Never an alias source (that is HISTORICAL_FIRST_PARTY_PINS, format 1 only). */
-export const SUPERSEDED_FIRST_PARTY_PINS: ReadonlySet<string> = new Set<string>([
-  'sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', // workshop 1.1.0 (modAbiId before S1.2)
-  'sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', // ledger 1.1.0 (modAbiId before S1.2)
-  'sha256:22bab5bf24abbc01ac5594e6fe4ff72f3b562479677c93b9a483196943bce1cb', // paradigm-context 1.1.1 (modAbiId before S1.2)
+/** The `modAbiId` of the release before the S1.2 move (`tool.call` gained `relayedFor`; no other method changed). */
+const MOD_ABI_ID_BEFORE_S1_2 = 'sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082';
+/**
+ * Format-2 first-party pins of the previous release: an EXACT package hash → the ONE prior `modAbiId` that tree
+ * echoes at `init` (G-MOD-15, Aegis S1.2 point 9). An installed snapshot at one of these hashes keeps its tier and
+ * the mod host starts it under that prior id, so an upgrade does not stop the bundled mods until the human approves
+ * their Update cards. Limits, each held by a test:
+ *  - exact hash, exact id, first-party by hash, source `package` only; nothing else ever earns the prior id;
+ *  - no listed tree declares a tool (`tool.call` is the only method the ABI change touched);
+ *  - never an alias source (that is HISTORICAL_FIRST_PARTY_PINS, format 1 only, and no format-1 pin is listed here);
+ *  - never a NEW stage (stageInstall refuses one: rollback protection);
+ *  - no chains: a prior id maps only to the ABI of SUPERSEDED_PINS_WRITTEN_FOR. When `modAbiId` next moves the
+ *    table must be emptied or each entry re-justified (the expiry test fails until then).
+ */
+export const SUPERSEDED_FIRST_PARTY_PINS: ReadonlyMap<string, string> = new Map<string, string>([
+  ['sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', MOD_ABI_ID_BEFORE_S1_2], // workshop 1.1.0
+  ['sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', MOD_ABI_ID_BEFORE_S1_2], // ledger 1.1.0
+  ['sha256:22bab5bf24abbc01ac5594e6fe4ff72f3b562479677c93b9a483196943bce1cb', MOD_ABI_ID_BEFORE_S1_2], // paradigm-context 1.1.1
 ]);
+/** The current `modAbiId` the table above was written for. A test compares it with MOD_ABI_ID. */
+export const SUPERSEDED_PINS_WRITTEN_FOR = 'sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66';
+
+/**
+ * The prior `modAbiId` an installed snapshot may answer `init` with, or null. Every condition must hold: the hash is
+ * listed, the tier is first-party, the source is `package`, the publisher is gnomon, the tree declares no tool, and
+ * the table was written for the ABI this kernel speaks.
+ */
+export function compatModAbiId(loaded: { packageHash: string; tier?: string | undefined; source: string; manifest: { publisher?: unknown; provides?: { tools?: readonly unknown[] } } }, currentModAbiId: string): string | null {
+  if (currentModAbiId !== SUPERSEDED_PINS_WRITTEN_FOR) return null;
+  if (loaded.tier !== 'first-party' || loaded.source !== 'package' || loaded.manifest.publisher !== 'gnomon') return null;
+  if ((loaded.manifest.provides?.tools ?? []).length > 0) return null;
+  return SUPERSEDED_FIRST_PARTY_PINS.get(loaded.packageHash) ?? null;
+}
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S1.2: the modAbiId move (relayedFor on tool.call) changes the three trees that echo the id
   'sha256:a5745505b524cf5675cea5d70f0a6219a729ed78e6f6ce6adef071bdc0b1a8b1', // packages/gnomon-mods/workshop 1.1.1 (gnomon.workshop)
@@ -91,7 +118,7 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
-  ...SUPERSEDED_FIRST_PARTY_PINS,
+  ...SUPERSEDED_FIRST_PARTY_PINS.keys(),
   // the format-1 1.0.0 pins of workshop, ledger and paradigm-context (grants.ts; existing installs keep loading)
   ...HISTORICAL_FIRST_PARTY_PINS,
 ]);

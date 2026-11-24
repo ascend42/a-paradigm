@@ -96,7 +96,7 @@ import { registerSeams } from '../internal-seams.js';
 import { isLifecycleRefusal } from '../lifecycle/refusal.js';
 import type { TrackInput } from '../lifecycle/children.js';
 import { effectiveInstall, readGrants } from '../manifest/grants.js';
-import { loadMod, publisherDisplayOf } from '../manifest/install.js';
+import { compatModAbiId, loadMod, publisherDisplayOf } from '../manifest/install.js';
 import { userMcpServerNames } from '../manifest/user-mcp.js';
 import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { noEvents, type ManifestEventSink } from '../manifest/refusal.js';
@@ -252,6 +252,10 @@ export interface CallOptions {
   timeoutMs?: number;
 }
 
+/** Host-composed (never mod text): what a mod refused ABI at init is waiting for. */
+export const NEEDS_UPDATE_NOTE = 'needs an update for this Gnomon';
+const needsUpdateText = (name: string): string => `${name} ${NEEDS_UPDATE_NOTE}: it was built for another mod ABI. Update it in the Mods panel, or install its current build`;
+
 export class ModHost {
   readonly #o: ModHostOptions;
   readonly #emit: ManifestEventSink;
@@ -264,6 +268,12 @@ export class ModHost {
   readonly #watchers = new Map<string, { close(): void }>();
   /** mods out of restarts: refused DOWN to relays until an operator start() */
   readonly #down = new Set<string>();
+  /**
+   * Mods refused ABI at init: name → the package hash that was refused. STICKY and in memory: a relay never respawns
+   * the child for that pin (so a view paint cannot loop it into the restart cap and its misleading DOWN text). An
+   * operator start, or a different pin (the Update card decided), tries once more. Bounded by the installed mods.
+   */
+  readonly #needsUpdate = new Map<string, string>();
   readonly #inflight = new Map<string, number>();
   /** hsids whose turn.partial edge was already fed (bounded) */
   readonly #streaming = new Set<string>();
@@ -336,6 +346,7 @@ export class ModHost {
     return {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
+      needsUpdate: this.needsUpdate(),
       paused: this.#pausedView(),
       // Aegis S0b L1: per running mod id, {host, verified}, so GUI panel headers and offer chips show the publisher
       publishers: Object.fromEntries([...this.#running.values()].map((r) => [r.name, r.publisherDisplay]).sort(([a], [b]) => String(a).localeCompare(String(b)))),
@@ -415,6 +426,7 @@ export class ModHost {
   /** Start (or return) the child for `name` — the OPERATOR path: it also lifts a restart-cap `down`. Paused mods return their pause; nothing from a changed tree loads. */
   start(name: string): Promise<ModStartResult> {
     this.#down.delete(name);
+    this.#needsUpdate.delete(name); // one fresh attempt per operator start
     if (this.#paused.get(name)?.why === 'user') this.#paused.delete(name); // re-judged from the marker
     return this.#launch(name);
   }
@@ -434,6 +446,11 @@ export class ModHost {
     if (live) return;
     const p = this.#paused.get(name);
     if (p) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: p.why, cardId: p.cardId });
+    const refusedPin = this.#needsUpdate.get(name);
+    if (refusedPin !== undefined) {
+      if (effectiveInstall(readGrants(this.#o.home, this.#o.trust), name)?.packageHash === refusedPin) throw new ModRefusal('ABI', needsUpdateText(name), { name, why: 'needs-update' });
+      this.#needsUpdate.delete(name); // another pin now: one fresh attempt
+    }
     if (this.#down.has(name) || this.restarts(name) >= RESTART_CAP.n) {
       this.#down.add(name);
       throw new ModRefusal('DOWN', `${name} is down (restart cap ${RESTART_CAP.n} per ${RESTART_CAP.windowMs / 60_000} min); an operator start brings it back`, { name });
@@ -459,6 +476,11 @@ export class ModHost {
   /** Write the folded relay-miss counter row now (also on its window timer and at stopAll). */
   flushRelayMisses(): void {
     this.#misses.flush();
+  }
+
+  /** Names refused ABI at init and waiting for an update (status, the Mods panel). */
+  needsUpdate(): string[] {
+    return [...this.#needsUpdate.keys()].sort();
   }
 
   /** Names a relay is refused DOWN for (inspect / tests). */
@@ -594,12 +616,19 @@ export class ModHost {
         await this.stop(name, 'init-failed');
         throw err instanceof ModRefusal ? err : new ModRefusal('ABI', `${name} did not answer init`, { name });
       }
-      if (init?.abi !== MOD_ABI_V1 || init?.modAbiId !== MOD_ABI_ID) {
+      // G-MOD-15: an installed first-party snapshot at an exactly listed superseded pin may answer with the ONE prior
+      // id listed for it. Nothing is granted or re-tiered; the grant and the snapshot rehash stood in loadMod above.
+      const prior = compatModAbiId(loaded, MOD_ABI_ID);
+      const compat = init?.abi === MOD_ABI_V1 && prior !== null && init?.modAbiId === prior;
+      if (init?.abi !== MOD_ABI_V1 || (init?.modAbiId !== MOD_ABI_ID && !compat)) {
         await this.stop(name, 'abi-mismatch');
+        this.#needsUpdate.set(name, loaded.packageHash);
         // the echoes are MOD-SUPPLIED and this text reaches the GUI: shown only when they have the expected shape, clipped
         const shown = (v: unknown, re: RegExp): string => (typeof v === 'string' && v.length <= 80 && re.test(v) ? v : 'a malformed value');
         throw new ModRefusal('ABI', `${name} answered abi ${shown(init?.abi, /^mod-abi:v[0-9]{1,4}$/)} / modAbiId ${shown(init?.modAbiId, /^sha256:[0-9a-f]{64}$/)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
       }
+      // one row saying so (an existing key of mod.health; no contract id moves)
+      if (compat) this.#emit('mod.health', { name, ok: true, why: 'abi-compat' });
       this.#primeFeed(r);
       this.#emit('mod.health', { name, ok: true });
       if (linked.length) this.#watch(name, linked[0]!); // re-armed on every successful start
