@@ -70,6 +70,31 @@ describe('#gui-mod-command sendModCommand', () => {
     expect(sent.gesture).toEqual({ n: g.n, kind: 'pointer' });
   });
 
+  it('reconnect: the stamp number is per client object, so a new connection starts again at 1 and steps by 1', async () => {
+    const nOf = (c: ReturnType<typeof client>): number[] => c.calls.map((x) => (x.params as { args: { gesture: { n: number } } }).args.gesture.n);
+    const old = client();
+    for (let i = 0; i < 1100; i++) await sendModCommand(old, press(0), DIM_MOD_ID, 'dim.op', {}, 0);
+    expect(nOf(old).slice(0, 3)).toEqual([1, 2, 3]);
+    expect(nOf(old)[1099]).toBe(1100);
+    // the page reconnected: a new GnomonClient
+    const fresh = client();
+    const g = press(0);
+    await sendModCommand(fresh, g, DIM_MOD_ID, 'dim.attach', {}, 0);
+    await sendModCommand(fresh, g, DIM_MOD_ID, 'dim.open', {}, 0);
+    await sendModCommand(fresh, press(0), DIM_MOD_ID, 'dim.op', {}, 0);
+    expect(nOf(fresh)).toEqual([1, 1, 2]);
+  });
+
+  it('a failed send is not retried, and its use stays spent', async () => {
+    const calls: unknown[] = [];
+    const failing = { call: <T>(_m: string, p?: unknown): Promise<T> => (calls.push(p), Promise.reject(new RpcError({ code: 'BUSY', reason: null, message: 'm', next: [], data: null }))) };
+    const g = press(0);
+    for (let i = 0; i < GESTURE_FANOUT; i++) await expect(sendModCommand(failing, g, DIM_MOD_ID, 'dim.op', {}, 0)).rejects.toBeInstanceOf(RpcError);
+    expect(calls).toHaveLength(GESTURE_FANOUT);
+    expect(await whyOf(sendModCommand(failing, g, DIM_MOD_ID, 'dim.op', {}, 0))).toBe('gesture-spent');
+    expect(readFileSync(path.join(SRC, 'core', 'mod-command.ts'), 'utf8')).not.toMatch(/retry\(|\.catch\(|for \(|while \(/);
+  });
+
   it('reads a failed send into a closed list of codes', () => {
     const rpc = (code: string, data: Record<string, unknown> | null = null): RpcError => new RpcError({ code, reason: null, message: 'm', next: [], data });
     expect(modCommandFailure(new ModCommandRefusal('gesture-expired'))).toEqual({ code: 'not-sent', why: 'gesture-expired' });
@@ -78,6 +103,8 @@ describe('#gui-mod-command sendModCommand', () => {
     expect(modCommandFailure(rpc('FORBIDDEN', { modCode: 'EFFECT', cap: 'command-read' }))).toEqual({ code: 'read-only', why: 'command-read' });
     expect(modCommandFailure(rpc('CLOSED'))).toEqual({ code: 'link-down', why: null });
     expect(modCommandFailure(rpc('TIMEOUT'))).toEqual({ code: 'no-answer', why: null });
+    expect(modCommandFailure(rpc('DELIVERY_UNKNOWN'))).toEqual({ code: 'no-answer', why: null });
+    expect(modCommandFailure(rpc('BUSY'))).toEqual({ code: 'refused', why: 'BUSY' });
     expect(modCommandFailure(rpc('NOT_FOUND'))).toEqual({ code: 'refused', why: 'NOT_FOUND' });
     expect(modCommandFailure(rpc('<img src=x>'))).toEqual({ code: 'refused', why: null });
     expect(modCommandFailure(new Error('x'))).toEqual({ code: 'refused', why: null });

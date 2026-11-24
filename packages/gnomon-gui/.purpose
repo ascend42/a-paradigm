@@ -394,13 +394,17 @@ components:
       forgot the gate and against replay on one connection, and any script
       in the page can mint it. It is never stored in a row, passed to a mod
       or reused for approvals or grants. A stamp is numbered at its FIRST
-      send, one above the last stamp sent, from a module-private counter that
-      is never reset (so the number never skips ahead and holds across
-      reconnects); only n and kind are sent, the mint time stays in the page.
-      takeGesture counts a use and refuses a stamp that is missing (null, or
-      an object gestureOf did not mint), older than 10 s by the caller's
-      clock, used 4 times, or numbered below a stamp sent since. No DOM and
-      no timer. Only #gui-mod-command calls takeGesture.
+      send on a connection, one above the last stamp sent there, from a
+      module-private counter PER CONNECTION that starts at 1 (the connection
+      is the client object: one GnomonClient is one socket), so the number
+      never skips ahead and starts again after a reconnect; only n and kind
+      are sent, the mint time stays in the page. takeGesture(g, now, conn)
+      counts a use and refuses a stamp that is missing (null, or an object
+      gestureOf did not mint), older than 10 s by the caller's clock, used 4
+      times in all, or numbered below a stamp sent since on that connection.
+      A use is never given back and a failed send is never retried on the
+      same stamp. No DOM and no timer. Only #gui-mod-command calls
+      takeGesture.
     path: src/core/gesture.ts
     type: module
     tags: [gnomon, gui, gesture, pure]
@@ -420,7 +424,9 @@ components:
       first two from args.focus), or when #gui-gesture refuses the stamp.
       modCommandFailure(err) reads a rejected send into a closed list of
       codes: not-sent, gesture-refused (with the kernel's why), read-only
-      (the host's command read cap), link-down, no-answer, refused. A static
+      (the host's command read cap), link-down, no-answer, refused. It never
+      retries: the kernel spends a use even when the command then fails. The
+      stamp is numbered per client object, so a reconnect needs no wiring. A static
       test holds that the relay's name occurs under src/ only in this file
       and the preview's fake kernel. Nothing in the app calls it yet.
     path: src/core/mod-command.ts

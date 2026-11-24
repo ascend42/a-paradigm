@@ -11,6 +11,11 @@
  * GESTURE_MAX_AGE_MS, already used GESTURE_FANOUT times, or numbered below a stamp sent since. Otherwise it sends
  * `{name, commandId, args: {...args, gesture: {n, kind}}}` (exactly those two keys: the kernel refuses a third).
  * A session is named with `args.focus = {hsid}`; the host composes `hsid` and `repo` itself.
+ *
+ * The stamp's number is per connection and the connection is the client object passed in (one GnomonClient is one
+ * socket; a reconnect makes a new one), so numbering starts again at 1 after a reconnect with nothing to wire.
+ * There is NO retry here and callers must not add one: the kernel spends a use even when the command then fails,
+ * is busy or is never answered. `spent` and `replayed` mean "a new gesture from the person", never "send again".
  */
 import { DIM_MOD_ID } from '@a-company/gnomon-contracts';
 import { RpcError, type GnomonClient } from './client.js';
@@ -41,7 +46,8 @@ export function sendModCommand(c: Pick<GnomonClient, 'call'>, g: Gesture | null,
   if (typeof name !== 'string' || !MOD_COMMAND_MODS.includes(name)) return Promise.reject(new ModCommandRefusal('mod-not-listed'));
   if (typeof commandId !== 'string' || commandId.length === 0) return Promise.reject(new ModCommandRefusal('command-id'));
   if (!plain(args) || MOD_COMMAND_RESERVED_ARGS.some((k) => Object.prototype.hasOwnProperty.call(args, k))) return Promise.reject(new ModCommandRefusal('args'));
-  const problem = takeGesture(g, now);
+  // the client object IS the connection: the stamp is numbered per connection, from 1
+  const problem = takeGesture(g, now, c);
   if (problem !== null) return Promise.reject(new ModCommandRefusal(`gesture-${problem}`));
   const stamp = { n: (g as Gesture).n, kind: (g as Gesture).kind };
   return c.call('mod.command', { name, commandId, args: { ...args, gesture: stamp } });
@@ -65,7 +71,8 @@ export function modCommandFailure(err: unknown): ModCommandFailure {
   if (!(err instanceof RpcError)) return { code: 'refused', why: null };
   const { code, data } = err.refusal;
   if (code === 'CLOSED') return { code: 'link-down', why: null };
-  if (code === 'TIMEOUT') return { code: 'no-answer', why: null };
+  // sent and never answered (a timeout, or the socket closed first): the kernel may have acted, and the use is spent
+  if (code === 'TIMEOUT' || code === 'DELIVERY_UNKNOWN') return { code: 'no-answer', why: null };
   if (code === 'FORBIDDEN' && data && data.needs === 'gesture') return { code: 'gesture-refused', why: typeof data.why === 'string' && GESTURE_WHYS.includes(data.why) ? data.why : null };
   if (code === 'FORBIDDEN' && data && data.modCode === 'EFFECT' && data.cap === 'command-read') return { code: 'read-only', why: 'command-read' };
   return { code: 'refused', why: /^[A-Za-z][A-Za-z0-9_ -]{0,31}$/.test(code) ? code : null };
