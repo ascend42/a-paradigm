@@ -90,6 +90,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/idle-exit.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   // M1.11 slice 2: #mod-host in the real daemon (unix socket + POSIX device-key modes).
   { test: 'test/mod-daemon.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/mod-append-budget.test.ts', na: 'Windows parity phase (P8-D78): the daemon endpoint is a unix socket and device keys use POSIX modes; the pure clamp and budget half runs everywhere in the sibling' },
+  // S1.3 P2 (#dimension-mod): the relay table per caller class over a unix socket with device keys, and the real daemon's log.
+  { test: 'test/dimension-relay.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/dimension-mod.test.ts', na: 'Windows parity phase (P8-D78): the daemon endpoint is a unix socket and device keys use POSIX modes; the mod\'s own rules (validation, caps, keyframes, the cold open) run everywhere in the sibling' },
   // M1.12 slice 3 replay: the rig writes kernel keys into an owner-only keys/ dir (POSIX modes in #identity).
   { test: 'test/always-rules.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the rules CLI test records kernel pubs under an owner-only keys/ (a POSIX mode; an ACL via the helper on win32); the rule fold itself is platform-independent code' },
   { test: 'test/trace-cli.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the fixture writes a kernel log whose owner-only keys/ is an ACL via the helper there, not a POSIX mode (as m112-replay); the trace reader and trace mode are platform-independent code' },

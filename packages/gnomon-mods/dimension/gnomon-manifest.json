@@ -1,0 +1,28 @@
+{
+  "manifest": 2,
+  "kind": "mod",
+  "publisher": "gnomon",
+  "name": "dimension",
+  "version": "1.0.0",
+  "abi": "mod-abi:v1",
+  "description": "Dimensions (spec §12.7): the one writer of dimension rows. Every op is checked by dim-shape:v1 before it is appended; a person on the Gnomon window draws, and no one else writes in S1.3.",
+  "provides": {
+    "tools": [
+      { "name": "dim-view", "effects": ["read"] },
+      { "name": "dim-draw", "effects": ["read", "write"] }
+    ],
+    "commands": [
+      { "id": "dim.open", "title": "Open a dimension" },
+      { "id": "dim.attach", "title": "Attach this session to a dimension" },
+      { "id": "dim.op", "title": "Draw in a dimension" },
+      { "id": "dim.close", "title": "Close a dimension" }
+    ],
+    "events": [
+      "modns.gnomon.dimension.session.start",
+      "modns.gnomon.dimension.attach",
+      "modns.gnomon.dimension.op",
+      "modns.gnomon.dimension.session.end"
+    ]
+  },
+  "requires": { "capabilities": [], "egress": "none" }
+}
