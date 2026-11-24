@@ -5,6 +5,13 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**What Paradigm says about itself in the first hour is now true.** A teaching audit found the product telling newcomers things that were wrong: a generated CLAUDE.md that said the stop hook blocks when its checks are off by default, setup that ended without a first thing to do, commands that did not exist, and stale names and versions.
+
+### Fixed
+- **Generated CLAUDE.md states the real enforcement level** (`#enforcement-section`, `#claude-adapter`). The "Automatic Enforcement" section used to say "The stop hook **BLOCKS**" in every project. It is now written from the project's resolved level (preset plus per-check overrides): at the default `none` it says the checks are off and names `paradigm enforcement set <level>`; at `minimal` it says the hook warns but never blocks; otherwise it lists what blocks and what warns. Run `paradigm sync` after changing the level to refresh the file.
+
 ## [8.1.3] — 2026-11-12
 
 **Agents now know when a project uses Warpline.** An agent in a Warpline project used to start with no idea what Warpline was, because nothing it reads mentioned it. `warpline init` now writes a short guide into the project's AGENTS.md (and CLAUDE.md, if there is one), and `paradigm sync` writes the same guide into the files it generates. The new `warpline orient` tells an agent where it is and what it can do next. Ships with `@a-company/warpline` 0.3.1.

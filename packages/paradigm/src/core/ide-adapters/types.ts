@@ -4,6 +4,7 @@
  */
 
 import type { ParadigmConfig } from '../paradigm-config.js';
+import type { EnforcementConfig } from '../enforcement/types.js';
 
 /**
  * Spec files loaded from .paradigm/specs/
@@ -54,6 +55,13 @@ export interface ParadigmFiles {
       }>;
     };
   }>;
+  /**
+   * The project's enforcement config (core/enforcement loadEnforcementConfig).
+   * Unset is treated as the default level (`none`: every check off), so a
+   * generated file never claims the stop hook blocks when it does not. Stable
+   * config, so the section it renders lives in CLAUDE.md's cacheable head.
+   */
+  enforcement?: EnforcementConfig;
   /**
    * Set when the project is versioned by Warpline (core/warpline-detect.ts).
    * Unset → no generated file mentions Warpline. The block it renders is

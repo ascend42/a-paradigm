@@ -11,6 +11,7 @@ import {
   generateConventions,
   generateCommitConvention,
   generateWarplineSection,
+  generateEnforcementSection,
 } from './base.js';
 import { mcpServerEnv } from './mcp-env.js';
 
@@ -121,19 +122,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('3. Adds endpoints? \u2192 `paradigm_gates_for_route`');
     sections.push('');
 
-    // Automatic Enforcement (compressed hooks table)
-    sections.push('## Automatic Enforcement (Hooks)');
-    sections.push('');
-    sections.push('The stop hook **BLOCKS** if source files were modified without .purpose updates.');
-    sections.push('');
-    sections.push('| Hook | Behavior |');
-    sections.push('|------|----------|');
-    sections.push('| **Stop** | Blocks on: missing .purpose, missing portal.yaml gates, aspect drift, stale purposes |');
-    sections.push('| **Pre-commit** | Auto-rebuilds index \u2014 never blocks |');
-    sections.push('| **Post-write** | Advisory reminder for .purpose coverage |');
-    sections.push('');
-    sections.push('**If blocked:** Update .purpose files \u2192 update portal.yaml if needed \u2192 `paradigm_reindex` \u2192 finish');
-    sections.push('');
+    // Automatic Enforcement — written from the project's resolved enforcement
+    // level (default `none` = checks off), never a fixed "the hook blocks" claim.
+    sections.push(generateEnforcementSection(files));
 
     // Maintaining Paradigm Files (merged authoring rules)
     sections.push('## Maintaining Paradigm Files');

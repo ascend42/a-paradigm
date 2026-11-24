@@ -23,6 +23,12 @@ components:
     path: claude.ts
     aspects: ["~ide-adapter-pattern"]
 
+  enforcement-section:
+    description: "base.ts generateEnforcementSection(files): the 'Automatic Enforcement (Hooks)' section of the generated CLAUDE.md, written from the project's RESOLVED enforcement level (core/enforcement resolveAllChecks: preset plus per-check overrides) instead of a fixed 'the stop hook BLOCKS' claim. loadParadigmFiles sets files.enforcement from loadEnforcementConfig; unset means the default level none. All checks off: says so and names `paradigm enforcement set <level>`. Warn-only: 'warns but never blocks'. Any blocking check: lists what blocks and what warns, plus the 'If blocked' line. Depends only on config.yaml, so it is byte-stable and stays in the cacheable head (#cache-aligner). Only the Claude adapter carries this section; the other adapters make no blocking claim (enforcement-section.test.ts asserts it)."
+    type: utility
+    path: base.ts
+    aspects: ["~ide-adapter-pattern"]
+
   copilot-adapter:
     description: Generate .github/copilot-instructions.md for GitHub Copilot
     type: service
