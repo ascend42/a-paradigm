@@ -149,7 +149,9 @@ export interface BoardHandle {
    * `move`), at a text commit, at a delete, at a restyle of the selection. Never for a selection, a pan, a zoom, a
    * hover or a render. `cause` is the trusted DOM event that ended the gesture (the last pointerup or keydown the
    * board saw), for the gesture stamp; null when there was none. The ops are NOT validated here. A change that
-   * maps to no op (a fallback mark moved) is undone on the board and not reported. Returns the unsubscribe.
+   * maps to no op is undone on the board and not reported. ONLY marks the person touched are in the ops, and a
+   * mark in hand is compared with the node it was drawn from: a remote change that landed mid-gesture is kept.
+   * `cause` is cleared after every report. Returns the unsubscribe.
    */
   onEdit(listener: (ops: DimOp[], cause: Event | null) => void): () => void;
   /**
@@ -163,6 +165,12 @@ export interface BoardHandle {
    * gesture listeners do nothing (G-DDL-08).
    */
   setYielded(on: boolean): void;
+  /**
+   * The UNFILTERED diff of the scene against the state last rendered: empty when the board shows exactly that
+   * state (a board holding a malformed order key always drifts by its re-key). A probe for tests and diagnostics;
+   * never sent.
+   */
+  drift(): DimOp[];
   /** Non-deleted elements in the scene. */
   count(): number;
   /** Choose a rail tool. Throws on anything that is not in BOARD_TOOLS. */
@@ -170,9 +178,11 @@ export interface BoardHandle {
   /**
    * Set the current line, fill and/or weight from content-palette tokens. Applies to what is drawn next and to the
    * selected marks. A token that fails `contentColourCheck` is refused and nothing changes (never stepped to a
-   * passing colour). `marker` is kept as the choice but draws as `bold` unless the tool is Stroke.
+   * passing colour). `marker` is kept as the choice but draws as `bold` unless the tool is Stroke. `by` is the
+   * rail's own trusted event (the press on a well): a restyle of the selection is reported as an edit only with
+   * one, and it is that edit's `cause`; without it the restyle is put back.
    */
-  setStyle(style: Partial<BoardStyle>): { ok: true } | BoardStyleRefusal;
+  setStyle(style: Partial<BoardStyle>, by?: Event | null): { ok: true } | BoardStyleRefusal;
   /** Day or night: re-reads the skin and re-resolves every mark's colours through the content palette. */
   setTheme(theme: BoardTheme): void;
   zoomIn(): void;
@@ -219,6 +229,12 @@ export interface BoardMountOptions {
   timeoutMs?: number;
   /** The theme to draw in (default day). Change it later with handle.setTheme. */
   theme?: BoardTheme;
+  /**
+   * PROBE ONLY (the P12 harness, which has no trusted input in WKWebView): untrusted pointer and key events count
+   * as a person's input. The app never sets it (test/board-leaf.test.ts scans for it): there, only trusted events
+   * can make an engine change an edit.
+   */
+  syntheticInput?: boolean;
 }
 
 export interface BoardModule {

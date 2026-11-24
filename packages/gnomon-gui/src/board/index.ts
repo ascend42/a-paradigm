@@ -259,6 +259,16 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       let touched = false;
       let cause: Event | null = null;
       let yielded = false;
+      /** Put-backs in a row with no input between them: the second one stops (an engine that keeps normalising cannot loop). */
+      let putBacks = 0;
+      /** The stored node each main element was last BUILT from: what the person saw when they took a mark in hand. */
+      const seen = new Map<string, Record<string, unknown>>();
+      /** The text being typed, as it was when it was opened: a text opened and left as it was is not an edit. */
+      let typing: { id: string; containerId: string | null; text: string } | null = null;
+      /** Elements the engine changed around a text that was opened and not changed (its box refitted): not the person's. */
+      const untouched = new Set<string>();
+      /** Untrusted events count as input only for the probe harness (mount option `syntheticInput`); never in the app. */
+      const counts = (e: Event): boolean => e.isTrusted || options.syntheticInput === true;
       const busy = (): boolean => {
         const s = api.getAppState();
         return pointerDown || s.newElement != null || s.editingTextElement != null || s.editingFrame != null || s.multiElement != null || s.selectedElementsAreBeingDragged === true || s.isResizing === true || s.isRotating === true;
@@ -397,6 +407,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             const done = complete(el, state);
             const sig = JSON.stringify(done);
             const r = rendered.get(el.id);
+            const stored = el.type === 'text' && typeof el.containerId === 'string' ? undefined : foldNodeOf(el.id, state)?.node;
+            if (stored) seen.set(el.id, stored);
             if (have && !have.isDeleted && r && r.sig === sig && r.version === have.version) {
               next.push(have);
               continue;
@@ -425,6 +437,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             if (!el.isDeleted && inTarget.has(el.id)) shown.add(el.id);
           }
           for (const id of [...rendered.keys()]) if (!inTarget.has(id)) rendered.delete(id);
+          for (const id of [...seen.keys()]) if (!inTarget.has(id)) seen.delete(id);
           prev = state;
           // the id table keeps only what the state or the scene still holds
           const present = new Set(all().map((el) => el.id));
@@ -453,25 +466,103 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           mutateElement(el as never, { points: fitStroke(pts).points.map(([x, y]) => [x, y]), pressures: [], simulatePressure: true } as never, false);
         }
       };
-      let flushQueued = false;
-      const flush = (): void => {
-        flushQueued = false;
-        if (dead !== null || recolouring || busy() || !dirty()) return;
-        if (!touched || yielded) {
-          // an engine change nobody made (a reflow after a render) is not an edit, and is not kept either
-          return renderNow(prev);
+      /** Everything back to the state last rendered, with nothing left counted as changed. Always terminates. */
+      const putBack = (): void => {
+        rebase();
+        touched = false;
+        cause = null;
+        untouched.clear();
+        if (++putBacks > 2) return; // the engine keeps changing what it is given: its form stands until the next render
+        renderNow(prev);
+        rebase();
+      };
+      /**
+       * A stored arrow tied to a shape keeps its stored geometry (the map ties it with no focus and no gap, so the
+       * engine would re-route BOTH ends to the shapes' centres when either shape moves). An arrow the person did
+       * not take in hand has each end carried by exactly what its own shape moved, and nothing else.
+       */
+      const followArrows = (selected: Record<string, unknown>): void => {
+        const scene = new Map(all().map((el) => [el.id, el]));
+        const was = new Map(dimToElements(prev, theme, ids).map((el) => [el.id, el]));
+        for (const el of scene.values()) {
+          const old = was.get(el.id);
+          if (el.type !== 'arrow' || el.isDeleted || !isDirty(el) || selected[el.id] === true || !old?.points || !el.points || old.points.length !== el.points.length) continue;
+          const shift = (bind: { elementId: string } | null | undefined): [number, number] => {
+            const now = bind ? scene.get(bind.elementId) : undefined;
+            const then = bind ? was.get(bind.elementId) : undefined;
+            return now && then && !now.isDeleted ? [now.x - then.x, now.y - then.y] : [0, 0];
+          };
+          const a = shift(old.startBinding);
+          const z = shift(old.endBinding);
+          const last = old.points.length - 1;
+          // absolute points: the first follows its shape, the last follows its own, the ones between stay
+          const abs = old.points.map(([px, py], i) => [old.x + px + (i === 0 ? a[0] : i === last ? z[0] : 0), old.y + py + (i === 0 ? a[1] : i === last ? z[1] : 0)] as const);
+          const points = abs.map(([px, py]) => [px - abs[0]![0], py - abs[0]![1]]);
+          if (el.x === abs[0]![0] && el.y === abs[0]![1] && JSON.stringify(el.points) === JSON.stringify(points)) continue;
+          mutateElement(el as never, { x: abs[0]![0], y: abs[0]![1], points } as never, false);
         }
-        fitNewStrokes();
+      };
+      /** The unfiltered diff of the scene against the state last rendered. */
+      const diff = (basis: DimState): DimOp[] => {
         // a wrapped text holds its line breaks in `text`: what was typed is `originalText`
         const scene = all().map((el) => (el.type === 'text' && typeof el.originalText === 'string' && el.originalText !== el.text ? { ...el, text: el.originalText } : el));
         const gone = (op: DimOp): boolean => op.type === 'delete' && !shown.has(ids.engineOf(op.id));
-        const ops = elementsToOps(prev, scene as never, ids, { line: style.line, fill: style.fill, sticky: stickyDrawn.size > 0 }).filter((op) => !gone(op));
+        return elementsToOps(basis, scene as never, ids, { line: style.line, fill: style.fill, sticky: stickyDrawn.size > 0 }).filter((op) => !gone(op));
+      };
+      let flushQueued = false;
+      const flush = (): void => {
+        flushQueued = false;
+        if (dead !== null || recolouring || busy()) return;
+        if (!dirty()) {
+          // the gesture is over and changed nothing: it does not stay armed for a later engine change
+          touched = false;
+          cause = null;
+          return;
+        }
+        // an engine change nobody made (a reflow after a render), or one made while a card has the keyboard, is
+        // not an edit, and is not kept either
+        if (!touched || yielded) return putBack();
+        putBacks = 0;
+        const s = api.getAppState();
+        followArrows(s.selectedElementIds as Record<string, unknown>);
+        fitNewStrokes();
+        // ONLY what the person touched is reported: the elements whose version moved since the last render or report
+        const mine = new Set<string>();
+        const tombs = new Set<string>();
+        for (const el of all()) {
+          if (!isDirty(el) || untouched.has(el.id)) continue;
+          mine.add(typeof el.containerId === 'string' && el.type === 'text' ? el.containerId : el.id);
+          if (el.isDeleted) tombs.add(el.id);
+        }
+        // a mark in hand is compared with the node it was DRAWN from, so a remote change that landed during the
+        // gesture is not undone by the drop: the ops are the person's own delta, applied on top of the newest state
+        let basis = prev;
+        const nodes = new Map(prev.nodes);
+        for (const engineId of mine) {
+          const nodeId = nodeByEngine.get(engineId);
+          const cur = nodeId === undefined ? undefined : prev.nodes.get(nodeId);
+          const was = seen.get(engineId);
+          if (nodeId !== undefined && cur && was && was !== cur.node) nodes.set(nodeId, { ...cur, node: was });
+        }
+        basis = { ...prev, nodes };
+        const touchedNode = (nodeId: string): boolean => mine.has(ids.engineOf(nodeId));
+        const ops: DimOp[] = [];
+        for (const op of diff(basis)) {
+          if (op.type === 'move') {
+            const moved = op.ids.filter(touchedNode);
+            if (moved.length > 0) ops.push({ ...op, ids: moved });
+          } else if (op.type === 'add' ? touchedNode(op.node.id) : (op.type === 'update' || op.type === 'delete') && touchedNode(op.id)) ops.push(op);
+        }
         const why = cause;
         rebase();
         touched = false;
+        cause = null;
+        untouched.clear();
+        stickyDrawn.clear();
         api.history.clear();
-        // a change that maps to no op (a fallback mark moved, a text opened and left as it was) is put back
-        if (ops.length === 0) return renderNow(prev);
+        // a change that maps to no op (a text opened and left as it was) is put back
+        if (ops.length === 0) return putBack();
+        putBacks = 0;
         for (const l of [...editListeners]) l(ops, why);
       };
       const queueFlush = (): void => {
@@ -504,6 +595,19 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           }
           if (mismatched(el as unknown as Element) && el.id !== appState.newElement?.id) repaint = true;
         }
+        // a text opened and closed with the words it had: whatever the engine refitted around it is not an edit
+        const editing = appState.editingTextElement as { id: string; containerId?: string | null; originalText?: string; text?: string } | null;
+        if (editing && typing?.id !== editing.id) {
+          const stored = elements.find((el) => el.id === editing.id) as { originalText?: string; text?: string } | undefined;
+          typing = { id: editing.id, containerId: editing.containerId ?? null, text: base.has(editing.id) ? (stored?.originalText ?? stored?.text ?? '') : '\u0000new' };
+        } else if (!editing && typing) {
+          const now = elements.find((el) => el.id === typing!.id) as { originalText?: string; text?: string; isDeleted?: boolean } | undefined;
+          if (now && !now.isDeleted && (now.originalText ?? now.text ?? '') === typing.text) {
+            untouched.add(typing.id);
+            if (typing.containerId) untouched.add(typing.containerId);
+          }
+          typing = null;
+        }
         if (repaint) queueMicrotask(recolourAll);
         announce();
         sceneChanged();
@@ -512,30 +616,41 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const unsubscribeScroll = api.onScrollChange(sceneChanged);
       // the pointer and the keys a person uses on the board: what makes a later engine change an edit, and the
       // event its gesture stamp is minted from (the leaf's; the handle only hands the event on)
-      const onDown = (): void => {
+      const onDown = (e: Event): void => {
         pointerDown = true;
+        if (!counts(e)) return;
         touched = true;
+        putBacks = 0;
       };
       const onUp = (e: Event): void => {
         if (!pointerDown) return;
         pointerDown = false;
-        cause = e;
+        if (counts(e)) cause = e;
         // the engine settles its own state after this event: look once it has
         setTimeout(queueFlush, 0);
       };
       const onKey = (e: KeyboardEvent): void => {
+        if (!counts(e)) return;
         touched = true;
+        putBacks = 0;
         cause = e;
+        setTimeout(queueFlush, 0);
         const mod = e.metaKey || e.ctrlKey;
         const key = e.key.toLowerCase();
         if (!mod || e.altKey || (key !== 'z' && !(key === 'y' && e.ctrlKey && !e.metaKey))) return;
         const s = api.getAppState();
         if (s.editingTextElement != null || s.editingFrame != null) return; // a text being typed keeps its own undo
         e.preventDefault();
-        if (yielded || e.repeat) return;
+        // not while a card has the keyboard, not for a key held down, and not with a mark in hand (mid-drag)
+        if (yielded || e.repeat || busy()) return;
         for (const l of [...undoListeners]) l(e, key === 'y' || e.shiftKey);
       };
-      const onInput = (): void => void (touched = true);
+      const onInput = (e: Event): void => {
+        if (!counts(e)) return;
+        touched = true;
+        putBacks = 0;
+        setTimeout(queueFlush, 0);
+      };
       host.addEventListener('pointerdown', onDown, true);
       host.addEventListener('keydown', onKey, true);
       host.addEventListener('input', onInput, true);
@@ -577,7 +692,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       // tab-separated text would open the engine's chart dialog, which is not built: nothing happens, so say so
       const onTablePaste = (e: ClipboardEvent): void => {
-        touched = true;
+        if (counts(e)) touched = true;
         onPaste(e);
         const rows = (e.clipboardData?.getData('text/plain') ?? '').trim().split(/\r?\n/);
         if (rows.length >= 2 && rows.every((r) => r.includes('\t'))) refuse({ what: 'table', why: 'no-table-kind' });
@@ -597,7 +712,11 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           live();
           // a rendered row is not a gesture (Aegis A1): unless a person has a mark in hand, nothing the engine does
           // from here on is an edit until they act again
-          if (!busy() && !dirty()) touched = false;
+          if (!busy() && !dirty()) {
+            touched = false;
+            cause = null;
+          }
+          putBacks = 0;
           renderNow(state);
         },
         onEdit(listener) {
@@ -611,7 +730,10 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         setYielded(on: boolean): void {
           yielded = on === true;
           setBoardYielded(host, yielded);
+          // a mark displaced when the card took the keyboard is put back once the engine lets go of it
+          if (yielded) queueFlush();
         },
+        drift: () => (live(), diff(prev)),
         count: () => live().length,
         setTool(next: BoardTool): void {
           live();
@@ -622,7 +744,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           api.setActiveTool({ type: ENGINE_TOOL[next] });
           announce();
         },
-        setStyle(next: Partial<BoardStyle>) {
+        setStyle(next: Partial<BoardStyle>, by: Event | null = null) {
           live();
           if (next.line !== undefined) {
             const c = contentColourCheck(next.line, 'line');
@@ -652,7 +774,11 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             });
           });
           // restyling the selection is the person's edit (the rail's key called this): it is reported like any other
-          if (restyled) touched = true;
+          if (restyled) {
+            touched = by !== null && counts(by);
+            cause = touched ? by : null;
+            putBacks = 0;
+          }
           api.updateScene({ ...(restyled ? { elements } : {}), appState: current() as never, captureUpdate: CaptureUpdateAction.NEVER });
           announce();
           if (restyled) queueFlush();

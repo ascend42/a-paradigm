@@ -130,7 +130,7 @@ const DRIVER = `'use strict';
     R.tModule = Math.round(performance.now() - R.t0);
     R.engine = m.BOARD_ENGINE;
     R.phase = 'mount';
-    var h = await m.mountBoard(document.getElementById('board'));
+    var h = await m.mountBoard(document.getElementById('board'), { syntheticInput: true });
     // The board is a view of a folded dimension (boards S1.3): the page keeps the rows, folds them with the chunk's
     // own foldDim and renders the fold. put() appends a row as the host would stamp it (a mark's \`by\` picks the
     // stamp: none is you, an agent, or no stamp at all for the unknown hand); an edit the board reports becomes a
