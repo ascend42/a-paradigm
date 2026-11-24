@@ -18,7 +18,8 @@
  *     GESTURE_FANOUT times (one press may open and attach: two commands);
  *   - `n` below the last one seen is a replay and is refused.
  * Anything else (a caller that is not human class, args that are not a plain object, a missing or malformed
- * stamp, an unknown kind, an extra key) is refused FORBIDDEN `gesture`, and a refused stamp changes no state.
+ * stamp, an unknown kind, an extra key) is refused FORBIDDEN `ungranted` with `needs: 'gesture'`, and a refused stamp changes no state. (No new refusal reason:
+ * the reason list is hashed into `clientApiId`, so the registered `ungranted` carries it, as log.append's `needs` does.)
  *
  * takeGesture RETURNS the args WITHOUT the `gesture` key, on a null-prototype object and without prototype keys,
  * so the mod host is never handed it (the host strips the key again for every caller, modhost/host.ts
@@ -46,12 +47,12 @@ export interface GestureConn {
   gesture?: GestureState | undefined;
 }
 
-const refuse = (why: string): RpcRefusal => new RpcRefusal('FORBIDDEN', 'gesture', `mod.command from the GUI needs a gesture stamp (§11.5): ${why}`, { verb: 'mod.command', why });
+const refuse = (why: string): RpcRefusal => new RpcRefusal('FORBIDDEN', 'ungranted', `mod.command from the GUI needs a gesture stamp (§11.5): ${why}`, { verb: 'mod.command', needs: 'gesture', why });
 const PROTOTYPE_KEYS: readonly string[] = ['__proto__', 'constructor', 'prototype'];
 
 /**
  * Check and spend the gesture stamp in `args` for this connection; return the args without it. Throws
- * RpcRefusal FORBIDDEN `gesture` (data.why: not-human | args | missing | malformed | kind | replayed | spent).
+ * RpcRefusal FORBIDDEN `ungranted` (data.needs: 'gesture'; data.why: not-human | args | missing | malformed | kind | replayed | spent).
  */
 export function takeGesture(conn: GestureConn, args: unknown): Record<string, unknown> {
   // the class is read from the authenticated connection, never from params; a read token is never human class

@@ -39,7 +39,7 @@ const why = (f: () => unknown): string => {
   }
   expect(err).toBeInstanceOf(RpcRefusal);
   const r = (err as RpcRefusal).refusal;
-  expect([r.code, r.data?.reason, r.data?.verb]).toEqual(['FORBIDDEN', 'gesture', 'mod.command']);
+  expect([r.code, r.data?.reason, r.data?.needs, r.data?.verb]).toEqual(['FORBIDDEN', 'ungranted', 'gesture', 'mod.command']);
   return String(r.data?.why);
 };
 const stamp = (n: unknown, kind: unknown = 'pointer', more: Record<string, unknown> = {}): Record<string, unknown> => ({ a: 1, gesture: { n, kind }, ...more });
@@ -143,7 +143,7 @@ const SOCKET_TEST_MS = 60_000;
 
 interface Reply {
   result?: { result?: { relayedFor?: Record<string, string>; out?: { ok: boolean; keys?: string[]; hsid?: unknown; repo?: unknown; gesture?: unknown; args?: unknown } } };
-  error?: { data?: { code?: string; data?: { reason?: string; why?: string } } };
+  error?: { data?: { code?: string; data?: { reason?: string; needs?: string; why?: string } } };
 }
 
 /** The real dispatcher behind the real `gnomon-web` child, relaying to a real mod host that runs both probes. */
@@ -208,41 +208,41 @@ async function guiRig() {
   return { h, rows, events: r.events, gui };
 }
 
-const refusedWhy = (f: Reply): unknown[] => [f.error?.data?.code, f.error?.data?.data?.reason, f.error?.data?.data?.why];
+const refusedWhy = (f: Reply): unknown[] => [f.error?.data?.code, `${String(f.error?.data?.data?.reason)}/${String(f.error?.data?.data?.needs)}`, f.error?.data?.data?.why];
 
 describe('G-MOD-16: the gesture stamp on a real GUI connection (WebSocket, launch token, real mod host)', () => {
   it(
-    'missing, malformed, repeated past the fan-out and decreasing stamps are refused FORBIDDEN gesture and never reach the mod; a second connection has its own counter',
+    'missing, malformed, repeated past the fan-out and decreasing stamps are refused FORBIDDEN ungranted (needs gesture) and never reach the mod; a second connection has its own counter',
     async () => {
       const w = await guiRig();
       const a = await w.gui();
       const probe = (n: unknown, kind: unknown = 'pointer') => a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: `n${String(n)}`, gesture: { n, kind } });
       // missing and malformed: the mod is never called, so its state never changes
-      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'no-stamp' }))).toEqual(['FORBIDDEN', 'gesture', 'missing']);
-      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, undefined))).toEqual(['FORBIDDEN', 'gesture', 'args']);
-      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, [{ gesture: { n: 1, kind: 'key' } }]))).toEqual(['FORBIDDEN', 'gesture', 'args']);
-      expect(refusedWhy(await probe(0))).toEqual(['FORBIDDEN', 'gesture', 'malformed']);
-      expect(refusedWhy(await probe('1'))).toEqual(['FORBIDDEN', 'gesture', 'malformed']);
-      expect(refusedWhy(await probe(1, 'touch'))).toEqual(['FORBIDDEN', 'gesture', 'kind']);
+      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'no-stamp' }))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'missing']);
+      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, undefined))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'args']);
+      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, [{ gesture: { n: 1, kind: 'key' } }]))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'args']);
+      expect(refusedWhy(await probe(0))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'malformed']);
+      expect(refusedWhy(await probe('1'))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'malformed']);
+      expect(refusedWhy(await probe(1, 'touch'))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'kind']);
       // a top-level gesture param is not the stamp (and the relay params are a contract: nothing new is read there)
-      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'top' }, { gesture: { n: 1, kind: 'key' } }))).toEqual(['FORBIDDEN', 'gesture', 'missing']);
+      expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'top' }, { gesture: { n: 1, kind: 'key' } }))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'missing']);
       const state = async (): Promise<unknown> => ((await w.h.callTool(FIRST_PARTY_PROBE, 'probe.read', { op: 'state.get' })) as { v?: string }).v;
       const untouched = await state();
       // the same n fans out to 4 commands; the 5th is refused
       for (let i = 0; i < GESTURE_FANOUT; i++) expect((await probe(3)).result?.result?.out?.ok).toBe(true);
       expect(await state()).toBe(JSON.stringify('n3'));
       expect(await state()).not.toBe(untouched);
-      expect(refusedWhy(await probe(3))).toEqual(['FORBIDDEN', 'gesture', 'spent']);
+      expect(refusedWhy(await probe(3))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'spent']);
       // a higher n starts again; a lower one is a replay
       expect((await probe(4, 'menu')).result?.result?.out?.ok).toBe(true);
-      expect(refusedWhy(await probe(3))).toEqual(['FORBIDDEN', 'gesture', 'replayed']);
-      expect(refusedWhy(await probe(1))).toEqual(['FORBIDDEN', 'gesture', 'replayed']);
+      expect(refusedWhy(await probe(3))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'replayed']);
+      expect(refusedWhy(await probe(1))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'replayed']);
       expect(await state()).toBe(JSON.stringify('n4'));
       // the counter is per connection: another GUI connection starts from nothing, and does not move this one
       const b = await w.gui();
       expect(b.connId).not.toBe(a.connId);
       expect((await b.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'b1', gesture: { n: 1, kind: 'key' } })).result?.result?.out?.ok).toBe(true);
-      expect(refusedWhy(await probe(1))).toEqual(['FORBIDDEN', 'gesture', 'replayed']);
+      expect(refusedWhy(await probe(1))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'replayed']);
       expect((await probe(5, 'paste')).result?.result?.out?.ok).toBe(true);
     },
     SOCKET_TEST_MS,

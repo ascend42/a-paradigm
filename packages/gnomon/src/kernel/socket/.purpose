@@ -357,7 +357,8 @@ components:
       M1.10 before); status reports the relay available. A GUI mod.command
       carries args.gesture {n, kind}, inside the opaque args because a
       top-level relay param would move modAbiId and clientApiId. takeGesture
-      refuses FORBIDDEN gesture (data.why: not-human, args, missing, malformed,
+      refuses FORBIDDEN ungranted with needs gesture (the reason list is hashed
+      into clientApiId, so no new reason; data.why: not-human, args, missing, malformed,
       kind, replayed, spent) unless the connection is human class, args is a
       plain object, n is a safe integer of at least 1 and kind is one of
       pointer, key, paste, menu. Per connection (ConnAuthState.gesture, two

@@ -84,7 +84,7 @@
  * `relayedFor{principal, connId}` stamped HERE from the authenticated
  * connection — never from params. `mod.command` from a GUI connection carries
  * a GESTURE STAMP in `args.gesture` (§11.5; S1.3, G-MOD-16; gesture.ts): a
- * missing, malformed, replayed or spent one ⇒ FORBIDDEN{gesture}, and the key
+ * missing, malformed, replayed or spent one ⇒ FORBIDDEN{ungranted, needs: gesture}, and the key
  * is removed before the mod host sees the args. The stamp proves nothing
  * about a human; what a command may WRITE is the host's rule (the command
  * read cap, modhost/effects.ts commandCap, G-MOD-17): only a human on the

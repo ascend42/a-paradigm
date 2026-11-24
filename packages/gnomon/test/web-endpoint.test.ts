@@ -534,7 +534,7 @@ setInterval(() => undefined, 1000);`;
 });
 
 describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
-  it('mod.command without a gesture stamp is refused FORBIDDEN gesture before the port (G-MOD-16; the full cases are relay-gesture.test.ts) and status reports it available; mod.view is served with relayedFor from the GUI connection', async () => {
+  it('mod.command without a gesture stamp is refused FORBIDDEN ungranted (needs gesture) before the port (G-MOD-16; the full cases are relay-gesture.test.ts) and status reports it available; mod.view is served with relayedFor from the GUI connection', async () => {
     const seen: unknown[] = [];
     const commands: unknown[] = [];
     const mods: ModRelayPort = {
@@ -551,7 +551,7 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
     expect(st.relays).toEqual([expect.objectContaining({ relay: 'mod.view', available: true }), expect.objectContaining({ relay: 'mod.command', available: true })]);
     expect(st.mods).toEqual({ full: true }); // GUI = the human class
     ws.sendJson(rpc(4, 'mod.command', { name: 'acme.probe', commandId: 'probe.who', args: {} }));
-    expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'FORBIDDEN', data: { reason: 'gesture', why: 'missing' } } } });
+    expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'FORBIDDEN', data: { reason: 'ungranted', needs: 'gesture', why: 'missing' } } } });
     expect(commands).toEqual([]);
     // with a stamp the port is reached, with the surface derived from the credential and the stamp removed
     ws.sendJson(rpc(6, 'mod.command', { name: 'acme.probe', commandId: 'probe.who', args: { a: 1, gesture: { n: 1, kind: 'pointer' } }, relayedFor: { principal: 'p:evil/x', surface: 'cli' } }));
