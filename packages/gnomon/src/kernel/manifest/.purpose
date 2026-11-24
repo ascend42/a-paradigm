@@ -169,6 +169,12 @@ components:
       keeps its tier. The old trees are vendored under
       packages/gnomon/test/fixtures/first-party-superseded and hashed against
       the pins by test/superseded-pins.test.ts.
+      SUPERSEDED_FIRST_PARTY_PINS is now a map from an exact package hash to the
+      one prior modAbiId that tree echoes (the three format-2 first-party trees
+      of the previous release; no format-1 pin), with
+      SUPERSEDED_PINS_WRITTEN_FOR naming the modAbiId it was written for: when
+      modAbiId next moves the expiry test in test/mod-abi-compat.test.ts fails
+      until the table is emptied or each entry re-justified (no chains).
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]

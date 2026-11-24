@@ -30,6 +30,9 @@ components:
       catalog is ONLY the app's Contents/Resources/gnomon-mods (#app-bundle;
       never a folder beside the app); elsewhere the nearest gnomon-mods above
       the module (clone, npm package).
+      InstalledModView.note (S1.2): a host-composed sentence for a stopped mod
+      the host refused ABI at init (needs an update for this Gnomon), read from
+      the host's status().needsUpdate; never mod text.
     tags: [mods, gui]
     signals: []
     tests:
@@ -229,4 +232,20 @@ components:
       S1.3, an integration test of the first-party branch of #identityAllowed
       with gnomon.dimension (only the log.read branch and the unentitled branch
       are tested end to end today).
+      Compatibility acceptance (G-MOD-15, Aegis S1.2 point 9;
+      test/mod-abi-compat.test.ts): at init a mod must echo MOD_ABI_ID, with ONE
+      bounded exception. An installed snapshot whose exact packageHash is a key
+      of SUPERSEDED_FIRST_PARTY_PINS (manifest/install.ts), first-party by hash,
+      source package, publisher gnomon and declaring no tool, may echo the one
+      prior modAbiId listed for that hash (compatModAbiId). It then starts as
+      before with one extra mod.health{ok, why: abi-compat} row; no grant is
+      written and no tier or identity changes; the root-signed grant and the
+      snapshot rehash stand in loadMod as always. Any other mod answering
+      another id is refused ABI, and the refusal is STICKY in memory
+      (#needsUpdate: name to the refused packageHash): later relays are refused
+      ABI with why needs-update and a host-composed sentence without spawning
+      the child, so a view paint cannot run it into the restart cap and the DOWN
+      text never shows for this cause; an operator start, or a different pin
+      after the Update card, tries once more. status().needsUpdate lists the
+      names. G-MOD-14 is the A1 rule above.
     tags: [kernel, mods, sandbox, M1.11]
