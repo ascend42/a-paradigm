@@ -54,9 +54,13 @@ components:
     description: >-
       findPurposeFiles in src/aggregator.ts globs with dot true, so a .purpose under a
       dot-directory the project tracks (.github/workflows, .paradigm/agents) is found and indexed.
-      DEFAULT_PURPOSE_IGNORE keeps tool state and agent checkouts out (.claude, .git, .warpline,
-      .loom, .worktrees, .build, .next, .turbo). With respectGitignore the result matches the
-      CLI's git-based project file list, which this package cannot import. Pinned by
+      DEFAULT_PURPOSE_IGNORE is derived from two lists. PURPOSE_IGNORE_DIR_NAMES holds directory
+      names skipped at any depth (the five the CLI file list prunes, plus build and tool output
+      such as dist, build, coverage, .next, .turbo, .venv and .cache). PURPOSE_IGNORE_ROOT_DIRS
+      holds root-relative directories (.claude and the Paradigm record directories lore, events,
+      history, work-log and research), which are not walked. isPurposePathIgnored applies the same
+      policy to a path, so the CLI's file-list count matches what the index reads; this package
+      cannot import the CLI list. Tests in src/purpose-ignore.test.ts and
       packages/paradigm/src/core/project-counts.test.ts.
     file: packages/purpose/core/src/aggregator.ts
     tags:
@@ -69,6 +73,8 @@ components:
       and components, a tilde key under aspects) is read as the plain id instead of being indexed
       double-prefixed. Each one yields a redundant-prefix ParseWarning on ParseResult.warnings,
       which paradigm lint prints as a warning. When both spellings are present the plain key wins.
+      A key carrying another section's prefix is left as written and yields a
+      wrong-section-prefix warning naming the section it belongs in.
       Array-format ids and flow names are treated the same. Tests in src/redundant-prefix.test.ts.
     file: packages/purpose/core/src/parser.ts
     tags:

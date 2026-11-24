@@ -48,11 +48,29 @@ describe('redundant section prefix on a key', () => {
     expect(Object.keys(result.data!.flows as object)).toEqual(['checkout']);
   });
 
-  it('only the section\'s own prefix is redundant', () => {
-    // "!urgent" under flows is not a doubled flow prefix; it is left as written
-    const data = { flows: { '!urgent': { description: 'x' } } };
+  it('a key carrying another section\'s prefix is left as written and reported as misplaced', () => {
+    const data = {
+      flows: { '^gate-here': { description: 'x' }, '!urgent': { description: 'y' }, ok: { description: 'z' } },
+      gates: { '$flow-here': { description: 'x' } },
+      components: { '~aspect-here': { description: 'x' } },
+    };
+    const warnings = normalizeSymbolKeys(data);
+
+    expect(Object.keys(data.flows)).toEqual(['^gate-here', '!urgent', 'ok']);
+    expect(Object.keys(data.gates)).toEqual(['$flow-here']);
+    expect(warnings.map((w) => [w.type, w.path])).toEqual([
+      ['wrong-section-prefix', 'components.~aspect-here'],
+      ['wrong-section-prefix', 'flows.^gate-here'],
+      ['wrong-section-prefix', 'flows.!urgent'],
+      ['wrong-section-prefix', 'gates.$flow-here'],
+    ]);
+    expect(warnings[1].message).toContain('carries the "^" prefix of gates');
+    expect(warnings[1].message).toContain('Move it to gates:');
+  });
+
+  it('a key with a character that is no symbol prefix gets no warning', () => {
+    const data = { flows: { '%legacy': { description: 'x' }, '_private': { description: 'y' } } };
     expect(normalizeSymbolKeys(data)).toEqual([]);
-    expect(Object.keys(data.flows)).toEqual(['!urgent']);
   });
 
   it('a repeated prefix is stripped whole', () => {

@@ -9,7 +9,8 @@
  *
  *  - .purpose files: entries named `.purpose` in the shared project file list
  *    (#project-files: tracked, or untracked and not ignored, with agent
- *    worktrees and generated state left out).
+ *    worktrees and generated state left out) that are symbol sources by
+ *    purpose-core's policy (no build-output copies, no Paradigm records).
  *  - symbols and gates: DECLARED symbols in the live index (premise-core
  *    getSymbolCounts). A gate counts once however many files declare it.
  *  - isolated symbols: premise-core findIsolatedSymbols, on the live index.
@@ -31,6 +32,7 @@ import {
   type IsolatedSymbol,
   type SymbolType,
 } from '@a-company/premise-core';
+import { isPurposePathIgnored } from '@a-company/purpose-core';
 import { listProjectFiles, toPosixPath, type ProjectFileList } from './project-files.js';
 
 export interface GateCounts {
@@ -66,9 +68,14 @@ export interface ProjectCounts {
   errors: AggregationError[];
 }
 
-/** The project's .purpose files, from the shared file list. */
+/**
+ * The project's .purpose files: the ones in the shared file list that are
+ * symbol sources. purpose-core's policy (isPurposePathIgnored) leaves out copies
+ * under build output and Paradigm's own records, so this is the set the symbol
+ * index reads.
+ */
 export function listPurposeFiles(list: ProjectFileList): string[] {
-  return list.files.filter((rel) => rel === '.purpose' || rel.endsWith('/.purpose'));
+  return list.files.filter((rel) => (rel === '.purpose' || rel.endsWith('/.purpose')) && !isPurposePathIgnored(rel));
 }
 
 /** The project's portal.yaml files, from the shared file list. */

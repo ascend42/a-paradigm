@@ -8,8 +8,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { findPurposeFiles } from '@a-company/purpose-core';
-import { listProjectFiles, toPosixPath } from './project-files.js';
+import { findPurposeFiles, PURPOSE_IGNORE_DIR_NAMES, PURPOSE_IGNORE_ROOT_DIRS } from '@a-company/purpose-core';
+import { listProjectFiles, toPosixPath, PRUNE_DIRS } from './project-files.js';
 import {
   collectProjectCounts,
   countLoreEntries,
@@ -120,6 +120,9 @@ function fixture(): void {
   // Tracked, under dot-directories: invisible to a glob without `dot: true`
   write('.github/workflows/.purpose', ['version: "2.0"', 'components:', '  ci-workflow:', '    description: CI']);
   write('.paradigm/agents/.purpose', ['version: "2.0"', 'components:', '  agent-roster:', '    description: Roster']);
+  // Tracked, but a record directory and build output by name: not symbol sources
+  write('.paradigm/research/some-study/.purpose', ['version: "2.0"', 'components:', '  study-note:', '    description: note']);
+  write('packages/api/dist/.purpose', ['version: "2.0"', 'components:', '  built-copy:', '    description: copy']);
   // Ignored build output: a copy that must not be counted or indexed
   write('release/App/.purpose', ['version: "2.0"', 'components:', '  copied:', '    description: copy']);
   // Lore: entries are .lore files in one directory per date; index files are not entries
@@ -193,6 +196,33 @@ describe('collectProjectCounts', () => {
     const list = listProjectFiles(root);
     const traits = repoTraits(root, 4, list);
     expect(traits.purposeCount).toBe(listPurposeFiles(list).length);
+  });
+});
+
+describe('ignore lists: the file list and .purpose discovery', () => {
+  it('every directory the file list prunes is also ignored by .purpose discovery', () => {
+    for (const dir of PRUNE_DIRS) expect(PURPOSE_IGNORE_DIR_NAMES, dir).toContain(dir);
+  });
+
+  it('pins the intended differences', () => {
+    // Only .purpose discovery skips these: other checks still need the files in them.
+    const onlyPurpose = PURPOSE_IGNORE_DIR_NAMES.filter((dir) => !PRUNE_DIRS.includes(dir));
+    expect(onlyPurpose).toEqual(['dist', '.worktrees', 'build', 'coverage', '.next', '.turbo', '.venv', '.cache', 'Pods', 'DerivedData']);
+    expect([...PRUNE_DIRS]).toEqual(['node_modules', '.git', '.warpline', '.build', '.loom']);
+    expect([...PURPOSE_IGNORE_ROOT_DIRS]).toContain('.paradigm/research');
+  });
+
+  it('a tracked .purpose under a record directory or build output is in the file list, not in the count or the index', async () => {
+    fixture();
+    const list = listProjectFiles(root);
+    expect(list.files).toContain('.paradigm/research/some-study/.purpose');
+    expect(list.files).toContain('packages/api/dist/.purpose');
+    expect(listPurposeFiles(list)).not.toContain('.paradigm/research/some-study/.purpose');
+    expect(listPurposeFiles(list)).not.toContain('packages/api/dist/.purpose');
+
+    const counts = await collectProjectCounts(root, list);
+    expect(counts.purposeFilesNotIndexed).toEqual([]);
+    expect(counts.symbols.component).toBe(5); // app-shell, lonely, step-only, ci-workflow, agent-roster
   });
 });
 

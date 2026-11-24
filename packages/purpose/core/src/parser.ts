@@ -178,7 +178,10 @@ const PREFIX_FOR_SECTION: Record<string, string> = {
  *    so every reference to `$checkout` reads as undeclared. Array-format entries
  *    (`id:` for components and features, `name:` for flows) are treated the same.
  *
- * Returns one warning per redundant prefix; the file is still valid.
+ * 3. A key carrying another section's prefix (`^gate` under flows) is left as
+ *    written and reported: it is probably in the wrong section.
+ *
+ * Returns one warning per finding; the file is still valid.
  */
 export function normalizeSymbolKeys(data: unknown): ParseWarning[] {
   const warnings: ParseWarning[] = [];
@@ -235,6 +238,16 @@ export function normalizeSymbolKeys(data: unknown): ParseWarning[] {
     for (const raw of Object.keys(dict)) {
       const id = raw[0] === prefix ? strip(raw) : '';
       if (!id) {
+        // A key carrying ANOTHER kind's prefix (`^gate` under flows) is almost
+        // certainly in the wrong section. It is left as written and reported.
+        const other = raw.length > 1 && raw[0] !== prefix ? SECTION_FOR_PREFIX[raw[0]] : undefined;
+        if (other) {
+          warnings.push({
+            type: 'wrong-section-prefix',
+            path: `${section}.${raw}`,
+            message: `"${raw}" under ${section}: carries the "${raw[0]}" prefix of ${other}. It is read as written, an entry of ${section} (symbol ${prefix}${raw}). Move it to ${other}:, or remove the prefix.`,
+          });
+        }
         rebuilt[raw] = dict[raw];
         continue;
       }

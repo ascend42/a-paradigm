@@ -146,36 +146,77 @@ export function aggregatePurposes(parsedFiles: ParsedPurposeFile[]): AggregatedP
 }
 
 /**
- * Default ignore globs for .purpose discovery (relative to the search root).
+ * Directories whose .purpose files are never symbol sources, at ANY depth.
  *
- * The first three are the historical set. The rest keep tool/build output and
- * agent scratch checkouts out of the symbol graph: Claude Code worktrees
- * (`.claude/**`), generic `.worktrees`, the Warpline object store, JS/Swift/iOS
- * build output (build, .build, coverage, .next, .turbo, Pods, DerivedData).
- * A `.purpose` copied into e.g. `.next/standalone/**` is a stale duplicate, and
- * duplicates are resolved last-write-wins — so leaving them in made the WINNING
- * definition depend on build artefacts.
- *
- * Note: glob runs with `dot: true`: a `.purpose` under a dot-directory the project
- * tracks (`.github/workflows/`, `.paradigm/agents/`) is a symbol source like any other.
- * The dot entries below are what keeps tool state and agent checkouts out.
+ * Compare PRUNE_DIRS in the CLI's core/project-files.ts (this package cannot
+ * import it). PRUNE_DIRS holds what NO check reads: node_modules, .git,
+ * .warpline, .build, .loom. Those five are here too. The rest of this list is
+ * intentionally only here: build and tool output (dist, build, coverage, .next,
+ * .turbo, .venv, .cache, Pods, DerivedData) and agent checkouts (.worktrees)
+ * can hold real project files that other checks must still see, but a .purpose
+ * in them is a copy, and duplicates are resolved last-write-wins, so leaving
+ * them in made the winning definition depend on build artefacts.
+ */
+export const PURPOSE_IGNORE_DIR_NAMES: readonly string[] = Object.freeze([
+  'node_modules',
+  'dist',
+  '.git',
+  '.worktrees',
+  '.warpline',
+  '.loom',
+  'build',
+  '.build',
+  'coverage',
+  '.next',
+  '.turbo',
+  '.venv',
+  '.cache',
+  'Pods',
+  'DerivedData',
+]);
+
+/**
+ * Root-relative directories whose .purpose files are never symbol sources:
+ * Claude Code state (agent worktrees are full copies of the repository) and
+ * Paradigm's own records. `.paradigm/agents/.purpose` and `.github/**` stay
+ * visible; lore, events, history, work logs and research notes are records
+ * with thousands of files, not code, and are not walked.
+ */
+export const PURPOSE_IGNORE_ROOT_DIRS: readonly string[] = Object.freeze([
+  '.claude',
+  '.paradigm/lore',
+  '.paradigm/events',
+  '.paradigm/history',
+  '.paradigm/work-log',
+  '.paradigm/research',
+]);
+
+/**
+ * Default ignore globs for .purpose discovery (relative to the search root),
+ * derived from the two lists above. glob runs with `dot: true`, so a .purpose
+ * under a dot-directory the project tracks is a symbol source like any other;
+ * these entries are what keeps tool state, records and copies out.
  */
 export const DEFAULT_PURPOSE_IGNORE: readonly string[] = Object.freeze([
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/.git/**',
-  '.claude/**',
-  '**/.worktrees/**',
-  '.warpline/**',
-  '**/.loom/**',
-  '**/build/**',
-  '**/.build/**',
-  '**/coverage/**',
-  '**/.next/**',
-  '**/.turbo/**',
-  '**/Pods/**',
-  '**/DerivedData/**',
+  ...PURPOSE_IGNORE_DIR_NAMES.map((name) => `**/${name}/**`),
+  ...PURPOSE_IGNORE_ROOT_DIRS.map((dir) => `${dir}/**`),
 ]);
+
+/**
+ * The same policy as DEFAULT_PURPOSE_IGNORE for a root-relative, forward-slash
+ * path, for callers that hold a file list instead of running the glob (the
+ * CLI's shared project file list). True when the path is not a symbol source.
+ */
+export function isPurposePathIgnored(relPath: string): boolean {
+  for (const dir of PURPOSE_IGNORE_ROOT_DIRS) {
+    if (relPath.startsWith(`${dir}/`)) return true;
+  }
+  const segments = relPath.split('/');
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (PURPOSE_IGNORE_DIR_NAMES.includes(segments[i])) return true;
+  }
+  return false;
+}
 
 /**
  * Extra globs used by findPurposeFiles({ respectGitignore: true }) when git

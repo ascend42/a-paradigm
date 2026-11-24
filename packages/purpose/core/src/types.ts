@@ -230,8 +230,11 @@ export interface ParseError {
 export interface ParseWarning {
   message: string;
   path?: string;
-  /** `redundant-prefix`: a key repeats its section's symbol prefix (`flows: { $x: … }`). */
-  type: 'redundant-prefix';
+  /**
+   * `redundant-prefix`: a key repeats its section's symbol prefix (`flows: { $x: … }`).
+   * `wrong-section-prefix`: a key carries another section's prefix (`flows: { ^x: … }`).
+   */
+  type: 'redundant-prefix' | 'wrong-section-prefix';
 }
 
 export interface ParseResult {
