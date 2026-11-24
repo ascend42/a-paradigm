@@ -389,7 +389,25 @@ function extractUniqueGates(references: GateReference[]): string[] {
  * @param rootDir - Project root directory
  * @returns Compliance report
  */
-export async function checkPortalCompliance(rootDir: string, options: { projectFiles?: ProjectFileList } = {}): Promise<ComplianceReport> {
+export async function checkPortalCompliance(
+  rootDir: string,
+  options: {
+    /** The run's shared #project-files list, when the caller already has one. */
+    projectFiles?: ProjectFileList;
+    /** Called with each section's wall time (compliance-check --timings). */
+    onTiming?: (section: 'gate-files' | 'references' | 'nested-declared', ms: number) => void;
+  } = {},
+): Promise<ComplianceReport> {
+  const timed = <T>(section: 'gate-files' | 'references' | 'nested-declared', fn: () => T): T => {
+    if (!options.onTiming) return fn();
+    const start = performance.now();
+    try {
+      return fn();
+    } finally {
+      options.onTiming(section, performance.now() - start);
+    }
+  };
+
   const loadResult = loadPortalConfig(rootDir);
 
   // FAIL-CLOSED: portal.yaml exists but cannot be parsed.
@@ -427,7 +445,8 @@ export async function checkPortalCompliance(rootDir: string, options: { projectF
 
   // If no portal.yaml exists, check if any gate references exist in code
   if (loadResult.status === 'missing') {
-    const references = findGateReferences(rootDir, listGateFiles(rootDir, options.projectFiles));
+    const missingPortalFiles = timed('gate-files', () => listGateFiles(rootDir, options.projectFiles));
+    const references = timed('references', () => findGateReferences(rootDir, missingPortalFiles));
     const usedGates = extractUniqueGates(references);
 
     if (usedGates.length === 0) {
@@ -467,8 +486,8 @@ export async function checkPortalCompliance(rootDir: string, options: { projectF
   const declaredGates = extractDeclaredGates(config);
   const routeAttachedGates = extractRouteAttachedGates(config);
   // One file list per run, shared by the reference scan and the nested-declaration scan
-  const gateFiles = listGateFiles(rootDir, options.projectFiles);
-  const references = findGateReferences(rootDir, gateFiles);
+  const gateFiles = timed('gate-files', () => listGateFiles(rootDir, options.projectFiles));
+  const references = timed('references', () => findGateReferences(rootDir, gateFiles));
   const usedGates = extractUniqueGates(references);
 
   // Compare declared vs used
@@ -479,7 +498,7 @@ export async function checkPortalCompliance(rootDir: string, options: { projectF
   const routeAttachedUnused = declaredButUnused.filter(g => routeAttachedGates.has(g));
   const orphanUnused = declaredButUnused.filter(g => !routeAttachedGates.has(g));
 
-  const nestedDeclared = new Set(extractNestedDeclaredGates(rootDir, gateFiles));
+  const nestedDeclared = new Set(timed('nested-declared', () => extractNestedDeclaredGates(rootDir, gateFiles)));
   const usedButUndeclared = usedGates.filter(g => !declaredSet.has(g) && !nestedDeclared.has(g));
   const properlyDeclared = declaredGates.filter(g => usedSet.has(g));
 

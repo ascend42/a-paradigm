@@ -38,21 +38,19 @@ const WORKTREE = '.claude/worktrees/agent-abc';
 const realHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
 let fakeHome = '';
 let rootDir = '';
-let cleanup: (() => void) | undefined;
 
 beforeEach(() => {
   fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-list-home-'));
   process.env.HOME = fakeHome;
   process.env.USERPROFILE = fakeHome;
+  // Removed in afterEach with retries (Windows), not with the helper's own cleanup
   const project = createTempProject({ withPurpose: true });
   rootDir = project.rootDir;
-  cleanup = project.cleanup;
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   fs.rmSync(rootDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  cleanup = undefined;
   for (const [k, v] of Object.entries(realHome)) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;

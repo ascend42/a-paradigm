@@ -1,6 +1,15 @@
 version: 2.0.0
 description: CLI command implementations for the paradigm binary
 components:
+  compliance-check-timings:
+    description: 'paradigm compliance-check --timings (compliance.ts): reports how long each section of the Stop hook''s one compliance pass took. Sections run one after another: habits (with habits.load, habits.git-diff, habits.git-status, habits.evaluate, habits.sentinel-record), drift, portal (with portal.gate-files, portal.references, portal.nested-declared, reported by checkPortalCompliance through its onTiming option), and learn when --learn is given; plus startupMs (process start to the command body, read from performance.now()) and commandMs. With --json the result gains one key, timings: {startupMs, commandMs, sections: [{section, ms}]}; the human report prints a Timings block through cli-output. Without the flag the output is unchanged, so the Stop hooks (which do not pass it) parse the same JSON as before. SectionTimer is exported for tests and records a section even when the timed function throws.'
+    type: command
+    file: packages/paradigm/src/commands/compliance.ts
+    tags: [compliance, hooks, performance]
+    components:
+      - '#portal-compliance'
+    tests:
+      - packages/paradigm/src/commands/compliance.test.ts
   reindex-command:
     description: 'paradigm reindex [path] [--json] [-q] (reindex/index.ts): the CLI form of the MCP tool paradigm_reindex. Calls the same rebuildStaticFiles and prints the same compact summary (summarizeRebuild), both imported from packages/paradigm-mcp/src/tools/reindex.ts, so no rebuild logic lives in the CLI. Writes .paradigm/scan-index.json, navigator.yaml, the flow index and the other generated indexes. Refuses (exit 1, "paradigm shift") when there is no .paradigm/ directory, so it never scaffolds one. --json and --quiet skip the operation tracker so stdout is only the JSON (or nothing). Doctor names this command for a missing or stale scan-index.json (#doctor-fix-commands). Bare `paradigm scan` still only prints usage, and `paradigm index` (commands/probe/index.ts) still writes scan-index.json through the older probe-core path without navigator.yaml or the aspect graph.'
     type: command

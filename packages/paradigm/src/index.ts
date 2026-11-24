@@ -3327,6 +3327,7 @@ program
   .option('--auto-heal', 'Auto-heal drift violations')
   .option('--trigger <event>', 'Trigger context (e.g., on-stop)', 'on-stop')
   .option('--learn', 'Run postflight learning pass (convert session verdicts to journal entries)')
+  .option('--timings', 'Report how long each section took (adds a "timings" key to --json)')
   .action(async (options) => {
     const { complianceCheckCommand } = await import('./commands/compliance.js');
     await complianceCheckCommand(options);
