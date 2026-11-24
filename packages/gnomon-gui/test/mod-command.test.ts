@@ -9,7 +9,7 @@ import { CLIENT_RELAYS, DIM_MOD_ID } from '@a-company/gnomon-contracts';
 import { RpcError } from '../src/core/client.js';
 import { GESTURE_FANOUT, GESTURE_MAX_AGE_MS, gestureOf } from '../src/core/gesture.js';
 import type { Gesture } from '../src/core/gesture.js';
-import { MOD_COMMAND_MODS, ModCommandRefusal, modCommandFailure, sendModCommand } from '../src/core/mod-command.js';
+import { MOD_COMMANDS, MOD_COMMAND_MODS, ModCommandRefusal, modCommandFailure, sendModCommand } from '../src/core/mod-command.js';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
 const press = (now = 0): Gesture => gestureOf({ isTrusted: true, type: 'pointerup' }, now)!;
@@ -58,16 +58,64 @@ describe('#gui-mod-command sendModCommand', () => {
     expect(g.n).toBe(0);
   });
 
-  it('refuses args that are not a plain object or that carry a host-composed key', async () => {
+  it('18. refuses args that are not a plain object or that carry a host-composed key, and spends nothing', async () => {
     const c = client();
     const g = press(0);
-    for (const args of [{ hsid: 'h' }, { repo: 'repo:x' }, { gesture: { n: 1, kind: 'key' } }, [], null, 'x', new Map()]) expect(await whyOf(sendModCommand(c, g, DIM_MOD_ID, 'dim.op', args as never, 0))).toBe('args');
+    for (const args of [{ hsid: 'h' }, { repo: 'repo:x' }, { paradigm: {} }, { gesture: { n: 1, kind: 'key' } }, [], null, 'x', new Map()]) expect(await whyOf(sendModCommand(c, g, DIM_MOD_ID, 'dim.op', args as never, 0))).toBe('args');
     expect(c.calls).toEqual([]);
-    // a key named __proto__ in parsed input stays a plain key and sets no prototype
-    await sendModCommand(c, g, DIM_MOD_ID, 'dim.op', JSON.parse('{"__proto__":{"gesture":1},"dim":"d"}') as Record<string, unknown>, 0);
-    const sent = (c.calls[0]!.params as { args: Record<string, unknown> }).args;
-    expect(Object.getPrototypeOf(sent)).toBe(Object.prototype);
-    expect(sent.gesture).toEqual({ n: g.n, kind: 'pointer' });
+    expect(g.n).toBe(0);
+  });
+
+  it('18. refuses (never strips) an own key __proto__, constructor, prototype or toJSON at any depth', async () => {
+    const c = client();
+    const g = press(0);
+    const hostile: unknown[] = [
+      JSON.parse('{"__proto__":{"gesture":1},"dim":"d"}'),
+      JSON.parse('{"ops":[{"type":"add","node":{"__proto__":{"x":1}}}]}'),
+      { constructor: 1 },
+      { ops: [{ patch: { prototype: {} } }] },
+      { toJSON: () => ({ hsid: 'smuggled' }) },
+      { ops: [{ node: { toJSON: 'x' } }] },
+      { when: new Date(0) },
+      { ops: [new (class Op {})()] },
+    ];
+    for (const args of hostile) expect(await whyOf(sendModCommand(c, g, DIM_MOD_ID, 'dim.op', args as never, 0))).toBe('args');
+    // too deep to walk is refused too
+    let deep: Record<string, unknown> = {};
+    const root = deep;
+    for (let i = 0; i < 40; i++) deep = deep.a = {};
+    expect(await whyOf(sendModCommand(c, g, DIM_MOD_ID, 'dim.op', root, 0))).toBe('args');
+    expect(c.calls).toEqual([]);
+    // ordinary nested args go out exactly as written
+    const args = { dim: 'dim:x', ops: [{ type: 'add', node: { id: 'a', points: [0, 0, 1, 1], refs: ['sym:#x'] } }], focus: { hsid: 'hsid-1' } };
+    await sendModCommand(c, g, DIM_MOD_ID, 'dim.op', args, 0);
+    expect((c.calls[0]!.params as { args: unknown }).args).toEqual({ ...args, gesture: { n: g.n, kind: 'pointer' } });
+  });
+
+  it('18. focus is {hsid} and nothing else', async () => {
+    const c = client();
+    for (const focus of [null, 'hsid-1', {}, { hsid: '' }, { hsid: 7 }, { hsid: 'h', repo: 'repo:x' }, { hsid: 'h', hsid2: 'i' }, ['h']]) expect(await whyOf(sendModCommand(c, press(0), DIM_MOD_ID, 'dim.op', { focus } as never, 0))).toBe('args');
+    expect(c.calls).toEqual([]);
+    expect(await whyOf(sendModCommand(c, press(0), DIM_MOD_ID, 'dim.op', { focus: { hsid: 'h' } }, 0))).toBe('sent');
+  });
+
+  it('18. takes a closed list of command ids for the dimension mod', async () => {
+    expect([...MOD_COMMANDS.entries()]).toEqual([['gnomon.dimension', ['dim.open', 'dim.attach', 'dim.op', 'dim.close']]]);
+    const c = client();
+    const g = press(0);
+    for (const id of ['dim.delete', 'dim.op ', 'DIM.OP', 'tool.call', 'toString', '', 'dim-draw']) expect(await whyOf(sendModCommand(c, g, DIM_MOD_ID, id, {}, 0))).toBe('command-id');
+    expect(c.calls).toEqual([]);
+    expect(g.n).toBe(0);
+    for (const id of ['dim.open', 'dim.attach', 'dim.op', 'dim.close']) expect(await whyOf(sendModCommand(c, press(0), DIM_MOD_ID, id, {}, 0))).toBe('sent');
+  });
+
+  it('18. a client that throws instead of rejecting still gives one rejected promise', async () => {
+    const boom = new Error('socket gone');
+    const throwing = { call: (): never => { throw boom; } };
+    let p: Promise<unknown> | undefined;
+    expect(() => (p = sendModCommand(throwing as never, press(0), DIM_MOD_ID, 'dim.op', {}, 0))).not.toThrow();
+    await expect(p).rejects.toBe(boom);
+    expect(modCommandFailure(boom)).toEqual({ code: 'refused', why: null });
   });
 
   it('reconnect: the stamp number is per client object, so a new connection starts again at 1 and steps by 1', async () => {
@@ -92,7 +140,12 @@ describe('#gui-mod-command sendModCommand', () => {
     for (let i = 0; i < GESTURE_FANOUT; i++) await expect(sendModCommand(failing, g, DIM_MOD_ID, 'dim.op', {}, 0)).rejects.toBeInstanceOf(RpcError);
     expect(calls).toHaveLength(GESTURE_FANOUT);
     expect(await whyOf(sendModCommand(failing, g, DIM_MOD_ID, 'dim.op', {}, 0))).toBe('gesture-spent');
-    expect(readFileSync(path.join(SRC, 'core', 'mod-command.ts'), 'utf8')).not.toMatch(/retry\(|\.catch\(|for \(|while \(/);
+    // the send function itself has no loop and no second call
+    const src = readFileSync(path.join(SRC, 'core', 'mod-command.ts'), 'utf8');
+    const fn = src.slice(src.indexOf('export function sendModCommand'), src.indexOf('/** Why a send failed'));
+    expect(fn.length).toBeGreaterThan(200);
+    expect(fn).not.toMatch(/retry\(|\.catch\(|\.then\(|for \(|while \(/);
+    expect(fn.match(/c\.call\(/g)).toHaveLength(1);
   });
 
   it('reads a failed send into a closed list of codes', () => {

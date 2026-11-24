@@ -8,7 +8,10 @@
  * the caller wires the events and calls `clear()` on window blur and at unmount.
  *
  * A6 rules, all held here:
- *  - an empty register text never matches (so a mark with no words is copied under a fixed stand-in line);
+ *  - an empty register text never matches (so a mark with no words is copied under a fixed stand-in line). Texts
+ *    are compared with line ends normalised to LF, because a Windows clipboard hands back CRLF. A paste of the
+ *    stand-in line when the register does not hold it (it was cleared on blur, or another copy replaced it) is
+ *    answered `nothing-held`, so the leaf adds nothing and says so instead of pasting the line as words;
  *  - at most DIM_CLIPBOARD_LIMITS.clones clones;
  *  - `from`, `to` and `parent` are renamed to the clone when their target is in the copied set, and dropped otherwise;
  *  - every clone has a new id, and nothing but shape, words and colour is carried: the closed key list
@@ -42,9 +45,23 @@ export interface DimCopyResult {
   /** the plain text for the system clipboard ('' when nothing was copied) */
   text: string;
   copied: number;
-  /** selected marks left out: over the limit, or of a kind this build cannot write */
+  /** distinct ids asked for that were not copied: unknown, over the limit, or of a kind this build cannot write */
   skipped: number;
 }
+
+/**
+ * What a paste is. `clones`: the text is the register's; add these ops. `text`: not the register's; the caller
+ * pastes it as one text node. `nothing-held`: the text is the stand-in line of a copy this register no longer
+ * holds; the caller adds nothing and says so.
+ */
+export type DimPasteResult = { kind: 'clones'; ops: DimOp[] } | { kind: 'text' } | { kind: 'nothing-held' };
+
+/** The line a copy of marks with no words puts on the clipboard. */
+export const dimStandInLine = (count: number): string => (count === 1 ? '(1 board mark)' : `(${count} board marks)`);
+/** Every stand-in line a copy can produce (1 to the clone limit). */
+const STAND_INS: ReadonlySet<string> = new Set(Array.from({ length: DIM_CLIPBOARD_LIMITS.clones }, (_, i) => dimStandInLine(i + 1)));
+/** CRLF and lone CR to LF: the form texts are compared in. */
+const lf = (text: string): string => text.replace(/\r\n?/g, '\n');
 
 export class DimClipboard {
   #text = '';
@@ -58,10 +75,11 @@ export class DimClipboard {
    */
   copy(state: DimState, nodeIds: readonly string[]): DimCopyResult {
     this.clear();
-    const wanted = [...new Set(nodeIds)].filter((id) => state.nodes.has(id));
+    const asked = new Set(nodeIds);
+    const wanted = [...asked].filter((id) => state.nodes.has(id));
     const core = wanted.filter((id) => isCore(own(state.nodes.get(id)!.node, 'kind'))).sort((a, b) => dimZCompare({ z: own(state.nodes.get(a)!.node, 'z'), id: a }, { z: own(state.nodes.get(b)!.node, 'z'), id: b }));
     const taken = core.slice(0, DIM_CLIPBOARD_LIMITS.clones);
-    if (taken.length === 0) return { text: '', copied: 0, skipped: nodeIds.length };
+    if (taken.length === 0) return { text: '', copied: 0, skipped: asked.size };
     const words: string[] = [];
     for (const id of taken) {
       const node = state.nodes.get(id)!.node;
@@ -73,23 +91,23 @@ export class DimClipboard {
       this.#kept.push({ id, z: own(node, 'z'), fields, links });
       for (const k of ['text', 'label', 'title']) if (typeof fields[k] === 'string' && (fields[k] as string).length > 0) words.push(fields[k] as string);
     }
-    this.#text = words.length > 0 ? words.join('\n') : taken.length === 1 ? '(1 board mark)' : `(${taken.length} board marks)`;
-    return { text: this.#text, copied: taken.length, skipped: wanted.length - taken.length };
+    this.#text = words.length > 0 ? lf(words.join('\n')) : dimStandInLine(taken.length);
+    return { text: this.#text, copied: taken.length, skipped: asked.size - taken.length };
   }
 
   /** True when a pasted text is the register's. An empty register, or an empty text, never matches. */
   matches(text: unknown): boolean {
-    return typeof text === 'string' && text.length > 0 && this.#text.length > 0 && this.#kept.length > 0 && text === this.#text;
+    return typeof text === 'string' && text.length > 0 && this.#text.length > 0 && this.#kept.length > 0 && lf(text) === this.#text;
   }
 
   /**
-   * The `add` ops of a paste whose text matched, or null when it did not (the caller then pastes the text as one
-   * text node). Clones sit DIM_CLIPBOARD_LIMITS.offset further down and right for each paste, on top of everything
+   * The `add` ops of a paste whose text matched; `text` when it did not (the caller then pastes the text as one
+   * text node); `nothing-held` when it is a stand-in line this register does not hold. Clones sit DIM_CLIPBOARD_LIMITS.offset further down and right for each paste, on top of everything
    * in `current`, in their copied order; frames come first and arrows last so each op may cite an earlier one.
    * Nothing is validated here: the caller sends the ops through the live controller.
    */
-  paste(text: unknown, current: DimState, mint: () => string): DimOp[] | null {
-    if (!this.matches(text)) return null;
+  paste(text: unknown, current: DimState, mint: () => string): DimPasteResult {
+    if (!this.matches(text)) return typeof text === 'string' && STAND_INS.has(lf(text).trim()) ? { kind: 'nothing-held' } : { kind: 'text' };
     this.#pastes += 1;
     const shift = DIM_CLIPBOARD_LIMITS.offset * this.#pastes;
     const ids = new Map(this.#kept.map((k) => [k.id, mint()]));
@@ -108,7 +126,7 @@ export class DimClipboard {
       }
       ops.push({ tier: node.kind === 'frame' ? 0 : node.kind === 'arrow' ? 2 : 1, op: { type: 'add', node: node as unknown as DimNode } });
     }
-    return ops.sort((a, b) => a.tier - b.tier).map((o) => o.op);
+    return { kind: 'clones', ops: ops.sort((a, b) => a.tier - b.tier).map((o) => o.op) };
   }
 
   /** True when something is held. */

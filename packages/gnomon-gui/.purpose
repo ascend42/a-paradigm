@@ -338,19 +338,29 @@ components:
       theme, ids) emits elements in dimZCompare order, a label straight after
       its mark, each BUILT from the closed list DIM_ENGINE_KEYS: no node key
       is copied, so a stored link, embeddable, free customData or prototype
-      key never reaches the engine. The stroke is dashed when the fold says
-      an agent or an unknown hand drew the node. dimIsSticky (a rect with a
+      key never reaches the engine. The stroke is solid ONLY when the fold
+      says a human drew the node; an agent, an unknown hand, a missing author
+      or a class this build does not know is dashed. dimIsSticky (a rect with a
       named fill and a label key) is paint only and never changes that. A
-      node of a non-core kind, or a core node missing what it is drawn from,
-      is a fixed rectangle labelled by dimFallbackLabel(kind). Coordinates
+      node of a non-core kind, a core node missing what it is drawn from, or
+      one whose points or text are over DIM_LIMITS, is a fixed rectangle
+      labelled by dimFallbackLabel(kind). Coordinates
       are rounded; a stroke or arrow is emitted with its first point at the
       origin. elementsToOps(prev, elements, ids, style) diffs the engine's
       scene against the state it was rendered from, reading both sides the
       same way, so fields the engine does not carry (refs, rel, a text's size
       and w) are never patched. It yields add, update, move (one op for a
       pure translation of several marks) and delete; a new or reordered mark
-      gets its order key from dimZPlace of its neighbours, and the longest
-      run already in order keeps its keys. It writes nothing for a fallback
+      gets its order key from dimZPlace of its neighbours (never the throwing
+      form), the longest run of well-formed keys already in order keeps its
+      keys, and a kept mark a placed key landed above is re-keyed in the same
+      diff, so one diff leaves the stored order equal to the order on screen.
+      A patch that names x, y or points of a stroke or arrow restates all
+      three in the engine's terms (a pure drag stays a relative move). A text
+      whose containerId names no live carrier is a mark of its own. Three
+      disagreements with normal.ts are pinned by test for the wiring pass:
+      diamond is not in its BOARD_TYPES or FILLABLE, and it forces one end
+      head on every arrow. It writes nothing for a fallback
       mark, a deleted id, an engine type the board does not have or an empty
       text, and validates nothing (the caller runs validateDimOps). Not
       imported by src/board/index.ts or the app yet (pass P3b), so the board
@@ -373,10 +383,16 @@ components:
       row-by-row fold (a source scan holds that). list(repo?) answers the
       dimensions whose rows carry that repo scope; lastDimOf(hsid) the
       dimension a session last opened or was attached to; stats() counts the
-      rows a scrub folded. Stated bounds: 512 dimensions (a row for one more
-      is counted, not kept); rows kept by reference for every held dimension;
-      at most 64 kept states per dimension, after which that dimension's
-      spacing doubles. reset() forgets everything when the log is replaced.
+      rows a scrub folded. Stated bounds: 512 dimensions, where one more
+      evicts the least recently written (an ended one first), never one the
+      caller pinned with pin(dim) (the open board) and never one written in
+      the same page; a row is dropped and counted only when nothing may be
+      evicted, and an evicted dimension written again is listed partial; rows
+      kept by reference for every held dimension; at most 64 kept states per
+      dimension, after which that dimension's spacing doubles. A listing
+      carries firstAt and lastAt from the log row's at. stateAt throws
+      DimSeqError for a seq that is not a safe integer. reset() forgets
+      everything but the pins when the log is replaced.
       Nothing in the app imports it yet (pass P3b/P4 wires it to followLog).
     path: src/core/dim-store.ts
     type: module
@@ -418,10 +434,15 @@ components:
       sendModCommand(client, gesture, name, commandId, args, now?) sends
       {name, commandId, args: {...args, gesture: {n, kind}}} and nothing
       else. It sends nothing and rejects with a typed ModCommandRefusal when
-      the mod is not on the closed list MOD_COMMAND_MODS (only
-      gnomon.dimension; the kernel does not hold this list), when args is not
-      a plain object or carries hsid, repo or gesture (the host composes the
-      first two from args.focus), or when #gui-gesture refuses the stamp.
+      the mod or the command id is not on the closed list MOD_COMMANDS (only
+      gnomon.dimension with dim.open, dim.attach, dim.op, dim.close; the
+      kernel does not hold this list), when args is not a plain object,
+      carries hsid, repo, paradigm or gesture (the host composes the first
+      three from args.focus), carries an own key __proto__, constructor,
+      prototype or toJSON at any depth (refused, never stripped), or gives
+      focus as anything but {hsid}, or when #gui-gesture refuses the stamp.
+      A client that throws instead of rejecting still yields one rejected
+      promise.
       modCommandFailure(err) reads a rejected send into a closed list of
       codes: not-sent, gesture-refused (with the kernel's why), read-only
       (the host's command read cap), link-down, no-answer, refused. It never
@@ -440,25 +461,39 @@ components:
       #gui-dim-live (boards S1.3 pass P3a, s1.3-draft point 6 write path;
       Mika's open items 1 and 2; Aegis B3) - the live loop of one open
       dimension as a PURE controller: no DOM, no socket and no timer; the
-      clock, the sender, the confirmed state (#gui-dim-store stateAt) and the
-      id minter are injected. Events: local(ops, gesture), ack(id, outcome),
-      row(row), timeout(), plus link(up) and undo(gesture). view() is the
-      confirmed fold plus every pending batch folded as rows stamped as me.
-      One send is in flight per dimension; queued edits coalesce into batches
-      of at most 64 ops (an undo is never merged). A batch is confirmed when
-      the row with the acked seq arrives, in either order; a row carrying
-      exactly the in-flight ops under my stamp confirms at once. A refusal,
-      or the injected clock passing DIM_LIVE_TIMEOUT_MS with no ack and no
-      row, drops the batch, validates later pending batches again against the
-      new view and yields ONE notice naming the field and the code, with the
-      count of ops lost: a mark never vanishes without a line. Link down:
-      nothing is sent, a new edit is refused with a notice, pending rolls
-      back at the timeout (no offline queue in S1.3). status() answers the
-      keep line's state; nextDeadline() tells the caller when to tick. Undo
-      keeps only this page's own confirmed rows (at most 64) and sends the
-      inverse planned by #gui-dim-undo like any edit. dimAckOf reads the
-      relay's result. Stated bounds: 16 pending batches, 256 early rows, 64
-      undo entries. Nothing in the app imports it yet.
+      clock, the sender, the confirmed state (#gui-dim-store stateAt), the
+      page's connId and the id minter are injected. Events: local(ops,
+      gesture), ack(id, outcome), row(row), timeout(), plus link(up) and
+      undo(gesture). Every result says changed, resync (the engine may show a
+      mark the view does not hold: render from view()) and at most one
+      notice. view() is the confirmed fold plus every pending batch folded as
+      rows stamped as me, and never applies an edit twice: an in-flight batch
+      stops being overlaid once a row of mine for it has arrived, and the
+      confirmed fold is read only as far as row() has been told, so the store
+      may fold a row before or after row() is called. An edit or an undo
+      with no gesture stamp changes nothing and answers not-sent. One send is
+      in flight per dimension and sends are spaced DIM_LIVE_SEND_GAP_MS apart;
+      queued edits coalesce into batches of at most 64 ops (an undo is never
+      merged) and the newest stamp rides a coalesced batch. A batch is
+      confirmed when the row with the acked seq arrives, in either order; a
+      row of mine (own-key stamp: my principal, the GUI surface, and my
+      connId when both sides name one) confirms at once when it carries
+      exactly the in-flight ops, and otherwise waits for the ack; if the ack
+      never comes the row stands and the ops it lacks are reported. A
+      refusal, or the injected clock passing DIM_LIVE_TIMEOUT_MS with no ack
+      and no row, drops the batch, validates later pending batches again and
+      yields ONE notice naming the field and the code, with the count of ops
+      lost. Link down: nothing is sent, a new edit is refused with a notice,
+      pending rolls back at the timeout (no offline queue in S1.3). status()
+      answers the keep line's state and since (when the oldest unsaved batch
+      was queued); nextDeadline() tells the caller when to tick. Undo keeps
+      only this page's own confirmed rows (at most 64), does nothing while
+      anything of mine is pending, removes an entry only when its inverse is
+      confirmed, and drops an entry that can never apply with one notice.
+      dimAckOf reads the dimension mod's replies exactly (ok with seq and
+      refused; ok false with a code of DIM_COMMAND_REFUSALS). Stated bounds:
+      16 pending batches, 256 early rows, 64 undo entries. Nothing in the
+      app imports it yet.
     path: src/core/dim-live.ts
     type: module
     tags: [gnomon, gui, dimension, pure]
@@ -474,6 +509,10 @@ components:
       reused) plus updates of every from, to and parent that pointed at the
       old id; every later mention of the old id is renamed, and re-adds come
       first (frames, marks, arrows). An op the fold skipped has no inverse.
+      Given the board as it stands, the inverse is fitted to it: a re-added
+      node carries no link to a node that has since gone, a restored link to
+      one becomes no link, and only a link that STILL names the old id is
+      re-pointed (a re-point made since is left alone).
       planUndo is all or nothing: the inverse goes through validateDimOps
       against the board as it stands and is refused whole when any op fails,
       when it is over 64 ops, or when it undoes more than 4 rows. Stated:
@@ -492,9 +531,12 @@ components:
       DimClipboard.copy(state, nodeIds) remembers a snapshot of the selected
       core nodes (the first 64 in paint order, and says how many it left out)
       and answers the plain text for the system clipboard: their words, one
-      per line, or a fixed line when they have none. paste(text, current,
-      mint) answers add ops only when the text EQUALS the register's; an
-      empty register or an empty text never matches. Every clone has a new
+      per line, or a fixed line when they have none; skipped counts the
+      distinct ids asked for that were not copied. paste(text, current, mint)
+      answers {kind: clones, ops} only when the text EQUALS the register's
+      (line ends normalised to LF; an empty register or an empty text never
+      matches), {kind: nothing-held} for a stand-in line the register does
+      not hold, and {kind: text} otherwise. Every clone has a new
       id, sits 16 units further for each paste and on top; from, to and
       parent are renamed to the clone when the target was copied too and
       dropped otherwise; only the closed list DIM_CLIPBOARD_KEYS is carried
