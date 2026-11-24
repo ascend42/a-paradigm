@@ -11,8 +11,9 @@ components:
       build/stamp.mjs. Rewrites the stamped regions of each page (facts, source lines, standing ledgers,
       file excerpts at the pinned commit, command captures, lately rows, the symbol graph, the shared
       head, masthead and footer) from facts.json. --check fails when a page is out of date; --release
-      also refuses slots, facts without a source or date, standing rows without evidence and excerpts
-      that stop inside a list.
+      also refuses slots, facts without a source or date, standing rows without evidence, excerpts
+      that stop inside a list, and a changelog whose first version heading is newer than the first
+      lately row ([Unreleased] is not a release).
     type: build
     tags: [site, build, facts]
   pages-check:

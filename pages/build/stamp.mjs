@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   PAGES, REGION_RE, STATES, esc, inl, hl, fmt, linkify, blobUrl, srcLine, resolveFact, readPinned, pinState,
-  loadFacts, loadManifest, listCut, isYaml, midCut, parseOpts, lineGroups, strayMarkers,
+  loadFacts, loadManifest, listCut, isYaml, midCut, parseOpts, lineGroups, strayMarkers, latelyBehind,
 } from './lib.mjs';
 
 const args = new Set(process.argv.slice(2));
@@ -304,8 +304,8 @@ for (const page of M.pages.filter((p) => p.built)) {
 }
 
 if (RELEASE) {
-  const newest = (fs.readFileSync(path.join(PAGES, '..', F.lately.source), 'utf8').match(/^## \[([^\]]+)\]/m) || [])[1];
-  if (newest && newest !== F.lately.paradigm[0].version) fail(F.lately.source, `has a newer release (${newest}) than facts.json lately.paradigm[0] (${F.lately.paradigm[0].version})`);
+  // the first version heading; [Unreleased] is not a release
+  latelyBehind(fs.readFileSync(path.join(PAGES, '..', F.lately.source), 'utf8'), F.lately.paradigm[0].version).forEach((m) => fail(F.lately.source, m));
   if (pinState.missing) notices.push(`the pinned commit ${F.excerpts_pinned_to.commit.slice(0, 8)} is not in this clone; excerpts were checked against the working tree`);
   if (tbd.size) notices.push(`deferred founder decisions shown with their working default: ${[...tbd].join(', ')}`);
 }

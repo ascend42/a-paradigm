@@ -212,3 +212,15 @@ export function lineGroups(spec) {
     }),
   );
 }
+
+/** The newest release a changelog names: its first `## [x.y.z]` heading. `[Unreleased]` is not a release. */
+export function newestRelease(changelog) {
+  for (const m of changelog.matchAll(/^## \[([^\]]+)\]/gm)) if (/^v?\d+\.\d+\.\d+/.test(m[1])) return m[1].replace(/^v/, '');
+  return null;
+}
+
+/** Problems when the changelog's newest release is not the first lately row: the rows are updated at each release. */
+export function latelyBehind(changelog, version) {
+  const newest = newestRelease(changelog);
+  return newest && newest !== version ? [`has a newer release (${newest}) than facts.json lately.paradigm[0] (${version})`] : [];
+}
