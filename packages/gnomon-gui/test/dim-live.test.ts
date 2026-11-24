@@ -231,6 +231,21 @@ describe('#gui-dim-live the write path', () => {
     expect(r.nodes()).toHaveLength(66);
   });
 
+  it('a merge fills a batch to exactly 64 ops (3 + 61) and not one more', () => {
+    const r = rig();
+    r.live.local([rect(1)], press(r.now())); // in flight
+    r.live.local([rect(2), rect(3), rect(4)], press(r.now()));
+    r.live.local(Array.from({ length: 61 }, (_, i) => rect(100 + i)), press(r.now()));
+    expect(r.live.status().pending).toBe(2);
+    r.live.local([rect(500)], press(r.now()));
+    expect(r.live.status().pending).toBe(3);
+    confirmNext(r);
+    expect(r.sent[1]!.ops).toHaveLength(64);
+    expect(r.sent[1]!.ops.slice(0, 3)).toEqual([rect(2), rect(3), rect(4)]);
+    confirmNext(r);
+    expect(r.sent[2]!.ops).toEqual([rect(500)]);
+  });
+
   it('18. sends are spaced: a queued batch waits for the gap, and nextDeadline says when', () => {
     const r = rig();
     r.live.local([rect(1)], press(r.now()));
@@ -595,11 +610,10 @@ describe('#gui-dim-live rows that fit, and one action is one undo step (P4a)', (
     const r = rig();
     const ops = Array.from({ length: 20 }, (_, i) => text(1 + i, 3900));
     expect(r.live.local(ops, press(r.now()))).toEqual({ changed: false, resync: true, notice: { code: 'too-large', field: 'ops', why: null, lost: 20 } });
-    const points = Array.from({ length: 2048 }, (_, i) => [i * 1000, -i * 1000]);
+    // one op that fits no row: valid for the validator (2,048 points), too many bytes for any row
+    const points = Array.from({ length: 4096 }, (_, i) => (i % 2 ? 9_999_000 + i : -9_999_000 - i));
     const res = r.live.local([{ type: 'add', node: { id: ULID(50), kind: 'stroke', x: 0, y: 0, z: 'V', points } as never }], press(r.now()));
-    // the validator or the packer refuses it; either way nothing is queued and it is said
-    expect(res.changed).toBe(false);
-    expect(res.notice).not.toBeNull();
+    expect(res).toEqual({ changed: false, resync: true, notice: { code: 'row-too-large', field: 'ops', why: null, lost: 1 } });
     expect(r.live.status().pending).toBe(0);
     expect(r.sent).toEqual([]);
   });

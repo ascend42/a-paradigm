@@ -14,7 +14,9 @@
  *
  * RULES.
  *  - ONE SENDER. Every command goes through `sendModCommand` with the `GnomonClient` object itself and no `now`
- *    argument. A stamp is minted here, at send time, from the listener's own event and `Date.now()`.
+ *    argument. A stamp is minted here from the listener's own event and `Date.now()`, when the EDIT is reported
+ *    (the end of the gesture), not when its command leaves: the command may then wait its turn, and a stamp that
+ *    has grown too old by then is refused by the sender.
  *  - NO STAMP, NO CHANGE. An edit whose cause gives no stamp (null, untrusted, a key held down) is put back
  *    (`render(view())`) and said in a notice. A stamp that is expired or used up when its turn comes is refused by
  *    the sender: the batch is dropped, the board re-rendered, ONE notice raised. Nothing is ever retried: `spent`
@@ -66,6 +68,29 @@ export class DimSendLimiter {
     this.#slots.push(at);
     if (this.#slots.length > L.perWindow) this.#slots.shift();
     return at;
+  }
+
+  /** when each of the last `perWindow` commands REALLY left, rising */
+  #sent: number[] = [];
+
+  /**
+   * The command whose slot has come is about to leave, at `now` on the clock: 0 when it may (it is then counted as
+   * sent), else how long it must still wait. Slots are a schedule; timers fire late and then together, so the
+   * limit is held HERE, against the times commands really left, whatever the number of open dimensions.
+   */
+  ready(now: number): number {
+    const L = DIM_SEND_LIMITS;
+    const last = this.#sent[this.#sent.length - 1];
+    let wait = 0;
+    if (last !== undefined && now - last < L.gapMs && now >= last) wait = L.gapMs - (now - last);
+    if (this.#sent.length >= L.perWindow) {
+      const oldest = this.#sent[this.#sent.length - L.perWindow]!;
+      if (now - oldest < L.windowMs && now >= oldest) wait = Math.max(wait, L.windowMs - (now - oldest));
+    }
+    if (wait > 0) return wait;
+    this.#sent.push(now);
+    if (this.#sent.length > L.perWindow) this.#sent.shift();
+    return 0;
   }
 }
 
@@ -294,6 +319,11 @@ export class DimSession {
     const at = d.limiter.reserve(now);
     return new Promise<unknown>((resolve, reject) => {
       const go = (): void => {
+        // the limit is held against the times commands really left: a late timer waits again, it never bunches
+        if (!this.#dead && this.#x.link() && !stale()) {
+          const wait = d.limiter.ready(d.now());
+          if (wait > 0) return void d.setTimer(go, wait);
+        }
         try {
           const link = this.#x.link();
           if (this.#dead || !link) return reject(new LinkDown());
@@ -425,7 +455,14 @@ export class DimSession {
   #emit(notice: DimSessionNotice | null): void {
     if (notice) this.#last = notice;
     const change: DimSessionChange = { status: this.status(), notice };
-    for (const fn of [...this.#listeners]) fn(change);
+    for (const fn of [...this.#listeners]) {
+      // a listener that throws is the listener's mistake: it is reported, and the loop goes on
+      try {
+        fn(change);
+      } catch (err) {
+        (globalThis as { reportError?: (e: unknown) => void }).reportError?.(err);
+      }
+    }
   }
 
   /** Be told when `status()` or `view()` answers differently, with the notice that came with it (at most one). */
@@ -688,6 +725,8 @@ export class DimSessions {
       gate: new StampGate(),
       gone: (s, why) => {
         if (this.#sessions.get(s.dim) === s) this.#sessions.delete(s.dim);
+        // a folded dimension's vouched hash is not kept: the next open answers a new one
+        if (why === 'fold') this.#verified.delete(s.dim);
         this.#tell({ type: 'destroyed', session: s, why, lost: s.lost });
       },
     };

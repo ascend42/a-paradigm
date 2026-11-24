@@ -309,9 +309,11 @@ describe('#gui-dim-session undo', () => {
   it('Cmd+Z sends the inverse through the same path on its own stamp; a multi-row action is undone in one step; redo is said, not sent', async () => {
     const w = world({ auto: true });
     const { s, h, n } = await opened(w);
+    const empty = dimHash(w.store.stateAt(DIM));
     h.edit([rect(1)], press());
     await flush(200);
     const clean = dimHash(w.store.stateAt(DIM));
+    expect(clean).not.toBe(empty);
     const big = Array.from({ length: 9 }, (_, i) => text(10 + i, 3900));
     h.edit(big, press('paste'));
     await flush(1000);
@@ -323,13 +325,14 @@ describe('#gui-dim-session undo', () => {
     expect(w.ops()).toHaveLength(5);
     expect((w.ops()[4]!.args.ops as DimOp[]).map((o) => o.type)).toEqual(Array(9).fill('delete'));
     expect((w.ops()[4]!.args.gesture as { kind: string }).kind).toBe('key');
-    expect(dimHash(w.store.stateAt(DIM))).not.toBe(''); // the fold moved; the marks are those before the paste
+    // the fold is back at the hash it had before the paste
+    expect(dimHash(w.store.stateAt(DIM))).toBe(clean);
     expect([...s.view().nodes.keys()]).toEqual([ULID(1)]);
     expect([...w.store.stateAt(DIM).nodes.keys()]).toEqual([...foldDim(w.store.rows(DIM)).nodes.keys()]);
     h.undoKey();
     await flush(200);
     expect(s.view().nodes.size).toBe(0);
-    expect(clean).not.toBe(dimHash(w.store.stateAt(DIM)));
+    expect(dimHash(w.store.stateAt(DIM))).toBe(empty);
     h.undoKey(true);
     expect(n[n.length - 1]).toMatchObject({ about: 'undo', code: 'redo-unavailable' });
     h.undoKey(false, press('keydown', { repeat: true }));
@@ -791,6 +794,144 @@ describe('#gui-dim-session review of PR #118, group B: link down as a person see
     // only once
     t!.attachHandle(h2.handle);
     expect(setView).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('#gui-dim-session review of PR #118, group C', () => {
+  it('the loop\'s clock is the injected one and the stamp\'s is the wall clock: a loop clock far ahead does not age a stamp, and the timeout follows the loop clock only', async () => {
+    const store = new DimStore();
+    let loop = 5_000_000; // nothing like Date.now()
+    const timers: Array<{ at: number; fn: () => void }> = [];
+    const sessions = new DimSessions({ store, now: () => loop, setTimer: (fn, ms) => (timers.push({ at: loop + ms, fn }), fn), clearTimer: (t) => void timers.splice(timers.findIndex((x) => x.fn === t), 1) });
+    const calls: Call[] = [];
+    const client = { call: <T>(_m: string, params?: unknown): Promise<T> => new Promise<T>((resolve, reject) => void calls.push({ commandId: (params as { commandId: string }).commandId, args: (params as { args: Record<string, unknown> }).args, at: loop, resolve: resolve as (v: unknown) => void, reject })) };
+    sessions.connect({ client: client as never, principal: ME, connId: 'conn:A' });
+    const tick = async (ms: number): Promise<void> => {
+      loop += ms;
+      for (const t of timers.filter((x) => x.at <= loop)) {
+        timers.splice(timers.indexOf(t), 1);
+        t.fn();
+      }
+      await flush();
+    };
+    const s = sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    const n = watch(s);
+    await flush();
+    sessions.apply([{ seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, title: 'Plan', attached: [HSID], opened: 'command', relayedFor: { principal: ME, connId: 'conn:A', surface: 'gui' } } }]);
+    calls[0]!.resolve({ result: { ok: true, created: true, dim: DIM, seq: 1, hash: dimHash(store.stateAt(DIM)) } });
+    await flush();
+    s.edit([rect(1)], press());
+    await tick(DIM_SEND_LIMITS.gapMs);
+    // the stamp was minted on the WALL clock and is sent: the loop clock being millions away did not expire it
+    expect(calls.map((c) => c.commandId)).toEqual(['dim.open', 'dim.op']);
+    // the wall clock moves past the timeout; the loop clock has not: nothing is dropped
+    vi.setSystemTime(Date.now() + DIM_LIVE_TIMEOUT_MS * 2);
+    await flush();
+    expect(n).toEqual([]);
+    expect(s.status().pending).toBe(1);
+    // the loop clock reaches the timeout: dropped, by that clock alone
+    await tick(DIM_LIVE_TIMEOUT_MS);
+    expect(n.map((x) => x.code)).toEqual(['timeout']);
+  });
+
+  it('connect() called twice rebuilds twice and leaves one session per dimension; an ack that arrives after reset() reaches nothing', async () => {
+    const w = world();
+    const { s, h } = await opened(w);
+    h.edit([rect(1)], press());
+    await flush();
+    const [t1] = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:B' });
+    const [t2] = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:C' });
+    expect([s.alive, t1!.alive, t2!.alive]).toEqual([false, false, true]);
+    expect(w.sessions.list()).toEqual([t2]);
+    expect(w.store.stats().pinned).toBe(1);
+    const n = watch(t2!);
+    const h2 = fakeHandle();
+    t2!.attachHandle(h2.handle);
+    h2.edit([rect(2)], press());
+    await flush(DIM_SEND_LIMITS.gapMs);
+    const before = h2.rendered.length;
+    w.sessions.reset();
+    // the old ack, and the ack of the batch that was in flight at the reset, arrive now
+    w.ops()[0]!.resolve({ result: { ok: true, dim: DIM, seq: 77, applied: 1, refused: [] } });
+    w.ops()[1]!.resolve({ result: { ok: false, code: 'ops-refused', fix: 'x', refused: [] } });
+    await flush(DIM_LIVE_TIMEOUT_MS * 2);
+    expect(n).toEqual([]);
+    expect(h2.rendered.length).toBe(before);
+    expect(w.sessions.list()).toEqual([]);
+    expect(w.store.stats()).toMatchObject({ dims: 0, pinned: 0 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('one command is in flight per dimension: a second edit is not sent until the first is confirmed by its row', async () => {
+    const w = world();
+    const { s, h } = await opened(w);
+    h.edit([rect(1)], press());
+    await flush(DIM_SEND_LIMITS.gapMs);
+    h.edit([rect(2)], press());
+    h.edit([rect(3)], press());
+    await flush(2000);
+    expect(w.ops()).toHaveLength(1);
+    expect(s.status()).toMatchObject({ pending: 2, inFlight: true });
+    w.answer(w.ops()[0]!);
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    expect(w.ops()).toHaveLength(2);
+    expect(w.ops()[1]!.args.ops).toEqual([rect(2), rect(3)]);
+  });
+
+  it('a handle given to a dead session is not kept or listened to; a listener that throws does not break the open or the loop', async () => {
+    const w = world();
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    const reported: unknown[] = [];
+    (globalThis as { reportError?: unknown }).reportError = (e: unknown) => void reported.push(e);
+    s.onChange(() => {
+      throw new Error('a listener of the app threw');
+    });
+    const heard: string[] = [];
+    s.onChange((c) => void heard.push(c.status.phase));
+    await flush();
+    w.answer(w.calls[0]!);
+    expect(await s.opened()).toBe(true); // the open did not reject
+    expect(heard).toContain('open');
+    expect(reported.length).toBeGreaterThan(0);
+    s.edit([rect(1)], press());
+    await flush(DIM_SEND_LIMITS.gapMs);
+    expect(w.ops()).toHaveLength(1);
+    s.destroy();
+    const h = fakeHandle();
+    s.attachHandle(h.handle);
+    expect(h.listening()).toBe(false);
+    expect(h.rendered).toEqual([]);
+    delete (globalThis as { reportError?: unknown }).reportError;
+  });
+
+  it('a fold forgets the hash the mod vouched for: the dimension opened again starts unchecked', async () => {
+    const w = world({ auto: true });
+    const { s } = await opened(w);
+    await flush(50);
+    expect(s.status().verified).toBe(true);
+    expect(await s.fold(press('keydown'))).toBe(true);
+    const again = w.sessions.resume({ dim: DIM, hsid: HSID });
+    expect(again.status()).toMatchObject({ verified: null, checkedSeq: null });
+  });
+
+  it('the limiter holds its limit against the times commands really left: timers that fire late and together do not bunch', () => {
+    const l = new DimSendLimiter();
+    // 40 slots reserved on schedule, then every timer fires at the same late instant
+    for (let i = 0; i < 40; i++) l.reserve(0);
+    const late = 10_000;
+    const left: number[] = [];
+    let now = late;
+    let waiting = 40;
+    for (let guard = 0; waiting > 0 && guard < 10_000; guard++) {
+      const wait = l.ready(now);
+      if (wait === 0) {
+        left.push(now);
+        waiting -= 1;
+      } else now += wait;
+    }
+    expect(left).toHaveLength(40);
+    for (let i = 1; i < left.length; i++) expect(left[i]! - left[i - 1]!).toBeGreaterThanOrEqual(DIM_SEND_LIMITS.gapMs);
+    for (const t of left) expect(left.filter((x) => x >= t && x < t + DIM_SEND_LIMITS.windowMs).length).toBeLessThanOrEqual(DIM_SEND_LIMITS.perWindow);
   });
 });
 
