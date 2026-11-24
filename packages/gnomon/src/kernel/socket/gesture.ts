@@ -16,7 +16,13 @@
  *   - `n` above the last one seen starts a new gesture (its use count becomes 1);
  *   - `n` equal to the last one seen is the same gesture fanning out, allowed while it has been used fewer than
  *     GESTURE_FANOUT times (one press may open and attach: two commands);
- *   - `n` below the last one seen is a replay and is refused.
+ *   - `n` below the last one seen is a replay and is refused;
+ *   - `n` more than GESTURE_MAX_STEP above the last one seen (above 0 for a connection's first stamp) is refused
+ *     `malformed` (Aegis, PR #112): otherwise one stamp with a huge `n` would pin the counter, and after its four
+ *     uses every later command on that connection would be `spent` or `replayed`.
+ * A use is spent HERE, before the mod host admits the command: a command the host then refuses (BUSY, a timeout,
+ * a paused mod) has still burned one of the four. A sender never retries on the same `n`; `spent` and `replayed`
+ * both mean "mint a new n".
  * Anything else (a caller that is not human class, args that are not a plain object, a missing or malformed
  * stamp, an unknown kind, an extra key) is refused FORBIDDEN `ungranted` with `needs: 'gesture'`, and a refused stamp changes no state. (No new refusal reason:
  * the reason list is hashed into `clientApiId`, so the registered `ungranted` carries it, as log.append's `needs` does.)
@@ -30,6 +36,8 @@ import { RpcRefusal } from './rpc.js';
 
 /** One gesture may be spent on this many `mod.command` calls (attach and open is 2). */
 export const GESTURE_FANOUT = 4;
+/** The furthest a stamp's `n` may sit above the connection's last one (above 0 for its first stamp). */
+export const GESTURE_MAX_STEP = 1024;
 /** The closed list of gesture kinds. */
 export const GESTURE_KINDS = Object.freeze(['pointer', 'key', 'paste', 'menu'] as const);
 export type GestureKind = (typeof GESTURE_KINDS)[number];
@@ -70,6 +78,8 @@ export function takeGesture(conn: GestureConn, args: unknown): Record<string, un
   if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 1) throw refuse('malformed');
   if (typeof kind !== 'string' || !(GESTURE_KINDS as readonly string[]).includes(kind)) throw refuse('kind');
   const last = conn.gesture;
+  // a jump too far ahead would pin the counter for the life of the connection: refused before any mutation
+  if (n > (last ? last.n : 0) + GESTURE_MAX_STEP) throw refuse('malformed');
   if (last && n < last.n) throw refuse('replayed');
   if (last && n === last.n) {
     if (last.used >= GESTURE_FANOUT) throw refuse('spent');

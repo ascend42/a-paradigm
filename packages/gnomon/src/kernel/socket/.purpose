@@ -363,7 +363,11 @@ components:
       plain object, n is a safe integer of at least 1 and kind is one of
       pointer, key, paste, menu. Per connection (ConnAuthState.gesture, two
       numbers): n above the last one seen starts a new gesture, n equal to it
-      is allowed for up to GESTURE_FANOUT = 4 commands, a lower n is a replay.
+      is allowed for up to GESTURE_FANOUT = 4 commands, a lower n is a replay,
+      and an n more than GESTURE_MAX_STEP = 1024 above the last one (above 0
+      for the first stamp) is malformed, so a huge n cannot pin the counter. A
+      use is spent before the mod host admits the command: a sender never
+      retries on the same n, and spent and replayed both mean mint a new n.
       A refused stamp changes no state. The key is removed before the mod host
       sees the args. The stamp proves nothing about a human. It fails closed
       against a GUI code path that forgot the gate, and against replay on one

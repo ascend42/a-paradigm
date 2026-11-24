@@ -261,8 +261,8 @@ components:
       refused EFFECT with cap command-read and logged mod.effect.refused; no
       row is appended and no state is set. The egress proxy reads the same
       set, so a capped command opens no tunnel. Consequence: a third-party
-      mod's command cannot write in S1.3 (the SDK example's hello.bump no
-      longer keeps state; its write tool does). Filed for before any
+      mod's command cannot write in S1.3 (the SDK example's command is the
+      read-only hello.show; its write is in the hello.count tool). Filed for before any
       third-party mod with commands: a per-command effects field in the
       manifest. (2) HOST-COMPOSED COMMAND ARGS (host.ts #composeRelayedArgs,
       every mod, every caller, a host-initiated runCommand included): the

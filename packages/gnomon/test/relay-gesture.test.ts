@@ -15,7 +15,7 @@ import type { PrincipalKind } from '@a-company/gnomon-contracts';
 import { UnprovisionedRootAuthority } from '../src/kernel/identity/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { createModKernelCall, createModRelayPort, type ModAppendRow } from '../src/kernel/modhost/index.js';
-import { createKernelDispatcher, GESTURE_FANOUT, GESTURE_KINDS, RpcRefusal, SocketAuthenticator, takeGesture, type GestureConn } from '../src/kernel/socket/index.js';
+import { createKernelDispatcher, GESTURE_FANOUT, GESTURE_KINDS, GESTURE_MAX_STEP, RpcRefusal, SocketAuthenticator, takeGesture, type GestureConn } from '../src/kernel/socket/index.js';
 import { createWebEndpointForTest, unsandboxedModLauncher } from '../src/kernel/testing.js';
 import type { WebEndpoint } from '../src/kernel/web/index.js';
 import { PKG_ROOT } from './helpers.js';
@@ -77,8 +77,33 @@ describe('G-MOD-16: the gesture stamp (takeGesture, the pure rule)', () => {
     for (const g of [null, 1, 'key', [], [1, 'key'], {}, { n: 1 }, { kind: 'key' }, { n: 1, kind: 'key', at: 5 }, { n: 1, kind: 'key', human: true }, Object.create({ n: 1, kind: 'key' })]) expect([g, why(() => takeGesture(conn, { gesture: g }))]).toEqual([g, 'malformed']);
     // a refused stamp changes no state
     expect(conn.gesture).toBeUndefined();
-    expect(Object.keys(takeGesture(conn, stamp(Number.MAX_SAFE_INTEGER, 'menu')))).toEqual(['a']);
-    expect(conn.gesture).toEqual({ n: Number.MAX_SAFE_INTEGER, used: 1 });
+    expect(Object.keys(takeGesture(conn, stamp(1, 'menu')))).toEqual(['a']);
+    expect(conn.gesture).toEqual({ n: 1, used: 1 });
+  });
+
+  it('a jump too far ahead cannot pin the counter: n above the last one by more than 1,024 is malformed, exactly +1,024 passes, and a refusal leaves the state as it was', () => {
+    expect(GESTURE_MAX_STEP).toBe(1024);
+    // a connection's first stamp is bounded from 0
+    const fresh = human();
+    for (const n of [GESTURE_MAX_STEP + 1, 1_000_000, Number.MAX_SAFE_INTEGER]) expect([n, why(() => takeGesture(fresh, stamp(n)))]).toEqual([n, 'malformed']);
+    expect(fresh.gesture).toBeUndefined();
+    takeGesture(fresh, stamp(GESTURE_MAX_STEP));
+    expect(fresh.gesture).toEqual({ n: GESTURE_MAX_STEP, used: 1 });
+    // later stamps are bounded from the last one seen
+    const conn = human();
+    takeGesture(conn, stamp(5));
+    takeGesture(conn, stamp(5));
+    const before = { ...conn.gesture };
+    for (const n of [5 + GESTURE_MAX_STEP + 1, Number.MAX_SAFE_INTEGER]) expect([n, why(() => takeGesture(conn, stamp(n)))]).toEqual([n, 'malformed']);
+    expect(conn.gesture).toEqual(before);
+    expect(conn.gesture).toEqual({ n: 5, used: 2 });
+    // the connection is not stuck: the same gesture still fans out, and the edge is accepted
+    takeGesture(conn, stamp(5));
+    takeGesture(conn, stamp(5 + GESTURE_MAX_STEP));
+    expect(conn.gesture).toEqual({ n: 5 + GESTURE_MAX_STEP, used: 1 });
+    // the attack this closes: a huge n spent four times would leave every later command spent or replayed
+    takeGesture(conn, stamp(6 + GESTURE_MAX_STEP));
+    expect(conn.gesture).toEqual({ n: 6 + GESTURE_MAX_STEP, used: 1 });
   });
 
   it('repeated past the fan-out: the same n is allowed 4 times, the 5th is refused; a higher n starts again', () => {
@@ -217,7 +242,9 @@ describe('G-MOD-16: the gesture stamp on a real GUI connection (WebSocket, launc
       const w = await guiRig();
       const a = await w.gui();
       const probe = (n: unknown, kind: unknown = 'pointer') => a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: `n${String(n)}`, gesture: { n, kind } });
-      // missing and malformed: the mod is never called, so its state never changes
+      const state = async (): Promise<unknown> => ((await w.h.callTool(FIRST_PARTY_PROBE, 'probe.read', { op: 'state.get' })) as { v?: string }).v;
+      // read BEFORE the refusals: each of them asks for a state.set, so an unchanged state after them means the mod was never called
+      const untouched = await state();
       expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'no-stamp' }))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'missing']);
       expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, undefined))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'args']);
       expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, [{ gesture: { n: 1, kind: 'key' } }]))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'args']);
@@ -226,8 +253,9 @@ describe('G-MOD-16: the gesture stamp on a real GUI connection (WebSocket, launc
       expect(refusedWhy(await probe(1, 'touch'))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'kind']);
       // a top-level gesture param is not the stamp (and the relay params are a contract: nothing new is read there)
       expect(refusedWhy(await a.command(FIRST_PARTY_PROBE, { op: 'state.set', value: 'top' }, { gesture: { n: 1, kind: 'key' } }))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'missing']);
-      const state = async (): Promise<unknown> => ((await w.h.callTool(FIRST_PARTY_PROBE, 'probe.read', { op: 'state.get' })) as { v?: string }).v;
-      const untouched = await state();
+      // an n too far ahead of the connection's last one (none yet, so above 0 + the step) is malformed as well
+      expect(refusedWhy(await probe(GESTURE_MAX_STEP + 1))).toEqual(['FORBIDDEN', 'ungranted/gesture', 'malformed']);
+      expect(await state()).toBe(untouched);
       // the same n fans out to 4 commands; the 5th is refused
       for (let i = 0; i < GESTURE_FANOUT; i++) expect((await probe(3)).result?.result?.out?.ok).toBe(true);
       expect(await state()).toBe(JSON.stringify('n3'));
