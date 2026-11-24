@@ -13,8 +13,15 @@ Task T-2026-11-24-002. Founder brief and tone are in lore L-2026-11-24-ascend-06
 - Shift syncs IDE files with `force: true`: `commands/shift.ts:750`. Whether that overwrites a hand-written CLAUDE.md is NOT yet confirmed by a run.
 - `docs/site/` holds only `INFO.md` and `README.md`; the older static pages are `docs/warpline/{index,pov,system}.html` and `docs/warpline-overview.html`.
 
-## Founder decisions the audit raises
-1. Which Warpline tagline (three are in use).
-2. Which learning story is current: automatic promotion, or gated by sign-off (README says gated; guidance says automatic).
-3. `paradigm tutorial`: revive as the day-one exercise, or remove.
-4. Whether `paradigm shift` should default to an enforcement level above `none` once it ends with a first prompt.
+## Founder decisions, deferred (founder, 2026-11-23: "denote those other decisions for later with placeholders")
+None of these blocks the build. Each has a working default; where a page or doc depends on the answer it carries a marked placeholder (`TBD-FOUNDER: <id>`), listed in the facts file so they can be found and filled in one pass.
+
+| Id | Decision | Working default until decided |
+|---|---|---|
+| warpline-tagline | Which Warpline tagline (three in use: "version control for meaning", "merge prediction from the symbol graph", "meaning-merge adjudication layer") | Placeholder slot on the page; the page describes what it does in a plain sentence instead of a tagline |
+| learning-story | Is a learning promoted automatically, or only after sign-off? (README says gated; in-tool guidance says automatic) | Pages describe the gate as the design and say outcome data is not in yet; no doc is changed to pick a side |
+| tutorial | `paradigm tutorial`: revive as the day-one exercise, or remove | Left as is; not referenced from the new learning path |
+| default-enforcement | Should `paradigm shift` default above `none`? | Stays `none`; pages and docs say checks are off until turned on |
+| p12-firefox | Accept the P12 pass rule without Firefox (Aegis: acceptable) | Rule as built |
+| board-design | Luna's S1.1 choices (naming in the UI, palette without red/orange/violet, solid-only human strokes, seals, `⌥B`, the shadow override) | Built as proposed; entries stay `proposed` |
+| pages-direction | Luna's hero-page direction and which path GitHub Pages serves | Built as proposed; Pages is enabled by the founder at the morning merge |
