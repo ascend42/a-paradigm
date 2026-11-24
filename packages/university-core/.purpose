@@ -50,6 +50,9 @@ components:
 aspects:
   ~zod-validated-sections:
     description: Section blocks validated/synthesized via the copied zod pack-schema; byte-identical to pack-loader output
+    anchors:
+      - src/pack-schema.ts
+      - src/pack-discovery.ts
     tags:
       - validation
       - sections
@@ -57,12 +60,16 @@ aspects:
       - '#pack-discovery'
   ~content-base-dual-layout:
     description: Content base probes content/ then src/content/, preferring the first base that contains content (C4 / T-2026-05-31-001)
+    anchors:
+      - src/loader.ts
     tags:
       - content-base
     applies-to:
       - '#content-base-resolver'
   ~classifier-only-errors:
     description: PackLoadError messages are classifier-only (derived from js-yaml error name) — never echo manifest body
+    anchors:
+      - src/pack-discovery.ts
     tags:
       - security
       - error-handling
