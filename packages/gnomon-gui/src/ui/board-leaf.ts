@@ -13,8 +13,10 @@
  * No inline style attribute is written: sizes and positions go through CSSOM properties, classes do the rest.
  */
 import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, dimKindName, resolveContentColour } from '@a-company/gnomon-contracts';
+import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, refusalLine, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { DimClipboard, dimPasteTextOp } from '../core/dim-clipboard.js';
+import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -40,6 +42,33 @@ export interface BoardLeafOptions {
   onReady?: (handle: BoardHandle) => void;
   /** Esc with nothing else to leave */
   onFold?: () => void;
+  /**
+   * The dimension as the leaf's owner holds it now (the live controller's view; the fixture's fold). A copy reads
+   * the copied nodes from it and a paste is placed on top of it. Without it nothing is copied and nothing pasted.
+   */
+  view?: () => DimState | null;
+  /**
+   * Ops the PERSON made outside a drawing gesture (a paste of the leaf's own copy, a pasted text), with the trusted
+   * event that caused them. The owner sends them through the SAME path as the handle's `onEdit` ops (one sender,
+   * one validator); the leaf applies nothing itself.
+   */
+  onOps?: (ops: DimOp[], cause: Event | null) => void;
+  /** A new node id (a ULID) for each pasted mark; the leaf mints its own when none is given. */
+  mint?: () => string;
+}
+
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+/** A new node id (a ULID, `DIM_NODE_ID_PATTERN`): the time, then 80 bits from `crypto.getRandomValues`. */
+function mintNodeId(): string {
+  let t = Date.now();
+  let head = '';
+  for (let i = 0; i < 10; i++) {
+    head = B32[t % 32] + head;
+    t = Math.floor(t / 32);
+  }
+  let tail = '';
+  for (const b of crypto.getRandomValues(new Uint8Array(16))) tail += B32[b % 32];
+  return head + tail;
 }
 
 export interface BoardLeaf {
@@ -102,6 +131,53 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let saidTimer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
   const offs: Array<() => void> = [];
+  // The copy register (core/dim-clipboard.ts; condition C8, Aegis A6): ONE per leaf, in memory only. A copy on the
+  // board remembers the selected nodes and answers the plain text for the system clipboard; a paste of that same
+  // text adds clones as the person's own ops; any other pasted text becomes one text mark. It is forgotten on window
+  // blur, when the leaf goes, and on a copy or cut anywhere else on the page. So a copy that had words, pasted
+  // after a blur, arrives as those bare words (fail-safe: decided here, for Aegis to confirm), and the stand-in line
+  // of a wordless copy pasted with nothing held adds nothing and says so.
+  const clip = new DimClipboard();
+  const forget = (): void => clip.clear();
+  window.addEventListener('blur', forget);
+  const copied = (ids: string[]): string => {
+    const view = o.view?.() ?? null;
+    if (!view) return clip.clear(), '';
+    const r = clip.copy(view, ids);
+    if (r.skipped > 0) say(CLIP_COPY.leftOut(r.skipped)); // what was left out is said, never silent
+    return r.text;
+  };
+  /** A cut takes the WHOLE selection (a frame's children with it) or nothing: the handle deletes exactly `ids`. */
+  const cutTaken = (ids: string[]): { text: string; ids: string[] } | null => {
+    const view = o.view?.() ?? null;
+    if (!view) return clip.clear(), null;
+    const r = clip.copy(view, ids);
+    if (r.copied === 0) return null;
+    if (r.skipped > 0) return clip.clear(), say(CLIP_COPY.cutRefused), null;
+    return { text: r.text, ids: r.ids };
+  };
+  let textPastes = 0;
+  let textPastedAt = '';
+  const pasted = (hd: BoardHandle, text: string, cause: Event): void => {
+    const view = o.view?.() ?? null;
+    if (!view || !o.onOps) return;
+    const v = hd.view();
+    const box = { x: -v.scrollX, y: -v.scrollY, w: v.width / v.zoom, h: v.height / v.zoom };
+    const r = clip.paste(text, view, o.mint ?? mintNodeId, box);
+    if (r.kind === 'nothing-held') return say(refusalLine('clipboard'));
+    // what was pasted is what is selected afterwards (the originals used to stay selected: Delete took THEM)
+    const sent = (ops: DimOp[]): void => {
+      o.onOps!(ops, cause);
+      if (hd.isAlive()) hd.select(ops.flatMap((op) => (op.type === 'add' ? [op.node.id] : [])));
+    };
+    if (r.kind === 'clones') return void (r.ops.length > 0 && sent(r.ops));
+    // a text pasted again with the view where it was steps down and right, so it never sits exactly on the last one
+    const where = `${v.scrollX},${v.scrollY},${v.zoom}`;
+    textPastes = where === textPastedAt ? textPastes + 1 : 0;
+    textPastedAt = where;
+    const op = dimPasteTextOp(text, view, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, o.mint ?? mintNodeId, { repeat: textPastes, top: box.y });
+    if (op) sent([op]);
+  };
 
   // ── the frame ────────────────────────────────────────────────────────────
   const titleEl = h('span', 'title', { title: o.title }, o.title);
@@ -503,7 +579,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     draw();
     if (!o.cardFocused()) headKey.focus(); // while it loads the keyboard is in the head, not on the page body
     o.load()
-      .then((m) => m.mountBoard(boardHost, { theme, onError: (err) => mine === generation && fail(err, true) }))
+      .then((m) => m.mountBoard(boardHost, { theme, chrome: el, onError: (err) => mine === generation && fail(err, true) }))
       .then(
         (hd) => {
           if (mine !== generation) return hd.unmount();
@@ -515,7 +591,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
               draw();
             }),
             hd.onScene(sceneSoon),
-            hd.onRefusal((r) => say(refusalLine(r.what))),
+            hd.onRefusal((r) => say(refusalLineOf(r))),
+            hd.onCopy((ids) => copied(ids)),
+            hd.onCut((ids) => cutTaken(ids)),
+            hd.onCopyOutside(forget),
+            hd.onPasteText((text, cause) => pasted(hd, text, cause)),
           );
           try {
             o.onReady?.(hd);
@@ -552,6 +632,32 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     else chooseTool(a.tool);
   };
   el.addEventListener('keydown', onKey, true);
+  // Cmd/Ctrl+D with the keyboard anywhere in the leaf never reaches the browser (its bookmark sheet)
+  el.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'd') e.preventDefault();
+  }, true);
+  // ONE guard for the whole leaf: nothing can be dropped on its head, rail, tray or foot either. (Over the board
+  // itself the handle refuses first and says what it was; this is everything around it, and the leaf while it has
+  // no board.) Said once per drag.
+  let dragSaid = false;
+  const dragGuard = (e: DragEvent): void => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    if (e.type === 'dragenter' && !dragSaid) {
+      dragSaid = true;
+      const types = [...(e.dataTransfer?.types ?? [])];
+      say(refusalLine(types.includes('Files') ? 'file' : 'drag'));
+    }
+    if (e.type === 'drop') dragSaid = false;
+  };
+  for (const type of ['dragenter', 'dragover', 'drop'] as const) el.addEventListener(type, dragGuard, true);
+  el.addEventListener('dragleave', (e) => {
+    if (!(e.relatedTarget instanceof Node && el.contains(e.relatedTarget))) dragSaid = false;
+  }, true);
+  // a refusal has been read once the person does anything else: it goes at the next press or key (it used to stay
+  // through a press on empty ground and through selecting another mark)
+  el.addEventListener('pointerdown', unsay, true);
+  el.addEventListener('keydown', unsay, true);
   // the rail is one tab stop; ↑ and ↓ move within it
   rail.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -617,6 +723,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       generation++;
       clearTimeout(saidTimer);
       for (const off of offs.splice(0)) off();
+      window.removeEventListener('blur', forget);
+      clip.clear();
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('focusout', onFocus);
       cancelAnimationFrame(sceneFrame);

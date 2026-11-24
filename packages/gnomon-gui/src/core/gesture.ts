@@ -38,7 +38,7 @@ export interface Gesture {
   readonly at: number;
 }
 
-const KIND_OF_TYPE: Readonly<Record<string, GestureKind>> = Object.freeze({ pointerup: 'pointer', keydown: 'key', paste: 'paste', click: 'menu' });
+const KIND_OF_TYPE: Readonly<Record<string, GestureKind>> = Object.freeze({ pointerup: 'pointer', keydown: 'key', paste: 'paste', click: 'menu', cut: 'menu' });
 
 /** The number of the last stamp sent, per connection (the client object). A new connection has no entry: it starts at 1. */
 const counters = new WeakMap<object, number>();
@@ -46,7 +46,8 @@ const counters = new WeakMap<object, number>();
 const minted = new WeakMap<Gesture, { n: number; used: number; conn: object | null }>();
 
 /**
- * A stamp for a trusted `pointerup`, `keydown`, `click` or `paste`; null for anything else, for a synthetic event
+ * A stamp for a trusted `pointerup`, `keydown`, `click`, `paste` or `cut` (a cut from the Edit menu is a `menu` gesture; a keyboard
+ * cut is stamped from its keydown; a `copy` changes nothing and is never stamped); null for anything else, for a synthetic event
  * and for a key held down (a repeated keydown is not a gesture).
  */
 export function gestureOf(e: { isTrusted: boolean; type: string; repeat?: boolean }, now: number): Gesture | null {

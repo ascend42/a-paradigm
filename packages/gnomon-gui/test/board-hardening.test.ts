@@ -83,6 +83,15 @@ describe('#gui-board patch manifest is pinned (a dropped patch is a failure, not
       'context-menu-removed @ index.js x1',
       'image-insert-refused @ index.js x1',
       'paste-types-filtered @ index.js x1',
+      'engine-paste-removed @ index.js x1',
+      'engine-cut-removed @ index.js x1',
+      'engine-copy-removed @ index.js x1',
+      'text-editor-paste-removed @ index.js x1',
+      'engine-drop-removed @ index.js x1',
+      'flowchart-keys-removed @ index.js x1',
+      'flowchart-navigate-removed @ index.js x1',
+      'alt-drag-duplicate-removed @ index.js x1',
+      'duplicate-action-removed @ index.js x1',
       'key-actions-allowlist @ index.js x1',
       'key-dialogs-removed @ index.js x1',
       'key-tools-removed @ index.js x1',
@@ -201,5 +210,22 @@ describe('#gui-board isolation: the served page cannot reach the chunk by any lo
     const html = bundle.get('index.html')!.toString('utf8');
     expect([...html.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0])).toEqual(['<script src="/boot.js">', '<script src="/app.js" defer>']);
     expect(html).not.toMatch(/type\s*=\s*["']?module|modulepreload|<iframe|<object|<embed|<base\b/i);
+  });
+});
+
+describe('#gui-board no engine clipboard action can be run through the handle (review of PR #117, B2)', () => {
+  it('the one action door (patch api-run-action) names exactly four zoom actions, and the key allowlist names none of the engine\'s clipboard or duplicate actions', async () => {
+    const { PATCHES } = (await import('../scripts/board-patches.mjs')) as { PATCHES: Array<{ id: string; replace: unknown }> };
+    const { gnomonBoardKeyActions } = await import('../src/board/skin.js');
+    const door = String(PATCHES.find((p) => p.id === 'api-run-action')!.replace);
+    expect(/\[([^\]]*)\]\.includes\(p\)/.exec(door)?.[1]).toBe('"zoomIn","zoomOut","resetZoom","zoomToFit"');
+    for (const name of ['copy', 'cut', 'paste', 'copyStyles', 'pasteStyles', 'copyAsPng', 'copyAsSvg', 'duplicateSelection']) {
+      expect(gnomonBoardKeyActions.has(name), name).toBe(false);
+      expect(door.includes(`"${name}"`), name).toBe(false);
+    }
+    // the handle itself calls gnomonAction only through its closed list of the same four
+    const src = (await import('node:fs')).readFileSync(new URL('../src/board/index.ts', import.meta.url), 'utf8');
+    expect(/const HANDLE_ACTIONS = \[([^\]]*)\] as const;/.exec(src)?.[1]).toBe("'zoomIn', 'zoomOut', 'resetZoom', 'zoomToFit'");
+    expect(src).not.toMatch(/executeAction|actionManager|navigator\.clipboard/);
   });
 });

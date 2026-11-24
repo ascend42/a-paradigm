@@ -46,7 +46,7 @@ export const BOARD_FONT_METRICS = Object.freeze({ unitsPerEm: 1000, ascender: 10
 export const boardLineHeight = (m) => (m.ascender - m.descender + m.lineGap) / m.unitsPerEm;
 
 /** The engine reads its colours and its key allowlist from the Gnomon tree (src/board/skin.ts), never from literals. */
-const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse,gnomonBoardAdmit,gnomonBoardYielded}from"gnomon-board:skin";';
+const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse,gnomonBoardAdmit,gnomonBoardYielded,gnomonBoardRan}from"gnomon-board:skin";';
 
 const SVG_BLOB = (expr) => `URL.createObjectURL(new Blob([${expr}],{type:H.svg}))`;
 
@@ -311,6 +311,82 @@ export const PATCHES = Object.freeze([
     replace: 'C(this,"addElementsFromPasteOrLibrary",t=>{let r=Pm(gnomonBoardAdmit(t.elements),null,void 0),',
     expect: 1,
     prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'engine-paste-removed',
+    file: 'index.js',
+    why: 'condition C8: the engine never reads a paste. The handle stops every paste before the engine (src/board/index.ts, document capture); if one ever reached this handler (the engine also calls it with no event from its removed context menu) it counts (gnomonBoardRan in src/board/skin.ts, read by the C8 test) and returns before it reads the clipboard, parses engine JSON, HTML or SVG, or inserts anything',
+    find: 'C(this,"pasteFromClipboard",Fe(async t=>{let r=!!Rd,',
+    replace: 'C(this,"pasteFromClipboard",Fe(async t=>{gnomonBoardRan("paste",this.excalidrawContainerRef&&this.excalidrawContainerRef.current,t);return;let r=!!Rd,',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'engine-cut-removed',
+    file: 'index.js',
+    why: 'condition C8: the engine never writes the system clipboard. A cut is the host register\'s (the handle answers plain text and deletes through the edit path); the engine\'s own cut handler counts and returns',
+    find: 'C(this,"onCut",Fe(t=>{',
+    replace: 'C(this,"onCut",Fe(t=>{gnomonBoardRan("cut",this.excalidrawContainerRef&&this.excalidrawContainerRef.current,t);return;',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'engine-copy-removed',
+    file: 'index.js',
+    why: 'condition C8: the engine never writes the system clipboard (its copy puts engine JSON, with every element field, on it). A copy is the host register\'s; the engine\'s own copy handler counts and returns',
+    find: 'C(this,"onCopy",Fe(t=>{',
+    replace: 'C(this,"onCopy",Fe(t=>{gnomonBoardRan("copy",this.excalidrawContainerRef&&this.excalidrawContainerRef.current,t);return;',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'text-editor-paste-removed',
+    file: 'index.js',
+    why: 'condition C8 (Aegis A5): the text editor\'s own paste handler (it parses the clipboard to pre-size the field) is never installed, so a paste into a text being typed is the textarea\'s native plain-text paste and nothing else; the input handler beside it stays',
+    find: 'o&&(d.onpaste=async F=>{let O=await _s(F,!0);if(!O.text)return;',
+    replace: 'o&&(d.onpaste=null,async F=>{let O=await _s(F,!0);if(!O.text)return;',
+    expect: 1,
+  },
+  {
+    id: 'engine-drop-removed',
+    file: 'index.js',
+    why: 'condition C8, the second line for drops (Aegis M2): the handle refuses every drag and drop before the engine, and a guard installed before the engine renders covers the time before the handle exists and after it has died; if a drop ever reached the engine\'s own handler (it reads scene files, library files and images) it counts (gnomonBoardRan), prevents the browser\'s default and returns',
+    find: 'C(this,"handleAppOnDrop",async t=>{',
+    replace: 'C(this,"handleAppOnDrop",async t=>{gnomonBoardRan("drop");t&&t.preventDefault&&t.preventDefault();return;',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'flowchart-keys-removed',
+    file: 'index.js',
+    why: 'Cmd/Ctrl+Arrow was hard-coded in the engine\'s keydown (not an action, so the key allowlist never saw it): it built flowchart nodes beside the selected mark, changed the selection and jumped the view. No node may be made by the engine: the branch never runs',
+    find: 'let l=an(t.key);if(t[y.CTRL_OR_CMD]&&l&&!t.shiftKey){',
+    replace: 'let l=an(t.key);if(!1&&t[y.CTRL_OR_CMD]&&l&&!t.shiftKey){',
+    expect: 1,
+  },
+  {
+    id: 'flowchart-navigate-removed',
+    file: 'index.js',
+    why: 'Alt+Arrow (the flowchart navigator, hard-coded beside the creator) changed the selection and scrolled the view: the branch never runs',
+    find: 'if(t.altKey){let s=$(this.scene.getNonDeletedElementsMap(),this.state);if(s.length===1&&l){',
+    replace: 'if(!1&&t.altKey){let s=$(this.scene.getNonDeletedElementsMap(),this.state);if(s.length===1&&l){',
+    expect: 1,
+  },
+  {
+    id: 'alt-drag-duplicate-removed',
+    file: 'index.js',
+    why: 'condition C8: Alt+drag duplicated the selection inside the engine, with every element field copied and no edit the host could author. With Alt held a drag is an ordinary move; a duplicate is a copy and a paste through the host register',
+    find: 'r.altKey&&!t.hit.hasBeenDuplicated){',
+    replace: '!1&&r.altKey&&!t.hit.hasBeenDuplicated){',
+    expect: 1,
+  },
+  {
+    id: 'duplicate-action-removed',
+    file: 'index.js',
+    why: 'condition C8: the duplicateSelection action (Cmd/Ctrl+D, the removed context menu and toolbar) does nothing even if it is ever run: the key allowlist already keeps its key from matching, this is the second line',
+    find: 'perform:(e,o,t,r)=>{if(o.editingLinearElement)try{let i=K.duplicateSelectedPoints(',
+    replace: 'perform:(e,o,t,r)=>{if(!0)return!1;if(o.editingLinearElement)try{let i=K.duplicateSelectedPoints(',
+    expect: 1,
   },
   {
     id: 'key-actions-allowlist',

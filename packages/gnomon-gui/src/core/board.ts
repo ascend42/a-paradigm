@@ -104,7 +104,7 @@ export interface BoardView {
   height: number;
 }
 
-/** A paste or a drop that reached the board. Reported, not acted on and not stopped (S1.3 intercepts: condition C8). */
+/** A paste or a drop that reached the board, as it was stopped before the engine (condition C8): what it offered, never its content. */
 export interface BoardAttempt {
   kind: 'paste' | 'drop';
   /** the DataTransfer types offered, never their content */
@@ -116,14 +116,20 @@ export interface BoardAttempt {
  * Something the board refused, for the leaf to say in its own words (the engine shows nothing).
  *  - `image`: an image insert (a picked, pasted or dropped image, SVG source or HTML carrying one); no image kind until S2
  *  - `scene-file`, `library-file`, `file`: a file dropped on the board; the drop never reaches the engine
- *  - `table`: tab-separated text pasted (the engine's chart dialog is not built into the board)
+ *  - `drag` with `no-drop`: a drag that carries no file (selected text, a link): nothing can be dropped on a board
+ *  - `file` with `no-file-paste`: a file on the clipboard; `paste` with `no-plain-text`: a paste that offers no plain
+ *    text (an image copied from a page, a rich fragment with no text form). Nothing was added
+ *  - `text` with `too-long`: pasted or typed words over what one mark may hold (`detail` is the limit). A paste
+ *    adds nothing; a typed text goes back to what it was
+ *  - `clipboard` with `nothing-held`: the pasted line stands for board marks this page no longer holds (said by
+ *    the leaf, which owns the copy register; the handle never raises it)
  *  - `mark`: a pasted mark of a kind the board does not have (`detail` names the engine type); it was removed
  *  - `fallback`: a press on a mark this build cannot draw (`detail` is its kind). It is locked in the engine: it
  *    starts no drag, shows no handles and cannot be selected or deleted, so the leaf says why nothing happened
  */
 export interface BoardRefusal {
-  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'table' | 'mark' | 'fallback';
-  why: 'no-image-kind' | 'no-file-drop' | 'no-table-kind' | 'not-a-board-kind' | 'kept-as-it-is';
+  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'drag' | 'mark' | 'fallback' | 'paste' | 'text' | 'clipboard';
+  why: 'no-image-kind' | 'no-file-drop' | 'no-drop' | 'no-file-paste' | 'no-plain-text' | 'too-long' | 'nothing-held' | 'not-stored' | 'not-a-board-kind' | 'kept-as-it-is';
   detail?: string;
 }
 
@@ -147,7 +153,8 @@ export interface BoardHandle {
    * Draw a folded dimension. The scene is DIFFED against it and updated outside the engine's history; a mark being
    * drawn, dragged or typed at that moment is left alone and is diffed against this state when the gesture ends.
    * NEVER fires `onEdit` (Aegis A1): a rendered row is not a gesture. Authorship, sticky and stub are read from
-   * this state only.
+   * this state only. ONE handle shows ONE dimension: a state whose `dim` differs from the first one rendered throws
+   * (on a dimension switch or a `cursor-epoch` reset the caller unmounts and mounts a new handle).
    */
   render(state: DimState): void;
   /**
@@ -157,6 +164,8 @@ export interface BoardHandle {
    * board saw), for the gesture stamp; null when there was none. The ops are NOT validated here. A change that
    * maps to no op is undone on the board and not reported. ONLY marks the person touched are in the ops, and a
    * mark in hand is compared with the node it was drawn from: a remote change that landed mid-gesture is kept.
+   * "Touched" is what the person had in hand (the selection, a mark being drawn, a text being typed), with its
+   * label, the arrows tied to it and a frame's children: an engine change to any other mark is never in the ops.
    * `cause` is cleared after every report. Returns the unsubscribe.
    */
   onEdit(listener: (ops: DimOp[], cause: Event | null) => void): () => void;
@@ -210,10 +219,42 @@ export interface BoardHandle {
   /** True while focus is inside the board (the surface or a text being typed). */
   hasFocus(): boolean;
   /**
-   * Be told about a paste or a drop on the board, before the engine. A paste is reported and left alone (S1.3
-   * intercepts it: condition C8); a drop that carries files is stopped here and also reported as a refusal.
+   * Be told about a paste or a drop on the board, as it is stopped before the engine (condition C8): the types
+   * offered and the file count, never the content. Every drop, and every paste outside a text being typed, is
+   * stopped; what was refused is also said through `onRefusal`.
    */
   onAttempt(listener: (attempt: BoardAttempt) => void): () => void;
+  /**
+   * Be told when a person pastes plain text on the board (not into a text being typed, which takes it natively).
+   * The handle adds NOTHING itself and never parses the text: the listener decides what the words become (the leaf:
+   * clones of its own copy, or one text mark). `cause` is the trusted `paste` event, for the gesture stamp. A paste
+   * that carries a file, offers no plain text or is over `DIM_LIMITS.text` is refused instead (`onRefusal`).
+   */
+  onPasteText(listener: (text: string, cause: ClipboardEvent) => void): () => void;
+  /**
+   * Be told when a person copies on the board, with the NODE ids of the selected marks the rendered state holds
+   * (paint order; possibly none). The listener answers the plain text for the system clipboard, synchronously; the
+   * handle puts it there as `text/plain` and nothing else. An empty answer leaves the clipboard as it is. The
+   * engine never writes the clipboard.
+   */
+  onCopy(listener: (nodeIds: string[], cause: ClipboardEvent) => string | null | void): () => void;
+  /**
+   * As `onCopy`, for a cut: the listener answers the text AND the node ids its register took (a frame's children
+   * with it); EXACTLY those nodes are deleted, and no others, reported through `onEdit` as the person's deletes.
+   * An empty answer cuts nothing. `cause` here and on that edit is the Cmd/Ctrl+X keydown when the cut
+   * came from the keyboard (a gesture stamp can be minted from it), else the `cut` event. A copy or
+   * a cut whose selection includes a mark not stored yet takes nothing: it is refused (`clipboard`, `not-stored`)
+   * and `onCopyOutside` listeners are told, so a stale copy cannot be pasted in its place.
+   */
+  onCut(listener: (nodeIds: string[], cause: Event) => { text: string; ids: string[] } | null | void): () => void;
+  /**
+   * Select exactly these nodes (the marks a paste just added), once every one of them is rendered: at once when
+   * they are, else after the render that brings them. Dropped if the person presses or types first. Selecting is
+   * never an edit.
+   */
+  select(nodeIds: readonly string[]): void;
+  /** Be told when a copy or a cut happens anywhere else on the page, so the caller can forget what it held. */
+  onCopyOutside(listener: () => void): () => void;
   /** Be told when the board refused something, so the leaf can say so. The engine itself shows nothing. */
   onRefusal(listener: (refusal: BoardRefusal) => void): () => void;
   /** The scene as a PNG on the theme's ground, rendered on a canvas (the GUI never exports SVG, §12.7). */
@@ -236,9 +277,16 @@ export interface BoardMountOptions {
   /** The theme to draw in (default day). Change it later with handle.setTheme. */
   theme?: BoardTheme;
   /**
-   * PROBE ONLY (the P12 harness, which has no trusted input in WKWebView): untrusted pointer and key events count
-   * as a person's input. The app never sets it (test/board-leaf.test.ts scans for it): there, only trusted events
-   * can make an engine change an edit.
+   * The leaf's own element around the board (head, rail, tray, foot). A paste, a copy or a cut made with the
+   * keyboard focus on that chrome is the board's (it used to add nothing and say nothing); a text field of the
+   * chrome keeps its own. Drags over it are the leaf's to refuse.
+   */
+  chrome?: HTMLElement;
+  /**
+   * PROBE BUILD ONLY. The chunk that ships IGNORES it: the branch that reads it is removed at build time (define
+   * `__GNOMON_BOARD_PROBE__` is false in scripts/board-build.mjs; test/board-patches.test.ts holds that the pinned
+   * `board/board.js` does not contain the word). Only the probe build the P12 harness makes for WKWebView, which
+   * has no trusted input, lets untrusted pointer and key events count as a person's input.
    */
   syntheticInput?: boolean;
 }

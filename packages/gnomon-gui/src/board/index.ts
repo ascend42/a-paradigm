@@ -21,16 +21,22 @@ import { createRoot } from 'react-dom/client';
 import { CaptureUpdateAction, Excalidraw, exportToBlob, mutateElement, newElementWith, restoreElements } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import './skin.css';
-import { CONTENT_DEFAULTS, contentColourCheck, emptyDimState, foldDim } from '@a-company/gnomon-contracts';
+import { CONTENT_DEFAULTS, contentColourCheck, DIM_LIMITS, emptyDimState, foldDim } from '@a-company/gnomon-contracts';
 import type { DimFoldNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
 import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
 import { dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
 import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, fillColour, lineColour, normalOf, offNormal } from './normal.js';
 import { fitStroke } from './simplify.js';
-import { applySkin, gnomonBoardSkin, onBoardRefusal, setBoardYielded } from './skin.js';
+import { applySkin, gnomonBoardRuns, gnomonBoardSkin, onBoardRefusal, setBoardYielded } from './skin.js';
 
 declare const __GNOMON_BOARD_ENGINE__: string;
+/**
+ * Build-time only (scripts/board-build.mjs): false in the chunk that ships, so the branch that lets untrusted events
+ * count as input is REMOVED from the pinned bytes (test/board-patches.test.ts reads them). True only in the probe
+ * build the P12 harness makes for WKWebView, which is never embedded and never served by the kernel.
+ */
+declare const __GNOMON_BOARD_PROBE__: boolean;
 
 /** `<name>@<version>` of the engine, stamped by the build from the installed package. */
 export const BOARD_ENGINE: string = __GNOMON_BOARD_ENGINE__;
@@ -42,6 +48,14 @@ export { BOARD_FONT_ID, BOARD_FONT_SIZE };
  * folds with its own copy; a state is plain data, so either copy's states render.
  */
 export { emptyDimState, foldDim };
+/**
+ * How often the ENGINE's own paste, copy, cut and drop handlers were entered for an event inside a board (patches
+ * `engine-paste-removed`, `engine-copy-removed`, `engine-cut-removed`, `engine-drop-removed` count and return; an
+ * event made elsewhere on the page, which the engine's document listeners also see, is not counted: skin.ts). A
+ * board stops those events before the engine, so every number stays 0: test/board-c8.test.ts and the P12 probe
+ * read it. Diagnostic; nothing is decided from it.
+ */
+export const boardEngineRuns = (): { paste: number; copy: number; cut: number; drop: number } => ({ ...gnomonBoardRuns });
 export const BOARD_FONT_FAMILY = 'JetBrains Mono';
 
 type StockApi = Parameters<NonNullable<Parameters<typeof Excalidraw>[0]['excalidrawAPI']>>[0];
@@ -122,8 +136,10 @@ const carriesMore = (el: Element): boolean => {
 };
 
 const DEFAULT_MOUNT_TIMEOUT_MS = 15_000;
-/** How long after a paste event the engine may take to add what was pasted (it reads the clipboard asynchronously). */
-const PASTE_SETTLE_MS = 1500;
+/** The engine MIME of a library drag. */
+const LIBRARY_MIME = 'application/vnd.excalidrawlib+json';
+/** True for a field that takes pasted text natively AS PLAIN TEXT (a textarea, a text input): never a contenteditable. */
+const takesPlainText = (t: EventTarget | null): boolean => t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && (t.type === 'text' || t.type === 'search'));
 const asError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
 /** How often the mount looks at the engine's loading flag while it initialises its scene. */
@@ -150,6 +166,24 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
     };
     // React 19 root options (the workspace's hoisted @types/react-dom is the 18 line, which does not know them yet)
     const rootOptions = { onUncaughtError: crashed, onCaughtError: crashed };
+    // The guard (Aegis M2): installed BEFORE the engine renders and kept until the board is unmounted. While no
+    // handle is alive (the engine is still loading its scene and its face, or it has crashed and its root is still
+    // rendered) every paste, copy, cut, drag and drop inside the host is stopped here, so the engine's own handlers
+    // never see one. Once the handle is alive it does nothing: the handle's own listeners decide.
+    let handleLive = false;
+    const guard = (e: Event): void => {
+      if (handleLive && dead === null) return;
+      const drag = e.type.startsWith('drag') || e.type === 'drop';
+      if (!(e.target instanceof Node && host.contains(e.target)) && (drag || !host.contains(document.activeElement))) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (drag && (e as DragEvent).dataTransfer) (e as DragEvent).dataTransfer!.dropEffect = 'none';
+    };
+    const GUARDED = ['paste', 'copy', 'cut', 'dragenter', 'dragover', 'drop'] as const;
+    for (const type of GUARDED) document.addEventListener(type, guard, true);
+    const unguard = (): void => {
+      for (const type of GUARDED) document.removeEventListener(type, guard, true);
+    };
     const root = createRoot(host, rootOptions as Parameters<typeof createRoot>[1]);
     const fail = (e: Error): void => {
       if (settled) return;
@@ -157,6 +191,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       clearTimeout(timer);
       clearTimeout(poll);
       root.unmount();
+      unguard();
       reject(e);
     };
     const timer = setTimeout(() => fail(new Error('the board engine did not come up in time')), options.timeoutMs ?? DEFAULT_MOUNT_TIMEOUT_MS);
@@ -182,6 +217,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
     });
 
     const handleOf = (api: Api): BoardHandle => {
+      handleLive = true; // from here the handle's own listeners decide (the guard above stands down)
       // ── the rendered dimension ────────────────────────────────────────────
       // `prev` is EXACTLY the state the scene was last rendered from: the diff's other side, and the only place
       // an author, a sticky or a stub is read from (an element says nothing about itself but its two tokens).
@@ -269,16 +305,71 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       let yielded = false;
       /** Put-backs in a row with no input between them: the second one stops (an engine that keeps normalising cannot loop). */
       let putBacks = 0;
-      /** Until when a paste the person made may still add its marks (the engine reads the clipboard asynchronously). */
-      let pasteUntil = 0;
+      /**
+       * What the person had in hand since the last render or report: the selection, a mark being drawn, a text being
+       * typed. Only these (with their labels, the arrows tied to them and a frame's children) may be in an edit.
+       */
+      const handled = new Set<string>();
+      const note = (s: { selectedElementIds: Record<string, unknown>; newElement?: unknown; editingTextElement?: unknown; multiElement?: unknown }): void => {
+        for (const id of Object.keys(s.selectedElementIds)) handled.add(id);
+        for (const el of [s.newElement, s.editingTextElement, s.multiElement] as Array<{ id?: string; containerId?: string | null } | null | undefined>) {
+          if (el?.id) handled.add(el.id);
+          if (el?.containerId) handled.add(el.containerId);
+        }
+      };
+      /** The person is no longer acting: nothing stays armed for a later engine change. */
+      const disarm = (): void => {
+        touched = false;
+        cause = null;
+        handled.clear();
+      };
+      /**
+       * What the ENGINE changed on marks nobody had in hand, per node, as the diff against the rendered state says it:
+       * left standing until the next render, and taken OUT of a later real edit of that mark (the person's edit must
+       * not carry the engine's delta).
+       */
+      const standing = new Map<string, { patch: Map<string, string>; dx: number; dy: number }>();
+      const stand = (ops: readonly DimOp[]): void => {
+        const at = (id: string): { patch: Map<string, string>; dx: number; dy: number } => standing.get(id) ?? (standing.set(id, { patch: new Map(), dx: 0, dy: 0 }), standing.get(id)!);
+        for (const op of ops) {
+          if (op.type === 'update') for (const [k, v] of Object.entries(op.patch as Record<string, unknown>)) at(op.id).patch.set(k, JSON.stringify(v));
+          else if (op.type === 'move') for (const id of op.ids) Object.assign(at(id), { dx: op.dx, dy: op.dy });
+        }
+      };
+      /** An op of the person's, less what the engine had already changed on that mark by itself. */
+      const lessStanding = (op: DimOp): DimOp[] => {
+        if (standing.size === 0) return [op];
+        if (op.type === 'update') {
+          const st = standing.get(op.id);
+          if (!st) return [op];
+          // (a change of place and of something else is ONE update carrying x and y: the engine's own shift is taken out of it)
+          const at = prev.nodes.get(op.id)?.node as { x?: unknown; y?: unknown } | undefined;
+          const shifted = (k: string, v: unknown): boolean => (k === 'x' || k === 'y') && (st.dx !== 0 || st.dy !== 0) && typeof at?.[k] === 'number' && v === (at[k] as number) + (k === 'x' ? st.dx : st.dy);
+          const patch = Object.fromEntries(Object.entries(op.patch as Record<string, unknown>).filter(([k, v]) => st.patch.get(k) !== JSON.stringify(v) && !shifted(k, v)));
+          return Object.keys(patch).length > 0 ? [{ ...op, patch } as DimOp] : [];
+        }
+        if (op.type !== 'move') return [op];
+        const plain = op.ids.filter((id) => !standing.get(id)?.dx && !standing.get(id)?.dy);
+        const out: DimOp[] = plain.length > 0 ? [{ ...op, ids: plain }] : [];
+        for (const id of op.ids) {
+          const st = standing.get(id);
+          if (!st || (!st.dx && !st.dy) || (op.dx === st.dx && op.dy === st.dy)) continue;
+          out.push({ ...op, ids: [id], dx: op.dx - st.dx, dy: op.dy - st.dy });
+        }
+        return out;
+      };
+      /** The last keydown a person made, for a cut made with the keyboard (a `cut` event itself carries no gesture stamp). */
+      let lastKey: KeyboardEvent | null = null;
+      /** The dimension this handle shows: one handle per dimension (the caller unmounts and mounts for another). */
+      let shows: string | null = null;
       /** The stored node each main element was last BUILT from: what the person saw when they took a mark in hand. */
       const seen = new Map<string, Record<string, unknown>>();
       /** The text being typed, as it was when it was opened: a text opened and left as it was is not an edit. */
       let typing: { id: string; containerId: string | null; text: string } | null = null;
       /** Elements the engine changed around a text that was opened and not changed (its box refitted): not the person's. */
       const untouched = new Set<string>();
-      /** Untrusted events count as input only for the probe harness (mount option `syntheticInput`); never in the app. */
-      const counts = (e: Event): boolean => e.isTrusted || options.syntheticInput === true;
+      /** Only an event the browser itself made is a person's input (`isTrusted`). A probe build alone also honours the mount option: see the define. */
+      const counts = (e: Event): boolean => e.isTrusted || (__GNOMON_BOARD_PROBE__ && options.syntheticInput === true);
       const busy = (): boolean => {
         const s = api.getAppState();
         return pointerDown || s.newElement != null || s.editingTextElement != null || s.editingFrame != null || s.multiElement != null || s.selectedElementsAreBeingDragged === true || s.isResizing === true || s.isRotating === true;
@@ -397,6 +488,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         return out;
       };
       const renderNow = (state: DimState): void => {
+        standing.clear(); // every mark not in hand is rebuilt from the state below
         own(() => {
           const s = api.getAppState();
           const scene = new Map(all().map((el) => [el.id, el]));
@@ -471,6 +563,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         api.history.clear();
         announce();
         sceneChanged();
+        selectWanted();
       };
 
       // ── edits: the scene diffed against `prev`, once a gesture has ended ──
@@ -505,17 +598,26 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           };
           mutateElement(el as never, shape(first) as never, false);
           // a stroke that cannot fit one row within the tolerance ceiling is several strokes, end to end: never lost
-          for (const piece of fit.strokes.slice(1)) extra.push(changed(el, { ...shape(piece), id: `g-${randomId()}`, index: null }));
+          for (const piece of fit.strokes.slice(1)) {
+            const id = `g-${randomId()}`;
+            if (handled.has(el.id)) handled.add(id); // a piece of the stroke the person drew is theirs too
+            extra.push(changed(el, { ...shape(piece), id, index: null }));
+          }
         }
         if (extra.length > 0) api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...extra] as never, captureUpdate: CaptureUpdateAction.NEVER });
       };
       /** Everything back to the state last rendered, with nothing left counted as changed. Always terminates. */
       const putBack = (): void => {
-        rebase();
-        touched = false;
-        cause = null;
+        disarm();
         untouched.clear();
-        if (++putBacks > 2) return; // the engine keeps changing what it is given: its form stands until the next render
+        if (++putBacks > 2) {
+          // the engine keeps changing what it is given: its form stands until the next render, and what it changed
+          // is remembered so that a later real edit of one of those marks reports the person's change alone
+          stand(diff(prev));
+          rebase();
+          return;
+        }
+        rebase();
         renderNow(prev);
         rebase();
       };
@@ -524,9 +626,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
        * engine would re-route BOTH ends to the shapes' centres when either shape moves). An arrow the person did
        * not take in hand has each end carried by exactly what its own shape moved, and nothing else.
        */
-      const followArrows = (selected: Record<string, unknown>): void => {
+      const followArrows = (selected: Record<string, unknown>, was: ReadonlyMap<string, EngineElement>): void => {
         const scene = new Map(all().map((el) => [el.id, el]));
-        const was = new Map(dimToElements(prev, theme, ids).map((el) => [el.id, el]));
         for (const el of scene.values()) {
           const old = was.get(el.id);
           if (el.type !== 'arrow' || el.isDeleted || !isDirty(el) || selected[el.id] === true || !old?.points || !el.points || old.points.length !== el.points.length) continue;
@@ -558,33 +659,63 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         const gone = (op: DimOp): boolean => op.type === 'delete' && !shown.has(ids.engineOf(op.id));
         return elementsToOps(basis, scene as never, ids, { line: style.line, fill: style.fill, sticky: stickyDrawn.size > 0 }).filter((op) => !gone(op));
       };
+      /** Nodes to select once they are all rendered (the marks a paste just added). */
+      let wanted: string[] | null = null;
+      const selectWanted = (): void => {
+        if (!wanted || dead !== null || busy()) return;
+        const engineIds = wanted.map((n) => (prev.nodes.has(n) ? engineByNode.get(n) : undefined));
+        if (engineIds.some((id) => id === undefined || !shown.has(id))) return;
+        wanted = null;
+        api.updateScene({ appState: { selectedElementIds: Object.fromEntries(engineIds.map((id) => [id, true])), selectedGroupIds: {} } as never, captureUpdate: CaptureUpdateAction.NEVER });
+        announce();
+        sceneChanged();
+      };
       let flushQueued = false;
       const flush = (): void => {
         flushQueued = false;
         if (dead !== null || recolouring || busy()) return;
         if (!dirty()) {
           // the gesture is over and changed nothing: it does not stay armed for a later engine change
-          // (but a paste the engine is still reading is not over)
-          if (performance.now() < pasteUntil) return;
-          touched = false;
-          cause = null;
-          return;
+          return disarm();
         }
         // an engine change nobody made (a reflow after a render), or one made while a card has the keyboard, is
         // not an edit, and is not kept either
         if (!touched || yielded) return putBack();
         putBacks = 0;
-        pasteUntil = 0;
         const s = api.getAppState();
-        followArrows(s.selectedElementIds as Record<string, unknown>);
+        note(s as never);
+        const was = new Map(dimToElements(prev, theme, ids).map((el) => [el.id, el]));
+        followArrows(s.selectedElementIds as Record<string, unknown>, was);
         fitNewStrokes();
-        // ONLY what the person touched is reported: the elements whose version moved since the last render or report
+        // What the person had in hand reaches: its label (and a label's mark), a frame's children, and the arrows
+        // tied to it, now or in the rendered state. Nothing else may be in the edit, whatever the engine bumped.
+        type Tied = Versioned & { frameId?: string | null; startBinding?: { elementId: string } | null; endBinding?: { elementId: string } | null; name?: string | null };
+        const scene = all() as readonly Tied[];
+        const reach = new Set(handled);
+        for (const el of scene) if (typeof el.containerId === 'string' && reach.has(el.id)) reach.add(el.containerId);
+        const tiedTo = (el: { startBinding?: { elementId: string } | null; endBinding?: { elementId: string } | null } | undefined): boolean => !!el && ((!!el.startBinding && reach.has(el.startBinding.elementId)) || (!!el.endBinding && reach.has(el.endBinding.elementId)));
+        for (const el of scene) if (typeof el.frameId === 'string' && reach.has(el.frameId)) reach.add(el.id);
+        for (const el of scene) if (el.type === 'arrow' && (tiedTo(el) || tiedTo(was.get(el.id)))) reach.add(el.id);
+        for (const el of scene) if (typeof el.containerId === 'string' && reach.has(el.containerId)) reach.add(el.id);
+        // ONLY what the person touched is reported: of those, the elements whose version moved since the last render or report
         const mine = new Set<string>();
-        const tombs = new Set<string>();
-        for (const el of all()) {
-          if (!isDirty(el) || untouched.has(el.id)) continue;
-          mine.add(typeof el.containerId === 'string' && el.type === 'text' ? el.containerId : el.id);
-          if (el.isDeleted) tombs.add(el.id);
+        // words over what a row may carry are never read by the map: refused, and the mark (a label's mark with
+        // it, which the engine resized around the words) goes back as it was
+        const tooLong = new Set<string>();
+        for (const el of scene) {
+          if (!isDirty(el) || !reach.has(el.id) || (el.type !== 'text' && el.type !== 'frame')) continue;
+          const label = el.type === 'text' && typeof el.containerId === 'string';
+          const words = el.type === 'text' ? (el.originalText ?? el.text ?? '') : typeof el.name === 'string' ? el.name : '';
+          const limit = el.type === 'frame' ? DIM_LIMITS.title : label ? DIM_LIMITS.label : DIM_LIMITS.text;
+          if (words.length <= limit) continue;
+          tooLong.add(el.id);
+          if (label) tooLong.add(el.containerId!);
+          refuse({ what: 'text', why: 'too-long', detail: String(limit) });
+        }
+        const cutBack = tooLong.size > 0;
+        for (const el of scene) {
+          if (!isDirty(el) || untouched.has(el.id) || !reach.has(el.id) || tooLong.has(el.id)) continue;
+          mine.add(el.type === 'text' && typeof el.containerId === 'string' ? el.containerId : el.id);
         }
         // a mark in hand is compared with the node it was DRAWN from, so a remote change that landed during the
         // gesture is not undone by the drop: the ops are the person's own delta, applied on top of the newest state
@@ -599,16 +730,22 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         basis = { ...prev, nodes };
         const touchedNode = (nodeId: string): boolean => mine.has(ids.engineOf(nodeId));
         const ops: DimOp[] = [];
+        const strays: DimOp[] = [];
         for (const op of diff(basis)) {
           if (op.type === 'move') {
             const moved = op.ids.filter(touchedNode);
-            if (moved.length > 0) ops.push({ ...op, ids: moved });
-          } else if (op.type === 'add' ? touchedNode(op.node.id) : (op.type === 'update' || op.type === 'delete') && touchedNode(op.id)) ops.push(op);
+            if (moved.length > 0) ops.push(...lessStanding({ ...op, ids: moved }));
+            if (moved.length < op.ids.length) strays.push({ ...op, ids: op.ids.filter((id) => !touchedNode(id)) });
+          } else if (op.type === 'add' ? touchedNode(op.node.id) : (op.type === 'update' || op.type === 'delete') && touchedNode(op.id)) ops.push(...lessStanding(op));
+          else strays.push(op);
         }
+        // what the engine changed on a mark nobody held stands until the next render, out of every later edit
+        // (a refused text is not standing: it is put back below)
+        const refusedNode = (id: string): boolean => tooLong.has(ids.engineOf(id));
+        stand(strays.filter((op) => !(op.type === 'move' ? op.ids.some(refusedNode) : op.type === 'add' ? refusedNode(op.node.id) : (op.type === 'update' || op.type === 'delete') && refusedNode(op.id))));
         const why = cause;
         rebase();
-        touched = false;
-        cause = null;
+        disarm();
         untouched.clear();
         stickyDrawn.clear();
         api.history.clear();
@@ -616,6 +753,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (ops.length === 0) return putBack();
         putBacks = 0;
         for (const l of [...editListeners]) l(ops, why);
+        // a refused text is put back as the state has it (the listener may not have rendered)
+        if (cutBack && dead === null) renderNow(prev);
       };
       const queueFlush = (): void => {
         if (flushQueued || dead !== null) return;
@@ -660,6 +799,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           }
           typing = null;
         }
+        if (touched) note(appState as never);
         if (repaint) queueMicrotask(recolourAll);
         announce();
         sceneChanged();
@@ -693,6 +833,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (!counts(e)) return;
         touched = true;
         putBacks = 0;
+        lastKey = null;
+        wanted = null; // the person has moved on: a pending selection of pasted marks is not forced on them
+        note(api.getAppState() as never);
       };
       const onUp = (e: Event): void => {
         if (!pointerDown) return;
@@ -709,9 +852,22 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         touched = true;
         putBacks = 0;
         cause = e;
+        lastKey = e.repeat ? null : e;
+        note(api.getAppState() as never);
         setTimeout(queueFlush, 0);
+        // Cmd/Ctrl+Arrow and Alt+Arrow never reach the engine (its flowchart keys were hard-coded in its keydown;
+        // patches `flowchart-keys-removed` and `flowchart-navigate-removed` are the second line): no node is made,
+        // nothing else is selected, the view does not jump. In a text being typed they move the caret as always.
+        if ((e.metaKey || e.ctrlKey || e.altKey) && e.key.startsWith('Arrow') && !takesPlainText(e.target)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         const mod = e.metaKey || e.ctrlKey;
         const key = e.key.toLowerCase();
+        // Cmd/Ctrl+D does nothing on a board (the engine's duplicate is removed), and must not fall through to the
+        // browser, where it opens the bookmark sheet
+        if (mod && !e.altKey && key === 'd') e.preventDefault();
         if (!mod || e.altKey || (key !== 'z' && !(key === 'y' && e.ctrlKey && !e.metaKey))) return;
         const s = api.getAppState();
         if (s.editingTextElement != null || s.editingFrame != null) return; // a text being typed keeps its own undo
@@ -724,61 +880,196 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (!counts(e)) return;
         touched = true;
         putBacks = 0;
+        note(api.getAppState() as never);
         setTimeout(queueFlush, 0);
       };
       host.addEventListener('pointerdown', onDown, true);
       host.addEventListener('keydown', onKey, true);
       host.addEventListener('input', onInput, true);
-      host.addEventListener('cut', onInput, true);
       window.addEventListener('pointerup', onUp, true);
       window.addEventListener('pointercancel', onUp, true);
-      // paste and drop are REPORTED from the capture phase and left alone: what the board does with them is the
-      // next pass's to decide (condition C8), and this hook is how the leaf will see them first
+      // ── paste, copy, cut and drop: contained BEFORE the engine (condition C8) ──
+      // Per-board listeners on the document, capture phase. They act only when the event's target or the focused
+      // element is inside THIS host (containment, never a tag), and they are removed at unmount. The engine's own
+      // paste, copy and cut handlers (document, bubble phase) therefore never run, and patches `engine-paste-removed`,
+      // `engine-copy-removed` and `engine-cut-removed` make them count and return if one ever did.
       const attemptListeners = new Set<(a: BoardAttempt) => void>();
-      const attempt = (kind: BoardAttempt['kind']) => (e: Event): void => {
-        const dt = kind === 'paste' ? (e as ClipboardEvent).clipboardData : (e as DragEvent).dataTransfer;
+      const attempt = (kind: BoardAttempt['kind'], dt: DataTransfer | null): void => {
         for (const l of [...attemptListeners]) l({ kind, types: [...(dt?.types ?? [])], files: dt?.files.length ?? 0 });
       };
-      const onPaste = attempt('paste');
-      const onDrop = attempt('drop');
-      const unsubscribeRefusal = onBoardRefusal((what, detail) => refuse(what === 'image' ? { what, why: 'no-image-kind' } : { what, why: 'not-a-board-kind', ...(detail ? { detail } : {}) }));
-      // A drop that carries files never reaches the engine: a dropped scene file replaced the whole board with the
-      // stock look and raised an img-src refusal, and a library file filled a Library nobody can open (Mika, S1.1
-      // pass A finding 1). The pointer says so while it hovers.
-      const LIBRARY_MIME = 'application/vnd.excalidrawlib+json';
-      const onDragOver = (e: DragEvent): void => {
+      const chrome = options.chrome ?? null;
+      const inBoard = (n: unknown): boolean => n instanceof Node && (host.contains(n) || (chrome !== null && chrome.contains(n)));
+      /** A text field of the leaf's chrome (not of the board): it keeps its own paste, copy and cut. */
+      const chromeField = (e: Event): boolean => chrome !== null && e.target instanceof Node && chrome.contains(e.target) && !host.contains(e.target) && (takesPlainText(e.target) || (e.target as HTMLElement).isContentEditable === true);
+      const within = (e: Event): boolean => !chromeField(e) && (inBoard(e.target) || inBoard(document.activeElement));
+      /** A text field of this board that is being typed in (the engine's text editor, a frame's title): it pastes natively. */
+      const typingIn = (e: Event): boolean => e.target instanceof Node && host.contains(e.target) && takesPlainText(e.target);
+      const pasteListeners = new Set<(text: string, cause: ClipboardEvent) => void>();
+      const copyListeners = new Set<(nodeIds: string[], cause: ClipboardEvent) => string | null | void>();
+      const cutListeners = new Set<(nodeIds: string[], cause: Event) => { text: string; ids: string[] } | null | void>();
+      const outsideListeners = new Set<() => void>();
+      const onPasteFirst = (e: ClipboardEvent): void => {
+        if (dead !== null || !within(e)) return;
+        // In a text being typed the field takes the paste itself, as plain text (rich HTML arrives as its text, a
+        // file as nothing); the engine's handlers on the field and on the document never see the event. The words
+        // reach the state only when the text is committed, through the edit path.
+        if (typingIn(e)) {
+          e.stopImmediatePropagation();
+          // only the LENGTH of the pasted words is read: words that would take the field over what its mark may
+          // hold are refused here, at the paste, so what was already typed is never thrown away at commit
+          const field = e.target as HTMLTextAreaElement | HTMLInputElement;
+          const st = api.getAppState() as unknown as { editingTextElement?: { containerId?: string | null } | null; editingFrame?: unknown };
+          const limit = st.editingTextElement ? (st.editingTextElement.containerId ? DIM_LIMITS.label : DIM_LIMITS.text) : st.editingFrame != null || field instanceof HTMLInputElement ? DIM_LIMITS.title : DIM_LIMITS.text;
+          const replaced = Math.abs((field.selectionEnd ?? 0) - (field.selectionStart ?? 0));
+          const incoming = (e.clipboardData?.getData('text/plain') ?? '').length;
+          if (field.value.length - replaced + incoming > limit) {
+            e.preventDefault();
+            refuse({ what: 'text', why: 'too-long', detail: String(limit) });
+          }
+          return;
+        }
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const dt = e.clipboardData;
+        attempt('paste', dt);
+        const files = [...(dt?.files ?? [])];
+        if (files.length > 0 || [...(dt?.items ?? [])].some((i) => i.kind === 'file')) {
+          const image = files.some((f) => f.type.startsWith('image/')) || [...(dt?.items ?? [])].some((i) => i.kind === 'file' && i.type.startsWith('image/'));
+          return refuse(image ? { what: 'image', why: 'no-image-kind' } : { what: 'file', why: 'no-file-paste' });
+        }
+        // the text is NEVER parsed: SVG source, engine JSON and HTML source are words like any other
+        const text = dt?.getData('text/plain') ?? '';
+        if (text.length === 0) return refuse({ what: 'paste', why: 'no-plain-text' });
+        if (text.trim().length === 0) return; // only white space: nothing to add and nothing to say
+        if (text.length > DIM_LIMITS.text) return refuse({ what: 'text', why: 'too-long', detail: String(DIM_LIMITS.text) });
+        if (!counts(e) || yielded) return; // a paste no person made is stopped and goes no further
+        for (const l of [...pasteListeners]) l(text, e);
+      };
+      /** The node ids of the selected marks the rendered state holds, in paint order; `all` is false when one is not stored yet. */
+      const selectedNodes = (): { ids: string[]; all: boolean } => {
+        const selected = api.getAppState().selectedElementIds as Record<string, unknown>;
+        const out: string[] = [];
+        let every = true;
+        for (const el of api.getSceneElements() as unknown as Element[]) {
+          if (selected[el.id] !== true || el.containerId) continue;
+          const nodeId = nodeByEngine.get(el.id);
+          if (nodeId !== undefined && prev.nodes.has(nodeId)) out.push(nodeId);
+          else every = false;
+        }
+        return { ids: out, all: every };
+      };
+      const onCopyFirst = (cut: boolean) => (e: ClipboardEvent): void => {
+        if (dead !== null) return;
+        // a copy or a cut made anywhere else on the page: the caller forgets what it held
+        if (!within(e)) return void [...outsideListeners].forEach((l) => l());
+        // the words being typed are copied by the field itself
+        if (typingIn(e)) return void e.stopImmediatePropagation();
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!counts(e) || yielded) return;
+        const sel = selectedNodes();
+        // a mark not stored yet cannot be copied: nothing is taken, the person is told, and whatever was held
+        // before is forgotten so that a stale copy is not pasted in its place
+        if (!sel.all) {
+          for (const l of [...outsideListeners]) l();
+          return refuse({ what: 'clipboard', why: 'not-stored' });
+        }
+        // a cut made with the keyboard is stamped from its key (a `cut` event carries no gesture stamp); the key is
+        // used once
+        const key = cut && lastKey && (lastKey.metaKey || lastKey.ctrlKey) && lastKey.key.toLowerCase() === 'x' ? lastKey : null;
+        lastKey = null;
+        let text = '';
+        let taken: string[] = [];
+        if (cut) {
+          for (const l of [...cutListeners]) {
+            const r = l(sel.ids, key ?? e);
+            if (r && typeof r.text === 'string' && r.text.length > 0) [text, taken] = [r.text, [...r.ids]];
+          }
+        } else for (const l of [...copyListeners]) text = String(l(sel.ids, e) ?? '') || text;
+        if (text.length === 0) return; // nothing was taken: the system clipboard is left as it is
+        // plain text and nothing else: no HTML, no engine type, no custom type
+        e.clipboardData?.setData('text/plain', text);
+        if (!cut || busy()) return;
+        // a cut removes EXACTLY the nodes the register took (and their labels), as the person's own edit
+        const going = new Set<string>();
+        for (const nodeId of taken) {
+          const engineId = prev.nodes.has(nodeId) ? engineByNode.get(nodeId) : undefined;
+          if (engineId !== undefined) going.add(engineId);
+        }
+        if (going.size === 0) return;
+        const scene = api.getSceneElementsIncludingDeleted() as unknown as Element[];
+        for (const el of scene) if (typeof el.containerId === 'string' && going.has(el.containerId)) going.add(el.id);
+        touched = true;
+        putBacks = 0;
+        cause = key ?? e;
+        for (const id of going) handled.add(id);
+        api.updateScene({ elements: scene.map((el) => (going.has(el.id) && !el.isDeleted ? changed(el, { isDeleted: true }) : el)) as never, appState: { selectedElementIds: {}, selectedGroupIds: {} } as never, captureUpdate: CaptureUpdateAction.NEVER });
+        queueFlush();
+      };
+      const onCopyHere = onCopyFirst(false);
+      const onCutHere = onCopyFirst(true);
+      const unsubscribeRefusal = onBoardRefusal((what, detail) => refuse(what === 'image' ? { what, why: 'no-image-kind' } : { what, why: 'not-a-board-kind', ...(detail ? { detail } : {}) }));
+      // A drop never reaches the engine: a dropped scene file replaced the whole board with the stock look and
+      // raised an img-src refusal, and a library file filled a Library nobody can open (Mika, S1.1 pass A finding
+      // 1). The pointer says so while it hovers.
+      const onDragOver = (e: DragEvent): void => {
+        if (dead !== null || !within(e)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
       };
       // EVERY drop is refused, with or without files (review S2): a drag that carries the library type and no file
       // was read by the engine and inserted as elements
       const onFileDrop = (e: DragEvent): void => {
-        onDrop(e);
+        if (dead !== null || !(e.target instanceof Node && host.contains(e.target))) return;
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
+        // (a drop arrives here only where the browser fires one after a refused dragover, or from a script)
+        const said = dragSaid;
+        dragSaid = false;
+        if (said) return;
+        attempt('drop', e.dataTransfer);
         const files = [...(e.dataTransfer?.files ?? [])];
-        if (files.length === 0) return void refuse({ what: [...(e.dataTransfer?.types ?? [])].includes(LIBRARY_MIME) ? 'library-file' : 'file', why: 'no-file-drop' });
+        if (files.length === 0) return void refuse([...(e.dataTransfer?.types ?? [])].includes(LIBRARY_MIME) ? { what: 'library-file', why: 'no-file-drop' } : { what: 'drag', why: 'no-drop' });
         for (const f of files) {
           const name = f.name.toLowerCase();
           const what: BoardRefusal['what'] = f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/.test(name) ? 'image' : name.endsWith('.excalidrawlib') ? 'library-file' : name.endsWith('.excalidraw') || name.endsWith('.json') ? 'scene-file' : 'file';
           refuse({ what, why: what === 'image' ? 'no-image-kind' : 'no-file-drop' });
         }
       };
-      // tab-separated text would open the engine's chart dialog, which is not built: nothing happens, so say so
-      const onTablePaste = (e: ClipboardEvent): void => {
-        // the engine reads a paste asynchronously: its marks arrive after this event's own turn has ended
-        if (counts(e)) {
-          touched = true;
-          pasteUntil = performance.now() + PASTE_SETTLE_MS;
-        }
-        onPaste(e);
-        const rows = (e.clipboardData?.getData('text/plain') ?? '').trim().split(/\r?\n/);
-        if (rows.length >= 2 && rows.every((r) => r.includes('\t'))) refuse({ what: 'table', why: 'no-table-kind' });
+      const onDragOverHere = (e: DragEvent): void => {
+        if (e.target instanceof Node && host.contains(e.target)) onDragOver(e);
       };
-      host.addEventListener('dragover', onDragOver, true);
-      host.addEventListener('paste', onTablePaste, true);
-      host.addEventListener('drop', onFileDrop, true);
+      // A real drag never gets as far as `drop` (the dragover above answers "none", so the browser ends it with a
+      // dragleave): the refusal is said ONCE per drag, when it enters the board, from the types the drag offers
+      // (file names are not readable before a drop, so a scene file is a `file` here).
+      let dragSaid = false;
+      const onDragEnter = (e: DragEvent): void => {
+        if (dead !== null || !(e.target instanceof Node && host.contains(e.target))) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (dragSaid) return;
+        dragSaid = true;
+        const dt = e.dataTransfer;
+        if (dt) dt.dropEffect = 'none';
+        attempt('drop', dt);
+        const items = [...(dt?.items ?? [])];
+        const types = [...(dt?.types ?? [])];
+        const file = items.some((i) => i.kind === 'file') || types.includes('Files');
+        refuse(items.some((i) => i.kind === 'file' && i.type.startsWith('image/')) ? { what: 'image', why: 'no-image-kind' } : types.includes(LIBRARY_MIME) ? { what: 'library-file', why: 'no-file-drop' } : file ? { what: 'file', why: 'no-file-drop' } : { what: 'drag', why: 'no-drop' });
+      };
+      const onDragGone = (e: DragEvent): void => {
+        // the drag left the board (or ended): the next one that enters is said again
+        if (e.type !== 'dragleave' || !(e.relatedTarget instanceof Node && host.contains(e.relatedTarget))) dragSaid = false;
+      };
+      document.addEventListener('paste', onPasteFirst, true);
+      document.addEventListener('copy', onCopyHere, true);
+      document.addEventListener('cut', onCutHere, true);
+      document.addEventListener('dragover', onDragOverHere, true);
+      document.addEventListener('dragenter', onDragEnter, true);
+      document.addEventListener('dragleave', onDragGone, true);
+      document.addEventListener('dragend', onDragGone, true);
+      document.addEventListener('drop', onFileDrop, true);
       const run = (name: (typeof HANDLE_ACTIONS)[number]): void => {
         live();
         api.gnomonAction(name);
@@ -791,10 +1082,12 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           live();
           // a rendered row is not a gesture (Aegis A1): unless a person has a mark in hand, nothing the engine does
           // from here on is an edit until they act again
-          if (!busy() && !dirty()) {
-            touched = false;
-            cause = null;
+          // one handle per dimension: another dimension is another mount (its ids, its undo and its marks in hand)
+          if (state.dim !== shows) {
+            if (shows !== null) throw new Error('this board shows another dimension: unmount it and mount a new one');
+            shows = state.dim;
           }
+          if (!busy() && !dirty()) disarm();
           putBacks = 0;
           renderNow(state);
         },
@@ -854,6 +1147,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           });
           // restyling the selection is the person's edit (the rail's key called this): it is reported like any other
           if (restyled) {
+            note(api.getAppState() as never);
             touched = by !== null && counts(by);
             cause = touched ? by : null;
             putBacks = 0;
@@ -899,6 +1193,27 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           attemptListeners.add(listener);
           return () => void attemptListeners.delete(listener);
         },
+        onPasteText(listener) {
+          pasteListeners.add(listener);
+          return () => void pasteListeners.delete(listener);
+        },
+        onCopy(listener) {
+          copyListeners.add(listener);
+          return () => void copyListeners.delete(listener);
+        },
+        onCut(listener) {
+          cutListeners.add(listener);
+          return () => void cutListeners.delete(listener);
+        },
+        select(nodeIds) {
+          live();
+          wanted = [...nodeIds];
+          selectWanted();
+        },
+        onCopyOutside(listener) {
+          outsideListeners.add(listener);
+          return () => void outsideListeners.delete(listener);
+        },
         onRefusal(listener) {
           refusedListeners.add(listener);
           return () => void refusedListeners.delete(listener);
@@ -918,12 +1233,20 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           host.removeEventListener('pointerdown', onDown, true);
           host.removeEventListener('keydown', onKey, true);
           host.removeEventListener('input', onInput, true);
-          host.removeEventListener('cut', onInput, true);
           window.removeEventListener('pointerup', onUp, true);
           window.removeEventListener('pointercancel', onUp, true);
-          host.removeEventListener('paste', onTablePaste, true);
-          host.removeEventListener('drop', onFileDrop, true);
-          host.removeEventListener('dragover', onDragOver, true);
+          document.removeEventListener('paste', onPasteFirst, true);
+          document.removeEventListener('copy', onCopyHere, true);
+          document.removeEventListener('cut', onCutHere, true);
+          document.removeEventListener('dragover', onDragOverHere, true);
+          document.removeEventListener('dragenter', onDragEnter, true);
+          document.removeEventListener('dragleave', onDragGone, true);
+          document.removeEventListener('dragend', onDragGone, true);
+          document.removeEventListener('drop', onFileDrop, true);
+          pasteListeners.clear();
+          copyListeners.clear();
+          cutListeners.clear();
+          outsideListeners.clear();
           stateListeners.clear();
           sceneListeners.clear();
           attemptListeners.clear();
@@ -931,6 +1254,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           editListeners.clear();
           undoListeners.clear();
           root.unmount();
+          unguard();
         },
       };
     };

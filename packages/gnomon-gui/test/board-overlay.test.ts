@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { BoardAuthor, BoardMarkView, BoardView } from '../src/core/board.js';
-import { boardAgentName, ENGINE_DASHES, footHands, handName, handOf, isScrap, markBox, markSealPoint, overlayItems, SEAL_GAP, SEAL_HALF, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
+import { boardAgentName, ENGINE_DASHES, FRAME_NARROW, PIN_HALF, footHands, handName, handOf, isScrap, markBox, markSealPoint, overlayItems, SEAL_GAP, SEAL_HALF, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
 import { sealOf } from '../src/core/board-seal.js';
 
 const VIEW: BoardView = { scrollX: 0, scrollY: 0, zoom: 1, width: 800, height: 600 };
@@ -47,7 +47,20 @@ describe('#gui-board the three hands', () => {
     expect(overlayItems([mark({ id: 'r', kind: 'rect' }), mark({ id: 'f', kind: 'frame' }), mark({ id: 't', kind: 'text' })], VIEW)).toEqual([]);
     expect(overlayItems([mark({ id: 'r', kind: 'arrow', author: ARKY, firstX: 130, firstY: 70 })], VIEW)).toEqual([]);
     expect(overlayItems([mark({ id: 'r', kind: 'arrow', author: ARKY, firstX: 130, firstY: 70, selected: true })], VIEW)).toEqual([{ type: 'seal', id: 'r', ...markSealPoint(mark({ id: 'r', kind: 'arrow', firstX: 130, firstY: 70 }), VIEW), seal: sealOf('arky', 'Arky'), name: 'Arky', on: 'mark' }]);
-    expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY, selected: true })], VIEW)).toEqual([{ type: 'hollow', id: 'r', ...markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW) }]);
+    // the unknown hand's 8px pin stands its own half plus the gap off the mark: about half a seal's distance
+    const pin = markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW, PIN_HALF);
+    const seal = markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW);
+    expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY, selected: true })], VIEW)).toEqual([{ type: 'hollow', id: 'r', ...pin }]);
+    const first = { left: (mark({ id: 'r', kind: 'rect' }).firstX + VIEW.scrollX) * VIEW.zoom, top: (mark({ id: 'r', kind: 'rect' }).firstY + VIEW.scrollY) * VIEW.zoom };
+    const far = (q: { left: number; top: number }): number => Math.hypot(q.left - first.left, q.top - first.top);
+    expect(far(pin)).toBeCloseTo(PIN_HALF + SEAL_GAP, 5);
+    expect(far(pin)).toBeLessThanOrEqual(far(seal) / 2 + 0.5);
+    // a frame narrower than FRAME_NARROW: the seal stands just outside its right corner, clear of a long title
+    const narrow = mark({ id: 'f', kind: 'frame', x: 100, y: 100, width: 60, height: 60, firstX: 100, firstY: 100 });
+    const nb = { left: (100 + VIEW.scrollX) * VIEW.zoom, width: 60 * VIEW.zoom };
+    if (nb.width < FRAME_NARROW) expect(markSealPoint(narrow, VIEW).left - SEAL_HALF).toBeGreaterThanOrEqual(nb.left + nb.width);
+    const wide = mark({ id: 'f', kind: 'frame', x: 100, y: 100, width: 300, height: 60, firstX: 100, firstY: 100 });
+    expect(markSealPoint(wide, VIEW).left).toBe((100 + 300 + VIEW.scrollX) * VIEW.zoom - SEAL_HALF);
     expect(overlayItems([mark({ id: 'r', kind: 'rect', selected: true })], VIEW)).toEqual([]);
   });
 

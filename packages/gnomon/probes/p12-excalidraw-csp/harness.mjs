@@ -123,10 +123,18 @@ const DRIVER = `'use strict';
   };
   var link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/board/board.css';
+  // Two pages, one script (boards S1.3 pass P3b-2). /pinned.html loads the PINNED chunk, the bytes the kernel serves,
+  // where only input the browser itself made counts: it mounts, renders, runs the paste, copy and drop containment
+  // checks (condition C8), exports a PNG and reports every CSP row. / loads the PROBE build of the same sources
+  // (packages/gnomon-gui/scripts/board-build.mjs, probe: true; never embedded, never served by the kernel), the one
+  // build in which this page's synthetic pointer and key events count, and runs every check, the edits included.
+  var PINNED = location.pathname === '/pinned.html';
+  var BASE = PINNED ? '/board' : '/probe-board';
+  R.mode = PINNED ? 'pinned' : 'probe';
+  link.href = BASE + '/board.css';
   document.head.appendChild(link);
   R.phase = 'load';
-  import('/board/board.js').then(async function (m) {
+  import(BASE + '/board.js').then(async function (m) {
     R.tModule = Math.round(performance.now() - R.t0);
     R.engine = m.BOARD_ENGINE;
     R.phase = 'mount';
@@ -177,10 +185,115 @@ const DRIVER = `'use strict';
     R.undoKeys = [];
     h.onUndoKey(function (e, redo) { R.undoKeys.push(redo ? 'redo' : 'undo'); });
     R.handleKeys = Object.keys(h).filter(function (k) { return k === 'add' || k === 'undo' || k === 'redo'; });
+    // Condition C8: a paste, a copy and a cut are stopped BEFORE the engine. A paste is made the realest way this
+    // browser allows: in a Chromium-family browser the harness server pastes for the page over the DevTools protocol
+    // (the text goes on the clipboard and the platform's paste chord is pressed, so the browser itself fires the
+    // paste); elsewhere (WKWebView, Firefox) the server answers 501 and a synthetic event is dispatched on the
+    // board's own container. Either way the handle's listener is the path exercised: the engine's own handlers must
+    // never be entered (m.boardEngineRuns()), nothing is added by the paste itself, no iframe, img, embed or object
+    // node appears and no CSP row is raised. A real paste is handed on as the LITERAL text; a synthetic one is
+    // stopped and, in the pinned chunk, goes no further (in the probe build it counts, and is handed on too).
+    var c8 = async function (said) {
+      var out = {};
+      var box = document.querySelector('.excalidraw-container');
+      var cv = document.querySelector('canvas.interactive') || document.querySelector('canvas');
+      var AT = { x: 250, y: 420 };
+      var heard = [];
+      var offP = h.onPasteText(function (t) { heard.push(t); });
+      var offC = h.onCopy(function () { return 'p12 copy'; });
+      var nodes = [];
+      var watch = new MutationObserver(function (records) {
+        records.forEach(function (rec) { Array.prototype.forEach.call(rec.addedNodes, function (nd) {
+          if (nd.nodeType !== 1) return;
+          var hit = /^(IFRAME|EMBED|IMG|OBJECT)$/.test(nd.tagName) ? [nd] : Array.prototype.slice.call(nd.querySelectorAll('iframe, embed, img, object'));
+          hit.forEach(function (x) { nodes.push(x.tagName.toLowerCase()); });
+        }); });
+      });
+      watch.observe(document.documentElement, { childList: true, subtree: true });
+      var carriedBy = function (ev, text) {
+        var cd = ev.clipboardData, types = [], file = false, got = null;
+        try { types = cd ? Array.prototype.slice.call(cd.types) : []; } catch (e) { types = []; }
+        try { got = cd ? cd.getData('text/plain') : null; } catch (e) { got = null; }
+        try { file = !!cd && ((cd.files && cd.files.length > 0) || Array.prototype.some.call(cd.items || [], function (i) { return i.kind === 'file'; })); } catch (e) { file = false; }
+        return { carried: file ? 'file' : text !== null && got === text ? 'text' : 'nothing', types: types };
+      };
+      var paste = async function (text) {
+        // a press on an empty spot, so nothing stays selected and the board has the keyboard
+        pointer(cv, 'pointerdown', AT.x, AT.y, 1); await wait(30); pointer(cv, 'pointerup', AT.x, AT.y, 0); await wait(150);
+        h.focus();
+        try {
+          var ans = await fetch('/paste?x=' + AT.x + '&y=' + AT.y, { method: 'POST', body: text });
+          if (ans.status === 200) return { via: 'devtools', stopped: null, carried: 'text', types: ['text/plain'] };
+          if (ans.status !== 501) R.pasteTrouble = (await ans.text()).slice(0, 200);
+        } catch (e) { R.pasteTrouble = String(e).slice(0, 200); }
+        var dt = new DataTransfer(); dt.setData('text/plain', text);
+        var ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+        // what the event REALLY carries, read back before it is dispatched: an engine may strip the data a script
+        // puts on a script-built ClipboardEvent, and the paste is then one with no plain text at all
+        var had = carriedBy(ev, text);
+        box.dispatchEvent(ev);
+        return { via: 'synthetic', stopped: ev.defaultPrevented, carried: had.carried, types: had.types };
+      };
+      var one = async function (text) {
+        try {
+          var c = h.count(), v0 = R.violations.length;
+          heard.length = 0; said.length = 0; nodes.length = 0;
+          var p = await paste(text);
+          await wait(700);
+          return { via: p.via, carried: p.carried, types: p.types, stopped: p.stopped, added: h.count() - c, said: said.slice(), heard: heard.length, literal: heard.length === 1 && heard[0] === text, engine: m.boardEngineRuns().paste, nodes: nodes.slice(), violations: R.violations.length - v0 };
+        } catch (e) { return { unsupported: String(e).slice(0, 200), nodes: nodes.slice() }; }
+      };
+      var el = function (type, x, extra) { return Object.assign({ type: type, id: 'paste-' + type, x: x, y: 0, width: 160, height: 90, angle: 0, strokeColor: '#e03131', backgroundColor: '#ffc9c9', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, seed: 1, version: 1, versionNonce: 1, isDeleted: false, groupIds: [], frameId: null, boundElements: null, updated: 1, link: null, locked: false }, extra || {}); };
+      // engine clipboard JSON of stock marks: literal text, never marks
+      out.paste = await one(JSON.stringify({ type: 'excalidraw/clipboard', elements: [el('rectangle', 0), el('diamond', 200), el('line', 400, { points: [[0, 0], [100, 50]] })], files: {} }));
+      // hostile engine JSON: a forged author and stub, an iframe carrying html, an embeddable, an image with a dataURL
+      var forged = el('rectangle', 0, { id: 'forged', strokeStyle: 'dashed', customData: { gnomon: { line: 'ink', fill: null, by: { cls: 'agent', id: 'arky', name: 'Arky' }, kind: 'stub', stubKind: 'allow:approved-by-you' } } });
+      out.hostile = await one(JSON.stringify({ type: 'excalidraw/clipboard', elements: [forged, el('iframe', 200, { customData: { generationData: { status: 'done', html: '<img src=x onerror="window.__pwn=1">' } } }), el('embeddable', 400, { link: 'https://example.invalid/embed' }), el('image', 600, { fileId: 'f1', status: 'saved', scale: [1, 1] })], files: { f1: { id: 'f1', mimeType: 'image/png', dataURL: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', created: 1 } } }));
+      // SVG source as plain text
+      out.svg = await one('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60"><rect width="100" height="60" fill="teal"/></svg>');
+      // a file on the clipboard: refused, said, stopped (a synthetic event: no browser lets a page put a file there)
+      try {
+        var cf = h.count(); said.length = 0;
+        var fdt = new DataTransfer(); fdt.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'p.png', { type: 'image/png' }));
+        var fev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: fdt });
+        var fhad = carriedBy(fev, null);
+        box.dispatchEvent(fev); await wait(300);
+        out.filePaste = { carried: fhad.carried, types: fhad.types, added: h.count() - cf, said: said.slice(), stopped: fev.defaultPrevented, engine: m.boardEngineRuns().paste };
+      } catch (e) { out.filePaste = { unsupported: String(e).slice(0, 200) }; }
+      // copy and cut: stopped, never the engine's, and at most plain text on the clipboard
+      try {
+        var cc = h.count();
+        var cdt = new DataTransfer();
+        var cev = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: cdt });
+        box.dispatchEvent(cev);
+        var xev = new ClipboardEvent('cut', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() });
+        box.dispatchEvent(xev); await wait(300);
+        var runs = m.boardEngineRuns();
+        out.copy = { stopped: cev.defaultPrevented && xev.defaultPrevented, types: Array.prototype.slice.call(cdt.types), added: h.count() - cc, engine: runs.copy + runs.cut };
+      } catch (e) { out.copy = { unsupported: String(e).slice(0, 200) }; }
+      out.pwn = window.__pwn === undefined ? null : window.__pwn;
+      watch.disconnect(); offP(); offC(); said.length = 0;
+      return out;
+    };
     R.mounted = true;
     R.tMounted = Math.round(performance.now() - R.t0);
     // no wait here: a mark added in the SAME tick the mount resolves must stay (the engine initialises its scene
     // asynchronously and used to wipe it about 20 ms later)
+    if (PINNED) {
+      R.phase = 'pinned';
+      R.afterAdd = put([{ type: 'rectangle', x: 40, y: 40, width: 160, height: 80 }, { type: 'ellipse', x: 240, y: 40, width: 120, height: 80 }, { type: 'text', x: 60, y: 160, text: 'gnomon board ✓' }]);
+      await wait(400);
+      R.afterAddSettled = h.count();
+      var saidPinned = [];
+      h.onRefusal(function (r) { saidPinned.push(r.what + (r.detail ? ':' + r.detail : '')); });
+      R.fix = await c8(saidPinned);
+      // the pinned chunk ignores the mount option: a synthetic press and drag draws nothing that stays
+      var cvp = document.querySelector('canvas.interactive') || document.querySelector('canvas');
+      var beforeDraw = h.count();
+      h.setTool('rect'); await wait(60); await drag(cvp, 500, 300, 620, 380); await wait(400);
+      R.syntheticDraw = { added: h.count() - beforeDraw, edits: R.edits.length };
+      h.setTool('select');
+    } else {
     R.phase = 'draw';
     R.afterAdd = put([{ type: 'rectangle', x: 40, y: 40, width: 160, height: 80 }, { type: 'ellipse', x: 240, y: 40, width: 120, height: 80 }, { type: 'text', x: 60, y: 160, text: 'gnomon board ✓' }]);
     await wait(400);
@@ -410,31 +523,6 @@ const DRIVER = `'use strict';
     boardEl.classList.remove('narrow');
     window.dispatchEvent(new Event('resize'));
     await wait(300);
-    // A paste, the realest way this engine allows. In a Chromium-family browser the harness server pastes for the
-    // page over the DevTools protocol: the text goes on the clipboard and the platform's paste chord is pressed, so
-    // the browser itself fires the paste (a synthetic ClipboardEvent never reaches this engine's paste handler
-    // there). Elsewhere (WKWebView, Firefox) the server answers 501 and a synthetic event is dispatched.
-    var PASTE_AT = { x: 250, y: 420 };
-    var pasteText = async function (text) {
-      // a press on the empty spot the paste is aimed at, so nothing stays selected, then a pointer move there: the
-      // engine pastes where the pointer last MOVED (in WebKit a synthetic mousemove alone does not set that)
-      await click(PASTE_AT.x, PASTE_AT.y);
-      container.focus();
-      pointer(canvas, 'pointermove', PASTE_AT.x, PASTE_AT.y, 0);
-      await frame();
-      // the engine pastes where the mouse last was, and only when that point is inside the board
-      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: PASTE_AT.x, clientY: PASTE_AT.y }));
-      try {
-        var ans = await fetch('/paste?x=' + PASTE_AT.x + '&y=' + PASTE_AT.y, { method: 'POST', body: text });
-        if (ans.status === 200) return 'devtools';
-        if (ans.status !== 501) R.pasteTrouble = (await ans.text()).slice(0, 200);
-      } catch (e) { R.pasteTrouble = String(e).slice(0, 200); }
-      var dt2 = new DataTransfer(); dt2.setData('text/plain', text);
-      // on the board's own container, as a real paste is (it targets the focused element and bubbles to the document,
-      // where the engine listens): the handle counts a paste as the person's only when it passes through the board
-      container.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 }));
-      return 'synthetic';
-    };
     // Mika's S1.1 pass A findings, each replayed on the shipped chunk (day theme, select tool).
     R.phase = 'fixes';
     R.fix = {};
@@ -474,29 +562,10 @@ const DRIVER = `'use strict';
       await wait(700);
       R.fix.sceneDrop = { added: h.count() - c1, said: said.slice(), dragStopped: over.defaultPrevented };
     } catch (e) { R.fix.sceneDrop = { unsupported: String(e).slice(0, 200) }; }
-    // 3. pasted engine content: a dashed, rough, hachured, translucent, rounded rectangle arrives solid and exact;
-    //    a line is removed and said (a diamond is a core kind of dim-shape:v1 since S1.3 and stays, in the same form)
-    var c2 = h.count();
-    said.length = 0;
-    try {
-      var el = function (type, x, extra) { return Object.assign({ type: type, id: 'paste-' + type, x: x, y: 0, width: 160, height: 90, angle: 0, strokeColor: '#e03131', backgroundColor: '#ffc9c9', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, seed: 1, version: 1, versionNonce: 1, isDeleted: false, groupIds: [], frameId: null, boundElements: null, updated: 1, link: 'https://example.invalid/', locked: false }, extra || {}); };
-      var clip = JSON.stringify({ type: 'excalidraw/clipboard', elements: [el('rectangle', 0), el('diamond', 200), el('line', 400, { points: [[0, 0], [100, 50]] })], files: {} });
-      var via1 = await pasteText(clip);
-      await wait(900);
-      var pasted = h.marks().filter(function (m) { return m.kind === 'rect' && Math.round(m.width) === 160 && Math.round(m.height) === 90; })[0];
-      R.fix.paste = { via: via1, added: h.count() - c2, said: said.slice().sort(), found: !!pasted };
-      // a synthetic paste event that the engine ignores proves nothing either way: say so instead of passing
-      if (R.fix.paste.added === 0 && said.length === 0) R.fix.paste = { unsupported: 'the ' + via1 + ' paste did not reach the engine' };
-      if (pasted) {
-        await click(1100, 700); await wait(150);
-        var v = h.view(), g2 = staticCanvas.getContext('2d'), prof = {}, gaps = 0;
-        var px = function (sx, sy) { return g2.getImageData(Math.round((sx + v.scrollX) * v.zoom * dpr), Math.round((sy + v.scrollY) * v.zoom * dpr), 1, 1).data; };
-        for (var qx = pasted.x + 12; qx < pasted.x + pasted.width - 12; qx += 3) { if (px(qx, pasted.y)[3] < 128) gaps++; }
-        var mid = px(pasted.x + pasted.width / 2, pasted.y + pasted.height / 2), edge = px(pasted.x + 40, pasted.y);
-        R.fix.paste.at = [Math.round(pasted.x), Math.round(pasted.y)];
-        R.fix.paste.edgeGaps = gaps; R.fix.paste.fillAlpha = mid[3]; R.fix.paste.edgeRgb = [edge[0], edge[1], edge[2]]; R.fix.paste.line = pasted.line; R.fix.paste.fillToken = pasted.fill;
-      }
-    } catch (e) { R.fix.paste = { unsupported: String(e).slice(0, 200) }; }
+    // 3. paste, copy and cut never reach the engine (condition C8): see c8() above
+    var el = function (type, x, extra) { return Object.assign({ type: type, id: 'paste-' + type, x: x, y: 0, width: 160, height: 90 }, extra || {}); };
+    var c8r = await c8(said);
+    R.fix.paste = c8r.paste; R.fix.hostile = c8r.hostile; R.fix.svg = c8r.svg; R.fix.filePaste = c8r.filePaste; R.fix.copy = c8r.copy; R.fix.pwn = c8r.pwn;
     // S2. a drag that carries the library type and NO file (a drag from another page): refused like any drop
     var c3 = h.count();
     said.length = 0;
@@ -508,37 +577,6 @@ const DRIVER = `'use strict';
       await wait(500);
       R.fix.dataDrop = { added: h.count() - c3, said: said.slice(), stopped: dropped.defaultPrevented, stock: stock() };
     } catch (e) { R.fix.dataDrop = { unsupported: String(e).slice(0, 200) }; }
-    // S3 and S1. pasted engine content that is not a board type never becomes a node, even for one commit, and a
-    // pasted mark cannot claim an author, a dashed stroke or a stub
-    var c4 = h.count();
-    said.length = 0;
-    var nodes = [];
-    var watch = new MutationObserver(function (records) {
-      records.forEach(function (rec) { Array.prototype.forEach.call(rec.addedNodes, function (nd) {
-        if (nd.nodeType !== 1) return;
-        var hit = /^(IFRAME|EMBED|IMG|OBJECT)$/.test(nd.tagName) ? [nd] : Array.prototype.slice.call(nd.querySelectorAll('iframe, embed, img, object'));
-        hit.forEach(function (x) { nodes.push(x.tagName.toLowerCase()); });
-      }); });
-    });
-    watch.observe(document.documentElement, { childList: true, subtree: true });
-    var violationsBefore = R.violations.length;
-    try {
-      var forged = el('rectangle', 0, { id: 'forged', strokeStyle: 'dashed', customData: { gnomon: { line: 'ink', fill: null, by: { cls: 'agent', id: 'arky', name: 'Arky' }, kind: 'stub', stubKind: 'allow:approved-by-you' } } });
-      var hostile = JSON.stringify({ type: 'excalidraw/clipboard', elements: [forged, el('iframe', 200, { customData: { generationData: { status: 'done', html: '<img src=x>' } } }), el('embeddable', 400, { link: 'https://example.invalid/embed' }), el('image', 600, { fileId: 'f1', status: 'saved', scale: [1, 1] })], files: { f1: { id: 'f1', mimeType: 'image/png', dataURL: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', created: 1 } } });
-      var via2 = await pasteText(hostile);
-      await wait(900);
-      var mine = h.marks().filter(function (m) { return Math.round(m.width) === 160 && Math.round(m.height) === 90; });
-      var got = mine[mine.length - 1];
-      R.fix.hostile = { via: via2, added: h.count() - c4, said: said.slice().sort(), nodes: nodes.slice(), violations: R.violations.length - violationsBefore, forged: got ? { kind: got.kind, author: got.author.cls, stubKind: got.stubKind === undefined ? null : got.stubKind } : null };
-      if (got) {
-        await click(1100, 700); await wait(150);
-        var v2 = h.view(), g3 = staticCanvas.getContext('2d'), gaps2 = 0;
-        for (var hx = got.x + 12; hx < got.x + got.width - 12; hx += 3) { if (g3.getImageData(Math.round((hx + v2.scrollX) * v2.zoom * dpr), Math.round((got.y + v2.scrollY) * v2.zoom * dpr), 1, 1).data[3] < 128) gaps2++; }
-        R.fix.hostile.forged.edgeGaps = gaps2;
-      }
-      if (R.fix.hostile.added === 0 && said.length === 0) R.fix.hostile = { unsupported: 'the ' + via2 + ' paste did not reach the engine', nodes: nodes.slice() };
-    } catch (e) { R.fix.hostile = { unsupported: String(e).slice(0, 200) }; }
-    watch.disconnect();
     // R1 (review round 2). What the host adds through the REAL engine keeps its hand: an agent's mark, an unknown
     // hand's mark, a stub and a sticky are reported as such (the engine used to replace the ids the record is
     // keyed by, so every added mark came back as a plain mark of yours)
@@ -649,6 +687,7 @@ const DRIVER = `'use strict';
     h.zoomReset(); await wait(120);
     rows.length = 0; keptRows.forEach(function (r) { rows.push(r); }); show();
     await wait(150);
+    }
     R.phase = 'export-png';
     try {
       var t = performance.now();
@@ -675,12 +714,16 @@ const DRIVER = `'use strict';
 `.replace('(function () {', `var TOOLS = ${JSON.stringify(TOOLS)};\nvar REFUSED_TOOLS = ${JSON.stringify(REFUSED_TOOLS)};\nvar STOCK_SELECTORS = ${JSON.stringify(STOCK_SELECTORS)};\nvar GROUND = ${JSON.stringify(GROUND)};\n(function () {`);
 
 /** url path → bytes of everything the harness serves: the shipped board files plus the page. */
-export function harnessFiles(board = shippedBoard()) {
+export function harnessFiles(board = shippedBoard(), probe = null) {
   const files = new Map();
   for (const [n, b] of board) files.set(`/${n}`, b);
   // the board's one text face lives beside the chunk in the same pinned bundle (../fonts from board/)
   const font = shippedBoardFont();
   if (font) files.set(`/${BOARD_FONT}`, font);
+  // the probe build (never embedded, never shipped) in its own directory beside the pinned one, so both ask for
+  // the same face at ../fonts
+  for (const [n, b] of probe ?? []) files.set(`/probe-board/${n.replace(/^board\//, '')}`, b);
+  files.set('/pinned.html', INDEX);
   files.set('/index.html', INDEX);
   files.set('/harness.css', CSS);
   files.set('/harness.js', DRIVER);
@@ -770,10 +813,100 @@ export function pickEngines() {
  * build a DragEvent reports `unsupported`; that is not a pass). The probe and the GUI test require every check to
  * have run in at least one engine, and print which.
  */
+/**
+ * The probe build of the board chunk: the same sources and patches as the pinned one, with the build-time define
+ * that lets untrusted events count as input (packages/gnomon-gui/scripts/board-build.mjs, `probe: true`). It needs
+ * the GUI package's own build tool, so it is made only where the repo's dependencies are installed; it is never
+ * embedded, never pinned and never served by the kernel.
+ */
+export async function probeBoard() {
+  const { buildBoard } = await import('../../../gnomon-gui/scripts/board-build.mjs');
+  return (await buildBoard({ probe: true })).files;
+}
+
+/**
+ * What a paste event carried, as the page read it back before dispatching it: `text` (the pasted text, or a real
+ * paste the browser made), `file`, or `nothing` (the engine stripped what the script put on a script-built
+ * ClipboardEvent). A record without the field is judged as carrying what was put on it.
+ */
+const carriedOf = (x, otherwise) => (x?.carried === 'text' || x?.carried === 'file' || x?.carried === 'nothing' ? x.carried : otherwise);
+
+/** The one contained outcome of a paste that carried NOTHING: stopped, nothing added, engine not entered, no node, no CSP row, and the board said `paste` (no plain text), once. */
+function emptyPasteTrouble(x) {
+  if (x.added !== 0) return `the paste itself added ${x.added} mark(s)`;
+  if (x.engine !== 0) return `the engine's own paste handler ran ${x.engine} time(s)`;
+  if (x.nodes?.length) return `nodes appeared: ${x.nodes.join()}`;
+  if (x.violations) return `${x.violations} CSP row(s)`;
+  if (x.stopped !== true) return `a paste that carried nothing was not stopped (stopped ${x.stopped})`;
+  if (x.heard) return `a paste that carried nothing was handed on ${x.heard} time(s)`;
+  if (x.said?.join() !== 'paste') return `a paste that carried nothing must be refused as "paste" (no plain text), once; said: ${JSON.stringify(x.said ?? null)}`;
+  return '';
+}
+
+/**
+ * Why a paste check did not hold ('' when it did). `mode` is the page's: 'pinned' or 'probe'. Judged by what the
+ * event CARRIED, never by the engine's name: with the text, the expectations are the strict ones (no refusal said;
+ * handed on as the literal text when the browser made the paste or the build counts synthetic input; stopped and
+ * heard by nobody otherwise); with nothing, the only contained outcome is `emptyPasteTrouble`'s.
+ */
+export function pasteTrouble(x, mode) {
+  if (!x) return 'no result';
+  if (x.unsupported) return '';
+  const carried = carriedOf(x, 'text');
+  if (carried === 'nothing') return emptyPasteTrouble(x);
+  if (carried !== 'text') return `a text paste carried ${carried}`;
+  if (x.added !== 0) return `the paste itself added ${x.added} mark(s)`;
+  if (x.engine !== 0) return `the engine's own paste handler ran ${x.engine} time(s)`;
+  if (x.said?.length) return `a refusal was said: ${x.said.join()}`;
+  if (x.nodes?.length) return `nodes appeared: ${x.nodes.join()}`;
+  if (x.violations) return `${x.violations} CSP row(s)`;
+  // a paste the browser made, or one that counts in the probe build, is handed on as the literal text, once
+  if (x.via === 'devtools' || mode === 'probe') return x.heard === 1 && x.literal === true ? '' : `handed on ${x.heard} time(s), literal ${x.literal}`;
+  // a synthetic paste on the pinned chunk is stopped and goes no further
+  return x.heard === 0 && x.stopped === true ? '' : `a synthetic paste was heard ${x.heard} time(s), stopped ${x.stopped}`;
+}
+
+/** Why the pasted-file check did not hold ('' when it did): a file that was carried is refused as `image`; an event that carried nothing is refused as `paste`. */
+export function filePasteTrouble(fp) {
+  if (!fp) return 'no result';
+  if (fp.unsupported) return '';
+  const carried = carriedOf(fp, 'file');
+  if (carried === 'text') return 'a file paste carried text';
+  const want = carried === 'file' ? 'image' : 'paste';
+  return fp.added === 0 && fp.said?.join() === want && fp.stopped === true && fp.engine === 0 ? '' : `carried ${carried}: expected the refusal "${want}", stopped, nothing added, engine 0`;
+}
+
+/** The C8 problems of a run (both pages run these checks). */
+export function c8Problems(r) {
+  const f = r.fix ?? {};
+  const p = [];
+  for (const [k, what] of [['paste', 'a paste was not contained before the engine'], ['hostile', 'hostile pasted content got through'], ['svg', 'pasted SVG source was not contained']]) {
+    const why = pasteTrouble(f[k], r.mode);
+    if (why || f[k]?.nodes?.length) p.push(`${what}: ${why || 'nodes appeared'} ${JSON.stringify(f[k])}`);
+  }
+  const fp = f.filePaste;
+  const fileWhy = filePasteTrouble(fp);
+  if (fileWhy) p.push(`a pasted file was not refused: ${fileWhy} ${JSON.stringify(fp)}`);
+  const cp = f.copy;
+  if (!cp || (!cp.unsupported && (cp.stopped !== true || cp.engine !== 0 || cp.added !== 0 || cp.types?.some((t) => t !== 'text/plain')))) p.push(`a copy or a cut reached the engine or the clipboard got more than plain text: ${JSON.stringify(cp)}`);
+  if (f.pwn !== null && f.pwn !== undefined) p.push(`a handler from pasted content ran: ${JSON.stringify(f.pwn)}`);
+  return p;
+}
+
+/** What each paste check of a run carried (`text`, `file`, `nothing`), or null where it did not run. For the evidence. */
+export function pasteCarried(r) {
+  const f = r?.fix ?? {};
+  const of = (x, otherwise) => (!x || x.unsupported ? null : carriedOf(x, otherwise));
+  return { paste: of(f.paste, 'text'), hostile: of(f.hostile, 'text'), svg: of(f.svg, 'text'), filePaste: of(f.filePaste, 'file') };
+}
+
 export function exercisedChecks(r) {
   const ran = (x) => !!x && !x.unsupported;
+  // a paste check is exercised only where the event carried what the check is about: a paste that carried nothing
+  // proves the empty paste is contained, not that pasted text or a pasted file is
+  const carrying = (x, what) => ran(x) && carriedOf(x, what) === what;
   const f = r?.fix ?? {};
-  return { 'library-file drop': ran(r?.libraryDrop), 'image-file drop': !!r?.imageTool && r.imageTool.dropUnsupported === undefined, 'scene-file drop': ran(f.sceneDrop), 'library-type drag (no file)': ran(f.dataDrop), 'paste: stock marks': ran(f.paste), 'paste: forged author, iframe, embeddable, image': ran(f.hostile) };
+  return { 'library-file drop': ran(r?.libraryDrop), 'image-file drop': !!r?.imageTool && r.imageTool.dropUnsupported === undefined, 'scene-file drop': ran(f.sceneDrop), 'library-type drag (no file)': ran(f.dataDrop), 'paste: stock marks': carrying(f.paste, 'text'), 'paste: forged author, iframe, embeddable, image': carrying(f.hostile, 'text'), 'paste: a file': carrying(f.filePaste, 'file'), 'copy and cut': ran(f.copy) };
 }
 
 /** The only font string the canvas may be given (patch font-family-string), with the size folded out. */
@@ -831,12 +964,9 @@ export function reskinProblems(r) {
   if (f.undo?.afterDraw !== 2 || f.undo?.afterUndo !== 1) p.push(`an undo after a programmatic add took the added marks with it: ${JSON.stringify(f.undo)}`);
   if (!(f.textAfterShape?.selectedBefore === 1 && f.textAfterShape?.selectedAfterTool === 0 && f.textAfterShape?.editing === true)) p.push(`text did not start on the first click after a shape: ${JSON.stringify(f.textAfterShape)}`);
   if (!f.sceneDrop || (!f.sceneDrop.unsupported && (f.sceneDrop.added !== 0 || f.sceneDrop.said?.join() !== 'scene-file' || f.sceneDrop.dragStopped !== true))) p.push(`a dropped scene file reached the board: ${JSON.stringify(f.sceneDrop)}`);
-  const pa = f.paste;
-  if (!pa || (!pa.unsupported && (pa.added !== 2 || pa.said?.join() !== 'mark:line' || pa.found !== true || pa.edgeGaps !== 0 || pa.fillAlpha !== 0 || pa.edgeRgb?.join() !== '22,21,15' || pa.line !== 'ink' || pa.fillToken !== null))) p.push(`pasted engine content kept its stock look: ${JSON.stringify(pa)}`);
   const dd = f.dataDrop;
   if (!dd || (!dd.unsupported && (dd.added !== 0 || dd.said?.join() !== 'library-file' || dd.stopped !== true || dd.stock?.length !== 0))) p.push(`a drag of the library type with no file reached the board: ${JSON.stringify(dd)}`);
-  const ho = f.hostile;
-  if (!ho || ho.nodes?.length || (!ho.unsupported && (ho.added !== 1 || ho.said?.join() !== 'image,mark:embeddable,mark:iframe' || ho.violations !== 0 || ho.forged?.kind !== 'rect' || ho.forged?.author !== 'human' || ho.forged?.stubKind !== null || ho.forged?.edgeGaps !== 0))) p.push(`hostile pasted content got through: ${JSON.stringify(ho)}`);
+  p.push(...c8Problems(r));
   if (f.hands?.join() !== 'rect:agent:Arky:60,ellipse:unknown:60,stub:agent:Luna:live:session:288,sticky:human:80,text:agent:Quill:' + String(f.hands?.[4] ?? '').split(':').pop() || !(f.agentEdgeGaps > 0)) p.push(`marks added by the host lost their hand: ${JSON.stringify({ hands: f.hands, agentEdgeGaps: f.agentEdgeGaps })}`);
   const fr = f.frame ?? {};
   if (fr.title !== 'a frame title that is long enough to be cut off' || fr.weight !== '600' || !fr.editor || !/^"?JetBrains Mono"?, monospace$/.test(fr.editor.fontFamily) || fr.editor.fontSize !== '11.5px' || fr.editor.fontWeight !== '600' || fr.editor.color !== RGB_INK.day || fr.editor.radius !== '0px' || fr.editor.editing !== true || fr.afterEsc?.input !== false || fr.afterEsc?.editing !== false) p.push(`the frame title: ${JSON.stringify(fr)}`);
@@ -860,14 +990,20 @@ export function runProblems(r, known) {
   if (r.mounted && r.afterAddSettled !== 3) p.push(`marks added as the mount resolved did not stay: ${r.afterAddSettled} of 3 left`);
   if (r.mounted && r.stage === 'done' && (r.aliveAfterUnmount !== false || r.deadHandle !== 'refused')) p.push(`a handle whose board is gone still answers (alive ${r.aliveAfterUnmount}, count ${r.deadHandle})`);
   if (r.mounted && r.stage === 'done' && r.alive !== true) p.push('the handle says the engine is no longer alive');
-  if (r.mounted && r.afterPointerRect !== 4) p.push(`the pointer rectangle left ${r.afterPointerRect} elements, expected 4`);
-  if (r.mounted && r.afterPointerStroke !== 5) p.push(`the pointer stroke left ${r.afterPointerStroke} elements, expected 5`);
-  if (r.mounted && r.libraryTrigger !== false) p.push('the stock Library trigger is on the page');
-  if (r.mounted && r.libraryOpen !== false) p.push('the stock Library sidebar opened');
+  const pinned = r.mode === 'pinned';
+  if (!pinned && r.mounted && r.afterPointerRect !== 4) p.push(`the pointer rectangle left ${r.afterPointerRect} elements, expected 4`);
+  if (!pinned && r.mounted && r.afterPointerStroke !== 5) p.push(`the pointer stroke left ${r.afterPointerStroke} elements, expected 5`);
+  if (!pinned && r.mounted && r.libraryTrigger !== false) p.push('the stock Library trigger is on the page');
+  if (!pinned && r.mounted && r.libraryOpen !== false) p.push('the stock Library sidebar opened');
   if (r.mounted && !r.png?.ok) p.push(`PNG export failed: ${r.png?.error ?? JSON.stringify(r.png)}`);
-  if (r.mounted && r.stage === 'done') p.push(...reskinProblems(r));
+  if (!pinned && r.mounted && r.stage === 'done') p.push(...reskinProblems(r));
+  // the pinned bytes: the containment checks, and the proof that untrusted input does not count there
+  if (pinned && r.mounted && r.stage === 'done') {
+    p.push(...c8Problems(r));
+    if (r.syntheticDraw?.added !== 0 || r.syntheticDraw?.edits !== 0) p.push(`synthetic input counted in the pinned chunk: ${JSON.stringify(r.syntheticDraw)}`);
+  }
   if (r.stage !== 'done') p.push(`stage ${r.stage}`);
-  const stray = (r.requests ?? []).filter((q) => !known.has(q.path) && q.path !== '/report' && q.path !== '/paste' && q.path !== '/' && q.path !== '/favicon.ico'); // the browser's own favicon probe
+  const stray = (r.requests ?? []).filter((q) => !known.has(q.path) && q.path !== '/report' && q.path !== '/paste' && q.path !== '/' && q.path !== '/pinned.html' && q.path !== '/favicon.ico'); // the browser's own favicon probe
   if (stray.length) p.push(`requests outside the bundle: ${[...new Set(stray.map((q) => q.path))].slice(0, 8).join(', ')}`);
   return p;
 }
@@ -877,8 +1013,9 @@ export function runProblems(r, known) {
  * `launchRetries` times per engine (a browser that never loaded the page says nothing about the CSP); a run that
  * reported is never retried. Resolves {csp, engines: {name: {version, family, runs: [...], clean, problems}}, missing}.
  */
-export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRetries = 1, engines = null, board = shippedBoard() } = {}) {
-  const files = harnessFiles(board);
+export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRetries = 1, engines = null, board = shippedBoard(), probe = null } = {}) {
+  // every run is TWO pages: /pinned.html on the pinned bytes (CSP rows, containment), then / on the probe build (edits)
+  const files = harnessFiles(board, probe ?? (await probeBoard()));
   const known = new Set(files.keys());
   const { pick, missing } = engines ? { pick: engines, missing: {} } : pickEngines();
   const server = await startServer({ files });
@@ -891,18 +1028,32 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
         let r;
         for (;;) {
           const before = server.requests.length;
+          // the pinned bytes first; its row rides on the probe page's row as `pinned`
+          let pinnedRow = null;
+          {
+            const b0 = server.requests.length;
+            const first = await runPage(server, e, '/pinned.html', timeoutMs);
+            const rq = server.requests.slice(b0).map((q) => ({ method: q.method, path: q.path }));
+            const pv = first.report?.violations ?? [];
+            pinnedRow = first.report
+              ? { mode: 'pinned', wallMs: first.wallMs, stage: first.report.stage, mounted: first.report.mounted === true, engine: first.report.engine, afterAdd: first.report.afterAdd, afterAddSettled: first.report.afterAddSettled, alive: first.report.alive, aliveAfterUnmount: first.report.aliveAfterUnmount, deadHandle: first.report.deadHandle, fix: first.report.fix, syntheticDraw: first.report.syntheticDraw, pasteTrouble: first.report.pasteTrouble, png: first.report.png, violationCount: pv.length, violations: aggregate(pv), errors: first.report.errors ?? [], rejections: first.report.rejections ?? [], requests: rq }
+              : { mode: 'pinned', wallMs: first.wallMs, error: NO_REPORT, launcherTail: first.launcherTail, requests: rq };
+          }
+          const beforeProbe = server.requests.length;
           const { report, wallMs, launcherTail } = await runPage(server, e, '/', timeoutMs);
-          const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
+          const requests = server.requests.slice(beforeProbe).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
             r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, pasteTrouble: report.pasteTrouble, colours: report.colours, matrix: report.matrix, zoom400: report.zoom400, edits: report.edits, undoKeys: report.undoKeys, handleKeys: report.handleKeys, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
-          } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
+            r.mode = 'probe';
+            r.pinned = pinnedRow;
+          } else r = { wallMs, error: NO_REPORT, launcherTail, requests, pinned: pinnedRow };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });
         }
         rows.push(r);
       }
-      const problems = rows.flatMap((r, i) => runProblems(r, known).map((p) => `run ${i + 1}: ${p}`));
+      const problems = rows.flatMap((r, i) => [...(r.pinned ? runProblems(r.pinned, known).map((p) => `run ${i + 1} (pinned bytes): ${p}`) : [`run ${i + 1}: the pinned bytes were not run`]), ...runProblems(r, known).map((p) => `run ${i + 1} (probe build): ${p}`)]);
       out[e.name] = { version: e.version, family: e.family ?? e.kind, runs: rows, launchRetries: retried, clean: problems.length === 0, problems };
     }
   } finally {

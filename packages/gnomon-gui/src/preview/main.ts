@@ -17,6 +17,7 @@ import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
 import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
 import { loadBoard, type BoardModule } from '../core/board.js';
+import type { DimOp } from '@a-company/gnomon-contracts';
 import { boardFixture, fixtureState } from './board-fixture.js';
 import { mountBoardLeaf } from '../ui/board-leaf.js';
 import { cardHasFocus } from '../ui/card-focus.js';
@@ -63,6 +64,8 @@ async function openBoardFixture(): Promise<void> {
       : variant === 'failed'
         ? Promise.reject(new Error('the board stylesheet did not load'))
         : loadBoard().then((m) => ({ BOARD_ENGINE: m.BOARD_ENGINE, mountBoard: (h, opts) => ((crash = opts?.onError), m.mountBoard(h, opts)) }));
+  const fx = boardFixture(variant === 'empty' ? 'empty' : (new URLSearchParams(location.search).get('marks') ?? 'sample'));
+  let send: (ops: DimOp[], cause: Event | null) => void = () => undefined;
   const ready = new Promise<void>((done) => {
     const leaf = mountBoardLeaf(host, {
       title: 'auth handoff',
@@ -76,14 +79,17 @@ async function openBoardFixture(): Promise<void> {
       load,
       cardFocused: () => cardHasFocus(document),
       onFold: () => diag('board fold asked'),
+      // a copy, a paste: the leaf's own register over the fixture's fold; pasted ops go where the board's edits go
+      view: () => fx.state(),
+      onOps: (ops, cause) => send(ops, cause),
       onReady: (handle) => {
         // the fixture's stand-in for the live loop: an edit becomes a row of yours and the fold is rendered back
-        const fx = boardFixture(variant === 'empty' ? 'empty' : (new URLSearchParams(location.search).get('marks') ?? 'sample'));
         handle.render(fx.state());
-        handle.onEdit((ops, cause) => {
+        send = (ops, cause) => {
           fx.edits.push({ ops, cause: cause ? cause.type : null });
           if (!fx.held) handle.render(fx.apply(ops));
-        });
+        };
+        handle.onEdit((ops, cause) => send(ops, cause));
         handle.onUndoKey((_e, redo) => void fx.undoKeys.push(redo ? 'redo' : 'undo'));
         (globalThis as { gnomonPreviewBoard?: unknown; gnomonPreviewDim?: unknown }).gnomonPreviewBoard = handle;
         (globalThis as { gnomonPreviewDim?: unknown }).gnomonPreviewDim = fx;
@@ -91,6 +97,7 @@ async function openBoardFixture(): Promise<void> {
         handle.onAttempt((a) => diag(`board attempt ${a.kind} types=${a.types.join(',')} files=${a.files}`));
         void loadBoard().then(async (m) => {
           document.documentElement.dataset.previewBoard = m.BOARD_ENGINE;
+          (globalThis as { gnomonPreviewBoardModule?: unknown }).gnomonPreviewBoardModule = m; // the chunk's own exports (test/board-c8.test.ts reads boardEngineRuns)
           await new Promise((r) => setTimeout(r, 300)); // the marks are counted after they have had time to be wiped
           if (variant === 'tray') (host.querySelector('.bd-ink') as HTMLElement | null)?.click();
           if (variant === 'yielded') (document.querySelector('#pinned .card button, #stack .card button') as HTMLElement | null)?.focus();

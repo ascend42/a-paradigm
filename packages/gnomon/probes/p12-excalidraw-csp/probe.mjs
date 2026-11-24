@@ -4,7 +4,14 @@
 // refusals of any directive: script-src 'self' with no 'unsafe-eval' and no 'wasm-unsafe-eval', no inline script
 // or style, img-src without data:, font-src 'self', connect-src loopback only. And what it costs (bytes, load).
 //
-// Method (ZERO deps, no install, no build: it runs on a fresh checkout):
+// Since boards S1.3 pass P3b-2 every run is TWO pages. /pinned.html loads the pinned bytes, in which only input the
+// browser itself made counts (the `syntheticInput` branch is removed at build time): it mounts, renders, runs the
+// paste, copy and drop containment checks of condition C8, exports a PNG and reports every CSP row. / loads a PROBE
+// build of the same sources and patches (packages/gnomon-gui/scripts/board-build.mjs with probe: true; made here,
+// never embedded, never served by the kernel), the one build in which this page's synthetic pointer and key events
+// count, for the edit checks in an engine with no real input (WKWebView). The probe build needs the repo's
+// dependencies installed; the pinned page does not.
+// Method (the pinned page: zero deps, no install, no build):
 //   1. Decode the `board/*` files from the kernel's pinned embed (src/kernel/web/gui-bundle.ts): the exact bytes
 //      the web endpoint serves. Nothing is bundled here and nothing comes from npm.
 //   2. Static scan of those bytes: eval / new Function / WebAssembly / external hosts / fetch / data: URLs / maps.
@@ -29,7 +36,7 @@
 // browser sends NO report never loaded the page; it is retried ONCE per engine and both attempts stay in the
 // evidence. A run that reported is never retried.
 import { gnomonCsp } from '../_shared/browser.mjs';
-import { exercisedChecks, NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
+import { exercisedChecks, NO_REPORT, pasteCarried, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
 
 export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'G-DDL-07', 'S25-M3'];
 
@@ -71,7 +78,9 @@ export default async function probe(ctx) {
       mountedRuns: ok.length,
       clean: e.clean,
       problems: e.problems,
-      violationCount: e.runs.reduce((a, r) => a + (r.violationCount ?? 0), 0),
+      // both pages of every run: the pinned bytes and the probe build
+      violationCount: e.runs.reduce((a, r) => a + (r.violationCount ?? 0) + (r.pinned?.violationCount ?? 0), 0),
+      pinnedBytes: e.runs.map((r) => (r.pinned ? { stage: r.pinned.stage, mounted: r.pinned.mounted, violationCount: r.pinned.violationCount ?? null, fix: r.pinned.fix, syntheticDraw: r.pinned.syntheticDraw, png: r.pinned.png } : null)),
       violatedDirectives: [...new Set(e.runs.flatMap((r) => (r.violations ?? []).map((v) => v.directive)))],
       exportPng: ok.length > 0 && ok.every((r) => r.png?.ok),
       medianMs: { module: median(ok.map((r) => r.ms.module)), mounted: median(ok.map((r) => r.ms.mounted)) },
@@ -116,6 +125,9 @@ export default async function probe(ctx) {
       exercised,
       // how each engine's paste was made: `devtools` is a real paste (clipboard plus the platform's paste chord)
       pasteVia: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, e.runs.find((r) => r.mounted)?.fix?.paste?.via ?? e.runs.find((r) => r.mounted)?.fix?.paste?.unsupported ?? null])),
+      // what each paste check's event carried in each engine (`text`, `file`, or `nothing` where the engine strips
+      // script-built clipboard data): a check is judged, and counted as exercised, by this and never by the engine's name
+      pasteCarried: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, pasteCarried(e.runs.find((r) => r.mounted) ?? {})])),
       pasteModifier: process.platform === 'darwin' ? 'Meta' : 'Control',
       clean,
       findings,

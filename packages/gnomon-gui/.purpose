@@ -386,6 +386,41 @@ components:
       Known and left for later slices: React and Excalidraw carry HTML sinks
       (the kernel's bundle scan exempts board/* from that one clause);
       react-style-singleton can inject a <style> for a modal popover.
+      Boards S1.3 pass P3b-2 (condition C8; Aegis A5, A6): paste, copy, cut,
+      drop and duplicate are contained BEFORE the engine by per-board capture
+      listeners on the document (matched by containment, removed at unmount).
+      A paste is never parsed: the handle hands the plain text on with
+      onPasteText(text, cause) and adds nothing; a file, a paste with no plain
+      text and words over the limit are refused; a paste into a text being
+      typed is the field's own plain-text paste. onCopy / onCut report the
+      selected node ids and put only the caller's plain text on the system
+      clipboard (a cut deletes through the edit path); onCopyOutside reports
+      a copy made elsewhere. Six more counted patches: the engine's paste,
+      copy and cut handlers count and return (boardEngineRuns), the text
+      editor's paste handler is not installed, Alt+drag is a move and the
+      duplicate action does nothing. `syntheticInput` is honoured only by a
+      probe build (define __GNOMON_BOARD_PROBE__, false in what ships; the
+      pinned bytes do not contain the word). An edit reports only what the
+      person had in hand; what the engine changed elsewhere stands until the
+      next render and is taken out of later edits; one handle shows one
+      dimension. ui/board-leaf.ts owns one #gui-dim-clipboard register (no
+      kernel wiring yet): a paste of its own copy is clones, any other text
+      is one text mark, and the stand-in line with nothing held adds nothing
+      and says so. test/board-c8.test.ts holds every recorded repro in a
+      real Chrome with real paste, copy, cut, drags and an IME composition.
+      Review of PR #117: handle.select(nodeIds) selects the pasted marks
+      once rendered; onCut answers {text, ids} and exactly those nodes are
+      deleted (a frame travels with its children; over the 64 cap the cut
+      is refused whole and a copy says what it left out); a copy or cut of
+      a mark not stored yet is refused `clipboard:not-stored`; a paste into
+      a text being typed is refused at paste time when it would pass the
+      limit. Three more counted patches (nine for C8): engine-drop-removed,
+      flowchart-keys-removed, flowchart-navigate-removed; a guard on the
+      document from before the engine renders until unmount; Cmd/Ctrl/Alt+
+      Arrow and Cmd/Ctrl+D never reach the engine or the browser; mount
+      option `chrome` makes a paste with focus on the leaf's rail the
+      board's. Pasted clones and text land in view; clipboard words are
+      cleaned of control and format characters.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]

@@ -14,6 +14,10 @@ describe('#gui-gesture gestureOf', () => {
     expect(gestureOf(trusted('pointerup'), 5)).toMatchObject({ kind: 'pointer', at: 5, n: 0 });
     expect(gestureOf(trusted('keydown'), 5)?.kind).toBe('key');
     expect(gestureOf(trusted('click'), 5)?.kind).toBe('menu');
+    // a cut from the Edit menu is a menu gesture (the kernel's closed list of kinds is unchanged); a copy is never stamped
+    expect(gestureOf(trusted('cut'), 5)?.kind).toBe('menu');
+    expect(gestureOf(trusted('copy'), 5)).toBeNull();
+    expect(gestureOf({ isTrusted: false, type: 'cut' }, 5)).toBeNull();
     expect(gestureOf(trusted('paste'), 5)?.kind).toBe('paste');
     for (const type of ['pointerdown', 'pointermove', 'keyup', 'mousedown', 'input', 'drop', 'copy', 'toString', '__proto__', '']) expect(gestureOf(trusted(type), 5)).toBeNull();
     for (const type of ['pointerup', 'keydown', 'click', 'paste']) {
