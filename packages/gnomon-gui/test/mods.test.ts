@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { RpcError, type GnomonClient } from '../src/core/client.js';
 import { workshopInstallKey } from '../src/core/mod-panels.js';
-import { configRequest, configurable, folderPathError, installRequest, linkRequest, modsViewOf, pauseRequest, startRequest, uninstallRequest, workshopSource, type InstalledMod } from '../src/core/mods.js';
+import { configRequest, configurable, folderPathError, installRequest, linkRequest, modsViewOf, pauseRequest, startRequest, stateText, uninstallRequest, workshopSource, type InstalledMod } from '../src/core/mods.js';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
 import type { StackCard } from '../src/core/store.js';
 import { emptyUi, paintMods, requestMod, splitArgs } from '../src/ui/mods-panel.js';
@@ -173,6 +173,27 @@ describe('#gui-mods-panel renders from status', () => {
     const v = modsViewOf({ mods: { installed: [{ name: 'Bad Name' }, { name: 'acme.ok', packageHash: 'nope', state: 'weird' }], available: [{ name: 'gnomon.x' }] } });
     expect(v.installed.map((m) => [m.name, m.pin, m.state])).toEqual([['acme.ok', '?', 'error']]);
     expect(v.available).toEqual([]); // no path: nothing to install from
+  });
+});
+
+describe('#gui-mods-panel: a stopped mod that needs an update (G-MOD-15)', () => {
+  const mod = (over: Record<string, unknown>) => ({ mods: { installed: [{ name: 'gnomon.workshop', version: '1.1.0', tier: 'first-party', source: 'package', packageHash: H('7'), state: 'stopped', ...over }], available: [], catalog: { root: '/r' } } });
+
+  it('shows the kernel-composed note as the state line, with the Update key beside it', () => {
+    const b = painted(mod({ note: 'needs an update for this Gnomon', update: { version: '1.1.1', path: '/r/workshop', packageHash: H('8') } }), []);
+    const w = row(b, 'gnomon.workshop');
+    expect(w.text).toContain('needs an update for this Gnomon');
+    expect(w.text).not.toContain('down');
+    expect(keys(w)).toContain('update');
+    expect(stateText(modsViewOf(mod({ note: 'needs an update for this Gnomon' })).installed[0]!)).toBe('needs an update for this Gnomon');
+  });
+
+  it('the note is shown only for a stopped mod and only when it is plain words of bounded length', () => {
+    const noteOf = (over: Record<string, unknown>): string => stateText(modsViewOf(mod(over)).installed[0]!);
+    expect(noteOf({})).toBe('stopped');
+    expect(noteOf({ note: 'needs an update for this Gnomon', state: 'running' })).toBe('running');
+    expect(noteOf({ note: 'needs an update for this Gnomon', state: 'paused' })).toBe('paused');
+    for (const bad of [7, null, '', 'x'.repeat(81), 'two\nlines', 'a <b>tag</b>', 'bidi \u202e text', '[ Allow ]', ' leading space']) expect(noteOf({ note: bad })).toBe('stopped');
   });
 });
 

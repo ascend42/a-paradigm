@@ -57,6 +57,8 @@ export interface InstalledMod {
   dev: boolean;
   state: 'running' | 'paused' | 'stopped' | 'error';
   pausedWhy: string | null;
+  /** kernel-composed: why a stopped mod is not running (for example, it needs an update for this Gnomon) */
+  note: string | null;
   uninstallRequested: boolean;
   mcp: ModMcp | null;
   offers: Array<{ kind: string; title: string }>;
@@ -145,6 +147,7 @@ export function modsViewOf(status: unknown, cards: Iterable<StackCard> = []): Mo
       dev: m.dev === true,
       state: state && STATES.has(state) ? (state as InstalledMod['state']) : 'error',
       pausedWhy: str(m.pausedWhy),
+      note: noteOf(m.note),
       uninstallRequested: m.uninstallRequested === true,
       mcp: mcp && str(mcp.server) ? { server: str(mcp.server)!, overridden: mcp.overridden === true, configRequested: mcp.configRequested === true, configurable: { command: cfg?.command === true, args: cfg?.args === true, env: strs(cfg?.env), secret: strs(cfg?.secret) }, command: str(mcp.command) ?? '', args: strs(mcp.args) } : null,
       offers: (Array.isArray(m.offers) ? m.offers : []).map(obj).filter((o): o is Record<string, unknown> => !!o).map((o) => ({ kind: str(o.kind) ?? '', title: str(o.title) ?? '' })).slice(0, 16),
@@ -227,9 +230,16 @@ export function configurable(m: Pick<InstalledMod, 'mcp'>): boolean {
   return !!c && (c.command || c.args || c.env.some((e) => !c.secret.includes(e)));
 }
 
+/** A kernel-composed note: plain printable ASCII words, at most 80 characters, else dropped. */
+function noteOf(v: unknown): string | null {
+  return typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9 ,.:'()-]{0,79}$/.test(v) ? v : null;
+}
+
 /** The state line of an installed mod. */
-export function stateText(m: Pick<InstalledMod, 'state' | 'pausedWhy' | 'uninstallRequested'>): string {
+export function stateText(m: Pick<InstalledMod, 'state' | 'pausedWhy' | 'uninstallRequested'> & { note?: string | null }): string {
   if (m.uninstallRequested) return 'uninstall requested';
+  // the kernel's own words for why a stopped mod is not running (it was refused at start), never the mod's
+  if (m.state === 'stopped' && m.note) return m.note;
   if (m.state === 'paused') return m.pausedWhy && m.pausedWhy !== 'user' ? `paused (${m.pausedWhy})` : 'paused';
   if (m.state === 'error') return 'error: its pinned snapshot does not read';
   return m.state;
