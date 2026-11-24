@@ -155,15 +155,50 @@ export function takeStartRequest(home: string, name: string): boolean {
   return true;
 }
 
-/** Mod names that have a directory under `<home>/mods/` (bounded, sorted). */
-export function modNames(home: string): string[] {
+/** A Paradigm-logger-shaped port (`logger.component('#mod-host').warn(…)`); omitted ⇒ silent. */
+export interface ModNamesLogger {
+  component(id: string): { warn(message: string, data?: Record<string, unknown>): void };
+}
+
+/** Homes already warned about a truncated mod list (one warning per home per process; bounded). */
+const truncationWarned = new Set<string>();
+
+function hasEntry(dir: string, ok: (n: string) => boolean): boolean {
+  try {
+    return fs.readdirSync(dir).some(ok);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether a mod directory holds a pinned snapshot or a staged card (by listing only; nothing is read). */
+function holdsPinOrCard(home: string, name: string): boolean {
+  const dir = modDirOf(home, name);
+  return hasEntry(path.join(dir, 'pinned'), (n) => /^[0-9a-f]{64}$/.test(n)) || hasEntry(path.join(dir, 'staged'), (n) => STAGED_FILE.test(n));
+}
+
+/**
+ * Mod names that have a directory under `<home>/mods/` (bounded, sorted). The directory is writable by the OS user,
+ * so the list is capped at MAX_PICKUP_MODS. When there are more names than the cap, names that hold neither a pin
+ * nor a staged card (leftover directories) are skipped BEFORE the cap, so they cannot push a real mod out of the
+ * scans; if real mods alone still exceed the cap, the tail is dropped and one warning is logged.
+ */
+export function modNames(home: string, logger?: ModNamesLogger): string[] {
   let names: string[] = [];
   try {
     names = fs.readdirSync(modsRoot(home));
   } catch {
     return [];
   }
-  return names.filter((n) => MOD_NAME.test(n)).sort().slice(0, MAX_PICKUP_MODS);
+  names = names.filter((n) => MOD_NAME.test(n)).sort();
+  if (names.length <= MAX_PICKUP_MODS) return names;
+  const held = names.filter((n) => holdsPinOrCard(home, n));
+  if (held.length > MAX_PICKUP_MODS && !truncationWarned.has(home)) {
+    if (truncationWarned.size >= 16) truncationWarned.clear();
+    truncationWarned.add(home);
+    logger?.component('#mod-host').warn('more mods on disk than one scan looks at; the rest are skipped', { held: held.length, cap: MAX_PICKUP_MODS, dropped: held.length - MAX_PICKUP_MODS });
+  }
+  return held.slice(0, MAX_PICKUP_MODS);
 }
 
 /** The card line naming what a staged file only CLAIMS (Aegis C4): who asked, from which session, attended or not. */
@@ -253,6 +288,8 @@ export interface PickupOptions {
   userHome?: string;
   /** cardIds whose manifest.staged row the kernel already wrote (staged in-process) */
   alreadyLogged?: (cardId: string) => boolean;
+  /** receives the one warning of a mod list that is still truncated after leftovers are skipped */
+  logger?: ModNamesLogger;
 }
 
 /**
@@ -315,7 +352,7 @@ export class StagedCardPickup {
         if (c && c.state === 'pending') await broker.expire(id, 'uninstall-request-dropped').catch(() => false);
       }
     }
-    for (const name of modNames(home)) {
+    for (const name of modNames(home, this.#o.logger)) {
       const req = uninstallRequested(home, name);
       if (!req || this.#uninstallCards.has(name)) continue;
       if (this.#uninstallCards.size >= MAX_PICKUP_CARDS) break;
@@ -394,7 +431,7 @@ export class StagedCardPickup {
       }
     }
     // start requests
-    for (const name of modNames(home)) {
+    for (const name of modNames(home, this.#o.logger)) {
       if (!isUserPaused(home, name) && takeStartRequest(home, name)) await host.start(name).catch(() => undefined);
     }
     await this.#uninstalls(emit, readGrants(home, this.#o.authority)); // Aegis C5: one grant-table read per scan

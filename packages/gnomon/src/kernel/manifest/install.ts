@@ -64,7 +64,7 @@ import { registerSeams } from '../internal-seams.js';
 import { appendGrantRow, appendSignedGrantRows, buildGrantRows, rowsOfDecision, type GrantRow, type GrantRowInput, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
 import { COMMAND_UNSAFE, compareVersions, detectWidening, MANIFEST_FILE, readManifest, type ManifestMcpConfig, type ManifestV2, type ReadManifestResult, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
-import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
+import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, pruneEmptyModDir, refuseSnapshot, removeTree, snapshotFolder, type SnapshotResult, type TreeDiff, type TreeFile } from './snapshot.js';
 
 export const STAGED_RECORD_SCHEMA = 'gnomon-staged-install:v1' as const;
 const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -254,14 +254,47 @@ function readManifestBytes(dir: string, name: string, emit: ManifestEventSink): 
   }
 }
 
-/** The raw manifest object of a folder, or null. */
+const O_NOFOLLOW: number = fs.constants.O_NOFOLLOW ?? 0;
+const O_NONBLOCK: number = fs.constants.O_NONBLOCK ?? 0;
+
+/**
+ * The raw manifest object of a folder, or null. Read only from a regular file: the path is opened without following
+ * a symlink and without blocking (a FIFO here would otherwise hang the read), and the open descriptor is checked.
+ */
 function rawManifestOf(dir: string): Record<string, unknown> | null {
+  let fd: number | undefined;
   try {
-    const v = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')) as unknown;
+    const p = path.join(dir, MANIFEST_FILE);
+    if (!fs.lstatSync(p).isFile()) return null;
+    fd = fs.openSync(p, fs.constants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+    if (!fs.fstatSync(fd).isFile()) return null;
+    const v = JSON.parse(fs.readFileSync(fd, 'utf8')) as unknown;
     return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
   } catch {
     return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
+}
+
+/** The id a source folder is named by when its manifest gives none. */
+function folderName(source: string): string {
+  return `local.${path.basename(path.resolve(source)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^[^a-z]+|-+$/g, '').slice(0, 24) || 'unnamed'}`;
+}
+
+/**
+ * Refuse a manifest path that is not a regular file BEFORE anything reads it (the walk's symlink and special-file
+ * checks run later). lstat only: nothing is followed or opened. A missing manifest is left to the later refusal.
+ */
+function refuseIrregularManifest(source: string, emit: ManifestEventSink): void {
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(path.join(source, MANIFEST_FILE));
+  } catch {
+    return;
+  }
+  if (st.isSymbolicLink()) refuseSnapshot('symlink', MANIFEST_FILE, folderName(source), emit);
+  if (!st.isFile()) refuseSnapshot('special-file', MANIFEST_FILE, folderName(source), emit);
 }
 
 /** Best-effort mod id for refusal events and the snapshot directory before the manifest validates. */
@@ -269,7 +302,7 @@ function sourceName(source: string, legacyPublisher?: string): string {
   const m = rawManifestOf(source);
   const id = m && typeof m.name === 'string' ? `${typeof m.publisher === 'string' ? m.publisher : (legacyPublisher ?? 'local')}.${m.name}` : '';
   if (isModId(id)) return id;
-  return `local.${path.basename(path.resolve(source)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^[^a-z]+|-+$/g, '').slice(0, 24) || 'unnamed'}`;
+  return folderName(source);
 }
 
 /** The kind and identity of a source, compared for a source change (S0b §3). */
@@ -540,7 +573,54 @@ function stagedPath(home: string, name: string, cardId: string): string {
 function writeStaged(home: string, rec: StagedRecord): void {
   const p = stagedPath(home, rec.detail.name, rec.card.cardId);
   fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(p, `${JSON.stringify(rec)}\n`, { mode: 0o600 });
+  try {
+    fs.writeFileSync(p, `${JSON.stringify(rec)}\n`, { mode: 0o600 });
+  } catch (err) {
+    // the card id was minted by this call: a partly written record of it is never left for the pickup to read
+    try {
+      if (fs.lstatSync(p).isFile()) fs.rmSync(p, { force: true });
+    } catch {
+      /* nothing was created */
+    }
+    throw err;
+  }
+}
+
+/**
+ * Drop the snapshot of a stage that did not end in a card, and the empty directories around it. Only a snapshot
+ * directory THIS call created is removed (`created`; a reused `pinned/<hex>` belongs to an install or an earlier
+ * stage), and not even that one when the effective install pins it or a staged record names it (another process
+ * may have reused it since). Never throws: the refusal that brought us here is what the caller must see.
+ */
+function discardSnapshot(home: string, name: string, snap: SnapshotResult, grants: ResolvedGrants): void {
+  try {
+    if (snap.created && effectiveInstall(grants, name)?.packageHash !== snap.packageHash && !stagedNames(home, name, snap.packageHash)) removeTree(snap.dir);
+    pruneEmptyModDir(home, name);
+  } catch {
+    /* best effort */
+  }
+}
+
+/** Whether any readable staged record of this mod names the snapshot, decided or not. */
+function stagedNames(home: string, name: string, packageHash: string): boolean {
+  const dir = path.join(modDir(home, name), 'staged');
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return false;
+  }
+  for (const n of names) {
+    try {
+      const st = fs.lstatSync(path.join(dir, n));
+      if (!st.isFile() || st.size > 1024 * 1024) continue;
+      const r = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8')) as StagedRecord;
+      if (r?.detail?.packageHash === packageHash) return true;
+    } catch {
+      /* unreadable: names nothing */
+    }
+  }
+  return false;
 }
 
 export function readStaged(home: string, name: string, cardId: string): StagedRecord | null {
@@ -594,6 +674,7 @@ export function stageInstall(opts: StageOptions): StageResult {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
   // format 1 is staged only for a historical first-party pin (its id is then gnomon.<name>); the hash decides
+  refuseIrregularManifest(opts.source, emit);
   const raw0 = rawManifestOf(opts.source);
   let legacyPublisher: 'gnomon' | 'local' | undefined = opts.recard?.legacyPublisher;
   if (!legacyPublisher && raw0?.manifest === 1 && typeof raw0.name === 'string') {
@@ -649,12 +730,35 @@ export function stageInstall(opts: StageOptions): StageResult {
       throw err;
     }
   } catch (err) {
-    // a snapshot of a refused manifest is never kept
-    if (snap.created) removeTree(snap.dir);
+    // a snapshot of a refused manifest is never kept, nor the empty directories made for it
+    discardSnapshot(opts.home, name0, snap, grants);
     throw err;
   }
+  // from here to the written card: any throw (a missing current pin, a card that does not validate, a failed write)
+  // leaves no snapshot this call created. A result of either state keeps its snapshot, as before.
+  try {
+    return cardForSnapshot(opts, emit, now, { name: name0, source, snap, read, tier, grants, binding, serverName });
+  } catch (err) {
+    discardSnapshot(opts.home, name0, snap, grants);
+    throw err;
+  }
+}
+
+interface StagedSnapshot {
+  name: string;
+  source: InstallSource;
+  snap: SnapshotResult;
+  read: ReadManifestResult;
+  tier: TrustTier;
+  grants: ResolvedGrants;
+  binding: ReturnType<typeof checkPublisherSource>;
+  serverName: string | undefined;
+}
+
+/** The second half of stageInstall: the card for a snapshot whose manifest was accepted (its caller cleans up a throw). */
+function cardForSnapshot(opts: StageOptions, emit: ManifestEventSink, now: Date, s: StagedSnapshot): StageResult {
+  const { name, source, snap, read, tier, grants, binding, serverName } = s;
   const manifest = read.manifest;
-  const name = name0;
   const mh = read.manifestHash;
   const current = effectiveInstall(grants, name);
   if (!opts.recard && current && current.packageHash === snap.packageHash && current.manifestHash === mh && current.source === source) return { state: 'unchanged', packageHash: snap.packageHash };
@@ -663,7 +767,6 @@ export function stageInstall(opts: StageOptions): StageResult {
   // earlier grant row, so an old first-party build is not put back by a stage or by a rollback. (An install that is
   // still pinned at a superseded hash stays as it is until its Update card is approved.)
   if (SUPERSEDED_FIRST_PARTY_PINS.has(snap.packageHash) && !(current && current.packageHash === snap.packageHash)) {
-    if (snap.created) removeTree(snap.dir);
     emit('manifest.refuse', { name, code: 'TIER', why: 'superseded' });
     throw new ManifestRefusal('TIER', `${name}: this is a superseded first-party build; install the one shipped with this Gnomon`, { name, why: 'superseded' });
   }

@@ -183,6 +183,22 @@ components:
       SUPERSEDED_PINS_WRITTEN_FOR naming the modAbiId it was written for: when
       modAbiId next moves the expiry test in test/mod-abi-compat.test.ts fails
       until the table is emptied or each entry re-justified (no chains).
+      Stage cleanup (security triage): a stage that ends in a throw leaves
+      nothing. The snapshot is discarded on ANY throw from the manifest block
+      through the written staged record (discardSnapshot), only when this call
+      created it (SnapshotResult.created) and neither the effective install nor
+      a staged record names it; the empty staged/, pinned/ and mods/<id>/ are
+      then removed by a non-recursive rmdir (pruneEmptyModDir), so a directory
+      holding another pin, a card or a marker is untouched. A partly written
+      staged record of the call's own card id is removed. The manifest path is
+      refused SNAPSHOT (symlink / special-file) by lstat before anything reads
+      it, and rawManifestOf opens it O_NOFOLLOW | O_NONBLOCK and checks the
+      descriptor, so a FIFO there cannot block the process. sweepStaging runs
+      once at kernel start (daemon.ts, before the mod host): it removes
+      ULID-named entries directly inside a real mods/.staging, follows nothing,
+      and keeps entries younger than STAGING_SWEEP_MIN_AGE_MS because the CLI
+      stages in its own process. What a staged, undecided or denied card leaves
+      on disk is unchanged.
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]

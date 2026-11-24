@@ -53,6 +53,8 @@ import {
   realpathLoose,
   removeTree,
   stageInstall,
+  snapshotFolder,
+  sweepStaging,
   uninstallHome,
   uninstallRepo,
   validateManifest,
@@ -61,7 +63,9 @@ import {
 import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
 import { installPresenceBinding, rollbackPresenceBinding } from '../src/kernel/manifest/install.js';
 import { PKG_ROOT } from './helpers.js';
-import { spawnSync } from 'node:child_process';
+import { privateTmpRoot } from './daemon-helpers.js';
+import { modNames, MAX_PICKUP_MODS } from '../src/kernel/modhost/control.js';
+import { spawn, spawnSync } from 'node:child_process';
 import { SESSION_DENY_REALISATION } from '../src/platform/session-denies.js';
 
 const tmps: string[] = [];
@@ -576,6 +580,189 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
 });
 
 /* ── linked folders + widening ────────────────────────────────────────────── */
+
+describe('#manifest-loader: a refused or failed stage leaves nothing behind (security triage, stage cleanup)', () => {
+  /** A private (never world-writable) temp directory, removed after the test. */
+  const ptmp = (): string => {
+    const d = fs.mkdtempSync(path.join(privateTmpRoot(), 'gst-'));
+    tmps.push(d);
+    return d;
+  };
+  const DIMENSION_TREE = path.resolve(PKG_ROOT, '..', 'gnomon-mods', 'dimension');
+  const thrown = (fn: () => unknown): unknown => {
+    try {
+      fn();
+    } catch (err) {
+      return err;
+    }
+    throw new Error('expected a throw');
+  };
+
+  it('a refused first-party stage (gnomon.dimension with one byte changed) leaves no mods/gnomon.dimension, and the real tree then stages as first-party', () => {
+    const home = ptmp();
+    const auth = root();
+    const copy = path.join(ptmp(), 'gnomon.dimension');
+    fs.cpSync(DIMENSION_TREE, copy, { recursive: true });
+    fs.appendFileSync(path.join(copy, 'model.mjs'), ' ');
+    const err = refusalOf(() => stageInstall({ home, source: copy, via: 'package', requestedBy: HUMAN, trust: auth }));
+    expect(err.message).toMatch(/publisher gnomon is first-party only/);
+    expect(fs.existsSync(path.join(home, 'mods', 'gnomon.dimension'))).toBe(false);
+    // nothing but an empty .staging is left under mods/
+    expect(Object.keys(treeBytes(path.join(home, 'mods')))).toEqual(['.staging/']);
+    const ok = stageInstall({ home, source: DIMENSION_TREE, via: 'package', requestedBy: HUMAN, trust: auth });
+    expect(ok.state === 'staged' && ok.record.detail.tier).toBe('first-party');
+    expect(ok.state === 'staged' && fs.existsSync(pinnedDir(home, 'gnomon.dimension', ok.record.detail.packageHash))).toBe(true);
+  });
+
+  it('a refusal for a mod id that already has an installed pin leaves the pin and its directory byte-identical and loadable', () => {
+    const home = ptmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(ptmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    const dir = path.join(home, 'mods', 'acme.diff-lens');
+    const before = treeBytes(dir);
+    // same id, a manifest the loader refuses (kind provider is first-party only)
+    const bad = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest({ kind: 'provider', version: '1.3.0' }), { 'extra.js': 'x' });
+    expect(refusalOf(() => stageInstall({ home, source: bad, via: 'package', requestedBy: HUMAN, trust: auth })).manifestCode).toBe('TIER');
+    expect(fs.readdirSync(path.join(home, 'mods')).sort()).toEqual(['.staging', 'acme.diff-lens']); // the refused copy went nowhere else
+    expect(treeBytes(dir)).toEqual(before);
+    expect(fs.readdirSync(path.join(dir, 'pinned'))).toHaveLength(1);
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).manifest.version).toBe('1.2.0');
+  });
+
+  it('a failure after the manifest block (the staged record cannot be written) leaves no new snapshot directory, and leaves a pre-existing identical snapshot in place', () => {
+    const auth = root();
+    const src = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n' });
+    // (a) a fresh home: `staged` is a file, so writeStaged fails after the snapshot was created
+    const home = ptmp();
+    const dir = path.join(home, 'mods', 'acme.diff-lens');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'staged'), 'in the way');
+    const err = thrown(() => stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth }));
+    expect(err).not.toBeInstanceOf(ManifestRefusal);
+    // the directory holds something (the file in the way), so it stays; the snapshot and the empty pinned/ do not
+    expect(fs.readdirSync(dir)).toEqual(['staged']);
+    expect(fs.readFileSync(path.join(dir, 'staged'), 'utf8')).toBe('in the way');
+    // (b) the identical snapshot was already there (an earlier stage or an install made it): it is not this call's to remove
+    const home2 = ptmp();
+    const snap = snapshotFolder(home2, src, 'acme.diff-lens', () => undefined);
+    expect(snap.created).toBe(true);
+    const kept = treeBytes(snap.dir);
+    fs.writeFileSync(path.join(home2, 'mods', 'acme.diff-lens', 'staged'), 'in the way');
+    expect(thrown(() => stageInstall({ home: home2, source: src, via: 'package', requestedBy: HUMAN, trust: auth }))).not.toBeInstanceOf(ManifestRefusal);
+    expect(treeBytes(snap.dir)).toEqual(kept);
+    expect(Object.keys(kept).length).toBeGreaterThan(1);
+  });
+
+  it(
+    'a symlink and a fifo at the manifest path are refused before anything reads them (no hang), and leave nothing in the home',
+    () => {
+      const auth = root();
+      const real = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest());
+      const linked = path.join(ptmp(), 'diff-lens');
+      fs.mkdirSync(linked);
+      let made = true;
+      try {
+        fs.symlinkSync(path.join(real, MANIFEST_FILE), path.join(linked, MANIFEST_FILE), 'file');
+      } catch {
+        made = false; // no symlink privilege (stock Windows)
+      }
+      if (made) {
+        const home = ptmp();
+        const ev = events();
+        const r = refusalOf(() => stageInstall({ home, source: linked, via: 'package', requestedBy: HUMAN, trust: auth, emit: ev.emit }));
+        expect([r.manifestCode, r.detail.snapshotReason, r.detail.path]).toEqual(['SNAPSHOT', 'symlink', MANIFEST_FILE]);
+        expect(ev.kinds()).toEqual(['mod.snapshot.refused', 'manifest.refuse']);
+        expect(fs.readdirSync(home)).toEqual([]);
+      }
+      const piped = path.join(ptmp(), 'diff-lens');
+      fs.mkdirSync(piped);
+      const mk = spawnSync('mkfifo', [path.join(piped, MANIFEST_FILE)]);
+      // capability is what the filesystem made, not mkfifo's exit code (MSYS mkfifo on Windows makes a plain file or nothing)
+      if (mk.status === 0 && fs.lstatSync(path.join(piped, MANIFEST_FILE), { throwIfNoEntry: false })?.isFIFO()) {
+        const home = ptmp();
+        // A read of a fifo blocks the whole thread, so the test timeout could never fire. The watchdog opens the
+        // write end after 3 s (again and again: the path is read more than once), which releases a blocked reader; the
+        // elapsed time then fails the test instead of hanging the run.
+        const watchdog = spawn('sh', ['-c', 'sleep 3; while :; do : > "$0"; done', path.join(piped, MANIFEST_FILE)], { stdio: 'ignore' });
+        try {
+          const t0 = Date.now();
+          const r = refusalOf(() => stageInstall({ home, source: piped, via: 'package', requestedBy: HUMAN, trust: auth }));
+          expect([r.manifestCode, r.detail.snapshotReason, r.detail.path]).toEqual(['SNAPSHOT', 'special-file', MANIFEST_FILE]);
+          expect(fs.readdirSync(home)).toEqual([]);
+          // the linked path refuses the same way
+          expect(refusalOf(() => stageInstall({ home, source: piped, via: 'linked', requestedBy: HUMAN, trust: auth })).detail.snapshotReason).toBe('special-file');
+          expect(Date.now() - t0, 'the manifest path was read before it was checked').toBeLessThan(2_000);
+        } finally {
+          watchdog.kill('SIGKILL');
+        }
+      }
+    },
+    10_000,
+  );
+
+  it('the .staging sweep removes a stale copy and nothing else: a fresh entry, a foreign name, a link target and the pins stay', () => {
+    const home = ptmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(ptmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
+    expect(st.state).toBe('staged');
+    const staging = path.join(home, 'mods', '.staging');
+    const STALE = '01JD1S0000000000000000STA1';
+    const FRESH = '01JD1S0000000000000000FRE1';
+    const LINK = '01JD1S0000000000000000N1NK';
+    const now = Date.now();
+    const old = new Date(now - 2 * 60 * 60 * 1000);
+    for (const n of [STALE, FRESH]) {
+      fs.mkdirSync(path.join(staging, n, 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(staging, n, 'dist', 'index.js'), 'x', { mode: 0o400 });
+    }
+    fs.mkdirSync(path.join(staging, 'not-ours'));
+    const outside = ptmp();
+    fs.writeFileSync(path.join(outside, 'keep.txt'), 'keep');
+    let linked = true;
+    try {
+      fs.symlinkSync(outside, path.join(staging, LINK), 'dir');
+      fs.lutimesSync(path.join(staging, LINK), old, old);
+    } catch {
+      linked = false; // no symlink privilege (stock Windows)
+    }
+    fs.utimesSync(path.join(staging, STALE), old, old);
+    fs.utimesSync(path.join(staging, 'not-ours'), old, old);
+    const modBefore = treeBytes(path.join(home, 'mods', 'acme.diff-lens'));
+    expect(sweepStaging(home, { now })).toEqual(linked ? [LINK, STALE].sort() : [STALE]);
+    expect(fs.readdirSync(staging).sort()).toEqual([FRESH, 'not-ours'].sort());
+    expect(fs.readFileSync(path.join(outside, 'keep.txt'), 'utf8')).toBe('keep');
+    expect(treeBytes(path.join(home, 'mods', 'acme.diff-lens'))).toEqual(modBefore);
+    // a second pass and a home without mods/ are no-ops
+    expect(sweepStaging(home, { now })).toEqual([]);
+    expect(sweepStaging(ptmp())).toEqual([]);
+  });
+
+  it('modNames with 300 empty leftover directories still returns every real mod; a list that is still over the cap is cut with one warning', () => {
+    const home = ptmp();
+    const mods = path.join(home, 'mods');
+    const HEX = 'a'.repeat(64);
+    // below the cap nothing is filtered (a directory holding only a marker is still listed)
+    fs.mkdirSync(path.join(mods, 'aaa.marker-only'), { recursive: true });
+    expect(modNames(home)).toEqual(['aaa.marker-only']);
+    for (let i = 0; i < 300; i++) fs.mkdirSync(path.join(mods, `aaa.left-${String(i).padStart(3, '0')}`, i % 2 ? 'pinned' : '.'), { recursive: true });
+    fs.mkdirSync(path.join(mods, 'zzz.real-pin', 'pinned', HEX), { recursive: true });
+    fs.mkdirSync(path.join(mods, 'zzz.real-card', 'staged'), { recursive: true });
+    fs.writeFileSync(path.join(mods, 'zzz.real-card', 'staged', 'card-01JD1S0000000000000000CARD.json'), '{}');
+    expect(fs.readdirSync(mods).length).toBeGreaterThan(MAX_PICKUP_MODS);
+    const warned: Array<Record<string, unknown> | undefined> = [];
+    const logger = { component: (id: string) => ({ warn: (_m: string, data?: Record<string, unknown>) => void warned.push({ id, ...data }) }) };
+    expect(modNames(home, logger)).toEqual(['zzz.real-card', 'zzz.real-pin']);
+    expect(warned).toEqual([]);
+    // more REAL mods than the cap: the first MAX_PICKUP_MODS by name, and exactly one warning for the home
+    for (let i = 0; i < MAX_PICKUP_MODS; i++) fs.mkdirSync(path.join(mods, `mmm.real-${String(i).padStart(3, '0')}`, 'pinned', HEX), { recursive: true });
+    const cut = modNames(home, logger);
+    expect([cut.length, cut[0], cut.includes('zzz.real-pin')]).toEqual([MAX_PICKUP_MODS, 'mmm.real-000', false]);
+    modNames(home, logger);
+    expect(warned).toEqual([{ id: '#mod-host', held: MAX_PICKUP_MODS + 2, cap: MAX_PICKUP_MODS, dropped: 2 }]);
+  });
+});
 
 describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) and manifest widening', () => {
   it('a change in a linked folder pauses the mod, stages a re-approve card with the file diff and the widening; the snapshot is unchanged', () => {
