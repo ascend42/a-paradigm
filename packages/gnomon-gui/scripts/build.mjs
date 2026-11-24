@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // #gui bundle build (spec §11.1, §11.2 rule 1a). Bundles src/main.ts (with @a-company/gnomon-contracts inlined, no
-// runtime fetch of anything) into dist/bundle/{index.html, boot.js, styles.css, app.js}, hashes the tree with the
-// kernel's `gnomon-bundle-tree:v1` definition (packages/gnomon/src/kernel/web/bundle.ts treeHashOf) and:
+// runtime fetch of anything) into dist/bundle/{index.html, boot.js, styles.css, app.js}, adds the lazy #gui-board
+// chunk (dist/bundle/board/*, scripts/board-build.mjs: its own ES module, never part of app.js), hashes the WHOLE
+// tree with the kernel's `gnomon-bundle-tree:v1` definition (packages/gnomon/src/kernel/web/bundle.ts treeHashOf) and:
 //   --embed  writes packages/gnomon/src/kernel/web/gui-bundle.ts (the files as opaque base64 + the pin literal)
-//   --check  fails when that generated file is not byte-identical to a fresh build (the pin cannot drift)
+//   --check  fails when that generated file is not byte-identical to a fresh build (the pin cannot drift), and says
+//            which board file is unpinned, or that the board chunk is over its budget or carries a sourcemap
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BOARD_BUDGET_BYTES, BOARD_DIR, boardProblems, buildBoard, embeddedFiles, unpinnedBoardFiles } from './board-build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist', 'bundle');
@@ -56,8 +59,18 @@ export async function buildFiles() {
   const files = new Map();
   files.set('app.js', Buffer.from(`'use strict';\n${r.outputFiles[0].text}`, 'utf8'));
   for (const [n, b] of staticFiles()) files.set(n, b);
+  // the board chunk joins the SAME tree: one hash pins app.js, static/ and board/ (Aegis S1 risk d)
+  for (const [n, b] of (await buildBoard()).files) {
+    if (files.has(n)) throw new Error(`board file ${n} collides with a GUI file`);
+    files.set(n, b);
+  }
+  const problems = boardProblems(files);
+  if (problems.length) throw new Error(`gui bundle: ${problems.join('; ')}`);
   return files;
 }
+
+/** Raw bytes of the board chunk in a file map. */
+export const boardBytes = (files) => [...files].reduce((a, [n, b]) => a + (n.startsWith(`${BOARD_DIR}/`) ? b.length : 0), 0);
 
 export function treeHash(files) {
   const names = [...files.keys()].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
@@ -104,9 +117,13 @@ if (mode === '--embed') {
   try {
     cur = readFileSync(EMBED, 'utf8').replace(/\r\n/g, '\n');
   } catch {}
-  if (cur !== src) {
+  // name the board files first: an unpinned board file would be served outside the hash the kernel checks
+  const unpinned = unpinnedBoardFiles(files, embeddedFiles(cur));
+  for (const u of unpinned) process.stderr.write(`✕ board: ${u}\n`);
+  if (cur !== src || unpinned.length) {
     process.stderr.write(`✕ gui-bundle.ts is stale: run \`npm run embed --workspace=@a-company/gnomon-gui\` (fresh ${hash})\n`);
     process.exit(1);
   }
   process.stdout.write(`✓ gui-bundle.ts matches the fresh build · ${hash}\n`);
+  process.stdout.write(`✓ board chunk pinned in the tree · ${[...files.keys()].filter((n) => n.startsWith(`${BOARD_DIR}/`)).length} files · ${boardBytes(files)} of ${BOARD_BUDGET_BYTES} bytes · no sourcemap\n`);
 } else process.stdout.write(`built ${files.size} files → dist/bundle · ${hash}\n`);
