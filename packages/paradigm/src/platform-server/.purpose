@@ -26,7 +26,8 @@ components:
     parent: '#PlatformServer'
     tags: [feature, agent-ui]
   local-guard:
-    description: Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched. On /api/brain/* ACAO is set only for the Platform's own exact origin (ownOrigin/isOwnOrigin: loopback Host whose port equals the socket port).
+    description: >-
+      Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched. On /api/brain/* ACAO is set only for the Platform's own exact origin (ownOrigin/isOwnOrigin: loopback Host whose port equals the socket port).
     type: middleware
     parent: '#PlatformServer'
     gates: ['^local-only']
