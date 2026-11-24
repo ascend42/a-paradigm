@@ -1,0 +1,285 @@
+// #dimension-mod model (spec §12.7): pure functions, no I/O and no platform import. Everything that decides what a
+// dimension row may hold lives here, so the stdio loop (index.mjs) is only plumbing and the rules can be tested
+// without a host. The fold and the validator are the published `dim-shape:v1` (dim-shape.mjs, generated).
+import { DIM_ID_PATTERN, DIM_KINDS, DIM_LIMITS, DIM_OPENED, DIM_ROW_VERSION, dimHash, emptyDimState, foldDimRow, validateDimOps } from './dim-shape.mjs';
+
+/** Dimensions one home may hold (the index lives in mod state, 1 MiB in all). */
+export const DIM_CAP = 512;
+/** Sessions one dimension may have attached. */
+export const ATTACH_CAP = 16;
+/** The host's append limits (modhost/bridge.ts), checked here BEFORE the append so a refusal is ours and named. */
+export const ROW_MAX_BYTES = 16 * 1024;
+export const ROW_MAX_VISITED = 4096;
+export const ROW_MAX_DEPTH = 32;
+/** The title a dimension gets when a session's name cannot be one. */
+export const FALLBACK_TITLE = 'Board';
+export const KEYFRAME_EVERY_OPS = 256;
+export const KEYFRAME_DIMS = 4;
+export const KEYFRAME_CHUNK_BYTES = 60 * 1024;
+export const KEYFRAME_MAX_BYTES = 256 * 1024;
+/** All keyframes together: the rest of the 1 MiB store is kept for the index. */
+export const KEYFRAME_BUDGET_BYTES = 640 * 1024;
+
+/** Command-level refusals: a code and ONE fixed sentence each. A refusal never carries input. */
+export const MOD_REFUSAL_FIXES = Object.freeze({
+  'not-human-gui': 'Only a person using the Gnomon window can change a dimension.',
+  'no-session': 'Open the dimension from a live session; none was named, or the named one is not live.',
+  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op or dim.close.',
+  'args-bad': 'Send only the listed arguments of this command, each with its listed type.',
+  'dim-bad': 'Use dim: followed by a 26-character ULID as the dimension id.',
+  'opened-bad': 'Say how the dimension was opened: command, menu or offer.',
+  'title-missing': 'Give a new dimension a title.',
+  'title-bad': 'Use a title of 1 to 120 characters with no control or invisible characters.',
+  'title-secret': 'Remove the credential from the title; rows are permanent, so nothing that looks like a secret is stored.',
+  'dim-cap': 'This home already holds 512 dimensions; no more can be created.',
+  'dim-unknown': 'Name a dimension that exists; open it with dim.open first.',
+  'repo-mismatch': 'This dimension belongs to another repository; open it from a session of its own repository.',
+  'not-attached': 'This session is not attached to the dimension; attach it first.',
+  'attach-cap': 'This dimension already has 16 sessions attached; no more can be attached.',
+  'dim-ended': 'This dimension is closed; open it again before drawing.',
+  'ops-refused': 'None of the ops could be applied; each one is refused by name.',
+  secret: 'Remove the credential from the text; op rows are permanent, so nothing that looks like a secret is stored.',
+  'row-too-large': 'Send fewer or smaller ops in one call; one row holds at most 16 KiB and 4,096 values.',
+  'append-failed': 'The row was not written; nothing changed. Try again in a moment.',
+  unavailable: 'The dimension could not be read from the log; nothing changed.',
+});
+export const MOD_REFUSAL_CODES = Object.freeze(Object.keys(MOD_REFUSAL_FIXES));
+
+/** A command refusal result. */
+export function refusal(code, extra) {
+  const c = Object.hasOwn(MOD_REFUSAL_FIXES, code) ? code : 'args-bad';
+  return { ok: false, code: c, fix: MOD_REFUSAL_FIXES[c], ...(extra ?? {}) };
+}
+
+/** A plain object (prototype null or Object.prototype), else null. */
+export function plain(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const p = Object.getPrototypeOf(v);
+  return p === null || p === Object.prototype ? v : null;
+}
+/** An OWN property, or undefined: nothing here is read through a prototype. */
+export const own = (o, k) => (Object.hasOwn(o, k) ? o[k] : undefined);
+const nonEmpty = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
+
+const STAMP_FIELDS = ['principal', 'connId', 'surface'];
+/**
+ * The stamp the host writes on a row of this call, rebuilt from what the host told the mod (`relayedFor` of a
+ * command is exactly {principal, connId, surface?}). Used to fold a row the way the log holds it, and to measure it.
+ */
+export function stampOf(relayedFor) {
+  const r = plain(relayedFor);
+  const out = {};
+  if (!r) return out;
+  for (const k of STAMP_FIELDS) {
+    const v = own(r, k);
+    if (typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Who is acting, from the HOST-WRITTEN `relayedFor` alone (never from args or input, S1.2 C2). A human only when
+ * the stamp names a principal, its surface is `gui`, and it names no agent. Everything else is nobody: an agent,
+ * session, voice or mod caller (no surface), a human on a device key (`cli`), and any tool call in S1.3.
+ */
+export function actorOf(relayedFor) {
+  const r = plain(relayedFor);
+  if (!r) return null;
+  const principal = own(r, 'principal');
+  if (!nonEmpty(principal, 256) || own(r, 'surface') !== 'gui' || Object.hasOwn(r, 'agent')) return null;
+  return { cls: 'human', principal };
+}
+
+/**
+ * The ONE entry for ops (A6): the command and, from S1.4, the agent tool are thin callers. Validates against the
+ * state with the published validator and previews the state after. A secret anywhere, or no accepted op, yields
+ * `ok: []` and `next === state`: nothing may be appended. `ok` holds the validator's own copies (prototype keys
+ * dropped at every depth); a row is built from `ok` only, never from the caller's ops.
+ */
+export function apply(state, ops, actor) {
+  if (!actor || (actor.cls !== 'human' && actor.cls !== 'agent')) return { ok: [], refused: [], secret: false, next: state };
+  const v = validateDimOps(state, ops, actor);
+  if (v.secret || v.ok.length === 0) return { ok: [], refused: v.refused, secret: v.secret, next: state };
+  const stamp = actor.cls === 'human' ? { principal: actor.principal, surface: 'gui' } : { principal: actor.principal, surface: 'bridge', agent: actor.agent };
+  const next = landed(state, DIM_KINDS.op, opPayload(state.dim, v.ok), stamp, state.seq + 1);
+  return { ok: v.ok, refused: v.refused, secret: false, next };
+}
+
+/** The state after a row this mod appended came back with its seq (the single-row fold step). */
+export function landed(state, kind, payload, stamp, seq) {
+  return foldDimRow(state, { seq, kind, payload: { ...payload, relayedFor: stamp } });
+}
+
+export const opPayload = (dim, ok) => ({ v: DIM_ROW_VERSION, dim, ops: ok });
+/** A first start row names the dimension; a reopen row carries NO title (the fold keeps the first one). */
+export const startPayload = (dim, hsid, opened, title) => ({ v: DIM_ROW_VERSION, dim, ...(title !== undefined ? { title } : {}), attached: [hsid], opened });
+export const attachPayload = (dim, hsid) => ({ v: DIM_ROW_VERSION, dim, hsid });
+/** The counts are the mod's own, from its fold: never a caller's. */
+export const endPayload = (state) => ({ v: DIM_ROW_VERSION, dim: state.dim, ops: state.ops, nodes: state.nodes.size });
+
+const PROBE_ID = '00000000000000000000000000';
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+/**
+ * `null` when the string may be a dimension title, else the refusal code. The secret check is the validator's own
+ * (NFKC text with invisible characters removed, and the raw text), reached by validating a frame that carries the
+ * title, so a title and a mark are scanned by one rule set.
+ */
+export function titleProblem(title) {
+  if (title === undefined || title === null) return 'title-missing';
+  if (typeof title !== 'string' || title.length > DIM_LIMITS.title || title.trim().length === 0 || INVISIBLE.test(title)) return 'title-bad';
+  const v = validateDimOps(emptyDimState(), [{ type: 'add', node: { id: PROBE_ID, kind: 'frame', x: 0, y: 0, z: 'V', w: 1, h: 1, title } }], { cls: 'human', principal: 'p:probe/title' });
+  if (v.secret) return 'title-secret';
+  return v.ok.length === 1 ? null : 'title-bad';
+}
+
+/** The title a new dimension gets: a session's name is used only if it could be typed as one, else the fixed word. */
+export function titleFor(title, fromSession) {
+  const problem = titleProblem(title);
+  if (problem === null) return { title };
+  return fromSession ? { title: FALLBACK_TITLE } : { problem };
+}
+
+/** Write grant of an attached session: the first attached one is on, any later one is off (consumed in S1.4). */
+export function grantDefault(state, hsid) {
+  return state.attached.length > 0 && state.attached[0] === hsid ? 'on' : 'off';
+}
+
+const utf8 = new TextEncoder();
+/**
+ * Would the host refuse this row? Measured as the host does: the canonical JSON bytes with the stamp included
+ * (key order does not change a length), nesting, and the count of keys and elements.
+ */
+export function rowProblem(payload, stamp) {
+  const full = { ...payload, relayedFor: stamp };
+  if (utf8.encode(JSON.stringify(full)).length > ROW_MAX_BYTES) return 'row-too-large';
+  const stack = [{ v: full, depth: 1 }];
+  let visited = 0;
+  while (stack.length > 0) {
+    const { v, depth } = stack.pop();
+    if (depth > ROW_MAX_DEPTH) return 'row-too-large';
+    const items = Array.isArray(v) ? v : Object.values(v);
+    visited += items.length;
+    if (visited > ROW_MAX_VISITED) return 'row-too-large';
+    for (const c of items) if (c !== null && typeof c === 'object') stack.push({ v: c, depth: depth + 1 });
+  }
+  return null;
+}
+
+const REPO = /^repo:[0-9a-f]{16}$/;
+/** Arguments each command may carry, beside the host-composed `hsid` and `repo`. Anything else is refused. */
+export const COMMAND_ARGS = Object.freeze({
+  'dim.open': Object.freeze(['dim', 'title', 'titleFrom', 'opened']),
+  'dim.attach': Object.freeze(['dim']),
+  'dim.op': Object.freeze(['dim', 'ops']),
+  'dim.close': Object.freeze(['dim']),
+});
+
+/**
+ * Read a command's args against its CLOSED shape (Aegis S1.3: nested prototype keys can reach a handler, so args
+ * are never spread or assigned). Returns `{ dim, hsid, repo, ... }` built field by field from own keys, or a
+ * refusal code. `ops` is passed on untouched: only `validateDimOps` reads it.
+ */
+export function readArgs(commandId, args) {
+  if (!Object.hasOwn(COMMAND_ARGS, commandId)) return { code: 'command-unknown' };
+  const a = plain(args);
+  if (!a) return { code: 'args-bad' };
+  const allowed = COMMAND_ARGS[commandId];
+  for (const k of Object.keys(a)) if (k !== 'hsid' && k !== 'repo' && !allowed.includes(k)) return { code: 'args-bad' };
+  const hsid = own(a, 'hsid');
+  const repo = own(a, 'repo');
+  // the host sets both or neither: absence is "no session"
+  if (!nonEmpty(hsid, 128) || typeof repo !== 'string' || !REPO.test(repo)) return { code: 'no-session' };
+  const dim = own(a, 'dim');
+  if (typeof dim !== 'string' || !DIM_ID_PATTERN.test(dim)) return { code: 'dim-bad' };
+  const out = { dim, hsid, repo };
+  if (commandId === 'dim.open') {
+    const opened = own(a, 'opened');
+    if (typeof opened !== 'string' || !DIM_OPENED.includes(opened)) return { code: 'opened-bad' };
+    const from = own(a, 'titleFrom');
+    if (from !== undefined && from !== 'session' && from !== 'user') return { code: 'args-bad' };
+    out.opened = opened;
+    out.title = own(a, 'title');
+    out.fromSession = from === 'session';
+  }
+  if (commandId === 'dim.op') out.ops = own(a, 'ops');
+  return { args: out };
+}
+
+/* ── keyframes ────────────────────────────────────────────────────────────── */
+
+/** sha256 of any text through the bundled contract (it exports no bare hash): the hash of a state that holds only this title. */
+export function sumOf(text) {
+  return dimHash({ ...emptyDimState(), title: text });
+}
+
+const BY_CLS = ['human', 'agent', 'unknown'];
+function byOk(by) {
+  const b = plain(by);
+  if (!b || !BY_CLS.includes(own(b, 'cls')) || typeof own(b, 'principal') !== 'string') return null;
+  const agent = own(b, 'agent');
+  if (agent !== undefined && typeof agent !== 'string') return null;
+  return { cls: b.cls, principal: b.principal, ...(agent !== undefined ? { agent } : {}) };
+}
+
+/**
+ * A state as a keyframe: a head and chunks of at most KEYFRAME_CHUNK_BYTES each. `hash` is the published
+ * `dimHash`; `sum` covers every stored field, so a damaged chunk or head is found. `null` above KEYFRAME_MAX_BYTES.
+ */
+export function encodeKeyframe(state) {
+  const items = [];
+  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq]);
+  for (const id of state.gone) items.push(['g', id]);
+  const chunks = [];
+  let cur = [];
+  let size = 2;
+  let total = 0;
+  for (const it of items) {
+    const b = utf8.encode(JSON.stringify(it)).length + 1;
+    total += b;
+    if (total > KEYFRAME_MAX_BYTES) return null;
+    if (cur.length > 0 && size + b > KEYFRAME_CHUNK_BYTES) {
+      chunks.push(cur);
+      cur = [];
+      size = 2;
+    }
+    cur.push(it);
+    size += b;
+  }
+  if (cur.length > 0) chunks.push(cur);
+  const meta = { dim: state.dim, title: state.title, attached: [...state.attached], ended: state.ended, ops: state.ops, unapplied: state.unapplied };
+  const head = { v: 1, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta };
+  return { head: { ...head, sum: sumOf(JSON.stringify([head, chunks])) }, chunks };
+}
+
+/** The state a stored keyframe holds, or `null` when anything about it is wrong (it is then ignored and rebuilt). */
+export function decodeKeyframe(headIn, chunks, dim) {
+  try {
+    const h = plain(headIn);
+    if (!h || own(h, 'v') !== 1 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
+    const m = plain(own(h, 'meta'));
+    if (!m || own(m, 'dim') !== dim || typeof own(m, 'title') !== 'string' || typeof own(m, 'ended') !== 'boolean') return null;
+    const attached = own(m, 'attached');
+    if (!Array.isArray(attached) || !attached.every((x) => typeof x === 'string') || !Number.isSafeInteger(own(m, 'ops')) || !Number.isSafeInteger(own(m, 'unapplied'))) return null;
+    if (!Array.isArray(chunks) || chunks.length !== own(h, 'n')) return null;
+    const head = { v: 1, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied } };
+    if (sumOf(JSON.stringify([head, chunks])) !== h.sum) return null;
+    const nodes = new Map();
+    const gone = new Set();
+    for (const chunk of chunks) {
+      if (!Array.isArray(chunk)) return null;
+      for (const it of chunk) {
+        if (!Array.isArray(it) || typeof it[1] !== 'string') return null;
+        if (it[0] === 'g') gone.add(it[1]);
+        else if (it[0] === 'n') {
+          const by = byOk(it[3]);
+          if (!plain(it[2]) || !by || !(it[4] === null || typeof it[4] === 'string') || !Number.isSafeInteger(it[5])) return null;
+          nodes.set(it[1], { node: it[2], by, hsid: it[4], addedSeq: it[5] });
+        } else return null;
+      }
+    }
+    const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
+    return dimHash(state) === h.hash ? state : null;
+  } catch {
+    return null;
+  }
+}

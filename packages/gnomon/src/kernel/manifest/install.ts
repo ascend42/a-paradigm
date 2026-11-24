@@ -116,6 +116,8 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S0b: manifest:2, publisher gnomon (no index.mjs, so no modAbiId echo: unchanged by the S1.2 move)
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
+  // S1.3: the dimension mod (the one writer of dimension rows; echoes the current modAbiId, declares two tools)
+  'sha256:1f2d84d2df4380a8356d35bb721ce3ef87ce95714c273a4dc2fb96d8e5c169db', // packages/gnomon-mods/dimension 1.0.0 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),
