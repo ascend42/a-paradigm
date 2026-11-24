@@ -31,18 +31,25 @@
 
 ## What it is not (yet)
 
-- **Not signed.** The fabric is tamper-*evident* (hash-chained identities; edits, reorders, and drops are caught by `fabric verify`), but attribution is self-asserted — cryptographic signatures are on the roadmap (M3).
+- **Signed between agents, not between agent and human.** The fabric is tamper-*evident* (hash-chained identities; edits, reorders, and drops are caught by `fabric verify`). Strands can carry Ed25519 agent signatures (`warpline key`, checked by `warpline fsck`), so agent-to-agent attribution is cryptographic. The human/agent boundary is enforced by permissions and gates, not by a signature.
 - **Not a meaning→code compiler.** Bytes are materialized from Warpline's own content-addressed store; weaving code *from* meaning is the long-run direction, not a shipped verb.
 - **Not round-tripped.** `export --git` (reconstruct git commits from picks, drift-free) is unproven — it is the gate we hold the "replacement" word behind.
 - **Not multi-generation.** Admission currently allows one merge generation and fails closed beyond it (by design, until merge recipes are verify-authenticated).
 
 ## Install / run
 
-Workspace package, not yet published:
+Published on npm as `@a-company/warpline`:
+
+```
+npm i -g @a-company/warpline
+warpline --help
+```
+
+To run from a clone instead:
 
 ```
 npm run build            # in packages/warpline
-node dist/cli.js --help  # or the `warpline` bin when linked
+node dist/cli.js --help
 ```
 
 ## Docs

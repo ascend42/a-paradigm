@@ -8,8 +8,8 @@ a plan), it shows a **card**. You decide the card in a local web page, the
 **GUI**, and every decision is signed after a Touch ID prompt from a helper that
 keeps its keys in the Secure Enclave.
 
-You use it much like `claude`: `cd` into a repo, type `gnomon`, and open the
-page it prints. If you prefer an app, use Gnomon.app instead.
+Installed from npm, `gnomon` opens Gnomon.app. Run from a clone, `gnomon` starts
+the kernel in your terminal and opens the GUI in your browser.
 
 The design is in `docs/specs/gnomon.md`. The longer walkthrough, including the
 DEV ONLY path, is [docs/guides/gnomon-dogfood.md](../../docs/guides/gnomon-dogfood.md).
@@ -24,7 +24,29 @@ DEV ONLY path, is [docs/guides/gnomon-dogfood.md](../../docs/guides/gnomon-dogfo
 
 ## Install
 
-From a clone of `a-paradigm` on the `feat/gnomon` branch:
+```sh
+npm install -g @a-company/paradigm
+```
+
+The `gnomon` command comes with `@a-company/paradigm`. Gnomon 8.x runs on Apple
+silicon Macs only.
+
+## First run (once)
+
+```sh
+gnomon
+```
+
+The first run installs a signed and notarized `Gnomon.app` into `/Applications`,
+or into `~/Applications` if you can't write to `/Applications`, and opens it.
+Setup asks for your name and for Touch ID or your password twice. After an
+upgrade, quit and reopen Gnomon.
+
+## Install from a clone (developers)
+
+The rest of this page describes Gnomon run from a clone of `a-paradigm`, where
+`gnomon` is the kernel CLI linked from your checkout and opens the GUI in your
+browser. Use this path to work on Gnomon itself.
 
 ```sh
 npm ci
@@ -38,7 +60,7 @@ key. It refuses to replace a `gnomon` that is not a symlink, or a link to a
 different clone, and tells you what to remove if you mean to switch.
 `--no-build` skips the build (`node packages/gnomon/scripts/install-darwin.mjs --no-build`).
 
-## First run (once)
+Then, once:
 
 ```sh
 node packages/gnomon-helper/scripts/build-darwin.mjs   # the signed Secure Enclave helper
