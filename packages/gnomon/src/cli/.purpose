@@ -462,6 +462,8 @@ components:
       effectiveInstall = the last install/uninstall pin row naming the mod.
       start and uninstall are refused from a kernel-spawned shell. list and
       status read the grant table offline (trust from identity.json or a
-      DEV home's root).
+      DEV home's root). homeTrust (that trust root) lives in the leaf
+      src/cli/home-trust.ts and is re-exported here; the agent client imports
+      the leaf, not this verb family (test/agent-entry-fence.test.ts).
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]

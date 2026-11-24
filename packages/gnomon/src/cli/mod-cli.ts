@@ -37,9 +37,7 @@ import * as fs from 'node:fs';
 import os from 'node:os';
 import * as path from 'node:path';
 import { HSID_PATTERN, isModId } from '@a-company/gnomon-contracts';
-import { RootVerifier } from '../kernel/identity/root-authority.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
-import { readIdentity } from '../kernel/identity/provision.js';
 import { daemonState } from '../kernel/lifecycle/pidfile.js';
 import { resolveGnomonHome } from '../kernel/lifecycle/home.js';
 import { effectiveInstall, readGrants } from '../kernel/manifest/grants.js';
@@ -49,7 +47,7 @@ import { userMcpServerNames } from '../kernel/manifest/user-mcp.js';
 import { modDir } from '../kernel/manifest/snapshot.js';
 import { isUserPaused, modNames, pendingStaged, requestStart, writePause, requestUninstall, uninstallRequested } from '../kernel/modhost/control.js';
 import { GNOMON_VERSION } from '../version.js';
-import { isDevHome, loadDevHome } from './dev-home.js';
+import { homeTrust } from './home-trust.js';
 import { readout, refused, type Out } from './readout.js';
 import { runModConfig } from './desk-cli.js';
 
@@ -74,7 +72,6 @@ Cards are raised by the running kernel (gnomon up) and decided in the GUI with T
 
 /** S0b: a mod id <publisher>.<name> (contracts isModId). */
 const MOD_NAME = { test: (s: string): boolean => isModId(s) };
-const NO_TRUST: RowVerifier = Object.freeze({ rootKeyId: null, ns: null, verifyRow: () => false });
 
 export interface ModCliIo {
   stdout: Out;
@@ -93,21 +90,8 @@ export interface ModCliDeps {
   cwd?: string;
 }
 
-/** The root that signs this home's grant table, read from the home (never asserted by the caller). */
-export function homeTrust(home: string): RowVerifier {
-  try {
-    const id = readIdentity(home);
-    if (id) return new RootVerifier(id.rootPublicKeyPem);
-  } catch {
-    return NO_TRUST;
-  }
-  try {
-    if (isDevHome(home)) return loadDevHome(home).root;
-  } catch {
-    return NO_TRUST;
-  }
-  return NO_TRUST;
-}
+// homeTrust lives in the leaf ./home-trust.ts (the agent client imports it without this verb family); re-exported so callers are unchanged
+export { homeTrust };
 
 function fromSession(env: NodeJS.ProcessEnv): string | null {
   const h = env.GNOMON_HSID;

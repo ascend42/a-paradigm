@@ -46,9 +46,8 @@ import {
 } from '../kernel/lifecycle/index.js';
 import { readKernelBuild } from '../kernel/lifecycle/build-stamp.js';
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
-import { IdentityError, openHardwareIdentity, readKernelPubs, readRegistry } from '../kernel/identity/index.js';
-import type { ServerKeyPin } from '../kernel/socket/client.js';
-import { homeTrust } from './mod-cli.js';
+import { IdentityError, openHardwareIdentity } from '../kernel/identity/index.js';
+import { kernelPinOf } from './kernel-pin.js';
 import { refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
@@ -437,21 +436,8 @@ async function runDaemonStop(home: string, sock: string): Promise<number> {
   }
 }
 
-/**
- * The pin for `keyId`, read from the home (never from the server): the
- * root-signed registry first, else the home's same-user kernel-pub.jsonl.
- */
-export function kernelPinOf(home: string, keyId: string): { pin: ServerKeyPin; source: 'registry' | 'home-kernel-pub' } | null {
-  if (typeof keyId !== 'string' || keyId === '') return null;
-  try {
-    const pem = readRegistry(home, homeTrust(home)).kernelKeys.get(keyId);
-    if (pem) return { pin: { keyId, publicKeyPem: pem }, source: 'registry' };
-  } catch {
-    /* no registry: fall through */
-  }
-  const pub = readKernelPubs(home).find((k) => k.keyId === keyId);
-  return pub ? { pin: { keyId, publicKeyPem: pub.publicKeyPem }, source: 'home-kernel-pub' } : null;
-}
+// kernelPinOf lives in the leaf ./kernel-pin.ts (the agent client imports it without the daemon); re-exported so callers are unchanged
+export { kernelPinOf };
 
 function usage(msg: string): number {
   process.stderr.write(
