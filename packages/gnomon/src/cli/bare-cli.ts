@@ -65,7 +65,6 @@ usage: gnomon [<command>] [options]     (every command takes --help)
   local              set | status | remove: the local model (loopback only; you allow it with the root key)
   mod                stage mod changes as cards for approval (never signs)
   desk               stats: offers shown and kept per mod (the Desk)
-  dim                replay <dim>: fold one dimension from the verified log · stats: how boards are used
   replay             replay the hash-chained log and check its head
   trace              read-only audit timeline of a session (log + transcript; contains prompt text);
                      on | off | status | path: record a folder's sessions (kept in ~/.gnomon/trace/)

@@ -40,4 +40,8 @@ for (const mod of ['neurons', 'constellation']) {
     process.stdout.write(`golden  ${path.relative(mods, out)}\n`);
   }
 }
-process.stdout.write('now run: npx vitest run test/workshop-mod.test.ts test/ledger-mod.test.ts test/paradigm-context-mod.test.ts test/neurons-mod.test.ts test/constellation-mod.test.ts -t packageHash  (it prints the new hash to pin)\n');
+// the dimension mod (#dimension-mod) has no fixture: its generated file is the published dim-shape bundle
+const { buildDimShape, DIM_SHAPE_OUT } = await import(pathToFileURL(path.join(here, 'build-dimension-mod.mjs')).href);
+fs.writeFileSync(DIM_SHAPE_OUT, await buildDimShape());
+process.stdout.write(`bundle  ${path.relative(mods, DIM_SHAPE_OUT).split(path.sep).join('/')}\n`);
+process.stdout.write('now run: npx vitest run test/workshop-mod.test.ts test/ledger-mod.test.ts test/paradigm-context-mod.test.ts test/neurons-mod.test.ts test/constellation-mod.test.ts test/dimension-mod.test.ts -t packageHash  (it prints the new hash to pin)\n');

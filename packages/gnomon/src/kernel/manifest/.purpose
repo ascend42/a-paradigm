@@ -159,7 +159,10 @@ components:
       paradigm-context 1.1.2 (the modAbiId move changes the three trees that
       echo the id); the previous format-2 pins stay as
       SUPERSEDED_FIRST_PARTY_PINS so an existing install keeps its tier, and
-      they are never an alias source. An installed snapshot of an earlier
+      they are never an alias source. S1.3 P2 adds the pin of
+      packages/gnomon-mods/dimension 1.0.0 (#dimension-mod); it declares two
+      tools, so compatModAbiId never applies to it, and it needs no prior id
+      (it echoes the current modAbiId). An installed snapshot of an earlier
       version is NOT refreshed by the kernel: it is refused ABI at init until
       the human approves the Update card the Mods panel offers (or runs gnomon
       mod install on the shipped folder).

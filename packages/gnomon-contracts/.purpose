@@ -317,8 +317,8 @@ components:
       carried fields are left out; dimFallbackLabel puts the fixed lead word `kind`
       before a kind name. Imports only ./internal.js, ./content-palette.js and
       ./secret-rules.js (a test holds this) so the mod can bundle it; no DOM, no
-      node:*. Not built here: the mod, the GUI leaf, the bridge tools dim_view /
-      dim_draw (host stamping of relayedFor is #mod-host, S1.2). Serves #dimension-mod and
+      node:*. Not built here: the mod, the GUI leaf, the bridge tools dim-view /
+      dim-draw (host stamping of relayedFor is #mod-host, S1.2). Serves #dimension-mod and
       $dimension-session: spec symbols that no .purpose declares, since no
       dimension mod package exists. The code written for them so far is these
       contracts and the lazy board chunk (#gui-board, packages/gnomon-gui).
