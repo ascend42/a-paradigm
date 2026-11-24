@@ -138,6 +138,7 @@ import { loadLocalConfig, localChainHighWater, localChainRemoved, type LoadedLoc
 import { LocalConfigCards } from '../local/config-request.js';
 import { defaultLocalRunner, nodeVersionOf, runnerVersionOf } from '../local/bundled-runner.js';
 import { linkedFolders } from '../manifest/install.js';
+import { sweepStaging } from '../manifest/snapshot.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { StagedCardPickup } from '../modhost/control.js';
 import { FeedBacklog, FEED_BACKLOG_KINDS, type FeedSourceRow } from '../modhost/feed.js';
@@ -1252,6 +1253,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #mod-host feed backlog (founder report 2026-10-23): ONE incremental fold of this boot's released rows (feed.ts
   // FeedBacklog; requireBoot: nothing counts until this boot's daemon.start is released, Aegis L)
   const feedFold = new FeedBacklog({ requireBoot: true });
+  // #manifest-loader: copies a dead process left in mods/.staging are removed once, here, before the mod host exists
+  // (entries younger than an hour are kept: `gnomon mod install` stages in the CLI process and may be mid-copy)
+  sweepStaging(home);
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({
     home,
