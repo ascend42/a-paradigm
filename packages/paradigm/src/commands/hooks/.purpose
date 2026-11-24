@@ -1,5 +1,11 @@
 version: 2.0.0
 components:
+  hook-help-pointer:
+    description: "The 'Help:' line that ends a blocked Stop (scripts/claude-code-stop.sh and scripts/cursor-stop.sh). It names .paradigm/docs/troubleshooting.md only when that file exists under the project root ($CWD); otherwise it names `paradigm doctor` and `paradigm doctor --explain`, which every install has. Never print a pointer to a file without testing for it first. Same rule as #doctor-fix-commands."
+    type: utility
+    path: scripts/claude-code-stop.sh
+    tests:
+      - packages/paradigm/tests/hooks-help-pointer.test.ts
   hook-advisory:
     description: "scripts/paradigm-common.sh ADVISORY: the list of non-blocking warnings the Stop hooks print under 'Advisory:'. Initialised ONCE beside VIOLATIONS and only ever appended to (ADVISORY=\"$ADVISORY…\"). It used to be reset to \"\" at Check 6, which discarded the warnings of the missing-CLI check and Checks 1-5 (purpose-coverage, purpose-exists, portal-gates, aspect-anchors, purpose-freshness), so `warn` behaved like `off` for them; Check 6 also assigned instead of appending. Edit the script here and run `node scripts/generate-hooks.mjs`: generated-hooks.ts and both plugin scripts/ directories are generated copies."
     type: utility
