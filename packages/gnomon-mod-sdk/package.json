@@ -1,6 +1,6 @@
 {
   "name": "@a-company/gnomon-mod-sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Gnomon mod SDK (spec §12, §18): mod-abi:v1 types, the zero-dependency mod runtime (serveMod) and the example mod. M1.11 slice 1; the test harness, link/dev tooling and the gnomon-mods MCP bridge are slice 2.",
   "type": "module",

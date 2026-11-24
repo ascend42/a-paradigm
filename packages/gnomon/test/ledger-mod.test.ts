@@ -176,7 +176,7 @@ describe('#ledger-mod through the host', () => {
 
   it('installs through gnomon mod install + the broker card and renders every fixture to its golden (light and dark)', async () => {
     const w = await installedLedger();
-    expect(w.out).toContain('│ Install mod gnomon.ledger 1.1.0 (mod) by gnomon from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.ledger 1.1.1 (mod) by gnomon from package, tier first-party');
     const g = readGrants(w.home, w.auth);
     expect(g.trust.get(effectiveInstall(g, 'gnomon.ledger')!.manifestHash)).toBe('first-party');
     expect(w.out).toContain('│ effects: none · egress: none');

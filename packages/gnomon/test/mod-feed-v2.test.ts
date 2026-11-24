@@ -29,7 +29,7 @@ function checkPayload(p: Record<string, unknown>): void {
 
 describe('#mod-host feed projection v2 (numbers only)', () => {
   it('the ids do not move: feed kinds are not part of MOD_ABI_DESCRIPTOR', () => {
-    expect(MOD_ABI_ID).toBe('sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082');
+    expect(MOD_ABI_ID).toBe('sha256:cc5625dac7fdbc8a987ed0295991e553710137ec65c5f20623daab1d035dc49a');
     expect(CLIENT_API_ID).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 

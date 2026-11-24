@@ -155,7 +155,7 @@ describe('#mods-admin status', () => {
     const after = t.admin.status();
     expect(after.available.map((a) => a.name)).not.toContain('gnomon.workshop');
     expect(after.installed).toEqual([
-      expect.objectContaining({ name: 'gnomon.workshop', publisher: 'gnomon', version: '1.1.0', tier: 'first-party', source: 'package', state: 'running', mcp: null, update: null, desk: { shown: 0, suppressed: 0, kept: 0, open: 0, notNow: 0, stopHere: 0 } }),
+      expect.objectContaining({ name: 'gnomon.workshop', publisher: 'gnomon', version: '1.1.1', tier: 'first-party', source: 'package', state: 'running', mcp: null, update: null, desk: { shown: 0, suppressed: 0, kept: 0, open: 0, notNow: 0, stopHere: 0 } }),
     ]);
     expect(after.installed[0]!.packageHash).toBe(before.available.find((a) => a.name === 'gnomon.workshop')!.packageHash);
   });

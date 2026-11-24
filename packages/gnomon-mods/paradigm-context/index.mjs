@@ -11,7 +11,7 @@ import { VIEWS } from './model.mjs';
 
 const ABI = 'mod-abi:v1';
 // Echoed at init; the host refuses any other id (a mod-ABI change needs a new build).
-const MOD_ABI_ID = 'sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082';
+const MOD_ABI_ID = 'sha256:cc5625dac7fdbc8a987ed0295991e553710137ec65c5f20623daab1d035dc49a';
 
 const send = (msg) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...msg })}\n`);
 

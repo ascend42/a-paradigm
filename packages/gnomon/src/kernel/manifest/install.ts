@@ -75,13 +75,23 @@ const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
  * Any edit to a tree moves its hash; test/workshop-mod.test.ts and
  * test/ledger-mod.test.ts hold the pins.
  */
+/** Format-2 first-party pins of earlier releases. Never an alias source (that is HISTORICAL_FIRST_PARTY_PINS, format 1 only). */
+export const SUPERSEDED_FIRST_PARTY_PINS: ReadonlySet<string> = new Set<string>([
+  'sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', // workshop 1.1.0 (modAbiId before S1.2)
+  'sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', // ledger 1.1.0 (modAbiId before S1.2)
+  'sha256:22bab5bf24abbc01ac5594e6fe4ff72f3b562479677c93b9a483196943bce1cb', // paradigm-context 1.1.1 (modAbiId before S1.2)
+]);
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
-  // S0b: manifest:2, publisher gnomon, 1.1.0
-  'sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', // packages/gnomon-mods/workshop 1.1.0 (gnomon.workshop)
-  'sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', // packages/gnomon-mods/ledger 1.1.0 (gnomon.ledger)
-  'sha256:22bab5bf24abbc01ac5594e6fe4ff72f3b562479677c93b9a483196943bce1cb', // packages/gnomon-mods/paradigm-context 1.1.1 (gnomon.paradigm-context; fitted zone heads, 2026-10-23)
+  // S1.2: the modAbiId move (relayedFor on tool.call) changes the three trees that echo the id
+  'sha256:3e3902e1cf0a970f9c53ac2df73d65e5daa99dd79dfd515c37d0a3f1342f7146', // packages/gnomon-mods/workshop 1.1.1 (gnomon.workshop)
+  'sha256:df476ed5dcfbe1a6d00460d7eded68b7c95ccd86a1ce2cfd7bd10b48116fa432', // packages/gnomon-mods/ledger 1.1.1 (gnomon.ledger)
+  'sha256:1d8f8468a5bc2e767e52dabe56432ba30919d7cc3d9d77c180aec2d2d872caa8', // packages/gnomon-mods/paradigm-context 1.1.2 (gnomon.paradigm-context)
+  // S0b: manifest:2, publisher gnomon (no index.mjs, so no modAbiId echo: unchanged by the S1.2 move)
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
+  // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
+  // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
+  ...SUPERSEDED_FIRST_PARTY_PINS,
   // the format-1 1.0.0 pins of workshop, ledger and paradigm-context (grants.ts; existing installs keep loading)
   ...HISTORICAL_FIRST_PARTY_PINS,
 ]);

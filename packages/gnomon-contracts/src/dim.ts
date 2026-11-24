@@ -280,7 +280,8 @@ const NON_EMPTY = (v: unknown): v is string => typeof v === 'string' && v.length
 function byOf(payload: Record<string, unknown>): DimBy {
   const r = payload.relayedFor;
   if (!isPlainObject(r) || !NON_EMPTY(r.principal) || !(DIM_SURFACES as readonly unknown[]).includes(r.surface)) return UNKNOWN_BY;
-  if (r.agent === undefined) return { cls: 'human', principal: r.principal };
+  // a tool surface always names its agent: a bridge or voice stamp without one vouches for nobody (never human)
+  if (r.agent === undefined) return r.surface === 'gui' || r.surface === 'cli' ? { cls: 'human', principal: r.principal } : UNKNOWN_BY;
   if (!NON_EMPTY(r.agent)) return UNKNOWN_BY;
   return { cls: 'agent', principal: r.principal, agent: r.agent };
 }
