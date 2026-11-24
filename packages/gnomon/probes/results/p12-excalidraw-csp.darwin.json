@@ -17,8 +17,8 @@
     "size": {
       "files": {
         "board/LICENSES.txt": {
-          "bytes": 113743,
-          "gzip": 10206
+          "bytes": 113744,
+          "gzip": 10204
         },
         "board/asset-0ac1d6438a10fae3.png": {
           "bytes": 106,
@@ -37,12 +37,12 @@
           "gzip": 22312
         },
         "board/board.js": {
-          "bytes": 1266276,
-          "gzip": 401541
+          "bytes": 1266626,
+          "gzip": 401724
         }
       },
-      "totalBytes": 1523524,
-      "totalGzip": 434563
+      "totalBytes": 1523875,
+      "totalGzip": 434744
     },
     "staticFindings": [],
     "engines": {
@@ -57,20 +57,25 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 51,
-          "mounted": 80
+          "module": 47,
+          "mounted": 84
         },
         "firstRun": {
-          "wallMs": 4572,
+          "wallMs": 4127,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 88,
-            "mounted": 138
+            "module": 52,
+            "mounted": 93
           },
           "afterAdd": 3,
+          "afterAddSettled": 3,
+          "alive": true,
+          "aliveAfterUnmount": false,
+          "deadHandle": "refused",
+          "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
           "finalCount": 5,
@@ -91,7 +96,7 @@
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 16027,
+            "bytes": 15577,
             "ms": 8
           },
           "violationCount": 0,
@@ -149,19 +154,24 @@
         "exportPng": true,
         "medianMs": {
           "module": 33,
-          "mounted": 54
+          "mounted": 62
         },
         "firstRun": {
-          "wallMs": 3839,
+          "wallMs": 3923,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 32,
-            "mounted": 54
+            "module": 33,
+            "mounted": 62
           },
           "afterAdd": 3,
+          "afterAddSettled": 3,
+          "alive": true,
+          "aliveAfterUnmount": false,
+          "deadHandle": "refused",
+          "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
           "finalCount": 5,
@@ -182,8 +192,8 @@
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 19196,
-            "ms": 15
+            "bytes": 19400,
+            "ms": 20
           },
           "violationCount": 0,
           "violations": [],
@@ -245,5 +255,5 @@
     "G-DDL-06",
     "S25-M3"
   ],
-  "at": "2026-11-24T06:43:52.666Z"
+  "at": "2026-11-24T07:42:14.478Z"
 }

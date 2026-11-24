@@ -31,17 +31,26 @@ const planted = (js: string): string[] => scan(new Map([['board/board.js', Buffe
 describe('#gui-board static scan of the shipped chunk (item 6)', () => {
   it('the scanner flags each forbidden construct on planted bytes (it is not vacuous)', () => {
     expect(planted('x=eval("1")')).toEqual(['eval']);
-    expect(planted('x=window.eval ("1")')).toEqual([]); // a property named eval is not the global (and esbuild never emits one)
+    expect(planted('x=window.eval ("1")')).toEqual(['eval']);
+    expect(planted('x=(0,eval)("1")')).toEqual(['eval']);
+    expect(planted('const medieval=1,evaluate=2')).toEqual([]);
+    expect(planted('i.src=`data:${t},${encodeURIComponent(s)}`')).toEqual(['dataUrlBuilder']); // not the allowed shape
+    expect(planted('a=`data:${t};base64,${x}`')).toEqual([]); // the one image-file encoder, by exact count
+    expect(planted('a=`data:${t};base64,${x}`;b=`data:${u};base64,${y}`')).toEqual(['dataUrlBuilder']);
+    expect(planted('c.toDataURL()')).toEqual([]);
+    expect(planted('c.toDataURL();d.toDataURL("image/png")')).toEqual(['toDataURL']);
+    expect(scan(new Map([['board/board.css', Buffer.from('a{b:url("data:x/y,1")}')]])).findings.map((f) => f.rule)).toEqual(['dataUrlBuilder']);
     expect(planted('x=new Function("return 1")')).toEqual(['newFunction']);
     expect(planted('x=a||Function("return this")()')).toEqual(['newFunction']);
     expect(planted('await WebAssembly.instantiate(b)')).toEqual(['webAssembly']);
     expect(planted('await WebAssembly .compile(b)')).toEqual(['webAssembly']);
+    expect(planted('const W=WebAssembly')).toEqual(['webAssembly']);
     expect(planted('fetch("/x")')).toEqual(['fetch']);
     expect(planted('window.fetch(u)')).toEqual(['fetch']);
     expect(planted('a="https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/"')).toEqual(['externalUrl']);
     expect(planted('a="http://json.excalidraw.com/api/v2/"')).toEqual(['externalUrl']);
     expect(planted('a="http://www.w3.org/2000/svg"')).toEqual([]);
-    expect(planted('i.src="data:image/svg+xml,<svg/>"')).toEqual(['dataUrl']);
+    expect(planted('i.src="data:image/svg+xml,<svg/>"')).toEqual(['dataUrl', 'dataUrlBuilder']);
     expect(planted('x=1\n//# sourceMappingURL=board.js.map')).toEqual(['sourceMap']);
     expect(scan(new Map([['board/board.js.map', Buffer.from('{}')]])).findings.map((f) => f.rule)).toEqual(['mapFile']);
     expect(planted('const refetch=()=>prefetch(1);o.gnomonBoardRefuseFetch()')).toEqual([]);

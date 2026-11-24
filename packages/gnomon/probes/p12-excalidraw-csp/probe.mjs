@@ -15,8 +15,9 @@
 //      securitypolicyviolation event, error and what it drew. RUNS cold loads per local engine.
 // Verdict: fail if the static scan finds anything, or any engine that ran did not mount, raised any CSP violation,
 // asked for anything outside the bundle or could not draw or export; pass if every engine is clean and the
-// required ones ran (a Chromium-family browser, and WKWebView on a Mac: the two the oracle names); partial when a
-// required engine is missing, and on non-darwin hosts (mechanics only, Windows parity phase).
+// required ones ran (a Chromium-family browser, and WKWebView on a Mac: the two the oracle names); fail on a Mac with
+// no WKWebView row; partial when the Chromium-family browser is missing, and on non-darwin hosts (mechanics only,
+// Windows parity phase).
 // History: until boards S1.0 this probe bundled the stock engine in a temp dir and recorded what the CSP refused
 // (results before 2026-11-23: 230 esm.sh font loads, eval in the font subsetter, 4 data: images, 1 inline style).
 // Launch flake (T-2026-10-31-001; T-2026-11-06-003 for WKWebView, fixed in _shared/wkwebview-load.swift): a run whose
@@ -74,7 +75,10 @@ export default async function probe(ctx) {
   for (const [n, r] of Object.entries(engines)) if (!r.clean) findings.push(`${n}: ${r.problems.join(' | ')}`);
   if (missingRequired.length) findings.push(`required engine(s) not on this machine: ${missingRequired.join(', ')}`);
 
-  let verdict = !clean ? 'fail' : missingRequired.length ? 'partial' : 'pass';
+  // On a Mac the WKWebView row is the claim (the wrapper's engine): without it the probe FAILS, on CI too. A missing
+  // Chromium-family browser stays partial.
+  const noWebKit = ctx.platform === 'darwin' && !families.has('wkwebview');
+  let verdict = !clean || noWebKit ? 'fail' : missingRequired.length ? 'partial' : 'pass';
   if (ctx.platform !== 'darwin' && verdict === 'pass') verdict = 'partial';
 
   return {

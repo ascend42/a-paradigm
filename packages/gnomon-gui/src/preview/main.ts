@@ -48,6 +48,7 @@ async function openBoardFixture(): Promise<void> {
     (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
     document.documentElement.dataset.previewBoard = board.BOARD_ENGINE;
     // a positive row: "no CSP rows" only means something when the board is known to have mounted
+    await new Promise((r) => setTimeout(r, 300)); // the marks are counted after they have had time to be wiped
     void fetch('/diag', { method: 'POST', body: `board ready ${board.BOARD_ENGINE} marks=${handle.count()} surface=${PREVIEW.surface}` }).catch(() => undefined);
   } catch (err) {
     host.textContent = `The board did not load: ${err instanceof Error ? err.message : String(err)}`;

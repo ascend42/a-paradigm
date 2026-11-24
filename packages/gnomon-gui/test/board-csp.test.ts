@@ -13,10 +13,10 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs (the zero-dependency probe harness)
 import { harnessFiles, NO_REPORT, pickEngines, runBoardUnderCsp, runProblems, shippedBoard, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
 
-interface Run { stage?: string; mounted?: boolean; error?: string; violationCount?: number; violations?: Array<{ directive: string; blocked: string; phase: string; count: number }>; afterAdd?: number; afterPointerRect?: number; afterPointerStroke?: number; libraryTrigger?: boolean; libraryOpen?: boolean; png?: { ok: boolean; bytes?: number }; errors?: string[]; rejections?: string[]; requests?: Array<{ path: string }>; cursors?: Record<string, string>; visibility?: string; engine?: string }
+interface Run { stage?: string; mounted?: boolean; error?: string; violationCount?: number; violations?: Array<{ directive: string; blocked: string; phase: string; count: number }>; afterAdd?: number; afterAddSettled?: number; alive?: boolean; aliveAfterUnmount?: boolean; deadHandle?: string; captureRefused?: number; afterPointerRect?: number; afterPointerStroke?: number; libraryTrigger?: boolean; libraryOpen?: boolean; png?: { ok: boolean; bytes?: number }; errors?: string[]; rejections?: string[]; requests?: Array<{ path: string }>; cursors?: Record<string, string>; visibility?: string; engine?: string }
 interface EngineRow { version: string; family: string; runs: Run[]; clean: boolean; problems: string[] }
 
-const CLEAN: Run = { stage: 'done', mounted: true, violationCount: 0, violations: [], afterAdd: 3, afterPointerRect: 4, afterPointerStroke: 5, libraryTrigger: false, libraryOpen: false, png: { ok: true, bytes: 9000 }, errors: [], rejections: [], requests: [{ path: '/' }, { path: '/board/board.js' }, { path: '/report' }, { path: '/favicon.ico' }] };
+const CLEAN: Run = { stage: 'done', mounted: true, violationCount: 0, violations: [], afterAdd: 3, afterAddSettled: 3, alive: true, aliveAfterUnmount: false, deadHandle: 'refused', afterPointerRect: 4, afterPointerStroke: 5, libraryTrigger: false, libraryOpen: false, png: { ok: true, bytes: 9000 }, errors: [], rejections: [], requests: [{ path: '/' }, { path: '/board/board.js' }, { path: '/report' }, { path: '/favicon.ico' }] };
 const KNOWN = new Set(['/board/board.js', '/board/board.css', '/index.html', '/harness.js', '/harness.css']);
 const problems = (r: Run): string[] => runProblems(r, KNOWN) as string[];
 
@@ -28,6 +28,9 @@ describe('G-DDL-06 predicate: what counts as a refusal-free run (every OS)', () 
     ['any CSP violation, whatever the directive', { violationCount: 1, violations: [{ directive: 'img-src', blocked: 'data', phase: 'tools', count: 1 }] }, /1 CSP violation\(s\): img-src data in tools x1/],
     ['a font or CDN request (a path outside the bundle)', { requests: [{ path: '/board/fonts/Excalifont/Excalifont-Regular.woff2' }] }, /requests outside the bundle: \/board\/fonts\//],
     ['no mount', { mounted: false, stage: 'driver-error' }, /did not mount/],
+    ['marks added as the mount resolved being wiped (mountBoard resolved before the scene was initialised)', { afterAddSettled: 0 }, /did not stay: 0 of 3 left/],
+    ['a handle that says the engine died', { alive: false }, /no longer alive/],
+    ['a handle that still answers after its board is gone', { deadHandle: 'answered' }, /still answers/],
     ['a pointer draw that left no mark', { afterPointerRect: 3 }, /pointer rectangle left 3/],
     ['a failed PNG export', { png: { ok: false } }, /PNG export failed/],
     ['a page error', { errors: ['boom @x:1'] }, /page errors: boom/],
@@ -75,6 +78,8 @@ describe.skipIf(!!process.env.CI)('G-DDL-06 the shipped board under the unchange
       expect(r.violationCount, name).toBe(0);
       expect(r.mounted, name).toBe(true);
       expect(r.engine, name).toBe('@excalidraw/excalidraw@0.18.1');
+      expect(r.afterAddSettled, name).toBe(3); // added in the tick the mount resolved, still there 400 ms later
+      expect(r.alive, name).toBe(true);
       expect(r.png?.ok, name).toBe(true);
       expect(r.visibility, name).toBe('visible'); // a hidden page never runs requestAnimationFrame (T-2026-11-06-003)
       // the cursors that used to be data: URLs are blob: URLs now

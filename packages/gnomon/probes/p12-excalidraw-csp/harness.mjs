@@ -69,6 +69,21 @@ const DRIVER = `'use strict';
   };
   setTimeout(function () { R.send('watchdog'); }, 45000);
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  // The page drives the engine with SYNTHETIC pointer events, whose pointerId is not an active pointer. Chromium
+  // and WebKit accept setPointerCapture for it; Firefox throws NotFoundError ("Invalid pointer id") from the
+  // engine's pointerdown handler, which would abort the draw before it starts. A real pointer never takes that
+  // path, so the page lets capture of an inactive pointer be a no-op and counts how often (R.captureRefused).
+  R.captureRefused = 0;
+  ['setPointerCapture', 'releasePointerCapture'].forEach(function (name) {
+    var real = Element.prototype[name];
+    if (typeof real !== 'function') return;
+    Element.prototype[name] = function (id) {
+      try { return real.call(this, id); } catch (e) {
+        if (e && e.name === 'NotFoundError') { R.captureRefused++; return undefined; }
+        throw e;
+      }
+    };
+  });
   var pointer = function (target, type, x, y, buttons) {
     target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: buttons }));
   };
@@ -91,10 +106,12 @@ const DRIVER = `'use strict';
     var h = await m.mountBoard(document.getElementById('board'));
     R.mounted = true;
     R.tMounted = Math.round(performance.now() - R.t0);
-    await wait(200);
+    // no wait here: a mark added in the SAME tick the mount resolves must stay (the engine initialises its scene
+    // asynchronously and used to wipe it about 20 ms later)
     R.phase = 'draw';
     R.afterAdd = h.add([{ type: 'rectangle', x: 40, y: 40, width: 160, height: 80 }, { type: 'ellipse', x: 240, y: 40, width: 120, height: 80 }, { type: 'text', x: 60, y: 160, text: 'gnomon board ✓' }]);
-    await wait(150);
+    await wait(400);
+    R.afterAddSettled = h.count();
     var canvas = document.querySelector('canvas.interactive') || document.querySelector('canvas');
     R.canvas = !!canvas;
     h.setTool('rectangle');
@@ -144,6 +161,11 @@ const DRIVER = `'use strict';
     R.phase = 'settle';
     await wait(1200); // late violations
     R.finalCount = h.count();
+    R.alive = h.isAlive();
+    // a handle whose board is gone says so and refuses, instead of answering as if alive
+    h.unmount();
+    R.aliveAfterUnmount = h.isAlive();
+    try { h.count(); R.deadHandle = 'answered'; } catch (e) { R.deadHandle = 'refused'; }
     R.send('done');
   }).catch(function (e) {
     R.errors.push('driver: ' + String((e && e.stack) || e).slice(0, 400));
@@ -166,13 +188,21 @@ export function harnessFiles(board = shippedBoard()) {
 export function staticScan(board = shippedBoard()) {
   const out = { files: {}, totalBytes: 0, totalGzip: 0, findings: [] };
   const RULES = {
-    eval: /(?<![.\w$])eval\s*\(/g,
+    // the identifier in any position: direct, indirect `(0,eval)(`, `globalThis.eval(`, an alias
+    eval: /\beval\b/g,
     newFunction: /new\s+Function\b|(?<![.\w$])Function\s*\(/g,
-    webAssembly: /WebAssembly\s*\./g,
+    webAssembly: /\bWebAssembly\b/g,
     fetch: /(?<![\w$])fetch\s*\(/g,
     externalUrl: /https?:\/\/(?!www\.w3\.org\/)[A-Za-z0-9][^\s"'`)\\]*/g,
     dataUrl: /data:(image|font|application|text)\//g,
     sourceMap: /sourceMappingURL=/g,
+  };
+  // A string or template that STARTS a data: URL, whatever its media type (`data:${type},…` is not seen by the
+  // dataUrl rule). board.js may keep exactly the builders named here, by exact count: the image-file encoder
+  // (images are refused until S2) and the image-insert cursor's canvas.toDataURL. One more is a finding.
+  const COUNTED = {
+    dataUrlBuilder: { find: /["'`]data:[^"'`]{0,24}/g, allow: { 'board/board.js': 1 }, shape: /^`data:\$\{[\w$]+\};base64,/ },
+    toDataURL: { find: /\btoDataURL\s*\(/g, allow: { 'board/board.js': 1 } },
   };
   for (const [n, b] of [...board].sort(([a], [c]) => (a < c ? -1 : 1))) {
     out.totalBytes += b.length;
@@ -185,6 +215,11 @@ export function staticScan(board = shippedBoard()) {
     for (const [rule, re] of Object.entries(RULES)) {
       const hits = s.match(re) ?? [];
       if (hits.length) out.findings.push({ file: n, rule, count: hits.length, sample: [...new Set(hits)].slice(0, 5) });
+    }
+    for (const [rule, c] of Object.entries(COUNTED)) {
+      const hits = s.match(c.find) ?? [];
+      const allowed = c.allow[n] ?? 0;
+      if (hits.length > allowed || (c.shape && hits.some((h) => !c.shape.test(h)))) out.findings.push({ file: n, rule, count: hits.length, allowed, sample: [...new Set(hits)].slice(0, 5) });
     }
   }
   return out;
@@ -236,6 +271,9 @@ export function runProblems(r, known) {
   if (r.errors?.length) p.push(`page errors: ${r.errors.join(' | ')}`);
   if (r.rejections?.length) p.push(`unhandled rejections: ${r.rejections.join(' | ')}`);
   if (r.mounted && r.afterAdd !== 3) p.push(`the handle added ${r.afterAdd} marks, expected 3`);
+  if (r.mounted && r.afterAddSettled !== 3) p.push(`marks added as the mount resolved did not stay: ${r.afterAddSettled} of 3 left`);
+  if (r.mounted && r.stage === 'done' && (r.aliveAfterUnmount !== false || r.deadHandle !== 'refused')) p.push(`a handle whose board is gone still answers (alive ${r.aliveAfterUnmount}, count ${r.deadHandle})`);
+  if (r.mounted && r.stage === 'done' && r.alive !== true) p.push('the handle says the engine is no longer alive');
   if (r.mounted && r.afterPointerRect !== 4) p.push(`the pointer rectangle left ${r.afterPointerRect} elements, expected 4`);
   if (r.mounted && r.afterPointerStroke !== 5) p.push(`the pointer stroke left ${r.afterPointerStroke} elements, expected 5`);
   if (r.mounted && r.libraryTrigger !== false) p.push('the stock Library trigger is on the page');
@@ -270,7 +308,7 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
           const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
+            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
           } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });
