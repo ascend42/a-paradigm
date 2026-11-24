@@ -240,8 +240,9 @@ code { font-family: var(--mono); font-size: 15px; }
 .section-n { font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1.1; color: var(--ink-2); font-variation-settings: "opsz" 144; }
 .section-n::before { content: counter(sec); }
 .section-body { min-width: 0; }
-.section-body > * + * { margin-top: 32px; }
-.section-body > .h3 + * { margin-top: 12px; }
+.section .section-body > * + * { margin-top: 32px; }
+.section .section-body > .h3 + * { margin-top: 12px; }
+.lead-block > .h3 + * { margin-top: 12px; }
 .section :target, :target { scroll-margin-top: 16px; }
 
 /* claims, as a run of rows (never three cards) */
