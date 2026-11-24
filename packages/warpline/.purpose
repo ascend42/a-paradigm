@@ -1,10 +1,14 @@
 version: "2.0"
 description: >-
-  The Warpline Engine. Phase 1: the Convergence/Divergence Oracle — a read-only
-  tool that lifts two git branches to a content-addressed store of MEANING (the
-  Paradigm symbol graph), predicts the merge from meaning (clean / knot /
-  dangling), runs git's actual merge read-only, and scores where meaning and
-  bytes agreed or diverged. Phase 2 (the native WRITE PATH): #fabric/#pick seal
+  The Warpline Engine. Phase 1: the Convergence/Divergence Oracle — a tool that
+  leaves git history and the user's files alone, lifts two git branches to a
+  content-addressed store of MEANING (the Paradigm symbol graph), predicts the
+  merge from meaning (clean / knot / dangling), runs git's actual merge without
+  changing any ref, and scores where meaning and bytes agreed or diverged. The
+  oracle is NOT write-free: each run records under .warpline/ in the repo it runs
+  in (oracle.jsonl, states/, warp/) and reads each ref through a temporary git
+  worktree that it removes; user-facing text must say that, not "read-only".
+  `weave --preview`, `consolidate`, `diff` and `orient` write nothing. Phase 2 (the native WRITE PATH): #fabric/#pick seal
   the working meaning into this project's OWN durable history (#strand records in
   .warpline/fabric.jsonl + the .warpline/refs/selvage tip), single-writer, NO git
   merge — git coexists (TD-2026-06-25-564). Multi-writer SCRATCH+CAS+WEFT is

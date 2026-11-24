@@ -236,7 +236,7 @@ function shellPrincipal(): PrincipalClass {
 
 program
   .name('warpline')
-  .description('Warpline — version control for meaning. START HERE: `warpline init` onboards a project (git optional), then `warpline orient` says where you are and what you can do next (`warpline status` shows what changed, by meaning). The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (fork/propose/admit/resolve/restore). Writes .warpline/ only, never git.')
+  .description('Warpline — version control for meaning. START HERE: `warpline init` onboards a project (git optional), then `warpline orient` says where you are and what you can do next (`warpline status` shows what changed, by meaning). The Convergence/Divergence Oracle and the forecasts (`oracle` records its result under .warpline/; `weave --preview` and `consolidate` write nothing) + the native fabric (fork/propose/admit/resolve/restore). Warpline leaves git history and your files alone; what it records goes under .warpline/.')
   // The real package version (src/cli.ts and dist/cli.js both sit one level below package.json)
   .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
   // D-7: the EXPLICIT root. Registered here so it appears in --help; the value
@@ -305,7 +305,7 @@ program
 
 program
   .command('oracle')
-  .description('Run the Oracle on two refs: predict the merge from meaning, run git for real, score where they agree/diverge.')
+  .description('Run the Oracle on two refs: predict the merge from meaning, run git for real, score where they agree/diverge. Leaves git history and your files alone. Records its result under .warpline/ in this repo (a row in oracle.jsonl, plus states/ and warp/), creating the directory if needed, and reads each ref through a temporary git worktree that it removes.')
   .argument('<branchA>', 'first ref')
   .argument('<branchB>', 'second ref')
   .option('--json', 'emit the full OracleRecord as JSON')
