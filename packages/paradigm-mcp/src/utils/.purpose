@@ -162,7 +162,7 @@ components:
     description: 'The Classroom decay pass (TD-2026-06-19-007, Phase 2; gated by TD-2026-07-01-401 / T-2026-11-03-001). Time may decay confidence, never mint evidence, and survival never waits on it (F2): EVERY pending cert, whatever its age, is offered to surviveCertification, which flips to survived only on exercise evidence and owns the break rule (an attributable break at/after the cert ts blocks; an older one does not, so no broken-entry pre-filter, F8). SURVIVAL_WINDOW_DAYS (14d, from premise-core) is only a label: an aged cert that did not survive is counted certsUnproven (derived, never written; the row stays pending). decayPassLogLevel: the summary logs at info only when something happened or the unproven count moved since the previous pass over the root, else debug (ruling 6). Gently decays confidence of entries idle past IDLE_WINDOW (30d) with low appliedCount (silence is signal; never deletes). runDecayPass is best-effort/idempotent, wired into ambient postflight right after runFieldFailureReducer. decay.test.ts carries the spec §1 guard: a fixture that clears the floor at t0 survives at t0, then with activity frozen and the clock advanced no new survivals (plus a separate zero-probe case).'
     type: service
     anchors:
-      - decay.ts:1-215
+      - decay.ts
     tags:
       - feature
       - classroom
@@ -172,7 +172,7 @@ components:
     type: service
     anchors:
       - field-failures.ts:1-490
-      - field-failure-reducer.ts:1-270
+      - field-failure-reducer.ts
     tags:
       - feature
       - classroom
