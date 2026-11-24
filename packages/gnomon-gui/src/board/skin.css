@@ -1,0 +1,27 @@
+/* #gui-board skin (boards S1.1, oracle G-DDL-07; design rule engine-wears-the-system).
+   Bundled after the engine stylesheet into board/board.css. The engine's own UI layer is not rendered
+   (scripts/board-patches.mjs, patch layer-ui-removed), so this sheet only dresses what is left: the bare
+   drawing surface and the text being typed. Colours are the Gnomon theme tokens of the page, by name only: on
+   a page that defines none the text and its caret keep the mark's own line colour, which the engine sets. */
+.excalidraw.excalidraw-container {
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono, "JetBrains Mono", ui-monospace, monospace);
+}
+/* the surface takes focus so its keys work; the ring is the leaf's to draw, not the browser's */
+.excalidraw.excalidraw-container:focus,
+.excalidraw.excalidraw-container:focus-visible { outline: none; }
+.excalidraw .excalidraw__canvas { background: transparent; }
+/* the text being typed: the one face, the theme caret, the theme selection */
+.excalidraw .excalidraw-wysiwyg,
+.excalidraw-textEditorContainer textarea {
+  font-family: "JetBrains Mono", monospace;
+  caret-color: var(--ink);
+}
+.excalidraw .excalidraw-wysiwyg::selection,
+.excalidraw-textEditorContainer textarea::selection {
+  background: var(--fold, Highlight);
+  color: var(--ink);
+}
+/* a frame's title: the system's 11.5 / 600 label in the secondary ink */
+.excalidraw .frame-name { font-weight: 600; letter-spacing: 0; }

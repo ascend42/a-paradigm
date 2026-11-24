@@ -79,7 +79,8 @@ describe('#gui-board static scan of the shipped chunk (item 6)', () => {
   it('no font, locale, Mermaid, subsetter or image-resizer source is in the chunk; the stand-ins are', () => {
     const js = text('board/board.js');
     const css = text('board/board.css');
-    expect(js).not.toMatch(/\.\/fonts\/|\.woff2"|\.ttf"/);
+    // the one font the chunk names is the bundle's own JetBrains Mono, beside the chunk (S1.1); no engine font file
+    expect([...js.matchAll(/["'`]([^"'`]*\.(?:woff2?|ttf|otf))["'`]/g)].map((m) => m[1])).toEqual(['../fonts/JetBrainsMono-Regular.woff2']);
     expect(css).not.toMatch(/@font-face|\.woff|url\(\s*["']?(data:|https?:|\/\/)/);
     expect([...css.matchAll(/url\(([^)]*)\)/g)].map((m) => m[1]!).every((u) => /^\.\/asset-[0-9a-f]{16}\.(png|svg)$/.test(u))).toBe(true);
     expect(js).not.toMatch(/hb-subset|harfbuzz|woff2_|Emscripten|asm\.js|mermaid\.initialize|parseMermaid\w*=async|katex/i);

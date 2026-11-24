@@ -36,6 +36,9 @@ const styleToAttrs = (_m, css) =>
     })
     .join(' ');
 
+/** The engine reads its colours and its key allowlist from the Gnomon tree (src/board/skin.ts), never from literals. */
+const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions}from"gnomon-board:skin";';
+
 const SVG_BLOB = (expr) => `URL.createObjectURL(new Blob([${expr}],{type:H.svg}))`;
 
 /**
@@ -44,11 +47,43 @@ const SVG_BLOB = (expr) => `URL.createObjectURL(new Blob([${expr}],{type:H.svg})
  */
 export const PATCHES = Object.freeze([
   {
+    id: 'font-family-table',
+    file: 'chunk-K2UTITRG.js',
+    why: 'the board has ONE text face (S1.1): JetBrains Mono joins the engine family table under its own id, so a text element can name it',
+    find: '"Liberation Sans":9}',
+    replace: '"Liberation Sans":9,"JetBrains Mono":10}',
+    expect: 1,
+  },
+  {
+    id: 'font-defaults',
+    file: 'chunk-K2UTITRG.js',
+    why: 'the default text is JetBrains Mono at 13.5 (design rule engine-wears-the-system: one size in S1), on every path that builds a text element',
+    find: 'Eo=1,ut=20,Ft=Ie.Excalifont,',
+    replace: 'Eo=1,ut=13.5,Ft=Ie["JetBrains Mono"],',
+    expect: 1,
+  },
+  {
+    id: 'font-metrics',
+    file: 'chunk-K2UTITRG.js',
+    why: 'the vertical metrics the engine places text by are those of the bundled face (JetBrains Mono: 1000 units per em, ascender 1020, descender -300), with a 1.4 line',
+    find: 'var Fr={[Ie.Excalifont]:',
+    replace: 'var Fr={[Ie["JetBrains Mono"]]:{metrics:{unitsPerEm:1e3,ascender:1020,descender:-300,lineHeight:1.4}},[Ie.Excalifont]:',
+    expect: 1,
+  },
+  {
+    id: 'font-family-string',
+    file: 'chunk-K2UTITRG.js',
+    why: 'the canvas and text-editor font string is the one family whatever a stored element says: no Excalifont, Virgil, Nunito, Comic Shanns or other engine family name reaches it, and no per-OS emoji or CJK family is appended',
+    find: 'ea=({fontFamily:e})=>{for(let[t,n]of Object.entries(Ie))if(n===e)return`${t}${bo(n).map(r=>`, ${r}`).join("")}`;return Tn},',
+    replace: 'ea=()=>\'"JetBrains Mono", monospace\',',
+    expect: 1,
+  },
+  {
     id: 'font-registry-empty',
     file: 'chunk-K2UTITRG.js',
-    why: 'no Excalidraw font ships: every family is registered with its metrics and zero faces, so no FontFace is created and no font URL is ever built. Until S1.1 registers a bundled face, board text and PNG export fall to the browser default font and measure differently per OS',
+    why: 'no Excalidraw font ships and no family without a face is registered: the registry holds ONE family, JetBrains Mono, whose single face is the bundle\'s own fonts/JetBrainsMono-Regular.woff2 (font-src self; its OFL notice ships beside it as fonts/OFL-JetBrainsMono.txt), so board text and PNG export measure with the same face on every OS',
     find: 'return n("Cascadia",...Gd),n("Comic Shanns",...Qd),n("Excalifont",...sc),n("Helvetica",...dc),n("Liberation Sans",...lc),n("Lilita One",...pc),n("Nunito",...xc),n("Virgil",...yc),n(Mn,...b1),n(Tn,...jd),ne._initialized=!0,t.registered}',
-    replace: 'return n("Cascadia"),n("Comic Shanns"),n("Excalifont"),n("Helvetica"),n("Liberation Sans"),n("Lilita One"),n("Nunito"),n("Virgil"),n(Mn),n(Tn),ne._initialized=!0,t.registered}',
+    replace: 'return n("JetBrains Mono",{uri:"../fonts/JetBrainsMono-Regular.woff2"}),ne._initialized=!0,t.registered}',
     expect: 1,
   },
   {
@@ -102,10 +137,11 @@ export const PATCHES = Object.freeze([
   {
     id: 'eraser-cursor',
     file: 'chunk-K2UTITRG.js',
-    why: 'the eraser cursor was a canvas data: URL; it is the same 5px ring as a blob: SVG',
+    why: 'the eraser cursor was a canvas data: URL; it is the same 5px ring as a blob: SVG, in the sheet and ink of the Gnomon theme (S1.1) instead of black and white',
     find: 'D2=Ct.toDataURL(H.svg)',
-    replace: `D2=${SVG_BLOB(`'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="5" fill="'+(o?Ei.black:Ei.white)+'" stroke="'+(o?Ei.white:Ei.black)+'"/></svg>'`)}`,
+    replace: `D2=${SVG_BLOB(`'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="5" fill="'+gnomonBoardSkin.sheet+'" stroke="'+gnomonBoardSkin.ink+'"/></svg>'`)}`,
     expect: 1,
+    prepend: SKIN_IMPORT,
   },
   {
     id: 'svg-text-style-attribute',
@@ -157,6 +193,210 @@ export const PATCHES = Object.freeze([
     replace: '',
     expect: 1,
   },
+  // ── S1.1 reskin: what the engine draws (chunk-K2UTITRG.js is the scene renderer) ──────────────────────────────
+  {
+    id: 'image-tool-removed',
+    file: 'chunk-K2UTITRG.js',
+    why: 'the image tool leaves the engine tool list, with its number-row key 9: it inserted a broken placeholder and raised img-src refusals instead of refusing (Mika, S1.0 re-review)',
+    find: '{icon:Kd,value:"image",key:null,numericKey:Q[9],fillable:!1},',
+    replace: '',
+    expect: 1,
+  },
+  {
+    id: 'roughness-zero',
+    file: 'chunk-K2UTITRG.js',
+    why: 'no hand-drawn sloppiness: every element built without an explicit roughness (the handle, a paste, a restore) is drawn exact',
+    find: 'strokeStyle:"solid",roughness:Gi.artist,opacity:100,locked:!1}',
+    replace: 'strokeStyle:"solid",roughness:0,opacity:100,locked:!1}',
+    expect: 1,
+  },
+  {
+    id: 'skin-frame',
+    file: 'chunk-K2UTITRG.js',
+    why: 'a frame is a 1px square region in the secondary ink with its title at 11.5 (design board-rail.tools.frame), read from the theme at draw time instead of the engine greys #bbb, #999999 and #7a7a7a',
+    find: 'Pe={strokeColor:"#bbb",strokeWidth:2,strokeStyle:"solid",fillStyle:"solid",roughness:0,roundness:null,backgroundColor:"transparent",radius:8,nameOffsetY:3,nameColorLightTheme:"#999999",nameColorDarkTheme:"#7a7a7a",nameFontSize:14,nameLineHeight:1.25}',
+    replace: 'Pe={get strokeColor(){return gnomonBoardSkin.frame},strokeWidth:1,strokeStyle:"solid",fillStyle:"solid",roughness:0,roundness:null,backgroundColor:"transparent",radius:0,nameOffsetY:3,get nameColorLightTheme(){return gnomonBoardSkin.frame},get nameColorDarkTheme(){return gnomonBoardSkin.frame},nameFontSize:11.5,nameLineHeight:1.25}',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-marquee',
+    file: 'chunk-K2UTITRG.js',
+    why: 'the selection marquee and the frame wash were a blue tint, rgba(0, 0, 200, 0.04); they are a wash of the theme ink',
+    find: /"rgba\(0, 0, 200, 0\.04\)"/g,
+    replace: 'gnomonBoardSkin.wash',
+    expect: 2,
+    prepend: SKIN_IMPORT,
+  },
+  // ── S1.1 reskin: the engine UI and the interactive layer (index.js) ───────────────────────────────────────────
+  {
+    id: 'layer-ui-removed',
+    file: 'index.js',
+    why: 'the whole stock UI layer renders nothing, at every pane size: tool island and its More tools menu (Web Embed, Mermaid "Generate", Laser), lock, main menu and its Excalidraw links, properties panel and colour picker, zoom and undo island, Help button and Help dialog links, hint line, welcome-screen tunnels, export dialogs, error dialogs, the sidebar (Library with "Browse libraries", search), the scroll-back key and the phone menu. The tools come from the Gnomon rail through the handle',
+    find: 'Q_=({actionManager:e,appState:o,files:t,setAppState:r,elements:n,canvas:i,onLockToggle:a,onHandToolToggle:l,onPenModeToggle:s,showExitZenModeBtn:c,renderTopRightUI:m,renderCustomStats:d,UIOptions:p,onExportImage:u,renderWelcomeScreen:h,children:f,app:b,isCollaborating:x,generateLinkForSelection:T})=>{',
+    replace: 'Q_=()=>{return null;',
+    expect: 1,
+  },
+  {
+    id: 'loading-message-removed',
+    file: 'index.js',
+    why: 'the engine spinner and its "Loading scene…" line never paint; the board leaf owns the loading state',
+    find: 'o?QT(Zs,{theme:e.theme}):e.children',
+    replace: 'o?null:e.children',
+    expect: 1,
+  },
+  {
+    id: 'phone-layout-removed',
+    file: 'index.js',
+    why: 'the engine switched to its phone layout in a narrow OR a short host (839x499 was phone); the host owns the layout at every size, so the breakpoint is never met',
+    find: 'C(this,"isMobileBreakpoint",(t,r)=>t<Ch||r<Sh&&t<Ih);',
+    replace: 'C(this,"isMobileBreakpoint",()=>!1);',
+    expect: 1,
+  },
+  {
+    id: 'toast-removed',
+    file: 'index.js',
+    why: 'the engine toast is never rendered (a refusal is the leaf\'s to say)',
+    find: 'this.state.toast!==null&&Ie(P1,',
+    replace: '!1&&Ie(P1,',
+    expect: 1,
+  },
+  {
+    id: 'link-popup-removed',
+    file: 'index.js',
+    why: 'link fields are off: the hyperlink popup is never rendered',
+    find: 'this.state.showHyperlinkPopup&&Ie(vv,',
+    replace: '!1&&Ie(vv,',
+    expect: 1,
+  },
+  {
+    id: 'context-menu-removed',
+    file: 'index.js',
+    why: 'no context menu in S1: a right-click on the board does nothing and the browser menu stays suppressed',
+    find: 'C(this,"handleCanvasContextMenu",t=>{if(t.preventDefault(),',
+    replace: 'C(this,"handleCanvasContextMenu",t=>{if(t.preventDefault(),!0)return;if(',
+    expect: 1,
+  },
+  {
+    id: 'image-insert-refused',
+    file: 'index.js',
+    why: 'no stock path inserts an image: the one function every file-based insert goes through (tool, file paste, file drop) returns before it adds the placeholder element',
+    find: 'C(this,"insertImageElement",async(t,r,n)=>{if(!this.isToolSupported("image")){',
+    replace: 'C(this,"insertImageElement",async(t,r,n)=>{if(!0){',
+    expect: 1,
+  },
+  {
+    id: 'key-actions-allowlist',
+    file: 'index.js',
+    why: 'only the keyboard actions the board keeps run from a key (gnomonBoardKeyActions in src/board/skin.ts); every other engine shortcut (command palette, help, link, theme, zen and view mode, grid, stats, export, save, duplicate, grouping, layers, styles, lock, font size) matches nothing',
+    find: '.filter(s=>(s.name in t?t[s.name]:!0)&&s.keyTest&&',
+    replace: '.filter(s=>gnomonBoardKeyActions.has(s.name)&&(s.name in t?t[s.name]:!0)&&s.keyTest&&',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'key-dialogs-removed',
+    file: 'index.js',
+    why: 'the ? key no longer opens Help and Ctrl/Cmd+Shift+E no longer opens the image export dialog',
+    find: 'if(t.key===y.QUESTION_MARK){this.setState({openDialog:{name:"help"}});return}else if(t.key.toLowerCase()===y.E&&t.shiftKey&&t[y.CTRL_OR_CMD]){t.preventDefault(),this.setState({openDialog:{name:"imageExport"}});return}',
+    replace: '',
+    expect: 1,
+  },
+  {
+    id: 'key-tools-removed',
+    file: 'index.js',
+    why: 'the engine\'s own letter and number-row tool keys go (9 was the image tool, A the arrow, K the laser, Q the lock), with the colour-popup, font-popup, eye-dropper and clear-canvas keys: the rail owns the letters. Space still pans',
+    find: /else if\(!t\.ctrlKey&&!t\.altKey&&!t\.metaKey&&!this\.state\.newElement&&!this\.state\.selectionElement&&!this\.state\.selectedElementsAreBeingDragged\)\{let a=cx\(t\.key\);[\s\S]*?\(n\|\|i\)&&this\.openEyeDropper\(\{type:n\?"stroke":"background"\}\)\}\)\);C\(this,"onKeyUp"/g,
+    replace: 't.key===y.SPACE&&fe.pointers.size===0&&(Mn=!0,Te(this.interactiveCanvas,we.GRAB),t.preventDefault())}));C(this,"onKeyUp"',
+    expect: 1,
+  },
+  {
+    id: 'text-size-keys-removed',
+    file: 'index.js',
+    why: 'text on a board is one size in S1: the text editor\'s own font-size keys do nothing',
+    find: 'else if(Up.keyTest(F))l.actionManager.executeAction(Up);else if(Hp.keyTest(F))l.actionManager.executeAction(Hp);',
+    replace: '',
+    expect: 1,
+  },
+  {
+    id: 'api-run-action',
+    file: 'index.js',
+    why: 'the rail drives zoom, undo and redo from outside the engine: the imperative API gains one method that runs a registered action by name (the handle in src/board/index.ts allows a closed list)',
+    find: 'history:{clear:this.resetHistory},',
+    replace: 'history:{clear:this.resetHistory},gnomonAction:(p,u)=>this.actionManager.executeAction(this.actionManager.actions[p],"api",u),',
+    expect: 1,
+  },
+  {
+    id: 'skin-selection',
+    file: 'index.js',
+    why: 'the selection colour was read from the engine stylesheet (--color-selection, violet #6965db beside the reserved state.knot); it is the theme key-edge, from the skin',
+    find: 'let l=e.containerRef?.current&&getComputedStyle(e.containerRef.current).getPropertyValue("--color-selection")||"#6965db";',
+    replace: 'let l=gnomonBoardSkin.selection;',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-point-hover',
+    file: 'index.js',
+    why: 'the hovered line point was violet, rgba(105, 101, 219, 0.4)',
+    find: 'o.fillStyle="rgba(105, 101, 219, 0.4)"',
+    replace: 'o.fillStyle=gnomonBoardSkin.handleHover',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-point-handles',
+    file: 'index.js',
+    why: 'line point handles were violet (#5e5ad8 edge; rgba(134, 131, 226) and rgba(177, 151, 252) fills) on white',
+    find: 'e.strokeStyle="#5e5ad8",e.setLineDash([]),e.fillStyle="rgba(255, 255, 255, 0.9)",n?e.fillStyle="rgba(134, 131, 226, 0.9)":i&&(e.fillStyle="rgba(177, 151, 252, 0.7)")',
+    replace: 'e.strokeStyle=gnomonBoardSkin.selection,e.setLineDash([]),e.fillStyle=gnomonBoardSkin.handle,n?e.fillStyle=gnomonBoardSkin.selection:i&&(e.fillStyle=gnomonBoardSkin.handleHover)',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-binding',
+    file: 'index.js',
+    why: 'the binding highlight was 5% black, which is nothing on the night ground; it is a wash of the theme ink',
+    find: /"rgba\(0,0,0,\.05\)"/g,
+    replace: 'gnomonBoardSkin.binding',
+    expect: 2,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-box-highlight',
+    file: 'index.js',
+    why: 'the element box highlight was a blue, rgb(0,118,255)',
+    find: /"rgb\(0,118,255\)"/g,
+    replace: 'gnomonBoardSkin.selection',
+    expect: 2,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-transform-handles',
+    file: 'index.js',
+    why: 'transform handles were filled white, a white dot on the night ground; they are filled with the theme sheet',
+    find: 'd.fillStyle=_d.white',
+    replace: 'd.fillStyle=gnomonBoardSkin.handle',
+    expect: 2,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-guides',
+    file: 'index.js',
+    why: 'snap guides were red (#ff6b6b light, #ff0000 dark), the colour family of state.fail; they are the theme ink',
+    find: 'let t=o.theme===re.LIGHT||o.zenModeEnabled?c5:d5,r=',
+    replace: 'let t=gnomonBoardSkin.guide,r=',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
+    id: 'skin-guide-literals',
+    file: 'index.js',
+    why: 'the two red guide literals leave with their use',
+    find: 'var c5="#ff6b6b",d5="#ff0000",G1=1,',
+    replace: 'var G1=1,',
+    expect: 1,
+  },
   {
     id: 'lodash-debounce-root',
     file: 'lodash.debounce/index.js',
@@ -172,6 +412,14 @@ export const PATCHES = Object.freeze([
     find: "Function('return this')()",
     replace: 'globalThis',
     expect: 1,
+  },
+  {
+    id: 'css-engine-violets',
+    file: 'index.css',
+    why: 'the engine UI violet family (#6965db, #5b57d1, #5753d0, #4a47b1 and the dark theme #a8a5ff) sits inside the reserved distance of state.knot (Aegis S1.1 ruling 8); every use reads the theme key-edge instead',
+    find: /#(?:6965db|5b57d1|5753d0|4a47b1|a8a5ff)\b/g,
+    replace: 'var(--key-edge,#2A2925)',
+    expect: 7,
   },
   {
     id: 'css-ui-font-faces',
@@ -222,7 +470,35 @@ export const STUBS = Object.freeze([
   { id: 'font-subset', filter: /^\.\/subset-(shared|worker)\.chunk\.js$/, stub: 'refused.ts', expect: 2, why: 'the font subsetter and its worker: eval, new Function and WebAssembly source' },
   { id: 'build-env', filter: /^\.\.?\/chunk-ZUYEQ4TG\.js$/, stub: 'env.ts', expect: 3, why: 'the hardcoded excalidraw.com json, library, AI and collab backends' },
   { id: 'mermaid', filter: /^@excalidraw\/mermaid-to-excalidraw$/, stub: 'refused.ts', expect: 1, why: 'the Mermaid importer (and its dependency tree) is not part of a board' },
-  { id: 'image-resize', filter: /^(pica|image-blob-reduce)$/, stub: 'refused.ts', expect: 2, why: 'WebAssembly source; images are refused until the redaction pass (S2)' },
+  { id: 'image-resize', filter: /^(pica|image-blob-reduce)$/, stub: 'refused.ts', expect: 2, why: 'WebAssembly source; the board has no image tool and no file-based image insert until the redaction pass (S2)' },
+]);
+
+/**
+ * G-DDL-07 (Aegis S1.1 ruling 8): the colour literals of the shipped chunk that sit inside the content palette's
+ * minimum distance of a reserved colour, and why each may stay. `by` is the patch that takes the literal's only
+ * use off the screen, or `unreached` for a literal that is never painted on a board (the reason says why). The
+ * reserved colours and theme tokens themselves (the palette source bundled for the colour check) are not listed:
+ * the test reads them from gnomon-contracts. The test compares this list with the shipped bytes in BOTH directions,
+ * so a new near-reserved literal fails and so does a stale entry.
+ */
+export const COLOUR_ALLOWLIST = Object.freeze([
+  {
+    file: 'board/board.js',
+    by: 'layer-ui-removed',
+    why: "the engine's colour tables (the open-color hues and its bronze): offered only by the stock colour picker and the chart dialog, neither of which is rendered; a mark's colours come from its content-palette tokens (src/board/index.ts)",
+    literals: ['#0b7285', '#364fc7', '#3b5bdb', '#4263eb', '#495057', '#5f3dc4', '#6741d9', '#7048e8', '#846358', '#91a7ff', '#adb5bd', '#b197fc', '#c92a2a', '#ced4da', '#d2bab0', '#e9fac8', '#eaddd7', '#faa2c1', '#fab005', '#fcc419', '#ff6b6b', '#ff8787', '#ffa8a8', '#ffa94d', '#ffc078', '#ffd43b', '#ffd8a8', '#ffe3e3', '#ffe8cc', '#ffec99', '#fff3bf'],
+  },
+  { file: 'board/board.js', by: 'layer-ui-removed', why: 'the canvas search highlight of the engine dark theme; the search sidebar is not rendered and the engine theme is always light', literals: ['rgba(99,52,0,0.4)'] },
+  { file: 'board/board.js', by: 'embed-allowlists-empty', why: 'the placeholder fill of an embeddable or iframe element; no embeddable is valid', literals: ['#d3d3d3'] },
+  { file: 'board/board.js', by: 'key-actions-allowlist', why: 'the grid line colour; the grid is off and its toggle key matches nothing', literals: ['#e5e5e5'] },
+  { file: 'board/board.js', by: 'unreached', why: 'the speaking ring of a collaborator avatar in the engine dark theme; the board passes no collaborators and the engine theme is always light', literals: ['#2f6330'] },
+  { file: 'board/board.js', by: 'unreached', why: 'a console %c style in an engine invariant warning; never painted on a board', literals: ['#8b4000'] },
+  {
+    file: 'board/board.css',
+    by: 'layer-ui-removed',
+    why: "custom properties and rules of the engine's own UI layer (islands, buttons, dialogs, the colour picker, the hyperlink popup, its dark theme): no element they style is rendered",
+    literals: ['#495057', '#4f4d6f', '#5c5c5c', '#8e8d9c', '#999999', '#aaa', '#ac2b29', '#adb5bd', '#b2aeff', '#b8b8b8', '#c5c5d0', '#c92a2a', '#ced4da', '#f3ab2c', '#f5c354', '#fceeca', '#ffa8a5', '#ffa8a8', '#ffdad6', '#ffe3e3'],
+  },
 ]);
 
 /** XML namespace URIs are identifiers, never fetched; they are the only http(s) literals the bundle may carry. */

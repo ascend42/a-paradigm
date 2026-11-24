@@ -13,6 +13,11 @@
 //      script, mount, draw through the handle and with pointer events, select every tool (their cursors), select a
 //      mark and reach for the stock Library (it must not exist), export a PNG, and POST every
 //      securitypolicyviolation event, error and what it drew. RUNS cold loads per local engine.
+//      Since boards S1.1 (oracle G-DDL-07) the page also walks the Gnomon rail's tools through the handle, checks
+//      that every other engine tool is refused, presses the command palette keys, drops a library file and an
+//      image file, presses the engine's old tool keys (9 was the image tool), records the stock nodes in the DOM,
+//      the canvas font strings and the font faces, and captures selection, marquee, multi-select, binding
+//      highlight and guides in day and night, and the board at 374 x 304 (no phone layout).
 // Verdict: fail if the static scan finds anything, or any engine that ran did not mount, raised any CSP violation,
 // asked for anything outside the bundle or could not draw or export; pass if every engine is clean and the
 // required ones ran (a Chromium-family browser, and WKWebView on a Mac: the two the oracle names); fail on a Mac with
@@ -26,9 +31,18 @@
 import { gnomonCsp } from '../_shared/browser.mjs';
 import { NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
 
-export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'S25-M3'];
+export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'G-DDL-07', 'S25-M3'];
 
 const RUNS = Number(process.env.P12_RUNS ?? 3);
+
+/** A run for the result file: the skin captures are PNGs (megabytes as base64); the result keeps their sizes. */
+function withoutCaptures(run) {
+  if (!run || typeof run !== 'object') return run;
+  const shot = (s) => (s && typeof s.png === 'string' ? { width: s.width, height: s.height, pngBytes: Math.floor((s.png.length * 3) / 4) } : s);
+  const skin = run.skin ? Object.fromEntries(Object.entries(run.skin).map(([theme, s]) => [theme, Object.fromEntries(Object.entries(s ?? {}).map(([k, v]) => [k, shot(v)]))])) : run.skin;
+  const narrow = run.narrow ? { ...run.narrow, capture: shot(run.narrow.capture) } : run.narrow;
+  return { ...run, skin, narrow };
+}
 
 const median = (xs) => {
   const v = xs.filter((x) => typeof x === 'number').sort((a, b) => a - b);
@@ -60,7 +74,7 @@ export default async function probe(ctx) {
       violatedDirectives: [...new Set(e.runs.flatMap((r) => (r.violations ?? []).map((v) => v.directive)))],
       exportPng: ok.length > 0 && ok.every((r) => r.png?.ok),
       medianMs: { module: median(ok.map((r) => r.ms.module)), mounted: median(ok.map((r) => r.ms.mounted)) },
-      firstRun: e.runs[0],
+      firstRun: withoutCaptures(e.runs[0]),
       nonReportingRuns: e.runs.map((r, i) => ({ run: i + 1, r })).filter(({ r }) => r.error === NO_REPORT).map(({ run, r }) => ({ run, wallMs: r.wallMs, launcherTail: r.launcherTail })),
       launchRetries: e.launchRetries,
     };

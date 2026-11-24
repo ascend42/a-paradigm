@@ -35,16 +35,15 @@ components:
       and embed as app.js. core/board.ts is the whole surface core/ and ui/
       may use: loadBoard() adds the stylesheet link and import()s the module
       (resolves only when both loaded; a failure removes the link and is not
-      cached), mountBoard(host, {onError, timeoutMs}) resolves a handle (add,
-      count, setTool, exportPng, onError, unmount) and rejects on an engine
-      throw or a timeout. NOTHING the kernel serves calls loadBoard yet: the
-      stock-looking engine is reachable only from the dev preview fixture
-      `board` until the S1.1 reskin and the S1.3 board leaf.
+      cached), mountBoard(host, {onError, timeoutMs, theme}) resolves a handle
+      and rejects on an engine throw or a timeout. NOTHING the kernel serves
+      calls loadBoard yet: the engine is reachable only from the dev preview
+      fixture `board` until the S1.3 board leaf.
       scripts/board-patches.mjs holds the build-time patches, each pinned to
       the engine file's sha256 and to an exact match count (a version bump
-      throws PatchError by name): every font family registered with zero
-      faces and the 230 font names blanked (text falls to the browser default
-      font until S1.1 registers a bundled face); the esm.sh fallback removed;
+      throws PatchError by name): the engine's font registrations removed and
+      the 230 font names blanked (S1.1 registers one bundled face, below);
+      the esm.sh fallback removed;
       the font subsetter and worker, pica / image-blob-reduce, the Mermaid
       importer, all locales but English and the build-env chunk (the
       excalidraw.com backends, a Firebase config) replaced by src/board/stubs
@@ -56,7 +55,8 @@ components:
       replaced; every remaining http(s) host literal stripped from the
       minified output. board/LICENSES.txt carries a notice per bundled
       package (vendored MIT notices where the tarball ships none; an unknown
-      licence stops the build). Budget 4 MB raw (now 1.5 MB, 435 KB gzipped);
+      licence stops the build). Budget 4 MB raw (1,529,836 bytes after S1.1,
+      by `--check`);
       `--check` names an unpinned board file, a sourcemap or an over-budget
       chunk. Review round 1 (2026-11-24): mountBoard resolves only once the
       engine has cleared its loading flag (a mark added in the same tick used
@@ -71,19 +71,75 @@ components:
       and proves the served page has no loader that could reach the chunk.
       The kernel's bundle scan pins the chunk's HTML sinks by exact count
       (packages/gnomon/test/web-units.test.ts).
-      Known and left for later slices: the image tool still builds
-      data: URLs (images are refused until S2); React and Excalidraw carry
-      HTML sinks (the kernel's bundle scan exempts board/* from that one
-      clause); react-style-singleton can inject a <style> for a modal
-      popover.
+      Boards S1.1, pass A (the engine side of the reskin; oracle G-DDL-07,
+      design rule engine-wears-the-system): the engine is a bare drawing
+      surface driven through the handle. Counted patches: layer-ui-removed
+      (the whole stock UI layer renders nothing: tool island and More tools,
+      main menu and its links, properties panel, zoom and undo island, Help,
+      hint line, welcome-screen tunnels, dialogs, sidebar, phone menu);
+      loading-message-removed; phone-layout-removed (the breakpoint is never
+      met, so a narrow or short pane keeps the same layout); toast-removed,
+      link-popup-removed, context-menu-removed; image-tool-removed (the tool
+      list entry and its 9 key) and image-insert-refused (the function every
+      file-based insert goes through returns before adding an element);
+      key-actions-allowlist (only undo, redo, delete, select all, zoom in,
+      out and 100%, and finalize run from a key), key-dialogs-removed,
+      key-tools-removed (the engine's letter and number tool keys; Space
+      still pans), text-size-keys-removed; api-run-action (one API method
+      that runs a registered action by name, used for zoom, undo and redo).
+      One text face: font-family-table, font-defaults, font-metrics,
+      font-family-string and font-registry-empty make JetBrains Mono at 13.5
+      the only family, registered from the bundle's own
+      fonts/JetBrainsMono-Regular.woff2 (its OFL notice is
+      fonts/OFL-JetBrainsMono.txt in the same tree); the canvas font string
+      is the constant '"JetBrains Mono", monospace' and mountBoard resolves
+      only after that face has loaded. roughness-zero plus the handle's
+      current-item state (solid, roughness 0, square corners) for exact
+      strokes; no stroke-style input exists. Colour: the engine stays in its
+      light theme; src/board/skin.ts derives a skin per theme from
+      CONTENT_THEME_TOKENS (gnomon-contracts) and patches skin-selection,
+      skin-point-hover, skin-point-handles, skin-binding, skin-box-highlight,
+      skin-transform-handles, skin-guides, skin-guide-literals, skin-frame,
+      skin-marquee and eraser-cursor make the engine read it at draw time;
+      css-engine-violets replaces the five engine violets in the stylesheet
+      with the key-edge token; src/board/skin.css dresses the surface and
+      the text being typed. Every mark carries its content-palette tokens in
+      customData.gnomon and is painted with resolveContentColour for the
+      active theme (setTheme repaints all marks); the canvas is transparent
+      so the host's ground shows, and exportPng fills the host's --ground.
+      The handle: add, count, setTool (select, sticky, text, rect, ellipse,
+      arrow, frame, stroke, hand; anything else throws), setStyle (line, fill
+      and weight tokens; a colour that fails contentColourCheck is refused
+      and nothing changes), setTheme, zoomIn/zoomOut/zoomReset/zoomToFit,
+      undo/redo, state/onState, exportPng, onError, isAlive, unmount. The
+      board chunk bundles only src/content-palette.ts of gnomon-contracts
+      (the build throws on any other contracts input).
+      scripts/board-patches.mjs COLOUR_ALLOWLIST lists every colour literal
+      of the shipped chunk inside the palette's minimum distance of a
+      reserved colour, each with the patch that takes its use off the screen;
+      test/board-reskin.test.ts compares it with the bytes in both
+      directions and checks the committed day and night goldens
+      (test/goldens/board) as decoded pixels.
+      Not done in pass A, stated: the stock UI components are unrendered but
+      still in the bytes (board.js did not shrink); the laser cursor keeps
+      its engine colours (no laser tool exists); paste, and a dropped
+      .excalidraw scene file, still reach the engine (condition C8, S1.3);
+      the rail, tray, seals, pins and the leaf's loading and failed states
+      are the host layer (pass B). scripts/preview-shots.mjs --chrome
+      (virtual time) captures the board before it mounts, because the mount
+      now waits for the font; a real-time capture shows it.
+      Known and left for later slices: React and Excalidraw carry HTML sinks
+      (the kernel's bundle scan exempts board/* from that one clause);
+      react-style-singleton can inject a <style> for a modal popover.
       DEFERRED to S1.3, tracked here: src/board/dim-map.ts (the pure mapping between
       a folded dimension and engine elements, built from an allowlist of engine keys)
       and its forward and reverse goldens; it lands with the board leaf.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
-    oracles: [G-DDL-06, G-WEB-06]
+    oracles: [G-DDL-06, G-DDL-07, G-WEB-06]
     tests:
+      - test/board-reskin.test.ts
       - test/board-patches.test.ts
       - test/board-isolation.test.ts
       - test/board-scan.test.ts
@@ -1186,7 +1242,10 @@ components:
       CSP row count; /board/* serves the #gui-board chunk from a fresh
       scripts/board-build.mjs build by its exact pinned-tree names. Fixture
       `board` mounts the chunk over the transcript through the real loader
-      and posts a `board ready` row once its marks have stayed.
+      and posts a `board ready` row once its marks have stayed. Boards S1.1:
+      the fixture mounts in the page's theme on the --ground token (it set a
+      white background before) and adds a frame, a sticky and marks in
+      content-palette colours.
     path: src/preview/
     type: module
     tags: [gnomon, gui, dev-tool, preview]

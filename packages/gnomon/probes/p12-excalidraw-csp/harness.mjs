@@ -20,8 +20,18 @@ import { findEngines, gnomonCsp, runPage, startServer } from '../_shared/browser
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const EMBED_PATH = path.resolve(HERE, '..', '..', 'src', 'kernel', 'web', 'gui-bundle.ts');
 export const NO_REPORT = 'no report within the timeout';
-/** The tools the page selects in turn; each sets the engine's cursor for that tool. */
-export const TOOLS = ['selection', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'freedraw', 'text', 'eraser', 'laser', 'hand'];
+/** The rail tools the page selects in turn (boards S1.1: the handle offers these and nothing else). */
+export const TOOLS = ['select', 'sticky', 'text', 'rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand'];
+/** Engine tools the handle must refuse (G-DDL-07: only tools in the design's rail exist). */
+export const REFUSED_TOOLS = ['image', 'eraser', 'laser', 'line', 'diamond', 'embeddable', 'selection', 'freedraw'];
+/** The one font file the board may ask for: the bundle's own JetBrains Mono, beside the board chunk. */
+export const BOARD_FONT = 'fonts/JetBrainsMono-Regular.woff2';
+/** Stock engine nodes that must not be in the DOM (G-DDL-07). */
+export const STOCK_SELECTORS = ['.layer-ui__wrapper', '.App-toolbar', '.App-menu', '.App-top-bar', '.App-bottom-bar', '.Island', '.main-menu-trigger', '.dropdown-menu', '.dropdown-menu-button', '.welcome-screen-center', '.welcome-screen-menu', '.help-icon', '.HintViewer', '.zoom-actions', '.undo-redo-buttons', '.ToolIcon', '[data-testid="toolbar-image"]', '.mobile-misc-tools-container', '.excalidraw--mobile', '.LoadingMessage', '.sidebar', '.default-sidebar', '.layer-ui__library', '.library-menu-items-container', '.command-palette-dialog', '.Modal', '.Dialog', '.context-menu', '.popover', '.Toast', '.excalidraw-hyperlinkContainer', '.color-picker-container', '.scroll-back-to-content', '.HelpDialog', '.layer-ui__wrapper__footer'];
+/** The desk ground the captures are composed on (the --ground token of each theme; the GUI test compares them with styles.css). */
+export const GROUND = { day: '#EDE8DC', night: '#0F1116' };
+/** The board width at a 1024 window (design board-leaf.widths) and a short pane (board-leaf.heights). */
+export const NARROW = { width: 374, height: 304 };
 
 /** Every file of the pinned GUI bundle, decoded from the generated embed source. */
 export function embeddedBundle(embedPath = EMBED_PATH) {
@@ -32,6 +42,11 @@ export function embeddedBundle(embedPath = EMBED_PATH) {
 /** The shipped board chunk: name ('board/…') → bytes. */
 export function shippedBoard(embedPath = EMBED_PATH) {
   return new Map([...embeddedBundle(embedPath)].filter(([n]) => n.startsWith('board/')));
+}
+
+/** The bundle's JetBrains Mono (the board's one text face), from the same embed. */
+export function shippedBoardFont(embedPath = EMBED_PATH) {
+  return embeddedBundle(embedPath).get(BOARD_FONT);
 }
 
 const INDEX = `<!doctype html>
@@ -46,7 +61,7 @@ const INDEX = `<!doctype html>
 </html>
 `;
 
-const CSS = 'html, body { margin: 0; }\n#board { width: 1280px; height: 800px; }\n';
+const CSS = `html, body { margin: 0; }\n#board { width: 1280px; height: 800px; }\n#board.narrow { width: ${NARROW.width}px; height: ${NARROW.height}px; }\n`;
 
 // A classic script (the GUI's app.js is one): the board arrives by import().
 const DRIVER = `'use strict';
@@ -69,6 +84,13 @@ const DRIVER = `'use strict';
   };
   setTimeout(function () { R.send('watchdog'); }, 45000);
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  // every font string the engine gives a canvas (G-DDL-07: only the board's one face may be named)
+  var FONTS_SEEN = {};
+  (function () {
+    var d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
+    if (!d || !d.set) return;
+    Object.defineProperty(CanvasRenderingContext2D.prototype, 'font', { configurable: true, enumerable: d.enumerable, get: d.get, set: function (v) { FONTS_SEEN[String(v).replace(/^[0-9.]+px /, '<size>px ')] = 1; d.set.call(this, v); } });
+  })();
   // The page drives the engine with SYNTHETIC pointer events, whose pointerId is not an active pointer. Chromium
   // and WebKit accept setPointerCapture for it; Firefox throws NotFoundError ("Invalid pointer id") from the
   // engine's pointerdown handler, which would abort the draw before it starts. A real pointer never takes that
@@ -114,24 +136,29 @@ const DRIVER = `'use strict';
     R.afterAddSettled = h.count();
     var canvas = document.querySelector('canvas.interactive') || document.querySelector('canvas');
     R.canvas = !!canvas;
-    h.setTool('rectangle');
+    h.setTool('rect');
     await wait(60);
     await drag(canvas, 500, 300, 640, 400);
     R.afterPointerRect = h.count();
-    h.setTool('freedraw');
+    h.setTool('stroke');
     await wait(60);
     await drag(canvas, 700, 300, 820, 420);
     R.afterPointerStroke = h.count();
     R.phase = 'tools';
     R.cursors = {};
+    R.toolState = {};
     for (var i = 0; i < TOOLS.length; i++) {
       h.setTool(TOOLS[i]);
       await wait(50);
       pointer(canvas, 'pointermove', 400 + i * 10, 500, 0);
       await wait(50);
       R.cursors[TOOLS[i]] = String(canvas.style.cursor || '').replace(/blob:[^)"' ]+/, 'blob:…').slice(0, 60);
+      R.toolState[TOOLS[i]] = h.state().tool;
     }
-    h.setTool('selection');
+    h.setTool('select');
+    // G-DDL-07: only the rail's tools exist. Every other engine tool is refused by the handle.
+    R.refusedTools = {};
+    REFUSED_TOOLS.forEach(function (t) { try { h.setTool(t); R.refusedTools[t] = 'accepted'; } catch (e) { R.refusedTools[t] = 'refused'; } });
     // select a mark, then reach for the stock Library (Mika's S1.0 repro: its previews are written with innerHTML
     // and carry an inline style attribute and a <style> element). The board ships no Library entry point: the
     // trigger must be absent, and pressing it if it ever comes back must still raise no violation.
@@ -141,6 +168,7 @@ const DRIVER = `'use strict';
     await wait(30);
     pointer(canvas, 'pointerup', 120, 41, 0);
     await wait(150);
+    R.selectedAfterClick = h.state().selected;
     var trigger = document.querySelector('.default-sidebar-trigger, .sidebar-trigger');
     R.libraryTrigger = !!trigger;
     if (trigger) {
@@ -149,6 +177,180 @@ const DRIVER = `'use strict';
       await wait(700);
     }
     R.libraryOpen = !!document.querySelector('.layer-ui__library, .library-menu-items-container, .default-sidebar');
+    var container = document.querySelector('.excalidraw-container');
+    var stock = function () { return STOCK_SELECTORS.filter(function (q) { return !!document.querySelector(q); }); };
+    var key = function (init) { container.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ bubbles: true, cancelable: true, composed: true }, init))); };
+    var drop = function (file) {
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      container.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, composed: true, clientX: 900, clientY: 600, dataTransfer: dt }));
+    };
+    // The command palette (S1.1 probe phase): its keys must open nothing (it offered "Library" and the stock links).
+    R.phase = 'command-palette';
+    container.focus();
+    [{ key: '/', code: 'Slash', metaKey: true }, { key: '/', code: 'Slash', ctrlKey: true }, { key: 'p', code: 'KeyP', metaKey: true, shiftKey: true }, { key: 'p', code: 'KeyP', ctrlKey: true, shiftKey: true }, { key: '?', code: 'Slash', shiftKey: true }].forEach(key);
+    await wait(400);
+    R.commandPalette = { stock: stock(), dialogs: document.querySelectorAll('.Modal, .Dialog, .command-palette-dialog, [role="dialog"]').length };
+    // A library file dropped on the board (S1.1 probe phase): no Library opens and nothing joins the scene.
+    R.phase = 'library-drop';
+    var beforeDrop = h.count();
+    try {
+      drop(new File([JSON.stringify({ type: 'excalidrawlib', version: 2, source: 'probe', libraryItems: [{ id: 'probe-item', status: 'unpublished', created: 1, elements: [{ type: 'rectangle', id: 'probe-rect', x: 0, y: 0, width: 40, height: 40 }] }] })], 'probe.excalidrawlib', { type: 'application/vnd.excalidrawlib+json' }));
+      await wait(700);
+      R.libraryDrop = { stock: stock(), added: h.count() - beforeDrop };
+    } catch (e) {
+      R.libraryDrop = { unsupported: String(e).slice(0, 200) };
+    }
+    // The image tool (S1.1 probe phase): it is absent. Its number key does nothing, the handle refuses it, and an
+    // image FILE dropped on the board adds no element (it used to leave a broken placeholder and img-src refusals).
+    R.phase = 'image-tool';
+    var beforeImage = h.count();
+    key({ key: '9', code: 'Digit9' });
+    await wait(150);
+    R.imageTool = { afterKey: h.state().tool, handle: R.refusedTools.image, node: !!document.querySelector('[data-testid="toolbar-image"]') };
+    try {
+      var png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), function (ch) { return ch.charCodeAt(0); });
+      drop(new File([png], 'probe.png', { type: 'image/png' }));
+      await wait(900);
+      R.imageTool.addedByDrop = h.count() - beforeImage;
+    } catch (e) {
+      R.imageTool.dropUnsupported = String(e).slice(0, 200);
+    }
+    // The engine's own tool letters are gone (A arrow, K laser, E eraser, Q lock, R, D, O ...): the rail owns letters.
+    R.phase = 'tool-keys';
+    R.toolKeys = {};
+    for (var k = 0; k < 8; k++) {
+      var letter = 'akeqrdo1'[k];
+      key({ key: letter });
+      await wait(40);
+      R.toolKeys[letter] = h.state().tool;
+    }
+    // G-DDL-07 runtime facts: the font strings the canvas was given, the faces the page holds, the stock nodes,
+    // and whether a drawn rectangle's edge is exact (roughness 0: every column of the top edge has one profile).
+    R.phase = 'reskin';
+    R.stockNodes = stock();
+    R.canvasFonts = Object.keys(FONTS_SEEN);
+    R.fontFaces = [];
+    document.fonts.forEach(function (f) { R.fontFaces.push(f.family.replace(/["']/g, '') + ' ' + f.weight + ' ' + f.status); });
+    var dpr = window.devicePixelRatio || 1;
+    var staticCanvas = document.querySelector('canvas.static') || document.querySelector('canvas');
+    R.dpr = dpr;
+    (function () {
+      // the pointer rectangle was dragged from (500,300) to (640,400)
+      var ctx = staticCanvas.getContext('2d');
+      var profiles = {};
+      var opaque = 0;
+      for (var x = 520; x <= 620; x += 4) {
+        var col = ctx.getImageData(Math.round(x * dpr), Math.round((300 - 6) * dpr), 1, Math.round(12 * dpr)).data;
+        var p = '';
+        for (var y = 0; y < col.length; y += 4) { p += col[y + 3] > 128 ? '1' : '0'; if (col[y + 3] > 128) opaque++; }
+        profiles[p] = (profiles[p] || 0) + 1;
+      }
+      R.edge = { profiles: Object.keys(profiles).length, opaque: opaque };
+    })();
+    // zoom, undo and redo through the handle (what the rail's keys call)
+    R.zoom = { start: h.state().zoom };
+    h.zoomIn(); await wait(80); R.zoom.afterIn = h.state().zoom;
+    h.zoomOut(); await wait(80); h.zoomOut(); await wait(80); R.zoom.afterOut = h.state().zoom;
+    h.zoomReset(); await wait(80); R.zoom.afterReset = h.state().zoom;
+    R.style = { refusedLine: h.setStyle({ line: 'lemon' }), refusedFill: h.setStyle({ fill: 'custom:#B4382A' }), okLine: h.setStyle({ line: 'cobalt' }), okBack: h.setStyle({ line: 'ink', fill: null, weight: 'fine' }), after: h.state().style };
+    var states = 0;
+    var off = h.onState(function () { states++; });
+    // The skin, day and night (G-DDL-07 goldens): selection, the marquee, multi-select, the binding highlight and
+    // the guides, each composed on the theme's ground from the engine's two canvases. Text is not in these captures
+    // (the caret is DOM: its computed colour is recorded instead).
+    R.phase = 'skin';
+    R.skin = {};
+    var capture = function (theme) {
+      var c = document.createElement('canvas');
+      c.width = staticCanvas.width; c.height = staticCanvas.height;
+      var g = c.getContext('2d');
+      g.fillStyle = GROUND[theme]; g.fillRect(0, 0, c.width, c.height);
+      // every engine canvas, in paint order: the scene, the mark being drawn, the interactive layer
+      Array.prototype.forEach.call(container.querySelectorAll('canvas'), function (layer) { if (layer.width && layer.height) g.drawImage(layer, 0, 0, c.width, c.height); });
+      return new Promise(function (res) {
+        c.toBlob(function (b) {
+          b.arrayBuffer().then(function (buf) {
+            var u = new Uint8Array(buf), bin = '';
+            for (var n = 0; n < u.length; n += 8192) bin += String.fromCharCode.apply(null, u.subarray(n, n + 8192));
+            res({ width: c.width, height: c.height, png: btoa(bin) });
+          });
+        }, 'image/png');
+      });
+    };
+    var click = async function (x, y) { pointer(canvas, 'pointerdown', x, y, 1); await wait(30); pointer(canvas, 'pointerup', x, y, 0); await wait(150); };
+    var hold = async function (x0, y0, x1, y1) {
+      pointer(canvas, 'pointerdown', x0, y0, 1);
+      await wait(30);
+      for (var n = 1; n <= 8; n++) { pointer(canvas, 'pointermove', x0 + ((x1 - x0) * n) / 8, y0 + ((y1 - y0) * n) / 8, 1); await wait(20); }
+      await wait(150);
+    };
+    var release = async function (x, y) { pointer(canvas, 'pointerup', x, y, 0); await wait(150); };
+    for (var ti = 0; ti < 2; ti++) {
+      var theme = ['day', 'night'][ti];
+      var S = (R.skin[theme] = {});
+      h.setTheme(theme);
+      h.setTool('select');
+      await click(1100, 700); // clear the selection
+      await wait(200);
+      S.marks = await capture(theme);
+      await click(120, 41); // the first rectangle's top edge
+      S.selected = h.state().selected;
+      S.selection = await capture(theme);
+      await click(1100, 700);
+      await hold(20, 20, 420, 140); // a marquee over the first rectangle and the ellipse
+      S.marquee = await capture(theme);
+      await release(420, 140);
+      S.multiSelected = h.state().selected;
+      S.multi = await capture(theme);
+      await click(1100, 700);
+      var beforeArrow = h.count();
+      h.setTool('arrow');
+      await wait(60);
+      await hold(300, 330, 203, 100); // an arrow dragged to the first rectangle's right edge: it is about to bind
+      S.binding = await capture(theme);
+      await release(203, 100);
+      S.arrowAdded = h.count() - beforeArrow;
+      h.undo();
+      await wait(120);
+      S.afterUndo = h.count() - beforeArrow;
+      h.setTool('select');
+      await click(1100, 700);
+      await hold(240, 80, 322, 82); // the ellipse dragged along by its left point: its top and bottom stay level with the rectangle's
+      S.guides = await capture(theme);
+      await release(322, 82);
+      h.undo();
+      await wait(120);
+      await click(1100, 700);
+      // the caret: a text is being typed; its colours and face are computed style, not pixels
+      h.setTool('text');
+      await wait(60);
+      await click(300, 520);
+      var ta = document.querySelector('textarea.excalidraw-wysiwyg') || document.querySelector('.excalidraw-textEditorContainer textarea');
+      if (ta) {
+        var cs = getComputedStyle(ta);
+        S.caret = { caretColor: cs.caretColor, color: cs.color, fontFamily: cs.fontFamily, fontSize: cs.fontSize, editing: h.state().editingText };
+        ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await wait(150);
+      } else S.caret = null;
+      window.scrollTo(0, 0); // a focused text field may scroll a small window; the pointer coordinates below assume it has not
+      h.setTool('select');
+      S.count = h.count();
+    }
+    // The 374px board (a 1024 window) in a short pane: no phone layout, no stock node.
+    R.phase = 'narrow';
+    h.setTheme('day');
+    var boardEl = document.getElementById('board');
+    boardEl.classList.add('narrow');
+    window.dispatchEvent(new Event('resize'));
+    await wait(500);
+    R.narrow = { stock: stock(), width: container.getBoundingClientRect().width, height: container.getBoundingClientRect().height, capture: await capture('day') };
+    boardEl.classList.remove('narrow');
+    window.dispatchEvent(new Event('resize'));
+    await wait(300);
+    off();
+    R.stateEvents = states;
+    R.canvasFontsEnd = Object.keys(FONTS_SEEN);
     R.phase = 'export-png';
     try {
       var t = performance.now();
@@ -172,12 +374,15 @@ const DRIVER = `'use strict';
     R.send('driver-error');
   });
 })();
-`.replace('(function () {', `var TOOLS = ${JSON.stringify(TOOLS)};\n(function () {`);
+`.replace('(function () {', `var TOOLS = ${JSON.stringify(TOOLS)};\nvar REFUSED_TOOLS = ${JSON.stringify(REFUSED_TOOLS)};\nvar STOCK_SELECTORS = ${JSON.stringify(STOCK_SELECTORS)};\nvar GROUND = ${JSON.stringify(GROUND)};\n(function () {`);
 
 /** url path → bytes of everything the harness serves: the shipped board files plus the page. */
 export function harnessFiles(board = shippedBoard()) {
   const files = new Map();
   for (const [n, b] of board) files.set(`/${n}`, b);
+  // the board's one text face lives beside the chunk in the same pinned bundle (../fonts from board/)
+  const font = shippedBoardFont();
+  if (font) files.set(`/${BOARD_FONT}`, font);
   files.set('/index.html', INDEX);
   files.set('/harness.css', CSS);
   files.set('/harness.js', DRIVER);
@@ -262,6 +467,54 @@ export function pickEngines() {
   return { pick, missing };
 }
 
+/** The only font string the canvas may be given (patch font-family-string), with the size folded out. */
+export const BOARD_FONT_STRING = '<size>px "JetBrains Mono", monospace';
+
+/**
+ * The runtime half of G-DDL-07 (boards S1.1), one finished run of one engine: no stock node, only the rail's tools,
+ * no engine tool key, no command palette, no Library from a dropped file, no image from the key or a dropped file,
+ * one font face and one font string, an exact (roughness 0) edge, the handle's zoom, undo and style, and the skin
+ * captures present for day and night. The pixel checks of the captures are the GUI test's (it has the palette).
+ */
+export function reskinProblems(r) {
+  const p = [];
+  if (r.stockNodes?.length !== 0) p.push(`stock engine nodes in the DOM: ${(r.stockNodes ?? ['(not reported)']).join(', ')}`);
+  const tools = r.toolState ?? {};
+  for (const t of TOOLS) if (tools[t] !== t) p.push(`the rail tool ${t} left the handle in ${tools[t]}`);
+  for (const t of REFUSED_TOOLS) if (r.refusedTools?.[t] !== 'refused') p.push(`the handle accepted the engine tool ${t}`);
+  for (const [k, v] of Object.entries(r.toolKeys ?? { '(not reported)': '?' })) if (v !== 'select') p.push(`the engine tool key ${k} chose ${v}`);
+  if (r.commandPalette?.stock?.length !== 0 || r.commandPalette?.dialogs !== 0) p.push(`the command palette keys opened something: ${JSON.stringify(r.commandPalette)}`);
+  if (!r.libraryDrop || (!r.libraryDrop.unsupported && (r.libraryDrop.stock?.length !== 0 || r.libraryDrop.added !== 0))) p.push(`a dropped library file changed the board: ${JSON.stringify(r.libraryDrop)}`);
+  const im = r.imageTool ?? {};
+  if (im.afterKey !== 'select' || im.handle !== 'refused' || im.node !== false || (im.dropUnsupported === undefined && im.addedByDrop !== 0)) p.push(`the image tool is reachable: ${JSON.stringify(im)}`);
+  const fonts = r.canvasFonts ?? [];
+  if (fonts.length === 0 || fonts.some((f) => f !== BOARD_FONT_STRING)) p.push(`canvas font strings other than the board face: ${JSON.stringify(fonts)}`);
+  const faces = r.fontFaces ?? [];
+  if (!faces.some((f) => f === 'JetBrains Mono 400 loaded') || faces.some((f) => !f.startsWith('JetBrains Mono '))) p.push(`font faces on the page: ${JSON.stringify(faces)}`);
+  if (r.edge?.profiles !== 1 || !(r.edge?.opaque > 0)) p.push(`a drawn rectangle's edge is not exact (roughness 0): ${JSON.stringify(r.edge)}`);
+  const z = r.zoom ?? {};
+  if (!(z.start === 1 && z.afterIn > 1 && z.afterOut < 1 && z.afterReset === 1)) p.push(`zoom through the handle: ${JSON.stringify(z)}`);
+  const st = r.style ?? {};
+  if (st.refusedLine?.ok !== false || st.refusedFill?.ok !== false || st.okLine?.ok !== true || st.after?.line !== 'ink' || st.after?.fill !== null) p.push(`style through the handle: ${JSON.stringify(st)}`);
+  for (const theme of ['day', 'night']) {
+    const s = r.skin?.[theme];
+    if (!s) {
+      p.push(`no ${theme} skin captures`);
+      continue;
+    }
+    for (const shot of ['marks', 'selection', 'marquee', 'multi', 'binding', 'guides']) if (!s[shot]?.png) p.push(`no ${theme} ${shot} capture`);
+    if (s.selected !== 1) p.push(`${theme}: a click selected ${s.selected} marks, expected 1`);
+    if (s.multiSelected !== 2) p.push(`${theme}: the marquee selected ${s.multiSelected} marks, expected 2`);
+    if (s.arrowAdded !== 1 || s.afterUndo !== 0) p.push(`${theme}: arrow then undo left ${s.arrowAdded} then ${s.afterUndo}`);
+    if (!s.caret || s.caret.editing !== true || !/^"?JetBrains Mono"?, monospace$/.test(s.caret.fontFamily) || s.caret.caretColor !== RGB_INK[theme]) p.push(`${theme}: the text caret: ${JSON.stringify(s.caret)}`);
+  }
+  if (!r.narrow || r.narrow.stock?.length !== 0 || Math.round(r.narrow.width) !== NARROW.width || !r.narrow.capture?.png) p.push(`the ${NARROW.width}px board: ${JSON.stringify({ ...r.narrow, capture: r.narrow?.capture ? '(png)' : null })}`);
+  if (!(r.stateEvents > 0)) p.push('the handle announced no state change');
+  return p;
+}
+/** The ink token of each theme as a computed colour: the harness page defines no tokens, so the caret takes the text's own colour, which is the mark's line colour (ink) in that theme. */
+export const RGB_INK = { day: 'rgb(22, 21, 15)', night: 'rgb(232, 244, 240)' };
+
 /** Why a run is not clean ([] when it is): the G-DDL-06 predicate, one run of one engine. */
 export function runProblems(r, known) {
   if (r.error) return [r.error];
@@ -279,6 +532,7 @@ export function runProblems(r, known) {
   if (r.mounted && r.libraryTrigger !== false) p.push('the stock Library trigger is on the page');
   if (r.mounted && r.libraryOpen !== false) p.push('the stock Library sidebar opened');
   if (r.mounted && !r.png?.ok) p.push(`PNG export failed: ${r.png?.error ?? JSON.stringify(r.png)}`);
+  if (r.mounted && r.stage === 'done') p.push(...reskinProblems(r));
   if (r.stage !== 'done') p.push(`stage ${r.stage}`);
   const stray = (r.requests ?? []).filter((q) => !known.has(q.path) && q.path !== '/report' && q.path !== '/' && q.path !== '/favicon.ico'); // the browser's own favicon probe
   if (stray.length) p.push(`requests outside the bundle: ${[...new Set(stray.map((q) => q.path))].slice(0, 8).join(', ')}`);
@@ -308,7 +562,7 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
           const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
+            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
           } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });

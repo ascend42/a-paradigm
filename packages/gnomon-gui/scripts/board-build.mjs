@@ -17,6 +17,8 @@ import { applyPatches, ENGINE, ENGINE_FILES, extractCssAssets, PATCHED_FILES, Pa
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const STUB_DIR = path.join(ROOT, 'src', 'board', 'stubs');
+/** The one file of gnomon-contracts the board chunk carries (resolveContentColour, contentColourCheck, the theme tokens). */
+export const CONTENT_PALETTE_SRC = path.resolve(ROOT, '..', 'gnomon-contracts', 'src', 'content-palette.ts');
 
 /** The board chunk's size budget, raw bytes over every board/ file (s1-build-plan §2 S1.0). */
 export const BOARD_BUDGET_BYTES = 4 * 1024 * 1024;
@@ -161,6 +163,7 @@ export async function buildBoard() {
     name: 'gnomon-board',
     setup(b) {
       b.onResolve({ filter: /^gnomon-board:refused$/ }, () => ({ path: path.join(STUB_DIR, 'refused.ts') }));
+      b.onResolve({ filter: /^gnomon-board:skin$/ }, () => ({ path: path.join(ROOT, 'src', 'board', 'skin.ts') }));
       for (const s of STUBS) {
         b.onResolve({ filter: s.filter }, (args) => {
           // relative stubs apply only to the engine's own files; bare ones (mermaid, pica) wherever they are imported
@@ -204,7 +207,10 @@ export async function buildBoard() {
     target: 'es2022',
     conditions: ['production'],
     // one React for the whole chunk: the engine and its dependencies are hoisted beside a different major
-    alias: { react: reactDir, 'react-dom': reactDomDir },
+    // The board needs the content palette and nothing else of the contracts package, whose published entry is one
+    // file that cannot be tree-shaken (it would bring the conformance vectors and every schema into the chunk): the
+    // palette's own source file is bundled instead (pure, no imports but its freeze helper).
+    alias: { react: reactDir, 'react-dom': reactDomDir, '@a-company/gnomon-contracts': CONTENT_PALETTE_SRC },
     define: {
       'process.env.NODE_ENV': '"production"',
       __GNOMON_BOARD_ENGINE__: JSON.stringify(`${ENGINE.name}@${ENGINE.version}`),
@@ -226,6 +232,10 @@ export async function buildBoard() {
     throw new Error(`board build: React is not the production build (${reactInputs.join(', ')})`);
   }
   report.reactInputs = reactInputs;
+  // of gnomon-contracts, only the palette source and its freeze helper are inputs
+  const contractInputs = Object.keys(r.metafile.inputs).filter((i) => /(^|\/)gnomon-contracts\//.test(i)).map((i) => i.slice(i.lastIndexOf('gnomon-contracts/') + 'gnomon-contracts/'.length)).sort();
+  if (contractInputs.join() !== 'src/content-palette.ts,src/internal.ts') throw new Error(`board build: unexpected gnomon-contracts inputs (${contractInputs.join(', ')})`);
+  report.contractInputs = contractInputs;
 
   for (const f of PATCHED_FILES) if (!seenPatched.has(f)) throw new PatchError('patched-file-loaded', f, 1, 0);
   for (const s of STUBS) if (report.stubs[s.id] !== s.expect) throw new PatchError(`stub:${s.id}`, 'the engine', s.expect, report.stubs[s.id]);

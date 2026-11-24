@@ -10,14 +10,16 @@
  * engines exist; here they run on a developer machine. The harness's own logic is tested on every OS below.
  */
 import { describe, expect, it } from 'vitest';
+import { checkLiveReskin, type LiveRun } from './board-golden.js';
+import { RESKIN_CLEAN } from './board-reskin-sample.js';
 // @ts-expect-error plain .mjs (the zero-dependency probe harness)
-import { harnessFiles, NO_REPORT, pickEngines, runBoardUnderCsp, runProblems, shippedBoard, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
+import { harnessFiles, NO_REPORT, pickEngines, REFUSED_TOOLS, runBoardUnderCsp, runProblems, shippedBoard, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
 
-interface Run { stage?: string; mounted?: boolean; error?: string; violationCount?: number; violations?: Array<{ directive: string; blocked: string; phase: string; count: number }>; afterAdd?: number; afterAddSettled?: number; alive?: boolean; aliveAfterUnmount?: boolean; deadHandle?: string; captureRefused?: number; afterPointerRect?: number; afterPointerStroke?: number; libraryTrigger?: boolean; libraryOpen?: boolean; png?: { ok: boolean; bytes?: number }; errors?: string[]; rejections?: string[]; requests?: Array<{ path: string }>; cursors?: Record<string, string>; visibility?: string; engine?: string }
+interface Run { refusedTools?: Record<string, string>; stage?: string; mounted?: boolean; error?: string; violationCount?: number; violations?: Array<{ directive: string; blocked: string; phase: string; count: number }>; afterAdd?: number; afterAddSettled?: number; alive?: boolean; aliveAfterUnmount?: boolean; deadHandle?: string; captureRefused?: number; afterPointerRect?: number; afterPointerStroke?: number; libraryTrigger?: boolean; libraryOpen?: boolean; png?: { ok: boolean; bytes?: number }; errors?: string[]; rejections?: string[]; requests?: Array<{ path: string }>; cursors?: Record<string, string>; refusedTools?: Record<string, string>; visibility?: string; engine?: string }
 interface EngineRow { version: string; family: string; runs: Run[]; clean: boolean; problems: string[] }
 
-const CLEAN: Run = { stage: 'done', mounted: true, violationCount: 0, violations: [], afterAdd: 3, afterAddSettled: 3, alive: true, aliveAfterUnmount: false, deadHandle: 'refused', afterPointerRect: 4, afterPointerStroke: 5, libraryTrigger: false, libraryOpen: false, png: { ok: true, bytes: 9000 }, errors: [], rejections: [], requests: [{ path: '/' }, { path: '/board/board.js' }, { path: '/report' }, { path: '/favicon.ico' }] };
-const KNOWN = new Set(['/board/board.js', '/board/board.css', '/index.html', '/harness.js', '/harness.css']);
+const CLEAN: Run = { ...(RESKIN_CLEAN as Run),  stage: 'done', mounted: true, violationCount: 0, violations: [], afterAdd: 3, afterAddSettled: 3, alive: true, aliveAfterUnmount: false, deadHandle: 'refused', afterPointerRect: 4, afterPointerStroke: 5, libraryTrigger: false, libraryOpen: false, png: { ok: true, bytes: 9000 }, errors: [], rejections: [], requests: [{ path: '/' }, { path: '/board/board.js' }, { path: '/report' }, { path: '/favicon.ico' }] };
+const KNOWN = new Set(['/board/board.js', '/board/board.css', '/fonts/JetBrainsMono-Regular.woff2', '/index.html', '/harness.js', '/harness.css']);
 const problems = (r: Run): string[] => runProblems(r, KNOWN) as string[];
 
 describe('G-DDL-06 predicate: what counts as a refusal-free run (every OS)', () => {
@@ -52,12 +54,18 @@ describe('G-DDL-06 predicate: what counts as a refusal-free run (every OS)', () 
     expect(js).toMatch(/import\('\/board\/board\.js'\)/);
     expect(js).toMatch(/securitypolicyviolation/);
     expect(js).toMatch(/R\.phase = 'library'/);
-    expect(TOOLS).toEqual(expect.arrayContaining(['eraser', 'laser', 'freedraw', 'text']));
+    // since S1.1 the page walks the rail's tools and checks that the engine's other tools are refused
+    expect(TOOLS).toEqual(['select', 'sticky', 'text', 'rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand']);
+    expect(REFUSED_TOOLS).toEqual(expect.arrayContaining(['image', 'eraser', 'laser']));
+    expect(js).toMatch(/R\.phase = 'command-palette'/);
+    expect(js).toMatch(/R\.phase = 'library-drop'/);
+    expect(js).toMatch(/R\.phase = 'image-tool'/);
     expect([...files.keys()].filter((k) => k.startsWith('/board/')).length).toBe((shippedBoard() as Map<string, Buffer>).size);
+    expect(files.has('/fonts/JetBrainsMono-Regular.woff2')).toBe(true); // the board's one face, from the same embed
   });
 });
 
-// Real engines. Skipped on CI (the probes job runs them there); on darwin WKWebView is REQUIRED, and a Chromium
+// Real engines (G-DDL-06, and the live half of G-DDL-07 on the same run). Skipped on CI (the probes job runs them there); on darwin WKWebView is REQUIRED, and a Chromium
 // family browser is required wherever one is installed.
 describe.skipIf(!!process.env.CI)('G-DDL-06 the shipped board under the unchanged CSP in real engines', () => {
   const { pick } = pickEngines() as { pick: Array<{ name: string; family: string }> };
@@ -82,10 +90,12 @@ describe.skipIf(!!process.env.CI)('G-DDL-06 the shipped board under the unchange
       expect(r.alive, name).toBe(true);
       expect(r.png?.ok, name).toBe(true);
       expect(r.visibility, name).toBe('visible'); // a hidden page never runs requestAnimationFrame (T-2026-11-06-003)
-      // the cursors that used to be data: URLs are blob: URLs now
-      expect(r.cursors?.eraser, name).toMatch(/^url\("blob:/);
-      expect(r.cursors?.laser, name).toMatch(/^url\("blob:/);
+      // the eraser and laser (whose cursors were data: URLs) are no longer tools: the handle refuses them
+      expect(r.refusedTools?.eraser, name).toBe('refused');
+      expect(r.refusedTools?.laser, name).toBe('refused');
       expect(e.clean, name).toBe(true);
+      // G-DDL-07, live half (boards S1.1), on the same run: one launch per engine
+      checkLiveReskin(name, e.family, r as LiveRun);
     }
   }, 400_000);
 });
