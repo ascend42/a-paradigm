@@ -210,19 +210,29 @@ const DRIVER = `'use strict';
         }); });
       });
       watch.observe(document.documentElement, { childList: true, subtree: true });
+      var carriedBy = function (ev, text) {
+        var cd = ev.clipboardData, types = [], file = false, got = null;
+        try { types = cd ? Array.prototype.slice.call(cd.types) : []; } catch (e) { types = []; }
+        try { got = cd ? cd.getData('text/plain') : null; } catch (e) { got = null; }
+        try { file = !!cd && ((cd.files && cd.files.length > 0) || Array.prototype.some.call(cd.items || [], function (i) { return i.kind === 'file'; })); } catch (e) { file = false; }
+        return { carried: file ? 'file' : text !== null && got === text ? 'text' : 'nothing', types: types };
+      };
       var paste = async function (text) {
         // a press on an empty spot, so nothing stays selected and the board has the keyboard
         pointer(cv, 'pointerdown', AT.x, AT.y, 1); await wait(30); pointer(cv, 'pointerup', AT.x, AT.y, 0); await wait(150);
         h.focus();
         try {
           var ans = await fetch('/paste?x=' + AT.x + '&y=' + AT.y, { method: 'POST', body: text });
-          if (ans.status === 200) return { via: 'devtools', stopped: null };
+          if (ans.status === 200) return { via: 'devtools', stopped: null, carried: 'text', types: ['text/plain'] };
           if (ans.status !== 501) R.pasteTrouble = (await ans.text()).slice(0, 200);
         } catch (e) { R.pasteTrouble = String(e).slice(0, 200); }
         var dt = new DataTransfer(); dt.setData('text/plain', text);
         var ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+        // what the event REALLY carries, read back before it is dispatched: an engine may strip the data a script
+        // puts on a script-built ClipboardEvent, and the paste is then one with no plain text at all
+        var had = carriedBy(ev, text);
         box.dispatchEvent(ev);
-        return { via: 'synthetic', stopped: ev.defaultPrevented };
+        return { via: 'synthetic', stopped: ev.defaultPrevented, carried: had.carried, types: had.types };
       };
       var one = async function (text) {
         try {
@@ -230,7 +240,7 @@ const DRIVER = `'use strict';
           heard.length = 0; said.length = 0; nodes.length = 0;
           var p = await paste(text);
           await wait(700);
-          return { via: p.via, stopped: p.stopped, added: h.count() - c, said: said.slice(), heard: heard.length, literal: heard.length === 1 && heard[0] === text, engine: m.boardEngineRuns().paste, nodes: nodes.slice(), violations: R.violations.length - v0 };
+          return { via: p.via, carried: p.carried, types: p.types, stopped: p.stopped, added: h.count() - c, said: said.slice(), heard: heard.length, literal: heard.length === 1 && heard[0] === text, engine: m.boardEngineRuns().paste, nodes: nodes.slice(), violations: R.violations.length - v0 };
         } catch (e) { return { unsupported: String(e).slice(0, 200), nodes: nodes.slice() }; }
       };
       var el = function (type, x, extra) { return Object.assign({ type: type, id: 'paste-' + type, x: x, y: 0, width: 160, height: 90, angle: 0, strokeColor: '#e03131', backgroundColor: '#ffc9c9', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, seed: 1, version: 1, versionNonce: 1, isDeleted: false, groupIds: [], frameId: null, boundElements: null, updated: 1, link: null, locked: false }, extra || {}); };
@@ -246,8 +256,9 @@ const DRIVER = `'use strict';
         var cf = h.count(); said.length = 0;
         var fdt = new DataTransfer(); fdt.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'p.png', { type: 'image/png' }));
         var fev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: fdt });
+        var fhad = carriedBy(fev, null);
         box.dispatchEvent(fev); await wait(300);
-        out.filePaste = { added: h.count() - cf, said: said.slice(), stopped: fev.defaultPrevented, engine: m.boardEngineRuns().paste };
+        out.filePaste = { carried: fhad.carried, types: fhad.types, added: h.count() - cf, said: said.slice(), stopped: fev.defaultPrevented, engine: m.boardEngineRuns().paste };
       } catch (e) { out.filePaste = { unsupported: String(e).slice(0, 200) }; }
       // copy and cut: stopped, never the engine's, and at most plain text on the clipboard
       try {
@@ -813,10 +824,37 @@ export async function probeBoard() {
   return (await buildBoard({ probe: true })).files;
 }
 
-/** Why a paste check did not hold ('' when it did). `mode` is the page's: 'pinned' or 'probe'. */
-function pasteTrouble(x, mode) {
+/**
+ * What a paste event carried, as the page read it back before dispatching it: `text` (the pasted text, or a real
+ * paste the browser made), `file`, or `nothing` (the engine stripped what the script put on a script-built
+ * ClipboardEvent). A record without the field is judged as carrying what was put on it.
+ */
+const carriedOf = (x, otherwise) => (x?.carried === 'text' || x?.carried === 'file' || x?.carried === 'nothing' ? x.carried : otherwise);
+
+/** The one contained outcome of a paste that carried NOTHING: stopped, nothing added, engine not entered, no node, no CSP row, and the board said `paste` (no plain text), once. */
+function emptyPasteTrouble(x) {
+  if (x.added !== 0) return `the paste itself added ${x.added} mark(s)`;
+  if (x.engine !== 0) return `the engine's own paste handler ran ${x.engine} time(s)`;
+  if (x.nodes?.length) return `nodes appeared: ${x.nodes.join()}`;
+  if (x.violations) return `${x.violations} CSP row(s)`;
+  if (x.stopped !== true) return `a paste that carried nothing was not stopped (stopped ${x.stopped})`;
+  if (x.heard) return `a paste that carried nothing was handed on ${x.heard} time(s)`;
+  if (x.said?.join() !== 'paste') return `a paste that carried nothing must be refused as "paste" (no plain text), once; said: ${JSON.stringify(x.said ?? null)}`;
+  return '';
+}
+
+/**
+ * Why a paste check did not hold ('' when it did). `mode` is the page's: 'pinned' or 'probe'. Judged by what the
+ * event CARRIED, never by the engine's name: with the text, the expectations are the strict ones (no refusal said;
+ * handed on as the literal text when the browser made the paste or the build counts synthetic input; stopped and
+ * heard by nobody otherwise); with nothing, the only contained outcome is `emptyPasteTrouble`'s.
+ */
+export function pasteTrouble(x, mode) {
   if (!x) return 'no result';
   if (x.unsupported) return '';
+  const carried = carriedOf(x, 'text');
+  if (carried === 'nothing') return emptyPasteTrouble(x);
+  if (carried !== 'text') return `a text paste carried ${carried}`;
   if (x.added !== 0) return `the paste itself added ${x.added} mark(s)`;
   if (x.engine !== 0) return `the engine's own paste handler ran ${x.engine} time(s)`;
   if (x.said?.length) return `a refusal was said: ${x.said.join()}`;
@@ -828,6 +866,16 @@ function pasteTrouble(x, mode) {
   return x.heard === 0 && x.stopped === true ? '' : `a synthetic paste was heard ${x.heard} time(s), stopped ${x.stopped}`;
 }
 
+/** Why the pasted-file check did not hold ('' when it did): a file that was carried is refused as `image`; an event that carried nothing is refused as `paste`. */
+export function filePasteTrouble(fp) {
+  if (!fp) return 'no result';
+  if (fp.unsupported) return '';
+  const carried = carriedOf(fp, 'file');
+  if (carried === 'text') return 'a file paste carried text';
+  const want = carried === 'file' ? 'image' : 'paste';
+  return fp.added === 0 && fp.said?.join() === want && fp.stopped === true && fp.engine === 0 ? '' : `carried ${carried}: expected the refusal "${want}", stopped, nothing added, engine 0`;
+}
+
 /** The C8 problems of a run (both pages run these checks). */
 export function c8Problems(r) {
   const f = r.fix ?? {};
@@ -837,17 +885,28 @@ export function c8Problems(r) {
     if (why || f[k]?.nodes?.length) p.push(`${what}: ${why || 'nodes appeared'} ${JSON.stringify(f[k])}`);
   }
   const fp = f.filePaste;
-  if (!fp || (!fp.unsupported && (fp.added !== 0 || fp.said?.join() !== 'image' || fp.stopped !== true || fp.engine !== 0))) p.push(`a pasted file was not refused: ${JSON.stringify(fp)}`);
+  const fileWhy = filePasteTrouble(fp);
+  if (fileWhy) p.push(`a pasted file was not refused: ${fileWhy} ${JSON.stringify(fp)}`);
   const cp = f.copy;
   if (!cp || (!cp.unsupported && (cp.stopped !== true || cp.engine !== 0 || cp.added !== 0 || cp.types?.some((t) => t !== 'text/plain')))) p.push(`a copy or a cut reached the engine or the clipboard got more than plain text: ${JSON.stringify(cp)}`);
   if (f.pwn !== null && f.pwn !== undefined) p.push(`a handler from pasted content ran: ${JSON.stringify(f.pwn)}`);
   return p;
 }
 
+/** What each paste check of a run carried (`text`, `file`, `nothing`), or null where it did not run. For the evidence. */
+export function pasteCarried(r) {
+  const f = r?.fix ?? {};
+  const of = (x, otherwise) => (!x || x.unsupported ? null : carriedOf(x, otherwise));
+  return { paste: of(f.paste, 'text'), hostile: of(f.hostile, 'text'), svg: of(f.svg, 'text'), filePaste: of(f.filePaste, 'file') };
+}
+
 export function exercisedChecks(r) {
   const ran = (x) => !!x && !x.unsupported;
+  // a paste check is exercised only where the event carried what the check is about: a paste that carried nothing
+  // proves the empty paste is contained, not that pasted text or a pasted file is
+  const carrying = (x, what) => ran(x) && carriedOf(x, what) === what;
   const f = r?.fix ?? {};
-  return { 'library-file drop': ran(r?.libraryDrop), 'image-file drop': !!r?.imageTool && r.imageTool.dropUnsupported === undefined, 'scene-file drop': ran(f.sceneDrop), 'library-type drag (no file)': ran(f.dataDrop), 'paste: stock marks': ran(f.paste), 'paste: forged author, iframe, embeddable, image': ran(f.hostile), 'paste: a file': ran(f.filePaste), 'copy and cut': ran(f.copy) };
+  return { 'library-file drop': ran(r?.libraryDrop), 'image-file drop': !!r?.imageTool && r.imageTool.dropUnsupported === undefined, 'scene-file drop': ran(f.sceneDrop), 'library-type drag (no file)': ran(f.dataDrop), 'paste: stock marks': carrying(f.paste, 'text'), 'paste: forged author, iframe, embeddable, image': carrying(f.hostile, 'text'), 'paste: a file': carrying(f.filePaste, 'file'), 'copy and cut': ran(f.copy) };
 }
 
 /** The only font string the canvas may be given (patch font-family-string), with the size folded out. */
