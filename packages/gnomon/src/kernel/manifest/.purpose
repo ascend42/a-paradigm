@@ -169,6 +169,11 @@ components:
       keeps its tier. The old trees are vendored under
       packages/gnomon/test/fixtures/first-party-superseded and hashed against
       the pins by test/superseded-pins.test.ts.
+      S1.1 carry-over: rollbackMod refuses TIER (why superseded) a target row
+      whose package hash is in SUPERSEDED_FIRST_PARTY_PINS unless it is the
+      tree pinned now, so an earlier approved row at a superseded pin is not
+      re-pinned by a rollback either (tested per tree, default and explicit
+      target, in test/superseded-pins.test.ts).
       SUPERSEDED_FIRST_PARTY_PINS is now a map from an exact package hash to the
       one prior modAbiId that tree echoes (the three format-2 first-party trees
       of the previous release; no format-1 pin), with

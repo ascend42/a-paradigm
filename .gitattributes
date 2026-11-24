@@ -54,3 +54,6 @@ packages/gnomon-contracts/test/fixtures/dim-future.json text eol=lf
 
 # Superseded first-party mod trees (S1.2): the tests hash them against SUPERSEDED_FIRST_PARTY_PINS; keep LF on every OS.
 packages/gnomon/test/fixtures/first-party-superseded/** text eol=lf
+
+# #gui-board goldens (G-DDL-07) are compared as decoded pixels; never convert or diff them as text
+packages/gnomon-gui/test/goldens/**/*.png binary

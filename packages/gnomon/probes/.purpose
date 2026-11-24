@@ -33,6 +33,26 @@ components:
       loads it under the rule 6 CSP through p12-excalidraw-csp/harness.mjs
       (static scan, mount, draw, tools, select-then-Library, PNG export),
       shared with oracle G-DDL-06 (packages/gnomon-gui/test/board-csp.test.ts).
+      Boards S1.1 (oracle G-DDL-07): the harness page walks the Gnomon rail's
+      tools through the handle and adds phases for the command palette keys,
+      a dropped library file, the absent image tool (its key and a dropped
+      image file), the engine's old tool keys, the stock nodes in the DOM,
+      the canvas font strings and font faces, and day and night captures of
+      selection, marquee, multi-select, binding highlight and guides plus the
+      board at 374 x 304; reskinProblems is its predicate. It also serves
+      the bundle's fonts/JetBrainsMono-Regular.woff2 from the same embed. The
+      result file keeps each capture's size, not its bytes.
+      Pass B: the page also checks that a dropped image is reported to the
+      host (onRefused, onAttempt) and reads the handle's marks and view.
+      S1.1 CI round: the two paste checks are a REAL paste in Chromium-family
+      engines (Chrome, Edge): the harness server writes the clipboard and
+      presses the platform's paste chord over the DevTools protocol
+      (_shared/browser.mjs devtools, realPaste; Meta on macOS, Control on
+      Windows and Linux), because a synthetic paste event never reaches the
+      engine's paste handler there. WKWebView and Firefox get a synthetic
+      event. A check that ran in no engine fails the probe, and the result
+      says which engine exercised each and how its paste was made. Chromium
+      engines are launched with a loopback DevTools port for this.
       _shared/wkwebview-load.swift turns window occlusion detection off so an
       offscreen page stays visible and requestAnimationFrame runs
       (T-2026-11-06-003), and prints the page's visibility and phase on a

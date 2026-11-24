@@ -83,6 +83,9 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
         logLevel: 'silent',
       });
       const inputs = Object.keys(r.metafile.inputs);
+      // nor the board's host layer: the leaf, the rail, the tray, the overlay, the seal (review S5). core/board.ts,
+      // the loader, is an input only in the second pass, where this test puts it in the graph itself
+      expect(inputs.map((i) => i.slice(i.lastIndexOf('src/') + 4)).filter((i) => /^(core|ui)\/board[-.]/.test(i))).toEqual(stdin ? ['core/board.ts'] : []);
       expect(inputs.filter((i) => /(^|\/)node_modules\/(react|react-dom|scheduler|@excalidraw)\//.test(i) || /(^|\/)src\/board\//.test(i))).toEqual([]);
       expect(inputs.some((i) => i.endsWith('src/main.ts'))).toBe(true);
       // the loader stays a native dynamic import of a computed URL (nothing for esbuild to inline)
@@ -105,11 +108,36 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     expect(text).not.toMatch(/\bimport\s*\(/); // no dynamic import of anything in the served GUI
   });
 
-  it('in src, only the dev preview and the loader itself name the loader (no product code path opens a board yet)', () => {
+  /** The board's host layer (boards S1.1 pass B): it draws round the engine and is handed the loader, never imports it. */
+  const HOST_LAYER = ['core/board-leaf.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'ui/board-leaf.ts'];
+
+  it('in src, only the dev preview, the loader itself and the host layer name the loader module; only the preview CALLS it', () => {
     const users = walk(SRC)
       .filter((f) => /loadBoard|core\/board\.js|\.\/board\.js/.test(readFileSync(f, 'utf8')))
       .map(rel)
       .filter((f) => f !== 'core/board.ts' && !f.startsWith('board/'));
-    expect(users.every((f) => f.startsWith('preview/')), users.join(', ')).toBe(true);
+    expect(users.every((f) => f.startsWith('preview/') || HOST_LAYER.includes(f)), users.join(', ')).toBe(true);
+    // the host layer takes types (and three constants) from core/board.ts; the loader is passed to it as an option
+    for (const f of HOST_LAYER) expect(readFileSync(path.join(SRC, ...f.split('/')), 'utf8'), f).not.toMatch(/\bloadBoard\b|\bimport\s*\(/);
+    const callers = walk(SRC).filter((f) => /\bloadBoard\s*\(/.test(readFileSync(f, 'utf8'))).map(rel).filter((f) => f !== 'core/board.ts');
+    expect(callers.every((f) => f.startsWith('preview/')), callers.join(', ')).toBe(true);
+  });
+
+  it('nothing the app entry imports, at any depth, reaches the host layer or the loader (no product code path opens a board yet)', () => {
+    const seen = new Set<string>();
+    const visit = (abs: string): void => {
+      if (seen.has(abs)) return;
+      seen.add(abs);
+      for (const spec of specifiers(readFileSync(abs, 'utf8'))) {
+        if (!spec.startsWith('.')) continue;
+        const target = path.resolve(path.dirname(abs), spec.replace(/\.js$/, '.ts'));
+        if (target.endsWith('.ts') && statSync(target, { throwIfNoEntry: false })?.isFile()) visit(target);
+      }
+    };
+    visit(path.join(SRC, 'main.ts'));
+    const reached = [...seen].map(rel);
+    expect(reached.length).toBeGreaterThan(20);
+    expect(reached).toContain('ui/app.ts');
+    expect(reached.filter((f) => HOST_LAYER.includes(f) || f === 'core/board.ts' || f.startsWith('board/') || f.startsWith('preview/'))).toEqual([]);
   });
 });

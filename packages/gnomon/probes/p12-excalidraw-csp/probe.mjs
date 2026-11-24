@@ -13,6 +13,11 @@
 //      script, mount, draw through the handle and with pointer events, select every tool (their cursors), select a
 //      mark and reach for the stock Library (it must not exist), export a PNG, and POST every
 //      securitypolicyviolation event, error and what it drew. RUNS cold loads per local engine.
+//      Since boards S1.1 (oracle G-DDL-07) the page also walks the Gnomon rail's tools through the handle, checks
+//      that every other engine tool is refused, presses the command palette keys, drops a library file and an
+//      image file, presses the engine's old tool keys (9 was the image tool), records the stock nodes in the DOM,
+//      the canvas font strings and the font faces, and captures selection, marquee, multi-select, binding
+//      highlight and guides in day and night, and the board at 374 x 304 (no phone layout).
 // Verdict: fail if the static scan finds anything, or any engine that ran did not mount, raised any CSP violation,
 // asked for anything outside the bundle or could not draw or export; pass if every engine is clean and the
 // required ones ran (a Chromium-family browser, and WKWebView on a Mac: the two the oracle names); fail on a Mac with
@@ -24,11 +29,21 @@
 // browser sends NO report never loaded the page; it is retried ONCE per engine and both attempts stay in the
 // evidence. A run that reported is never retried.
 import { gnomonCsp } from '../_shared/browser.mjs';
-import { NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
+import { exercisedChecks, NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
 
-export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'S25-M3'];
+export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'G-DDL-07', 'S25-M3'];
 
 const RUNS = Number(process.env.P12_RUNS ?? 3);
+
+/** A run for the result file: the skin captures are PNGs (megabytes as base64); the result keeps their sizes. */
+function withoutCaptures(run) {
+  if (!run || typeof run !== 'object') return run;
+  const shot = (s) => (s && typeof s.png === 'string' ? { width: s.width, height: s.height, pngBytes: Math.floor((s.png.length * 3) / 4) } : s);
+  const skin = run.skin ? Object.fromEntries(Object.entries(run.skin).map(([theme, s]) => [theme, Object.fromEntries(Object.entries(s ?? {}).map(([k, v]) => [k, shot(v)]))])) : run.skin;
+  const narrow = run.narrow ? { ...run.narrow, capture: shot(run.narrow.capture) } : run.narrow;
+  const colours = run.colours ? Object.fromEntries(Object.entries(run.colours).map(([k, v]) => [k, shot(v)])) : run.colours;
+  return { ...run, skin, narrow, colours };
+}
 
 const median = (xs) => {
   const v = xs.filter((x) => typeof x === 'number').sort((a, b) => a - b);
@@ -60,7 +75,7 @@ export default async function probe(ctx) {
       violatedDirectives: [...new Set(e.runs.flatMap((r) => (r.violations ?? []).map((v) => v.directive)))],
       exportPng: ok.length > 0 && ok.every((r) => r.png?.ok),
       medianMs: { module: median(ok.map((r) => r.ms.module)), mounted: median(ok.map((r) => r.ms.mounted)) },
-      firstRun: e.runs[0],
+      firstRun: withoutCaptures(e.runs[0]),
       nonReportingRuns: e.runs.map((r, i) => ({ run: i + 1, r })).filter(({ r }) => r.error === NO_REPORT).map(({ run, r }) => ({ run, wallMs: r.wallMs, launcherTail: r.launcherTail })),
       launchRetries: e.launchRetries,
     };
@@ -70,15 +85,21 @@ export default async function probe(ctx) {
   const required = ['chromium', ...(ctx.platform === 'darwin' ? ['wkwebview'] : [])];
   const missingRequired = required.filter((f) => !families.has(f));
   const clean = rows.length > 0 && rows.every((r) => r.clean) && scan.findings.length === 0;
+  const allExercised = () => never.length === 0;
   const findings = [];
   if (scan.findings.length) findings.push(`static: ${scan.findings.map((f) => `${f.rule} x${f.count} in ${f.file}`).join('; ')}`);
   for (const [n, r] of Object.entries(engines)) if (!r.clean) findings.push(`${n}: ${r.problems.join(' | ')}`);
+  // a paste or drop check that a browser reported as unsupported did not run there: each must have run somewhere
+  const exercised = {};
+  for (const [n, e] of Object.entries(out.engines)) for (const [check, ran] of Object.entries(exercisedChecks(e.runs.find((r) => r.mounted) ?? {}))) if (ran) (exercised[check] ??= []).push(n);
+  const never = Object.keys(exercisedChecks({})).filter((c) => !exercised[c]);
+  if (never.length && rows.length) findings.push(`paste or drop checks that ran in no engine: ${never.join(', ')}`);
   if (missingRequired.length) findings.push(`required engine(s) not on this machine: ${missingRequired.join(', ')}`);
 
   // On a Mac the WKWebView row is the claim (the wrapper's engine): without it the probe FAILS, on CI too. A missing
   // Chromium-family browser stays partial.
   const noWebKit = ctx.platform === 'darwin' && !families.has('wkwebview');
-  let verdict = !clean || noWebKit ? 'fail' : missingRequired.length ? 'partial' : 'pass';
+  let verdict = !clean || noWebKit || !allExercised() ? 'fail' : missingRequired.length ? 'partial' : 'pass';
   if (ctx.platform !== 'darwin' && verdict === 'pass') verdict = 'partial';
 
   return {
@@ -92,6 +113,10 @@ export default async function probe(ctx) {
       engines,
       enginesUnavailable: out.missing,
       requiredEngines: required,
+      exercised,
+      // how each engine's paste was made: `devtools` is a real paste (clipboard plus the platform's paste chord)
+      pasteVia: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, e.runs.find((r) => r.mounted)?.fix?.paste?.via ?? e.runs.find((r) => r.mounted)?.fix?.paste?.unsupported ?? null])),
+      pasteModifier: process.platform === 'darwin' ? 'Meta' : 'Control',
       clean,
       findings,
       ...(ctx.platform !== 'darwin' ? { platformNote: `${ctx.platform}: mechanics only (Windows parity phase, P8-D78)` } : {}),

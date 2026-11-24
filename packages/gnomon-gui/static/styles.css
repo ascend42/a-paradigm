@@ -1789,3 +1789,103 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .trow.role-run .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
 .trow.role-run .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
 .trow.role-run .run-data-text { margin: 2px 0 4px; font-family: var(--mono); font-size: var(--fs-control); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto; }
+
+/* ── #gui-board: the board medium (design components board-leaf, board-rail, content-tray, author-seal, pin,
+   fallback-node; all `proposed`). The bd-* rules below are the proposal CSS of
+   .atelier/systems/gnomon/specimen-board.html, moved here with the S1.1 build; the specimen's own drawing of marks
+   (its canvas, ink layer, frame, live node and slip rules) stays in the specimen. Nothing the kernel serves builds
+   a board leaf yet (S1.3): these rules are reached only from the dev preview fixtures. */
+.bd-leaf{position:relative;display:flex;flex-direction:column;min-height:0;background:var(--ground);border-left:1px solid var(--rule)}
+.bd-head{background:var(--sheet);container-type:inline-size}
+/* Mika 2026-11-23: at a 1024 window the centre is 424px. The head never wraps: the medium word goes first (it stays in title=), then the title truncates */
+.bd-head .title{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .bd-head .bd-g,.bd-head .key{flex:none}
+@container (max-width:520px){.bd-head .bd-medium{display:none}}
+.bd-g{font-size:var(--fs-reading);color:var(--ink2)}
+.bd-medium{font-size:var(--fs-control);color:var(--sec);white-space:nowrap}
+.bd-keep{background:var(--sheet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bd-keep .swatch{display:inline-block;vertical-align:-1px;margin:0 2px}
+.bd-yield{color:var(--ink);font-weight:500} .bd-yield-m{color:var(--ink)}
+.bd-body{display:flex;min-height:0}
+.bd-stage{position:relative;flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.bd-foot{display:flex;overflow:hidden;gap:16px;align-items:center;padding:4px 14px;min-height:28px;font-size:var(--fs-label);color:var(--sec);border-top:1px dashed var(--rule)}
+.bd-hand{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+/* the rail: a graduated strip of the sheet; keys are the system's segment keys */
+.bd-rail{flex:0 0 48px;width:48px;display:flex;flex-direction:column;gap:4px;padding:8px 0;border-right:1px solid var(--rule); background:repeating-linear-gradient(to bottom,var(--sec) 0 1px,transparent 1px 8px) left top/4px 100% no-repeat,var(--sheet)}
+.bd-row{display:flex;align-items:center;height:28px}
+.bd-row kbd{flex:0 0 16px;width:16px;padding-left:6px;font:inherit;font-size:var(--fs-label);color:var(--sec);text-align:left}
+.bd-brk{display:block;height:1px;width:10px;margin:2px 0;background:var(--sec)}
+.bd-grow{flex:1 1 auto;min-height:8px}
+.bd-rail .bd-tool{width:28px;min-width:28px;height:28px;padding:0;margin-left:0}
+[data-theme] .bd-rail .key.bd-tool::before,[data-theme] .bd-rail .key.bd-tool::after{content:none}
+.bd-i{display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter} .bd-i .solid{fill:currentColor;stroke:none}
+/* night: the chosen tool is bracketed, drawn as an edge, and carries the chosen segment's glow */
+[data-theme="night"] .bd-rail .bd-tool.current{border-color:transparent;border-radius:0; background:linear-gradient(var(--ink),var(--ink)) left top/2px 100% no-repeat,linear-gradient(var(--ink),var(--ink)) left top/6px 2px no-repeat,linear-gradient(var(--ink),var(--ink)) left bottom/6px 2px no-repeat, linear-gradient(var(--ink),var(--ink)) right top/2px 100% no-repeat,linear-gradient(var(--ink),var(--ink)) right top/6px 2px no-repeat,linear-gradient(var(--ink),var(--ink)) right bottom/6px 2px no-repeat} /* Mika: 2px bars; at 1px the chosen key was lighter than a resting one */
+[data-theme="night"] .bd-rail .bd-tool.current .bd-i{filter:drop-shadow(0 0 3px rgba(200,255,235,.35))}
+.bd-rail.yielded{background:var(--sheet)} .bd-rail.yielded .bd-brk{background:var(--rule)}
+/* Mika 2026-11-23: the percent is a key like the rest (principle 2: the edge says whether it presses); it spans the letter column so "100%" fits */
+.bd-rail .key.bd-zoom{width:40px;min-width:40px;height:28px;margin-left:-12px;padding:0;font-size:var(--fs-label)}
+[data-theme] .bd-rail .key.bd-zoom::before,[data-theme] .bd-rail .key.bd-zoom::after{content:none}
+.bd-rail .bd-more{font-size:var(--fs-control)}
+.bd-ink{position:relative}
+.bd-ink .bd-well{position:absolute;width:14px;height:14px} .bd-ink .bd-well.line{left:4px;top:4px} .bd-ink .bd-well.fill{right:4px;bottom:4px}
+/* wells: content colours are round, so they never read as the square project swatch */
+.bd-well{display:inline-block;width:18px;height:18px;border-radius:var(--radius-pill);border:1px solid var(--key-edge);background:var(--wf,transparent);flex:none}
+.bd-well.line{background:var(--sheet);box-shadow:inset 0 0 0 4px var(--wl,var(--ink))}
+.bd-well.sel{outline:2px solid var(--key-edge);outline-offset:2px}
+.bd-well.c-none{background:linear-gradient(to top right,transparent calc(50% - 1px),var(--sec) calc(50% - 1px),var(--sec) calc(50% + 1px),transparent calc(50% + 1px)),var(--sheet);border-color:var(--sec)}
+.bd-tray{display:flex;flex-direction:column;gap:8px;width:max-content;padding:10px 12px;background:var(--sheet);border:1px solid var(--key-edge);border-radius:var(--radius);box-shadow:var(--shadow)}
+.bd-tr{display:flex;align-items:center;gap:8px;min-height:28px;font-size:var(--fs-control)}
+.bd-tl{flex:0 0 52px;font-size:var(--fs-label);color:var(--sec)}
+.bd-hex{width:10ch;font-size:var(--fs-control)} .bd-refuse{color:var(--ink)} 
+/* marks on the desk: solid is yours, dashed is an agent's */
+/* scraps: pinned paper */
+.bd-scrap{position:absolute;box-sizing:border-box;padding:12px 10px 8px;font-size:var(--fs-control);line-height:1.45;color:var(--ink);background:var(--fill,var(--sheet));border:1px solid var(--edge,var(--sec));border-radius:var(--radius);box-shadow:2px 2px 0 rgba(22,21,15,.16)}
+.bd-scrap.rel,.bd-stub.rel{position:relative;min-width:96px;min-height:56px}
+.bd-scrap.agent{border-style:dashed}
+[data-theme="night"] .bd-scrap,[data-theme="night"] .bd-stub{border-radius:0;box-shadow:2px 2px 0 0 var(--ground),2px 2px 0 1px var(--sec)}
+.bd-scrap.sh4{box-shadow:4px 4px 0 rgba(22,21,15,.16)} [data-theme="night"] .bd-scrap.sh4{box-shadow:4px 4px 0 0 var(--ground),4px 4px 0 1px var(--sec)}
+.bd-scrap.sh6{box-shadow:6px 6px 0 rgba(22,21,15,.16)} [data-theme="night"] .bd-scrap.sh6{box-shadow:6px 6px 0 0 var(--ground),6px 6px 0 1px var(--sec)}
+.bd-scrap.sh8{box-shadow:8px 8px 0 rgba(22,21,15,.16)} [data-theme="night"] .bd-scrap.sh8{box-shadow:8px 8px 0 0 var(--ground),8px 8px 0 1px var(--sec)}
+.bd-scrap.sh10{box-shadow:10px 10px 0 rgba(22,21,15,.16)} [data-theme="night"] .bd-scrap.sh10{box-shadow:10px 10px 0 0 var(--ground),10px 10px 0 1px var(--sec)}
+.bd-pin{position:absolute;left:50%;top:-4px;margin-left:-4px;width:8px;height:8px;border-radius:var(--radius-pill);background:var(--ink);box-shadow:1px 2px 0 rgba(22,21,15,.24)}
+[data-theme="night"] .bd-pin{background:var(--ground);box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px var(--ground),inset 0 0 0 4px var(--ink)}
+.bd-pin.inline{position:static;display:inline-block;margin:0;vertical-align:0}
+/* the unknown hand (Aegis S1.1 ruling 5): a row with no host-vouched author. Dashed like an agent, never solid, no seal; its pin is hollow */
+.bd-pin.unk{background:var(--sheet);box-shadow:inset 0 0 0 1.5px var(--ink)} [data-theme="night"] .bd-pin.unk{background:var(--ground);box-shadow:inset 0 0 0 1px var(--ink)}
+.bd-seal{flex:none;overflow:visible;vertical-align:middle}
+.bd-seal .sl-cut{fill:var(--sheet);stroke:var(--ink);stroke-width:1.5;stroke-linejoin:miter}
+.bd-seal text{font-family:var(--mono);font-size:var(--fs-label);font-weight:600;fill:var(--ink)}
+.bd-seal .sl-bead{fill:var(--ink)}
+.bd-seal.claimed .sl-cut{stroke-dasharray:2.5 2;stroke-width:1.25} .bd-seal.claimed text{font-weight:400} .bd-seal.claimed .sl-bead{fill:var(--sheet);stroke:var(--ink);stroke-width:1}
+/* the stub: a node this build has no drawing for */
+.bd-stub{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;padding:10px 10px 8px 22px;max-width:260px;background:var(--sheet);border:1px solid var(--sec);border-radius:var(--radius);box-shadow:2px 2px 0 rgba(22,21,15,.16); background-image:repeating-linear-gradient(135deg,var(--rule) 0 2px,transparent 2px 6px);background-size:12px 100%;background-repeat:no-repeat}
+.bd-stub.agent{border-style:dashed}
+.bd-stub-k{font-size:var(--fs-control);font-weight:500;color:var(--ink2)} .bd-stub-l{font-size:var(--fs-label);font-weight:400;color:var(--sec);margin-right:6px} .bd-stub-n{font-size:var(--fs-label);color:var(--sec)}
+/* build additions: where the engine and the host layer sit inside the leaf (not in the specimen, which draws no engine) */
+.bd-leaf { position: absolute; inset: 0; z-index: 12; overflow: hidden; } /* nothing of the leaf is ever drawn outside it */
+.bd-body { flex: 1 1 auto; }
+.bd-board { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* the engine's own z-indexes stay inside it */
+.bd-board[hidden], .bd-over[hidden] { display: none; }
+.bd-over { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+.bd-over > * { position: absolute; left: 0; top: 0; margin: 0; }
+.bd-over .bd-stub { max-width: none; overflow: hidden; background-color: transparent; border-color: transparent; box-shadow: none; }
+.bd-over .bd-textbox { box-sizing: border-box; border: 1px dashed var(--ink2); }
+.bd-stage > .bd-tray { position: absolute; left: 8px; top: 8px; z-index: 3; max-width: calc(100% - 16px); box-sizing: border-box; }
+.bd-tr { flex-wrap: wrap; }
+.bd-tr .bd-wn { font-size: var(--fs-label); color: var(--sec); margin-left: 4px; }
+button.bd-well { padding: 0; cursor: pointer; font: inherit; }
+button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.bd-refuse-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-label); }
+.bd-row { position: relative; }
+.bd-menu { position: absolute; left: 48px; bottom: 0; z-index: 4; display: flex; flex-direction: column; gap: 2px; min-width: 20ch; padding: 4px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--shadow); }
+.bd-menu .bd-mi { display: flex; align-items: center; gap: 8px; min-height: var(--key-h); padding: 0 8px; background: none; border: 0; border-radius: var(--radius); color: var(--ink); font: inherit; font-size: var(--fs-control); text-align: left; cursor: pointer; }
+.bd-menu .bd-mi:hover, .bd-menu .bd-mi:focus-visible { background: var(--fold); outline: none; }
+.bd-menu .bd-mi kbd { margin-left: auto; font: inherit; font-size: var(--fs-label); color: var(--sec); }
+.bd-rail.yielded { background: var(--sheet); }
+.bd-rail.yielded kbd { visibility: hidden; }
+.bd-note { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(300px, calc(100% - 32px)); transform: translate(-50%, -50%); box-sizing: border-box; padding: 16px 16px 12px; pointer-events: none; }
+.bd-note p { margin: 0 0 4px; color: var(--sec); }
+.bd-note .bd-en-t { font-size: var(--fs-reading); font-weight: 600; color: var(--ink); }
+.bd-said-line { color: var(--ink); }
+.bd-foot .bd-more-hands { white-space: nowrap; }
+.bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }

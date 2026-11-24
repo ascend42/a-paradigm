@@ -64,6 +64,8 @@ export async function startServer({ files = new Map(), rootDir = null }) {
   const waiters = new Map();
   const early = new Map();
   const requests = [];
+  // POST paths a probe answers itself while a page runs: path -> async (body, url) => ({ status, body? })
+  const hooks = new Map();
   let port = 0;
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1');
@@ -95,6 +97,16 @@ export async function startServer({ files = new Map(), rootDir = null }) {
       });
       return;
     }
+    if (req.method === 'POST' && hooks.has(u.pathname)) {
+      let posted = '';
+      req.on('data', (d) => (posted += d));
+      req.on('end', () => {
+        Promise.resolve()
+          .then(() => hooks.get(u.pathname)(posted, u))
+          .then((r) => res.writeHead(r.status, headers).end(r.body ?? ''), (e) => res.writeHead(500, headers).end(String(e?.message ?? e).slice(0, 300)));
+      });
+      return;
+    }
     let body = files.get(u.pathname === '/' ? '/index.html' : u.pathname);
     let ext = path.extname(u.pathname === '/' ? '/index.html' : u.pathname);
     if (body === undefined && rootDir) {
@@ -117,6 +129,7 @@ export async function startServer({ files = new Map(), rootDir = null }) {
     port,
     origin: `http://127.0.0.1:${port}`,
     requests,
+    hooks,
     waitReport(run, timeoutMs) {
       if (early.has(run)) {
         const v = early.get(run);
@@ -166,7 +179,7 @@ function newestCached(prefix) {
 
 function chromeArgs(profile, url) {
   return ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
-    '--disable-background-networking', '--disable-component-update', `--user-data-dir=${profile}`, url];
+    '--disable-background-networking', '--disable-component-update', '--remote-debugging-port=0', `--user-data-dir=${profile}`, url];
 }
 
 /** Compile (once, cached by source hash) the WKWebView host. darwin only. */
@@ -250,6 +263,7 @@ export function launch(engine, url, timeoutSec = 60) {
   const exited = new Promise((r) => child.on('close', (code, signal) => r({ code, signal })));
   return {
     exited,
+    profile,
     output: () => out,
     async kill() {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
@@ -265,6 +279,79 @@ export function launch(engine, url, timeoutSec = 60) {
   };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The DevTools protocol of a launched Chromium-family browser (Chrome, Edge; they are started with
+ * --remote-debugging-port=0, loopback only), over Node's own WebSocket. Resolves { call(method, params), close() }
+ * for the page target, or null when there is no port, no page or no WebSocket.
+ */
+export async function devtools(profile) {
+  if (typeof WebSocket === 'undefined') return null;
+  const portFile = path.join(profile, 'DevToolsActivePort');
+  for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
+  if (!existsSync(portFile)) return null;
+  const port = readFileSync(portFile, 'utf8').split(/\r?\n/)[0];
+  let page = null;
+  for (let i = 0; i < 50 && !page; i++) {
+    try {
+      page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === 'page') ?? null;
+    } catch {
+      page = null;
+    }
+    if (!page) await sleep(100);
+  }
+  if (!page) return null;
+  const ws = new WebSocket(page.webSocketDebuggerUrl);
+  const opened = await new Promise((res) => {
+    ws.addEventListener('open', () => res(true), { once: true });
+    ws.addEventListener('error', () => res(false), { once: true });
+  });
+  if (!opened) return null;
+  let id = 0;
+  return {
+    call: (method, params = {}) =>
+      new Promise((res) => {
+        const mine = ++id;
+        const on = (e) => {
+          const m = JSON.parse(e.data);
+          if (m.id !== mine) return;
+          ws.removeEventListener('message', on);
+          res(m.result ?? { error: m.error?.message ?? 'no result' });
+        };
+        ws.addEventListener('message', on);
+        ws.send(JSON.stringify({ id: mine, method, params }));
+      }),
+    close: () => {
+      try {
+        ws.close();
+      } catch {
+        // already closed
+      }
+    },
+  };
+}
+
+/** The modifier bit and name the platform pastes with: Meta on macOS, Control on Windows and Linux. */
+export const pasteModifier = (platform = process.platform) => (platform === 'darwin' ? { bit: 4, name: 'Meta' } : { bit: 2, name: 'Control' });
+
+/**
+ * A REAL paste into the page, the way a person makes one: the text goes on the clipboard (permission granted for
+ * the page's origin), the mouse is moved to (x, y), and the platform's paste chord is pressed with the browser's own
+ * `paste` editing command. Resolves null when done, or why not.
+ */
+export async function realPaste(cdp, origin, text, x, y, platform = process.platform) {
+  await cdp.call('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+  const wrote = await cdp.call('Runtime.evaluate', { expression: `navigator.clipboard.writeText(${JSON.stringify(text)}).then(() => 'written', (e) => 'not written: ' + e)`, awaitPromise: true, returnByValue: true });
+  if (wrote.result?.value !== 'written') return String(wrote.result?.value ?? wrote.error ?? 'the clipboard was not written');
+  await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
+  const mod = pasteModifier(platform);
+  const key = { key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: mod.bit };
+  await cdp.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...key, commands: ['paste'] });
+  await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', ...key });
+  return null;
+}
+
 /** Open `pagePath` on `server` in `engine` and wait for its report. */
 export async function runPage(server, engine, pagePath, timeoutMs = 60_000) {
   const run = randomBytes(6).toString('hex');
@@ -274,7 +361,19 @@ export async function runPage(server, engine, pagePath, timeoutMs = 60_000) {
   // the WKWebView host times out a little BEFORE this wait does, so its last lines (the page's visibility and phase,
   // T-2026-11-06-003) reach the launcher tail of a run that never reported
   const proc = launch(engine, url, Math.max(5, Math.floor(timeoutMs / 1000) - 5));
+  // POST /paste?x=&y= with the text as its body: a real paste through DevTools in a Chromium-family browser (200),
+  // or 501 where there is no such channel (WKWebView, Firefox) and the page falls back to a synthetic event
+  let cdp = null;
+  server.hooks.set('/paste', async (text, u) => {
+    if (engine.kind !== 'chromium') return { status: 501, body: 'no devtools channel in this engine' };
+    cdp ??= await devtools(proc.profile);
+    if (!cdp) return { status: 501, body: 'the devtools port did not open' };
+    const why = await realPaste(cdp, server.origin, text, Number(u.searchParams.get('x') ?? 0), Number(u.searchParams.get('y') ?? 0));
+    return why === null ? { status: 200, body: 'pasted' } : { status: 500, body: why };
+  });
   const report = await Promise.race([server.waitReport(run, timeoutMs), proc.exited.then(() => server.waitReport(run, 1500))]);
+  server.hooks.delete('/paste');
+  cdp?.close();
   const wallMs = Date.now() - t0;
   const tail = proc.output();
   await proc.kill();

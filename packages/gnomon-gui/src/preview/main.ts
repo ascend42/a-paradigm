@@ -16,7 +16,9 @@ import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-ker
 import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
 import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
-import { loadBoard } from '../core/board.js';
+import { loadBoard, type BoardMark, type BoardModule } from '../core/board.js';
+import { mountBoardLeaf } from '../ui/board-leaf.js';
+import { cardHasFocus } from '../ui/card-focus.js';
 
 // DEV ONLY: every CSP refusal on a preview page goes to the preview server's /diag (GET /diag lists them), so a
 // fixture that draws anything the kernel's policy would refuse says so (boards S1.0 dogfood: no CSP rows).
@@ -25,35 +27,92 @@ document.addEventListener('securitypolicyviolation', (e) => {
   void fetch('/diag', { method: 'POST', body: row }).catch(() => undefined);
 });
 
-/** #gui-board DEV fixture: the board over the transcript's feed, through the real loader. Sized with CSSOM (no inline style). */
+/**
+ * #gui-board DEV fixture (boards S1.1): the board leaf over the chat header and the chat, stopping above the
+ * pinned cards and the composer, through the real loader, in the page's theme. `?board=` picks a state: open
+ * (default), tray, empty, yielded, loading, failed, crashed, short (the rail folds) or tiny (too short to draw).
+ * The marks carry the fixture's own sample authors: the hands are real only from S1.3. Sized with CSSOM.
+ */
+const ARKY = { cls: 'agent', id: 'arky', name: 'Arky' } as const;
+const LUNA = { cls: 'agent', id: 'luna', name: 'Luna' } as const;
+const QUILL = { cls: 'agent', id: 'quill', name: 'Quill' } as const;
+const SAMPLE_MARKS: BoardMark[] = [
+  { type: 'frame', x: 24, y: 28, width: 330, height: 262, text: 'auth handoff' },
+  { type: 'sticky', x: 44, y: 56, width: 132, height: 76, text: 'token expires\nbefore the retry' },
+  { type: 'rectangle', x: 212, y: 56, width: 120, height: 60, line: 'cobalt', fill: 'sky', text: 'broker' },
+  { type: 'ellipse', x: 212, y: 168, width: 120, height: 64, line: 'leaf', fill: 'leaf', text: 'kernel', by: ARKY },
+  { type: 'arrow', x: 258, y: 120, width: 14, height: 44, line: 'raspberry', weight: 'bold' },
+  { type: 'arrow', x: 180, y: 92, width: 28, height: 0, line: 'graphite', by: ARKY },
+  { type: 'sticky', x: 44, y: 160, width: 132, height: 60, fill: 'orchid', text: 'who signs\nthe second hop?', by: LUNA },
+  { type: 'text', x: 48, y: 250, text: 'checked against the log', by: QUILL },
+  { type: 'rectangle', x: 212, y: 246, width: 120, height: 30, by: { cls: 'unknown' } },
+  { type: 'stub', x: 380, y: 56, kind: 'live:session' },
+  { type: 'stub', x: 380, y: 136, kind: 'allow:approved-by-you', by: ARKY },
+];
+
 async function openBoardFixture(): Promise<void> {
-  const feed = document.querySelector('#pane-transcript .feed') as HTMLElement | null;
-  if (!feed) return;
+  const pane = document.getElementById('pane-transcript');
+  const feed = pane?.querySelector('.feed') as HTMLElement | null;
+  if (!pane || !feed) return;
+  const variant = new URLSearchParams(location.search).get('board') ?? 'open';
   const host = document.createElement('div');
   host.id = 'preview-board';
   host.style.position = 'absolute';
-  host.style.inset = '0';
-  host.style.zIndex = '5';
-  host.style.background = '#fff';
-  if (getComputedStyle(feed).position === 'static') feed.style.position = 'relative';
-  feed.appendChild(host);
-  try {
-    const board = await loadBoard();
-    const handle = await board.mountBoard(host, { onError: (err) => void fetch('/diag', { method: 'POST', body: `board error ${err.message}` }).catch(() => undefined) });
-    handle.add([
-      { type: 'rectangle', x: 80, y: 80, width: 200, height: 110 },
-      { type: 'ellipse', x: 360, y: 90, width: 160, height: 100 },
-      { type: 'text', x: 100, y: 230, text: 'board engine under the CSP (S1.0)' },
-    ]);
-    (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
-    document.documentElement.dataset.previewBoard = board.BOARD_ENGINE;
-    // a positive row: "no CSP rows" only means something when the board is known to have mounted
-    await new Promise((r) => setTimeout(r, 300)); // the marks are counted after they have had time to be wiped
-    void fetch('/diag', { method: 'POST', body: `board ready ${board.BOARD_ENGINE} marks=${handle.count()} surface=${PREVIEW.surface}` }).catch(() => undefined);
-  } catch (err) {
-    host.textContent = `The board did not load: ${err instanceof Error ? err.message : String(err)}`;
-    void fetch('/diag', { method: 'POST', body: `board load failed ${err instanceof Error ? err.message : String(err)}` }).catch(() => undefined);
-  }
+  host.style.left = '0';
+  host.style.right = '0';
+  host.style.top = '0';
+  pane.style.position = 'relative';
+  // the leaf covers the chat header and the chat and stops above the pinned cards and the composer
+  const fit = (): void => {
+    const full = feed.getBoundingClientRect().bottom - pane.getBoundingClientRect().top;
+    host.style.height = `${variant === 'short' ? Math.min(full, 304 + 96) : variant === 'tiny' ? Math.min(full, 200) : full}px`;
+  };
+  fit();
+  new ResizeObserver(fit).observe(pane);
+  pane.appendChild(host);
+  const diag = (row: string): void => void fetch('/diag', { method: 'POST', body: row }).catch(() => undefined);
+  let crash: ((e: Error) => void) | undefined;
+  const load = (): Promise<BoardModule> =>
+    variant === 'loading'
+      ? new Promise<BoardModule>(() => undefined)
+      : variant === 'failed'
+        ? Promise.reject(new Error('the board stylesheet did not load'))
+        : loadBoard().then((m) => ({ BOARD_ENGINE: m.BOARD_ENGINE, mountBoard: (h, opts) => ((crash = opts?.onError), m.mountBoard(h, opts)) }));
+  const ready = new Promise<void>((done) => {
+    const leaf = mountBoardLeaf(host, {
+      title: 'auth handoff',
+      project: 'billing',
+      projectHue: 'h0',
+      session: 'Totals are off by a cent',
+      how: 'offer',
+      agent: 'Arky',
+      time: '14:02',
+      theme: PREVIEW.theme,
+      load,
+      cardFocused: () => cardHasFocus(document),
+      onFold: () => diag('board fold asked'),
+      onReady: (handle) => {
+        if (variant !== 'empty') handle.add(SAMPLE_MARKS);
+        (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
+        handle.onAttempt((a) => diag(`board attempt ${a.kind} types=${a.types.join(',')} files=${a.files}`));
+        void loadBoard().then(async (m) => {
+          document.documentElement.dataset.previewBoard = m.BOARD_ENGINE;
+          await new Promise((r) => setTimeout(r, 300)); // the marks are counted after they have had time to be wiped
+          if (variant === 'tray') (host.querySelector('.bd-ink') as HTMLElement | null)?.click();
+          if (variant === 'yielded') (document.querySelector('#pinned .card button, #stack .card button') as HTMLElement | null)?.focus();
+          if (variant === 'crashed') crash?.(new Error('preview: the engine stopped'));
+          // a positive row: "no CSP rows" only means something when the board is known to have mounted
+          diag(`board ready ${m.BOARD_ENGINE} marks=${handle.count()} theme=${handle.state().theme} leaf=${leaf.state()} surface=${PREVIEW.surface}`);
+          done();
+        });
+      },
+    });
+    (globalThis as { gnomonPreviewLeaf?: unknown }).gnomonPreviewLeaf = leaf;
+    // a state with no engine (loading, failed) is ready once it has drawn itself
+    if (variant === 'loading' || variant === 'failed') setTimeout(done, 500);
+  });
+  await ready;
+  await new Promise((r) => setTimeout(r, 150));
 }
 
 const frames = (n: number): Promise<void> => new Promise((r) => (n <= 0 ? r() : requestAnimationFrame(() => void frames(n - 1).then(r))));

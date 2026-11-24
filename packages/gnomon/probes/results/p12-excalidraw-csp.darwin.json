@@ -33,16 +33,16 @@
           "gzip": 199
         },
         "board/board.css": {
-          "bytes": 142932,
-          "gzip": 22312
+          "bytes": 143751,
+          "gzip": 22458
         },
         "board/board.js": {
-          "bytes": 1266626,
-          "gzip": 401724
+          "bytes": 1277913,
+          "gzip": 410629
         }
       },
-      "totalBytes": 1523875,
-      "totalGzip": 434744
+      "totalBytes": 1535981,
+      "totalGzip": 443795
     },
     "staticFindings": [],
     "engines": {
@@ -57,18 +57,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 47,
-          "mounted": 84
+          "module": 54,
+          "mounted": 76
         },
         "firstRun": {
-          "wallMs": 4127,
+          "wallMs": 21924,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 52,
-            "mounted": 93
+            "module": 54,
+            "mounted": 77
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -78,26 +78,343 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 5,
+          "finalCount": 24,
           "cursors": {
-            "selection": "",
-            "rectangle": "crosshair",
-            "diamond": "crosshair",
+            "select": "",
+            "sticky": "crosshair",
+            "text": "crosshair",
+            "rect": "crosshair",
             "ellipse": "crosshair",
             "arrow": "crosshair",
-            "line": "crosshair",
-            "freedraw": "crosshair",
-            "text": "crosshair",
-            "eraser": "url(\"blob:…\") 10 10, auto",
-            "laser": "url(\"blob:…\"), auto",
+            "frame": "crosshair",
+            "stroke": "crosshair",
             "hand": "grab"
           },
+          "hostView": {
+            "marks": [
+              "rect:human:40,40,160,80",
+              "ellipse:human:240,40,120,80",
+              "text:human:60,160,113,18",
+              "rect:human:500,300,140,100",
+              "stroke:human:700,300,120,120"
+            ],
+            "view": {
+              "scrollX": 0,
+              "scrollY": 0,
+              "zoom": 1,
+              "width": 1280,
+              "height": 800
+            },
+            "focus": true
+          },
+          "toolState": {
+            "select": "select",
+            "sticky": "sticky",
+            "text": "text",
+            "rect": "rect",
+            "ellipse": "ellipse",
+            "arrow": "arrow",
+            "frame": "frame",
+            "stroke": "stroke",
+            "hand": "hand"
+          },
+          "refusedTools": {
+            "image": "refused",
+            "eraser": "refused",
+            "laser": "refused",
+            "line": "refused",
+            "diamond": "refused",
+            "embeddable": "refused",
+            "selection": "refused",
+            "freedraw": "refused"
+          },
+          "selectedAfterClick": 1,
+          "commandPalette": {
+            "stock": [],
+            "dialogs": 0
+          },
+          "libraryDrop": {
+            "stock": [],
+            "added": 0
+          },
+          "imageTool": {
+            "afterKey": "select",
+            "handle": "refused",
+            "node": false,
+            "addedByDrop": 0,
+            "refused": [
+              "image:no-image-kind"
+            ],
+            "attempts": [
+              "drop:1"
+            ]
+          },
+          "toolKeys": {
+            "1": "select",
+            "a": "select",
+            "k": "select",
+            "e": "select",
+            "q": "select",
+            "r": "select",
+            "d": "select",
+            "o": "select"
+          },
+          "stockNodes": [],
+          "canvasFonts": [
+            "<size>px \"JetBrains Mono\", monospace"
+          ],
+          "fontFaces": [
+            "JetBrains Mono 400 loaded"
+          ],
+          "dpr": 1,
+          "edge": {
+            "profiles": 1,
+            "opaque": 52
+          },
+          "zoom": {
+            "start": 1,
+            "afterIn": 1.1,
+            "afterOut": 0.9,
+            "afterReset": 1
+          },
+          "style": {
+            "refusedLine": {
+              "ok": false,
+              "field": "line",
+              "offer": null
+            },
+            "refusedFill": {
+              "ok": false,
+              "field": "fill",
+              "offer": "raspberry"
+            },
+            "okLine": {
+              "ok": true
+            },
+            "okBack": {
+              "ok": true
+            },
+            "after": {
+              "line": "ink",
+              "fill": null,
+              "weight": "fine"
+            }
+          },
+          "skin": {
+            "day": {
+              "marks": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 28854
+              },
+              "selected": 1,
+              "selection": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 29598
+              },
+              "marquee": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 31284
+              },
+              "multiSelected": 2,
+              "multi": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 31239
+              },
+              "binding": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 31443
+              },
+              "arrowAdded": 1,
+              "afterUndo": 0,
+              "guides": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 30120
+              },
+              "caret": {
+                "caretColor": "rgb(22, 21, 15)",
+                "color": "rgb(22, 21, 15)",
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "13.5px",
+                "editing": true
+              },
+              "count": 5
+            },
+            "night": {
+              "marks": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 28836
+              },
+              "selected": 1,
+              "selection": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 29574
+              },
+              "marquee": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 31293
+              },
+              "multiSelected": 2,
+              "multi": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 31149
+              },
+              "binding": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 31368
+              },
+              "arrowAdded": 1,
+              "afterUndo": 0,
+              "guides": {
+                "width": 1280,
+                "height": 800,
+                "pngBytes": 30021
+              },
+              "caret": {
+                "caretColor": "rgb(232, 244, 240)",
+                "color": "rgb(232, 244, 240)",
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "13.5px",
+                "editing": true
+              },
+              "count": 5
+            }
+          },
+          "fix": {
+            "undo": {
+              "afterDraw": 2,
+              "afterUndo": 1
+            },
+            "textAfterShape": {
+              "selectedBefore": 1,
+              "selectedAfterTool": 0,
+              "editing": true
+            },
+            "sceneDrop": {
+              "added": 0,
+              "said": [
+                "scene-file"
+              ],
+              "dragStopped": true
+            },
+            "paste": {
+              "via": "devtools",
+              "added": 1,
+              "said": [
+                "mark:diamond",
+                "mark:line"
+              ],
+              "found": true,
+              "at": [
+                170,
+                706
+              ],
+              "edgeGaps": 0,
+              "fillAlpha": 0,
+              "edgeRgb": [
+                22,
+                21,
+                15
+              ],
+              "line": "ink",
+              "fillToken": null
+            },
+            "dataDrop": {
+              "added": 0,
+              "said": [
+                "library-file"
+              ],
+              "stopped": true,
+              "stock": []
+            },
+            "hostile": {
+              "via": "devtools",
+              "added": 1,
+              "said": [
+                "image",
+                "mark:embeddable",
+                "mark:iframe"
+              ],
+              "nodes": [],
+              "violations": 0,
+              "forged": {
+                "kind": "rect",
+                "author": "human",
+                "stubKind": null,
+                "edgeGaps": 0
+              }
+            },
+            "hands": [
+              "rect:agent:Arky:60",
+              "ellipse:unknown:60",
+              "stub:agent:Luna:live:session:288",
+              "sticky:human:80",
+              "text:agent:Quill:65"
+            ],
+            "agentEdgeGaps": 12,
+            "frame": {
+              "title": "a frame title that is long enough to be cut off",
+              "weight": "600",
+              "editor": {
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "11.5px",
+                "fontWeight": "600",
+                "color": "rgb(22, 21, 15)",
+                "radius": "0px",
+                "editing": true
+              },
+              "afterEsc": {
+                "input": false,
+                "editing": false
+              }
+            },
+            "label": {
+              "lines": [
+                "ink"
+              ],
+              "marksAdded": 1,
+              "countAdded": 1
+            }
+          },
+          "colours": {
+            "day": {
+              "width": 1280,
+              "height": 800,
+              "pngBytes": 38868
+            },
+            "night": {
+              "width": 1280,
+              "height": 800,
+              "pngBytes": 38883
+            }
+          },
+          "narrow": {
+            "stock": [],
+            "width": 374,
+            "height": 304,
+            "capture": {
+              "width": 374,
+              "height": 304,
+              "pngBytes": 8007
+            }
+          },
+          "stateEvents": 58,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 15577,
-            "ms": 8
+            "bytes": 38765,
+            "ms": 15
           },
           "violationCount": 0,
           "violations": [],
@@ -130,7 +447,15 @@
             },
             {
               "method": "GET",
-              "path": "/board/asset-0ac1d6438a10fae3.png"
+              "path": "/fonts/JetBrainsMono-Regular.woff2"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
             },
             {
               "method": "POST",
@@ -153,18 +478,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 33,
-          "mounted": 62
+          "module": 34,
+          "mounted": 57
         },
         "firstRun": {
-          "wallMs": 3923,
+          "wallMs": 22166,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
             "module": 33,
-            "mounted": 62
+            "mounted": 53
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -174,26 +499,343 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 5,
+          "finalCount": 24,
           "cursors": {
-            "selection": "",
-            "rectangle": "crosshair",
-            "diamond": "crosshair",
+            "select": "",
+            "sticky": "crosshair",
+            "text": "crosshair",
+            "rect": "crosshair",
             "ellipse": "crosshair",
             "arrow": "crosshair",
-            "line": "crosshair",
-            "freedraw": "crosshair",
-            "text": "crosshair",
-            "eraser": "url(\"blob:…\") 10 10, auto",
-            "laser": "url(\"blob:…\"), auto",
+            "frame": "crosshair",
+            "stroke": "crosshair",
             "hand": "grab"
           },
+          "hostView": {
+            "marks": [
+              "rect:human:40,40,160,80",
+              "ellipse:human:240,40,120,80",
+              "text:human:60,160,113,18",
+              "rect:human:500,300,140,100",
+              "stroke:human:700,300,120,120"
+            ],
+            "view": {
+              "scrollX": 0,
+              "scrollY": 0,
+              "zoom": 1,
+              "width": 1280,
+              "height": 800
+            },
+            "focus": true
+          },
+          "toolState": {
+            "select": "select",
+            "sticky": "sticky",
+            "text": "text",
+            "rect": "rect",
+            "ellipse": "ellipse",
+            "arrow": "arrow",
+            "frame": "frame",
+            "stroke": "stroke",
+            "hand": "hand"
+          },
+          "refusedTools": {
+            "image": "refused",
+            "eraser": "refused",
+            "laser": "refused",
+            "line": "refused",
+            "diamond": "refused",
+            "embeddable": "refused",
+            "selection": "refused",
+            "freedraw": "refused"
+          },
+          "selectedAfterClick": 1,
+          "commandPalette": {
+            "stock": [],
+            "dialogs": 0
+          },
+          "libraryDrop": {
+            "stock": [],
+            "added": 0
+          },
+          "imageTool": {
+            "afterKey": "select",
+            "handle": "refused",
+            "node": false,
+            "addedByDrop": 0,
+            "refused": [
+              "image:no-image-kind"
+            ],
+            "attempts": [
+              "drop:1"
+            ]
+          },
+          "toolKeys": {
+            "1": "select",
+            "a": "select",
+            "k": "select",
+            "e": "select",
+            "q": "select",
+            "r": "select",
+            "d": "select",
+            "o": "select"
+          },
+          "stockNodes": [],
+          "canvasFonts": [
+            "<size>px \"JetBrains Mono\", monospace"
+          ],
+          "fontFaces": [
+            "JetBrains Mono 400 loaded"
+          ],
+          "dpr": 2,
+          "edge": {
+            "profiles": 1,
+            "opaque": 104
+          },
+          "zoom": {
+            "start": 1,
+            "afterIn": 1.1,
+            "afterOut": 0.9,
+            "afterReset": 1
+          },
+          "style": {
+            "refusedLine": {
+              "ok": false,
+              "field": "line",
+              "offer": null
+            },
+            "refusedFill": {
+              "ok": false,
+              "field": "fill",
+              "offer": "raspberry"
+            },
+            "okLine": {
+              "ok": true
+            },
+            "okBack": {
+              "ok": true
+            },
+            "after": {
+              "line": "ink",
+              "fill": null,
+              "weight": "fine"
+            }
+          },
+          "skin": {
+            "day": {
+              "marks": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 93999
+              },
+              "selected": 1,
+              "selection": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 95748
+              },
+              "marquee": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 96201
+              },
+              "multiSelected": 2,
+              "multi": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 95943
+              },
+              "binding": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 101202
+              },
+              "arrowAdded": 1,
+              "afterUndo": 0,
+              "guides": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 96603
+              },
+              "caret": {
+                "caretColor": "rgb(22, 21, 15)",
+                "color": "rgb(22, 21, 15)",
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "13.5px",
+                "editing": true
+              },
+              "count": 5
+            },
+            "night": {
+              "marks": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 95076
+              },
+              "selected": 1,
+              "selection": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 97041
+              },
+              "marquee": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 97326
+              },
+              "multiSelected": 2,
+              "multi": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 97263
+              },
+              "binding": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 102327
+              },
+              "arrowAdded": 1,
+              "afterUndo": 0,
+              "guides": {
+                "width": 2560,
+                "height": 1600,
+                "pngBytes": 97863
+              },
+              "caret": {
+                "caretColor": "rgb(232, 244, 240)",
+                "color": "rgb(232, 244, 240)",
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "13.5px",
+                "editing": true
+              },
+              "count": 5
+            }
+          },
+          "fix": {
+            "undo": {
+              "afterDraw": 2,
+              "afterUndo": 1
+            },
+            "textAfterShape": {
+              "selectedBefore": 1,
+              "selectedAfterTool": 0,
+              "editing": true
+            },
+            "sceneDrop": {
+              "added": 0,
+              "said": [
+                "scene-file"
+              ],
+              "dragStopped": true
+            },
+            "paste": {
+              "via": "synthetic",
+              "added": 1,
+              "said": [
+                "mark:diamond",
+                "mark:line"
+              ],
+              "found": true,
+              "at": [
+                170,
+                375
+              ],
+              "edgeGaps": 0,
+              "fillAlpha": 0,
+              "edgeRgb": [
+                22,
+                21,
+                15
+              ],
+              "line": "ink",
+              "fillToken": null
+            },
+            "dataDrop": {
+              "added": 0,
+              "said": [
+                "library-file"
+              ],
+              "stopped": true,
+              "stock": []
+            },
+            "hostile": {
+              "via": "synthetic",
+              "added": 1,
+              "said": [
+                "image",
+                "mark:embeddable",
+                "mark:iframe"
+              ],
+              "nodes": [],
+              "violations": 0,
+              "forged": {
+                "kind": "rect",
+                "author": "human",
+                "stubKind": null,
+                "edgeGaps": 0
+              }
+            },
+            "hands": [
+              "rect:agent:Arky:60",
+              "ellipse:unknown:60",
+              "stub:agent:Luna:live:session:288",
+              "sticky:human:80",
+              "text:agent:Quill:65"
+            ],
+            "agentEdgeGaps": 12,
+            "frame": {
+              "title": "a frame title that is long enough to be cut off",
+              "weight": "600",
+              "editor": {
+                "fontFamily": "\"JetBrains Mono\", monospace",
+                "fontSize": "11.5px",
+                "fontWeight": "600",
+                "color": "rgb(22, 21, 15)",
+                "radius": "0px",
+                "editing": true
+              },
+              "afterEsc": {
+                "input": false,
+                "editing": false
+              }
+            },
+            "label": {
+              "lines": [
+                "ink"
+              ],
+              "marksAdded": 1,
+              "countAdded": 1
+            }
+          },
+          "colours": {
+            "day": {
+              "width": 2560,
+              "height": 1600,
+              "pngBytes": 127830
+            },
+            "night": {
+              "width": 2560,
+              "height": 1600,
+              "pngBytes": 128970
+            }
+          },
+          "narrow": {
+            "stock": [],
+            "width": 374,
+            "height": 304,
+            "capture": {
+              "width": 748,
+              "height": 608,
+              "pngBytes": 23544
+            }
+          },
+          "stateEvents": 58,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 19400,
-            "ms": 20
+            "bytes": 41927,
+            "ms": 12
           },
           "violationCount": 0,
           "violations": [],
@@ -222,7 +864,15 @@
             },
             {
               "method": "GET",
-              "path": "/board/asset-0ac1d6438a10fae3.png"
+              "path": "/fonts/JetBrainsMono-Regular.woff2"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
             },
             {
               "method": "POST",
@@ -243,6 +893,37 @@
       "chromium",
       "wkwebview"
     ],
+    "exercised": {
+      "library-file drop": [
+        "chrome",
+        "wkwebview"
+      ],
+      "image-file drop": [
+        "chrome",
+        "wkwebview"
+      ],
+      "scene-file drop": [
+        "chrome",
+        "wkwebview"
+      ],
+      "library-type drag (no file)": [
+        "chrome",
+        "wkwebview"
+      ],
+      "paste: stock marks": [
+        "chrome",
+        "wkwebview"
+      ],
+      "paste: forged author, iframe, embeddable, image": [
+        "chrome",
+        "wkwebview"
+      ]
+    },
+    "pasteVia": {
+      "chrome": "devtools",
+      "wkwebview": "synthetic"
+    },
+    "pasteModifier": "Meta",
     "clean": true,
     "findings": []
   },
@@ -253,7 +934,8 @@
     "OPEN 12",
     "G-WEB-06",
     "G-DDL-06",
+    "G-DDL-07",
     "S25-M3"
   ],
-  "at": "2026-11-24T07:42:14.478Z"
+  "at": "2026-11-24T13:01:13.154Z"
 }
