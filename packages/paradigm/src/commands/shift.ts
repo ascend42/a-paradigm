@@ -129,7 +129,7 @@ function buildAgentSummaries(
  * For existing-project upgrades that match cohort C (project defines
  * `~aspects` in any `.purpose` file but the `compliance` archetype is NOT
  * on the roster), prompt the user to add Rune (compliance) to the roster.
- * Without a claimant, paradigm 6.0.4 no longer enforces aspect coverage —
+ * Without a claimant, Paradigm does not enforce aspect coverage —
  * this nomination step is the recovery path.
  *
  * No-ops silently when:
@@ -193,8 +193,8 @@ export async function runComplianceNominationStep(
   console.log('  This project defines ~aspects but no compliance-archetype agent');
   console.log('  (Rune) is on the roster.');
   console.log('');
-  console.log('  Without a claimant, paradigm 6.0.4 no longer enforces aspect');
-  console.log('  coverage. You can:');
+  console.log('  Without a claimant, Paradigm does not enforce aspect coverage.');
+  console.log('  You can:');
   console.log('');
   console.log(`    ${chalk.green('[Y]')} Add Rune (compliance) to the roster — recommended`);
   console.log('        Authority defaults will be written to .paradigm/authority.yaml.');
@@ -552,7 +552,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   // v6.0.4 — Step 2c-nominate-compliance.
   // For existing-project upgrades where the project defines ~aspects but the
   // compliance archetype (Rune) is NOT on the roster, prompt to add him.
-  // Without a claimant, paradigm 6.0.4 no longer enforces aspect coverage.
+  // Without a claimant, Paradigm does not enforce aspect coverage.
   // Predicate matches the cohort-C definition in migration-notices.ts.
   await runComplianceNominationStep(cwd, rosterPath, options);
 
