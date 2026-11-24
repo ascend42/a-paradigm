@@ -307,8 +307,8 @@ components:
       yield-gesture-start, -change, -end) make the engine's document-level
       listeners return at once; refusal listeners and the handle's window
       listeners are removed at unmount. src/board/simplify.ts fits a new
-      freehand stroke to 1,024 points and 8,192 bytes (half of each limit
-      the mod refuses at) with Ramer-Douglas-Peucker before it is read.
+      freehand stroke to a size one row may carry before it is read (the
+      numbers and the rule are in the review-batch paragraph below).
       The board build's contracts allowlist is content-palette.ts, dim.ts,
       secret-rules.ts and internal.ts, exactly; the chunk re-exports
       foldDim and emptyDimState for a page that has only the chunk (the
@@ -317,11 +317,49 @@ components:
       hand) and zoom400-day (a stroke drawn at 400%: whole-unit rounding
       shows as short straight runs at that zoom, judged acceptable; the
       contract is unchanged).
+      Review batch of PR #116 (Aegis, Probe, Mika; 2026-11-24). An edit
+      reports ONLY the marks whose engine version moved (a malformed order
+      key on another mark is not re-keyed in the person's edit), and a mark
+      in hand is compared with the node it was drawn from, so a remote
+      change that lands mid-gesture is kept and the drop is the person's
+      own delta. A put-back rebases first and stops after two in a row, so
+      an engine change nobody made, or one made while yielded, is put back
+      once and never spins. Only TRUSTED events count as input (the P12
+      harness alone sets the probe-only mount option syntheticInput); a
+      gesture that changed nothing leaves nothing armed; `cause` is
+      cleared after every report; setStyle(style, by) takes the rail's own
+      event and a restyle without one is put back. A text opened and
+      closed with the words it had reports nothing. A stored bound arrow
+      keeps its stored geometry: an end follows only what its own shape
+      moved. Cmd+Z with a mark in hand does not reach the host.
+      handle.drift() is the unfiltered whole-scene diff (tests and
+      diagnostics; never sent). Strokes: lastCommittedPoint is set after
+      the engine's restore, so a stroke is drawn to its last point; a
+      stored stroke of one point is a dot; simplify.ts drops non-finite
+      points, takes the smallest tolerance that fits (budget 1,900 points
+      and 12 KiB per stroke), never passes a ceiling of 4 board units, and
+      SPLITS a stroke that cannot fit into several that share their end
+      points (its work is bounded by windows of 1,024 points and tested by
+      counting); a stroke drawn above 100% zoom gets the half-unit pass.
+      Display: the seal or hollow pin of a drawn mark stands 2px clear of
+      the first point (a frame: its top edge at the right corner) and is
+      clamped into the part of the mark that is in view
+      (core/board-overlay.ts markSealPoint); a fallback mark is locked in
+      the engine (no drag, no handles, no selection) and a press on it is
+      a refusal the leaf says (`fallback`, proposed copy); a long kind
+      stays on one line; the foot is 32px; an agent's name has control and
+      format characters removed and never reads as `you` or `unknown hand`
+      (core/board-overlay.ts boardAgentName, through the contracts
+      sanitizer); engine ids come from
+      crypto.getRandomValues; the yielded flag is per board (the patches
+      pass the engine's container). Still module-wide: the refusal
+      listeners in skin.ts. For the next pass: a split stroke is several
+      add ops in ONE onEdit call, and a row over 16 KiB is refused whole,
+      so the sender must put pieces in separate rows when their sum is
+      too large.
       Still open for the next passes: paste and copy interception (C8),
       the leaf's live wiring, the wake hold that swallows a drag or a wheel
-      begun shortly after waking, a real-paste test on CI, the foot of the
-      leaf growing by a few pixels when it holds a seal. Not shown: a
-      stored stroke of a single point (the engine holds no such element).
+      begun shortly after waking, a real-paste test on CI.
       A pen's pressure is not stored, so a stroke re-rendered from the
       fold has the simulated taper.
       For S1.4 (recorded from the reviews, not built): opening the tray by
@@ -335,7 +373,7 @@ components:
       overlay nodes in headless Chromium on the founder's Mac; the figure
       is in her review, not here, and WKWebView has not been timed);
       refusal listeners in skin.ts are module-wide, so two boards on one
-      page would hear each other (the yielded flag is module-wide too); the
+      page would hear each other; the
       binding highlight is under 3:1; Alt-drag duplicates a mark while
       Cmd+D is off; drawing by keyboard alone is impossible; Luna's open
       questions (square or rounded handles, stroke taper, sticky text size,

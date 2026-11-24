@@ -25,7 +25,7 @@
  * The full display-block:v1 contract (a JSON Schema in gnomon-contracts) is
  * M1.1's; this gate is the kernel's fail-closed subset until it lands.
  */
-import { KIT_V1_BLOCKS, MOD_BLOCK_LIMITS, checkCap } from '@a-company/gnomon-contracts';
+import { DIM_ID_PATTERN, KIT_V1_BLOCKS, MOD_BLOCK_LIMITS, checkCap } from '@a-company/gnomon-contracts';
 import { sanitizeLine } from '../broker/card.js';
 import { ModRefusal } from './refusal.js';
 
@@ -139,6 +139,8 @@ export function sanitizeModBlock(raw: unknown, modName: string): SanitizedBlock 
         break;
       case 'Canvas':
         out.dim = str(n.dim, `${at}.dim`);
+        // a dimension id and nothing else: a Canvas names a board, it never carries words or a path
+        if (!DIM_ID_PATTERN.test(out.dim as string)) throw new ModRefusal('BLOCK', `${at}.dim is not a dimension id`, { name: modName, at });
         if (n.readOnly !== undefined) out.readOnly = n.readOnly === true;
         break;
     }

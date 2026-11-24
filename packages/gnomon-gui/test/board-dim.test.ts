@@ -434,6 +434,64 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
     expect(a.drift).toEqual([]);
   }, 120_000);
 
+  // ── review batch C: display ──
+  it('C1: panned so an agent stroke\'s first point is off-screen, its seal is still in view, and it never covers the first point', async () => {
+    const S = fixtureId(930);
+    const rect = (q: string): string => `(() => { const e = document.querySelector(${JSON.stringify(q)}); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]; })()`;
+    const a = await real([
+      { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${S}', kind: 'stroke', x: 60, y: 200, z: 'za', points: [0, 0, 200, 10, 400, 0, 700, 30] } }], 'arky')), 1)`, as: 'r' }, { wait: 250 },
+      { read: rect('#preview-board .bd-over .bd-seal'), as: 'sealAtRest' }, { read: rect('#preview-board .bd-stage'), as: 'stage' },
+      // pan left by hand until the first point is out of view
+      { press: '#preview-board [data-key="tool:hand"]' }, { drag: [[500, 380], [400, 380], [300, 380], [200, 380]] }, { wait: 250 },
+      { read: `${B}.view().scrollX`, as: 'scrollX' },
+      { read: rect('#preview-board .bd-over .bd-seal'), as: 'sealPanned' }, { read: `document.querySelectorAll('#preview-board .bd-over .bd-seal').length`, as: 'seals' },
+      { read: COUNT, as: 'edits' },
+    ], 'empty');
+    expect(a.errors).toEqual([]);
+    const stage = a.stage as number[];
+    const rest = a.sealAtRest as number[];
+    // at rest: left of the first point (stage x 60), 2px clear of it, not on it
+    expect(rest[2]! - stage[0]!).toBeLessThanOrEqual(60 - 1);
+    expect(a.scrollX as number).toBeLessThan(-100);
+    const panned = a.sealPanned as number[];
+    expect(a.seals).toBe(1);
+    expect(panned[0]!).toBeGreaterThanOrEqual(stage[0]! - 1);
+    expect(panned[2]!).toBeLessThanOrEqual(stage[2]! + 1);
+    expect(a.edits).toBe(0);
+  }, 120_000);
+
+  it('C2, C3: a fallback mark starts no drag, shows no selection and is not deleted, and the leaf says why; a long kind stays on one line; the foot is 32px with and without a seal', async () => {
+    const LONG = fixtureId(931);
+    const a = await real([
+      { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${LONG}', kind: 'a-very-long-namespace-x:a-kind-name-that-runs-to-the-limit-x', x: 380, y: 230 } }], 'arky')), 1)`, as: 'r' }, { wait: 250 },
+      { read: `document.querySelector('#preview-board .bd-foot').getBoundingClientRect().height`, as: 'footWithSeals' },
+      // the fixture's own stub at (380, 56), 288 by 52: drag it, then press it and Delete
+      { drag: [[500, 80], [520, 110], [540, 150], [560, 190]] }, { wait: 250 },
+      { read: `${B}.marks().filter((m) => m.kind === 'stub').map((m) => [Math.round(m.x), Math.round(m.y)]).sort((p, q) => p[1] - q[1])`, as: 'stubsAfterDrag' },
+      { at: [640, 420], press: true },
+      { at: [500, 80], press: true }, { read: `${B}.state().selected`, as: 'selected' },
+      { read: `document.querySelector('#preview-board .bd-keep').textContent`, as: 'said' },
+      { key: 'Delete' }, { wait: 250 },
+      { read: `${B}.marks().filter((m) => m.kind === 'stub').length`, as: 'stubs' },
+      { read: COUNT, as: 'edits' }, { read: `${B}.drift()`, as: 'drift' },
+      { read: `[...document.querySelectorAll('#preview-board .bd-stub')].map((e) => { const k = e.querySelector('.bd-stub-k'); const n = e.querySelector('.bd-stub-n'); const b = e.getBoundingClientRect(); return { lineK: Math.round(k.getBoundingClientRect().height), fits: n.getBoundingClientRect().bottom <= b.bottom + 0.5, kWithin: k.getBoundingClientRect().right <= b.right + 0.5 }; })`, as: 'stubBoxes' },
+      { read: `(${B}.render(globalThis.gnomonPreviewState([{ hand: 'you', marks: [{ kind: 'rect', x: 40, y: 40, w: 60, h: 40 }] }])), 1)`, as: 'r2' }, { wait: 250 },
+      { read: `document.querySelector('#preview-board .bd-foot').getBoundingClientRect().height`, as: 'footNoSeals' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.stubsAfterDrag).toEqual([[380, 56], [380, 136], [380, 230]]);
+    expect(a.selected).toBe(0);
+    expect(a.said).toContain('kept as it is');
+    expect(a).toMatchObject({ stubs: 3, edits: 0, drift: [] });
+    for (const b of a.stubBoxes as Array<{ lineK: number; fits: boolean; kWithin: boolean }>) {
+      expect(b.lineK).toBeLessThanOrEqual(22); // one line, never two
+      expect(b.fits).toBe(true);
+      expect(b.kWithin).toBe(true);
+    }
+    expect(a.footWithSeals).toBe(32);
+    expect(a.footNoSeals).toBe(32);
+  }, 120_000);
+
   it('a mark of another hand is never drawn the same as yours: the engine dashes it, or the host lays a seal or a hollow pin over it', async () => {
     const MARK: Record<string, Record<string, unknown>> = {
       text: { kind: 'text', x: 60, y: 60, text: 'plain text' },

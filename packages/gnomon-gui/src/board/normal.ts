@@ -54,8 +54,9 @@ export function normalOf(el: { type: string; strokeWidth?: number; startArrowhea
     opacity: 100,
     roundness: null,
     link: null,
-    // a pasted lock could never be undone (the board has no lock key)
-    locked: false,
+    // a pasted lock could never be undone (the board has no lock key). ONE mark is locked, by the handle: a
+    // fallback (a node this build cannot draw) starts no drag and shows no handles, since no op may touch it
+    locked: stamp?.kind === 'stub',
     // WHICH ends carry a head is the arrow's own (`head` of dim-shape:v1: none, end or both, so a start head never
     // stands without an end head); the SHAPE of a head is fixed: the open arrow, never a stock triangle, bar or dot
     ...(el.type === 'arrow' ? { startArrowhead: el.startArrowhead != null ? 'arrow' : null, endArrowhead: el.startArrowhead != null || el.endArrowhead != null ? 'arrow' : null } : {}),

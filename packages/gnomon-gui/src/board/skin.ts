@@ -81,9 +81,17 @@ export function setBoardYielded(host: object, on: boolean): void {
 }
 /**
  * Read by the patched engine (patches `yield-keyup`, `yield-gesture-*`): its document-level keyup and gesture
- * listeners return at once while a board on the page has yielded (G-DDL-08). A page shows one board at a time.
+ * listeners return at once while THEIR board has yielded (G-DDL-08): each patch passes the engine's own container.
  */
-export const gnomonBoardYielded = (): boolean => yieldedHosts.size > 0;
+export const gnomonBoardYielded = (container?: unknown): boolean => {
+  if (yieldedHosts.size === 0) return false;
+  // per board: the engine passes its own container, and only the board that holds it has yielded
+  if (container && typeof (container as Node).nodeType === 'number') {
+    for (const host of yieldedHosts) if ((host as Node).contains?.(container as Node)) return true;
+    return false;
+  }
+  return true;
+};
 
 /** What the engine refused to do, for the host to say in its own words. */
 export type BoardRefusalKind = 'image' | 'mark';

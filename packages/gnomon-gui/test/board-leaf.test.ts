@@ -106,4 +106,9 @@ describe('#gui-board fences', () => {
     for (const cls of used) expect(css, cls).toMatch(new RegExp(`\\.${cls}(?![a-z-])`));
     expect(ui).not.toMatch(/setAttribute\(\s*['"]style['"]|style=\\?["']|innerHTML|insertAdjacentHTML/);
   });
+  it('the app never asks for untrusted input to count: `syntheticInput` is the probe harness\'s alone (review batch A3)', () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
+    for (const f of ['ui/board-leaf.ts', 'ui/app.ts', 'core/board-leaf.ts', 'preview/main.ts']) expect(readFileSync(path.join(root, f), 'utf8'), f).not.toMatch(/syntheticInput/);
+    expect(readFileSync(path.join(root, 'core', 'board.ts'), 'utf8')).toMatch(/syntheticInput\?: boolean/);
+  });
 });

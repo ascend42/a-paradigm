@@ -127,6 +127,11 @@ describe('closed kit gate (§12.2)', () => {
     expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Text', text: 'x', onclick: 'y' }, 'm')).toThrow(ModRefusal);
     expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Image', blob: `sha256:${'a'.repeat(64)}`, alt: ' ', w: 1, h: 1 }, 'm')).toThrow(/alt/);
     expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Text', text: 'x'.repeat(300 * 1024) }, 'm')).toThrow(/exceeds/);
+    // a Canvas names a dimension by id and carries nothing else (S1.3: the field is `dim`, held to the id pattern)
+    const canvas = (dim: unknown, more: Record<string, unknown> = {}): unknown => ({ schemaVersion: 'display-block:v1', type: 'Canvas', dim, ...more });
+    expect(sanitizeModBlock(canvas('dim:01JD1MVECT0R00000000000001', { readOnly: true }), 'm').block).toEqual({ schemaVersion: 'display-block:v1', type: 'Canvas', dim: 'dim:01JD1MVECT0R00000000000001', readOnly: true });
+    for (const bad of ['a board', 'dim:short', '../../etc/passwd', 'dim:01JD1MVECT0R00000000000001 and words', '', 7]) expect(() => sanitizeModBlock(canvas(bad), 'm'), String(bad)).toThrow(ModRefusal);
+    expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Canvas', ds: 'dim:01JD1MVECT0R00000000000001' }, 'm')).toThrow(ModRefusal);
     const ok = await h.render('acme.probe', 'probe.view', {});
     expect(ok).toMatchObject({ label: 'mod:acme.probe', dev: false, block: { schemaVersion: 'display-block:v1', type: 'Text', text: 'hi' } });
   });

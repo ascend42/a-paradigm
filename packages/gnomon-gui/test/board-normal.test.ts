@@ -40,6 +40,10 @@ describe('#gui-board the normal form of a mark', () => {
 
   it('a pasted lock is taken off and a pasted arrow keeps no stock head: the ends that had one get the open arrow (none, end or both)', () => {
     expect(offNormal({ type: 'rectangle', locked: true } as never, null, 'day')).toBe(true);
+    // ONE mark is locked, by the handle and never by a paste: a fallback, which no op may touch (review batch C2)
+    expect(normalOf({ type: 'rectangle' }, { line: 'graphite', fill: 'paper', kind: 'stub' }, 'day').locked).toBe(true);
+    expect(normalOf({ type: 'rectangle' }, { line: 'ink', fill: 'lemon', kind: 'sticky' }, 'day').locked).toBe(false);
+    expect(offNormal({ type: 'rectangle', locked: false } as never, { line: 'graphite', fill: 'paper', kind: 'stub' }, 'day')).toBe(true);
     expect(normalOf({ type: 'arrow', endArrowhead: 'arrow' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow', locked: false });
     expect(offNormal({ type: 'arrow', startArrowhead: 'dot', endArrowhead: 'triangle' } as never, null, 'day')).toBe(true);
     expect(normalOf({ type: 'arrow', startArrowhead: 'dot', endArrowhead: 'triangle' }, null, 'day')).toMatchObject({ startArrowhead: 'arrow', endArrowhead: 'arrow' });

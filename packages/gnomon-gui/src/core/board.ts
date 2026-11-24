@@ -58,7 +58,8 @@ export interface BoardStyleRefusal {
 /**
  * Who drew a mark, as the HOST knows it (design component author-seal: three hands). `human` is you; `agent` is an
  * agent the host named (`id` is the host-stamped agent id the seal is worked out from, `name` the text beside it:
- * the same id until a later pass gives agents display names); `unknown` is a mark with no author the host vouches
+ * the same id until a later pass gives agents display names; the leaf shows it through
+ * core/board-overlay.ts boardAgentName, never raw); `unknown` is a mark with no author the host vouches
  * for. It is read ONLY from the `by` of the folded dimension the board last rendered, never from an element, so
  * nothing pasted, dropped or copied can carry one.
  */
@@ -77,9 +78,12 @@ export interface BoardMarkView {
   y: number;
   width: number;
   height: number;
-  /** the mark's first point (where a drawn mark's seal sits) */
+  /** the mark's first point (a drawn mark's seal stands just off it) */
   firstX: number;
   firstY: number;
+  /** the second point of a stroke or an arrow, when it has one (the seal stands on the far side of the first from it) */
+  secondX?: number;
+  secondY?: number;
   author: BoardAuthor;
   /** the mark's content-palette tokens (a label is always the default line) */
   line: string;
@@ -114,10 +118,12 @@ export interface BoardAttempt {
  *  - `scene-file`, `library-file`, `file`: a file dropped on the board; the drop never reaches the engine
  *  - `table`: tab-separated text pasted (the engine's chart dialog is not built into the board)
  *  - `mark`: a pasted mark of a kind the board does not have (`detail` names the engine type); it was removed
+ *  - `fallback`: a press on a mark this build cannot draw (`detail` is its kind). It is locked in the engine: it
+ *    starts no drag, shows no handles and cannot be selected or deleted, so the leaf says why nothing happened
  */
 export interface BoardRefusal {
-  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'table' | 'mark';
-  why: 'no-image-kind' | 'no-file-drop' | 'no-table-kind' | 'not-a-board-kind';
+  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'table' | 'mark' | 'fallback';
+  why: 'no-image-kind' | 'no-file-drop' | 'no-table-kind' | 'not-a-board-kind' | 'kept-as-it-is';
   detail?: string;
 }
 

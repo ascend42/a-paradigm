@@ -430,7 +430,9 @@ const DRIVER = `'use strict';
         if (ans.status !== 501) R.pasteTrouble = (await ans.text()).slice(0, 200);
       } catch (e) { R.pasteTrouble = String(e).slice(0, 200); }
       var dt2 = new DataTransfer(); dt2.setData('text/plain', text);
-      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 }));
+      // on the board's own container, as a real paste is (it targets the focused element and bubbles to the document,
+      // where the engine listens): the handle counts a paste as the person's only when it passes through the board
+      container.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 }));
       return 'synthetic';
     };
     // Mika's S1.1 pass A findings, each replayed on the shipped chunk (day theme, select tool).

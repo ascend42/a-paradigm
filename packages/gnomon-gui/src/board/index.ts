@@ -122,6 +122,8 @@ const carriesMore = (el: Element): boolean => {
 };
 
 const DEFAULT_MOUNT_TIMEOUT_MS = 15_000;
+/** How long after a paste event the engine may take to add what was pasted (it reads the clipboard asynchronously). */
+const PASTE_SETTLE_MS = 1500;
 const asError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
 /** How often the mount looks at the engine's loading flag while it initialises its scene. */
@@ -267,6 +269,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       let yielded = false;
       /** Put-backs in a row with no input between them: the second one stops (an engine that keeps normalising cannot loop). */
       let putBacks = 0;
+      /** Until when a paste the person made may still add its marks (the engine reads the clipboard asynchronously). */
+      let pasteUntil = 0;
       /** The stored node each main element was last BUILT from: what the person saw when they took a mark in hand. */
       const seen = new Map<string, Record<string, unknown>>();
       /** The text being typed, as it was when it was opened: a text opened and left as it was is not an edit. */
@@ -338,6 +342,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           height: maxY - minY,
           firstX: el.x,
           firstY: el.y,
+          ...(el.points && el.points.length > 1 ? { secondX: el.x + el.points[1]![0], secondY: el.y + el.points[1]![1] } : {}),
           author: g?.by ?? HUMAN,
           line: g?.line ?? CONTENT_DEFAULTS.line,
           fill: g?.fill ?? null,
@@ -559,6 +564,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (dead !== null || recolouring || busy()) return;
         if (!dirty()) {
           // the gesture is over and changed nothing: it does not stay armed for a later engine change
+          // (but a paste the engine is still reading is not over)
+          if (performance.now() < pasteUntil) return;
           touched = false;
           cause = null;
           return;
@@ -567,6 +574,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         // not an edit, and is not kept either
         if (!touched || yielded) return putBack();
         putBacks = 0;
+        pasteUntil = 0;
         const s = api.getAppState();
         followArrows(s.selectedElementIds as Record<string, unknown>);
         fitNewStrokes();
@@ -660,8 +668,28 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const unsubscribeScroll = api.onScrollChange(sceneChanged);
       // the pointer and the keys a person uses on the board: what makes a later engine change an edit, and the
       // event its gesture stamp is minted from (the leaf's; the handle only hands the event on)
+      let downAt: { x: number; y: number } | null = null;
+      /** A press that lands on a fallback mark and goes nowhere: the mark is locked, so the leaf is told why nothing happened. */
+      const pressOnFallback = (e: Event): void => {
+        const p = e as PointerEvent;
+        const from = downAt;
+        downAt = null;
+        if (!from || tool !== 'select' || Math.hypot(p.clientX - from.x, p.clientY - from.y) > 4) return;
+        const box = surface()?.getBoundingClientRect();
+        if (!box) return;
+        const s = api.getAppState();
+        const x = (p.clientX - box.left) / s.zoom.value - s.scrollX;
+        const y = (p.clientY - box.top) / s.zoom.value - s.scrollY;
+        for (const el of [...(api.getSceneElements() as unknown as Element[])].reverse()) {
+          if (x < el.x || y < el.y || x > el.x + el.width || y > el.y + el.height) continue;
+          const st = stampOf(el);
+          if (st?.kind === 'stub') return refuse({ what: 'fallback', why: 'kept-as-it-is', detail: st.stubKind ?? '' });
+          if (el.type !== 'frame') return; // the press was on a mark above it
+        }
+      };
       const onDown = (e: Event): void => {
         pointerDown = true;
+        downAt = counts(e) ? { x: (e as PointerEvent).clientX, y: (e as PointerEvent).clientY } : null;
         if (!counts(e)) return;
         touched = true;
         putBacks = 0;
@@ -669,7 +697,10 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const onUp = (e: Event): void => {
         if (!pointerDown) return;
         pointerDown = false;
-        if (counts(e)) cause = e;
+        if (counts(e)) {
+          cause = e;
+          pressOnFallback(e);
+        }
         // the engine settles its own state after this event: look once it has
         setTimeout(queueFlush, 0);
       };
@@ -736,7 +767,11 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       // tab-separated text would open the engine's chart dialog, which is not built: nothing happens, so say so
       const onTablePaste = (e: ClipboardEvent): void => {
-        if (counts(e)) touched = true;
+        // the engine reads a paste asynchronously: its marks arrive after this event's own turn has ended
+        if (counts(e)) {
+          touched = true;
+          pasteUntil = performance.now() + PASTE_SETTLE_MS;
+        }
         onPaste(e);
         const rows = (e.clipboardData?.getData('text/plain') ?? '').trim().split(/\r?\n/);
         if (rows.length >= 2 && rows.every((r) => r.includes('\t'))) refuse({ what: 'table', why: 'no-table-kind' });
