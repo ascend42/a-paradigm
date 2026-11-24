@@ -51,9 +51,65 @@ export interface BoardStyleRefusal {
   offer: string | null;
 }
 
+/**
+ * Who drew a mark, as the HOST knows it (design component author-seal: three hands). `human` is you; `agent` is an
+ * agent the host named (`id` is the host-stamped author id the seal is worked out from, `name` the text beside
+ * it); `unknown` is a mark with no author the host vouches for. It is never read from anything a person or an
+ * agent typed: until S1.3 maps real rows, only the handle's `add` (the fixture) sets it.
+ */
+export type BoardAuthor = { cls: 'human' } | { cls: 'agent'; id: string; name: string } | { cls: 'unknown' };
+
+/** What the host layer needs to know about one mark, to lay DOM over it. Scene units; see BoardView for the screen. */
+export interface BoardMarkView {
+  id: string;
+  /** `stub`: a node of a kind this build cannot draw (fallback-node); `other`: an engine element outside the rail's kinds */
+  kind: 'sticky' | 'rect' | 'ellipse' | 'arrow' | 'frame' | 'stroke' | 'text' | 'stub' | 'other';
+  /** bounding box */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** the mark's first point (where a drawn mark's seal sits) */
+  firstX: number;
+  firstY: number;
+  author: BoardAuthor;
+  selected: boolean;
+  /** a stub's kind exactly as it was given (the host pattern-checks it before showing it) */
+  stubKind?: string;
+  /** the mark this text is the label of, when it is one */
+  labelOf?: string;
+}
+
+/** The viewport: a scene point (x, y) is drawn at ((x + scrollX) * zoom, (y + scrollY) * zoom) from the board's top-left. */
+export interface BoardView {
+  scrollX: number;
+  scrollY: number;
+  zoom: number;
+  width: number;
+  height: number;
+}
+
+/** A paste or a drop that reached the board. Reported, not acted on and not stopped (S1.3 intercepts: condition C8). */
+export interface BoardAttempt {
+  kind: 'paste' | 'drop';
+  /** the DataTransfer types offered, never their content */
+  types: string[];
+  files: number;
+}
+
+/** Something the engine refused to do. `image`: a file-based image insert; the board has no image kind until S2. */
+export interface BoardRefusal {
+  what: 'image';
+  why: 'no-image-kind';
+}
+
 /** A mark added through the handle (enough for the fixture and the probes; not the stored shape vocabulary). */
 export interface BoardMark {
-  type: 'rectangle' | 'ellipse' | 'text' | 'sticky' | 'arrow' | 'frame';
+  type: 'rectangle' | 'ellipse' | 'text' | 'sticky' | 'arrow' | 'frame' | 'stub';
+  /** who drew it (default: you). An agent's or an unknown hand's mark is drawn dashed; that is derived, never set */
+  by?: BoardAuthor;
+  /** a stub's kind */
+  kind?: string;
   x: number;
   y: number;
   width?: number;
@@ -105,6 +161,19 @@ export interface BoardHandle {
   state(): BoardState;
   /** Be told when `state()` would answer differently. Returns the unsubscribe. */
   onState(listener: (state: BoardState) => void): () => void;
+  /** Every non-deleted mark, in paint order. */
+  marks(): BoardMarkView[];
+  view(): BoardView;
+  /** Be told when `marks()` or `view()` would answer differently (a mark drawn or moved, a pan, a zoom, a resize). */
+  onScene(listener: () => void): () => void;
+  /** Give the board the keyboard (its drawing surface takes focus; the page does not scroll). */
+  focus(): void;
+  /** True while focus is inside the board (the surface or a text being typed). */
+  hasFocus(): boolean;
+  /** Be told about a paste or a drop on the board. The handle neither acts on it nor stops it. */
+  onAttempt(listener: (attempt: BoardAttempt) => void): () => void;
+  /** Be told when the engine refused something, so the leaf can say so. The engine itself shows nothing. */
+  onRefused(listener: (refusal: BoardRefusal) => void): () => void;
   /** The scene as a PNG on the theme's ground, rendered on a canvas (the GUI never exports SVG, §12.7). */
   exportPng(): Promise<Blob>;
   /**

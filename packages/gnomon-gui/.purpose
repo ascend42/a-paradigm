@@ -123,11 +123,56 @@ components:
       Not done in pass A, stated: the stock UI components are unrendered but
       still in the bytes (board.js did not shrink); the laser cursor keeps
       its engine colours (no laser tool exists); paste, and a dropped
-      .excalidraw scene file, still reach the engine (condition C8, S1.3);
-      the rail, tray, seals, pins and the leaf's loading and failed states
-      are the host layer (pass B). scripts/preview-shots.mjs --chrome
-      (virtual time) captures the board before it mounts, because the mount
-      now waits for the font; a real-time capture shows it.
+      .excalidraw scene file, still reach the engine (condition C8, S1.3).
+      Boards S1.1, pass B (the host layer; design components board-leaf,
+      board-rail, content-tray, author-seal, pin, fallback-node, all
+      proposed). Carried fixes: the font-metrics patch is built from
+      BOARD_FONT_METRICS, which scripts/board-font.mjs reads from
+      static/fonts/JetBrainsMono-Regular.woff2 (1000 units per em, ascender
+      1020, descender -300, line gap 0, so a 1.32 line); the build and
+      test/board-font.test.ts fail when file and patch disagree. A refused
+      image insert reaches the host through handle.onRefused (the engine
+      shows nothing). scripts/preview-shots.mjs --chrome captures in real
+      time over the DevTools protocol, waiting for data-preview=ready (under
+      Chrome's virtual-time screenshot the board fixture never finished
+      mounting; the cause was not found).
+      Handle additions: marks() (id, kind, box, first point, author,
+      selected, a stub's kind, a label's owner), view(), onScene, focus,
+      hasFocus, onAttempt (a paste or a drop is reported from the capture
+      phase and neither acted on nor stopped), onRefused. A mark's author
+      slot (human, agent with id and name, unknown) is set only through add
+      (the fixture) until S1.3 maps real rows; a mark that is not yours is
+      drawn with the engine's dashed stroke, derived from the author on every
+      change (a dashed stroke on a mark of yours is repainted solid), never
+      an input. A stub (a node of a kind this build cannot draw) is an
+      engine rectangle of at least 156 by 52 that setStyle leaves alone.
+      Host layer, PURE models with tests: core/board-seal.ts (FNV-1a, cut,
+      bead, letter; the design's ten vectors pass, hex cuts included),
+      core/board-rail.ts (tools, letters, glyph paths, railKeyAction,
+      railLayout folding at 472 and 408 and then one tool per row),
+      core/board-tray.ts (wells from the palette's names; customEntry
+      through contentColourCheck, a refusal offers the nearest swatch and
+      stores nothing), core/board-overlay.ts (screen transform, pins, seals,
+      the box round a text that is not yours, stub words, the hands foot),
+      core/board-leaf.ts (states and the design's copy). ui/board-leaf.ts
+      draws them (head, keep line, rail, tray, overlay, notes, foot) and
+      touches the engine only through the handle; static/styles.css carries
+      the bd-* rules moved from the specimen. Letters act only with focus in
+      the board, never while a text is typed or a card is focused; a press
+      on a yielded board only wakes it, and only if trusted. NOTHING the app
+      entry imports reaches any of it (test/board-isolation.test.ts walks
+      the import graph; test/board-leaf.test.ts checks the shipped app.js):
+      only the dev preview fixture mounts the leaf.
+      Not built, stated: the scrap shadow (the overlay's frame rate while
+      panning was not measured, so per the design's engine note pins and
+      seals ship and the shadow waits); claimed sub-agent seals (S1.4); the
+      6px low-zoom ring (S1.4); the seal on hover or keyboard focus of a
+      drawn mark (it shows on selection); rename, the Dimensions list, the
+      edge tab and the working line (S1.3); dash lengths are the engine's,
+      not the design's 6 4; a stub's words are screen-size text over a rect
+      that scales with zoom. The image-refused line is not in the design
+      (proposed copy in core/board-leaf.ts).
+      Known and left for later slices: React and Excalidraw carry HTML sinks
       Known and left for later slices: React and Excalidraw carry HTML sinks
       (the kernel's bundle scan exempts board/* from that one clause);
       react-style-singleton can inject a <style> for a modal popover.
@@ -140,6 +185,13 @@ components:
     oracles: [G-DDL-06, G-DDL-07, G-WEB-06]
     tests:
       - test/board-reskin.test.ts
+      - test/board-font.test.ts
+      - test/board-seal.test.ts
+      - test/board-rail.test.ts
+      - test/board-tray.test.ts
+      - test/board-overlay.test.ts
+      - test/board-leaf.test.ts
+      - test/board-leaf-golden.test.ts
       - test/board-patches.test.ts
       - test/board-isolation.test.ts
       - test/board-scan.test.ts
@@ -1245,7 +1297,11 @@ components:
       and posts a `board ready` row once its marks have stayed. Boards S1.1:
       the fixture mounts in the page's theme on the --ground token (it set a
       white background before) and adds a frame, a sticky and marks in
-      content-palette colours.
+      content-palette colours. Pass B: the fixture mounts the board LEAF
+      (ui/board-leaf.ts) over the chat header and the chat, with sample
+      authors of its own, and `?board=` picks open, tray, empty, yielded,
+      loading, failed, crashed, short or tiny;
+      scripts/board-leaf-shots.mjs captures them from an installed Chrome.
     path: src/preview/
     type: module
     tags: [gnomon, gui, dev-tool, preview]

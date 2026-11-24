@@ -12,7 +12,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyPatches, ENGINE, ENGINE_FILES, extractCssAssets, PATCHED_FILES, PatchError, sha256, STUBS, stripHosts } from './board-patches.mjs';
+import { woff2Metrics } from './board-font.mjs';
+import { applyPatches, BOARD_FONT_METRICS, ENGINE, ENGINE_FILES, extractCssAssets, PATCHED_FILES, PatchError, sha256, STUBS, stripHosts } from './board-patches.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -152,6 +153,9 @@ export async function buildBoard() {
     if (got !== want) throw new PatchError(`engine-file:${f}`, f, want, got);
   }
 
+  // the metrics the engine places text by are the bundled face's own (boards S1.1 item 0a)
+  const measured = woff2Metrics(readFileSync(path.join(ROOT, 'static', 'fonts', 'JetBrainsMono-Regular.woff2')));
+  for (const k of Object.keys(BOARD_FONT_METRICS)) if (measured[k] !== BOARD_FONT_METRICS[k]) throw new Error(`board build: BOARD_FONT_METRICS.${k} is ${BOARD_FONT_METRICS[k]} but static/fonts/JetBrainsMono-Regular.woff2 says ${measured[k]}`);
   const report = { engine: `${ENGINE.name}@${ENGINE.version}`, patches: {}, stubs: Object.fromEntries(STUBS.map((s) => [s.id, 0])), hosts: {} };
   const assets = new Map();
   const seenPatched = new Set();

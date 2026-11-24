@@ -23,8 +23,8 @@ import '@excalidraw/excalidraw/index.css';
 import './skin.css';
 import { CONTENT_DEFAULTS, contentColourCheck, resolveContentColour } from '@a-company/gnomon-contracts';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
-import type { BoardHandle, BoardMark, BoardMountOptions, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool } from '../core/board.js';
-import { applySkin, gnomonBoardSkin } from './skin.js';
+import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMark, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
+import { applySkin, gnomonBoardSkin, onBoardRefusal } from './skin.js';
 
 declare const __GNOMON_BOARD_ENGINE__: string;
 
@@ -47,6 +47,13 @@ interface Element {
   readonly strokeColor: string;
   readonly backgroundColor: string;
   readonly isDeleted: boolean;
+  readonly strokeStyle?: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly points?: ReadonlyArray<readonly [number, number]>;
+  readonly containerId?: string | null;
   readonly customData?: Record<string, unknown>;
 }
 /** `newElementWith` over the structural type: a changed copy of the same element. */
@@ -57,8 +64,25 @@ type EngineTool = 'selection' | 'rectangle' | 'ellipse' | 'arrow' | 'frame' | 'f
 interface Stamp {
   line: string;
   fill: string | null;
-  kind?: 'sticky';
+  kind?: 'sticky' | 'stub';
+  /** the host's word on who drew it; absent means you */
+  by?: BoardAuthor;
+  stubKind?: string;
 }
+const HUMAN: BoardAuthor = { cls: 'human' };
+/** Only a well-formed author survives a round trip through an element's customData; anything else is the unknown hand. */
+const authorOf = (v: unknown): BoardAuthor | undefined => {
+  if (v === undefined) return undefined;
+  const a = v as { cls?: unknown; id?: unknown; name?: unknown } | null;
+  if (a && a.cls === 'human') return HUMAN;
+  if (a && a.cls === 'agent' && typeof a.id === 'string' && a.id.length > 0 && typeof a.name === 'string') return { cls: 'agent', id: a.id, name: a.name };
+  return { cls: 'unknown' };
+};
+/** Solid means the host vouches for you; every other hand is dashed. Derived from the author, never an input. */
+const strokeStyleOf = (by: BoardAuthor | undefined): 'solid' | 'dashed' => (by && by.cls !== 'human' ? 'dashed' : 'solid');
+const VIEW_KIND: Readonly<Record<string, BoardMarkView['kind']>> = { rectangle: 'rect', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text' };
+/** A stub is never smaller than this (design component fallback-node). */
+const STUB_MIN = { width: 156, height: 52 };
 
 const ENGINE_TOOL: Readonly<Record<BoardTool, EngineTool>> = { select: 'selection', sticky: 'rectangle', text: 'text', rect: 'rectangle', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', stroke: 'freedraw', hand: 'hand' };
 const RAIL_TOOL: Readonly<Record<EngineTool, BoardTool>> = { selection: 'select', rectangle: 'rect', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text', hand: 'hand' };
@@ -71,7 +95,9 @@ const lineColour = (token: unknown, theme: BoardTheme): string => resolveContent
 const fillColour = (token: unknown, theme: BoardTheme): string => (token === null ? null : resolveContentColour(token, 'fill', theme)) ?? 'transparent';
 const stampOf = (el: Element): Stamp | null => {
   const g = (el.customData as { gnomon?: Partial<Stamp> } | undefined)?.gnomon;
-  return g && typeof g.line === 'string' ? { line: g.line, fill: typeof g.fill === 'string' ? g.fill : null, ...(g.kind === 'sticky' ? { kind: 'sticky' as const } : {}) } : null;
+  if (!g || typeof g.line !== 'string') return null;
+  const by = authorOf(g.by);
+  return { line: g.line, fill: typeof g.fill === 'string' ? g.fill : null, ...(g.kind === 'sticky' || g.kind === 'stub' ? { kind: g.kind } : {}), ...(by ? { by } : {}), ...(typeof g.stubKind === 'string' ? { stubKind: g.stubKind } : {}) };
 };
 
 const DEFAULT_MOUNT_TIMEOUT_MS = 15_000;
@@ -154,13 +180,39 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const pushCurrent = (): void => api.updateScene({ appState: current() as never, captureUpdate: CaptureUpdateAction.NEVER });
       /** The colours a stamped mark has in this theme. A mark with no stamp is ink with no fill. */
-      const painted = (el: Element): { strokeColor: string; backgroundColor: string } => {
+      const painted = (el: Element): { strokeColor: string; backgroundColor: string; strokeStyle: 'solid' | 'dashed' } => {
         const g = stampOf(el);
-        return { strokeColor: lineColour(g?.line ?? CONTENT_DEFAULTS.line, theme), backgroundColor: fillColour(g && FILLABLE.has(el.type) ? g.fill : null, theme) };
+        return { strokeColor: lineColour(g?.line ?? CONTENT_DEFAULTS.line, theme), backgroundColor: fillColour(g && FILLABLE.has(el.type) ? g.fill : null, theme), strokeStyle: strokeStyleOf(g?.by) };
       };
       const mismatched = (el: Element): boolean => {
         const want = painted(el);
-        return el.strokeColor !== want.strokeColor || el.backgroundColor !== want.backgroundColor;
+        return el.strokeColor !== want.strokeColor || el.backgroundColor !== want.backgroundColor || (el.strokeStyle !== undefined && el.strokeStyle !== want.strokeStyle);
+      };
+      const sceneListeners = new Set<() => void>();
+      const sceneChanged = (): void => {
+        if (dead === null) for (const l of [...sceneListeners]) l();
+      };
+      const surface = (): HTMLElement | null => host.querySelector<HTMLElement>('.excalidraw-container');
+      const viewOf = (el: Element, selected: Record<string, unknown>): BoardMarkView => {
+        const g = stampOf(el);
+        const xs = el.points?.length ? el.points.map((p) => p[0]) : [0, el.width];
+        const ys = el.points?.length ? el.points.map((p) => p[1]) : [0, el.height];
+        const left = el.x + Math.min(...xs);
+        const top = el.y + Math.min(...ys);
+        return {
+          id: el.id,
+          kind: g?.kind ?? VIEW_KIND[el.type] ?? 'other',
+          x: left,
+          y: top,
+          width: Math.max(...xs) - Math.min(...xs),
+          height: Math.max(...ys) - Math.min(...ys),
+          firstX: el.x,
+          firstY: el.y,
+          author: g?.by ?? HUMAN,
+          selected: selected[el.id] === true,
+          ...(g?.stubKind !== undefined ? { stubKind: g.stubKind } : {}),
+          ...(el.containerId ? { labelOf: el.containerId } : {}),
+        };
       };
       /** Repaint every mark from its tokens (a theme change, or an undo that brought back another theme's colours). */
       const recolourAll = (): void => {
@@ -195,6 +247,23 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         }
         if (repaint) queueMicrotask(recolourAll);
         announce();
+        sceneChanged();
+      });
+      const unsubscribeScroll = api.onScrollChange(sceneChanged);
+      // paste and drop are REPORTED from the capture phase and left alone: what the board does with them is S1.3's
+      // to decide (condition C8), and this hook is how the leaf will see them first
+      const attemptListeners = new Set<(a: BoardAttempt) => void>();
+      const attempt = (kind: BoardAttempt['kind']) => (e: Event): void => {
+        const dt = kind === 'paste' ? (e as ClipboardEvent).clipboardData : (e as DragEvent).dataTransfer;
+        for (const l of [...attemptListeners]) l({ kind, types: [...(dt?.types ?? [])], files: dt?.files.length ?? 0 });
+      };
+      const onPaste = attempt('paste');
+      const onDrop = attempt('drop');
+      host.addEventListener('paste', onPaste, true);
+      host.addEventListener('drop', onDrop, true);
+      const refusedListeners = new Set<(r: BoardRefusal) => void>();
+      const unsubscribeRefusal = onBoardRefusal((what) => {
+        if (dead === null) for (const l of [...refusedListeners]) l({ what, why: 'no-image-kind' });
       });
       const run = (name: (typeof HANDLE_ACTIONS)[number]): void => {
         live();
@@ -203,9 +272,17 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const skeletonOf = (m: BoardMark): Record<string, unknown> => {
         const sticky = m.type === 'sticky';
-        const stamp: Stamp = { line: m.line ?? CONTENT_DEFAULTS.line, fill: sticky ? (m.fill ?? CONTENT_DEFAULTS.stickyFill) : m.type === 'rectangle' || m.type === 'ellipse' ? (m.fill ?? null) : null, ...(sticky ? { kind: 'sticky' as const } : {}) };
+        const by = authorOf(m.by);
+        const author = by && by.cls !== 'human' ? { by } : {};
+        if (m.type === 'stub') {
+          // a node this build cannot draw: the scrap (paper, a 1px secondary edge) is an engine rectangle so it can be
+          // selected, moved and deleted; its words and pin are the host's
+          const stamp: Stamp = { line: 'graphite', fill: 'paper', kind: 'stub', stubKind: String(m.kind ?? ''), ...author };
+          return { type: 'rectangle', x: m.x, y: m.y, width: Math.max(STUB_MIN.width, m.width ?? 0), height: Math.max(STUB_MIN.height, m.height ?? 0), strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: 1, strokeStyle: strokeStyleOf(by), fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
+        }
+        const stamp: Stamp = { line: m.line ?? CONTENT_DEFAULTS.line, fill: sticky ? (m.fill ?? CONTENT_DEFAULTS.stickyFill) : m.type === 'rectangle' || m.type === 'ellipse' ? (m.fill ?? null) : null, ...(sticky ? { kind: 'sticky' as const } : {}), ...author };
         const text = { fontSize: BOARD_FONT_SIZE, fontFamily: BOARD_FONT_ID };
-        const base = { x: m.x, y: m.y, strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: BOARD_WEIGHTS[m.weight === 'marker' ? 'bold' : (m.weight ?? 'fine')], strokeStyle: 'solid', fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
+        const base = { x: m.x, y: m.y, strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: BOARD_WEIGHTS[m.weight === 'marker' ? 'bold' : (m.weight ?? 'fine')], strokeStyle: strokeStyleOf(by), fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
         if (m.type === 'text') return { ...base, ...text, type: 'text', text: m.text ?? '' };
         if (m.type === 'arrow') return { ...base, type: 'arrow', width: m.width ?? 120, height: m.height ?? 0, endArrowhead: 'arrow' };
         if (m.type === 'frame') return { ...base, type: 'frame', children: [], width: m.width ?? 240, height: m.height ?? 160, ...(m.text ? { name: m.text } : {}) };
@@ -247,6 +324,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           const elements = api.getSceneElementsIncludingDeleted().map((el) => {
             if (!selected[el.id] || el.isDeleted) return el;
             const old = stampOf(el) ?? { line: CONTENT_DEFAULTS.line, fill: null };
+            if (old.kind === 'stub') return el; // a stub is moved and deleted, never restyled
             const stamp: Stamp = { ...old, ...(next.line !== undefined ? { line: next.line } : {}), ...(next.fill !== undefined && FILLABLE.has(el.type) ? { fill: next.fill ?? (old.kind === 'sticky' ? CONTENT_DEFAULTS.stickyFill : null) } : {}) };
             touched = true;
             return changed(el, {
@@ -279,6 +357,29 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           stateListeners.add(listener);
           return () => void stateListeners.delete(listener);
         },
+        marks(): BoardMarkView[] {
+          const selected = api.getAppState().selectedElementIds as Record<string, unknown>;
+          return (live() as unknown as Element[]).map((el) => viewOf(el, selected));
+        },
+        view(): BoardView {
+          live();
+          const s = api.getAppState();
+          return { scrollX: s.scrollX, scrollY: s.scrollY, zoom: s.zoom.value, width: s.width, height: s.height };
+        },
+        onScene(listener) {
+          sceneListeners.add(listener);
+          return () => void sceneListeners.delete(listener);
+        },
+        focus: () => void (live(), surface()?.focus({ preventScroll: true })),
+        hasFocus: () => dead === null && host.contains(document.activeElement),
+        onAttempt(listener) {
+          attemptListeners.add(listener);
+          return () => void attemptListeners.delete(listener);
+        },
+        onRefused(listener) {
+          refusedListeners.add(listener);
+          return () => void refusedListeners.delete(listener);
+        },
         exportPng: async () => {
           const ground = getComputedStyle(host).getPropertyValue('--ground').trim() || gnomonBoardSkin.sheet;
           return exportToBlob({ elements: live(), appState: { ...api.getAppState(), exportBackground: true, exportWithDarkMode: false, viewBackgroundColor: ground }, files: api.getFiles(), mimeType: 'image/png' });
@@ -288,7 +389,14 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         unmount: () => {
           dead ??= 'unmounted';
           unsubscribe();
+          unsubscribeScroll();
+          unsubscribeRefusal();
+          host.removeEventListener('paste', onPaste, true);
+          host.removeEventListener('drop', onDrop, true);
           stateListeners.clear();
+          sceneListeners.clear();
+          attemptListeners.clear();
+          refusedListeners.clear();
           root.unmount();
         },
       };
@@ -302,15 +410,18 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const check = (): void => {
         if (settled) return;
         if (api.getAppState().isLoading) return void (poll = setTimeout(check, READY_POLL_MS));
-        void document.fonts.load(`400 ${BOARD_FONT_SIZE}px "${BOARD_FONT_FAMILY}"`).then(
-          (faces) => {
+        // The face is loaded through its own FontFace objects (the engine's registration, and the page's @font-face
+        // when it has one): every one of them, so the first text never measures with a fallback.
+        const faces = [...document.fonts].filter((f) => f.family.replace(/["']/g, '') === BOARD_FONT_FAMILY && (f.weight === '400' || f.weight === 'normal') && f.style === 'normal');
+        if (faces.length === 0) return fail(new Error('the board text face is not registered'));
+        void Promise.all(faces.map((f) => f.load())).then(
+          () => {
             if (settled) return;
-            if (faces.length === 0) return fail(new Error('the board text face did not load'));
             settled = true;
             clearTimeout(timer);
             resolve(handleOf(api));
           },
-          (e: unknown) => fail(asError(e)),
+          () => fail(new Error('the board text face did not load')),
         );
       };
       check();

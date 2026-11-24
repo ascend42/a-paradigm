@@ -205,6 +205,11 @@ const DRIVER = `'use strict';
     // image FILE dropped on the board adds no element (it used to leave a broken placeholder and img-src refusals).
     R.phase = 'image-tool';
     var beforeImage = h.count();
+    // the refusal reaches the host through the handle (the engine shows nothing itself), and a drop is reported
+    var refusals = [];
+    var attempts = [];
+    var offRefused = h.onRefused(function (r) { refusals.push(r.what + ':' + r.why); });
+    var offAttempt = h.onAttempt(function (a) { attempts.push(a.kind + ':' + a.files); });
     key({ key: '9', code: 'Digit9' });
     await wait(150);
     R.imageTool = { afterKey: h.state().tool, handle: R.refusedTools.image, node: !!document.querySelector('[data-testid="toolbar-image"]') };
@@ -213,9 +218,14 @@ const DRIVER = `'use strict';
       drop(new File([png], 'probe.png', { type: 'image/png' }));
       await wait(900);
       R.imageTool.addedByDrop = h.count() - beforeImage;
+      R.imageTool.refused = refusals;
+      R.imageTool.attempts = attempts;
     } catch (e) {
       R.imageTool.dropUnsupported = String(e).slice(0, 200);
     }
+    offRefused(); offAttempt();
+    // what the host layer reads: every mark with its kind, box and hand, and the viewport
+    R.hostView = { marks: h.marks().map(function (m) { return m.kind + ':' + m.author.cls + ':' + Math.round(m.x) + ',' + Math.round(m.y) + ',' + Math.round(m.width) + ',' + Math.round(m.height); }), view: h.view(), focus: (h.focus(), h.hasFocus()) };
     // The engine's own tool letters are gone (A arrow, K laser, E eraser, Q lock, R, D, O ...): the rail owns letters.
     R.phase = 'tool-keys';
     R.toolKeys = {};
@@ -487,6 +497,9 @@ export function reskinProblems(r) {
   if (!r.libraryDrop || (!r.libraryDrop.unsupported && (r.libraryDrop.stock?.length !== 0 || r.libraryDrop.added !== 0))) p.push(`a dropped library file changed the board: ${JSON.stringify(r.libraryDrop)}`);
   const im = r.imageTool ?? {};
   if (im.afterKey !== 'select' || im.handle !== 'refused' || im.node !== false || (im.dropUnsupported === undefined && im.addedByDrop !== 0)) p.push(`the image tool is reachable: ${JSON.stringify(im)}`);
+  if (im.dropUnsupported === undefined && (im.refused?.join() !== 'image:no-image-kind' || im.attempts?.join() !== 'drop:1')) p.push(`a refused image was not reported to the host: ${JSON.stringify({ refused: im.refused, attempts: im.attempts })}`);
+  const hv = r.hostView ?? {};
+  if (hv.marks?.join(' ') !== 'rect:human:40,40,160,80 ellipse:human:240,40,120,80 text:human:60,160,' + (hv.marks?.[2] ?? '').split(',').slice(2).join(',') + ' rect:human:500,300,140,100 stroke:human:700,300,120,120' || hv.view?.zoom !== 1 || hv.focus !== true) p.push(`the host view of the marks: ${JSON.stringify(hv)}`);
   const fonts = r.canvasFonts ?? [];
   if (fonts.length === 0 || fonts.some((f) => f !== BOARD_FONT_STRING)) p.push(`canvas font strings other than the board face: ${JSON.stringify(fonts)}`);
   const faces = r.fontFaces ?? [];
@@ -562,7 +575,7 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
           const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
+            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
           } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });

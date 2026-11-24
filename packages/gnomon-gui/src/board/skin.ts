@@ -67,3 +67,15 @@ export function applySkin(theme: ContentTheme): void {
  * zoom in, out and to 100%, and finishing a mark with Esc or Enter. Every other engine shortcut matches nothing.
  */
 export const gnomonBoardKeyActions: ReadonlySet<string> = new Set(['undo', 'redo', 'deleteSelectedElements', 'selectAll', 'zoomIn', 'zoomOut', 'resetZoom', 'finalize']);
+
+/** What the engine refused to do, for the host to say in its own words. `image`: a file-based image insert. */
+export type BoardRefusalKind = 'image';
+const refusalListeners = new Set<(what: BoardRefusalKind) => void>();
+/** Called by the patched engine (patch `image-insert-refused`). Nothing is shown by the engine itself. */
+export function gnomonBoardRefuse(what: BoardRefusalKind): void {
+  for (const l of [...refusalListeners]) l(what);
+}
+export function onBoardRefusal(listener: (what: BoardRefusalKind) => void): () => void {
+  refusalListeners.add(listener);
+  return () => void refusalListeners.delete(listener);
+}

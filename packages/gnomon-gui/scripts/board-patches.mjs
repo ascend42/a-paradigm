@@ -36,8 +36,17 @@ const styleToAttrs = (_m, css) =>
     })
     .join(' ');
 
+/**
+ * head.unitsPerEm and the hhea ascender, descender and line gap of static/fonts/JetBrainsMono-Regular.woff2, as
+ * scripts/board-font.mjs reads them from the file. Never edit these by hand: the build and a test fail when the
+ * file says otherwise.
+ */
+export const BOARD_FONT_METRICS = Object.freeze({ unitsPerEm: 1000, ascender: 1020, descender: -300, lineGap: 0 });
+/** The face's natural line, as a multiple of the font size. */
+export const boardLineHeight = (m) => (m.ascender - m.descender + m.lineGap) / m.unitsPerEm;
+
 /** The engine reads its colours and its key allowlist from the Gnomon tree (src/board/skin.ts), never from literals. */
-const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions}from"gnomon-board:skin";';
+const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse}from"gnomon-board:skin";';
 
 const SVG_BLOB = (expr) => `URL.createObjectURL(new Blob([${expr}],{type:H.svg}))`;
 
@@ -65,9 +74,9 @@ export const PATCHES = Object.freeze([
   {
     id: 'font-metrics',
     file: 'chunk-K2UTITRG.js',
-    why: 'the vertical metrics the engine places text by are those of the bundled face (JetBrains Mono: 1000 units per em, ascender 1020, descender -300), with a 1.4 line',
+    why: 'the vertical metrics the engine places text by are those READ from the bundled face (BOARD_FONT_METRICS; test/board-font.test.ts and the build compare them with static/fonts/JetBrainsMono-Regular.woff2), and the line is the face\'s own: (ascender - descender + line gap) / units per em',
     find: 'var Fr={[Ie.Excalifont]:',
-    replace: 'var Fr={[Ie["JetBrains Mono"]]:{metrics:{unitsPerEm:1e3,ascender:1020,descender:-300,lineHeight:1.4}},[Ie.Excalifont]:',
+    replace: `var Fr={[Ie["JetBrains Mono"]]:{metrics:{unitsPerEm:${BOARD_FONT_METRICS.unitsPerEm},ascender:${BOARD_FONT_METRICS.ascender},descender:${BOARD_FONT_METRICS.descender},lineHeight:${boardLineHeight(BOARD_FONT_METRICS)}}},[Ie.Excalifont]:`,
     expect: 1,
   },
   {
@@ -280,10 +289,11 @@ export const PATCHES = Object.freeze([
   {
     id: 'image-insert-refused',
     file: 'index.js',
-    why: 'no stock path inserts an image: the one function every file-based insert goes through (tool, file paste, file drop) returns before it adds the placeholder element',
-    find: 'C(this,"insertImageElement",async(t,r,n)=>{if(!this.isToolSupported("image")){',
-    replace: 'C(this,"insertImageElement",async(t,r,n)=>{if(!0){',
+    why: 'no stock path inserts an image: the one function every file-based insert goes through (tool, file paste, file drop) returns before it adds the placeholder element, and tells the host (gnomonBoardRefuse in src/board/skin.ts, the handle\'s onRefused) instead of setting an engine error nobody sees',
+    find: 'C(this,"insertImageElement",async(t,r,n)=>{if(!this.isToolSupported("image")){this.setState({errorMessage:g("errors.imageToolNotSupported")});return}',
+    replace: 'C(this,"insertImageElement",async(t,r,n)=>{{gnomonBoardRefuse("image");return}',
     expect: 1,
+    prepend: SKIN_IMPORT,
   },
   {
     id: 'key-actions-allowlist',

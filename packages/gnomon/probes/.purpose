@@ -42,6 +42,8 @@ components:
       board at 374 x 304; reskinProblems is its predicate. It also serves
       the bundle's fonts/JetBrainsMono-Regular.woff2 from the same embed. The
       result file keeps each capture's size, not its bytes.
+      Pass B: the page also checks that a dropped image is reported to the
+      host (onRefused, onAttempt) and reads the handle's marks and view.
       _shared/wkwebview-load.swift turns window occlusion detection off so an
       offscreen page stays visible and requestAnimationFrame runs
       (T-2026-11-06-003), and prints the page's visibility and phase on a
