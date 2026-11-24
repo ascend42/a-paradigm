@@ -21,7 +21,7 @@
   "scripts": {
     "build": "node scripts/generate-hooks.mjs && tsup && npm run build:mcp-bundle && npm run build:platform-ui && npm run build:sentinel-assets",
     "build:mcp-bundle": "node scripts/build-mcp-bundle.mjs",
-    "build:sentinel-assets": "rm -rf dist/sentinel-ui && cp -r ../sentinel/ui/dist dist/sentinel-ui",
+    "build:sentinel-assets": "node scripts/copy-sentinel-assets.mjs",
     "check:hooks": "node scripts/generate-hooks.mjs --check",
     "build:platform-ui": "cd platform-ui && (test -d node_modules || npm ci --no-audit --no-fund) && npx vite build",
     "dev": "tsup src/index.ts --format esm --dts --watch",
@@ -31,7 +31,7 @@
     "lint": "eslint src/commands/",
     "sync:readme": "node scripts/sync-readme.mjs",
     "check:readme": "node scripts/sync-readme.mjs --check",
-    "prepack": "node scripts/sync-readme.mjs",
+    "prepack": "node scripts/sync-readme.mjs && node scripts/copy-sentinel-assets.mjs --check",
     "prepublishOnly": "node scripts/check-gnomon-published.mjs && npm run build"
   },
   "dependencies": {

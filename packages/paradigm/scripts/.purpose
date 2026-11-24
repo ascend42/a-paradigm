@@ -3,6 +3,7 @@ description: "Build and packaging scripts for @a-company/paradigm"
 context:
   - "generate-hooks.mjs: regenerates the bundled hook scripts (build, check:hooks)"
   - "sync-readme.mjs: copies the root README.md to packages/paradigm/README.md at prepack (TD-2026-10-22-220)"
+  - "copy-sentinel-assets.mjs: copies the built Sentinel UI into dist/sentinel-ui without source maps (build:sentinel-assets); --check runs at prepack"
 components:
   generate-hooks:
     description: "Generates the bundled hook scripts from their sources; --check fails on drift"
@@ -13,3 +14,11 @@ components:
       and GitHub match, rewriting relative links to absolute github.com/ascend42/a-paradigm/blob/main URLs.
       A committed copy keeps npm pack working from a fresh clone; --check and tests/readme-sync.test.ts fail on drift.
     tags: [build, docs, release]
+  sentinel-assets-copy:
+    description: >-
+      build:sentinel-assets copies packages/sentinel/ui/dist into dist/sentinel-ui and leaves out every
+      .map file (the Sentinel UI's index-*.js.map, 629,147 bytes, used to ship in the npm package); a copied
+      file whose map was left out loses its trailing sourceMappingURL comment. prepack runs --check, which
+      fails when any .map sits in a directory package.json `files` publishes.
+      tests/sentinel-assets-no-maps.test.ts covers the copy, the check and the npm pack file list.
+    tags: [build, release]
