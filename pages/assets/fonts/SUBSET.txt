@@ -1,0 +1,10 @@
+Fraunces-latin.woff2 is a subset of packages/gnomon-gui/static/fonts/Fraunces-opsz-wght.woff2
+(Fraunces, SIL Open Font License 1.1, OFL-Fraunces.txt beside this file). Made 2026-11-23 with fontTools:
+
+  fonttools varLib.instancer Fraunces-opsz-wght.woff2 wght=400:600 opsz=20:144 -o fr.ttf
+  pyftsubset fr.ttf --unicodes="U+0020-007E,U+00A0,U+00A9,U+00B7,U+2013,U+2014,U+2018,U+2019,U+201C,U+201D,U+2026" \
+    --layout-features='kern,liga,locl,ccmp' --no-hinting --desubroutinize --flavor=woff2 --output-file=Fraunces-latin.woff2
+
+It holds Basic Latin and the punctuation the pages use, weights 400 to 600, optical sizes 20 to 144.
+The pages set Fraunces at 21px and larger, in weights 400, 500 and 600. A character outside the subset
+falls back to Georgia. The JetBrains Mono files are copied unchanged.

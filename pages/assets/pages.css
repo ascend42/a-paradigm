@@ -2,11 +2,11 @@
    Every colour, size, space and radius in a custom property is a foundation value there;
    pages/build/check.mjs fails the build when one is not. */
 
-@font-face { font-family: "Fraunces"; src: url("fonts/Fraunces-opsz-wght.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Fraunces"; src: url("fonts/Fraunces-latin.woff2") format("woff2"); font-weight: 400 600; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 /* Georgia, sized to Fraunces, so the swap does not move the layout */
-@font-face { font-family: "Fraunces Fallback"; src: local("Georgia"); size-adjust: 97%; ascent-override: 98%; descent-override: 26%; line-gap-override: 0%; }
+@font-face { font-family: "Fraunces Fallback"; src: local("Georgia"); size-adjust: 98.6%; ascent-override: 98%; descent-override: 26%; line-gap-override: 0%; }
 
 /* ── tokens that do not change with the theme ──────────────────────────── */
 :root {

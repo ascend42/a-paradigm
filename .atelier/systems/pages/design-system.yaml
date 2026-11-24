@@ -73,6 +73,7 @@ foundations:
     display: "Fraunces"            # variable opsz 9..144, wght 400..700; headlines, entry names, row terms
     sans: "system-ui"              # body and ledes; the reader's own system face, zero bytes
     mono: "JetBrains Mono"         # 400/600; anything that is real: symbols, commands, numbers, paths, sources, standing
+    display-fallback: "Fraunces Fallback"   # builder, 2026-11-23: not a face. It is local Georgia under an @font-face with size-adjust and ascent overrides, so the swap to Fraunces does not move the layout (build brief, "What must be inline"). Proposed with the rest.
     stacks:
       display: '"Fraunces", Georgia, serif'
       sans: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
