@@ -1,0 +1,387 @@
+/* The one stylesheet for the public pages. System: .atelier/systems/pages/design-system.yaml.
+   Every colour, size, space and radius in a custom property is a foundation value there;
+   pages/build/check.mjs fails the build when one is not. */
+
+@font-face { font-family: "Fraunces"; src: url("fonts/Fraunces-opsz-wght.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+/* Georgia, sized to Fraunces, so the swap does not move the layout */
+@font-face { font-family: "Fraunces Fallback"; src: local("Georgia"); size-adjust: 97%; ascent-override: 98%; descent-override: 26%; line-gap-override: 0%; }
+
+/* ── tokens that do not change with the theme ──────────────────────────── */
+:root {
+  --w-ground: #0B0D14; --w-rule: #1C2138; --w-text: #F4F1EA; --w-muted: #8B8A82; --w-a: #E9A23B; --w-b: #2DD4BF; --w-seam: #7C6FF0;
+  --display: "Fraunces", "Fraunces Fallback", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --trace: 120ms linear;
+  color-scheme: light dark;
+}
+
+/* ── theme tokens: declared twice (by the system's preference, and by the theme key). check.mjs holds the two sets equal. ── */
+:root {
+  --ground: #F4F4F1; --surface: #FBFBF9; --sunk: #E9E9E4;
+  --ink: #17181C; --ink-2: #4B4D56; --edge: #70727B; --rule: #D3D3CC; --on-ink: #FBFBF9;
+  --sym-component: #166534; --sym-flow: #6D28D9; --sym-gate: #B91C1C; --sym-signal: #854D0E; --sym-aspect: #4B5563;
+  --g-ground: #EDE8DC; --g-sheet: #F8F5EE; --g-ink: #16150F; --g-sec: #5A5850; --g-edge: #2A2925; --g-on-ink: #F8F5EE;
+  --g-shadow: 4px 4px 0 #2A2925;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0E0F13; --surface: #15171D; --sunk: #090A0D;
+    --ink: #ECEBE6; --ink-2: #A4A7B1; --edge: #7D818D; --rule: #2B2E37; --on-ink: #15171D;
+    --sym-component: #4ADE80; --sym-flow: #A78BFA; --sym-gate: #F87171; --sym-signal: #EAB308; --sym-aspect: #9CA3AF;
+    --g-ground: #0F1116; --g-sheet: #171A21; --g-ink: #E8F4F0; --g-sec: #86998F; --g-edge: #C9DCD6; --g-on-ink: #171A21;
+    --g-shadow: none;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #F4F4F1; --surface: #FBFBF9; --sunk: #E9E9E4;
+  --ink: #17181C; --ink-2: #4B4D56; --edge: #70727B; --rule: #D3D3CC; --on-ink: #FBFBF9;
+  --sym-component: #166534; --sym-flow: #6D28D9; --sym-gate: #B91C1C; --sym-signal: #854D0E; --sym-aspect: #4B5563;
+  --g-ground: #EDE8DC; --g-sheet: #F8F5EE; --g-ink: #16150F; --g-sec: #5A5850; --g-edge: #2A2925; --g-on-ink: #F8F5EE;
+  --g-shadow: 4px 4px 0 #2A2925;
+}
+:root[data-theme="dark"] {
+  --ground: #0E0F13; --surface: #15171D; --sunk: #090A0D;
+  --ink: #ECEBE6; --ink-2: #A4A7B1; --edge: #7D818D; --rule: #2B2E37; --on-ink: #15171D;
+  --sym-component: #4ADE80; --sym-flow: #A78BFA; --sym-gate: #F87171; --sym-signal: #EAB308; --sym-aspect: #9CA3AF;
+  --g-ground: #0F1116; --g-sheet: #171A21; --g-ink: #E8F4F0; --g-sec: #86998F; --g-edge: #C9DCD6; --g-on-ink: #171A21;
+  --g-shadow: none;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ── base ──────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.6; counter-reset: sec; }
+a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+p, figure, h1, h2, h3, dl, dd { margin: 0; }
+code { font-family: var(--mono); font-size: 15px; }
+.lede code { font-size: 17px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; position: relative; }
+.mono { font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.quiet { color: var(--ink-2); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* long paths and ids break inside their block instead of running off a narrow page */
+.mono, .fact-src, .ledger-ev, .prov, .standing, .lately-when, .proof-head, .foot, .graph-list { overflow-wrap: anywhere; }
+.fact-src code, .prov code, .ledger-ev code, .standing code, .mono code, .proof-cut code { font-size: 13px; }
+/* a link in a source line is padded to a 44px target */
+.fact-src a, .prov a, .ledger-ev a, .standing a, .lately-when a, .proof-head a, .claims dd a, .mono a { padding: 16px 0; }
+/* skip link: the first focusable thing on every page; shown only while focused */
+.skip { position: absolute; left: 16px; top: 8px; z-index: 2; }
+.skip:not(:focus) { width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+
+/* ── masthead ──────────────────────────────────────────────────────────── */
+.mast { display: flex; align-items: baseline; gap: 32px; padding: 24px 0 16px; border-bottom: 1px solid var(--ink); position: relative; }
+.mast-name { font-family: var(--display); font-size: 21px; font-weight: 600; text-decoration: none; padding: 8px 0; }
+.mast nav { display: flex; gap: 24px; flex: 1; }
+.mast nav a, .mast-side a, .mast-side button { font-family: var(--mono); font-size: 13px; line-height: 1.6; text-decoration: none; padding: 12px 0; white-space: nowrap; }
+.mast nav a:hover, .mast-side a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+.mast nav a[aria-current="page"] { font-weight: 600; position: relative; }
+/* the register tick: the masthead rule thickens under the page you are on */
+.mast nav a[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 4px; background: var(--ink); }
+.mast-side { display: flex; gap: 24px; align-items: baseline; }
+.theme-key { background: none; border: 0; color: var(--ink-2); cursor: pointer; }
+.theme-key:hover { color: var(--ink); }
+.theme-key b { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+
+/* ── type ──────────────────────────────────────────────────────────────── */
+.display { font-family: var(--display); font-weight: 500; font-size: 68px; line-height: 1.04; letter-spacing: -0.02em; font-variation-settings: "opsz" 144; text-wrap: balance; }
+.h2 { font-family: var(--display); font-weight: 500; font-size: 44px; line-height: 1.1; letter-spacing: -0.015em; text-wrap: balance; }
+.h3 { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; }
+.lede { font-size: 21px; line-height: 1.5; max-width: 34em; }
+.plain { max-width: 34em; }
+.prose { max-width: 66ch; }
+
+/* ── key (the one button) and the command line ─────────────────────────── */
+.key { font-family: var(--mono); font-size: 13px; font-weight: 600; min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--ink); border-radius: 2px; cursor: pointer; text-decoration: none; }
+.key:hover { background: var(--sunk); }
+.key:active { transform: translateY(1px); }
+.key.pri { background: var(--ink); color: var(--on-ink); }
+.key.pri:hover { background: var(--ink-2); border-color: var(--ink-2); }
+/* done: Copy says Copied for two seconds, in the filled state; no icon swap */
+.key[data-done], .key[data-done]:hover { background: var(--ink); color: var(--on-ink); }
+.cmd { display: flex; align-items: stretch; border: 1px solid var(--ink); border-radius: 2px; background: var(--surface); min-width: 0; max-width: min(520px, 100%); }
+.cmd code { font-family: var(--mono); font-size: 15px; line-height: 1.6; padding: 12px 16px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+.cmd code::before { content: "$ "; color: var(--ink-2); user-select: none; }
+/* typed to the agent, not to a shell: no prompt mark */
+.cmd.agent code::before { content: none; }
+.cmd:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cmd :focus-visible { outline-offset: -4px; }
+/* a run of commands: joined, in the order they are typed, each with a word saying where */
+.cmds { max-width: min(520px, 100%); }
+.cmds .cmd { max-width: none; }
+.cmds .cmd + .cmd { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.cmds .cmd:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.cmd .where { font-family: var(--mono); font-size: 13px; color: var(--ink-2); align-self: center; padding: 0 16px 0 0; white-space: nowrap; }
+.cmd .key { border: 0; border-left: 1px solid var(--ink); border-radius: 0; background: transparent; min-width: calc(6ch + 32px); }
+.cmd .key:hover { background: var(--sunk); }
+.cmd .key[data-done], .cmd .key[data-done]:hover { background: var(--ink); color: var(--on-ink); }
+/* prompt line: a sentence you say to your agent (never a shell command, never a $ prompt) */
+.say { border-left: 4px solid var(--ink); padding: 4px 0 4px 16px; max-width: 520px; }
+.say-who { font-family: var(--mono); font-size: 13px; color: var(--ink-2); display: block; }
+.say q { display: block; font-size: 17px; line-height: 1.5; quotes: none; }
+.say q var { font-style: normal; font-family: var(--mono); font-size: 15px; border-bottom: 1px dashed var(--edge); }
+.say .key { margin-top: 12px; }
+.next { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; }
+.next > a:not(.key) { padding: 12px 0; }
+
+/* ── standing: built, did not hold, in progress, untested (read by mark and word, never by hue) ── */
+.standing { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.standing li { display: grid; grid-template-columns: 16px 104px minmax(0, 1fr); gap: 0 8px; align-items: baseline; padding: 4px 0; }
+.standing b { font-weight: 600; }
+.standing .of { grid-column: 2 / -1; color: var(--ink-2); }
+.mark { width: 12px; height: 12px; flex: none; display: inline-block; border: 2px solid var(--ink); transform: translateY(1px); }
+.mark.built { background: var(--ink); }
+.mark.progress { background: linear-gradient(135deg, var(--ink) 50%, transparent 50%); }
+.mark.untested { border: 1px dashed var(--ink); }
+/* measured against a bar set in advance, and it did not hold: a hollow square, struck through */
+.mark.nothold { position: relative; }
+.mark.nothold::after { content: ""; position: absolute; left: -4px; right: -4px; top: calc(50% - 1px); height: 2px; background: var(--ink); }
+/* what a state row says is prose, so it is set as prose */
+.standing li > span:last-child:not(.of) { font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.standing li > span:last-child:not(.of) code { font-size: 13px; }
+
+/* ── provenance caption under every exhibit ────────────────────────────── */
+.prov { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); margin-top: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 12px; }
+.prov b { color: var(--ink); font-weight: 600; }
+.prov > span { max-width: 76ch; }
+
+/* ── hub: first screen ─────────────────────────────────────────────────── */
+.hub { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 64px; padding: 64px 0 96px; align-items: start; }
+.hub-lead > * + * { margin-top: 32px; }
+.contents { border-top: 4px solid var(--ink); list-style: none; margin: 0; padding: 0; }
+.entry { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 0 24px; padding: 24px 0; border-bottom: 1px solid var(--rule); }
+.entry:last-child { border-bottom: 1px solid var(--ink); }
+.entry-name { font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.1; }
+.entry-name a { text-decoration: none; display: inline-block; padding: 8px 0; }
+.entry.minor .entry-name a, .stop .h3 a, .claims dt a { display: inline-block; padding: 12px 0; }
+.entry-name a::after { content: " \2192"; font-family: var(--mono); font-size: 21px; font-weight: 400; color: var(--ink-2); transition: color var(--trace); }
+.entry-name a:hover::after, .entry-name a:focus-visible::after { color: var(--ink); }
+.entry-name a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.entry p { font-size: 15px; margin: 0 0 12px; max-width: 30em; }
+.entry.minor .entry-name { font-size: 21px; }
+.entry.minor p { margin-bottom: 8px; }
+.device { padding-top: 12px; }
+
+/* device: Paradigm, the sigil (a prefix glyph on a socket of its own hue) */
+.sigils { font-family: var(--mono); font-weight: 600; font-size: 21px; line-height: 1.1; display: grid; grid-template-columns: repeat(3, 20px); gap: 8px 4px; }
+.sig { display: inline-block; width: 20px; text-align: center; border-bottom: 4px solid currentColor; padding-bottom: 4px; }
+.sig.c, .s-c { color: var(--sym-component); } .sig.f, .s-f { color: var(--sym-flow); } .sig.g, .s-g { color: var(--sym-gate); }
+.sig.s, .s-s { color: var(--sym-signal); } .sig.a, .s-a { color: var(--sym-aspect); }
+
+/* device: Gnomon, the cut sheet with the one hard shadow */
+.sheet { width: 64px; background: var(--g-sheet); color: var(--g-ink); border: 1px solid var(--g-edge); border-radius: 3px; box-shadow: var(--g-shadow); padding: 8px; }
+.sheet i { display: block; height: 2px; background: var(--g-sec); margin-bottom: 4px; }
+.sheet i:nth-child(2) { width: 60%; }
+.sheet span { display: block; height: 12px; margin-top: 8px; background: var(--g-ink); border-radius: 3px; width: 28px; }
+
+/* device: Warpline, the strand (two threads; a loose end where nothing is tested yet).
+   Ruled with the frame's hairline, because on a dark page the ink strip has no edge of its own. */
+.strand { display: block; width: 64px; height: 48px; background: var(--w-ground); outline: 1px solid var(--rule); }
+.strand path { fill: none; stroke-width: 2; }
+.strand .wa { stroke: var(--w-a); }
+.strand .wb { stroke: var(--w-b); }
+
+/* device: the path, stations on a line */
+.stations { display: flex; align-items: center; width: 64px; height: 24px; position: relative; }
+.stations::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; border-top: 1px solid var(--ink); }
+.stations i { position: relative; width: 8px; height: 8px; background: var(--ground); border: 1px solid var(--ink); margin-right: 12px; }
+.stations i:first-child { background: var(--ink); }
+
+/* ── product page ──────────────────────────────────────────────────────── */
+.hero { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); gap: 64px; padding: 32px 0 64px; align-items: start; }
+.hero-lead > * + * { margin-top: 24px; }
+.plate { background: var(--surface); border: 1px solid var(--ink); padding: 24px; }
+.plate svg.graph { display: block; width: 100%; height: auto; }
+.plate .proof { margin-top: 12px; background: var(--sunk); }
+.plate .proof pre { padding: 8px 16px; }
+.plate .legend { margin-top: 12px; padding-top: 8px; }
+.plate > .prov { display: block; margin-top: 8px; }
+.plate > .prov b { margin-right: 8px; }
+.hero-exhibit > * + * { margin-top: 24px; }
+
+/* the symbol graph. A node is a symbol id, not a circle. Hover or focus a node and the change ripples to what depends on it. */
+.graph text { font-family: var(--mono); font-size: 13px; fill: var(--ink); }
+.graph .edge { fill: none; stroke: var(--edge); stroke-width: 1; transition: stroke var(--trace), stroke-width var(--trace); }
+.graph .edge.lists { stroke: var(--ink); }
+.graph .edge.hit { stroke: var(--ink); stroke-width: 2; }
+.graph .node { cursor: default; }
+.graph .node rect { fill: transparent; stroke: transparent; stroke-width: 1; transition: fill var(--trace), stroke var(--trace); }
+.graph .node text, .graph .node tspan { transition: fill var(--trace); }
+.graph .node:hover rect { stroke: var(--edge); }
+/* reached by the ripple */
+.graph .node.hit rect { stroke: var(--ink); fill: var(--sunk); }
+.graph .node.hit text { font-weight: 600; }
+/* where the change starts */
+.graph .node.at rect { stroke: var(--ink); fill: var(--ink); }
+.graph .node.at text, .graph .node.at tspan { fill: var(--on-ink); font-weight: 600; }
+.graph .node:focus { outline: none; }
+.graph .node:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.graph .p-c { fill: var(--sym-component); font-weight: 600; } .graph .p-f { fill: var(--sym-flow); font-weight: 600; } .graph .p-g { fill: var(--sym-gate); font-weight: 600; }
+.graph .p-s { fill: var(--sym-signal); font-weight: 600; } .graph .p-a { fill: var(--sym-aspect); font-weight: 600; }
+/* the same symbols and edges as a list, for when the drawing would set its labels under 13px */
+.graph-list { display: none; list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.graph-list ul { list-style: none; margin: 4px 0 16px 4px; padding: 0 0 0 16px; border-left: 1px solid var(--edge); }
+.graph-list li li { padding: 4px 0; }
+.graph-list .hit { font-weight: 600; }
+.graph-list .hit span { font-weight: 400; color: var(--ink-2); }
+.legend { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 4px 24px; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.legend b { font-weight: 600; }
+
+/* section frame: a margin column where the numeral hangs */
+.section { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 10fr); gap: 0 32px; padding: 64px 0; border-top: 1px solid var(--ink); counter-increment: sec; }
+.section-n { font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1.1; color: var(--ink-2); font-variation-settings: "opsz" 144; }
+.section-n::before { content: counter(sec); }
+.section-body { min-width: 0; }
+.section-body > * + * { margin-top: 32px; }
+.section-body > .h3 + * { margin-top: 12px; }
+.section :target, :target { scroll-margin-top: 16px; }
+
+/* claims, as a run of rows (never three cards) */
+.claims > div { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-top: 1px solid var(--rule); }
+.claims > div:last-child { border-bottom: 1px solid var(--rule); }
+.claims dt { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; }
+.claims dt a { text-decoration: none; }
+.claims dt a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.claims dd > * + * { margin-top: 8px; }
+.claims dd p { max-width: 66ch; }
+
+/* fact line: numeral, claim, source. No source, no line. */
+.facts { border-top: 4px solid var(--ink); }
+.fact { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-bottom: 1px solid var(--rule); align-items: start; }
+.fact-n { font-family: var(--mono); font-weight: 600; font-size: 56px; line-height: 1; letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.fact-n small { font-size: 15px; font-weight: 400; line-height: 1.6; letter-spacing: 0; color: var(--ink-2); }
+.fact-claim { font-size: 17px; max-width: 66ch; }
+.fact-src { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); margin-top: 8px; max-width: 76ch; }
+.fact-src b { color: var(--ink); font-weight: 600; }
+/* the lead fact: the one number in a first screen. Stacked, under the same 4px rule. */
+.fact.lead { display: block; border-top: 4px solid var(--ink); border-bottom: 0; padding: 16px 0 0; }
+.fact.lead .fact-claim { margin-top: 8px; max-width: 34em; }
+
+/* before and after: one unit, one scale from zero, two rows. The values are printed; the bars only show the ratio. */
+.pair { border: 1px solid var(--ink); background: var(--surface); padding: 24px; }
+.pair-rows { margin-top: 16px; }
+.pair-row { display: grid; grid-template-columns: 200px minmax(0, 1fr) 160px; gap: 16px; align-items: center; font-family: var(--mono); font-size: 13px; line-height: 1.6; padding: 8px 0; }
+.pair-bar { display: block; width: 100%; height: 16px; }
+.pair-bar rect { fill: var(--ink); }
+.pair-row .v { text-align: right; color: var(--ink-2); }
+.pair-row .v b { color: var(--ink); font-weight: 600; font-size: 17px; }
+/* a single paired run: every measure it took, as a table. Never drawn as bars. */
+.study-head { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
+.study table { border-collapse: collapse; width: 100%; max-width: 640px; margin-top: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.study th, .study td { text-align: left; padding: 8px 16px 8px 0; border-bottom: 1px solid var(--rule); font-weight: 400; vertical-align: baseline; }
+.study thead th { color: var(--ink-2); border-bottom-color: var(--ink); }
+.study td { font-size: 17px; font-weight: 600; }
+
+/* proof excerpt: the real file, its path, its lines */
+.proof { border-left: 4px solid var(--ink); background: var(--surface); min-width: 0; }
+.proof-head { font-family: var(--mono); font-size: 13px; line-height: 1.6; padding: 0 24px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; gap: 0 16px; flex-wrap: wrap; }
+.proof-head > * { padding: 12px 0; }
+.proof pre { margin: 0; padding: 16px 24px; max-width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; }
+.proof pre:focus-visible { outline-offset: -2px; }
+.proof pre .ln { color: var(--ink-2); user-select: none; display: inline-block; width: 32px; }
+.proof pre b { font-weight: 600; }
+.proof-cut { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); padding: 0 24px 12px; }
+.proof .prov { margin-top: 0; padding: 0 24px 16px; }
+.plate .proof .prov { padding: 0 16px 12px; }
+
+/* standing ledger: one row per feature; state, what, evidence. Rows by rules. */
+.ledger { border-top: 4px solid var(--ink); list-style: none; margin: 0; padding: 0; }
+.ledger-row { display: grid; grid-template-columns: 136px minmax(0, 5fr) minmax(0, 4fr); gap: 0 24px; padding: 16px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.ledger-state { font-family: var(--mono); font-size: 13px; line-height: 1.6; font-weight: 600; display: flex; gap: 8px; align-items: baseline; padding-top: 4px; }
+.ledger-what { font-size: 17px; max-width: 66ch; }
+.ledger-ev { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); padding-top: 4px; }
+
+/* numbered rows: one session start to finish, and the first thing to do. The number is counted, never typed. */
+.steps { list-style: none; margin: 0; padding: 0; border-top: 4px solid var(--ink); counter-reset: step; }
+.step { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-bottom: 1px solid var(--rule); counter-increment: step; align-items: start; }
+.step-term { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; display: flex; gap: 12px; align-items: baseline; }
+.step-term::before { content: counter(step); font-family: var(--mono); font-weight: 400; font-size: 15px; color: var(--ink-2); min-width: 16px; }
+.step-body { min-width: 0; }
+.step-body > * + * { margin-top: 16px; }
+.step-body > p { max-width: 66ch; }
+
+/* how the three fit: one line across the page, a stop for each. The last stretch is dashed: it is not proven yet. */
+.route { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stop { position: relative; border-top: 1px solid var(--ink); padding: 24px 32px 0 0; }
+.stop::before { content: ""; position: absolute; left: 0; top: 0; width: 8px; height: 8px; transform: translateY(-50%); background: var(--ground); border: 1px solid var(--ink); }
+.stop:first-child::before { background: var(--ink); }
+.stop.loose { border-top-style: dashed; }
+.stop.loose::before { border-style: dashed; }
+.stop .h3 a { text-decoration: none; }
+.stop .h3 a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.stop-of { display: block; font-family: var(--mono); font-size: 13px; line-height: 1.6; font-weight: 400; color: var(--ink-2); }
+.stop p { font-size: 15px; }
+.stop .h3:not(:has(a)) { padding: 12px 0; }
+
+/* lately: dated rows on a vertical rule, newest first */
+.lately { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--ink); }
+.lately-row { position: relative; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 16px 0 16px 24px; }
+.lately-row::before { content: ""; position: absolute; left: 0; top: 24px; width: 8px; height: 8px; transform: translateX(-50%); background: var(--ground); border: 1px solid var(--ink); }
+.lately-row:first-child::before { background: var(--ink); }
+.lately-when { font-family: var(--mono); font-size: 13px; line-height: 1.6; padding-top: 4px; }
+.lately-lead { font-size: 17px; max-width: 66ch; }
+.lately-moved { font-family: var(--mono); font-size: 13px; line-height: 1.6; display: flex; gap: 8px; align-items: baseline; margin-top: 8px; }
+
+/* plain rows: limits and requirements, at the same size as the features */
+.split { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 32px 64px; align-items: start; }
+.rows { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--ink); }
+.rows li { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+
+/* the end of a page: the next page, then the path */
+.onward { display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: center; justify-content: space-between; padding: 48px 0; border-top: 4px solid var(--ink); }
+.onward .entry-name a { padding: 0; }
+.onward .entry-name small { display: block; font-family: var(--mono); font-size: 13px; line-height: 1.6; font-weight: 400; color: var(--ink-2); }
+.foot { display: flex; flex-wrap: wrap; gap: 0 32px; align-items: baseline; padding: 12px 0 48px; border-top: 1px solid var(--ink); font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.foot a { text-decoration: none; color: var(--ink); padding: 12px 0; }
+.foot a:hover { text-decoration: underline; }
+.foot > * { padding: 12px 0; }
+.lead-short { padding: 64px 0 96px; max-width: 800px; }
+.lead-short > * + * { margin-top: 24px; }
+
+/* ── four steps: 1280 the display drops a size · 1100 heroes go to one column · 860 rows stack · 620 compact ── */
+@media (max-width: 1279px) { .display { font-size: 56px; } }
+@media (max-width: 1099px) {
+  .hub, .hero { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+  .plate { max-width: 560px; } .contents { max-width: 640px; }
+}
+@media (min-width: 861px) and (max-width: 1099px) {
+  .hero-exhibit { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .hero-exhibit > * + * { margin-top: 0; }
+}
+@media (max-width: 860px) {
+  .wrap { padding: 0 16px; }
+  .h2 { font-size: 32px; } .lede { font-size: 17px; } .lede code { font-size: 15px; }
+  .hub { padding: 32px 0 64px; } .hero { padding: 32px 0 48px; }
+  .section, .claims > div, .fact, .step, .lately-row, .split { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .split { gap: 32px; }
+  .section-n { font-size: 21px; }
+  .mast { flex-wrap: wrap; gap: 4px 24px; } .mast nav { order: 3; flex-basis: 100%; overflow-x: auto; }
+  .mast-side { margin-left: auto; }
+  .pair-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } .pair-row .v { text-align: left; }
+  .ledger-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .standing li { grid-template-columns: 16px minmax(0, 1fr); } .standing li > span:last-child { grid-column: 2; }
+  .route { grid-template-columns: minmax(0, 1fr); }
+  .stop { border-top: 0; border-left: 1px solid var(--ink); padding: 0 0 24px 24px; }
+  .stop:last-child { padding-bottom: 0; }
+  .stop.loose { border-left-style: dashed; }
+  .stop::before { top: 12px; transform: translate(-50%, -50%); }
+}
+@media (max-width: 620px) {
+  .display { font-size: 44px; } .fact-n { font-size: 44px; }
+  .plate { padding: 16px; } .plate svg.graph { display: none; } .graph-list { display: block; }
+  .cmd .where { display: none; }
+  .pair { padding: 16px; } .proof-head, .proof pre { padding-left: 16px; padding-right: 16px; } .proof-cut, .proof .prov { padding-left: 16px; padding-right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .key:active { transform: none; }
+  .graph .edge, .graph .node rect, .graph .node text, .graph .node tspan, .entry-name a::after { transition: none; }
+}
+@media print {
+  .mast nav, .mast-side, .skip, .key { display: none; }
+}

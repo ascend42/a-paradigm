@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paradigm: a map of your code that agents can be held to</title>
+<meta name="description" content="Paradigm describes each part of a codebase in plain YAML next to the code. Agents read that map through MCP tools, and hooks can block a session that leaves the description behind. What is built, what is in progress and what is untested, with the evidence for each.">
+<!-- Copy: pages/content/hub.md. Numbers: pages/facts.json, stamped by pages/build/stamp.mjs. Do not type a digit into this file. -->
+<!-- frame:head -->
+<script>try{var t=localStorage.getItem("pages-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preload" href="assets/fonts/Fraunces-opsz-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/pages.css">
+<script src="assets/pages.js" defer></script>
+<!-- /frame -->
+</head>
+<body>
+<div class="wrap">
+<!-- frame:mast -->
+  <a class="key skip" href="#main">Skip to the page</a>
+  <header class="mast">
+    <a class="mast-name" href="index.html">Paradigm</a>
+    <nav aria-label="Pages">
+      <a href="index.html" aria-current="page">Overview</a>
+      <a href="paradigm/index.html">Paradigm</a>
+      <a href="gnomon/index.html">Gnomon</a>
+      <a href="warpline/index.html">Warpline</a>
+      <a href="learn/index.html">Learn</a>
+    </nav>
+    <div class="mast-side">
+      <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+    </div>
+  </header>
+<!-- /frame -->
+
+  <main id="main">
+    <div class="hub">
+      <div class="hub-lead">
+        <h1 class="display">A map of your code that agents can be held to.</h1>
+        <!-- TBD-FOUNDER: default-enforcement (shown with the working default: checks stay off until turned on) -->
+        <p class="lede">Paradigm describes each part of a codebase in plain YAML, next to the code. Agents read that map through MCP tools, and hooks can block a session that changes code and leaves the description behind. The checks are off until you turn them on.</p>
+        <div class="next">
+          <div class="cmd"><code>npm install -g @a-company/paradigm</code></div>
+          <a href="learn/index.html">Start the path</a>
+        </div>
+        <div class="fact lead">
+          <div class="fact-n"><!-- fact:paradigm.tools-tokens round=100 -->7,800<!-- /fact --><small>tokens, about</small></div>
+          <p class="fact-claim">for the whole default tool list an agent loads: <!-- fact:paradigm.tools-default -->32<!-- /fact --> tools, cut from about <!-- fact:paradigm.tools-before.tools -->134<!-- /fact --> tools and <!-- fact:paradigm.tools-before.tokens -->30,000<!-- /fact --> tokens in <!-- ref:release.tool-budget -->7.13.0<!-- /ref -->. A test fails the build above <!-- fact:paradigm.tools-budget.tokens -->8,000<!-- /fact -->.</p>
+          <p class="fact-src">real · <!-- loc:paradigm.budget-test --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm-mcp/src/tools/tools-list-budget.test.ts#L18-L19">packages/paradigm-mcp/src/tools/tools-list-budget.test.ts, lines 18 to 19</a><!-- /loc --> · run <!-- fact:paradigm.tools-tokens.measured -->2026-11-23<!-- /fact --> (<!-- fact:paradigm.tools-tokens -->7,793<!-- /fact -->, estimated as length divided by four, not counted by a tokenizer) · the earlier figures are the ones recorded in <!-- fact:paradigm.tools-before.source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L441">CHANGELOG.md:441</a><!-- /fact --> on <!-- fact:paradigm.tools-before.measured -->2026-09-29<!-- /fact -->, and were not re-measured</p>
+        </div>
+        <figure class="proof">
+          <!-- excerpt:paradigm.init-command lines=32-40 -->
+<div class="proof-head"><span>packages/paradigm/.purpose</span><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/.purpose#L32-L40">lines 32 to 40 ↗</a></div>
+<pre tabindex="0"><span class="ln">32</span>    flows:
+<span class="ln">33</span>      - <b class="s-f">$</b>init-flow
+<span class="ln">34</span>    signals:
+<span class="ln">35</span>      - '<b class="s-s">!</b>init-success'
+<span class="ln">36</span>      - '<b class="s-s">!</b>init-skipped'
+<span class="ln">37</span>    components:
+<span class="ln">38</span>      - '<b class="s-c">#</b>init-handler'
+<span class="ln">39</span>      - '<b class="s-c">#</b>template-copier'
+<span class="ln">40</span>      - '<b class="s-c">#</b>detection-engine'</pre>
+<!-- /excerpt -->
+          <figcaption class="prov"><b>real</b><span>The whole idea is a file like this one, next to the code it describes.</span></figcaption>
+        </figure>
+      </div>
+
+      <ul class="contents" aria-label="In this repository">
+        <li class="entry">
+          <div class="device" aria-hidden="true">
+            <div class="sigils"><span class="sig c">#</span><span class="sig f">$</span><span class="sig g">^</span><span class="sig s">!</span><span class="sig a">~</span></div>
+          </div>
+          <div>
+            <h2 class="entry-name"><a href="paradigm/index.html">Paradigm</a></h2>
+            <p>The map and the rules. It describes the code and can check that the description stays true.</p>
+            <ul class="standing">
+              <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span><!-- fact:paradigm.version -->8.1.3<!-- /fact --> on npm; a fresh install audits at <!-- fact:paradigm.audit-vulns -->0<!-- /fact --> vulnerabilities</span></li>
+              <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>whether what agents learn improves their work</span></li>
+              <li><span></span><span class="of">as of <!-- fact:paradigm.audit-vulns.measured -->2026-11-23<!-- /fact --> · real: <code>npm audit</code>; <code>paradigm doctor</code></span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="entry">
+          <div class="device" aria-hidden="true">
+            <div class="sheet"><i></i><i></i><span></span></div>
+          </div>
+          <div>
+            <h2 class="entry-name"><a href="gnomon/index.html">Gnomon</a></h2>
+            <p>A Mac app for your Claude Code sessions. Every permission, question and plan lands on one stack, and your answer is signed.</p>
+            <ul class="standing">
+              <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>signed and notarized app, Apple silicon Macs only</span></li>
+              <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>boards, first slice on a branch</span></li>
+              <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>on any Mac but the one it was built on</span></li>
+              <li><span></span><span class="of">as of <!-- fact:gnomon.notarized.measured -->2026-11-23<!-- /fact --> · real: <code>spctl</code> on the npm package; <code>git log</code></span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="entry minor">
+          <div class="device" aria-hidden="true">
+            <svg class="strand" viewBox="0 0 64 48" focusable="false">
+              <path class="wa" d="M12 0 V48"/>
+              <path class="wb" d="M24 0 V20"/>
+              <path class="wb" stroke-dasharray="2 4" d="M24 20 C24 30 40 28 40 38 V48"/>
+            </svg>
+          </div>
+          <div>
+            <!-- TBD-FOUNDER: warpline-tagline (no tagline; a plain description) -->
+            <h2 class="entry-name"><a href="warpline/index.html">Warpline</a></h2>
+            <p>Checks a merge by what the code means, before the merge. Experimental.</p>
+            <ul class="standing">
+              <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span><!-- fact:warpline.version -->0.3.1<!-- /fact --> on npm, experimental</span></li>
+              <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>not yet run end to end with a server, or at scale</span></li>
+              <li><span></span><span class="of">as of <!-- fact:warpline.version.measured -->2026-11-23<!-- /fact --> · real: <code>npm view</code>; the founder</span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="entry minor">
+          <div class="device" aria-hidden="true"><div class="stations"><i></i><i></i><i></i><i></i></div></div>
+          <div>
+            <h2 class="entry-name"><a href="learn/index.html">Learn the path</a></h2>
+            <p>Four levels. One exercise each, on your own repo. The first takes <!-- fact:learn.level0-time -->about 10 minutes<!-- /fact --> by our estimate; nobody has timed it.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <section class="section" id="fit" aria-labelledby="fit-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="fit-h">One line, from your code to your merge.</h2>
+        <ol class="route">
+          <li class="stop">
+            <h3 class="h3">Your code</h3>
+            <p>Where everything starts. Nothing here changes how you write it.</p>
+          </li>
+          <li class="stop">
+            <h3 class="h3"><a href="paradigm/index.html">The map</a><span class="stop-of">Paradigm</span></h3>
+            <p>A <code class="mono">.purpose</code> file beside the code names its components, flows, gates, signals and aspects. Agents ask the map what a change touches before they make it.</p>
+          </li>
+          <li class="stop">
+            <h3 class="h3"><a href="gnomon/index.html">Sessions and decisions</a><span class="stop-of">Gnomon</span></h3>
+            <p>Gnomon runs the sessions that use the map. It puts each request in front of you and signs what you answered. Mac only.</p>
+          </li>
+          <li class="stop loose">
+            <h3 class="h3"><a href="warpline/index.html">Merges</a><span class="stop-of">Warpline, experimental</span></h3>
+            <p>Warpline asks a different question of the same kind of map: do these two changes mean things that conflict? It is not proven yet.</p>
+          </li>
+        </ol>
+        <p class="prose"><code>npm install -g @a-company/paradigm</code> adds the <code>paradigm</code> and <code>gnomon</code> commands. Warpline's own command is a separate install, <code>npm i -g @a-company/warpline</code>. In practice most people will use Paradigm alone, because Gnomon needs an Apple silicon Mac and Warpline is experimental.</p>
+        <p class="prov"><b>real</b><span><!-- ref:hub.fit-sources --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/hero-pages/evidence-dossier.md">.paradigm/research/hero-pages/evidence-dossier.md</a>, section 7; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L209">CHANGELOG.md:209</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">CHANGELOG.md:231</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/hero-pages/teaching-audit.md#L81">.paradigm/research/hero-pages/teaching-audit.md:81</a><!-- /ref --></span></p>
+      </div>
+    </section>
+
+    <section class="section" id="lately" aria-labelledby="lately-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="lately-h">The last three releases.</h2>
+        <ol class="lately">
+          <!-- lately:paradigm rows=3 name=Paradigm with=warpline -->
+<li class="lately-row"><div class="lately-when">2026-11-12 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L10">Paradigm 8.1.3</a>, with Warpline 0.3.1</div><div><p class="lately-lead">“Agents now know when a project uses Warpline.”</p></div></li>
+<li class="lately-row"><div class="lately-when">2026-11-06 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L26">Paradigm 8.1.2</a>, with Warpline 0.3.0</div><div><p class="lately-lead">“Commits no longer leave your tree dirty.”</p></div></li>
+<li class="lately-row"><div class="lately-when">2026-11-04 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L51">Paradigm 8.1.1</a></div><div><p class="lately-lead">“The learning loop now tells the truth about what it knows.”</p><p class="lately-moved"><span class="mark progress" aria-hidden="true"></span>gated learning: design to in progress</p></div></li>
+<!-- /lately -->
+        </ol>
+        <p class="prose">All three are Paradigm releases. Gnomon's latest is <!-- fact:gnomon.version -->8.1.0<!-- /fact -->, from <!-- fact:lately.gnomon[0].date -->2026-10-29<!-- /fact -->; its page has the rows. Releases are not tagged in git yet.</p>
+        <p class="prov"><b>real</b><span>Each row is the release's own lead sentence, copied from <!-- fact:paradigm.security-fixes.source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L157">CHANGELOG.md:157</a><!-- /fact --> and the lines linked above. <!-- src:gnomon.version -->real · npm view @a-company/gnomon version; gnomon --version; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src -->. Tags: <!-- src:paradigm.git-tags -->real · git tag | wc -l; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src -->.</span></p>
+      </div>
+    </section>
+
+    <section class="section" id="standing" aria-labelledby="standing-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="standing-h">What works, what is being built, and what nobody has run yet.</h2>
+        <dl class="claims">
+          <div>
+            <dt><a href="paradigm/index.html">Paradigm</a></dt>
+            <dd>
+              <ul class="standing">
+                <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>the map, the MCP server, the hooks, a clean install audit</span></li>
+                <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>route-to-gate lookup, gated learning, coverage of our own repo (<!-- fact:paradigm.purpose-coverage -->65% (186 of 288 source directories)<!-- /fact -->)</span></li>
+                <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>whether it saves tokens or improves results in use. The one study we have found the same results with more tool calls.</span></li>
+              </ul>
+              <p class="fact-src"><!-- src:paradigm.purpose-coverage -->real · paradigm doctor; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a> · run 2026-11-23<!-- /src --> · the study: <!-- src:paradigm.study-tool-calls -->recorded 2026-02-06, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/case-study/compare.md#L40">case-study/compare.md:40</a><!-- /src --></p>
+              <p><a href="paradigm/index.html#standing">The full ledger, with evidence on every row</a></p>
+            </dd>
+          </div>
+          <div>
+            <dt><a href="gnomon/index.html">Gnomon</a></dt>
+            <dd>
+              <ul class="standing">
+                <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>the signed app, the decision stack, the chained log, sandboxed sessions</span></li>
+                <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>boards; Windows; <!-- fact:gnomon.ci-latest -->7 of 8<!-- /fact --> CI jobs passing on the latest run</span></li>
+                <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>or not built: a spending cap, loops in the released app, any machine but the founder's</span></li>
+              </ul>
+              <p class="fact-src"><!-- src:gnomon.ci-latest -->recorded 2026-11-12, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/hero-pages/evidence-dossier.md">.paradigm/research/hero-pages/evidence-dossier.md</a> (3B, G5; gh run view 43286257168 --json jobs)<!-- /src --></p>
+              <p><a href="gnomon/index.html#standing">The full ledger</a></p>
+            </dd>
+          </div>
+          <div>
+            <dt><a href="warpline/index.html">Warpline</a></dt>
+            <dd>
+              <ul class="standing">
+                <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>the command line, the forecast, the record on its own git branch</span></li>
+                <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>measuring what its flags are worth. On three open-source repos, <!-- fact:warpline.base-rate -->17 of 275 (6.2%)<!-- /fact --> clean merges were flagged; <!-- fact:warpline.ground-truth.fixed_by_a_human_within_a_day -->3<!-- /fact --> of the <!-- fact:warpline.ground-truth.hits -->18<!-- /fact --> flags were real defects.</span></li>
+                <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>the field test we wrote down in advance, a run with a server, anything at scale</span></li>
+              </ul>
+              <p class="fact-src"><!-- src:warpline.base-rate -->recorded 2026-07-01, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/results.md#L38-L47">.paradigm/research/warpline-guard-base-rate/results.md:38-47</a><!-- /src --> · <!-- src:warpline.ground-truth -->recorded 2026-07-02, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/ground-truth.md#L13-L27">.paradigm/research/warpline-guard-base-rate/ground-truth.md:13-27</a><!-- /src --></p>
+              <p><a href="warpline/index.html#standing">The full ledger</a></p>
+            </dd>
+          </div>
+        </dl>
+        <p class="prose">We are building all three in the open, and this page is stamped from the same facts file the product pages use. Facts last stamped <!-- fact:as_of -->2026-11-23<!-- /fact -->.</p>
+      </div>
+    </section>
+  </main>
+
+<!-- frame:foot -->
+  <footer class="foot">
+    <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+    <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md">Changelog ↗</a>
+    <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/LICENSE">MIT licence ↗</a>
+    <span>Facts last stamped 2026-11-23</span>
+  </footer>
+<!-- /frame -->
+</div>
+</body>
+</html>

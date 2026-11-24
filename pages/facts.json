@@ -8,8 +8,8 @@
   },
   "excerpts_pinned_to": {
     "branch": "feat/hero-pages",
-    "commit": "b3bcbed7",
-    "note": "The engineer re-pins at build time."
+    "commit": "6f29f25aea36ca64642cac0032e1ee5792f15033",
+    "note": "Re-pinned by the builder on 2026-11-23. Every excerpt, capture link and source link points at this commit; stamp.mjs reads the files as they are there."
   },
   "stale_after_days": 90,
   "kinds": [
@@ -1028,7 +1028,7 @@
         },
         {
           "state": "in progress",
-          "what": "Paradigm on its own repo: 65% of directories covered, below its own 80% line",
+          "what": "Purpose coverage on our own repo is 65% (186 of 288 directories), below its own 80% line",
           "evidence": "paradigm doctor, 2026-11-23",
           "facts": [
             "paradigm.purpose-coverage",
@@ -1064,6 +1064,24 @@
           "facts": [
             "paradigm.learning-liveness"
           ]
+        },
+        {
+          "state": "untested or not built",
+          "what": "The learning loop has recorded no journals here",
+          "evidence": "paradigm doctor, 2026-11-23: \"FLATLINE: 0 journals / 20 completions\"; pages/captures/paradigm-doctor.txt",
+          "facts": [
+            "paradigm.learning-liveness"
+          ],
+          "added": "builder, from the evidence dossier, fact 10 and line 244"
+        },
+        {
+          "state": "untested or not built",
+          "what": "This repository is not a working Warpline example: dogfooding here stopped on 2026-11-09 and its ledger fails `warpline health`",
+          "evidence": "warpline health (dossier, 2026-11-23): UNSOUND, 63 failures of 374; decision TD-2026-11-09-865; commit 96e234ef",
+          "facts": [
+            "warpline.own-repo"
+          ],
+          "added": "builder, from the evidence dossier, fact 10 and line 242"
         },
         {
           "state": "untested or not built",
@@ -1409,12 +1427,13 @@
       "path": "packages/paradigm/.purpose",
       "lines": [
         29,
-        39
+        40
       ],
       "used_in": [
         "hub.md section 1 (lines 32-39)",
         "paradigm.md section 3"
-      ]
+      ],
+      "note": "Runs to line 40 so it ends where the components list ends (Mika, 2026-11-23). The hub shows lines 32 to 40."
     },
     "paradigm.enforcement-default": {
       "path": "packages/paradigm/src/core/enforcement/loader.ts",
@@ -1687,5 +1706,48 @@
       "default_shown": "No chart.",
       "fills_it": "One series with five or more dated measurements taken the same way. The dossier holds none."
     }
-  ]
+  ],
+  "refs": {
+    "_note": "Structural references that appear in page prose and hold a digit: a release, a level, a requirement. Each names where it is written down. Stamped with <!-- ref:id -->.",
+    "release.tool-budget": {
+      "value": "7.13.0",
+      "source": "CHANGELOG.md:441"
+    },
+    "release.gated-learning": {
+      "value": "8.1.1",
+      "source": "CHANGELOG.md:51"
+    },
+    "release.ripple-fix": {
+      "value": "7.15.0",
+      "source": "CHANGELOG.md:347"
+    },
+    "study.paradigm-version": {
+      "value": "v2",
+      "source": "case-study/compare.md; facts paradigm.study-outcomes note"
+    },
+    "study.project-size": {
+      "value": "15-file",
+      "source": "case-study/compare.md; facts paradigm.study-outcomes note"
+    },
+    "paradigm.node": {
+      "value": "Node 24",
+      "source": "packages/paradigm/package.json:93"
+    },
+    "learn.level-work": {
+      "value": "level 1",
+      "source": ".atelier/sessions/2026-11-23-hero-pages/DIRECTION.md (the levels table); pages/content/learn.md"
+    },
+    "learn.level-trust": {
+      "value": "Level 2",
+      "source": ".atelier/sessions/2026-11-23-hero-pages/DIRECTION.md (the levels table); pages/content/learn.md"
+    },
+    "hub.fit-sources": {
+      "value": ".paradigm/research/hero-pages/evidence-dossier.md, section 7; CHANGELOG.md:209; CHANGELOG.md:231; .paradigm/research/hero-pages/teaching-audit.md:81",
+      "source": "pages/content/hub.md (the provenance line for \"How the three fit\")"
+    },
+    "repo.slug": {
+      "value": "ascend42/a-paradigm",
+      "source": "pages/build/pages.json (repo); README.md"
+    }
+  }
 }
