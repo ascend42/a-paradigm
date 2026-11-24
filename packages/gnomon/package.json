@@ -48,7 +48,7 @@
     "prepublishOnly": "node ../../scripts/gate-gnomon-publish.mjs"
   },
   "devDependencies": {
-    "@a-company/gnomon-contracts": "1.0.0",
+    "@a-company/gnomon-contracts": "1.1.0",
     "@types/node": "^24.0.0",
     "esbuild": "0.28.2",
     "postject": "1.0.0-alpha.6",

@@ -41,8 +41,11 @@ export const OFFER_SUPPRESS_REASONS = ['no-block', 'turn-streaming', 'pending-ca
 export type OfferSuppressReason = (typeof OFFER_SUPPRESS_REASONS)[number];
 /** The suppression reasons that carry no mod or kind (offer.suppressed{name, offerKind} absent). */
 export const OFFER_SUPPRESS_UNNAMED: readonly OfferSuppressReason[] = Object.freeze(['no-block', 'malformed']);
-/** How an offer reaches its mod (CLOSED): the mod's local MCP server (A2). */
-export const OFFER_REACHES = ['mcp'] as const;
+/**
+ * How an offer reaches its mod (CLOSED): the mod's local MCP server (A2), or `canvas`, a board raised by the offer
+ * (published in S1.2; the manifest loader refuses it until boards raised by offer ship).
+ */
+export const OFFER_REACHES = ['mcp', 'canvas'] as const;
 
 /**
  * What an offer may take in (CLOSED, Aegis review of the GUI slice): offer-spec:v1 `contextIn` and offer.shown
@@ -128,7 +131,7 @@ export interface OfferSpecV1 {
   summary: string;
   contextIn: ContextSource[];
   resultOut: string;
-  reach: 'mcp';
+  reach: (typeof OFFER_REACHES)[number];
   handoffTool: string;
   related: string[];
   restraint: string;

@@ -242,7 +242,7 @@ const TABLE: Row[] = [
   ['merge', 'kernel', 'reverted ref.rewritten', D86],
   ['gate-class', 'kernel', 'detected decided'],
   ['inject', 'userland', 'receipt'],
-  ['paradigm', 'userland', 'doodle.exported event'],
+  ['paradigm', 'userland', 'dimension.exported event'],
   ['detector', 'userland', 'event'],
   ['loop', 'userland', 'open row closed'],
   ['loop', 'kernel', 'paused'],

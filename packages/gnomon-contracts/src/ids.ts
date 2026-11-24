@@ -124,7 +124,8 @@ export const ID_PREFIXES = {
   permit: 'permit:v1:',
   brief: 'brief:',
   msg: 'msg:',
-  ds: 'ds:',
+  /** a dimension (S1.2, spec §12.7); replaces the never-minted `ds` */
+  dim: 'dim:',
   /** the Desk (TD-2026-10-20-812): one offer.shown row and the decision on it */
   offer: 'offer:',
 } as const;

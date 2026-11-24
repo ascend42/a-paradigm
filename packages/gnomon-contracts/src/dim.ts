@@ -40,9 +40,10 @@ export const DIM_CORE_KINDS = ['stroke', 'rect', 'ellipse', 'diamond', 'arrow', 
 export type DimCoreKind = (typeof DIM_CORE_KINDS)[number];
 /** Grammar: a core kind, or `<ns>:<kind>`. */
 export const DIM_KIND_PATTERN = /^(?:[a-z][a-z0-9-]{0,23}:)?[a-z][a-z0-9-]{0,31}$/;
-/** client-minted ULID */
-export const DIM_NODE_ID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-export const DIM_ID_PATTERN = /^dim:[0-9A-HJKMNP-TV-Z]{26}$/;
+/** client-minted ULID (the same grammar as ids.ts, restated here because this file imports nothing from it) */
+export const DIM_NODE_ID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+/** equals `ID_PATTERNS.dim` (a test holds this) */
+export const DIM_ID_PATTERN = /^dim:[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 /** order key: base 62 over `0-9A-Za-z`, never ending in `0` */
 export const DIM_Z_PATTERN = /^[0-9A-Za-z]{0,63}[1-9A-Za-z]$/;
 export const DIM_REL_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
@@ -203,9 +204,10 @@ export interface DimRow {
   payload: unknown;
   causes?: readonly string[];
 }
+export const DIM_BY_CLASSES = ['human', 'agent', 'unknown'] as const;
 /** Who drew a node. `unknown`: the row carried no well-formed host stamp, so no hand is vouched for. */
 export interface DimBy {
-  cls: 'human' | 'agent' | 'unknown';
+  cls: (typeof DIM_BY_CLASSES)[number];
   principal: string;
   agent?: string;
 }
