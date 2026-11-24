@@ -621,7 +621,7 @@ components:
   university-launcher:
     description: Launches the Paradigm University learning platform
     type: service
-    file: src/commands/university.ts
+    file: src/commands/university/serve.ts
   triage-handler:
     description: Handles Sentinel CLI triage commands
     type: handler

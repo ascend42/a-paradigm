@@ -305,7 +305,7 @@ components:
   tool-aliases:
     description: Alternate names and intent phrases on tool definitions for better LLM tool matching. Simple string arrays, not semantic embeddings.
     type: utility
-    file: packages/paradigm-mcp/src/tools/tool-registry.ts
+    file: packages/paradigm-mcp/src/utils/tool-registry.ts
   paradigm-arch-status:
     description: 'paradigm_arch_status MCP tool — returns a structured snapshot of the project symbol graph: component counts, flow coverage, gate coverage, and orphan detection. Consumed by the Atlas cartographer agent.'
     type: tool
