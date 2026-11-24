@@ -10,7 +10,7 @@ import { apply, emptyState, VIEWS } from './model.mjs';
 
 const ABI = 'mod-abi:v1';
 // Echoed at init; the host refuses any other id (a mod-ABI change needs a new Ledger build).
-const MOD_ABI_ID = 'sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082';
+const MOD_ABI_ID = 'sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66';
 const MAX_FIXTURE_EVENTS = 1024;
 
 const live = emptyState();

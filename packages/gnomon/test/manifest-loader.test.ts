@@ -1065,23 +1065,23 @@ describe('Aegis S0b M2: the TOFU binding race', () => {
   it('two first-binding cards for different hosts: approving one makes the other refuse PUBLISHER at decide', () => {
     const home = tmp();
     const auth = root();
-    const a = stageGit(home, auth, 'board-a', 'gitlab.com');
-    const b = stageGit(home, auth, 'board-b', 'codeberg.org');
+    const a = stageGit(home, auth, 'panel-a', 'gitlab.com');
+    const b = stageGit(home, auth, 'panel-b', 'codeberg.org');
     const linesOf = (st: typeof a) => (st.record.card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
     expect(a.record.detail.rebind).toEqual({ host: 'gitlab.com', namespace: 'acme', from: null });
     expect(linesOf(a)).toContain('publisher acme: first binding to gitlab.com/acme');
     expect(linesOf(a).some((t) => t.startsWith('PUBLISHER RE-BIND'))).toBe(false);
-    decideInstallCard(home, 'acme.board-a', a.cardId, 'install', { presenceToken: bound(home, 'acme.board-a', a.cardId), authority: auth });
+    decideInstallCard(home, 'acme.panel-a', a.cardId, 'install', { presenceToken: bound(home, 'acme.panel-a', a.cardId), authority: auth });
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'gitlab.com', namespace: 'acme' });
-    const r = refusalOf(() => decideInstallCard(home, 'acme.board-b', b.cardId, 'install', { presenceToken: bound(home, 'acme.board-b', b.cardId), authority: auth }));
+    const r = refusalOf(() => decideInstallCard(home, 'acme.panel-b', b.cardId, 'install', { presenceToken: bound(home, 'acme.panel-b', b.cardId), authority: auth }));
     expect(r.manifestCode).toBe('PUBLISHER');
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'gitlab.com' });
     // re-staged with an explicit re-bind, the card names what it replaces
-    const src = writeMod(path.join(tmp(), 'board-c'), baseManifest({ name: 'board-c', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: [], egress: 'none' } }));
-    const c = stageInstall({ home, source: src, via: 'git', git: { url: 'https://codeberg.org/acme/board-c', commit: SHA40 }, rebindPublisher: true, requestedBy: HUMAN, trust: auth });
+    const src = writeMod(path.join(tmp(), 'panel-c'), baseManifest({ name: 'panel-c', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: [], egress: 'none' } }));
+    const c = stageInstall({ home, source: src, via: 'git', git: { url: 'https://codeberg.org/acme/panel-c', commit: SHA40 }, rebindPublisher: true, requestedBy: HUMAN, trust: auth });
     if (c.state !== 'staged') throw new Error('staged');
     expect(linesOf(c as typeof a)).toContain('PUBLISHER RE-BIND from gitlab.com/acme: acme → codeberg.org/acme');
-    decideInstallCard(home, 'acme.board-c', c.cardId, 'install', { presenceToken: bound(home, 'acme.board-c', c.cardId), authority: auth });
+    decideInstallCard(home, 'acme.panel-c', c.cardId, 'install', { presenceToken: bound(home, 'acme.panel-c', c.cardId), authority: auth });
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'codeberg.org' });
   });
 });

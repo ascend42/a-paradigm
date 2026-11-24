@@ -47,8 +47,13 @@
  * proxy refuses a tunnel opened while the call in force lacks `network`.
  * Rendered blocks pass the closed-kit gate (block.ts) and come back fenced and
  * labelled `mod:<name>` (+ `dev`); `mod.view.rendered{name, slot, ms}`.
- * RELAYS: `relayView` / `relayCommand` stamp `relayedFor{principal, connId}`
- * from the CALLER's authenticated connection — a mod can never name who acted.
+ * RELAYS: `relayView` / `relayCommand` stamp `relayedFor` from the CALLER's
+ * authenticated connection — a mod can never name who acted. Its fields are fixed
+ * per method by the contracts `pickRelayedFor` (S1.2): {principal, connId} for a
+ * view; plus `surface` for a command, and only for a human-class caller; a tool
+ * call gets {surface, agent} and, for a first-party or `log.read` mod only,
+ * {principal, hsid, turn}. The same object is stamped on every row the mod
+ * appends inside the call (CallStamp → bridge.clampModAppend).
  *
  * SUPERVISION: an unexpected exit ⇒ `mod.health{ok:false}` and a restart
  * (cap 3 per 10 min, then the mod stays down until started again); a crash
@@ -84,14 +89,14 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import os from 'node:os';
 import * as path from 'node:path';
-import { isModId, MOD_ABI_ID, MOD_ABI_V1, type RelayedFor } from '@a-company/gnomon-contracts';
+import { isModId, MOD_ABI_ID, MOD_ABI_V1, pickRelayedFor, type RelayedFor, type ToolRelayedFor } from '@a-company/gnomon-contracts';
 import { ownsModKind } from '../manifest/mod-kind.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { registerSeams } from '../internal-seams.js';
 import { isLifecycleRefusal } from '../lifecycle/refusal.js';
 import type { TrackInput } from '../lifecycle/children.js';
 import { effectiveInstall, readGrants } from '../manifest/grants.js';
-import { loadMod, publisherDisplayOf } from '../manifest/install.js';
+import { compatModAbiId, loadMod, publisherDisplayOf } from '../manifest/install.js';
 import { userMcpServerNames } from '../manifest/user-mcp.js';
 import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { noEvents, type ManifestEventSink } from '../manifest/refusal.js';
@@ -102,7 +107,7 @@ import type { ChildLaunchPlan } from '../sandbox/transport.js';
 import { sanitizeModBlock } from './block.js';
 import { RowFold } from './fold.js';
 import { ModChannel, ModRpcError } from './channel.js';
-import { declaredEffects, effectsFor, methodEffect, type CallContext } from './effects.js';
+import { declaredEffects, effectsFor, methodEffect, type CallContext, type CallStamp } from './effects.js';
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
@@ -155,6 +160,8 @@ export interface KernelCallRequest {
   hsid?: string;
   /** the bound host → mod call (absent ⇒ idle); the bridge's per-call append budget keys on it */
   callId?: string;
+  /** S1.2 C1: the host's stamp of the bound command or tool call (absent ⇒ idle, view or host-initiated); never mod input */
+  stamp?: CallStamp;
 }
 
 export interface ModHostOptions {
@@ -245,6 +252,10 @@ export interface CallOptions {
   timeoutMs?: number;
 }
 
+/** Host-composed (never mod text): what a mod refused ABI at init is waiting for. */
+export const NEEDS_UPDATE_NOTE = 'needs an update for this Gnomon';
+const needsUpdateText = (name: string): string => `${name} ${NEEDS_UPDATE_NOTE}: it was built for another mod ABI. Update it in the Mods panel, or install its current build`;
+
 export class ModHost {
   readonly #o: ModHostOptions;
   readonly #emit: ManifestEventSink;
@@ -257,6 +268,12 @@ export class ModHost {
   readonly #watchers = new Map<string, { close(): void }>();
   /** mods out of restarts: refused DOWN to relays until an operator start() */
   readonly #down = new Set<string>();
+  /**
+   * Mods refused ABI at init: name → the package hash that was refused. STICKY and in memory: a relay never respawns
+   * the child for that pin (so a view paint cannot loop it into the restart cap and its misleading DOWN text). An
+   * operator start, or a different pin (the Update card decided), tries once more. Bounded by the installed mods.
+   */
+  readonly #needsUpdate = new Map<string, string>();
   readonly #inflight = new Map<string, number>();
   /** hsids whose turn.partial edge was already fed (bounded) */
   readonly #streaming = new Set<string>();
@@ -329,6 +346,7 @@ export class ModHost {
     return {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
+      needsUpdate: this.needsUpdate(),
       paused: this.#pausedView(),
       // Aegis S0b L1: per running mod id, {host, verified}, so GUI panel headers and offer chips show the publisher
       publishers: Object.fromEntries([...this.#running.values()].map((r) => [r.name, r.publisherDisplay]).sort(([a], [b]) => String(a).localeCompare(String(b)))),
@@ -408,6 +426,7 @@ export class ModHost {
   /** Start (or return) the child for `name` — the OPERATOR path: it also lifts a restart-cap `down`. Paused mods return their pause; nothing from a changed tree loads. */
   start(name: string): Promise<ModStartResult> {
     this.#down.delete(name);
+    this.#needsUpdate.delete(name); // one fresh attempt per operator start
     if (this.#paused.get(name)?.why === 'user') this.#paused.delete(name); // re-judged from the marker
     return this.#launch(name);
   }
@@ -427,6 +446,11 @@ export class ModHost {
     if (live) return;
     const p = this.#paused.get(name);
     if (p) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: p.why, cardId: p.cardId });
+    const refusedPin = this.#needsUpdate.get(name);
+    if (refusedPin !== undefined) {
+      if (effectiveInstall(readGrants(this.#o.home, this.#o.trust), name)?.packageHash === refusedPin) throw new ModRefusal('ABI', needsUpdateText(name), { name, why: 'needs-update' });
+      this.#needsUpdate.delete(name); // another pin now: one fresh attempt
+    }
     if (this.#down.has(name) || this.restarts(name) >= RESTART_CAP.n) {
       this.#down.add(name);
       throw new ModRefusal('DOWN', `${name} is down (restart cap ${RESTART_CAP.n} per ${RESTART_CAP.windowMs / 60_000} min); an operator start brings it back`, { name });
@@ -452,6 +476,11 @@ export class ModHost {
   /** Write the folded relay-miss counter row now (also on its window timer and at stopAll). */
   flushRelayMisses(): void {
     this.#misses.flush();
+  }
+
+  /** Names refused ABI at init and waiting for an update (status, the Mods panel). */
+  needsUpdate(): string[] {
+    return [...this.#needsUpdate.keys()].sort();
   }
 
   /** Names a relay is refused DOWN for (inspect / tests). */
@@ -587,10 +616,19 @@ export class ModHost {
         await this.stop(name, 'init-failed');
         throw err instanceof ModRefusal ? err : new ModRefusal('ABI', `${name} did not answer init`, { name });
       }
-      if (init?.abi !== MOD_ABI_V1 || init?.modAbiId !== MOD_ABI_ID) {
+      // G-MOD-15: an installed first-party snapshot at an exactly listed superseded pin may answer with the ONE prior
+      // id listed for it. Nothing is granted or re-tiered; the grant and the snapshot rehash stood in loadMod above.
+      const prior = compatModAbiId(loaded, MOD_ABI_ID);
+      const compat = init?.abi === MOD_ABI_V1 && prior !== null && init?.modAbiId === prior;
+      if (init?.abi !== MOD_ABI_V1 || (init?.modAbiId !== MOD_ABI_ID && !compat)) {
         await this.stop(name, 'abi-mismatch');
-        throw new ModRefusal('ABI', `${name} answered abi ${String(init?.abi)} / modAbiId ${String(init?.modAbiId)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
+        this.#needsUpdate.set(name, loaded.packageHash);
+        // the echoes are MOD-SUPPLIED and this text reaches the GUI: shown only when they have the expected shape, clipped
+        const shown = (v: unknown, re: RegExp): string => (typeof v === 'string' && v.length <= 80 && re.test(v) ? v : 'a malformed value');
+        throw new ModRefusal('ABI', `${name} answered abi ${shown(init?.abi, /^mod-abi:v[0-9]{1,4}$/)} / modAbiId ${shown(init?.modAbiId, /^sha256:[0-9a-f]{64}$/)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
       }
+      // one row saying so (an existing key of mod.health; no contract id moves)
+      if (compat) this.#emit('mod.health', { name, ok: true, why: 'abi-compat' });
       this.#primeFeed(r);
       this.#emit('mod.health', { name, ok: true });
       if (linked.length) this.#watch(name, linked[0]!); // re-armed on every successful start
@@ -772,7 +810,9 @@ export class ModHost {
     if (!view) throw new ModRefusal('UNDECLARED', `${name} declares no view ${viewId}`, { name, viewId });
     const t0 = this.#now();
     if (opts.relayedFor) input = this.#composeRelayedInput(r, input, opts.relayedFor, opts.relayedClass ?? null);
-    const out = (await this.#call(name, 'view.render', { viewId, input: input ?? null, width: opts.width ?? 80, prefs: opts.prefs ?? {}, ...(opts.relayedFor ? { relayedFor: opts.relayedFor } : {}) }, { kind: 'view' }, opts)) as Record<string, unknown>;
+    // C2 (G-MOD-13): exactly the view.render fields, whatever the caller object holds
+    const rf = opts.relayedFor ? pickRelayedFor('view.render', opts.relayedFor as unknown as Record<string, unknown>, false) : null;
+    const out = (await this.#call(name, 'view.render', { viewId, input: input ?? null, width: opts.width ?? 80, prefs: opts.prefs ?? {}, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'view' }, opts)) as Record<string, unknown>;
     const s = sanitizeModBlock(out?.block, name);
     this.#emit('mod.view.rendered', { name, slot: view.slot, ms: this.#now() - t0 });
     return { label: `mod:${name}`, dev: r.dev, block: s.block, nodes: s.nodes, flags: s.flags };
@@ -829,20 +869,45 @@ export class ModHost {
   async runCommand(name: string, commandId: string, args: unknown, opts: CallOptions = {}): Promise<unknown> {
     const r = this.#require(name);
     if (!r.manifest.provides?.commands?.some((c) => c.id === commandId)) throw new ModRefusal('UNDECLARED', `${name} declares no command ${commandId}`, { name, commandId });
-    const out = (await this.#call(name, 'command.run', { commandId, args: args ?? null, ...(opts.relayedFor ? { relayedFor: opts.relayedFor } : {}) }, { kind: 'command' }, opts)) as Record<string, unknown>;
+    // C1/C2: one pickRelayedFor output is both what the mod is sent and what its rows are stamped with
+    const rf = opts.relayedFor ? pickRelayedFor('command.run', opts.relayedFor as unknown as Record<string, unknown>, false) : null;
+    const out = (await this.#call(name, 'command.run', { commandId, args: args ?? null, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', ...(rf ? { stamp: { relayedFor: rf } } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 
   /** The `mod.command` client relay (a GUI caller additionally needs a user gesture — the endpoint's rule, slice 2). */
-  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; principalClass?: string }): Promise<unknown> {
-    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId } });
+  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; surface?: 'gui' | 'cli'; principalClass?: string }): Promise<unknown> {
+    // A1: no surface (a non-human caller) stays absent; the row then folds as the unknown hand
+    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId, ...(req.surface ? { surface: req.surface } : {}) } });
   }
 
   /** `tool.call` — effects in force = that tool's declared effects (∩ the dev cap). */
-  async callTool(name: string, tool: string, input: unknown, opts: CallOptions & { hsid?: string } = {}): Promise<unknown> {
+  /**
+   * C2 / A3: may this mod learn which session, principal and turn called it? Only a `gnomon`-published mod (the
+   * loader enforces publisher gnomon ⇔ first-party tier, both ways) or one granted `log.read`. Anything else gets
+   * neither `principal`, `hsid` nor `turn` on a tool call, and no `causes` on its rows (a turn ref holds the session
+   * id). Its rows then carry no principal and a dimension fold reads them as the unknown hand.
+   */
+  #identityAllowed(r: Running): boolean {
+    return r.manifest.publisher === 'gnomon' || feedAccessOf(r.manifest.requires?.capabilities).base;
+  }
+
+  /**
+   * `toolRelayedFor` is the full HOST-KNOWN value of the calling session (the bridge supplies it from S1.4); it is
+   * never read from tool input. A value without a principal, a tool surface and an agent label is not sent and not
+   * stamped: rows the mod appends in that call then fold as the unknown hand, never as a human or a named agent.
+   */
+  async callTool(name: string, tool: string, input: unknown, opts: CallOptions & { hsid?: string; toolRelayedFor?: ToolRelayedFor } = {}): Promise<unknown> {
     const r = this.#require(name);
     if (!r.manifest.provides?.tools?.some((t) => t.name === tool)) throw new ModRefusal('UNDECLARED', `${name} declares no tool ${tool}`, { name, tool });
-    const out = (await this.#call(name, 'tool.call', { name: tool, input: input ?? null }, { kind: 'tool', tool, ...(opts.hsid ? { hsid: opts.hsid } : {}) }, opts)) as Record<string, unknown>;
+    const identity = this.#identityAllowed(r);
+    // fail closed: the HOST-KNOWN value must be whole (principal, a tool surface, an agent label) or it vouches for nobody
+    const whole = opts.toolRelayedFor ? pickRelayedFor('tool.call', opts.toolRelayedFor as unknown as Record<string, unknown>, true) : null;
+    const complete = !!whole && !!whole.principal && !!whole.surface && !!whole.agent;
+    // A3: an unentitled mod is told the surface and the agent label only; the session principal is identity
+    const rf = complete ? pickRelayedFor('tool.call', whole, identity) : null;
+    const stamp: CallStamp | null = rf ? { relayedFor: rf, ...(identity && rf.turn ? { causes: [rf.turn] } : {}) } : null;
+    const out = (await this.#call(name, 'tool.call', { name: tool, input: input ?? null, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'tool', tool, ...(opts.hsid ? { hsid: opts.hsid } : {}), ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 
@@ -953,7 +1018,8 @@ export class ModHost {
         }
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
         const callId = typeof params.callId === 'string' ? params.callId : undefined;
-        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}) }) };
+        const stamp = (ctx.kind === 'command' || ctx.kind === 'tool') && ctx.stamp ? ctx.stamp : undefined;
+        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}) }) };
       }
     } catch (err) {
       if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {

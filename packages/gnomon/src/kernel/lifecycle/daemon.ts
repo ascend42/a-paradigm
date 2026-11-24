@@ -1341,7 +1341,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       append: async (row) => {
         // B1: modns.* is userland-owned (L7) ⇒ appended `as: 'userland'` under the MOD principal; the kernel key signs it as an
         // attestation that the kernel accepted a mod-originated row — readers attribute it by principal, never by keyId
-        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}) });
+        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}), ...(row.causes ? { causes: row.causes } : {}) });
         return { seq: r.seq };
       },
   });

@@ -1,0 +1,497 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "●",
+          "tone": "hue-3"
+        },
+        {
+          "type": "Text",
+          "text": "a-paradigm"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "tasks",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "5 of 12 open · 2 high",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task ▲",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-20-006",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Gnomon: Paradigm Context mod (K1 slice, K3 focus join), read-only sidebar sheet”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task ▲",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-19-011",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Aegis re-check of the auto-edits read-only shell pass before the next dogfood w…”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-20-008",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Mod host follow-ups (Aegis, Ledger re-check):”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-20-007",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Voice: earcon and a separate system voice for kernel speech”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-18-004",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Windows CI: LF pins for the mod fixtures and the 8.3 name check”",
+              "tone": "quiet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decisions",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "5 of 95",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-20-294",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-20",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Table-talk voice replies, and fewer approval prompts under auto-edits”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-20-262",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-20",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Dictation: a human send carries its voice turns, attributed by the kernel”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-19-063",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-19",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“A claim-mismatch card arrives with Deny focused”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-18-097",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-18",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Audited sessions load the repo context the way plain Claude Code does”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-17-041",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-17",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Mods are pinned snapshots; a changed linked folder pauses and re-cards”",
+              "tone": "quiet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "5 of 341",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore insight",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-20-ascend-054457-857",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Decision TD-2026-10-20-294 recorded”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore milestone",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-20-ascend-053549-001",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Ledger mod lands behind log.read:usage (Aegis M1)”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore insight",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-20-ascend-043827-854",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Decision TD-2026-10-20-262 recorded”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-19-ascend-221501-002",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Repo hooks stay audited; the human decides each one”",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore insight",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-19-ascend-180211-004",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“The Workshop strip shows who needs you, never what they said”",
+              "tone": "quiet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "symbols",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "7",
+              "tone": "quiet"
+            }
+          ]
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "#gnomon-voice",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#gui",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "$voice-turn",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#ledger-mod",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#mod-host",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "^repo-hook",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#workshop-mod",
+              "tone": "chip"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "skipped · 1 malformed",
+      "tone": "quiet"
+    }
+  ]
+}

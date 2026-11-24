@@ -1,5 +1,7 @@
 # Doodle — a shared, replayable scribble surface for a human and their agents
 
+Note (2026-11-24): TD-2026-11-24-053 supersedes the naming in this document and its §3.1–3.2. The shared surface is a **dimension** (the space); the board and the doodle are **mediums** inside it. The permanent names are `modns.gnomon.dimension.*`, the `dim:` ref scheme (the `doodle:` scheme is dropped), `dim-shape:v1`, the tools `dim_view` / `dim_draw` and the CLI `gnomon dim`; the symbols are `#dimension-mod` and `$dimension-session`. Where this document and the build spec differ, `docs/specs/gnomon.md` §12.7 is the commitment; this document stays as the concept record.
+
 Note (2026-10-16): spec v3.2 supersedes parts of this concept. The shell is a localhost GUI (P8-D50), so the GUI hosts the canvas directly; there is no separate gnomon-doodle client or second listener. See docs/specs/gnomon.md §12.7.
 
 Status: concept / ideation (not a build spec). Target: Gnomon 8.0 first-party mod + first-party surface. Companion to `gnome-persona.md` in this folder (the gnome is the hand; Doodle is the paper).

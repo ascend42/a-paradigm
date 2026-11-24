@@ -135,3 +135,9 @@ So: pasted text becomes a text node through the dimension validator and never re
 **S1.4:** a test that marked-up text stays text; the Library components stubbed out of the bytes, not only unmounted.
 
 **Backlog:** the GUI embed is inlined three times in the kernel dist (T-2026-11-24-005); `pack-roundtrip` and `sec-01` tests fail under npm 12 (`npm pack --json` shape); Firefox and Edge are listed as supported in §11.2 but were not on the founder's Mac for the local run (CI covers them).
+
+**Added from Mika's re-review of the completed S1.0 fixture (approved-with-fixes, none blocking the merge of an unreachable chunk):**
+- **The image tool does not refuse.** Through the legacy file input and through file drop, an image lands in the scene as a broken placeholder with two `img-src` refusals and no message to the user; `BoardRefused` reaches the console only. `packages/gnomon-gui/.purpose` says "images are refused until S2": correct that wording, and in S1.1 remove the image tool by a counted patch (as for the Library) so no stock path inserts an image. Drop is covered by C8 in S1.3.
+- **The engine's phone layout is triggered by a short pane as well as a narrow one.** An 839x499 host is in the phone layout; 839x799 is desktop. S1.1 sets a minimum pane size in both dimensions or owns the layout.
+- `packages/gnomon-gui/src/preview/main.ts:37` sets `host.style.background = '#fff'`, which fails `atelier check` (`no-pure-black-white`): use the paper token. Dev fixture only; fix in S1.1.
+- S1.1 also inherits: designed loading, failed, crashed and retry states (the code now emits every signal for them); the stock contrast failures; the docked search sidebar covering the tool island in a narrow host.

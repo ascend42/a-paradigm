@@ -53,7 +53,8 @@
     "reach": {
       "type": "string",
       "enum": [
-        "mcp"
+        "mcp",
+        "canvas"
       ]
     },
     "handoffTool": {

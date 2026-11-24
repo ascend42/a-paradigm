@@ -327,7 +327,7 @@
                   "type": "array",
                   "items": {
                     "type": "string",
-                    "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+                    "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|dim):[^\\s]+$"
                   }
                 }
               },
@@ -478,7 +478,7 @@
                 },
                 "ref": {
                   "type": "string",
-                  "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+                  "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|dim):[^\\s]+$"
                 }
               },
               "required": [

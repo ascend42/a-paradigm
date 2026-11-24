@@ -169,6 +169,6 @@ describe('decisionSig v2 layout (built by slice A2)', () => {
   it('changing the layout moves clientApiId; modAbiId is not an input', () => {
     const changed = { ...CLIENT_API_DESCRIPTOR, decisionSig: { ...DECISION_SIG_DESCRIPTOR, v2: { ...DECISION_SIG_DESCRIPTOR.v2, marker: 'gnomon:decision:v3' } } };
     expect(computeClientApiId(changed)).not.toBe(CLIENT_API_ID);
-    expect(MOD_ABI_ID).toBe('sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082');
+    expect(MOD_ABI_ID).toBe('sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66');
   });
 });

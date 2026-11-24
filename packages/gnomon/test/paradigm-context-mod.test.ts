@@ -175,7 +175,7 @@ describe('#paradigm-context-mod through the host', () => {
 
   it('installs as tier first-party', async () => {
     const w = await installed();
-    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.1 (mod) by gnomon from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.2 (mod) by gnomon from package, tier first-party');
     const g = readGrants(w.home, w.auth);
     expect(g.trust.get(effectiveInstall(g, 'gnomon.paradigm-context')!.manifestHash)).toBe('first-party');
   });

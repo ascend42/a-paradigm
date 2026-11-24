@@ -34,6 +34,8 @@ components:
       `gnomon mod install packages/gnomon-mods/workshop` + the root-key card.
       Fixtures strip.json / strip-reduced.json with golden renders
       (test/workshop-mod.test.ts, every OS).
+      1.1.1 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES.
     tags: [mods, first-party, M1.11]
     oracles: [G-WSP-01]
 
@@ -66,6 +68,8 @@ components:
       `npm run repin:first-party` in packages/gnomon
       (packages/gnomon/scripts/repin-first-party.mjs, which renders the
       Workshop, Ledger and Paradigm Context goldens from their pure models).
+      1.1.1 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES.
     tags: [mods, first-party]
   paradigm-context-mod:
     description: >-
@@ -98,6 +102,9 @@ components:
       goldens (test/paradigm-context-mod.test.ts, light and dark);
       regenerate with `npm run repin:first-party`; tier first-party once
       pinned in FIRST_PARTY_PACKAGE_HASHES (1.1.1 sha256:22bab5bf…, repinned 2026-10-23 for the fitted zone heads and the one-line empty state).
+      1.1.2 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES (sha256:bd25b714…, superseding the
+      1.1.1 pin named above).
     tags: [mods, first-party]
   neurons-mod:
     description: >-

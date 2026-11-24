@@ -12,6 +12,7 @@
  * by the kernel, never stored). Each value of LITERAL_MIN_CHARS or more, and its URL-encoded form, is replaced FIRST by
  * `[REDACTED:env:<NAME>]` (kind `env:<NAME>`), whatever its shape.
  */
+import { compileSecretRules } from '@a-company/gnomon-contracts';
 
 /** A literal shorter than this is not redacted (it would shred ordinary text). */
 export const LITERAL_MIN_CHARS = 6;
@@ -33,25 +34,8 @@ interface Rule {
   group?: number;
 }
 
-const RULES: readonly Rule[] = [
-  { kind: 'private-key', re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|$)/g },
-  // a block whose BEGIN line fell outside the tail window: everything up to its END line
-  { kind: 'private-key', re: /^[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/g },
-  { kind: 'aws-access-key', re: /\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b/g },
-  { kind: 'aws-secret', re: /(aws_?secret_?access_?key|aws_?session_?token)(["']?\s*[:=]\s*["']?)([A-Za-z0-9/+=]{16,})/gi, group: 3 },
-  { kind: 'github-token', re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/g },
-  { kind: 'slack-token', re: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g },
-  { kind: 'anthropic-key', re: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g },
-  { kind: 'openai-key', re: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g },
-  { kind: 'jwt', re: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
-  { kind: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/g },
-  { kind: 'stripe-key', re: /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{10,}\b/g },
-  { kind: 'gitlab-token', re: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
-  { kind: 'url-password', re: /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)([^\s@/]+)(@)/gi, group: 2 },
-  { kind: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/g },
-  { kind: 'bearer', re: /(\bAuthorization\s*:\s*Bearer\s+)([A-Za-z0-9._~+/=-]{8,})/gi, group: 2 },
-  { kind: 'generic-secret', re: /(\b[A-Za-z0-9_.-]*(?:api[_-]?key|apikey|secret|token|passw(?:or)?d|passwd|credential)[A-Za-z0-9_.-]*)(["']?\s*[:=]\s*["']?)([^\s"',;]{8,})/gi, group: 3 },
-];
+/** Built from the ONE pattern table in `@a-company/gnomon-contracts` (`secret-rules.ts`, S1.2 ruling O4). */
+const RULES: readonly Rule[] = compileSecretRules();
 
 /** Replace every literal value (and its URL-encoded form) by `[REDACTED:env:NAME]`; counts per kind. */
 export function redactLiterals(text: string, literals: ReadonlyArray<{ name: string; value: string }>, counts: Map<string, number> = new Map()): { text: string; counts: Map<string, number> } {

@@ -34,6 +34,7 @@ const run = async (input, api) => {
   if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
   if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done' })));
+  if (input.op === 'append.forged') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done', payload: { note: input.note ?? 'n', relayedFor: { principal: 'p:evil/x', surface: 'gui', agent: 'arky', hsid: 'hs-evil', turn: 'turn:hs-evil/9' } }, causes: ['turn:hs-evil/9'] })));
   if (input.op === 'send') return attempt(async () => JSON.stringify(await api.kernel('session.send', input.params ?? {})));
   if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
   if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
@@ -52,11 +53,11 @@ const run = async (input, api) => {
   return null;
 };
 serveMod({
-  views: { 'probe.view': async (input) => input && input.raw ? input.raw : ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'hi' }) },
-  commands: { 'probe.who': async (_a, ctx) => ({ relayedFor: ctx.relayedFor ?? null }) },
+  views: { 'probe.view': async (input, ctx) => input && input.raw ? input.raw : ({ schemaVersion: 'display-block:v1', type: 'Text', text: input && input.who ? JSON.stringify(ctx.relayedFor ?? null) : 'hi' }) },
+  commands: { 'probe.who': async (a, ctx, api) => (a && a.op ? { relayedFor: ctx.relayedFor ?? null, out: await run(a, api) } : { relayedFor: ctx.relayedFor ?? null }) },
   tools: {
     'probe.read': (input, _c, api) => run(input, api),
-    'probe.write': (input, _c, api) => run(input.op ? input : { op: 'state.set', value: 2 }, api),
+    'probe.write': async (input, c, api) => (input.who ? { relayedFor: c.relayedFor ?? null, out: await run(input, api) } : run(input.op ? input : { op: 'state.set', value: 2 }, api)),
     'probe.net': (input, _c, api) => run(input.op ? input : { op: 'egress', host: input.host }, api),
     'probe.spend': (input, _c, api) => run(input, api),
   },

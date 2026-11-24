@@ -555,7 +555,8 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
     expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.10' } } } });
     ws.sendJson(rpc(5, 'mod.view', { name: 'acme.probe', viewId: 'probe.view', input: {}, relayedFor: { principal: 'p:evil/x', connId: 'z' } }));
     expect(await ws.nextJson()).toMatchObject({ result: { label: 'mod:acme.probe' } });
-    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human' }, req: { name: 'acme.probe', viewId: 'probe.view', input: {} } }]);
+    // S1.2 C2: the dispatcher derives `surface` from the connection credential (host-side; view.render never forwards it)
+    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human', surface: 'gui' }, req: { name: 'acme.probe', viewId: 'probe.view', input: {} } }]);
   });
 });
 

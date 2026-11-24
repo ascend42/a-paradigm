@@ -48,3 +48,9 @@ packages/warpline/test/fixtures/frozen-fabric/** -text
 # merge line-wise; commit history itself is derived from git, never written here.
 .paradigm/history/log.jsonl merge=union
 # <<< paradigm history <<<
+
+# The future-dimension fixture (G-DDL-10) is hashed from parsed JSON; keep LF on every OS anyway.
+packages/gnomon-contracts/test/fixtures/dim-future.json text eol=lf
+
+# Superseded first-party mod trees (S1.2): the tests hash them against SUPERSEDED_FIRST_PARTY_PINS; keep LF on every OS.
+packages/gnomon/test/fixtures/first-party-superseded/** text eol=lf

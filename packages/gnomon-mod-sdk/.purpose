@@ -15,4 +15,9 @@ components:
       an AbortSignal honouring cancel and the host-stamped relayedFor; api
       state.get/set, kernel.call, stderr log, egress CONNECT via the host's
       loopback proxy). Example mod example/hello (view, command, tools, state).
+      1.1.0 (Dimensions S1.2): CallContext.relayedFor is RelayedFor |
+      ToolRelayedFor (host-stamped; a command adds surface, a tool call carries
+      principal, surface, agent and, for an entitled mod, hsid and turn). The
+      SDK re-exports MOD_ABI_ID, which moved, so a mod built against 1.0.0 is
+      refused ABI at init and must be rebuilt against 1.1.0.
     tags: [mods, sdk, M1.11]

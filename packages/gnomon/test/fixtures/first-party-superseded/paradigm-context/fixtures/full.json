@@ -1,0 +1,134 @@
+{
+  "view": "paradigm-context.sheet",
+  "input": {
+    "paradigm": {
+      "v": "paradigm-slice:v1",
+      "state": "ok",
+      "project": 3,
+      "name": "a-paradigm",
+      "at": "2026-10-20",
+      "newest": "2026-10-20",
+      "tasks": {
+        "open": 12,
+        "high": 2,
+        "items": [
+          {
+            "id": "T-2026-10-20-006",
+            "title": "Gnomon: Paradigm Context mod (K1 slice, K3 focus join), read-only sidebar sheet",
+            "priority": "high"
+          },
+          {
+            "id": "T-2026-10-19-011",
+            "title": "Aegis re-check of the auto-edits read-only shell pass before the next dogfood week",
+            "priority": "high"
+          },
+          {
+            "id": "T-2026-10-20-008",
+            "title": "Mod host follow-ups (Aegis, Ledger re-check):",
+            "priority": "medium"
+          },
+          {
+            "id": "T-2026-10-20-007",
+            "title": "Voice: earcon and a separate system voice for kernel speech",
+            "priority": "medium"
+          },
+          {
+            "id": "T-2026-10-18-004",
+            "title": "Windows CI: LF pins for the mod fixtures and the 8.3 name check",
+            "priority": "low"
+          }
+        ],
+        "count": {
+          "n": 5,
+          "of": 12
+        }
+      },
+      "decisions": {
+        "items": [
+          {
+            "id": "TD-2026-10-20-294",
+            "title": "Table-talk voice replies, and fewer approval prompts under auto-edits",
+            "date": "2026-10-20"
+          },
+          {
+            "id": "TD-2026-10-20-262",
+            "title": "Dictation: a human send carries its voice turns, attributed by the kernel",
+            "date": "2026-10-20"
+          },
+          {
+            "id": "TD-2026-10-19-063",
+            "title": "A claim-mismatch card arrives with Deny focused",
+            "date": "2026-10-19"
+          },
+          {
+            "id": "TD-2026-10-18-097",
+            "title": "Audited sessions load the repo context the way plain Claude Code does",
+            "date": "2026-10-18"
+          },
+          {
+            "id": "TD-2026-10-17-041",
+            "title": "Mods are pinned snapshots; a changed linked folder pauses and re-cards",
+            "date": "2026-10-17"
+          }
+        ],
+        "count": {
+          "n": 5,
+          "of": 95
+        }
+      },
+      "lore": {
+        "items": [
+          {
+            "id": "L-2026-10-20-ascend-054457-857",
+            "title": "Decision TD-2026-10-20-294 recorded",
+            "type": "insight"
+          },
+          {
+            "id": "L-2026-10-20-ascend-053549-001",
+            "title": "Ledger mod lands behind log.read:usage (Aegis M1)",
+            "type": "milestone"
+          },
+          {
+            "id": "L-2026-10-20-ascend-043827-854",
+            "title": "Decision TD-2026-10-20-262 recorded",
+            "type": "insight"
+          },
+          {
+            "id": "L-2026-10-19-ascend-221501-002",
+            "title": "Repo hooks stay audited; the human decides each one",
+            "type": "decision"
+          },
+          {
+            "id": "L-2026-10-19-ascend-180211-004",
+            "title": "The Workshop strip shows who needs you, never what they said",
+            "type": "insight"
+          }
+        ],
+        "count": {
+          "n": 5,
+          "of": 341
+        }
+      },
+      "symbols": [
+        "#gnomon-voice",
+        "#gui",
+        "$voice-turn",
+        "#ledger-mod",
+        "#mod-host",
+        "^repo-hook",
+        "#workshop-mod"
+      ],
+      "skipped": {
+        "malformed": 1,
+        "refused": 0,
+        "secret": 0,
+        "truncated": false
+      }
+    }
+  },
+  "width": 40,
+  "prefs": {
+    "motion": "full",
+    "theme": "day"
+  }
+}

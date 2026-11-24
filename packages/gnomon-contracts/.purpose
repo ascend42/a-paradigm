@@ -42,7 +42,8 @@ components:
       the manifest-declared title); ID_PREFIXES.offer (offer:<ULID>); descriptor field
       desk. src/offer.ts: offer-spec:v1 (OfferSpecV1, validateOfferSpecV1, published
       schemas/offer-spec.v1.schema.json), closed OFFER_PHASES, OFFER_DECISIONS,
-      OFFER_REACHES, CONTEXT_SOURCES (recent-messages, open-files, repo-path,
+      OFFER_REACHES (mcp, and from S1.2 canvas: published here, kept inert by the
+      manifest loader's refusal until boards raised by offer ship), CONTEXT_SOURCES (recent-messages, open-files, repo-path,
       selection, session-summary; at most 8), OFFERS_PER_MOD_MAX 6, THE shared text
       rule isOfferText / isOfferQuestion (240 code points, no control/format/separator,
       no edge whitespace), and offerBlockOf(text): the ONE strict, linear parser of a
@@ -128,7 +129,8 @@ components:
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner
       shaped, ASCII, no u flag), MOD_NAME_PATTERN (1..24), MOD_ID_PATTERN with the 60-char
       total checked separately (isModId), parseModId/formatModId; data the kernel applies:
-      RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES, FIRST_PARTY_MOD_NAMES, FOUNDER_BRANDS
+      RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES, FIRST_PARTY_MOD_NAMES (from S1.2 also
+      dimension, dimensions, dim, dims, board, boards, doodle), FOUNDER_BRANDS
       (ascend42 github.com-only; a-company/warpline/nevr/nevrland/conductor refused),
       FIRST_PARTY_DISPLAY_NAMES, modSkeleton (fixed confusable transform); derived names:
       mcpServerName (gm_<pub>_<name> <= 28 else gx_<name[0..13]>_<hash10>), qualifiedToolName
@@ -279,6 +281,125 @@ components:
       - test/contracts.test.ts
       - test/m1-1-reservations.test.ts
 
+  contract-dim-shape:
+    description: >-
+      dim-shape:v1 (Dimensions S1.2, spec §12.7; .paradigm/research/gnomon-canvas/
+      s1.2-draft.md and its rulings): src/dim.ts. A dimension is the space; mediums
+      (board, doodle) display things inside it; its truth is op rows appended by the
+      dimension mod (DIM_MOD_ID gnomon.dimension, DIM_KINDS session.start / attach /
+      op / session.end). Vocabulary: DIM_CORE_KINDS (stroke rect ellipse diamond
+      arrow text frame; later kinds are namespaced <ns>:<kind>), closed DIM_NODE_KEYS
+      and DIM_NODE_REQUIRED per kind, DIM_OP_TYPES (add update move delete, plus
+      lock unlock clear which are in the vocabulary and refused), DIM_LIMITS, integer
+      board units with y down, the base-62 order key z (dimZBetween, dimZCompare).
+      READS ARE TOLERANT: foldDimRow / foldDim are pure and never throw; unknown
+      kinds and unknown fields are carried and hashed, unknown op types are counted
+      in `unapplied`, a row with a higher v folds by the v1 rules, ids are never
+      reused, __proto__ / constructor / prototype keys are dropped. `by` (who drew a
+      node) is derived only from the host-written payload.relayedFor of the adding
+      row; a row with no well-formed stamp folds as cls `unknown`, never as human
+      (Aegis ruling 5). dimCanonical / dimHash: the hash covers every node field and
+      `by`, never seq, connId, surface, hsid or counters, so a replay at other seqs
+      hashes the same; DIM_HASH_VECTOR_ROWS and DIM_HASH_VECTOR_HASH are the one
+      vector published in the client API descriptor (G-DDL-04). WRITES ARE CLOSED:
+      validateDimOps refuses by name (DIM_REFUSAL_CODES, one fixed `fix` sentence per
+      code, input never echoed) an unknown or non-core kind, an unknown field, a
+      wrong type or range, a failing colour (colour-bad, may name a swatch), a
+      dangling from / to / parent, an agent editing a mark it did not draw, an edit
+      of a non-core node, more than 64 ops, and any secret match (whole batch
+      refused; every string at any depth, plus for each touched node the strings as
+      they would stand, joined and pairwise, so a credential split over two updates
+      or two fields is found; residual: a split across two nodes or by ordinary
+      spaces). validateDimRef (C3): schemes sym spec td l t n s wl knot dim, 128
+      characters, a restricted id character set, no `..` or `//`; refs are plain
+      strings, never resolved. dimViewOf (C4): a core node shows its listed fields
+      and by; any other node shows id, the pattern-checked kind name, x, y and by;
+      carried fields are left out; dimFallbackLabel puts the fixed lead word `kind`
+      before a kind name. Imports only ./internal.js, ./content-palette.js and
+      ./secret-rules.js (a test holds this) so the mod can bundle it; no DOM, no
+      node:*. Not built here: the mod, the GUI leaf, the bridge tools dim_view /
+      dim_draw (host stamping of relayedFor is #mod-host, S1.2). Serves #dimension-mod and
+      $dimension-session (spec symbols; no code yet).
+      S1.2 review fixes: byOf and hsidOf read the stamp as own keys only; a
+      bridge or voice stamp with no agent, and any stamp with no principal (an
+      unentitled mod's tool row), fold as the unknown hand; the published vector
+      now holds all three by classes. Order keys: an open end counts
+      (dimZBetween(a, null) and (null, b) step a counter whose head character
+      says how many digits follow, so ten thousand appends or prepends in a row
+      stay a few characters long), a key between two keys is the digit-wise
+      midpoint, and dimZBetween throws RangeError when no key of legal length
+      fits (it never returns one that fails DIM_Z_PATTERN). dimZPlace(below,
+      above) is the TOTAL form for stored data a renderer reads: a malformed
+      neighbour key is an open end; equal or out-of-order neighbours place above
+      the lower one; with no room at all the lower key is reused and ties are
+      ordered by id. A move re-reads no node in the secret check. DEFERRED,
+      tracked here: to S1.3, the engine mapping (gnomon-gui src/board/dim-map.ts
+      and its goldens) and the check that nothing in contracts or mods imports
+      the board; to S1.4, the secret-check residuals (combining marks and
+      default-ignorable code points inside a credential, a split over three or
+      more strings, encoded secrets, the dimension title on the session.start
+      row, which no validator here reads) and dimViewOf re-validating the stored
+      fields of a core node before a tool reads them.
+    path: src/dim.ts
+    type: module
+    tags: [gnomon, contracts, dimension, paradigm-8]
+    tests:
+      - test/dim-fold.test.ts
+      - test/dim-validate.test.ts
+      - test/dim-move.test.ts
+  contract-content-palette:
+    description: >-
+      content-palette:v1 (Dimensions S1.2; Luna's S1.1 design in
+      .atelier/systems/gnomon/design-system.yaml content_palette; Aegis rulings 1 to
+      4): src/content-palette.ts. PROTOCOL (in the client API descriptor): the schema
+      version, CONTENT_SWATCH_NAMES (ink graphite paper lemon leaf sky cobalt orchid
+      raspberry) and CUSTOM_COLOUR_PATTERN (custom:#rrggbb, the day value).
+      PRESENTATION (not descriptor inputs, so a re-tuned value cannot move
+      clientApiId): per-role day and night values (line, fill), the neutrals as theme
+      tokens, CONTENT_RESERVED_COLOURS (the mineral and semantic colours, copied from
+      foundations.color and compared with it by the test; night state.warn-bg is the
+      one named exception, a wash whose composites the test computes),
+      CONTENT_MIN_DISTANCE 0.06, NIGHT_TRANSFORM. The metric is Euclidean distance in
+      OKLab and this file is its ONLY implementation (a test scans packages/ for a
+      second copy of the matrices): sRGB linearised from a literal 256-entry table,
+      Lab quantised to integers, every threshold compare an integer compare. ONE
+      behaviour per layer: contentColourCheck (the write validator and the picker)
+      REFUSES a failing colour and may offer the nearest named swatch, never
+      substitutes; resolveContentColour (the renderer) is total and re-runs the
+      current check, drawing a failing stored token as ink (line) or no fill, never
+      stepping it towards a passing colour. Rules: a custom value must keep the
+      minimum from every day reserved colour, and both of its night transforms from
+      every night reserved colour; a neutral is exempt as a LINE only; a fill, named
+      or custom, is also tested against text.primary and line.key-edge of each theme
+      with no exemption (custom:#16150F as a fill is refused). contentPaletteProblems
+      validates the tables; contrastRatio is the WCAG 2 ratio from the same table.
+      Pure, no DOM, no node:*.
+      DEFERRED, tracked here: to S1.3, running the vectors and the swatch night
+      table in Chrome and WKWebView (they run in Node only today); to S1.4, a
+      contrast floor for a custom LINE colour against the ground (a custom line
+      passes on distance alone today).
+    path: src/content-palette.ts
+    type: module
+    tags: [gnomon, contracts, dimension, colour, paradigm-8]
+    tests:
+      - test/content-palette.test.ts
+  contract-secret-rules:
+    description: >-
+      The secret pattern table as data (Dimensions S1.2, ruling O4):
+      src/secret-rules.ts. SECRET_RULES is an ordered frozen list of {kind, source,
+      flags, group?} (private keys, AWS, GitHub, Slack, Anthropic, OpenAI, JWT, npm,
+      Stripe, GitLab, Google keys, passwords in URLs, bearer headers, generic
+      key=value assignments). ONE table, two users: the kernel's evidence redactor
+      (#loop-check, packages/gnomon/src/kernel/loops/secret-scan.ts, builds its
+      regexes with compileSecretRules; G-LOOP-27 output unchanged) and the dimension
+      write validator (secretKindsIn: the kinds that match, never the matched text).
+      Not an input of the client API descriptor, so a new rule never moves
+      clientApiId. Pure, no DOM, no node:*.
+    path: src/secret-rules.ts
+    type: module
+    tags: [gnomon, contracts, dimension, secrets, paradigm-8]
+    tests:
+      - test/secret-rules.test.ts
   contract-project-hue:
     description: >-
       The ONE project-hue function (critique 2026-10-20 S2.1): projectHue(key)
@@ -313,7 +434,8 @@ components:
       Ids (§4.2, §3.1, S32-13) — ULID (ulid, monotonicUlidFactory with
       in-ms increment and overflow refusal, isUlid, ulidTime) over
       globalThis.crypto.getRandomValues; prefixed ULID ids ev/log/conn/card/arm/
-      permit:v1/brief/msg/ds (mintId, isId); hsid:v1 (mintHsid, non-monotonic so
+      permit:v1/brief/msg/dim/offer (mintId, isId; `dim` is a dimension id, S1.2,
+      replacing the never-minted `ds`); hsid:v1 (mintHsid, non-monotonic so
       hsid-short stays fully random), hsid:v1d derivation (deriveHsidV1d),
       hsid-short = lowercase Crockford of the ULID's 80 random bits, 16 chars
       (hsidShort); turn ids turn:<hsid>/<n> (turnId, parseTurnId); keyId,
@@ -463,7 +585,19 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). TD-2026-10-20-086 F6 + T-2026-10-20-007
+      kitId and clientApiId (§12.3, §12.8). Dimensions S1.2 (ONE deliberate move)
+      moved clientApiId
+      sha256:af070b92e89fe985cb43d7b6f5a720d1f43e7ee0f6aa08d0c87db3e713a4f060 →
+      sha256:e21ffbb2ca618808d3692028d0457a8bf1010f23698e56bd1dd3c115d60142ea:
+      the new descriptor key `dimension` (shape: the dim-shape:v1 vocabulary, limits,
+      patterns, refusal codes and one fixed fold vector; palette: schemaVersion,
+      swatch NAMES and the custom token pattern only, never a colour value, so a
+      re-tuned colour cannot move the id), `canvas` added to OFFER_REACHES, seven
+      reserved first-party names (dimension, dimensions, dim, dims, board, boards,
+      doodle), ref scheme `dim` registered and `doodle` dropped, ID_PREFIXES.ds
+      replaced by dim, paradigm.doodle.exported renamed paradigm.dimension.exported.
+      kitId and modAbiId unchanged (test/dim-move.test.ts holds all three literals).
+      Earlier moves follow. TD-2026-10-20-086 F6 + T-2026-10-20-007
       (one deliberate move) moved clientApiId
       sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4 →
       sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f:

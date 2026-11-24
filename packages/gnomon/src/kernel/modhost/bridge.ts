@@ -42,7 +42,8 @@
  * `relayedFor` comes from the dispatcher — the caller's authenticated
  * connection — never the input.
  */
-import { canonicalJson, AUDIENCES, SENSITIVITIES } from '@a-company/gnomon-contracts';
+import { canonicalJson, AUDIENCES, RELAYED_FOR_APPEND_KEY, SENSITIVITIES } from '@a-company/gnomon-contracts';
+import type { CallStamp } from './effects.js';
 import { ownsModKind } from '../manifest/mod-kind.js';
 import type { ModHost, KernelCallRequest, RenderResult } from './host.js';
 import { ModRefusal } from './refusal.js';
@@ -63,6 +64,8 @@ export interface ModAppendRow {
   payload: Record<string, unknown>;
   audience?: (typeof AUDIENCES)[number];
   sensitivity?: (typeof SENSITIVITIES)[number];
+  /** HOST-ONLY (S1.2 C1): the turn that caused an entitled tool call. Never a mod-supplied field (MOD_APPEND_FIELDS). */
+  causes?: string[];
 }
 
 export interface ModKernelPorts {
@@ -72,15 +75,30 @@ export interface ModKernelPorts {
   append(row: ModAppendRow): Promise<{ seq: number }>;
 }
 
-/** Clamp a mod's log.append params to the fields it may supply (Aegis C2). */
-export function clampModAppend(name: string, principal: string, params: Record<string, unknown>): ModAppendRow {
+/**
+ * Clamp a mod's log.append params to the fields it may supply (Aegis C2), then apply the host's stamp (S1.2 C1,
+ * G-MOD-12). `relayedFor` is a HOST-OWNED payload key on every mod append: a mod-supplied value is always removed;
+ * with a stamp (a relayed command or a tool call) the host's value is written; without one (idle, event-driven or
+ * host-initiated) the key is absent. `causes` comes only from the stamp; a mod-supplied `causes` is never read. The
+ * size cap is measured AFTER stamping, so the stamp cannot push a row past it.
+ */
+export function clampModAppend(name: string, principal: string, params: Record<string, unknown>, stamp?: CallStamp): ModAppendRow {
   const kind = params.kind;
   if (typeof kind !== 'string' || !ownsModKind(name, kind)) throw new ModRefusal('VERB', `${name} may append only its own modns.${name}.* kinds`, { name, verb: 'log.append' });
   const raw = params.payload ?? {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new ModRefusal('LOG', 'log.append payload must be a plain object', { name, kind });
-  const bytes = Buffer.byteLength(canonicalJson(raw), 'utf8');
+  // Aegis S1.2 A2: an own `__proto__` key (JSON.parse makes one) survives a spread and would be stored, and a later
+  // reader that assigns the payload onto an object would take its prototype from the mod. Refused by key class.
+  for (const k of Object.keys(raw)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') throw new ModRefusal('LOG', 'log.append payload has a prototype key (__proto__, constructor or prototype) at the top level', { name, kind, why: 'prototype-key' });
+  }
+  // a copy onto a null-prototype object, key by key: the mod's object is never mutated and never trusted for this key
+  const payload: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const k of Object.keys(raw)) if (k !== RELAYED_FOR_APPEND_KEY) payload[k] = (raw as Record<string, unknown>)[k];
+  if (stamp) payload[RELAYED_FOR_APPEND_KEY] = { ...stamp.relayedFor };
+  const bytes = Buffer.byteLength(canonicalJson(payload), 'utf8');
   if (bytes > MOD_APPEND_MAX_BYTES) throw new ModRefusal('LOG', `log.append payload is ${bytes} bytes; a mod may append at most ${MOD_APPEND_MAX_BYTES}`, { name, kind, bytes });
-  const row: ModAppendRow = { kind, principal, payload: raw as Record<string, unknown> };
+  const row: ModAppendRow = { kind, principal, payload, ...(stamp?.causes && stamp.causes.length > 0 ? { causes: [...stamp.causes] } : {}) };
   if (params.audience !== undefined) {
     if (!(AUDIENCES as readonly unknown[]).includes(params.audience)) throw new ModRefusal('LOG', 'log.append audience is not an audience value', { name, kind });
     row.audience = params.audience as ModAppendRow['audience'];
@@ -106,7 +124,7 @@ export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => n
   const bytes = new Map<string, number>(); // `${name}|${callKey}` → payload bytes appended
   const fn = async (req: KernelCallRequest): Promise<unknown> => {
     if (req.verb === 'log.append') {
-      const row = clampModAppend(req.name, req.principal, req.params);
+      const row = clampModAppend(req.name, req.principal, req.params, req.stamp);
       const t = now();
       const recent = (rows.get(req.name) ?? []).filter((x) => t - x < 1_000);
       if (recent.length >= MOD_APPEND_ROWS_PER_SEC) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_ROWS_PER_SEC} appends per second`, { name: req.name, budget: 'rows' });
@@ -138,7 +156,7 @@ export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => n
 /** What the dispatcher needs from the mod host (socket/dispatch.ts ModRelayPort). */
 export interface ModRelays {
   view(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; viewId: string; input: unknown }): Promise<RenderResult>;
-  command(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  command(relayedFor: { principal: string; connId: string; principalClass: string; surface?: 'gui' | 'cli' }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
   /** full for the human class; counts only for every other caller (F4) */
   status(full: boolean): Record<string, unknown>;
 }
@@ -152,7 +170,7 @@ export function createModRelayPort(host: ModHost): ModRelays {
     },
     command: async (rf, req) => {
       await ensure(req.name);
-      return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId }) };
+      return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId, ...(rf.surface ? { surface: rf.surface } : {}) }) };
     },
     status: (full) => {
       const st = host.status() as { modAbiId: string; running: unknown[]; paused: unknown[] };

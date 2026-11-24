@@ -30,6 +30,9 @@ components:
       catalog is ONLY the app's Contents/Resources/gnomon-mods (#app-bundle;
       never a folder beside the app); elsewhere the nearest gnomon-mods above
       the module (clone, npm package).
+      InstalledModView.note (S1.2): a host-composed sentence for a stopped mod
+      the host refused ABI at init (needs an update for this Gnomon), read from
+      the host's status().needsUpdate; never mod text.
     tags: [mods, gui]
     signals: []
     tests:
@@ -193,4 +196,56 @@ components:
       children; mutation-checked): log.read-only mods get no usage kind and
       turn.result exactly {hsid}; a mod without paradigm.read:summary never
       receives the slice (relayed, forged, or via the feed).
+      Dimensions S1.2 (C1, C2; G-MOD-12, G-MOD-13; modAbiId moved 7aaf92f4 ->
+      fb9bd26a, kitId and clientApiId unchanged): relayedFor is built by the
+      contracts pickRelayedFor with fields fixed per method. view.render gets
+      {principal, connId}; command.run adds surface (gui | cli, derived by the
+      socket dispatcher from the connection credential, never from params);
+      tool.call gets {principal, surface bridge | voice, agent} from the
+      host-known toolRelayedFor option of callTool and, only when
+      #identityAllowed (publisher gnomon, or the log.read capability), hsid and
+      turn. A tool stamp lacking principal, surface or agent is neither sent nor
+      stamped (fail closed). The same object rides the bound call context as
+      CallStamp (effects.ts) and the bridge's clampModAppend applies it to every
+      log.append made inside that call: a mod-supplied payload.relayedFor is
+      always removed, the host's is written when there is a stamp, an idle, view
+      or host-initiated append has no relayedFor key, the 16 KiB cap is measured
+      after stamping, and row causes come only from the stamp (the turn of an
+      entitled tool call; a mod-supplied causes is never read). No caller passes
+      toolRelayedFor yet: the MCP bridge that knows the calling session's agent
+      and turn is S1.4, so until then tool-call rows are unstamped and a
+      dimension fold reads them as the unknown hand. Tests:
+      test/mod-stamp.test.ts.
+      S1.2 review fixes (these replace the field lists in the paragraph above):
+      (A1) the socket dispatcher stamps a surface only for a human-class caller
+      (relaySurfaceOf); an agent, session, mod or voice caller gets none, so its
+      command rows fold as the unknown hand. (A2) clampModAppend refuses a
+      top-level __proto__, constructor or prototype payload key by key class and
+      stores the payload on a null-prototype object. (A3) on tool.call the
+      calling session's principal is identity: an unentitled mod is sent, and
+      stamped with, surface and agent only; principal, hsid and turn go to a
+      gnomon-published mod or one granted log.read. The host-known
+      toolRelayedFor must be whole (principal, a tool surface, an agent label)
+      or nothing is sent or stamped. The mod's echoed init.abi and modAbiId are
+      shown in the ABI refusal only when they have the expected shape. modAbiId
+      for the whole S1.2 move: 7aaf92f4 -> fb9bd26a. DEFERRED, tracked here: to
+      S1.3, an integration test of the first-party branch of #identityAllowed
+      with gnomon.dimension (only the log.read branch and the unentitled branch
+      are tested end to end today).
+      Compatibility acceptance (G-MOD-15, Aegis S1.2 point 9;
+      test/mod-abi-compat.test.ts): at init a mod must echo MOD_ABI_ID, with ONE
+      bounded exception. An installed snapshot whose exact packageHash is a key
+      of SUPERSEDED_FIRST_PARTY_PINS (manifest/install.ts), first-party by hash,
+      source package, publisher gnomon and declaring no tool, may echo the one
+      prior modAbiId listed for that hash (compatModAbiId). It then starts as
+      before with one extra mod.health{ok, why: abi-compat} row; no grant is
+      written and no tier or identity changes; the root-signed grant and the
+      snapshot rehash stand in loadMod as always. Any other mod answering
+      another id is refused ABI, and the refusal is STICKY in memory
+      (#needsUpdate: name to the refused packageHash): later relays are refused
+      ABI with why needs-update and a host-composed sentence without spawning
+      the child, so a view paint cannot run it into the restart cap and the DOWN
+      text never shows for this cause; an operator start, or a different pin
+      after the Update card, tries once more. status().needsUpdate lists the
+      names. G-MOD-14 is the A1 rule above.
     tags: [kernel, mods, sandbox, M1.11]

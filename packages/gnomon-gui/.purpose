@@ -76,6 +76,9 @@ components:
       HTML sinks (the kernel's bundle scan exempts board/* from that one
       clause); react-style-singleton can inject a <style> for a modal
       popover.
+      DEFERRED to S1.3, tracked here: src/board/dim-map.ts (the pure mapping between
+      a folded dimension and engine elements, built from an allowlist of engine keys)
+      and its forward and reverse goldens; it lands with the board leaf.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
@@ -1273,6 +1276,9 @@ components:
       (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts
       installWorkshop) now sends request.mod.install or opens the panel;
       it was a disabled constant with the command in title= only.
+      S1.2: the state line of a stopped mod shows the kernel-composed note when there
+      is one (needs an update for this Gnomon: the host refused the mod's ABI at
+      start); the note is shown only as plain words of bounded length, else dropped.
     tags: [gui, mods]
     signals: []
     tests:

@@ -24,7 +24,17 @@ import { VERBS } from '@a-company/gnomon-contracts';
 import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { ModRefusal } from './refusal.js';
 
-export type CallContext = { kind: 'tool'; tool: string; hsid?: string } | { kind: 'command' } | { kind: 'view' } | { kind: 'idle' };
+/**
+ * What the HOST knows about the call a mod request is bound to (S1.2 C1, G-MOD-12): the `relayedFor` it sent the
+ * mod (built by `pickRelayedFor`, so the row holds exactly what the mod was told) and, for an entitled tool call,
+ * the turn that caused it. The bridge writes these onto every row the mod appends inside the call. Never mod input.
+ */
+export interface CallStamp {
+  relayedFor: Record<string, string>;
+  causes?: string[];
+}
+
+export type CallContext = { kind: 'tool'; tool: string; hsid?: string; stamp?: CallStamp } | { kind: 'command'; stamp?: CallStamp } | { kind: 'view' } | { kind: 'idle' };
 
 export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
   const out = new Set<ToolEffect>();

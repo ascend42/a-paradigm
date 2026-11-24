@@ -127,7 +127,7 @@ describe('#workshop-mod', () => {
 
   it('installs through gnomon mod install + the broker card as tier first-party, effects read only, and starts', async () => {
     const w = await installedWorkshop();
-    expect(w.out).toContain('│ Install mod gnomon.workshop 1.1.0 (mod) by gnomon from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.workshop 1.1.1 (mod) by gnomon from package, tier first-party');
     expect(w.out).toContain('│ effects: none · egress: none');
     const g = readGrants(w.home, w.auth);
     const row = effectiveInstall(g, 'gnomon.workshop')!;
