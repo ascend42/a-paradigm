@@ -90,6 +90,16 @@
 # names its cost); transcript-row gains variant run (the data fold, the run's states, the policy word; the first-use
 # question and the Send this one key come with b2-2); host-slip: a listed, loaded skill's slash command reads "Run it
 # from /" with an Open / menu key. No new token. Mika reviews it rendered.
+#
+# Proposed 2026-11-23 by session 2026-11-23-gnomon-board-medium (Luna; milestone S1.1 of Gnomon dimensions, decision
+# TD-2026-11-24-500, naming TD-2026-11-24-053). The founder was away, so NOTHING here is decided: every entry is
+# `proposed` with decided_by: none, and each records the alternative it was chosen over (`chose`). New: top-level
+# content_palette (content-palette:v1, its night transform, the minimum-distance rule and the reserved values it is
+# tested against); components board-leaf, board-rail, content-tray, author-seal, pin, fallback-node, and board-slip
+# (`contested`, because offer-slip is: session 2026-10-20-gnomon-mod-invitations still decides the slip); eleven
+# proposed rules; one proposed override (foundations.shadow as a state signal, live nodes only, not used in S1);
+# zones.centre.proposed; content.vocabulary.proposed (dimension, board, mark, hand, seal, claimed). No existing entry
+# was changed. Rendered: .atelier/systems/gnomon/specimen-board.html (day and night). Mika and Aegis reviews pending.
 
 version: 2
 product: gnomon
@@ -1141,6 +1151,256 @@ components:
     status: clear
     from: { session: 2026-10-23-gnomon-rules-view, choice: "C3 the save bar names its cost", decided_by: "Mika (design review), Aegis (security review)" }
 
+  # ── Proposed 2026-11-23, session 2026-11-23-gnomon-board-medium (milestone S1.1 of dimensions). Nothing below is
+  # codified: every entry is `proposed` (board-slip `contested`, as offer-slip is) with decided_by: none. Rendered in
+  # .atelier/systems/gnomon/specimen-board.html; the bd-* classes live in that page until the S1.1 build moves them
+  # into styles.css, so these entries carry `specimen:` anchors and no `examples:` (examples would draw unstyled in
+  # specimen.html). Each `chose` records the alternative, so the founder can overrule cheaply.
+  board-leaf:
+    role: "The board medium's view of a dimension: a GUI-owned leaf over the centre column (the loops-leaf pattern), where the founder and the session's agents draw. It covers the chat header and the chat, and stops above this session's pinned cards and the composer, so talking goes on while it is open."
+    pattern: "loops-leaf (variant): same head, keep line, Esc-to-edge-tab and leaf-in arrival; differs in that it never covers the pinned zone or the composer (S1 plan §1, spec §11.4 amendment)."
+    anatomy:
+      - "head (the .lp-head row, on --sheet): ◰ · the dimension's title (17, .title) · '› board' (11.5 --sec, the medium) · ✎ rename (key quiet) · spacer · Dimensions ▾ (key quiet: this project's dimensions, the same list as /boards) · esc (key quiet: fold)"
+      - "keep line (.lp-keep): 'dimension in ■ <project> · attached ◇ <session>[ +n] · opened from <how> · hh:mm'. <how> is one of '/board', 'the ⋯ menu', '<agent>'s offer' (session.start's command | menu | offer, amendment A9)"
+      - "body: board-rail (48px) | the board (the engine's canvas on --ground, no dot grid, the desk's grain by day)"
+      - "foot (10.5 --sec over a dashed --rule): the hands on this board: 'you <n>' with a plain pin, then each agent's seal, name and mark count; a self-claimed sub-agent adds '· claimed'"
+      - "under the leaf, always visible: the turn's working line (transcript-row's working key, with 'show chat' which folds the leaf) and the composer"
+    entry: ["/board (reopens this session's last dimension)", "chat header ⋯ → Open board (⌥B)", "Open on a board offer slip", "a row of the Dimensions list (/boards, ⌘K dimensions: list)"]
+    esc_order: "Esc leaves a text edit or returns to Select first, then closes the tray, then folds the leaf to its edge tab; focus returns to what opened it. Esc never reaches the board while a card is focused."
+    edge_tab: "The loops-leaf edge tab (.lp-edgetab), 56px down, below the Loops tab when both are folded: '<title> · board', and '<title> · board · <agent> +<n>' when marks were added while folded."
+    states: [open, arriving, empty, yielded, folded]
+    state-notes:
+      empty: "one pinned paper note at the board's centre (the scrap look, paper swatch, plain pin): 'Nothing drawn yet' (13.5/600), then 'N for a sticky · T to write · or pick a tool and draw.' and, from S1.4, 'Ask in the composer and this session's agent can draw here too.' It is host DOM with pointer-events none, takes no focus, has no key, and leaves at the first mark. Not the empty-state sheet: that one carries a primary key."
+      yielded: "while a card is focused (ui/card-focus.ts) the board takes no keyboard input: board-rail draws yielded and the keep line is replaced by '◆ A card has the keys. Click the board, or decide the card, to draw again.' (ink, 500; the ◆ in --warn-ink). A pointer press on the leaf moves focus to the board and ends the state."
+    never: ["cover the sessions rail, the stack, the header, the alerts band, the Workshop, the pinned cards or the composer (zones.centre.never, G-DDL-08)", "hold a decision key, a card, or anything drawn as a key inside the board", "open by itself: an agent raises it only through an offer the founder opens", "the engine's own toolbar, menus, welcome screen, library, help, zoom island or hand-drawn font (G-DDL-07)", "the engine's selection violet (#6965DB as shipped upstream; 0.057 OKLab from state.knot): selection, handles, guides and the text caret draw in --ink / --key-edge"]
+    widths: "Desktop only. At a 1024 window the centre column is about 470px: the rail takes 48 and the board the rest; the head drops '› board' to title= first, then the title truncates. The transcript margin rail from the early read (.paradigm/research/gnomon-canvas/luna.md §1) does not fit at 1024 and waits for the board layout preset."
+    tokens: { fill: "--ground; head, keep line and rail on --sheet", edge: "1px --rule left (as .lp-leaf)", arrive: "leaf-in 360ms; none when reduced" }
+    specimen: "specimen-board.html#leaf"
+    chose:
+      - { what: "stops above the composer, with the working line as the only view of the chat", over: "a narrow transcript rail on the board's left (my early read)", why: "the centre is about 470px at 1024; a rail leaves under 250px to draw on. The plan requires the composer to stay visible, and the working line already says what the agent is doing" }
+      - { what: "no dot grid; the board is the bare desk", over: "FigJam-style dots or the engine's line grid", why: "dots are the template's tell, and scraps pinned to the desk are the device" }
+      - { what: "the hands foot ships with S1.3 as 'you <n>' and gains seals at S1.4", over: "no legend until agents draw", why: "the foot's place is then stable from the first dogfood" }
+    status: proposed
+    from: { session: 2026-11-23-gnomon-board-medium, board: board-leaf, decided_by: none, plan: ".paradigm/research/gnomon-canvas/s1-build-plan.md §2 S1.1, §7 S1.3; s1-scale-amendments.md A7, A9", review: "Mika pending (rendered); Aegis pending (yielded state, G-DDL-08)" }
+  board-rail:
+    role: "The board's tools, replacing the engine's toolbar: a graduated strip of the sheet down the leaf's left edge. Each tool is the system's segment key (key seg, var(--key-h) square) carrying a drawn glyph; the rail is one vertical radiogroup that calls the engine's setActiveTool."
+    anatomy:
+      - "the strip: 48px (foundations.space.layout), --sheet, 1px --rule right edge; graduations on its left edge, a 4px --sec tick every 8px and a 10px tick where a group ends (the scale rule: rules and spacing, no boxes round groups)"
+      - "rows of 28px, 4px apart: the tool's letter in the margin beside its tick (10.5 --sec), then the key"
+      - "groups, top down: Select | Sticky, Text | Rectangle, Ellipse, Arrow, Frame | Stroke | the line-and-fill key (opens content-tray) | spacer | Hand, +, the percent (a dotted-underline word key that fits everything), −"
+    tools:
+      select:  { letter: V, also: "Esc returns here" }
+      sticky:  { letter: N, draws: "a pinned scrap in the current fill; lemon by default" }
+      text:    { letter: T, also: "double-click the desk" }
+      rect:    { letter: R, draws: "square corners" }
+      ellipse: { letter: O }
+      arrow:   { letter: C, draws: "an open head; dragging from one mark to another connects them (the named verb connect)" }
+      frame:   { letter: F, draws: "a 1px --sec region with its title above the top-left corner (11.5/600)" }
+      stroke:  { letter: P, draws: "freehand, smoothed, roughness 0" }
+      hand:    { letter: H, also: "hold Space; two-finger scroll" }
+      zoom:    { keys: "⌘ +, ⌘ −, ⌘ 0 (fit)", also: "pinch, ⌘ scroll" }
+    glyphs: "Drawn for Gnomon on a 16 grid: 1.5 stroke, butt caps, mitre joins, currentColor, no fill (the sticky's pin head is the one filled dot). Not an icon kit. Paths are in specimen-board.html (const I)."
+    states: [rest, hover, focus, chosen, pressed, yielded]
+    state-notes:
+      chosen: "day: the segment's filled ink key. Night: the key's ring is redrawn as a bracket (left and right bars with 6px returns), the glyph carries the chosen segment's glow (rule night-glow-sparing already lists the chosen segment). Night's text brackets ([ ]) are off for rail keys: a glyph and two brackets do not fit 28px."
+      yielded: "a card is focused: every key is aria-disabled and draws the disabled key (edge --rule, glyph --sec, no offset), the letters and the graduations are removed, and the leaf's keep line says why. Keys keep their place in the tab order; a pointer press takes the keys back."
+    keyboard: "Single letters act only while focus is in the board and no text is being edited. No tool uses A or D (card decision letters), Enter, or ⌘O / ⌘S / ⌘⇧E (the engine's file keys are off). The rail is one tab stop; ↑ ↓ move within it. Every key has title= '<Tool> (<letter>)' and an accessible name."
+    short_windows: "Under 520px of rail height the three zoom keys fold into the percent key's menu; the tools never scroll."
+    tokens: { fill: --sheet, edge: "1px --rule", tick: --sec, key: "key quiet seg (fill --sheet, edge --key-edge, hover --fold, focus 2px --key-edge)", letter: "10.5 --sec" }
+    specimen: "specimen-board.html#rail"
+    chose:
+      - { what: "a rail on the leaf's left edge", over: "the engine's top-centre island or FigJam's floating bottom bar", why: "a floating bar covers the drawing at 470px and is the stock look; an edge rail costs a fixed 48px and reads as part of the instrument" }
+      - { what: "Arrow is C (connect) and Sticky is N (note)", over: "the engine's A for arrow and its number row", why: "A and D decide cards; the yield at capture is the guard, and letters that never collide are the second one" }
+      - { what: "letters shown in the rule's margin", over: "tooltips only, or a kbd inside each key", why: "a glyph-only rail needs its letters visible to be learnt; a kbd inside a 28px key crowds the glyph" }
+      - { what: "humans get no stroke-style control (solid only)", over: "offering dotted or dashed for 'planned' lines", why: "the dash is the authorship cue and must never be a choice (TD-2026-11-24-500); tentative lines use graphite or the fine weight" }
+    status: proposed
+    from: { session: 2026-11-23-gnomon-board-medium, board: tool-rail, decided_by: none, review: "Mika pending (rendered: glyph weight at 1x, the night bracket); Aegis pending (letters against G-DDL-08)" }
+  content-tray:
+    role: "Where content colour and weight are picked: a tray that opens beside the rail from its line-and-fill key. Content colours are round wells, so they never read as the square project swatch."
+    anatomy:
+      - "rows led by one lowercase word (10.5 --sec), no boxes: line | fill | weight | custom"
+      - "line: ink, graphite, then the hues that have a line value (lemon has none)"
+      - "fill: none (a slashed well), paper, then every hue"
+      - "weight: a seg of fine (2) | bold (4) | marker (8, Stroke only), in board units"
+      - "custom: a 10ch hex field; when the colour passes, its well and 'custom · at night #… as a line, #… as a fill'"
+    well: "18px circle, 1px --key-edge ring. A fill well is filled; a line well is --sheet with a 4px ring of the line colour. Chosen: a 2px --key-edge outline, 2px out. Wells are a radiogroup per row; each has its swatch name as title= and accessible name."
+    states: [closed, open, well-hover, well-focus, well-chosen, custom-ok, custom-refused]
+    state-notes:
+      custom-refused: "a custom colour inside the reserved distance is not applied. The row under the field says '✕ not used · <why in plain words>' (for example 'at night this red is the failed colour', 'that is a project colour') and offers one quiet key, 'Use <nearest swatch>'. The measured distance and the reserved token's name stay in the raw view."
+    tokens: { fill: --sheet, edge: --key-edge, shadow: "foundations.shadow.overlay (day)", row-gap: 8, lead: "10.5 --sec, 52px" }
+    specimen: "specimen-board.html#palette"
+    chose:
+      - { what: "refuse with the nearest swatch offered", over: "snapping the colour silently (the wording of the Aegis S1.2 condition)", why: "with no warm hues in the named set, the nearest swatch to an amber is a green; a silent swap would look like a bug. The stored value is still never inside the distance, which is what the condition protects. Arky and Aegis to confirm at S1.2" }
+      - { what: "round wells", over: "reusing the square swatch", why: "the square swatch means a project" }
+    status: proposed
+    from: { session: 2026-11-23-gnomon-board-medium, board: content-palette, decided_by: none, review: "Mika pending; Aegis pending (refuse vs snap)" }
+  author-seal:
+    role: "Who drew a mark, without colour. Two cues: the stroke (solid is the human's, dashed is an agent's, derived from the host-stamped author and never an input) and the seal, a small stamp worked out from the author id each time it is drawn. Never stored, never chosen."
+    grammar: "Solid means the host vouches; dashed means it is an agent's word. Human marks: solid. Agent marks: dashed. A seal whose rim is solid: an agent the host named. A seal whose rim is dashed: a sub-agent that named itself inside that session (s1-scale-amendments.md §4, known limit)."
+    derivation:
+      input: "the author id string as the host stamped it (the op's by). The function does not depend on the id's format; S1.2 fixes the format."
+      hash: "h = FNV-1a 32-bit over the id's UTF-8 bytes (offset 0x811C9DC5, prime 0x01000193)"
+      cut: "h mod 5 → 0 round, 1 square, 2 diamond, 3 hex, 4 tab (a square with a pointed foot)"
+      bead: "(h >>> 8) mod 8 → a 1.75 radius dot on the rim where the ray from the centre at bead × 45° (0 is up, clockwise) meets the cut"
+      letter: "the first [a-z0-9] of the id's name part, upper-cased, mono 10.5/600"
+      test_vectors: { arky: "9eec954e · square · bead 5 · A", luna: "05033d87 · tab · bead 5 · L", kit: "6cf7bb37 · diamond · bead 3 · K", mika: "867d2e5b · square · bead 6 · M", aegis: "560edd4c · diamond · bead 5 · A", loid: "f5f3eb61 · round · bead 3 · L", jinx: "b622116a · tab · bead 1 · J", judge: "aae2e5a4 · tab · bead 5 · J" }
+      note: "Vectors use bare nicknames as ids for illustration. jinx and judge share a cut and a letter and are parted by the bead: the bead is why the seal survives a twelve-agent roster."
+    seal:
+      sizes: { small: "18 (on a pin, in the foot, on a slip)", large: "28 (the hover and focus line, the Dimensions list)" }
+      verified: "fill --sheet, rim 1.5 --ink solid, letter 600, bead filled --ink"
+      claimed: "rim 1.25 --ink dashed 2.5 2, letter 400, bead hollow; every text that names it adds 'claimed' ('Kit · claimed, inside Arky's session')"
+      human: "no seal: a plain pin (8px --ink disc by day; a ringed point at night). Seals for several humans wait for team editing (S7)."
+      zoom: "seals and pins are host DOM in screen space: they do not scale with the board and are never drawn by the engine."
+    strokes:
+      human: "solid, at the chosen weight"
+      agent: "dashed 3× the weight on, 2× off (fine: 6 4; bold: 12 8), butt caps; a mark under 24 board units on its short side tightens to 3 2 so every side shows a gap. The engine's own dashed style is acceptable if a gap of at least 2 screen px shows at 100%; dotted is never used."
+      agent-sticky: "the scrap's edge is dashed and its pin head is the seal"
+      agent-text: "a 1px dashed --ink2 edge round the text block, with the seal at its top edge (principle 7: a dashed edge and a second cue)"
+      low-zoom: "under 50% zoom dashes may close up; the seals (screen space) and the hands foot remain the cue."
+    where: ["always: on the pin of an agent's scrap (sticky, stub)", "on hover, keyboard focus or selection: at the first point of an agent's drawn mark (shape, arrow, stroke, text), with the line '<name> · hh:mm · ◇ <session>'", "always: the hands foot of the leaf", "the board slip's 'added' line"]
+    never: ["authorship by hue, tint or fill", "a seal stored in an op, a file or a setting", "a human able to pick the dashed stroke", "a claimed seal drawn with a solid rim", "a seal as a control (it is not clickable in S1; the hands filter is later)"]
+    specimen: "specimen-board.html#seal"
+    chose:
+      - { what: "a claimed sub-agent keeps its own cut, bead and letter, with a dashed rim", over: "showing only the session agent's verified seal with a 'has sub-agents' ring", why: "in Claude Code most named agents are sub-agents of one session, so nearly every seal would be the same and 'who made what' would be lost; the dashed rim keeps the claim honest" }
+      - { what: "cut + bead + letter", over: "a letter alone, or a generated pattern (an identicon)", why: "a letter alone collides (jinx, judge); an identicon cannot be said aloud or recognised at 18px" }
+      - { what: "seals always on scraps, on demand on drawn marks", over: "a seal on every mark", why: "thirty seals on a diagram bury it; the dash already says 'an agent', the seal says which" }
+    status: proposed
+    from: { session: 2026-11-23-gnomon-board-medium, board: author-seal, decided_by: none, decision: "TD-2026-11-24-500 (authorship is never shown by colour)", review: "Mika pending (the diamond and hex cuts at 18px are tight; letter legibility at 1x); Aegis pending (G-DDL-09: the seal reads only the host-stamped id)" }
+  pin:
+    role: "The board's crafted device, reused wherever paper sits on the desk: a scrap is pinned, and its shadow is short and hard. On a live node the shadow is also a clock: it lengthens in steps as the node's reading ages, as on the instrument the product is named for."
+    scrap: "A scrap is paper: a sticky, the stub (fallback-node), the empty note, and later a live node. Ink drawn on the desk (rect, ellipse, arrow, stroke, text, frame) is not a scrap: no pin, no shadow."
+    anatomy:
+      - "pin head, centred on the scrap's top edge: the human's plain pin (8px --ink disc, 1px 2px 0 shadow; at night a ringed point, no glow) or an agent's seal (author-seal, 18)"
+      - "scrap: fill from the content palette (paper = --sheet), 1px edge in the swatch's line colour (--sec for lemon and paper), solid for the human and dashed for an agent; radius 3 by day, 0 at night; text 11.5 --ink"
+      - "shadow, day: N px N px 0 rgba(22, 21, 15, .16), hard, no blur. Night: no fill shadow (phosphor has none); a 1px --sec trace of the scrap's outline offset by the same N"
+    shadow_steps: { rest: 2, steps: [2, 4, 6, 8, 10], rule: "a live node declares how often it refreshes (every). Age under 1× every: 2. 1 to 2×: 4. 2 to 4×: 6. 4 to 8×: 8. 8× and over: 10, and its 'as of' line turns ink 600." }
+    second_cue: "The shadow is never the only signal. A live node always prints 'as of hh:mm · <age>' (10.5 --sec), and its status reads by mark and word (rule status-in-ink)."
+    motion: "A step change is an event (the age crossed a threshold): the shadow moves to its new length over droop 500ms ease-out. Nothing animates between steps. Reduced motion: instant."
+    ships:
+      s1: ["the pin on stickies, the stub and the empty note (plain head; the seal head arrives with S1.4)", "the shadow at rest (2) on every scrap, day and night", "the tokens for the steps, reserved and unused"]
+      waits: ["the lengthening shadow: S6a, the live tray (S1 has no live nodes, so nothing in S1 changes length)", "paper tape for images: S2", "an agent's cap travelling to where it draws: after S1.4", "the hands filter that dims other hands' marks: later"]
+    never: ["a shadow in --key-edge or at the key's 2px 2px 0 --key-edge (that is a key)", "a glow at night", "length as the only cue to staleness", "a pin on drawn ink"]
+    engine_note: "The engine cannot draw shadows or pins. Scrap fills and edges are engine elements; pins, seals and shadows are a host layer tracking the viewport. If that layer cannot hold 60fps while panning, S1 ships pins and seals only and the shadow waits: say so at the S1.1 review instead of faking it in the engine."
+    specimen: "specimen-board.html#pin"
+    status: proposed
+    from: { session: 2026-11-23-gnomon-board-medium, board: pin-and-shadow, decided_by: none, origin: ".paradigm/research/gnomon-canvas/luna.md §4; synthesis.md 'Look'", needs: "overrides: the proposed entry on foundations.shadow ('material, never a state signal')", review: "Mika pending" }
+  fallback-node:
+    role: "How a node of a kind this build has no drawing for appears (a later medium's node, a mod's node; amendment A1): a stub. It must be legible, must not pass for an approval, and must not look broken."
+    anatomy:
+      - "a scrap on --sheet with a 1px --sec edge and a pin (dashed edge and sealed pin when an agent placed it)"
+      - "a 12px hatched left margin (the leaf gutter's hatch, --rule): the mark of 'kept, not drawn'"
+      - "line 1: the kind as written, '<ns>:<kind>', mono 11.5/500 --ink2, cut at 36 characters with … and the whole kind in title="
+      - "line 2: 'not drawn by this Gnomon · kept as it is' (10.5 --sec)"
+    size: "the node's own w and h when present, never under 156 × 52; else 156 wide and as tall as its two lines"
+    behaviour: "Selectable, movable and deletable like any mark (ops address ids); never editable. Its unknown fields are carried through untouched and never shown: the only text taken from the node is its kind, which the kind grammar has already validated."
+    states: [rest, selected, agent-placed]
+    not_an_approval: ["no --key-edge, no key, no offset key shadow, no bracket", "no verb and no 'Allow', 'Open', 'Run' in its copy", "nothing in it is clickable"]
+    not_broken: ["no ✕, no ◆, no vermilion or amber", "never the words error, unknown, unsupported, missing or failed", "no question mark, no placeholder icon"]
+    specimen: "specimen-board.html#stub"
+    chose:
+      - { what: "show only the kind", over: "showing a label or text field when the node has one", why: "an unknown kind's fields are untrusted text from a newer build or a mod (Aegis S1.2: no free customData)" }
+      - { what: "one sentence for every unknown kind", over: "naming the mod or version that would draw it", why: "this build cannot know which; a guess would be wrong half the time" }
+    status: proposed
+    from: { session: 2026-11-23-gnomon-board-medium, board: fallback-node, decided_by: none, plan: "s1-scale-amendments.md A1, A13 (the 'future dimension' guard fixture renders these)", review: "Mika pending; Aegis pending" }
+  board-slip:
+    role: "The offer slip's states for a board: how an agent offers one, and what the slip under a reply says once the board is folded and an agent has kept drawing ('Arky added 3')."
+    pattern: "offer-slip (variant). offer-slip is contested until session 2026-10-20-gnomon-mod-invitations closes; this entry adds states to that pattern and settles nothing about it. If the founder's picks there change the slip, these states follow."
+    states:
+      live: "tab '◰ offer · board' · the agent's question · 'takes: a new dimension in <project> · nothing is drawn until you open it' · Open + not now"
+      gone: "'opened board · <title> · hh:mm'"
+      added: "flat (no tilt: it is a record, not an invitation). Tab '◰ board · <title>'. One line: each agent's seal, '<name> added <n>' (a claimed sub-agent: '<name> added <n>, claimed'), at most two agents then '+<k> more', and 'since you folded it' when it fits. One GUI key: 'Open board ⌥B' (key quiet). It replaces the gone line under the latest reply that drew; older replies keep theirs."
+    counts: "n is marks (nodes) added since the founder last had the board open, folded from the op rows by host-stamped author. The line is kernel-rendered DOM (Aegis S1.5); the agent never writes it. The dimension's title is a text node, cut at 40 characters, bidi-isolated."
+    open_key: "⌥B opens or folds this session's board, on the slip and anywhere on the desk. The slip's Open does not use Enter here, so it cannot collide with a decision key (Aegis S1.5). Proposed; the hint on other offers (↵ today) belongs to the open session."
+    never: ["open on arrival, on hover or by voice in S1", "a count the agent supplied", "a decision key, or the word Allow"]
+    specimen: "specimen-board.html#slip"
+    status: contested
+    note: "Contested because its parent pattern is. Do not build the 'added' state before session 2026-10-20-gnomon-mod-invitations closes (S1 plan §3: it blocks S1.5)."
+    from: { session: 2026-11-23-gnomon-board-medium, board: board-slip, decided_by: none, depends_on: { session: 2026-10-20-gnomon-mod-invitations, board: invitation }, review: "Mika pending; Aegis pending (⌥B, kernel-rendered counts)" }
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# Content palette (PROPOSED 2026-11-23, session 2026-11-23-gnomon-board-medium). The colours of what is drawn on a
+# board, published to contracts as content-palette:v1 at S1.2. It is deliberately NOT under foundations.color: that
+# block is the console's palette and `atelier check` reads it as "allowed in any Gnomon UI file". Content colours are
+# allowed only as board content (rule content-colour-stays-on-the-board). Free hues for content were decided by the
+# founder (TD-2026-11-24-500) over Luna's recorded dissent; this block is how that decision is carried out.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+content_palette:
+  id: "content-palette:v1"
+  status: proposed
+  roles:
+    line: "strokes, arrows, frame edges when coloured, and text drawn in a colour"
+    fill: "sticky paper and shape backgrounds"
+  text_on_fill: "text on a named fill is the theme's text.primary (measured: 13.6:1 or better by day, 9.7:1 or better at night). On a custom fill it is text.primary unless that pair is under 4.5:1, then text.on-ink."
+  defaults: { line: ink, shape-fill: none, sticky-fill: lemon, weight: fine }
+  neutrals:   # theme tokens, not new values; chroma under 0.02, so outside the distance rule
+    ink:      { line: text.primary }
+    graphite: { line: text.secondary }
+    paper:    { fill: surface.sheet }
+  swatches:   # day values are the stored truth; night values are transform(day) by role, printed so the transform can be tested
+    lemon:     { day: { fill: "#F3F287" },                  night: { fill: "#373500" }, note: "fill only: a yellow dark enough to write with (4.5:1 on the ground) lands within 0.06 of ochre.ink and sage.ink" }
+    leaf:      { day: { line: "#007835", fill: "#BAF6C5" }, night: { line: "#63C37B", fill: "#194224" } }
+    sky:       { day: { line: "#067092", fill: "#C0EDFF" }, night: { line: "#5EB4D9", fill: "#133E4C" } }
+    cobalt:    { day: { line: "#1957BB", fill: "#CDDFFE" }, night: { line: "#83B2FE", fill: "#2F3D56" } }
+    orchid:    { day: { line: "#8E389B", fill: "#F4D4FE" }, night: { line: "#D789E2", fill: "#492F51" } }
+    raspberry: { day: { line: "#B62268", fill: "#FFD9E2" }, night: { line: "#EE79A4", fill: "#4B2E36" } }
+  contrast:   # measured, WCAG 2 ratio
+    day-line-on-ground:   { leaf: 4.60, sky: 4.59, cobalt: 5.50, orchid: 5.39, raspberry: 5.03, floor: 4.5 }
+    night-line-on-ground: { leaf: 8.65, sky: 8.10, cobalt: 8.78, orchid: 7.70, raspberry: 7.11, floor: 4.5 }
+    fill-on-ground: "about 1.0 to 1.2 by day and 1.5 to 1.7 at night: a fill never carries its own outline, so every scrap and filled shape keeps a 1px edge (components.pin.anatomy)"
+  custom:
+    form: "custom:#rrggbb, the day value, upper or lower case, six digits, no alpha"
+    night_transform:
+      space: "OKLCH from OKLab (Ottosson 2020 matrices) over 8-bit sRGB"
+      line: "L' = clamp(1.24 − L, 0.70, 0.88) · C' = min(C, 0.15) · h' = h"
+      fill: "L' = clamp(1.26 − L, 0.30, 0.42) · C' = min(C, 0.07) · h' = h"
+      gamut: "lower C' by 0.002 at a time until every linear channel is within [−0.0005, 1.0005], then clip and round to 8 bits"
+      role: "chosen by the field the colour is used in (stroke and text: line; background: fill)"
+      note: "The named swatches' night values above are this transform applied to their day values, so the table is also the transform's test vectors. The engine stays in its light theme; the host supplies these colours at night (S1 plan §1)."
+    neutral: "a colour with OKLCH chroma under 0.02 is ink or paper: it passes without the distance test"
+    distance_rule: "A custom colour passes only if ALL hold: d(day value, r) ≥ 0.06 for every r in reserved.day; d(line transform, r) ≥ 0.06 and d(fill transform, r) ≥ 0.06 for every r in reserved.night. d is the Euclidean distance in OKLab."
+    on_fail: "The value is never stored. GUI: the tray says why in plain words and offers the nearest named swatch for that role (nearest by d on day values; lemon is not offered for a line). Agent tool: the op is refused with field, code and fix naming that swatch (amendment A10). Alternative recorded in components.content-tray.chose: silent snap."
+  minimum_distance:
+    metric: "Euclidean distance in OKLab (ΔEok)"
+    min: 0.06
+    why: "The two closest reserved colours are 0.045 apart (day: terracotta.ink and rose-clay.ink; night: terracotta and rose-clay at 0.047). At 0.06 a content colour is always further from any reserved colour than those two are from each other."
+    named_clearance: "smallest distance from any named swatch value to any reserved value: 0.068 (cobalt night line to state.knot). Day minimum 0.071 (raspberry fill to state.warn-bg)."
+    alternative: "0.08 (stricter). Cost: cobalt, sky and raspberry would need re-tuning and fewer blues and pinks would pass as custom. Chosen 0.06 because content colours are only ever seen inside the board, where no project swatch or state colour is drawn."
+  reserved:   # copied from foundations.color so the rule can be tested; a test should also assert this list equals the foundations
+    day:
+      mineral: { terracotta.fill: "#C08A73", terracotta.ink: "#8E4E38", sage.fill: "#9DAF8C", sage.ink: "#56663F", slate.fill: "#8C9DBB", slate.ink: "#44577C", ochre.fill: "#D2B074", ochre.ink: "#7A5A1C", rose-clay.fill: "#C9949A", rose-clay.ink: "#874B54", sea-grey.fill: "#8FB0AE", sea-grey.ink: "#3F6664" }
+      semantic: { state.fail: "#B4382A", state.warn-ink: "#6E4700", state.warn-edge: "#A8730C", state.warn-bg: "#F6E3B8", state.knot: "#5B4FD6" }
+    night:
+      mineral: { terracotta: "#E6A88F", sage: "#B7CCA3", slate: "#A9B9DB", ochre: "#E8C88C", rose-clay: "#E4AEB4", sea-grey: "#A8CFCB" }
+      semantic: { state.fail: "#FF7A66", state.warn-ink: "#FFC15A", state.knot: "#A79CFF" }
+      left_out: "state.warn-bg at night is rgba(255, 193, 90, 0.10): over the ground and the sheet it composites to #27231D and #2E2B27, near-neutral darks that every dark fill sits close to. It is told by its amber edge and text (#FFC15A, reserved above), so it is not in the distance list. For Aegis to confirm."
+    approval:
+      values: { text.primary: "#16150F / #E8F4F0", line.key-edge: "#2A2925 / #C9DCD6", surface.sheet: "#F8F5EE / #171A21", text.on-ink: "#F8F5EE / #171A21", retired-stamp: "#3F6664 (the old --stamp; equal to sea-grey.ink, so already in the mineral list)" }
+      note: "Approval has no hue of its own (status is ink, board gnomon-status-colour), and ink on paper is exactly what a board is drawn with, so distance cannot protect it. It is protected by shape: rules nothing-on-a-board-is-a-key and agent-marks-are-dashed. This reads the Aegis S1.2 condition ('away from mineral, semantic and approval colours') as distance for the first two and shape for the third. For Aegis to confirm."
+  test_vectors:   # custom value → verdict (worst distance, where, nearest reserved) → nearest swatch offered (line / fill)
+    - { v: "#C08A73", pass: false, why: "0.000 day terracotta.fill", offer: "raspberry / raspberry" }
+    - { v: "#B4382A", pass: false, why: "0.000 day state.fail", offer: "raspberry / raspberry" }
+    - { v: "#5B4FD6", pass: false, why: "0.000 day state.knot", offer: "cobalt / cobalt" }
+    - { v: "#FF0000", pass: false, why: "0.035 night line state.fail (passes by day)", offer: "raspberry / raspberry" }
+    - { v: "#E53935", pass: false, why: "0.036 night line state.fail", offer: "raspberry / raspberry" }
+    - { v: "#8A2BE2", pass: false, why: "0.050 night line state.knot", offer: "orchid / orchid" }
+    - { v: "#7B3FA0", pass: false, why: "0.059 night line state.knot", offer: "orchid / orchid" }
+    - { v: "#6D4C41", pass: false, why: "0.033 night line rose-clay", offer: "sky / cobalt" }
+    - { v: "#FFF59D", pass: true, why: "0.066 day state.warn-bg" }
+    - { v: "#FF8800", pass: true, why: "0.079 night line state.fail", night: "#E38230 line, #6A4225 fill" }
+    - { v: "#1E90FF", pass: true, why: "0.096 night line state.knot", night: "#54A1F9 line, #304F72 fill" }
+    - { v: "#00897B", pass: true, why: "0.103 day sea-grey.ink", night: "#47B3A4 line, #0F5950 fill" }
+    - { v: "#FFD700", pass: true, why: "0.128 day state.warn-bg", night: "#BA9C00 line, #4C400B fill" }
+    - { v: "#808080", pass: true, why: "neutral (chroma under 0.02)", night: "#9E9E9E line, #4D4D4D fill" }
+  honest_limits:
+    - "There is no named red, orange, amber or violet: those neighbourhoods belong to failed, warning and KNOT. Raspberry is the red pen. A custom orange or gold can pass when it is far enough from amber (see #FF8800, #FFD700)."
+    - "The nearest-swatch offer can jump hue (a brown is offered sky): the named set has no warm colours to offer."
+    - "Colour here carries no meaning the product reads. A board that uses colour to mean something is the author's own key."
+  chose:
+    - { what: "six hues placed in the gaps between reserved hues, plus three neutrals bound to theme tokens", over: "a FigJam-like nine-hue set including red, orange and violet", why: "those three land on the failed, warning and KNOT colours, the only saturated colours the console has" }
+    - { what: "named night values are the transform of the day values", over: "hand-tuned night values per swatch", why: "one behaviour for named and custom colours, and the swatch table becomes the transform's fixture" }
+    - { what: "OKLab distance", over: "CIEDE2000", why: "a few lines of arithmetic with no trigonometric corrections, easy to keep identical in contracts, the mod and the GUI" }
+  from: { session: 2026-11-23-gnomon-board-medium, board: content-palette, decided_by: none, decision: "TD-2026-11-24-500 (free hues for content; never the minerals or semantic colours; authorship never by colour)", conditions: "s1-build-plan.md §7: S1.1 'palette leaves room for a minimum-distance rule', S1.2 'custom snapped away'", review: "Mika pending (rendered, day and night); Aegis pending (reserved list, warn-bg at night, approval by shape, refuse vs snap)", computed_by: "OKLab script, 2026-11-23; values reproduced in specimen-board.html#palette" }
+
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # Zones (the desk). Main surface: the GUI window (packages/gnomon-gui/static/index.html). Desktop widths only.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1177,6 +1437,8 @@ zones:
     from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, choice: desk, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
   centre:
     surface: desk, centre
+    proposed:
+      - { session: 2026-11-23-gnomon-board-medium, board: board-leaf, status: proposed, decided_by: none, holds: "the board leaf over the chat header and the chat (/board, ⋯ Open board ⌥B, Open on a board slip, a Dimensions row); Esc folds it to an edge tab below the Loops tab; the turn's working line and the composer stay under it", never: "a board leaf over the pinned cards or the composer; a decision key or card inside a board; a board opened by an agent without the founder's Open", see: "components.board-leaf, rules board-centre-only, board-yields-the-keys" }
     holds: ["chat header: title (✎ rename) · ■ project · model · started · run mode ▾ · ⋯ (small controls are 24px keys)", "a local session's chat header: ■ project · local model · tier N ▾ · started (#gui-tool-tier, C4'b: the tier key where a Claude session's model key sits; the source as a word, tier 2 | tier 3 · yours | tier 1 · provisional; the owner of a live session gets the quiet key and its .mode-menu, then a .sheet-card confirm; anyone else, or an ended session, a plain chip titled 'Only the person who opened this session can change its tier.'; a loop session shows none)", "the chat (timestamps, took Ns, activity fold, working line)", "'↓ latest' (one key at the chat's bottom right, only while scrolled up; '↓ latest · N new')", "offer slips under their reply", "this session's pending cards pinned above the composer (max 30vh)", "the composer (one send key)", "the empty sheet when no session is open", "the Loops leaf over the chat (header loops word, Gnomon ▾ Loops…, ⌘K loops.open); Esc folds it to an edge tab", "a loop-trust card unfolded over the chat by its Read key (fold or Esc puts it back)"]
     never: ["the raw kernel feed as default (it is a palette view)", "a second send control", "a mod surface covering header, stack, Workshop or pinned cards", "a leaf or unfolded card that covers the sessions rail, the stack or the header", "page-level sideways scroll from a loop graph (it zooms inside its own frame)"]
     overflow: "Rows hold an 80ch measure; the title gives way before the meta; pinned scrolls past 30vh."
@@ -1261,6 +1523,23 @@ content:
       LOOPS n running: "'loops n · m waiting' (the spec's Shuttle line; the indicator is the header loops word)"
       loop mode: "autonomy (observe / act / propose) or run mode, whichever is meant"
       cwd: "'folder' in GUI copy (the New session field label)"
+    proposed:   # session 2026-11-23-gnomon-board-medium; decided_by: none. Naming itself is the founder's (TD-2026-11-24-053)
+      use:
+        dimension: "the space things are shown in: it has a title, belongs to a project, has sessions attached, and is what is listed and kept ('Dimensions', 'dimension in ■ a-paradigm', 'Rename dimension'). 'dim' only in the raw view, the CLI and logs"
+        medium: "a named way of showing a dimension. Rarely needed in copy: say the medium's own name"
+        board: "the whiteboard medium: what you open, fold and draw on ('Open board', '/board', '<title> › board', 'offer · board', 'Board tools')"
+        mark: "one thing drawn on a board, whoever drew it ('Arky added 3', '10 marks'); 'node' stays in the raw view"
+        hand: "an author on a board; the leaf's foot lists the hands ('you 5 · Arky 4')"
+        seal: "an agent's stamp, worked out from its id"
+        claimed: "said of a sub-agent the host could not name itself ('Kit · claimed, inside Arky's session')"
+        sticky: "a pinned paper note on a board"
+        fold: "what Esc does to a leaf (as Loops); a board is folded, not closed"
+      retired:
+        canvas: "board"
+        whiteboard: "board"
+        doodle: "board (doodle is kept as a later medium's name, never the system's)"
+        Excalidraw: "never named in the GUI; 'the board'"
+      open_question: "/boards (founder-approved, amendment A7) opens a list headed 'Dimensions'. Kept as approved; the alternative is to head the list 'Boards' until a second medium exists."
     status: clear
     from: { session: 2026-10-21-gnomon-voice, note: "commit 6f986338 retired Ambient/push-to-talk; 'stack' from the desk board (global decision stack)", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
     amended_by:
@@ -1442,6 +1721,52 @@ rules:
   - id: paths-are-chosen
     rule: "A folder or file on this Mac is chosen, not typed: recent choices first, then the Mac's own chooser (the kernel opens it); a typed path is an Advanced fallback, open by default only when no chooser exists. Every choice is checked by the kernel before the key that uses it is enabled."
     from: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } }
+  # proposed 2026-11-23 (session 2026-11-23-gnomon-board-medium; decided_by: none until the founder accepts)
+  - id: content-colour-stays-on-the-board
+    status: proposed
+    rule: "Content-palette colours appear only as board content and in the wells that pick them. No console surface, key, chip, card, toast or status takes one, and no board content takes a mineral or a semantic colour."
+    from: { session: 2026-11-23-gnomon-board-medium, board: content-palette, decided_by: none, decision: TD-2026-11-24-500 }
+  - id: content-keeps-its-distance
+    status: proposed
+    rule: "Every content colour, named or custom, is at least 0.06 (Euclidean, OKLab) from every reserved colour of the theme it is seen in; a custom colour is tested as its day value and as both night transforms. Neutrals (chroma under 0.02) are exempt. The reserved list is content_palette.reserved and must equal foundations.color."
+    test: "content_palette.test_vectors and the swatch table; G-DDL-07 goldens"
+    from: { session: 2026-11-23-gnomon-board-medium, board: content-palette, decided_by: none, condition: "Aegis S1.1 and S1.2 (s1-build-plan.md §7)" }
+  - id: agent-marks-are-dashed
+    status: proposed
+    rule: "On a board the human's marks are solid and an agent's are dashed, with the agent's seal as the second cue. The dash and the seal are derived from the host-stamped author every time they are drawn; neither is stored, chosen or offered as a style. Authorship is never shown by colour."
+    from: { session: 2026-11-23-gnomon-board-medium, board: author-seal, decided_by: none, extends: "model-text-never-a-key (principle 7)", decision: TD-2026-11-24-500 }
+  - id: solid-is-vouched
+    status: proposed
+    rule: "On a board, solid means the host vouches and dashed means it is an agent's word. So a seal has a solid rim only when the host named that agent; a sub-agent that named itself has a dashed rim and the word 'claimed' wherever it is named."
+    from: { session: 2026-11-23-gnomon-board-medium, board: author-seal, decided_by: none, limit: "s1-scale-amendments.md §4" }
+  - id: nothing-on-a-board-is-a-key
+    status: proposed
+    rule: "No kernel key, card or decision is ever drawn inside a board, and no board content gets the key's edge-and-offset, a bracket or a control role; so anything inside the board is content by construction. A node links to its card in the stack and never becomes one."
+    from: { session: 2026-11-23-gnomon-board-medium, board: board-leaf, decided_by: none, condition: "synthesis.md 'approval surfaces stay sacred'" }
+  - id: board-centre-only
+    status: proposed
+    rule: "A board leaf covers the chat header and the chat of the centre column and nothing else: the header, alerts band, sessions rail, stack, Workshop, this session's pinned cards and the composer stay visible and usable under every layout preset."
+    from: { session: 2026-11-23-gnomon-board-medium, board: board-leaf, decided_by: none, oracle: G-DDL-08 }
+  - id: board-yields-the-keys
+    status: proposed
+    rule: "While a card is focused the board takes no keyboard input, and it shows that it does not: the rail's letters go, its keys draw disabled, and the leaf says 'A card has the keys'. No board tool is bound to A, D or Enter."
+    from: { session: 2026-11-23-gnomon-board-medium, board: tool-rail, decided_by: none, oracle: G-DDL-08 }
+  - id: engine-wears-the-system
+    status: proposed
+    rule: "Nothing of the drawing engine's own look reaches the screen: no hand-drawn font or roughness, no engine toolbar, menu, welcome, library or help, no engine violet for selection. Text is JetBrains Mono; selection, handles, guides and the caret are --ink and --key-edge; tools come from the rail."
+    from: { session: 2026-11-23-gnomon-board-medium, board: board-leaf, decided_by: none, oracle: G-DDL-07, note: "TD-2026-11-24-500: no stock Excalidraw look ships" }
+  - id: stale-is-said-and-shown
+    status: proposed
+    rule: "A live node's age is printed ('as of hh:mm · <age>') and shown by its shadow's length in five steps; the shadow is never the only cue, and it changes only when the age crosses a step. Not used in S1 (no live nodes)."
+    from: { session: 2026-11-23-gnomon-board-medium, board: pin-and-shadow, decided_by: none, needs: "the proposed override of foundations.shadow" }
+  - id: unknown-kind-is-a-stub
+    status: proposed
+    rule: "A node of a kind this build cannot draw renders as the stub: its kind and one calm line, nothing else from its fields; movable and deletable, never editable; never a key, never an error."
+    from: { session: 2026-11-23-gnomon-board-medium, board: fallback-node, decided_by: none, plan: "s1-scale-amendments.md A1, A13" }
+  - id: dimension-then-medium
+    status: proposed
+    rule: "In GUI copy a dimension is the titled space that is listed, attached and kept; a board is the medium you open, fold and draw on. Where both appear the dimension comes first ('auth handoff › board'). 'dim' stays in the raw view, the CLI and logs. Never 'canvas', 'whiteboard', 'sheet' or the engine's name; 'doodle' is a future medium's name, not the system's."
+    from: { session: 2026-11-23-gnomon-board-medium, board: naming, decided_by: none, founder: "TD-2026-11-24-053 (s1-scale-amendments.md §2)" }
 
 preserve:
   - { what: tokens, value: "every colour token in docs/specs/gnomon-fixtures/contrast.json (G-GUI-10), verbatim (--live/--stamp are not fixture tokens; retiring them as state leaves the fixture unchanged)" }
@@ -1473,6 +1798,13 @@ overrides:
     by: creator
     codified_as: "zones.stack, components pile, card.family, alert, trust-slip; rules stack-order, family-by-glyph-and-word"
     from: { session: 2026-10-22-gnomon-loops-ui, board: agent-loops-surface }
+  - rule: "foundations.shadow: shadow is material, never a state signal (world rule, session 2026-10-20-gnomon-gui-fidelity)"
+    status: proposed
+    scope: "live nodes in a dimension only (S6a onward). Every other shadow in the console, and every scrap in S1, stays material."
+    reason: "The pin and the lengthening shadow are the board's crafted device, taken from the gnomon itself: the shadow's length tells the time since the reading. It is always paired with the printed 'as of' line (rule stale-is-said-and-shown), so the shadow is never the only signal."
+    by: none
+    note: "Not in force. S1 builds nothing that depends on it. Accepting it now only reserves the steps; refusing it leaves live nodes with the words alone."
+    from: { session: 2026-11-23-gnomon-board-medium, board: pin-and-shadow, origin: ".paradigm/research/gnomon-canvas/synthesis.md 'Look'" }
 
 decisions:
   - { session: 2026-10-15-gnomon-aesthetic, board: world, choice: shadow-instrument, superseded_by: style }
@@ -1514,6 +1846,7 @@ decisions:
   - { session: 2026-10-22-gnomon-local-model, board: C1, choice: check-first, decided_by: creator }
   - { session: 2026-10-22-gnomon-local-model, board: C2, choice: confirm-when-used, decided_by: creator }
   - { session: 2026-10-22-gnomon-local-model, board: C3, choice: gnomon, decided_by: creator }
+  - { session: 2026-11-23-gnomon-board-medium, boards: [board-leaf, tool-rail, content-palette, author-seal, pin-and-shadow, fallback-node, board-slip, naming], choice: null, status: "proposed by Luna while the founder was away; awaiting the founder. Each entry's `chose` names the alternative", specimen: ".atelier/systems/gnomon/specimen-board.html" }
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # Migration: every change to existing UI the system makes. Batched by zone or component; each batch goes through the

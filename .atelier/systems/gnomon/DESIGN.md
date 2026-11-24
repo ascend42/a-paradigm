@@ -68,6 +68,24 @@ You choose a folder; you don't type one (rule paths-are-chosen). New session lis
 
 The same session made one key height the rule: `--key-h`, 28px, for every key in every zone. Quiet keys, fold keys, segment keys and the chat header's glyph keys were 24px beside 28px keys, which the founder saw as inconsistent button heights. The reference is [folder-picker.html](../../sessions/2026-10-23-gnomon-folder-picker/refs/folder-picker.html), with every key before and after on board K. Both changes are pending migration batches (`folder-field`, `key-height`).
 
+## Dimensions and the board (proposed, session 2026-11-23-gnomon-board-medium)
+
+Proposed for milestone S1.1 while the founder was away. Nothing in this section is decided; the entries are `proposed` in `design-system.yaml` (the slip states are `contested`, as the offer slip is), and the rendered proposal is [specimen-board.html](specimen-board.html), day and night.
+
+A **dimension** is the space things are shown in: it has a title, belongs to a project and has sessions attached. A **board** is the first medium, a whiteboard you and your agents draw on together. You open a board; the board shows a dimension. Where both words appear, the dimension comes first: "auth handoff › board". The drawing engine is Excalidraw, and none of its own look ships: no hand-drawn font, no wobble, none of its toolbar, and not its selection violet, which sits 0.057 from KNOT's.
+
+The board is a leaf over the centre column, as Loops is, with one difference: it stops above the session's pinned cards and the composer, so you keep talking while it is open. Its head names the dimension and the medium; the line under it says which project, which sessions are attached and how it was opened; its foot lists the hands that have drawn. The stack, the header and the composer are never under a board, and nothing inside a board is ever a key. While a card is focused the board gives up the keyboard and says so.
+
+The tools are a rail down the leaf's left edge, a strip of the sheet graduated like a scale rule, with the system's own segment keys carrying glyphs drawn for Gnomon. The letters sit in the rule's margin. No tool uses A or D.
+
+Content has its own colours, `content-palette:v1`, kept apart from the console's. Six hues (lemon, leaf, sky, cobalt, orchid, raspberry) sit in the gaps the instrument leaves, with ink, graphite and paper bound to the theme. A custom colour is allowed, with a fixed night transform. Every content colour stays at least 0.06 in OKLab from every mineral and semantic colour; the two closest reserved colours are themselves 0.045 apart. A custom colour that lands too close is not used and the tray offers the nearest swatch. This carries out the founder's decision for free hues (TD-2026-11-24-500), made over my recommendation of paper stocks only.
+
+Colour never says who drew a mark. Your marks are solid; an agent's are dashed, and nobody can choose the dash. Each agent has a seal worked out from its id: a cut, a bead on the rim and a letter. Solid means the host vouches and dashed means it is an agent's word, so a sub-agent that named itself has a seal with a dashed rim and the word "claimed".
+
+The device is the pin. Paper on the board (a sticky, or the stub for a node this build can't draw) is pinned to the desk and casts a short hard shadow. On a live node that shadow will also tell the time: it lengthens in five steps as the reading ages, always beside a printed "as of". S1 has no live nodes, so S1 ships the pin and the shadow at rest; the lengthening waits for the live tray. That use of shadow as a signal needs an override of the recorded rule that shadow is material only, and the override is proposed, not in force.
+
+What the founder should look at first: the two words and where they appear; the six hues with no red, orange or violet; whether the board should refuse a too-close custom colour (proposed) or change it silently; the ⌥B key for Open board; and the shadow override.
+
 ## What's next
 
 The `migration:` list in `design-system.yaml` (now including the pending batches settings-form, folder-field and key-height) is the work that brings the shipped UI onto this system, batched by zone and component (notices and toasts, chips and small keys, the card voice tag, status colour, field edges, type, spacing, radius, copy). Each batch goes through the UI review on its own. Offer slips and the one-offer-per-reply rule stay open until session `2026-10-20-gnomon-mod-invitations` closes.
