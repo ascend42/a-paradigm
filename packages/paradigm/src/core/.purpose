@@ -136,9 +136,18 @@ components:
     type: service
     path: flow-validator.ts
   portal-compliance:
-    description: Validate portal.yaml gates are used in routes and routes reference declared gates. v5.37.12 fail-closed (discriminated PortalLoadResult). v5.38.0 imports classifyYamlError from @a-company/portal-core and attaches near-match suggestions to undeclared / unused gates via the #near-match helper. rg and grep get the pattern after -e and the root after --, so a gate pattern starting with - is never an option.
+    description: Validate portal.yaml gates are used in routes and routes reference declared gates. v5.37.12 fail-closed (discriminated PortalLoadResult). v5.38.0 imports classifyYamlError from @a-company/portal-core and attaches near-match suggestions to undeclared / unused gates via the #near-match helper. rg and grep get the pattern after -e and the root after --, so a gate pattern starting with - is never an option. listGateFiles (the .purpose and portal.yaml files that count as gate sources) is computed once per checkPortalCompliance run from #project-files and passed to findGateReferences and extractNestedDeclaredGates (both still take it as an optional argument); it used to be a `find` from the root, run twice. Inside git a gitignored .purpose or nested portal.yaml is therefore not a gate source. The code-scan skip list plus .warpline, .build and .loom are left out in both modes.
     type: service
     path: portal-compliance.ts
+    tests:
+      - packages/paradigm/src/core/portal-compliance.test.ts
+      - packages/paradigm/src/core/project-files.test.ts
+  project-files:
+    description: "listProjectFiles(rootDir) → {root, source: git|walk, files}: one list of a project's files per run, root-relative with forward slashes on every OS. Inside a git work tree it is `git ls-files -co --exclude-standard -z` (tracked plus untracked-not-ignored; inherited GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE cleared; never descends into nested repositories). When git is missing, fails, or answers with no files (a directory wholly ignored by an enclosing repository) it is a directory walk that prunes node_modules, .git, .warpline, .build and .loom by name. Both modes leave out .claude/worktrees/ (agent worktree copies). A tracked file deleted from disk is still listed in git mode, so readers must tolerate a missing file. hasDirSegment(rel, names) is the shared skip-list test (directory segments only). Used by #portal-compliance and by `paradigm doctor`."
+    type: utility
+    path: project-files.ts
+    tests:
+      - packages/paradigm/src/core/project-files.test.ts
   near-match:
     description: v5.38.0 tiny Levenshtein-based near-match engine for compliance "did you mean" hints. Threshold — distance ≤ 2 OR distance / longer ≤ 0.3. Safe for local user-facing surfaces (user has portal.yaml on disk); not safe for telemetry. Produces ComplianceSuggestion shape for both the formatted report and the JSON envelope.
     type: utility
