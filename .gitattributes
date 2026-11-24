@@ -18,7 +18,8 @@ packages/gnomon-gui/static/fonts/*.txt text eol=lf
 *.woff2 binary
 packages/gnomon-gui/static/fonts/*.woff2 binary
 packages/gnomon-gui/src/** text eol=lf
-packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf
+# generated base64 (several MB): LF-pinned as text, but collapsed in review and never rendered as a line diff
+packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf linguist-generated=true -diff
 packages/gnomon-contracts/src/** text eol=lf
 
 # The generated client-API doc is a byte-compared fixed point (G-HON-04 rule) on every OS

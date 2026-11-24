@@ -6,6 +6,7 @@
  * Needs the built child (dist/transport/gnomon-web.js): `npm run test:gnomon`
  * builds first.
  */
+import { contentSecurityPolicy } from '../src/kernel/web/rules.js';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as net from 'node:net';
@@ -184,6 +185,27 @@ describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-onl
     const rpcGet = await rawHttp(port, 'GET', '/rpc', GOOD(port));
     expect(rpcGet.status).toBe(426);
     expect(rpcGet.headers['cache-control']).toBe('no-store');
+  });
+
+  it('boards S1.0 (Excalidraw fixture): the endpoint serves every board file from the pinned snapshot under the unchanged CSP', async () => {
+    const { ep } = await rig();
+    await ep.ensureListening();
+    const port = ep.port;
+    const board = [...guiBundleFiles()].filter(([n]) => n.startsWith('board/'));
+    expect(board.map(([n]) => n)).toEqual(expect.arrayContaining(['board/board.js', 'board/board.css', 'board/LICENSES.txt']));
+    const TYPES: Record<string, string> = { js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', txt: 'text/plain; charset=utf-8', png: 'image/png', svg: 'image/svg+xml' };
+    for (const [n, bytes] of board) {
+      const r = await rawHttp(port, 'GET', `/${n}`, { Host: `127.0.0.1:${port}` });
+      expect(r.status, n).toBe(200);
+      expect(r.body.equals(bytes), n).toBe(true);
+      expect(r.headers['content-type'], n).toBe(TYPES[n.slice(n.lastIndexOf('.') + 1)]);
+      expect(r.headers['content-security-policy'], n).toBe(contentSecurityPolicy(port));
+      expect(r.headers, n).toMatchObject({ 'cross-origin-resource-policy': 'same-origin', 'x-content-type-options': 'nosniff' });
+    }
+    // nothing beside the pinned members: no sourcemap, no directory listing, no font or locale the engine might ask for
+    for (const miss of ['/board/board.js.map', '/board/board.css.map', '/board/', '/board', '/board/fonts/Excalifont/Excalifont-Regular.woff2', '/board/locales/de-DE.js', '/board/subset-worker.chunk.js']) {
+      expect((await rawHttp(port, 'GET', miss, { Host: `127.0.0.1:${port}` })).status, miss).toBe(404);
+    }
   });
 
   it('/blob: GUI token required, content hash verified, PNG served, SVG and disguised HTML 415; /diag appends gui.log', async () => {

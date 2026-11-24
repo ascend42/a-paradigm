@@ -1,0 +1,53 @@
+id: L-2026-11-24-ascend-064322-001
+type: insight
+timestamp: '2026-11-24T06:43:22.195Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Founder widens the Gnomon aim to a "Jarvis"-like suite; the S1 plan is reshaped, not enlarged
+summary: 'On resuming the boards checkpoint, the founder asked for the plan to scale toward Gnomon as a full "Jarvis"-like suite for building seamlessly, and for the team to iterate through the build overnight. Arky and a Loid/Jinx/Helix counterweight ran in parallel; Aegis reviewed the result. Outcome: S1 stays the same size, but everything permanent (op rows, contract ids, names) is shaped for later mediums.'
+symbols_touched:
+  - '#doodle-mod'
+  - '#gnomon'
+  - '#mod-host'
+decisions:
+  - id: TD-2026-11-24-053
+    decision: Dimension is the space; boards and doodles are mediums
+    rationale: Generic name for where things are rendered; must be settled before the first permanent op
+  - id: TD-2026-11-24-872
+    decision: Scale amendments approved; contract moves batched to two
+    rationale: Shape permanent things now; keep S1 the same size
+learnings:
+  - A plan memo's claim that something is host-stamped must be checked against who builds the payload; here the mod did
+  - 'Run the architect and a counterweight panel blind to each other, then a security pass on the reconciled result: each caught something the others missed'
+  - An open kind grammar plus a tolerant fold gives forward compatibility without reserving unread fields, provided a fixture proves the fold carries them and every write is refused by name
+tags:
+  - gnomon
+  - dimensions
+  - jarvis
+  - scale
+  - T-2026-11-24-001
+body: |-
+  Founder (2026-11-23): "i want gnomon to be this full 'jarvis' like suite that enables me to build seamlessly". On naming: "dimensions are the space where they are, and the mediums of which things are displayed are the named pieces like boards or doodles."
+
+  What the team converged on (s1-scale-amendments.md):
+  - Jinx's rule held: reserved fields nobody reads are untested contract. So no data bag, no pending state, no VR fields in S1.
+  - What IS paid for now, because op rows are permanent: an open kind grammar with closed writes and a tolerant fold; first-class relations; refs on nodes; host-stamped provenance; project-scoped dimensions that outlive a session.
+  - Three sign-offs became two (one modAbiId, one clientApiId move at S1.2).
+  - First "talk and nodes appear" moment is S1.4, with no new code: a spoken turn is already session.send{source:'voice'}.
+
+  Where the first draft was wrong (caught by Aegis, re-checked in code by the orchestrator):
+  - "Host-stamped cause/hsid in the op payload" was not host-stamped: the mod builds the payload and the clamp passes it through (modhost/bridge.ts:76-83). Fix: the host overwrites a reserved payload key and sets row causes from the call in force.
+  - refs[] on ref:v1 alone accepts any non-whitespace id, including card: and permit: schemes (ref.ts:85,128-144). Fix: a board allowlist.
+  - tool.call carries no relayedFor at all today (mod-abi.ts:78; host.ts:845).
+  - mod.command from the GUI is still refused pending a gesture proof (socket/dispatch.ts:912-914): a missed S1.3 dependency.
+
+  Founder decisions the same night: live tray before images; T-DDL-01 clock starts at S1.4; if the usage bar is missed, stop the whiteboard medium but keep the dimension model and try the live tray.
+linked_tasks:
+  - T-2026-11-24-001
+confidence: 0.8
+git_context:
+  ref: 53b5a636c15a78bb8f3b5acf48d3630e7a62a77d
+  branch: feat/gnomon-boards-s1.0
+  dirty: true

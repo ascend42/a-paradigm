@@ -18,6 +18,43 @@ final class Host: NSObject, WKNavigationDelegate {
         webView = WKWebView(frame: frame, configuration: config)
         super.init()
         webView.navigationDelegate = self
+        Host.keepVisible(webView)
+    }
+    /// T-2026-11-06-003: an offscreen window is OCCLUDED whenever the display sleeps, the session is locked or the
+    /// window server has no screen for it (a hosted CI runner, an agent's background session). WebKit then marks the
+    /// page hidden: timers still run, but requestAnimationFrame never fires, so a page that mounts through rAF
+    /// (Excalidraw) loads, logs didFinish and never reports. Turning window occlusion detection off makes the page
+    /// visible whenever its window is ordered in, which is what WebKit's own test runner does for its offscreen
+    /// windows. The selector is WebKit SPI, looked up at run time: where it is missing the host says so and carries on.
+    static func keepVisible(_ webView: WKWebView) {
+        let sel = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
+        guard webView.responds(to: sel), let imp = webView.method(for: sel) else {
+            print("wkwebview-load: occlusion detection SPI missing (the page may be hidden)")
+            fflush(stdout)
+            return
+        }
+        typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
+        unsafeBitCast(imp, to: Setter.self)(webView, sel, false)
+    }
+    /// Printed before a timeout exit: whether the page was hidden and how far its script got (the page's own
+    /// report object, if it has one), so a silent run says why.
+    func dumpState(_ done: @escaping () -> Void) {
+        let js = "JSON.stringify({visibility: document.visibilityState, phase: (window.__board || window.__p12 || window.__p09 || {}).phase || null, mounted: (window.__board || window.__p12 || {}).mounted || false})"
+        var finished = false
+        webView.evaluateJavaScript(js) { value, error in
+            if finished { return }
+            finished = true
+            print("wkwebview-load: state \(value as? String ?? "unavailable: \(error?.localizedDescription ?? "nil")")")
+            fflush(stdout)
+            done()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            if finished { return }
+            finished = true
+            print("wkwebview-load: state unavailable (the web process did not answer in 3 s)")
+            fflush(stdout)
+            done()
+        }
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         print("wkwebview-load: didFinish")
@@ -50,10 +87,13 @@ let frame = NSRect(x: -10000, y: -10000, width: 1280, height: 800)
 let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
 let host = Host(frame: NSRect(x: 0, y: 0, width: 1280, height: 800))
 window.contentView = host.webView
-window.orderBack(nil) // offscreen but ordered in, so WebKit does not throttle timers/rAF
+window.orderBack(nil) // offscreen but ordered in; Host.keepVisible stops WebKit hiding the page when the window is occluded
 host.webView.load(URLRequest(url: url))
 DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
-    print("wkwebview-load: timeout")
-    exit(2)
+    host.dumpState {
+        print("wkwebview-load: timeout")
+        fflush(stdout)
+        exit(2)
+    }
 }
 app.run()

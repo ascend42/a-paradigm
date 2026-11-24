@@ -1,0 +1,14 @@
+id: L-2026-11-24-ascend-062323-903
+type: insight
+timestamp: '2026-11-24T06:23:23.710Z'
+author: ascend
+title: Decision TD-2026-11-24-872 recorded
+summary: Companion lore entry for decision record TD-2026-11-24-872. See .paradigm/decisions/TD-2026-11-24-872.yaml.
+symbols_touched:
+  - '#doodle-mod'
+  - '#gnomon'
+references:
+  decision_id: TD-2026-11-24-872
+tags:
+  - companion-lore
+  - decision-reference

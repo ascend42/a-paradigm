@@ -271,7 +271,9 @@ export async function runPage(server, engine, pagePath, timeoutMs = 60_000) {
   const sep = pagePath.includes('?') ? '&' : '?';
   const url = `${server.origin}${pagePath}${sep}run=${run}`;
   const t0 = Date.now();
-  const proc = launch(engine, url, Math.ceil(timeoutMs / 1000) + 5);
+  // the WKWebView host times out a little BEFORE this wait does, so its last lines (the page's visibility and phase,
+  // T-2026-11-06-003) reach the launcher tail of a run that never reported
+  const proc = launch(engine, url, Math.max(5, Math.floor(timeoutMs / 1000) - 5));
   const report = await Promise.race([server.waitReport(run, timeoutMs), proc.exited.then(() => server.waitReport(run, 1500))]);
   const wallMs = Date.now() - t0;
   const tail = proc.output();
