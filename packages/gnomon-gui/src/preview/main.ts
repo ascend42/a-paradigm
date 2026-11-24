@@ -16,6 +16,44 @@ import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-ker
 import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
 import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
+import { loadBoard } from '../core/board.js';
+
+// DEV ONLY: every CSP refusal on a preview page goes to the preview server's /diag (GET /diag lists them), so a
+// fixture that draws anything the kernel's policy would refuse says so (boards S1.0 dogfood: no CSP rows).
+document.addEventListener('securitypolicyviolation', (e) => {
+  const row = `csp ${e.effectiveDirective || e.violatedDirective} blocked=${e.blockedURI || '(none)'} source=${e.sourceFile || ''}:${e.lineNumber} fixture=${PREVIEW.fixture}`;
+  void fetch('/diag', { method: 'POST', body: row }).catch(() => undefined);
+});
+
+/** #gui-board DEV fixture: the board over the transcript's feed, through the real loader. Sized with CSSOM (no inline style). */
+async function openBoardFixture(): Promise<void> {
+  const feed = document.querySelector('#pane-transcript .feed') as HTMLElement | null;
+  if (!feed) return;
+  const host = document.createElement('div');
+  host.id = 'preview-board';
+  host.style.position = 'absolute';
+  host.style.inset = '0';
+  host.style.zIndex = '5';
+  host.style.background = '#fff';
+  if (getComputedStyle(feed).position === 'static') feed.style.position = 'relative';
+  feed.appendChild(host);
+  try {
+    const board = await loadBoard();
+    const handle = await board.mountBoard(host, { onError: (err) => void fetch('/diag', { method: 'POST', body: `board error ${err.message}` }).catch(() => undefined) });
+    handle.add([
+      { type: 'rectangle', x: 80, y: 80, width: 200, height: 110 },
+      { type: 'ellipse', x: 360, y: 90, width: 160, height: 100 },
+      { type: 'text', x: 100, y: 230, text: 'board engine under the CSP (S1.0)' },
+    ]);
+    (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
+    document.documentElement.dataset.previewBoard = board.BOARD_ENGINE;
+    // a positive row: "no CSP rows" only means something when the board is known to have mounted
+    void fetch('/diag', { method: 'POST', body: `board ready ${board.BOARD_ENGINE} marks=${handle.count()} surface=${PREVIEW.surface}` }).catch(() => undefined);
+  } catch (err) {
+    host.textContent = `The board did not load: ${err instanceof Error ? err.message : String(err)}`;
+    void fetch('/diag', { method: 'POST', body: `board load failed ${err instanceof Error ? err.message : String(err)}` }).catch(() => undefined);
+  }
+}
 
 const frames = (n: number): Promise<void> => new Promise((r) => (n <= 0 ? r() : requestAnimationFrame(() => void frames(n - 1).then(r))));
 
@@ -90,6 +128,7 @@ async function boot(): Promise<void> {
     hd?.scrollIntoView({ block: 'start' });
     hd?.focus({ preventScroll: true });
   }
+  if (fx.open === 'board') await openBoardFixture();
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }

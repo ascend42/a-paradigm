@@ -6,6 +6,10 @@
 //   node packages/gnomon-gui/scripts/preview.mjs [--port 8790]   serve on 127.0.0.1 (the list of fixtures at /)
 //   node packages/gnomon-gui/scripts/preview.mjs --fixture-list  print every fixture × theme URL and exit
 //
+// Fixture pages are served under the KERNEL's Content-Security-Policy (§11.2 rule 6, the same string for this port),
+// and the preview page POSTs every CSP refusal to /diag; GET /diag lists what arrived (boards S1.0 dogfood: the
+// `board` fixture mounts the lazy #gui-board chunk, served from a fresh scripts/board-build.mjs build at /board/*).
+//
 // Fixture URL: /?fixture=<name>&theme=day|night&motion=on|off[&surface=browser]. app.js is rebuilt on every request,
 // so an edit to the GUI shows on reload.
 import { build } from 'esbuild';
@@ -13,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { buildBoard } from './board-build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const THEMES = ['day', 'night'];
@@ -48,24 +53,54 @@ function listPage(list) {
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
 // S1 materials: the bundled fonts and grain, served raw (the same bytes build.mjs pins); plain names only, no `..`
 const STATIC_ASSET = /^\/(grain\.svg|fonts\/[A-Za-z0-9._-]+\.(woff2|txt))$/;
+// #gui-board: the board chunk's members, by their exact pinned-tree names (never a path into the filesystem)
+const BOARD_FILE = /^\/(board\/(board\.js|board\.css|LICENSES\.txt|asset-[0-9a-f]{16}\.(png|svg)))$/;
+TYPES['.png'] = 'image/png';
+/** The kernel's rule 6 policy for a port (packages/gnomon/src/kernel/web/rules.ts contentSecurityPolicy; test/preview.test.ts compares the two). */
+export const previewCsp = (port) =>
+  ["default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' blob:", "font-src 'self'", `connect-src ws://127.0.0.1:${port} http://127.0.0.1:${port}`, "worker-src 'self'", "frame-src 'none'", "frame-ancestors 'none'", "base-uri 'none'", "form-action 'none'"].join('; ');
+const DIAG_MAX_ROWS = 500;
+const DIAG_MAX_BYTES = 4096;
 
 /** Start the server; resolves {url, close}. port 0 picks a free port. */
 export async function startPreview({ port = 8790 } = {}) {
   const list = await fixtureList();
+  let board = null; // built on first use, once per server
+  const diag = []; // what pages POSTed to /diag (bounded; dev only)
   const server = http.createServer(async (req, res) => {
-    const send = (code, type, body) => {
-      res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    const send = (code, type, body, extra = {}) => {
+      res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra });
       res.end(body);
     };
     const host = String(req.headers.host ?? '');
     if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) return send(421, 'text/plain', 'loopback only'); // DNS-rebinding guard
     const u = new URL(req.url ?? '/', `http://${host}`);
     try {
-      if (req.method === 'POST' && u.pathname === '/diag') return send(204, 'text/plain', '');
+      if (req.method === 'POST' && u.pathname === '/diag') {
+        const chunks = [];
+        let size = 0;
+        for await (const c of req) {
+          size += c.length;
+          if (size > DIAG_MAX_BYTES) break;
+          chunks.push(c);
+        }
+        if (diag.length < DIAG_MAX_ROWS) diag.push({ at: new Date().toISOString(), row: Buffer.concat(chunks).toString('utf8').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, DIAG_MAX_BYTES) });
+        return send(204, 'text/plain', '');
+      }
       if (req.method !== 'GET') return send(405, 'text/plain', 'GET only');
+      if (u.pathname === '/diag') {
+        const csp = diag.filter((d) => d.row.startsWith('csp '));
+        return send(200, 'text/plain; charset=utf-8', [`${diag.length} diag row(s), ${csp.length} CSP row(s)`, ...diag.map((d) => `${d.at} ${d.row}`), ''].join('\n'));
+      }
+      if (BOARD_FILE.test(u.pathname)) {
+        board ??= (await buildBoard()).files;
+        const bytes = board.get(u.pathname.slice(1));
+        return bytes ? send(200, TYPES[path.extname(u.pathname)], bytes) : send(404, 'text/plain', 'not found');
+      }
       if (u.pathname === '/' || u.pathname === '/index.html') {
         if (!u.searchParams.has('fixture')) return send(200, TYPES['.html'], listPage(list));
-        return send(200, TYPES['.html'], readFileSync(path.join(ROOT, 'static', 'index.html')));
+        // the fixture page runs under the kernel's own policy (the list page above is plain dev HTML and does not)
+        return send(200, TYPES['.html'], readFileSync(path.join(ROOT, 'static', 'index.html')), { 'content-security-policy': previewCsp(server.address().port) });
       }
       if (u.pathname === '/boot.js' || u.pathname === '/styles.css') return send(200, TYPES[path.extname(u.pathname)], readFileSync(path.join(ROOT, 'static', u.pathname.slice(1))));
       if (STATIC_ASSET.test(u.pathname) && !u.pathname.includes('..')) return send(200, TYPES[path.extname(u.pathname)], readFileSync(path.join(ROOT, 'static', ...u.pathname.slice(1).split('/'))));
@@ -86,7 +121,7 @@ export async function startPreview({ port = 8790 } = {}) {
     server.listen(port, HOST, resolve);
   });
   const url = `http://${HOST}:${server.address().port}`;
-  return { url, list, close: () => new Promise((r) => server.close(r)) };
+  return { url, list, diag, close: () => new Promise((r) => server.close(r)) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
