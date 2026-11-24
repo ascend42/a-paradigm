@@ -75,7 +75,7 @@ Authoring, onboarding and quizzes moved to the CLI (`paradigm university add|sho
 
 ## Token Budget Tips
 
-- Prefer MCP tools over file reads (~100-300 tokens vs ~2000+ for files)
-- Use `response_format: 'concise'` to halve token usage on supported tools
+- The default tool list is 32 tools, about 7,800 tokens (estimated as JSON length / 4 on Paradigm's own repository). A test fails the build past 40 tools or 8,000 tokens. How many tokens a tool result costs compared with reading the files has not been measured.
+- Use `response_format: 'concise'` for a shorter response on supported tools
 - Call `paradigm_session` (op `health`) every 10-15 tool calls to monitor usage
 - Results are cached for 30 seconds — repeated calls are free

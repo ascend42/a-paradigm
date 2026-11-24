@@ -18,26 +18,26 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Paradigm — The Context Engineering Framework',
+    default: 'Paradigm — Structure for AI-assisted development',
     template: '%s | Paradigm',
   },
   description:
-    'The context engineering framework for AI-native development. Structure your codebase so AI agents understand it.',
+    'Structure for AI-assisted development: a symbol graph built from files in your repo, hooks that are scripts, and decisions on record.',
   metadataBase: new URL('https://useparadigm.dev'),
   openGraph: {
     type: 'website',
     locale: 'en_US',
     url: 'https://useparadigm.dev',
     siteName: 'Paradigm',
-    title: 'Paradigm — The Context Engineering Framework',
+    title: 'Paradigm — Structure for AI-assisted development',
     description:
-      'Structure your codebase so AI agents understand it. Five symbols. Infinite clarity.',
+      'Structure your codebase so AI agents understand it. Five symbols, one symbol graph.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Paradigm — The Context Engineering Framework',
+    title: 'Paradigm — Structure for AI-assisted development',
     description:
-      'Structure your codebase so AI agents understand it. Five symbols. Infinite clarity.',
+      'Structure your codebase so AI agents understand it. Five symbols, one symbol graph.',
   },
   robots: {
     index: true,

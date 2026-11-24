@@ -4,10 +4,17 @@ import { motion } from 'framer-motion';
 import styles from './MetricsSection.module.css';
 
 const METRICS = [
-  { value: '5', label: 'Symbols', detail: 'Cover every concept' },
-  { value: '32', label: 'MCP Tools', detail: 'Grouped, more on demand' },
-  { value: '90%', label: 'Less context', detail: 'Tokens saved vs file reads' },
-  { value: '<1min', label: 'Setup time', detail: 'paradigm shift' },
+  // Every figure here is counted from the repository. Sources:
+  //  5   symbol kinds: # component, $ flow, ^ gate, ! signal, ~ aspect.
+  //  32  default tools/list size and its ~7,800-token estimate (JSON length / 4),
+  //  40  and the ceiling a test enforces (40 tools, 8,000 tokens):
+  //      packages/paradigm-mcp/src/tools/tools-list-budget.test.ts
+  //  68  ls packages/paradigm/templates/agents/*.agent | wc -l
+  // Do not add a figure that has no command or test behind it.
+  { value: '5', label: 'Symbols', detail: 'Components, flows, gates, signals, aspects' },
+  { value: '32', label: 'MCP tools', detail: 'Listed by default, about 7,800 tokens' },
+  { value: '40', label: 'Tool ceiling', detail: 'A test fails the build past 40 tools or 8,000 tokens' },
+  { value: '68', label: 'Agent profiles', detail: 'Bundled with the CLI' },
 ];
 
 const container = {
