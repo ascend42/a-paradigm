@@ -152,3 +152,40 @@ components:
       test/constellation-mod.test.ts.
     tags: [mods, first-party, desk]
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
+  dimension-mod:
+    description: >-
+      #dimension-mod (spec §12.7; S1.3 P2; first-party, human-only) -
+      packages/gnomon-mods/dimension, id gnomon.dimension: the ONE writer of
+      dimension rows. Commands dim.open, dim.attach, dim.op, dim.close; the
+      four modns.gnomon.dimension.* kinds; tools dim-view (read) and dim-draw
+      (read, write), declared so the commands have a write effect and both
+      answering not-available until agents draw (S1.4); no view, keybinding,
+      offer, capability or egress. model.mjs is pure: actorOf (a human only
+      for a host stamp with surface gui and no agent), apply(state, ops,
+      actor) (the one entry: validateDimOps, rows built from its accepted
+      copies), titleProblem, grantDefault, readArgs (closed arg shapes, read
+      field by field, never spread), rowProblem and the keyframe codec.
+      index.mjs is the stdio loop plus a mod-to-host request helper. Every
+      command checks the stamp, the args, the attached session and the repo
+      before any append; the 512-dimension cap, the 16-session attach cap
+      and the row-size check run before the append; mod state and the fold
+      move only after a seq. State: `dims`, `idx:<ulid>` {repo, firstSeq,
+      lastSeq, title, log}, `kfs`, and keyframes `kf:<ulid>` + chunks of at
+      most 60 KiB for the 4 most recent dimensions (at close and every 256
+      ops, skipped above 256 KiB, 640 KiB in all), each bound to its log id.
+      The LOG is the truth and the index a hint: a cold open verifies the
+      keyframe (sum, dimHash, log id), then pages log.read for the four
+      kinds from its seq to the log head, one foldDim per page, and heals
+      the index; a dimension with rows but no index is adopted from its first
+      start row and that row's repo scope; entries of another log are pruned
+      once (`log` key); a failed append drops the in-memory fold. apply
+      measures the caller's ops (16 KiB, 4,096 values, depth 32) BEFORE the
+      validator reads them. dim-shape.mjs is GENERATED from
+      #contract-dim-shape by packages/gnomon/scripts/build-dimension-mod.mjs
+      and compared with a fresh build by a test. Tier first-party
+      (packageHash pinned). Tested in test/dimension-mod.test.ts (rules,
+      caps, keyframes, isolation) and test/dimension-relay.test.ts (the
+      relay table per caller class over real connections, a mod's own
+      log.read, first-party identity).
+    tags: [mods, first-party, dimensions]
+    oracles: [G-DDL-01, G-MOD-16, G-MOD-17, G-MOD-18]
