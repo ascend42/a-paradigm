@@ -110,3 +110,28 @@ Merge conditions (added to the plan's §7):
 - **C7 (S1.2):** the manifest loader refuses `reach: 'canvas'` by name, with a test, until S1.5 (first-party only then). Reserved names and the ref-scheme and export-kind renames as in §2.
 
 Not verified by Aegis: the MCP bridge (unbuilt, so the source of `hsid`, `agent` and `turn` is unreviewed until S1.4); the mod SDK's handling of `relayedFor`; whether any existing log holds `doodle:` refs (check before dropping the scheme).
+
+## 10. Findings from the S1.0 reviews that bind later milestones (2026-11-23)
+
+Sources: Aegis, Judge and Probe on PR #99. Fixed inside S1.0: audit overrides, pinned HTML-sink counts, the Firefox probe drive, marks lost right after mount, post-mount crash reporting, measured patch counts.
+
+**S1.1 (reskin):**
+- No image tool; the Gnomon rail does not offer it.
+- The dead stock entry points go with the stock UI (menu links, Help links, "Browse libraries", Web Embed, Mermaid).
+- Harness phases added to the probe: the command palette, a library-file drop, the image tool.
+- G-DDL-07 asserts no colour literal within the minimum distance of a reserved colour outside a per-patch allowlist (the engine carries a violet family, not one hex).
+
+**S1.2 (contracts):**
+- The validator refuses `embeddable`, `iframe` and `image` types and `link` (already a §7 condition; Probe showed why).
+
+**S1.3 (leaf), new condition C8:** the leaf intercepts paste and drop BEFORE the engine. "Plain text only" is not enough on its own: Probe showed, on the shipped chunk in Chrome and WKWebView, that
+- pasting plain text that is SVG source creates an image element and raises `img-src` refusals;
+- pasting engine clipboard JSON with an `iframe` element adds an `<iframe srcdoc>` to the DOM;
+- pasting clipboard JSON with an `image` element and a `dataURL` raises `img-src` refusals, and a later PNG export raises more;
+- dropping a `.excalidraw` file replaces the whole scene although `loadScene` is off;
+- pasting a frame whose `name` is an object crashes the engine (React error #31): the leaf must show the failed state and offer a reload from the log.
+So: pasted text becomes a text node through the dimension validator and never reaches the engine's paste parser; engine clipboard JSON, files and HTML are refused; a test replays each of Probe's seven repros (V1-V7 in his report) and expects zero CSP rows and zero new elements of a refused type.
+
+**S1.4:** a test that marked-up text stays text; the Library components stubbed out of the bytes, not only unmounted.
+
+**Backlog:** the GUI embed is inlined three times in the kernel dist (T-2026-11-24-005); `pack-roundtrip` and `sec-01` tests fail under npm 12 (`npm pack --json` shape); Firefox and Edge are listed as supported in §11.2 but were not on the founder's Mac for the local run (CI covers them).
