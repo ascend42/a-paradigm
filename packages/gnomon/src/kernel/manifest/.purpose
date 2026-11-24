@@ -163,6 +163,12 @@ components:
       version is NOT refreshed by the kernel: it is refused ABI at init until
       the human approves the Update card the Mods panel offers (or runs gnomon
       mod install on the shipped folder).
+      S1.2 review fix (J5, Aegis 9a): rollback protection. stageInstall refuses
+      TIER (why superseded) a NEW stage of a tree in
+      SUPERSEDED_FIRST_PARTY_PINS; only an install already pinned at that hash
+      keeps its tier. The old trees are vendored under
+      packages/gnomon/test/fixtures/first-party-superseded and hashed against
+      the pins by test/superseded-pins.test.ts.
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]

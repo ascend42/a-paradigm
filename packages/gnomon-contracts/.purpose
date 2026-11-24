@@ -318,8 +318,28 @@ components:
       before a kind name. Imports only ./internal.js, ./content-palette.js and
       ./secret-rules.js (a test holds this) so the mod can bundle it; no DOM, no
       node:*. Not built here: the mod, the GUI leaf, the bridge tools dim_view /
-      dim_draw, host stamping of relayedFor. Serves #dimension-mod and
+      dim_draw (host stamping of relayedFor is #mod-host, S1.2). Serves #dimension-mod and
       $dimension-session (spec symbols; no code yet).
+      S1.2 review fixes: byOf and hsidOf read the stamp as own keys only; a
+      bridge or voice stamp with no agent, and any stamp with no principal (an
+      unentitled mod's tool row), fold as the unknown hand; the published vector
+      now holds all three by classes. Order keys: an open end counts
+      (dimZBetween(a, null) and (null, b) step a counter whose head character
+      says how many digits follow, so ten thousand appends or prepends in a row
+      stay a few characters long), a key between two keys is the digit-wise
+      midpoint, and dimZBetween throws RangeError when no key of legal length
+      fits (it never returns one that fails DIM_Z_PATTERN). dimZPlace(below,
+      above) is the TOTAL form for stored data a renderer reads: a malformed
+      neighbour key is an open end; equal or out-of-order neighbours place above
+      the lower one; with no room at all the lower key is reused and ties are
+      ordered by id. A move re-reads no node in the secret check. DEFERRED,
+      tracked here: to S1.3, the engine mapping (gnomon-gui src/board/dim-map.ts
+      and its goldens) and the check that nothing in contracts or mods imports
+      the board; to S1.4, the secret-check residuals (combining marks and
+      default-ignorable code points inside a credential, a split over three or
+      more strings, encoded secrets, the dimension title on the session.start
+      row, which no validator here reads) and dimViewOf re-validating the stored
+      fields of a core node before a tool reads them.
     path: src/dim.ts
     type: module
     tags: [gnomon, contracts, dimension, paradigm-8]
@@ -354,6 +374,10 @@ components:
       with no exemption (custom:#16150F as a fill is refused). contentPaletteProblems
       validates the tables; contrastRatio is the WCAG 2 ratio from the same table.
       Pure, no DOM, no node:*.
+      DEFERRED, tracked here: to S1.3, running the vectors and the swatch night
+      table in Chrome and WKWebView (they run in Node only today); to S1.4, a
+      contrast floor for a custom LINE colour against the ground (a custom line
+      passes on distance alone today).
     path: src/content-palette.ts
     type: module
     tags: [gnomon, contracts, dimension, colour, paradigm-8]
@@ -564,7 +588,7 @@ components:
       kitId and clientApiId (§12.3, §12.8). Dimensions S1.2 (ONE deliberate move)
       moved clientApiId
       sha256:af070b92e89fe985cb43d7b6f5a720d1f43e7ee0f6aa08d0c87db3e713a4f060 →
-      sha256:0d6b5f1a43af00225dff0478b85f872e326ee33deae162bddc7bc8e6c4304ee1:
+      sha256:e21ffbb2ca618808d3692028d0457a8bf1010f23698e56bd1dd3c115d60142ea:
       the new descriptor key `dimension` (shape: the dim-shape:v1 vocabulary, limits,
       patterns, refusal codes and one fixed fold vector; palette: schemaVersion,
       swatch NAMES and the custom token pattern only, never a colour value, so a

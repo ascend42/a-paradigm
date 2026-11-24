@@ -194,7 +194,7 @@ components:
       turn.result exactly {hsid}; a mod without paradigm.read:summary never
       receives the slice (relayed, forged, or via the feed).
       Dimensions S1.2 (C1, C2; G-MOD-12, G-MOD-13; modAbiId moved 7aaf92f4 ->
-      cc5625da, kitId and clientApiId unchanged): relayedFor is built by the
+      fb9bd26a, kitId and clientApiId unchanged): relayedFor is built by the
       contracts pickRelayedFor with fields fixed per method. view.render gets
       {principal, connId}; command.run adds surface (gui | cli, derived by the
       socket dispatcher from the connection credential, never from params);
@@ -213,4 +213,20 @@ components:
       and turn is S1.4, so until then tool-call rows are unstamped and a
       dimension fold reads them as the unknown hand. Tests:
       test/mod-stamp.test.ts.
+      S1.2 review fixes (these replace the field lists in the paragraph above):
+      (A1) the socket dispatcher stamps a surface only for a human-class caller
+      (relaySurfaceOf); an agent, session, mod or voice caller gets none, so its
+      command rows fold as the unknown hand. (A2) clampModAppend refuses a
+      top-level __proto__, constructor or prototype payload key by key class and
+      stores the payload on a null-prototype object. (A3) on tool.call the
+      calling session's principal is identity: an unentitled mod is sent, and
+      stamped with, surface and agent only; principal, hsid and turn go to a
+      gnomon-published mod or one granted log.read. The host-known
+      toolRelayedFor must be whole (principal, a tool surface, an agent label)
+      or nothing is sent or stamped. The mod's echoed init.abi and modAbiId are
+      shown in the ABI refusal only when they have the expected shape. modAbiId
+      for the whole S1.2 move: 7aaf92f4 -> fb9bd26a. DEFERRED, tracked here: to
+      S1.3, an integration test of the first-party branch of #identityAllowed
+      with gnomon.dimension (only the log.read branch and the unentitled branch
+      are tested end to end today).
     tags: [kernel, mods, sandbox, M1.11]

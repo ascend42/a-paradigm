@@ -76,6 +76,9 @@ components:
       HTML sinks (the kernel's bundle scan exempts board/* from that one
       clause); react-style-singleton can inject a <style> for a modal
       popover.
+      DEFERRED to S1.3, tracked here: src/board/dim-map.ts (the pure mapping between
+      a folded dimension and engine elements, built from an allowlist of engine keys)
+      and its forward and reverse goldens; it lands with the board leaf.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]

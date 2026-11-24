@@ -103,7 +103,7 @@ components:
       regenerate with `npm run repin:first-party`; tier first-party once
       pinned in FIRST_PARTY_PACKAGE_HASHES (1.1.1 sha256:22bab5bf…, repinned 2026-10-23 for the fitted zone heads and the one-line empty state).
       1.1.2 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
-      re-pinned in FIRST_PARTY_PACKAGE_HASHES (sha256:1d8f8468…, superseding the
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES (sha256:bd25b714…, superseding the
       1.1.1 pin named above).
     tags: [mods, first-party]
   neurons-mod:
