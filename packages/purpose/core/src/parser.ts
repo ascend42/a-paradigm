@@ -77,7 +77,7 @@ const FlowStepObjectSchema = z.object({
   component: z.string(),
   action: z.string(),
   description: z.string().optional(),
-});
+}).passthrough(); // a step may also name a gate or signal; keep those keys for the index
 const FlowStepSchema = z.union([FlowStepObjectSchema, z.string()]);
 
 // Array format: [{ name, steps }]

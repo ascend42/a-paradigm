@@ -168,6 +168,8 @@ export interface SymbolEntry {
   componentType?: string;
   /** Parent component symbol from .purpose parent field */
   parentSymbol?: string;
+  /** For gates: the portal.yaml routes that name this gate, sorted. Absent when none does. */
+  routes?: string[];
   /**
    * False only on reference stubs — a symbol that is referenced (e.g.
    * `gates: [^ghost]`) but never declared anywhere. Absent ≡ declared.
