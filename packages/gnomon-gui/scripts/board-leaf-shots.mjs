@@ -27,7 +27,17 @@ export function findChrome() {
  * One capture. Resolves { png: Buffer, facts } or throws. `facts` is what the page says about the leaf (its state,
  * the rects of the leaf, the stack, the pinned zone, the composer and the status strip), read after it is ready.
  */
-export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null }) {
+/** DevTools key descriptions for the keys the tests press. */
+const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], ArrowDown: ['ArrowDown', 40], ArrowUp: ['ArrowUp', 38], ArrowRight: ['ArrowRight', 39], ArrowLeft: ['ArrowLeft', 37] };
+
+/**
+ * `actions` are REAL input, sent through the DevTools Input domain (trusted pointer and key events, the kind a person
+ * makes), in order: {press: selector} moves the mouse to the element's centre and presses and releases it;
+ * {at: [x, y], press: true} does the same at a point of #preview-board's stage; {dbl: selector}; {wheel: selector};
+ * {key: 'Tab' | 'r' | …, shift?, meta?}; {paste: text} puts text on the clipboard and pastes it with the keyboard;
+ * {read: expression} evaluates and records the value under `as`; {wait: ms}.
+ */
+export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [] }) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'gnomon-leaf-'));
   const proc = spawn(chrome, ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${width},${height}`, '--hide-scrollbars', '--force-device-scale-factor=1', '--remote-debugging-port=0', url], { stdio: 'ignore' });
   let ws = null;
@@ -66,6 +76,45 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     while (Date.now() < until && (await evaluate('document.documentElement.dataset.preview === "ready"')) !== true) await sleep(100);
     if ((await evaluate('document.documentElement.dataset.preview === "ready"')) !== true) throw new Error('the fixture never set data-preview="ready"');
     await sleep(300);
+    const acted = {};
+    const centre = async (selector) => JSON.parse(await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return 'null'; const b = e.getBoundingClientRect(); return JSON.stringify({ x: b.x + b.width / 2, y: b.y + b.height / 2 }); })()`));
+    const mouse = (type, x, y, extra = {}) => call('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' || type === 'mouseMoved' ? 0 : 1, clickCount: 1, ...extra });
+    const pressAt = async (x, y, clickCount = 1) => {
+      await mouse('mouseMoved', x, y, { button: 'none' });
+      await mouse('mousePressed', x, y, { clickCount });
+      await mouse('mouseReleased', x, y, { clickCount });
+    };
+    for (const a of actions) {
+      if (a.wait) await sleep(a.wait);
+      else if (a.read) acted[a.as] = JSON.parse((await evaluate(`JSON.stringify((() => (${a.read}))() ?? null)`)) ?? 'null');
+      else if (a.key) {
+        const [key, code] = KEYS[a.key] ?? [a.key, a.key.toUpperCase().charCodeAt(0)];
+        const modifiers = (a.shift ? 8 : 0) | (a.meta ? 4 : 0) | (a.ctrl ? 2 : 0);
+        const base = { key, code: KEYS[a.key] ? key : `Key${a.key.toUpperCase()}`, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers };
+        await call('Input.dispatchKeyEvent', { type: KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(KEYS[a.key] || modifiers ? {} : { text: a.key }) });
+        await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+      } else if (a.paste !== undefined) {
+        await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+        acted[a.as ?? 'paste'] = (await call('Runtime.evaluate', { expression: `navigator.clipboard.writeText(${JSON.stringify(a.paste)}).then(() => 'written', (e) => 'not written: ' + e)`, awaitPromise: true, returnByValue: true })).result?.value ?? 'no answer';
+        await call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2, commands: ['paste'] });
+        await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2 });
+      } else {
+        let p = null;
+        if (a.at) {
+          const stage = await centre('#preview-board .bd-stage');
+          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+          p = stage ? { x: box.x + a.at[0], y: box.y + a.at[1] } : null;
+        } else p = await centre(a.press ?? a.dbl ?? a.wheel ?? a.move);
+        if (!p) throw new Error(`no element for ${JSON.stringify(a)}`);
+        if (a.wheel) await call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: p.x, y: p.y, deltaX: 0, deltaY: 240 });
+        else if (a.move) await mouse('mouseMoved', p.x, p.y, { button: 'none' });
+        else if (a.dbl) {
+          await pressAt(p.x, p.y, 1);
+          await pressAt(p.x, p.y, 2);
+        } else await pressAt(p.x, p.y);
+      }
+      await sleep(a.settle ?? 90);
+    }
     // an optional page-side script (an async function body returning JSON-able data), run once the fixture is ready
     // (its value crosses as a JSON string: an object returned by value from an awaited promise arrived empty)
     const scripted = script ? await call('Runtime.evaluate', { expression: `(async () => JSON.stringify(await (async () => { ${script} })()))()`, awaitPromise: true, returnByValue: true }) : null;
@@ -80,7 +129,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     if (clip && facts.leaf) params.clip = { x: Math.round(facts.leaf.x), y: Math.round(facts.leaf.y), width: Math.round(facts.leaf.w), height: Math.round(facts.leaf.h), scale: 1 };
     const shot = await call('Page.captureScreenshot', params);
     if (!shot.data) throw new Error('no screenshot data');
-    return { png: Buffer.from(shot.data, 'base64'), facts, scripted: scripted ? (typeof scripted.result?.value === 'string' ? JSON.parse(scripted.result.value) : { error: scripted.exceptionDetails?.exception?.description ?? 'no value' }) : null };
+    return { png: Buffer.from(shot.data, 'base64'), facts, acted, scripted: scripted ? (typeof scripted.result?.value === 'string' ? JSON.parse(scripted.result.value) : { error: scripted.exceptionDetails?.exception?.description ?? 'no value' }) : null };
   } finally {
     try {
       ws?.close();

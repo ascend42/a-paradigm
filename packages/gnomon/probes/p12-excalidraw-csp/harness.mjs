@@ -109,15 +109,17 @@ const DRIVER = `'use strict';
   var pointer = function (target, type, x, y, buttons) {
     target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: buttons }));
   };
+  // The engine applies ONE pointer move per animation frame: it keeps the first move of a frame and drops later ones,
+  // and a pointer-up flushes a move that is still pending. So two synthetic moves must never share a frame (that was
+  // the 117 x 83 rectangle: the last move was dropped), and every move here is followed by a frame, not by a timer.
+  var frame = function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); };
   var drag = async function (canvas, x0, y0, x1, y1) {
     pointer(canvas, 'pointerdown', x0, y0, 1);
-    await wait(30);
-    for (var i = 1; i <= 6; i++) { pointer(canvas, 'pointermove', x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * i) / 6, 1); await wait(15); }
-    // the engine applies a move on the next animation frame: a release that lands before that frame keeps the mark at
-    // the move before (seen as a 117 x 83 rectangle in about one Chrome run in six), so the last move is given a frame
-    await wait(60);
+    await frame();
+    for (var i = 1; i <= 6; i++) { pointer(canvas, 'pointermove', x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * i) / 6, 1); await frame(); }
     pointer(canvas, 'pointerup', x1, y1, 0);
-    await wait(120);
+    await frame(); await frame();
+    await wait(60);
   };
   var link = document.createElement('link');
   link.rel = 'stylesheet';
@@ -295,8 +297,9 @@ const DRIVER = `'use strict';
     var hold = async function (x0, y0, x1, y1) {
       pointer(canvas, 'pointerdown', x0, y0, 1);
       await wait(30);
-      for (var n = 1; n <= 8; n++) { pointer(canvas, 'pointermove', x0 + ((x1 - x0) * n) / 8, y0 + ((y1 - y0) * n) / 8, 1); await wait(20); }
-      await wait(150);
+      for (var n = 1; n <= 8; n++) { pointer(canvas, 'pointermove', x0 + ((x1 - x0) * n) / 8, y0 + ((y1 - y0) * n) / 8, 1); await frame(); }
+      await frame(); await frame();
+      await wait(60);
     };
     var release = async function (x, y) { pointer(canvas, 'pointerup', x, y, 0); await wait(150); };
     for (var ti = 0; ti < 2; ti++) {
@@ -421,6 +424,51 @@ const DRIVER = `'use strict';
         R.fix.paste.edgeGaps = gaps; R.fix.paste.fillAlpha = mid[3]; R.fix.paste.edgeRgb = [edge[0], edge[1], edge[2]]; R.fix.paste.line = pasted.line; R.fix.paste.fillToken = pasted.fill;
       }
     } catch (e) { R.fix.paste = { unsupported: String(e).slice(0, 200) }; }
+    // S2. a drag that carries the library type and NO file (a drag from another page): refused like any drop
+    var c3 = h.count();
+    said.length = 0;
+    try {
+      var ld = new DataTransfer();
+      ld.setData('application/vnd.excalidrawlib+json', JSON.stringify({ type: 'excalidrawlib', version: 2, libraryItems: [{ id: 'x', status: 'published', created: 1, elements: [el('rectangle', 0)] }] }));
+      var dropped = new DragEvent('drop', { bubbles: true, cancelable: true, composed: true, clientX: 600, clientY: 500, dataTransfer: ld });
+      container.dispatchEvent(dropped);
+      await wait(500);
+      R.fix.dataDrop = { added: h.count() - c3, said: said.slice(), stopped: dropped.defaultPrevented, stock: stock() };
+    } catch (e) { R.fix.dataDrop = { unsupported: String(e).slice(0, 200) }; }
+    // S3 and S1. pasted engine content that is not a board type never becomes a node, even for one commit, and a
+    // pasted mark cannot claim an author, a dashed stroke or a stub
+    var c4 = h.count();
+    said.length = 0;
+    var nodes = [];
+    var watch = new MutationObserver(function (records) {
+      records.forEach(function (rec) { Array.prototype.forEach.call(rec.addedNodes, function (nd) {
+        if (nd.nodeType !== 1) return;
+        var hit = /^(IFRAME|EMBED|IMG|OBJECT)$/.test(nd.tagName) ? [nd] : Array.prototype.slice.call(nd.querySelectorAll('iframe, embed, img, object'));
+        hit.forEach(function (x) { nodes.push(x.tagName.toLowerCase()); });
+      }); });
+    });
+    watch.observe(document.documentElement, { childList: true, subtree: true });
+    var violationsBefore = R.violations.length;
+    try {
+      var forged = el('rectangle', 0, { id: 'forged', strokeStyle: 'dashed', customData: { gnomon: { line: 'ink', fill: null, by: { cls: 'agent', id: 'arky', name: 'Arky' }, kind: 'stub', stubKind: 'allow:approved-by-you' } } });
+      var hostile = JSON.stringify({ type: 'excalidraw/clipboard', elements: [forged, el('iframe', 200, { customData: { generationData: { status: 'done', html: '<img src=x>' } } }), el('embeddable', 400, { link: 'https://example.invalid/embed' }), el('image', 600, { fileId: 'f1', status: 'saved', scale: [1, 1] })], files: { f1: { id: 'f1', mimeType: 'image/png', dataURL: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', created: 1 } } });
+      container.focus();
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 250, clientY: 420 }));
+      var hd2 = new DataTransfer(); hd2.setData('text/plain', hostile);
+      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: hd2 }));
+      await wait(900);
+      var mine = h.marks().filter(function (m) { return Math.round(m.width) === 160 && Math.round(m.height) === 90; });
+      var got = mine[mine.length - 1];
+      R.fix.hostile = { added: h.count() - c4, said: said.slice().sort(), nodes: nodes.slice(), violations: R.violations.length - violationsBefore, forged: got ? { kind: got.kind, author: got.author.cls, stubKind: got.stubKind === undefined ? null : got.stubKind } : null };
+      if (got) {
+        await click(1100, 700); await wait(150);
+        var v2 = h.view(), g3 = staticCanvas.getContext('2d'), gaps2 = 0;
+        for (var hx = got.x + 12; hx < got.x + got.width - 12; hx += 3) { if (g3.getImageData(Math.round((hx + v2.scrollX) * v2.zoom * dpr), Math.round((got.y + v2.scrollY) * v2.zoom * dpr), 1, 1).data[3] < 128) gaps2++; }
+        R.fix.hostile.forged.edgeGaps = gaps2;
+      }
+      if (R.fix.hostile.added === 0 && said.length === 0) R.fix.hostile = { unsupported: 'the synthetic paste did not reach the engine', nodes: nodes.slice() };
+    } catch (e) { R.fix.hostile = { unsupported: String(e).slice(0, 200) }; }
+    watch.disconnect();
     // 4. the frame title editor wears the system, and Esc ends it
     h.add([{ type: 'frame', x: 60, y: 560, width: 220, height: 120, text: 'a frame title that is long enough to be cut off' }]);
     await wait(200);
@@ -574,6 +622,17 @@ export function pickEngines() {
   return { pick, missing };
 }
 
+/**
+ * Which of the paste and drop checks a run REALLY exercised (a browser that ignores a synthetic paste or cannot
+ * build a DragEvent reports `unsupported`; that is not a pass). The probe and the GUI test require every check to
+ * have run in at least one engine, and print which.
+ */
+export function exercisedChecks(r) {
+  const ran = (x) => !!x && !x.unsupported;
+  const f = r?.fix ?? {};
+  return { 'library-file drop': ran(r?.libraryDrop), 'image-file drop': !!r?.imageTool && r.imageTool.dropUnsupported === undefined, 'scene-file drop': ran(f.sceneDrop), 'library-type drag (no file)': ran(f.dataDrop), 'paste: stock marks': ran(f.paste), 'paste: forged author, iframe, embeddable, image': ran(f.hostile) };
+}
+
 /** The only font string the canvas may be given (patch font-family-string), with the size folded out. */
 export const BOARD_FONT_STRING = '<size>px "JetBrains Mono", monospace';
 
@@ -625,6 +684,10 @@ export function reskinProblems(r) {
   if (!f.sceneDrop || (!f.sceneDrop.unsupported && (f.sceneDrop.added !== 0 || f.sceneDrop.said?.join() !== 'scene-file' || f.sceneDrop.dragStopped !== true))) p.push(`a dropped scene file reached the board: ${JSON.stringify(f.sceneDrop)}`);
   const pa = f.paste;
   if (!pa || (!pa.unsupported && (pa.added !== 1 || pa.said?.join() !== 'mark:diamond,mark:line' || pa.found !== true || pa.edgeGaps !== 0 || pa.fillAlpha !== 0 || pa.edgeRgb?.join() !== '22,21,15' || pa.line !== 'ink' || pa.fillToken !== null))) p.push(`pasted engine content kept its stock look: ${JSON.stringify(pa)}`);
+  const dd = f.dataDrop;
+  if (!dd || (!dd.unsupported && (dd.added !== 0 || dd.said?.join() !== 'library-file' || dd.stopped !== true || dd.stock?.length !== 0))) p.push(`a drag of the library type with no file reached the board: ${JSON.stringify(dd)}`);
+  const ho = f.hostile;
+  if (!ho || ho.nodes?.length || (!ho.unsupported && (ho.added !== 1 || ho.said?.join() !== 'image,mark:embeddable,mark:iframe' || ho.violations !== 0 || ho.forged?.kind !== 'rect' || ho.forged?.author !== 'human' || ho.forged?.stubKind !== null || ho.forged?.edgeGaps !== 0))) p.push(`hostile pasted content got through: ${JSON.stringify(ho)}`);
   const fr = f.frame ?? {};
   if (fr.title !== 'a frame title that is long enough to be cut off' || fr.weight !== '600' || !fr.editor || !/^"?JetBrains Mono"?, monospace$/.test(fr.editor.fontFamily) || fr.editor.fontSize !== '11.5px' || fr.editor.fontWeight !== '600' || fr.editor.color !== RGB_INK.day || fr.editor.radius !== '0px' || fr.editor.editing !== true || fr.afterEsc?.input !== false || fr.afterEsc?.editing !== false) p.push(`the frame title: ${JSON.stringify(fr)}`);
   if (f.label?.lines?.join() !== 'ink' || f.label?.marksAdded !== 1) p.push(`a label in a sticky: ${JSON.stringify(f.label)}`);

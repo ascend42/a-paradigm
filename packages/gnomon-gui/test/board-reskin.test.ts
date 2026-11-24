@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CONTENT_MIN_DISTANCE, CONTENT_RESERVED_COLOURS, CONTENT_THEME_TOKENS, coloursClear } from '@a-company/gnomon-contracts';
 // @ts-expect-error plain .mjs (the zero-dependency probe harness)
-import { BOARD_FONT, BOARD_FONT_STRING, embeddedBundle, GROUND, NARROW, REFUSED_TOOLS, reskinProblems, RGB_INK, STOCK_SELECTORS, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
+import { BOARD_FONT, BOARD_FONT_STRING, embeddedBundle, exercisedChecks, GROUND, NARROW, REFUSED_TOOLS, reskinProblems, RGB_INK, STOCK_SELECTORS, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
 // @ts-expect-error plain .mjs build script (no types)
 import { colourLiterals, pixelColours } from '../scripts/board-colours.mjs';
 // @ts-expect-error plain .mjs build script (no types)
@@ -74,7 +74,7 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
 
   it('every S1.1 patch is in the manifest', () => {
     const ids = (PATCHES as Array<{ id: string }>).map((p) => p.id);
-    for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'stroke-exact', 'frame-name-editor', 'frame-name-editor-ink', 'frame-name-editor-keys', 'frame-name-title', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
+    for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'paste-types-filtered', 'stroke-exact', 'frame-name-editor', 'frame-name-editor-ink', 'frame-name-editor-keys', 'frame-name-title', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
   });
 
   it('the rail is nine tools, three weights and seven key actions (⌘0 is the host\'s: it fits); nothing of the engine\'s tool list', () => {
@@ -223,6 +223,12 @@ describe('G-DDL-07 predicate: what a clean reskin run reports (every OS)', () =>
     ['a click after a shape that only deselects', { fix: { ...(RESKIN_CLEAN.fix as object), textAfterShape: { selectedBefore: 1, selectedAfterTool: 1, editing: false } } }, /text did not start on the first click/],
     ['a dropped scene file that reached the engine', { fix: { ...(RESKIN_CLEAN.fix as object), sceneDrop: { added: 1, said: [], dragStopped: false } } }, /dropped scene file reached the board/],
     ['a pasted dashed mark that stayed dashed', { fix: { ...(RESKIN_CLEAN.fix as object), paste: { added: 1, said: ['mark:diamond', 'mark:line'], found: true, edgeGaps: 9, fillAlpha: 0, edgeRgb: [22, 21, 15], line: 'ink', fillToken: null } } }, /pasted engine content kept its stock look/],
+    ['a drag of the library type with no file that reached the engine', { fix: { ...(RESKIN_CLEAN.fix as object), dataDrop: { added: 1, said: [], stopped: false, stock: [] } } }, /drag of the library type with no file reached the board/],
+    ['a pasted mark that kept a forged author', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: [], violations: 0, forged: { kind: 'rect', author: 'agent', stubKind: null, edgeGaps: 7 } } } }, /hostile pasted content got through/],
+    ['a pasted mark that became a stub', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: [], violations: 0, forged: { kind: 'stub', author: 'human', stubKind: 'allow:approved-by-you', edgeGaps: 0 } } } }, /hostile pasted content got through/],
+    ['an iframe node that existed for one commit', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: ['iframe'], violations: 0, forged: { kind: 'rect', author: 'human', stubKind: null, edgeGaps: 0 } } } }, /hostile pasted content got through/],
+    ['an img node from a paste the browser otherwise ignored', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { unsupported: 'x', nodes: ['img'] } } }, /hostile pasted content got through/],
+    ['a CSP violation raised by a paste', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: [], violations: 2, forged: { kind: 'rect', author: 'human', stubKind: null, edgeGaps: 0 } } } }, /hostile pasted content got through/],
     ['a stock frame title editor', { fix: { ...(RESKIN_CLEAN.fix as object), frame: { title: 'a frame title that is long enough to be cut off', weight: '600', editor: { fontFamily: 'Times', fontSize: '14px', fontWeight: '400', color: 'rgb(61, 61, 61)', radius: '4px', editing: true }, afterEsc: { input: true, editing: true } } } }, /the frame title/],
     ['a label in the current line colour', { fix: { ...(RESKIN_CLEAN.fix as object), label: { lines: ['raspberry'], marksAdded: 1 } } }, /a label in a sticky/],
     ['a missing content-colour capture', { colours: { day: RESKIN_CLEAN.colours && (RESKIN_CLEAN.colours as Record<string, unknown>).day } }, /no night content-colour capture/],
@@ -230,6 +236,12 @@ describe('G-DDL-07 predicate: what a clean reskin run reports (every OS)', () =>
     ['zoom that does not move', { zoom: { start: 1, afterIn: 1, afterOut: 1, afterReset: 1 } }, /zoom through the handle/],
   ] as Array<[string, Record<string, unknown>, RegExp]>)('not clean: %s', (_name, patch, why) => {
     expect(problems(patch)).toMatch(why);
+  });
+  it('a check a browser reports as unsupported did NOT run there: it is not counted as exercised', () => {
+    expect(Object.values(exercisedChecks(RESKIN_CLEAN)).every(Boolean)).toBe(true);
+    const skipped = exercisedChecks({ ...RESKIN_CLEAN, libraryDrop: { unsupported: 'x' }, fix: { ...(RESKIN_CLEAN.fix as object), paste: { unsupported: 'x' }, hostile: { unsupported: 'x', nodes: [] }, dataDrop: { unsupported: 'x' } } }) as Record<string, boolean>;
+    expect(skipped).toEqual({ 'library-file drop': false, 'image-file drop': true, 'scene-file drop': true, 'library-type drag (no file)': false, 'paste: stock marks': false, 'paste: forged author, iframe, embeddable, image': false });
+    expect(Object.values(exercisedChecks({})).some(Boolean)).toBe(false);
   });
   it('the stock selectors name the toolbar, the menu, the welcome screen and the image tool', () => {
     for (const q of ['.App-toolbar', '.main-menu-trigger', '.welcome-screen-center', '[data-testid="toolbar-image"]', '.excalidraw--mobile', '.help-icon', '.HintViewer', '.zoom-actions']) expect(STOCK_SELECTORS).toContain(q);

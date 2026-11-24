@@ -81,7 +81,9 @@ describe('#gui-board G-DDL-08 (the parts that exist before the S1.3 leaf)', () =
   it('the leaf routes every key through railKeyAction with that predicate, and wakes on a trusted press only', () => {
     const ui = src('src/ui/board-leaf.ts');
     expect(ui).toMatch(/railKeyAction\(e, \{ boardFocused: el\.contains\(active\), editingText: s\?\.editingText \?\? false, cardFocused: o\.cardFocused\(\) \}\)/);
-    expect(ui).toMatch(/if \(!yielded\(\)\) return;\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+if \(e\.isTrusted\) handle\?\.focus\(\);/);
+    expect(ui).toMatch(/e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+if \(e\.isTrusted\) \{\s+wakeUntil = performance\.now\(\) \+ WAKE_HOLD_MS;\s+handle\?\.focus\(\);/);
+    for (const type of ['dblclick', 'drop', 'contextmenu', 'paste']) expect(ui, type).toContain(`'${type}'`);
+    expect(ui).toMatch(/stage\.addEventListener\('wheel', onHeld, \{ capture: true, passive: false \}\)/);
     expect(ui).toMatch(/stage\.addEventListener\('pointerdown', onWake, true\)/);
   });
 });

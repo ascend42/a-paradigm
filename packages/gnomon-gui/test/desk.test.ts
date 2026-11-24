@@ -537,10 +537,14 @@ describe('board gnomon-type-scale (batch type): four steps, 10.5 label · 11.5 c
   });
   it('no inline font size in TS-rendered markup', () => {
     const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.ts') ? [path.join(d, e.name)] : []));
-    // src/board/index.ts and src/board/normal.ts are not markup: they hand the engine its own field names (fontSize, currentItemFontSize), set
-    // to the reading step (13.5) and nothing else (boards S1.1; test/board-reskin.test.ts pins the value)
-    const engineEntry = [path.join(ROOT, 'src', 'board', 'index.ts'), path.join(ROOT, 'src', 'board', 'normal.ts')];
-    for (const f of walk(path.join(ROOT, 'src'))) if (!engineEntry.includes(f)) expect(readFileSync(f, 'utf8'), f).not.toMatch(/fontSize|font-size/);
+    // The two engine files hand the engine its OWN field names, set to the reading step and nothing else: exactly
+    // these spellings are allowed there, and any other font size in them still fails.
+    const engineFiles = [path.join(ROOT, 'src', 'board', 'index.ts'), path.join(ROOT, 'src', 'board', 'normal.ts')];
+    const ENGINE_FIELDS = /\bfontSize: BOARD_FONT_SIZE\b|\bcurrentItemFontSize: BOARD_FONT_SIZE\b/g;
+    for (const f of walk(path.join(ROOT, 'src'))) {
+      const text = readFileSync(f, 'utf8');
+      expect(engineFiles.includes(f) ? text.replace(ENGINE_FIELDS, '') : text, f).not.toMatch(/fontSize|font-size/);
+    }
   });
   it('roles: controls at 11.5, the choice key at 10.5, reply choices at 13.5, night stack, settings and setup titles at 13.5, the stack title at 17, the heard phrase at 13.5 and 600', () => {
     for (const sel of ['.key.quiet', '.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope']) expect(rule(sel)).toContain('font-size: var(--fs-control)');

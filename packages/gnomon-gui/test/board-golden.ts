@@ -70,8 +70,9 @@ export function contentColours(theme: Theme): string[] {
   return [...new Set(out)];
 }
 
-/** Golden compare on DECODED pixels (never file bytes): the share of pixels with any channel more than 48 apart. */
-export const TOLERANCE = { channel: 48, share: 0.002 };
+/** Golden compare on DECODED pixels (never file bytes): the share of pixels with any channel more than TOLERANCE.channel apart. */
+// 16 per channel: a whole-skin shift (every ink pixel a shade off) fails, which 48 let through (review nit)
+export const TOLERANCE = { channel: 16, share: 0.002 };
 export function differingShare(a: Png, b: Png): number {
   if (a.width !== b.width || a.height !== b.height) return 1;
   let diff = 0;

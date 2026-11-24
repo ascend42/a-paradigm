@@ -82,6 +82,7 @@ describe('#gui-board patch manifest is pinned (a dropped patch is a failure, not
       'link-popup-removed @ index.js x1',
       'context-menu-removed @ index.js x1',
       'image-insert-refused @ index.js x1',
+      'paste-types-filtered @ index.js x1',
       'key-actions-allowlist @ index.js x1',
       'key-dialogs-removed @ index.js x1',
       'key-tools-removed @ index.js x1',

@@ -82,18 +82,22 @@ const authorOf = (v: unknown): BoardAuthor | undefined => {
 const VIEW_KIND: Readonly<Record<string, BoardMarkView['kind']>> = { rectangle: 'rect', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text' };
 /** A stub is never smaller than this (design component fallback-node). */
 const STUB_MIN = { width: 156, height: 52 };
+/** A stub that names no size is this wide: its fixed line is 40 characters and needs 284px on one line (Mika, S1.1 review ruling 6). */
+const STUB_DEFAULT_WIDTH = 288;
 
 const ENGINE_TOOL: Readonly<Record<BoardTool, EngineTool>> = { select: 'selection', sticky: 'rectangle', text: 'text', rect: 'rectangle', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', stroke: 'freedraw', hand: 'hand' };
 const RAIL_TOOL: Readonly<Record<EngineTool, BoardTool>> = { selection: 'select', rectangle: 'rect', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text', hand: 'hand' };
 /** The engine actions the handle may run through `gnomonAction`. */
 const HANDLE_ACTIONS = ['zoomIn', 'zoomOut', 'resetZoom', 'zoomToFit', 'undo', 'redo'] as const;
-/** Element types whose background is a fill a person chose. */
-
-const stampOf = (el: Element): Stamp | null => {
-  const g = (el.customData as { gnomon?: Partial<Stamp> } | undefined)?.gnomon;
-  if (!g || typeof g.line !== 'string') return null;
-  const by = authorOf(g.by);
-  return { line: g.line, fill: typeof g.fill === 'string' ? g.fill : null, ...(g.kind === 'sticky' || g.kind === 'stub' ? { kind: g.kind } : {}), ...(by ? { by } : {}), ...(typeof g.stubKind === 'string' ? { stubKind: g.stubKind } : {}) };
+/** The tokens an element carries. NOTHING else is read from an element: not an author, not a kind (review S1). */
+const tokensOf = (el: Element): { line: string; fill: string | null } | null => {
+  const g = (el.customData as { gnomon?: { line?: unknown; fill?: unknown } } | undefined)?.gnomon;
+  return g && typeof g.line === 'string' ? { line: g.line, fill: typeof g.fill === 'string' ? g.fill : null } : null;
+};
+/** True when an element's customData carries anything but the two tokens (a forged author, kind or stub kind). */
+const carriesMore = (el: Element): boolean => {
+  const g = (el.customData as { gnomon?: Record<string, unknown> } | undefined)?.gnomon;
+  return !!g && Object.keys(g).some((k) => k !== 'line' && k !== 'fill');
 };
 
 const DEFAULT_MOUNT_TIMEOUT_MS = 15_000;
@@ -155,6 +159,16 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
     });
 
     const handleOf = (api: Api): BoardHandle => {
+      // Who drew a mark, whether it is a sticky or a stub, and a stub's kind: the handle's OWN record, keyed by
+      // element id and written only by add() (and, for a sticky you draw, by the tool you drew it with). An element
+      // that is not in it is a plain mark of yours, whatever it says about itself: a paste, a drop or a copy makes
+      // new ids, so none of them can carry an author, a dashed stroke, a seal or a stub (review S1).
+      const trusted = new Map<string, { kind?: 'sticky' | 'stub'; by?: BoardAuthor; stubKind?: string }>();
+      const stampOf = (el: Element): Stamp | null => {
+        const t = tokensOf(el);
+        const rec = trusted.get(el.id);
+        return t ? { ...t, ...(rec?.kind ? { kind: rec.kind } : {}), ...(rec?.by ? { by: rec.by } : {}), ...(rec?.stubKind !== undefined ? { stubKind: rec.stubKind } : {}) } : null;
+      };
       const stateListeners = new Set<(state: BoardState) => void>();
       let lastState = '';
       let recolouring = false;
@@ -246,10 +260,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         }
         let repaint = false;
         for (const el of elements) {
-          if (!stampOf(el)) {
-            // a label inside a sticky or a shape is always the default ink, whatever line is current
-            const stamp: Stamp = { line: (el as unknown as Element).containerId ? CONTENT_DEFAULTS.line : style.line, fill: FILLABLE.has(el.type) ? fillToken() : null, ...(tool === 'sticky' && el.type === 'rectangle' ? { kind: 'sticky' as const } : {}) };
-            mutateElement(el as never, { customData: { ...el.customData, gnomon: stamp } } as never, false);
+          if (!tokensOf(el as unknown as Element) || carriesMore(el as unknown as Element)) {
+            // tokens only: whatever else a pasted element says about itself (an author, a kind) is dropped here.
+            // A label inside a sticky or a shape is always the default ink, whatever line is current.
+            const had = tokensOf(el as unknown as Element);
+            const tokens = had ?? { line: (el as unknown as Element).containerId ? CONTENT_DEFAULTS.line : style.line, fill: FILLABLE.has(el.type) ? fillToken() : null };
+            if (!had && tool === 'sticky' && el.type === 'rectangle' && el.id === appState.newElement?.id) trusted.set(el.id, { kind: 'sticky' });
+            mutateElement(el as never, { customData: { ...el.customData, gnomon: tokens } } as never, false);
           }
           if (mismatched(el) && el.id !== appState.newElement?.id) repaint = true;
         }
@@ -267,22 +284,24 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const onPaste = attempt('paste');
       const onDrop = attempt('drop');
-      const unsubscribeRefusal = onBoardRefusal((what) => refuse({ what, why: 'no-image-kind' }));
+      const unsubscribeRefusal = onBoardRefusal((what, detail) => refuse(what === 'image' ? { what, why: 'no-image-kind' } : { what, why: 'not-a-board-kind', ...(detail ? { detail } : {}) }));
       // A drop that carries files never reaches the engine: a dropped scene file replaced the whole board with the
       // stock look and raised an img-src refusal, and a library file filled a Library nobody can open (Mika, S1.1
       // pass A finding 1). The pointer says so while it hovers.
+      const LIBRARY_MIME = 'application/vnd.excalidrawlib+json';
       const onDragOver = (e: DragEvent): void => {
-        if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
         e.preventDefault();
         e.stopPropagation();
-        e.dataTransfer.dropEffect = 'none';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
       };
+      // EVERY drop is refused, with or without files (review S2): a drag that carries the library type and no file
+      // was read by the engine and inserted as elements
       const onFileDrop = (e: DragEvent): void => {
         onDrop(e);
-        const files = [...(e.dataTransfer?.files ?? [])];
-        if (files.length === 0) return;
         e.preventDefault();
         e.stopPropagation();
+        const files = [...(e.dataTransfer?.files ?? [])];
+        if (files.length === 0) return void refuse({ what: [...(e.dataTransfer?.types ?? [])].includes(LIBRARY_MIME) ? 'library-file' : 'file', why: 'no-file-drop' });
         for (const f of files) {
           const name = f.name.toLowerCase();
           const what: BoardRefusal['what'] = f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/.test(name) ? 'image' : name.endsWith('.excalidrawlib') ? 'library-file' : name.endsWith('.excalidraw') || name.endsWith('.json') ? 'scene-file' : 'file';
@@ -306,16 +325,19 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const skeletonOf = (m: BoardMark): Record<string, unknown> => {
         const sticky = m.type === 'sticky';
         const by = authorOf(m.by);
-        const author = by && by.cls !== 'human' ? { by } : {};
+        const id = crypto.randomUUID();
+        const record = (kind?: 'sticky' | 'stub', stubKind?: string): void => void trusted.set(id, { ...(kind ? { kind } : {}), ...(by && by.cls !== 'human' ? { by } : {}), ...(stubKind !== undefined ? { stubKind } : {}) });
         if (m.type === 'stub') {
           // a node this build cannot draw: the scrap (paper, a 1px secondary edge) is an engine rectangle so it can be
           // selected, moved and deleted; its words and pin are the host's
-          const stamp: Stamp = { line: 'graphite', fill: 'paper', kind: 'stub', stubKind: String(m.kind ?? ''), ...author };
-          return { type: 'rectangle', x: m.x, y: m.y, width: Math.max(STUB_MIN.width, m.width ?? 0), height: Math.max(STUB_MIN.height, m.height ?? 0), strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: 1, strokeStyle: strokeStyleOf(by), fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
+          record('stub', String(m.kind ?? ''));
+          const stamp = { line: 'graphite', fill: 'paper' };
+          return { id, type: 'rectangle', x: m.x, y: m.y, width: Math.max(STUB_MIN.width, m.width ?? STUB_DEFAULT_WIDTH), height: Math.max(STUB_MIN.height, m.height ?? 0), strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: 1, strokeStyle: strokeStyleOf(by), fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
         }
-        const stamp: Stamp = { line: m.line ?? CONTENT_DEFAULTS.line, fill: sticky ? (m.fill ?? CONTENT_DEFAULTS.stickyFill) : m.type === 'rectangle' || m.type === 'ellipse' ? (m.fill ?? null) : null, ...(sticky ? { kind: 'sticky' as const } : {}), ...author };
+        record(sticky ? 'sticky' : undefined);
+        const stamp = { line: m.line ?? CONTENT_DEFAULTS.line, fill: sticky ? (m.fill ?? CONTENT_DEFAULTS.stickyFill) : m.type === 'rectangle' || m.type === 'ellipse' ? (m.fill ?? null) : null };
         const text = { fontSize: BOARD_FONT_SIZE, fontFamily: BOARD_FONT_ID };
-        const base = { x: m.x, y: m.y, strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: BOARD_WEIGHTS[m.weight === 'marker' ? 'bold' : (m.weight ?? 'fine')], strokeStyle: strokeStyleOf(by), fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
+        const base = { id, x: m.x, y: m.y, strokeColor: lineColour(stamp.line, theme), backgroundColor: fillColour(stamp.fill, theme), strokeWidth: BOARD_WEIGHTS[m.weight === 'marker' ? 'bold' : (m.weight ?? 'fine')], strokeStyle: strokeStyleOf(by), fillStyle: 'solid', roughness: 0, roundness: null, customData: { gnomon: stamp } };
         if (m.type === 'text') return { ...base, ...text, type: 'text', text: m.text ?? '' };
         if (m.type === 'arrow') return { ...base, type: 'arrow', width: m.width ?? 120, height: m.height ?? 0, endArrowhead: 'arrow' };
         if (m.type === 'frame') return { ...base, type: 'frame', children: [], width: m.width ?? 240, height: m.height ?? 160, ...(m.text ? { name: m.text } : {}) };
@@ -358,7 +380,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           let touched = false;
           const elements = api.getSceneElementsIncludingDeleted().map((el) => {
             if (!selected[el.id] || el.isDeleted) return el;
-            const old = stampOf(el) ?? { line: CONTENT_DEFAULTS.line, fill: null };
+            const old: Stamp = stampOf(el as unknown as Element) ?? { line: CONTENT_DEFAULTS.line, fill: null };
             if (old.kind === 'stub') return el; // a stub is moved and deleted, never restyled
             const label = !!(el as unknown as Element).containerId;
             if (label && next.fill === undefined && next.weight === undefined) return el; // a label stays the default ink
@@ -368,7 +390,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
               strokeColor: lineColour(stamp.line, theme),
               backgroundColor: fillColour(FILLABLE.has(el.type) ? stamp.fill : null, theme),
               ...(next.weight !== undefined && el.type !== 'text' && el.type !== 'frame' ? { strokeWidth: BOARD_WEIGHTS[next.weight === 'marker' && el.type !== 'freedraw' ? 'bold' : next.weight] } : {}),
-              customData: { ...el.customData, gnomon: stamp },
+              customData: { ...el.customData, gnomon: { line: stamp.line, fill: stamp.fill } },
             });
           });
           api.updateScene({ ...(touched ? { elements } : {}), appState: current() as never, captureUpdate: touched ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER });

@@ -83,6 +83,9 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
         logLevel: 'silent',
       });
       const inputs = Object.keys(r.metafile.inputs);
+      // nor the board's host layer: the leaf, the rail, the tray, the overlay, the seal (review S5). core/board.ts,
+      // the loader, is an input only in the second pass, where this test puts it in the graph itself
+      expect(inputs.map((i) => i.slice(i.lastIndexOf('src/') + 4)).filter((i) => /^(core|ui)\/board[-.]/.test(i))).toEqual(stdin ? ['core/board.ts'] : []);
       expect(inputs.filter((i) => /(^|\/)node_modules\/(react|react-dom|scheduler|@excalidraw)\//.test(i) || /(^|\/)src\/board\//.test(i))).toEqual([]);
       expect(inputs.some((i) => i.endsWith('src/main.ts'))).toBe(true);
       // the loader stays a native dynamic import of a computed URL (nothing for esbuild to inline)

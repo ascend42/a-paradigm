@@ -1832,8 +1832,7 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-well{display:inline-block;width:18px;height:18px;border-radius:var(--radius-pill);border:1px solid var(--key-edge);background:var(--wf,transparent);flex:none}
 .bd-well.line{background:var(--sheet);box-shadow:inset 0 0 0 4px var(--wl,var(--ink))}
 .bd-well.sel{outline:2px solid var(--key-edge);outline-offset:2px}
-.bd-well.none,.bd-well.c-none{background:linear-gradient(to top right,transparent calc(50% - 1px),var(--sec) calc(50% - 1px),var(--sec) calc(50% + 1px),transparent calc(50% + 1px)),var(--sheet);border-color:var(--sec)}
-.bd-well.none{border-style:dotted}
+.bd-well.c-none{background:linear-gradient(to top right,transparent calc(50% - 1px),var(--sec) calc(50% - 1px),var(--sec) calc(50% + 1px),transparent calc(50% + 1px)),var(--sheet);border-color:var(--sec)}
 .bd-tray{display:flex;flex-direction:column;gap:8px;width:max-content;padding:10px 12px;background:var(--sheet);border:1px solid var(--key-edge);border-radius:var(--radius);box-shadow:var(--shadow)}
 .bd-tr{display:flex;align-items:center;gap:8px;min-height:28px;font-size:var(--fs-control)}
 .bd-tl{flex:0 0 52px;font-size:var(--fs-label);color:var(--sec)}
@@ -1860,11 +1859,10 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-seal.claimed .sl-cut{stroke-dasharray:2.5 2;stroke-width:1.25} .bd-seal.claimed text{font-weight:400} .bd-seal.claimed .sl-bead{fill:var(--sheet);stroke:var(--ink);stroke-width:1}
 /* the stub: a node this build has no drawing for */
 .bd-stub{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;padding:10px 10px 8px 22px;max-width:260px;background:var(--sheet);border:1px solid var(--sec);border-radius:var(--radius);box-shadow:2px 2px 0 rgba(22,21,15,.16); background-image:repeating-linear-gradient(135deg,var(--rule) 0 2px,transparent 2px 6px);background-size:12px 100%;background-repeat:no-repeat}
-.bd-stub.agent{border-style:dashed} .bd-stub.is-sel{outline:1px solid var(--ink);outline-offset:3px}
+.bd-stub.agent{border-style:dashed}
 .bd-stub-k{font-size:var(--fs-control);font-weight:500;color:var(--ink2)} .bd-stub-l{font-size:var(--fs-label);font-weight:400;color:var(--sec);margin-right:6px} .bd-stub-n{font-size:var(--fs-label);color:var(--sec)}
-.bd-emptynote{left:50%;top:50%;width:300px;margin:-56px 0 0 -150px;padding:16px 16px 12px;pointer-events:none} .bd-emptynote p{margin:0 0 4px;color:var(--sec)} .bd-emptynote .bd-en-t{font-size:var(--fs-reading);font-weight:600;color:var(--ink)}
 /* build additions: where the engine and the host layer sit inside the leaf (not in the specimen, which draws no engine) */
-.bd-leaf { position: absolute; inset: 0; z-index: 12; }
+.bd-leaf { position: absolute; inset: 0; z-index: 12; overflow: hidden; } /* nothing of the leaf is ever drawn outside it */
 .bd-body { flex: 1 1 auto; }
 .bd-board { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* the engine's own z-indexes stay inside it */
 .bd-board[hidden], .bd-over[hidden] { display: none; }
@@ -1889,6 +1887,5 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-note p { margin: 0 0 4px; color: var(--sec); }
 .bd-note .bd-en-t { font-size: var(--fs-reading); font-weight: 600; color: var(--ink); }
 .bd-said-line { color: var(--ink); }
-.bd-said-line[hidden] { display: none; }
 .bd-foot .bd-more-hands { white-space: nowrap; }
 .bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }

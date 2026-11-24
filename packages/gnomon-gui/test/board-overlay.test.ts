@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { BoardAuthor, BoardMarkView, BoardView } from '../src/core/board.js';
-import { footHands, handName, handOf, isScrap, markBox, overlayItems, TEXTBOX_PAD, toScreen } from '../src/core/board-overlay.js';
+import { footHands, handName, handOf, isScrap, markBox, overlayItems, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
 import { sealOf } from '../src/core/board-seal.js';
 
 const VIEW: BoardView = { scrollX: 0, scrollY: 0, zoom: 1, width: 800, height: 600 };
@@ -53,8 +53,9 @@ describe('#gui-board the three hands', () => {
 
   it('a text that is not yours is ALWAYS boxed, with the seal (or the hollow pin) on its top edge', () => {
     const [box, seal] = overlayItems([mark({ id: 't', kind: 'text', author: ARKY })], VIEW);
-    expect(box).toEqual({ type: 'textbox', id: 't', left: 100 - TEXTBOX_PAD, top: 50 - TEXTBOX_PAD, width: 120 + 2 * TEXTBOX_PAD, height: 80 + 2 * TEXTBOX_PAD });
-    expect(seal).toMatchObject({ type: 'seal', on: 'text', left: 160, top: 50 - TEXTBOX_PAD });
+    expect(box).toEqual({ type: 'textbox', id: 't', left: 100 - TEXTBOX_PAD, top: 50 - TEXTBOX_TOP, width: 120 + 2 * TEXTBOX_PAD, height: 80 + TEXTBOX_TOP + TEXTBOX_PAD });
+    expect(seal).toMatchObject({ type: 'seal', on: 'text', left: 160, top: 50 - TEXTBOX_TOP });
+    expect(TEXTBOX_TOP).toBe(12);
     expect(overlayItems([mark({ id: 't', kind: 'text', author: NOBODY })], VIEW).map((i) => i.type)).toEqual(['textbox', 'hollow']);
   });
 

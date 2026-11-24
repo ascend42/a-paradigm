@@ -37,12 +37,12 @@
           "gzip": 22458
         },
         "board/board.js": {
-          "bytes": 1276974,
-          "gzip": 410170
+          "bytes": 1277894,
+          "gzip": 410620
         }
       },
-      "totalBytes": 1535042,
-      "totalGzip": 443336
+      "totalBytes": 1535962,
+      "totalGzip": 443786
     },
     "staticFindings": [],
     "engines": {
@@ -57,18 +57,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 56,
-          "mounted": 78
+          "module": 54,
+          "mounted": 76
         },
         "firstRun": {
-          "wallMs": 19861,
+          "wallMs": 19917,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 47,
-            "mounted": 68
+            "module": 48,
+            "mounted": 66
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -310,6 +310,18 @@
             "paste": {
               "unsupported": "the synthetic paste did not reach the engine"
             },
+            "dataDrop": {
+              "added": 0,
+              "said": [
+                "library-file"
+              ],
+              "stopped": true,
+              "stock": []
+            },
+            "hostile": {
+              "unsupported": "the synthetic paste did not reach the engine",
+              "nodes": []
+            },
             "frame": {
               "title": "a frame title that is long enough to be cut off",
               "weight": "600",
@@ -362,7 +374,7 @@
           "png": {
             "ok": true,
             "bytes": 32360,
-            "ms": 23
+            "ms": 27
           },
           "violationCount": 0,
           "violations": [],
@@ -418,18 +430,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 33,
-          "mounted": 54
+          "module": 37,
+          "mounted": 58
         },
         "firstRun": {
-          "wallMs": 20870,
+          "wallMs": 20944,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 58,
-            "mounted": 113
+            "module": 40,
+            "mounted": 60
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -439,7 +451,7 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 18,
+          "finalCount": 19,
           "cursors": {
             "select": "",
             "sticky": "crosshair",
@@ -588,7 +600,7 @@
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 101199
+                "pngBytes": 101196
               },
               "arrowAdded": 1,
               "afterUndo": 0,
@@ -632,7 +644,7 @@
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 102321
+                "pngBytes": 102324
               },
               "arrowAdded": 1,
               "afterUndo": 0,
@@ -685,6 +697,30 @@
               "line": "ink",
               "fillToken": null
             },
+            "dataDrop": {
+              "added": 0,
+              "said": [
+                "library-file"
+              ],
+              "stopped": true,
+              "stock": []
+            },
+            "hostile": {
+              "added": 1,
+              "said": [
+                "image",
+                "mark:embeddable",
+                "mark:iframe"
+              ],
+              "nodes": [],
+              "violations": 0,
+              "forged": {
+                "kind": "rect",
+                "author": "human",
+                "stubKind": null,
+                "edgeGaps": 0
+              }
+            },
             "frame": {
               "title": "a frame title that is long enough to be cut off",
               "weight": "600",
@@ -713,12 +749,12 @@
             "day": {
               "width": 2560,
               "height": 1600,
-              "pngBytes": 115560
+              "pngBytes": 115626
             },
             "night": {
               "width": 2560,
               "height": 1600,
-              "pngBytes": 116955
+              "pngBytes": 116979
             }
           },
           "narrow": {
@@ -731,13 +767,13 @@
               "pngBytes": 23544
             }
           },
-          "stateEvents": 56,
+          "stateEvents": 57,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 37187,
-            "ms": 13
+            "bytes": 36999,
+            "ms": 11
           },
           "violationCount": 0,
           "violations": [],
@@ -787,6 +823,30 @@
       "chromium",
       "wkwebview"
     ],
+    "exercised": {
+      "library-file drop": [
+        "chrome",
+        "wkwebview"
+      ],
+      "image-file drop": [
+        "chrome",
+        "wkwebview"
+      ],
+      "scene-file drop": [
+        "chrome",
+        "wkwebview"
+      ],
+      "library-type drag (no file)": [
+        "chrome",
+        "wkwebview"
+      ],
+      "paste: stock marks": [
+        "wkwebview"
+      ],
+      "paste: forged author, iframe, embeddable, image": [
+        "wkwebview"
+      ]
+    },
     "clean": true,
     "findings": []
   },
@@ -800,5 +860,5 @@
     "G-DDL-07",
     "S25-M3"
   ],
-  "at": "2026-11-24T10:35:21.968Z"
+  "at": "2026-11-24T11:55:13.296Z"
 }

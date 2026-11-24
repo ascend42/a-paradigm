@@ -27,6 +27,8 @@ export const RESKIN_CLEAN: Record<string, unknown> = {
     sceneDrop: { added: 0, said: ['scene-file'], dragStopped: true },
     paste: { added: 1, said: ['mark:diamond', 'mark:line'], found: true, edgeGaps: 0, fillAlpha: 0, edgeRgb: [22, 21, 15], line: 'ink', fillToken: null },
     frame: { title: 'a frame title that is long enough to be cut off', weight: '600', editor: { fontFamily: '"JetBrains Mono", monospace', fontSize: '11.5px', fontWeight: '600', color: 'rgb(22, 21, 15)', radius: '0px', editing: true }, afterEsc: { input: false, editing: false } },
+    dataDrop: { added: 0, said: ['library-file'], stopped: true, stock: [] },
+    hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: [], violations: 0, forged: { kind: 'rect', author: 'human', stubKind: null, edgeGaps: 0 } },
     label: { lines: ['ink'], marksAdded: 1, countAdded: 1 },
   },
   colours: { day: shot, night: shot },

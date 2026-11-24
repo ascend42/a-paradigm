@@ -54,8 +54,10 @@ export interface BoardStyleRefusal {
 /**
  * Who drew a mark, as the HOST knows it (design component author-seal: three hands). `human` is you; `agent` is an
  * agent the host named (`id` is the host-stamped author id the seal is worked out from, `name` the text beside
- * it); `unknown` is a mark with no author the host vouches for. It is never read from anything a person or an
- * agent typed: until S1.3 maps real rows, only the handle's `add` (the fixture) sets it.
+ * it); `unknown` is a mark with no author the host vouches for. The handle keeps it in a record of its OWN, keyed
+ * by element id and written only by `add`; it is never read from an element, so nothing pasted, dropped or copied
+ * can carry one (a copy of an agent's mark is a new element and is yours). Until S1.3 maps real rows, only the
+ * fixture calls `add` with an author.
  */
 export type BoardAuthor = { cls: 'human' } | { cls: 'agent'; id: string; name: string } | { cls: 'unknown' };
 

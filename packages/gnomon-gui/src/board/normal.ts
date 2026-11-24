@@ -26,6 +26,12 @@ export const strokeStyleOf = (by: BoardAuthor | undefined): 'solid' | 'dashed' =
 export const lineColour = (token: unknown, theme: BoardTheme): string => resolveContentColour(token, 'line', theme) ?? CONTENT_THEME_TOKENS[theme]['text.primary'];
 export const fillColour = (token: unknown, theme: BoardTheme): string => (token === null ? null : resolveContentColour(token, 'fill', theme)) ?? 'transparent';
 
+/**
+ * What a mark is painted from. `line` and `fill` are content-palette tokens kept on the element (the palette checks
+ * them on every paint). `kind` and `by` are NOT read from the element: they come from the handle's own record of
+ * the marks it added (review S1), so nothing pasted, dropped or copied can claim an author, a dashed stroke or a
+ * stub.
+ */
 export interface MarkStamp {
   line: string;
   fill: string | null;
@@ -44,6 +50,10 @@ export function normalOf(el: { type: string; strokeWidth?: number }, stamp: Mark
     opacity: 100,
     roundness: null,
     link: null,
+    // a pasted lock could never be undone (the board has no lock key)
+    locked: false,
+    // one arrowhead: open at the end, none at the start (a pasted arrow keeps no stock head shape)
+    ...(el.type === 'arrow' ? { startArrowhead: null, endArrowhead: 'arrow' } : {}),
     ...(el.type === 'frame' || el.type === 'text' || stamp?.kind === 'stub' ? {} : { strokeWidth: nearestWeight(el.strokeWidth ?? BOARD_WEIGHTS.fine) }),
     ...(el.type === 'text' ? { fontFamily: BOARD_FONT_ID, fontSize: BOARD_FONT_SIZE } : {}),
   };

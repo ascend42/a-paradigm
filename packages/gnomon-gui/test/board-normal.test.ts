@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONTENT_THEME_TOKENS, resolveContentColour } from '@a-company/gnomon-contracts';
 import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, nearestWeight, normalOf, offNormal, strokeStyleOf } from '../src/board/normal.js';
+import { gnomonBoardAdmit, gnomonBoardTypes, onBoardRefusal } from '../src/board/skin.js';
 
 /** what the engine's own clipboard carries for a stock mark */
 const STOCK = { strokeColor: '#e03131', backgroundColor: '#ffc9c9', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, link: 'https://example.invalid/' };
@@ -14,7 +15,7 @@ describe('#gui-board the normal form of a mark', () => {
   it('a pasted stock rectangle becomes solid, exact, opaque, square, unlinked, in ink with no fill, at a design weight', () => {
     const el = { type: 'rectangle', ...STOCK };
     expect(offNormal(el, null, 'day')).toBe(true);
-    expect(normalOf(el, null, 'day')).toEqual({ strokeColor: CONTENT_THEME_TOKENS.day['text.primary'], backgroundColor: 'transparent', strokeStyle: 'solid', roughness: 0, fillStyle: 'solid', opacity: 100, roundness: null, link: null, strokeWidth: 2 });
+    expect(normalOf(el, null, 'day')).toEqual({ strokeColor: CONTENT_THEME_TOKENS.day['text.primary'], backgroundColor: 'transparent', strokeStyle: 'solid', roughness: 0, fillStyle: 'solid', opacity: 100, roundness: null, link: null, locked: false, strokeWidth: 2 });
     expect(offNormal({ type: 'rectangle', ...normalOf(el, null, 'day') }, null, 'day')).toBe(false);
   });
 
@@ -34,6 +35,24 @@ describe('#gui-board the normal form of a mark', () => {
     for (const type of ['image', 'embeddable', 'iframe', 'diamond', 'line', 'magicframe', 'selection']) expect(offNormal({ type }, null, 'day'), type).toBe(true);
     expect(offNormal({ type: 'image', isDeleted: true }, null, 'day')).toBe(false);
     expect([...FILLABLE].sort()).toEqual(['ellipse', 'rectangle']); // no diamond
+  });
+
+  it('a pasted lock is taken off and a pasted arrow keeps no stock head', () => {
+    expect(offNormal({ type: 'rectangle', locked: true } as never, null, 'day')).toBe(true);
+    expect(normalOf({ type: 'arrow' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow', locked: false });
+    expect(offNormal({ type: 'arrow', startArrowhead: 'dot', endArrowhead: 'triangle' } as never, null, 'day')).toBe(true);
+    expect('endArrowhead' in normalOf({ type: 'rectangle' }, null, 'day')).toBe(false);
+  });
+
+  it('the engine-side filter admits board types only, before anything is committed, and says what it refused', () => {
+    const heard: string[] = [];
+    const off = onBoardRefusal((what, detail) => void heard.push(`${what}:${detail}`));
+    const kept = gnomonBoardAdmit([{ type: 'rectangle' }, { type: 'iframe' }, { type: 'embeddable' }, { type: 'image' }, { type: 'text' }, { type: 'diamond' }, { type: 42 }, null as never]);
+    off();
+    expect(kept.map((e) => e.type)).toEqual(['rectangle', 'text']);
+    expect(heard).toEqual(['mark:iframe', 'mark:embeddable', 'image:image', 'mark:diamond', 'mark:unknown', 'mark:unknown']);
+    expect(gnomonBoardAdmit(null)).toEqual([]);
+    expect([...gnomonBoardTypes].sort()).toEqual([...BOARD_TYPES].sort());
   });
 
   it('stroke widths land on the design\'s weights; frames, text and stubs keep theirs', () => {

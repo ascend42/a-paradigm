@@ -46,9 +46,8 @@ const SAMPLE_MARKS: BoardMark[] = [
   { type: 'sticky', x: 44, y: 160, width: 132, height: 60, fill: 'orchid', text: 'who signs\nthe second hop?', by: LUNA },
   { type: 'text', x: 48, y: 250, text: 'checked against the log', by: QUILL },
   { type: 'rectangle', x: 212, y: 246, width: 120, height: 30, by: { cls: 'unknown' } },
-  // wide enough for the stub's fixed line: at the design's 156 minimum that line wraps past the 52 minimum height
-  { type: 'stub', x: 380, y: 56, width: 290, kind: 'live:session' },
-  { type: 'stub', x: 380, y: 136, width: 290, kind: 'allow:approved-by-you', by: ARKY },
+  { type: 'stub', x: 380, y: 56, kind: 'live:session' },
+  { type: 'stub', x: 380, y: 136, kind: 'allow:approved-by-you', by: ARKY },
 ];
 
 async function openBoardFixture(): Promise<void> {

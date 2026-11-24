@@ -140,11 +140,14 @@ components:
       selected, a stub's kind, a label's owner), view(), onScene, focus,
       hasFocus, onAttempt (a paste or a drop is reported from the capture
       phase), onRefusal. A mark's author
-      slot (human, agent with id and name, unknown) is set only through add
-      (the fixture) until S1.3 maps real rows; a mark that is not yours is
-      drawn with the engine's dashed stroke, derived from the author on every
-      change (a dashed stroke on a mark of yours is repainted solid), never
-      an input. A stub (a node of a kind this build cannot draw) is an
+      (human, agent with id and name, unknown), whether it is a sticky or a
+      stub, and a stub's kind live in a record of the handle's own, keyed by
+      element id and written only by add (and, for a sticky you draw, by the
+      tool you drew it with). Nothing of them is read from an element: an
+      element's customData holds its two colour tokens and anything else
+      there is stripped, so pasted, dropped or copied content is a plain
+      solid mark of yours. A mark that is not yours is drawn with the
+      engine's dashed stroke, derived from that record on every change. A stub (a node of a kind this build cannot draw) is an
       engine rectangle of at least 156 by 52 that setStyle leaves alone.
       Host layer, PURE models with tests: core/board-seal.ts (FNV-1a, cut,
       bead, letter; the design's ten vectors pass, hex cuts included),
@@ -212,6 +215,44 @@ components:
       test/board-normal.test.ts. Not fixed: double-clicking an arrow made
       through add() logs "Linear element is not normalized"; the canvas
       fallback text is still the engine's "Drawing canvas".
+      Review round 1 of S1.1 (PR #107), fixed. Leaf: it redraws on a focus
+      move only when the yield state flips, the rail and the tray are rebuilt
+      only when what they show changes, and focus returns to the same
+      control by a data-key on every rail and tray control (a press on a rail
+      key was lost, the tray could not be opened by pointer, Tab into the
+      rail overflowed the stack, and choosing a well dropped focus to the
+      body); under 148px of board no state draws the body or the foot and
+      the leaf clips to its own box; while yielded every press, the wheel, a
+      double-click, a drop and a paste are stopped, and the waking press
+      holds the engine off for 500 ms so its own double-click starts no
+      text. Engine: authorship is the handle's record (above); every drop is
+      refused, with or without files; patch paste-types-filtered removes
+      elements that are not board types before the engine commits a paste or
+      an insert; the api-run-action patch carries its closed list of six
+      actions; a pasted lock and stock arrowheads are normalised away. Each
+      is tested with real pointer and key events over the DevTools protocol
+      (test/board-leaf-golden.test.ts) or replayed in the P12 harness, which
+      now paces synthetic moves by animation frame and reports which engine
+      exercised each paste and drop check (an engine that reports a check as
+      unsupported did not run it; every check must have run somewhere).
+      Also from the review: a refusal is said in the keep line's place, with
+      an always-present status node; the custom colour offers a well per
+      role it passes for; a seal on a text that is not yours no longer
+      covers its first line; a stub with no size is 288 wide; one tab stop
+      per tray row; the golden tolerance is 16 per channel. NOT done from
+      the review's follow-up list: the rail menus still use .bd-menu (not
+      .mode-menu); a stub smaller than its words is clipped, not shortened
+      line by line, and its words do not scale with the board.
+      For S1.3 and S1.4 (recorded from the review, not built): the sticky is
+      not yet the specimen's scrap; whether a new sticky goes straight into
+      its text; the tray covers the board at a 1024 window; dash lengths by
+      a counted patch before S1.4, and a small agent mark must not render as
+      [ ] (the night key shape); screen-reader names in the hands foot;
+      hover seals, the low-zoom ring and the scrap shadow (Mika measured
+      16.7 ms frames with 208 overlay nodes in headless Chromium; measure
+      once in WKWebView); refusal listeners in skin.ts are module-wide, so
+      two boards on one page would hear each other; a copy of a sticky is a
+      plain filled rectangle with no pin (the copy is not in the record).
       For S1.3 (carried, not built): the binding highlight is under 3:1;
       Alt-drag duplicates a mark while Cmd+D is off; drawing by keyboard
       alone is impossible; Luna's open questions (square or rounded

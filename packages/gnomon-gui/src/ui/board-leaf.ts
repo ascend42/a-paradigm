@@ -96,7 +96,6 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let cause = '';
   let theme = o.theme;
   let trayOpen = false;
-  let customRole: 'line' | 'fill' = 'line';
   let menu: 'more' | 'zoom' | null = null;
   let quiet = true;
   let said = '';
@@ -114,7 +113,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // the drawing surface is one region with a name; its description is the empty note's hint (design `tab_order`)
   const boardHost = h('div', 'bd-board', { role: 'application', 'aria-roledescription': 'board', 'aria-label': `Board: ${o.title}`, 'aria-description': LEAF_COPY.emptyHint });
   // what the board refused is said here, under the head, and announced
-  const saidLine = h('div', 'lp-keep bd-keep bd-said-line', { role: 'status', 'aria-live': 'polite', hidden: true });
+  // always in the tree, so a screen reader hears each refusal; the keep line shows the same words
+  const saidLine = h('span', 'sr-only', { role: 'status', 'aria-live': 'polite' });
   const over = h('div', 'bd-over', { 'aria-hidden': 'true' });
   const tray = h('div', 'bd-tray', { role: 'group', 'aria-label': 'Line and fill', hidden: true });
   const note = h('div', 'bd-scrap bd-note', { hidden: true });
@@ -126,7 +126,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const st = (): BoardState | null => (handle && handle.isAlive() ? handle.state() : null);
   const leafState = (): LeafState => leafStateOf({ load, alive: !handle || handle.isAlive(), boardHeight: boardHeight(), cardFocused: o.cardFocused(), marks: st()?.marks ?? 0 });
   /** the height the board has (or would have, when the body is hidden): the leaf less its head, keep line and foot */
-  const boardHeight = (): number => Math.max(0, el.clientHeight - head.offsetHeight - keep.offsetHeight - saidLine.offsetHeight - FOOT_HEIGHT);
+  const boardHeight = (): number => Math.max(0, el.clientHeight - head.offsetHeight - keep.offsetHeight - FOOT_HEIGHT);
+  /** under the least height a board can be drawn on, whatever the state: the body and the foot are not drawn */
+  const short = (): boolean => boardHeight() < BOARD_MIN_HEIGHT;
   const yielded = (): boolean => load === 'ready' && o.cardFocused();
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
@@ -137,8 +139,18 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     headKey.title = failed ? '' : 'Dimensions in this project (/boards)';
     if (failed) headKey.removeAttribute('aria-disabled');
     else headKey.setAttribute('aria-disabled', 'true'); // the list is S1.3's
-    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}`;
+    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
+    // what the board refused is said in the keep line's place (as the yielded line is), so nothing below moves
+    if (said && state !== 'failed' && state !== 'loading') {
+      keep.title = said;
+      return void keep.append(said);
+    }
+    // too short to hold the failed note: the head keeps the Try again key and this one line says what and why
+    if (state === 'failed' && short()) {
+      keep.title = `${LEAF_COPY.failedTitle} · ${cause}`;
+      return void keep.append(keep.title);
+    }
     // one line, cut from its end with …; the whole text is always in title=
     keep.title = state === 'loading' ? '' : state === 'too-short' ? LEAF_COPY.tooShort : state === 'yielded' ? LEAF_COPY.yielded : '';
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
@@ -162,7 +174,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const row = (letter: string, key: HTMLElement, ...extra: Node[]): HTMLElement => h('span', 'bd-row', {}, h('kbd', '', {}, letter), key, ...extra);
   function toolKey(t: RailTool, s: BoardState | null, off: boolean): HTMLElement {
     const on = s?.tool === t.tool;
-    const b = h('button', `key quiet seg-key bd-tool${on && !off ? ' current' : ''}`, { type: 'button', role: 'radio', 'aria-checked': on && !off ? 'true' : 'false', 'aria-disabled': off ? 'true' : undefined, title: t.tool === 'hand' ? 'Hand: drag to move the view (H, or hold Space)' : railTitle(t), 'aria-label': t.name.replace(' · connect', ''), tabindex: on || (!s && t.tool === 'select') ? 0 : -1, 'data-tool': t.tool });
+    const b = h('button', `key quiet seg-key bd-tool${on && !off ? ' current' : ''}`, { type: 'button', role: 'radio', 'aria-checked': on && !off ? 'true' : 'false', 'aria-disabled': off ? 'true' : undefined, title: t.tool === 'hand' ? 'Hand: drag to move the view (H, or hold Space)' : railTitle(t), 'aria-label': t.name.replace(' · connect', ''), tabindex: on || (!s && t.tool === 'select') ? 0 : -1, 'data-tool': t.tool, 'data-key': `tool:${t.tool}` });
     b.append(glyph(t));
     b.addEventListener('click', (e) => act(() => chooseTool(t.tool), e));
     return b;
@@ -194,6 +206,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const off = state !== 'open' && state !== 'empty';
     rail.className = `bd-rail${off ? ' yielded' : ''}`;
     const lay = railLayout(boardHeight() || 9999, s?.tool ?? 'select');
+    const style = s?.style ?? { line: CONTENT_DEFAULTS.line, fill: null, weight: 'fine' as BoardWeight };
+    // the rail is rebuilt only when what it shows has changed: a rebuild under a pointer press loses the press, and a
+    // rebuild on a focus move sent focus round in a loop (review B1)
+    const key = JSON.stringify([off, s?.tool ?? null, lay, menu, zoomPercent(s?.zoom ?? 1), style.line, style.fill, trayOpen, theme]);
+    if (key === railKey) return;
+    railKey = key;
     const kids: Node[] = [];
     let first = true;
     for (const group of RAIL_GROUPS) {
@@ -205,12 +223,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     }
     if (lay.folded.length) {
       const names = lay.folded.map((t) => `${railTool(t).name.replace(' · connect', '')} (${railTool(t).letter})`).join(', ');
-      const more = quietKey('bd-tool bd-more', '⋯', `More tools: ${names}`, off, () => void ((menu = menu === 'more' ? null : 'more'), draw()), { 'aria-haspopup': 'menu', 'aria-label': 'More tools', 'aria-expanded': menu === 'more' ? 'true' : 'false' });
+      const more = quietKey('bd-tool bd-more', '⋯', `More tools: ${names}`, off, () => void ((menu = menu === 'more' ? null : 'more'), draw()), { 'aria-haspopup': 'menu', 'aria-label': 'More tools', 'aria-expanded': menu === 'more' ? 'true' : 'false', 'data-key': 'more' });
       kids.push(row('', more, ...(menu === 'more' && !off ? [menuOf(lay.folded.map((t) => ({ label: railTool(t).name, letter: railTool(t).letter, glyph: glyph(railTool(t)), run: () => chooseTool(t) })))] : [])));
     }
     kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
-    const style = s?.style ?? { line: CONTENT_DEFAULTS.line, fill: null, weight: 'fine' as BoardWeight };
-    const ink = quietKey('bd-tool bd-ink', '', 'Line and fill', off, () => void ((trayOpen = !trayOpen), draw()), { 'aria-label': `Line ${wellName(style.line)}, fill ${wellName(style.fill)}`, 'aria-expanded': trayOpen ? 'true' : 'false' });
+    const ink = quietKey('bd-tool bd-ink', '', 'Line and fill', off, () => void ((trayOpen = !trayOpen), draw()), { 'aria-label': `Line ${wellName(style.line)}, fill ${wellName(style.fill)}`, 'aria-expanded': trayOpen ? 'true' : 'false', 'data-key': 'ink' });
     const wl = h('span', 'bd-well line');
     wl.style.setProperty('--wl', colour(style.line, 'line'));
     const wf = h('span', `bd-well fill${style.fill === null ? ' c-none' : ''}`);
@@ -218,33 +235,47 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     ink.append(wl, wf);
     kids.push(row('', ink), h('span', 'bd-grow'));
     if (lay.hand) kids.push(row(off ? '' : 'H', toolKey(railTool('hand'), s, off)));
-    if (lay.zoomKeys) kids.push(row('', quietKey('bd-tool', '+', 'Zoom in (⌘ +)', off, () => handle?.zoomIn(), { 'aria-label': 'Zoom in' })));
-    const pct = quietKey('bd-zoom', zoomPercent(s?.zoom ?? 1), lay.zoomKeys ? 'Fit everything (⌘ 0)' : 'Zoom', off, () => (lay.zoomKeys ? handle?.zoomToFit() : void ((menu = menu === 'zoom' ? null : 'zoom'), draw())), lay.zoomKeys ? {} : { 'aria-haspopup': 'menu', 'aria-expanded': menu === 'zoom' ? 'true' : 'false' });
+    if (lay.zoomKeys) kids.push(row('', quietKey('bd-tool', '+', 'Zoom in (⌘ +)', off, () => handle?.zoomIn(), { 'aria-label': 'Zoom in', 'data-key': 'zoom-in' })));
+    const pct = quietKey('bd-zoom', zoomPercent(s?.zoom ?? 1), lay.zoomKeys ? 'Fit everything (⌘ 0)' : 'Zoom', off, () => (lay.zoomKeys ? handle?.zoomToFit() : void ((menu = menu === 'zoom' ? null : 'zoom'), draw())), lay.zoomKeys ? { 'data-key': 'percent' } : { 'aria-haspopup': 'menu', 'aria-expanded': menu === 'zoom' ? 'true' : 'false', 'data-key': 'percent' });
     kids.push(row('', pct, ...(menu === 'zoom' && !lay.zoomKeys && !off ? [menuOf([{ label: 'Zoom in', letter: '⌘ +', run: () => handle?.zoomIn() }, { label: 'Fit everything', letter: '⌘ 0', run: () => handle?.zoomToFit() }, { label: 'Zoom out', letter: '⌘ −', run: () => handle?.zoomOut() }])] : [])));
-    if (lay.zoomKeys) kids.push(row('', quietKey('bd-tool', '−', 'Zoom out (⌘ −)', off, () => handle?.zoomOut(), { 'aria-label': 'Zoom out' })));
-    const focused = rail.contains(document.activeElement) ? (document.activeElement as HTMLElement).getAttribute('data-tool') : null;
+    if (lay.zoomKeys) kids.push(row('', quietKey('bd-tool', '−', 'Zoom out (⌘ −)', off, () => handle?.zoomOut(), { 'aria-label': 'Zoom out', 'data-key': 'zoom-out' })));
+    const focused = rail.contains(document.activeElement) ? (document.activeElement as HTMLElement).getAttribute('data-key') : null;
     rail.replaceChildren(...kids);
-    if (focused) rail.querySelector<HTMLElement>(`[data-tool="${focused}"]`)?.focus();
+    // focus goes back to the same key (every rail key has a data-key), or to the chosen tool when that key is gone
+    if (focused) (rail.querySelector<HTMLElement>(`[data-key="${focused}"]`) ?? rail.querySelector<HTMLElement>('[tabindex="0"]'))?.focus();
   }
 
   // ── the tray ─────────────────────────────────────────────────────────────
   let hexText = '';
   let trayKey = '';
+  let railKey = '';
   function drawTray(state: LeafState): void {
     const s = st();
     tray.hidden = !trayOpen || !s || (state !== 'open' && state !== 'empty');
     if (tray.hidden) return void (trayKey = '');
     const style = s!.style;
     // the tray is rebuilt only when what it shows has changed: a focus move must not replace a field being typed in
-    const key = JSON.stringify([style, s!.tool === 'stroke', theme, customRole]);
+    const key = JSON.stringify([style, s!.tool === 'stroke', theme]);
     if (key === trayKey) return;
     trayKey = key;
+    // each row is ONE tab stop; the arrow keys move within it (design content-tray: a radiogroup per row)
+    const roving = (row: HTMLElement): void => {
+      row.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const keys = [...row.querySelectorAll<HTMLElement>('button:not([disabled])')];
+        const at = keys.indexOf(document.activeElement as HTMLElement);
+        if (at < 0) return;
+        e.preventDefault();
+        keys[(at + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length]!.focus();
+      });
+    };
     const wells = (role: 'line' | 'fill', tokens: ReadonlyArray<string | null>, chosen: string | null): HTMLElement => {
       const name = h('span', 'bd-wn', {}, wellName(chosen));
       const r = h('div', 'bd-tr', { role: 'radiogroup', 'aria-label': role }, h('span', 'bd-tl', {}, role));
-      for (const t of tokens) {
+      const anyChosen = tokens.includes(chosen);
+      tokens.forEach((t, n) => {
         const on = t === chosen;
-        const w = h('button', `bd-well ${role}${t === null ? ' c-none' : ''}${on ? ' sel' : ''}`, { type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', title: wellName(t), 'aria-label': wellName(t) });
+        const w = h('button', `bd-well ${role}${t === null ? ' c-none' : ''}${on ? ' sel' : ''}`, { type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', title: wellName(t), 'aria-label': wellName(t), tabindex: on || (!anyChosen && n === 0) ? 0 : -1, 'data-key': `${role}:${t ?? 'none'}` });
         if (t !== null) w.style.setProperty(role === 'line' ? '--wl' : '--wf', colour(t, role));
         const show = (): void => void (name.textContent = wellName(t));
         const back = (): void => void (name.textContent = wellName(chosen));
@@ -253,23 +284,27 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         w.addEventListener('pointerleave', back);
         w.addEventListener('blur', back);
         w.addEventListener('click', () => {
-          customRole = role;
           handle?.setStyle(role === 'line' ? { line: t as string } : { fill: t });
           draw();
         });
         r.append(w);
-      }
+      });
       r.append(name);
+      roving(r);
       return r;
     };
-    const weight = h('div', 'bd-tr', {}, h('span', 'bd-tl', {}, 'weight'));
+    const weight = h('div', 'bd-tr', { role: 'group', 'aria-label': 'weight' }, h('span', 'bd-tl', {}, 'weight'));
     for (const wgt of TRAY_WEIGHTS) {
       const off = wgt === 'marker' && s!.tool !== 'stroke';
-      const b = h('button', `key quiet seg-key${style.weight === wgt ? ' current' : ''}`, { type: 'button', 'aria-pressed': style.weight === wgt ? 'true' : 'false', disabled: off, title: off ? MARKER_OFF_TITLE : undefined }, wgt);
-      b.addEventListener('click', () => handle?.setStyle({ weight: wgt }));
+      const b = h('button', `key quiet seg-key${style.weight === wgt ? ' current' : ''}`, { type: 'button', 'aria-pressed': style.weight === wgt ? 'true' : 'false', disabled: off, title: off ? MARKER_OFF_TITLE : undefined, tabindex: style.weight === wgt ? 0 : -1, 'data-key': `weight:${wgt}` }, wgt);
+      b.addEventListener('click', () => {
+        handle?.setStyle({ weight: wgt });
+        draw();
+      });
       weight.append(b);
     }
-    const field = h('input', 'field bd-hex', { 'aria-label': 'Custom colour, hex', value: hexText, spellcheck: 'false', autocomplete: 'off', maxlength: 7 });
+    roving(weight);
+    const field = h('input', 'field bd-hex', { 'aria-label': 'Custom colour, hex', value: hexText, spellcheck: 'false', autocomplete: 'off', maxlength: 7, 'data-key': 'hex' });
     const custom = h('div', 'bd-tr', {}, h('span', 'bd-tl', {}, 'custom'), field);
     const answer = h('div', 'bd-refuse-row', { role: 'status' });
     const read = (): void => {
@@ -277,39 +312,49 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       custom.querySelectorAll('.bd-well, .meta').forEach((n) => n.remove());
       answer.replaceChildren();
       if (!hexText.trim()) return;
-      const c = customEntry(hexText, customRole);
-      if (c.ok) {
-        // a passing colour is offered as a well; pressing it (or Enter) applies it to the row last used
-        const w = h('button', `bd-well ${customRole}`, { type: 'button', title: 'custom', 'aria-label': `Use this colour as the ${customRole}` });
-        w.style.setProperty(customRole === 'line' ? '--wl' : '--wf', colour(c.token, customRole));
-        const use = (): void => void handle?.setStyle(customRole === 'line' ? { line: c.token } : { fill: c.token });
-        w.addEventListener('click', use);
-        field.onkeydown = (e) => void (e.key === 'Enter' && use());
-        custom.append(w, h('span', 'meta', {}, c.line));
-        return;
-      }
-      // refused: nothing is applied and nothing is substituted; the nearest swatch is an offer, taken only by its key
-      field.onkeydown = null;
-      answer.append(h('span', 'bd-refuse', {}, c.line));
-      if (c.offer) {
-        const offer = c.offer;
-        const b = h('button', 'key quiet', { type: 'button' }, `Use ${offer}`);
-        b.addEventListener('click', () => {
-          hexText = '';
-          trayKey = '';
-          handle?.setStyle(customRole === 'line' ? { line: offer } : { fill: offer });
+      // one well per role the colour passes for: "use as line", "use as fill". Nothing is applied until one is pressed.
+      const entries = (['line', 'fill'] as const).map((role) => ({ role, c: customEntry(hexText, role) }));
+      const passing = entries.filter((e) => e.c.ok);
+      for (const { role, c } of passing) {
+        if (!c.ok) continue;
+        const w = h('button', `bd-well ${role}`, { type: 'button', title: `use as ${role}`, 'aria-label': `Use this colour as the ${role}`, 'data-key': `custom:${role}` });
+        w.style.setProperty(role === 'line' ? '--wl' : '--wf', colour(c.token, role));
+        w.addEventListener('click', () => {
+          handle?.setStyle(role === 'line' ? { line: c.token } : { fill: c.token });
           draw();
         });
-        answer.append(b);
+        custom.append(w);
+      }
+      const first = passing[0]?.c;
+      if (first?.ok) custom.append(h('span', 'meta', {}, first.line));
+      // a role the colour fails for: nothing is applied and nothing is substituted; the nearest swatch is an offer
+      for (const { role, c } of entries) {
+        if (c.ok) continue;
+        answer.append(h('span', 'bd-refuse', {}, passing.length ? `${c.line} as a ${role}` : c.line));
+        if (c.offer) {
+          const offer = c.offer;
+          const b = h('button', 'key quiet', { type: 'button', 'data-key': `offer:${role}` }, passing.length ? `Use ${offer} as the ${role}` : `Use ${offer}`);
+          b.addEventListener('click', () => {
+            hexText = '';
+            trayKey = '';
+            handle?.setStyle(role === 'line' ? { line: offer } : { fill: offer });
+            draw();
+          });
+          answer.append(b);
+        }
+        if (!passing.length) break; // refused for both roles: say it once
       }
     };
     field.addEventListener('input', read);
-    const hadFocus = tray.contains(document.activeElement) && isField(document.activeElement);
+    // the control that had focus keeps it through the rebuild (review B2: choosing a well dropped focus to the body,
+    // so Esc no longer closed the tray and the tool letters did nothing)
+    const focused = tray.contains(document.activeElement) ? (document.activeElement as HTMLElement).getAttribute('data-key') : null;
     tray.replaceChildren(wells('line', TRAY_LINE, style.line), wells('fill', TRAY_FILL, style.fill), weight, custom, answer);
     read();
-    if (hadFocus) {
-      field.focus();
-      field.setSelectionRange(hexText.length, hexText.length);
+    if (focused) {
+      const again = tray.querySelector<HTMLElement>(`[data-key="${focused}"]`) ?? tray.querySelector<HTMLElement>('[tabindex="0"]');
+      again?.focus();
+      if (again === field) field.setSelectionRange(hexText.length, hexText.length);
     }
   }
 
@@ -362,43 +407,74 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.name), ' ', name, ` ${f.n}`));
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
-    const line: HTMLElement | null = null;
-    saidLine.hidden = !said;
-    saidLine.title = said;
-    if (saidLine.textContent !== said) saidLine.textContent = said;
     foot.replaceChildren(...kids);
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
     while (foot.scrollWidth > foot.clientWidth && kids.length - cut > 1) {
       cut++;
-      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`), ...(line ? [line] : []));
+      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`));
     }
   }
+  let saidAt = 0;
   function say(text: string): void {
     said = text;
+    saidAt = Date.now();
+    saidLine.textContent = text;
     clearTimeout(saidTimer);
-    saidTimer = setTimeout(() => {
-      said = '';
-      drawFoot();
-    }, 6000);
-    drawFoot();
+    saidTimer = setTimeout(unsay, 6000);
+    draw();
+  }
+  /** The refusal line goes after six seconds, or as soon as something else is done on the board. */
+  function unsay(): void {
+    if (!said) return;
+    said = '';
+    saidLine.textContent = '';
+    clearTimeout(saidTimer);
+    draw();
   }
 
+  let drawing = false;
+  let again = false;
   function draw(): void {
-    const state = leafState();
-    el.classList.toggle('too-short', state === 'too-short');
-    el.dataset.state = state;
-    // the failed note stands on the bare desk: nothing of a stopped engine is left showing
-    boardHost.hidden = state === 'failed';
-    over.hidden = state === 'failed';
-    drawHead(state);
-    drawRail(state);
-    drawTray(state);
-    drawNote(state);
-    drawFoot();
-    drawOver();
+    // one draw at a time: a draw that moves focus must not start another inside itself (review B1)
+    if (drawing) return void (again = true);
+    drawing = true;
+    try {
+      const state = leafState();
+      // under the least height nothing of the body or the foot is drawn, in EVERY state (review B3: loading and
+      // failed used to draw the rail over the pinned card and the composer)
+      el.classList.toggle('too-short', short());
+      el.dataset.state = state;
+      // the failed note stands on the bare desk: nothing of a stopped engine is left showing
+      boardHost.hidden = state === 'failed';
+      over.hidden = state === 'failed';
+      drawHead(state);
+      drawRail(state);
+      drawTray(state);
+      drawNote(state);
+      drawFoot();
+      drawOver();
+      wasYielded = yielded();
+    } finally {
+      drawing = false;
+    }
+    if (again) {
+      again = false;
+      draw();
+    }
   }
+  let wasYielded = false;
+  /** pins, seals and the foot follow the scene once per frame, however many changes a frame holds */
+  let sceneFrame = 0;
+  const sceneSoon = (): void => {
+    if (sceneFrame) return;
+    sceneFrame = requestAnimationFrame(() => {
+      sceneFrame = 0;
+      drawOver();
+      drawFoot();
+    });
+  };
 
   // ── loading the engine ───────────────────────────────────────────────────
   function fail(error: unknown, afterMount: boolean): void {
@@ -406,6 +482,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     load = 'failed';
     trayOpen = false;
     draw();
+    headKey.focus(); // Try again is where the keyboard is, not the page body
   }
   function start(): void {
     const mine = ++generation;
@@ -427,8 +504,19 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
           if (mine !== generation) return hd.unmount();
           handle = hd;
           load = 'ready';
-          offs.push(hd.onState(() => draw()), hd.onScene(() => (drawOver(), drawFoot())), hd.onRefusal((r) => say(refusalLine(r.what))));
-          o.onReady?.(hd);
+          offs.push(
+            hd.onState(() => {
+              if (said && Date.now() - saidAt > 400) unsay(); // something else was done: the refusal has been read
+              draw();
+            }),
+            hd.onScene(sceneSoon),
+            hd.onRefusal((r) => say(refusalLine(r.what))),
+          );
+          try {
+            o.onReady?.(hd);
+          } catch (err) {
+            globalThis.reportError(err); // the opener's mistake is reported, and the board still opens
+          }
           draw();
           if (!o.cardFocused()) hd.focus(); // opening moves focus to the board, unless a card has the keys
         },
@@ -467,17 +555,41 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     keys[(i + (e.key === 'ArrowDown' ? 1 : keys.length - 1)) % keys.length]!.focus();
   });
   // a press on the board while a card has the keys only wakes it: it never reaches the engine
-  const onWake = (e: PointerEvent): void => {
-    if (!yielded()) return;
+  // The waking press is one whole gesture: for the length of a double-click after it, nothing more of that gesture
+  // reaches the engine (its release, its click, a second press, the double-click that would start a text).
+  const WAKE_HOLD_MS = 500;
+  let wakeUntil = 0;
+  const onWake = (e: Event): void => {
+    if (!yielded()) {
+      if (performance.now() < wakeUntil) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
-    if (e.isTrusted) handle?.focus();
+    if (e.isTrusted) {
+      wakeUntil = performance.now() + WAKE_HOLD_MS;
+      handle?.focus();
+    }
   };
   stage.addEventListener('pointerdown', onWake, true);
+  // and nothing else reaches the engine while yielded (review S4): a double-click, a wheel, a drop, a context menu
+  const onHeld = (e: Event): void => {
+    if (!yielded() && performance.now() >= wakeUntil) return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  for (const type of ['pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'dragover', 'drop', 'paste', 'touchstart']) stage.addEventListener(type, onHeld, true);
+  stage.addEventListener('wheel', onHeld, { capture: true, passive: false });
   headKey.addEventListener('click', () => load === 'failed' && start());
   escKey.addEventListener('click', () => o.onFold?.());
-  const onFocus = (): void => draw();
+  // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
+  // the rail key under the pointer and looped with the redraw's own refocus)
+  const onFocus = (): void => void queueMicrotask(() => yielded() !== wasYielded && draw());
   document.addEventListener('focusin', onFocus);
+  document.addEventListener('focusout', onFocus);
   const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => draw());
   ro?.observe(el);
 
@@ -497,6 +609,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       clearTimeout(saidTimer);
       for (const off of offs.splice(0)) off();
       document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('focusout', onFocus);
+      cancelAnimationFrame(sceneFrame);
       ro?.disconnect();
       handle?.unmount();
       el.remove();

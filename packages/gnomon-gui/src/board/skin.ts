@@ -72,14 +72,34 @@ export function applySkin(theme: ContentTheme): void {
  */
 export const gnomonBoardKeyActions: ReadonlySet<string> = new Set(['undo', 'redo', 'deleteSelectedElements', 'selectAll', 'zoomIn', 'zoomOut', 'finalize']);
 
-/** What the engine refused to do, for the host to say in its own words. `image`: a file-based image insert. */
-export type BoardRefusalKind = 'image';
-const refusalListeners = new Set<(what: BoardRefusalKind) => void>();
-/** Called by the patched engine (patch `image-insert-refused`). Nothing is shown by the engine itself. */
-export function gnomonBoardRefuse(what: BoardRefusalKind): void {
-  for (const l of [...refusalListeners]) l(what);
+/** What the engine refused to do, for the host to say in its own words. */
+export type BoardRefusalKind = 'image' | 'mark';
+const refusalListeners = new Set<(what: BoardRefusalKind, detail?: string) => void>();
+/**
+ * Called by the patched engine (patches `image-insert-refused`, `paste-types-filtered`). Nothing is shown by the
+ * engine itself. The listeners are module-wide: one board per page today, and a second board on a page would hear
+ * the first one's refusals (recorded for S1.3, when a page may hold more than one).
+ */
+export function gnomonBoardRefuse(what: BoardRefusalKind, detail?: string): void {
+  for (const l of [...refusalListeners]) l(what, detail);
 }
-export function onBoardRefusal(listener: (what: BoardRefusalKind) => void): () => void {
+export function onBoardRefusal(listener: (what: BoardRefusalKind, detail?: string) => void): () => void {
   refusalListeners.add(listener);
   return () => void refusalListeners.delete(listener);
+}
+
+/** The engine element types a board holds (src/board/normal.ts BOARD_TYPES holds the same list; a test compares). */
+export const gnomonBoardTypes: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'arrow', 'frame', 'freedraw', 'text']);
+/**
+ * Called by the patched engine on every paste or insert, BEFORE it commits anything (patch `paste-types-filtered`):
+ * the elements of a board type, and a refusal for each one that is not. An image, an embeddable or an iframe
+ * therefore never becomes a scene element, and no node for one is ever built.
+ */
+export function gnomonBoardAdmit<T extends { type?: unknown }>(elements: readonly T[] | null | undefined): T[] {
+  const out: T[] = [];
+  for (const el of elements ?? []) {
+    if (el && typeof el.type === 'string' && gnomonBoardTypes.has(el.type)) out.push(el);
+    else gnomonBoardRefuse(el && el.type === 'image' ? 'image' : 'mark', el && typeof el.type === 'string' ? el.type.slice(0, 24) : 'unknown');
+  }
+  return out;
 }

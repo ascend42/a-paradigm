@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { checkLiveReskin, type LiveRun } from './board-golden.js';
 import { RESKIN_CLEAN } from './board-reskin-sample.js';
 // @ts-expect-error plain .mjs (the zero-dependency probe harness)
-import { harnessFiles, NO_REPORT, pickEngines, REFUSED_TOOLS, runBoardUnderCsp, runProblems, shippedBoard, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
+import { exercisedChecks, harnessFiles, NO_REPORT, pickEngines, REFUSED_TOOLS, runBoardUnderCsp, runProblems, shippedBoard, TOOLS } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
 
 interface Run { refusedTools?: Record<string, string>; stage?: string; mounted?: boolean; error?: string; violationCount?: number; violations?: Array<{ directive: string; blocked: string; phase: string; count: number }>; afterAdd?: number; afterAddSettled?: number; alive?: boolean; aliveAfterUnmount?: boolean; deadHandle?: string; captureRefused?: number; afterPointerRect?: number; afterPointerStroke?: number; libraryTrigger?: boolean; libraryOpen?: boolean; png?: { ok: boolean; bytes?: number }; errors?: string[]; rejections?: string[]; requests?: Array<{ path: string }>; cursors?: Record<string, string>; refusedTools?: Record<string, string>; visibility?: string; engine?: string }
 interface EngineRow { version: string; family: string; runs: Run[]; clean: boolean; problems: string[] }
@@ -80,6 +80,12 @@ describe.skipIf(!!process.env.CI)('G-DDL-06 the shipped board under the unchange
     const out = (await runBoardUnderCsp({ engines: wanted, runs: 1, timeoutMs: 90_000 })) as { csp: string; engines: Record<string, EngineRow> };
     expect(out.csp).not.toMatch(/unsafe|data:/);
     expect(Object.keys(out.engines).sort()).toEqual(wanted.map((e) => e.name).sort());
+    // every paste and drop check must have RUN in at least one engine here (an engine that reports one as
+    // unsupported did not exercise it); which engine ran which is printed with the run
+    const exercised: Record<string, string[]> = {};
+    for (const [name, e] of Object.entries(out.engines)) for (const [check, ran] of Object.entries(exercisedChecks(e.runs[0]) as Record<string, boolean>)) if (ran) (exercised[check] ??= []).push(name);
+    console.info(`G-DDL-07 paste and drop checks exercised: ${JSON.stringify(exercised)}`); // eslint-disable-line no-console
+    for (const check of Object.keys(exercisedChecks({}) as object)) expect(exercised[check] ?? [], `${check} ran in no engine`).not.toEqual([]);
     for (const [name, e] of Object.entries(out.engines)) {
       expect(e.problems, `${name} ${e.version}`).toEqual([]);
       const r = e.runs[0]!;

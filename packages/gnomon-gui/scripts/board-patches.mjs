@@ -46,7 +46,7 @@ export const BOARD_FONT_METRICS = Object.freeze({ unitsPerEm: 1000, ascender: 10
 export const boardLineHeight = (m) => (m.ascender - m.descender + m.lineGap) / m.unitsPerEm;
 
 /** The engine reads its colours and its key allowlist from the Gnomon tree (src/board/skin.ts), never from literals. */
-const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse}from"gnomon-board:skin";';
+const SKIN_IMPORT = 'import{gnomonBoardSkin,gnomonBoardKeyActions,gnomonBoardRefuse,gnomonBoardAdmit}from"gnomon-board:skin";';
 
 const SVG_BLOB = (expr) => `URL.createObjectURL(new Blob([${expr}],{type:H.svg}))`;
 
@@ -304,6 +304,15 @@ export const PATCHES = Object.freeze([
     prepend: SKIN_IMPORT,
   },
   {
+    id: 'paste-types-filtered',
+    file: 'index.js',
+    why: 'pasted or inserted elements are filtered BEFORE the engine commits them (review S3): an element that is not a board type (image, embeddable, iframe, diamond, line, magicframe) never enters the scene, so no iframe, embed or image node exists even for one commit; each removed type is reported to the host (gnomonBoardAdmit in src/board/skin.ts)',
+    find: 'C(this,"addElementsFromPasteOrLibrary",t=>{let r=Pm(t.elements,null,void 0),',
+    replace: 'C(this,"addElementsFromPasteOrLibrary",t=>{let r=Pm(gnomonBoardAdmit(t.elements),null,void 0),',
+    expect: 1,
+    prepend: SKIN_IMPORT,
+  },
+  {
     id: 'key-actions-allowlist',
     file: 'index.js',
     why: 'only the keyboard actions the board keeps run from a key (gnomonBoardKeyActions in src/board/skin.ts); every other engine shortcut (command palette, help, link, theme, zen and view mode, grid, stats, export, save, duplicate, grouping, layers, styles, lock, font size) matches nothing',
@@ -373,9 +382,9 @@ export const PATCHES = Object.freeze([
   {
     id: 'api-run-action',
     file: 'index.js',
-    why: 'the rail drives zoom, undo and redo from outside the engine: the imperative API gains one method that runs a registered action by name (the handle in src/board/index.ts allows a closed list)',
+    why: 'the rail drives zoom, undo and redo from outside the engine: the imperative API gains one method that runs one of SIX registered actions by name and no other (the closed list is in the patch itself: zoomIn, zoomOut, resetZoom, zoomToFit, undo, redo), with no value',
     find: 'history:{clear:this.resetHistory},',
-    replace: 'history:{clear:this.resetHistory},gnomonAction:(p,u)=>this.actionManager.executeAction(this.actionManager.actions[p],"api",u),',
+    replace: 'history:{clear:this.resetHistory},gnomonAction:p=>{["zoomIn","zoomOut","resetZoom","zoomToFit","undo","redo"].includes(p)&&this.actionManager.executeAction(this.actionManager.actions[p],"api")},',
     expect: 1,
   },
   {

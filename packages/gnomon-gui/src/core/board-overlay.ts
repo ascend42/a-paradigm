@@ -33,6 +33,8 @@ export type OverlayItem =
 
 /** An agent text's box stands this far off the glyphs. */
 export const TEXTBOX_PAD = 4;
+/** …and this far above them, so the seal on its top edge does not cover the first line (Mika, S1.1 review). */
+export const TEXTBOX_TOP = 12;
 
 /**
  * Everything the host draws over the marks, in paint order. `left`/`top` of a pin, hollow pin or seal is the point it
@@ -47,8 +49,8 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView): 
     const head = { left: box.left + box.width / 2, top: box.top };
     if (m.kind === 'stub') out.push({ type: 'stub', id: m.id, ...box, kind: m.stubKind ?? '', dashed: hand !== 'you' });
     if (isScrap(m.kind) || (m.kind === 'text' && hand !== 'you')) {
-      if (m.kind === 'text') out.push({ type: 'textbox', id: m.id, left: box.left - TEXTBOX_PAD, top: box.top - TEXTBOX_PAD, width: box.width + 2 * TEXTBOX_PAD, height: box.height + 2 * TEXTBOX_PAD });
-      const at = m.kind === 'text' ? { left: head.left, top: head.top - TEXTBOX_PAD } : head;
+      if (m.kind === 'text') out.push({ type: 'textbox', id: m.id, left: box.left - TEXTBOX_PAD, top: box.top - TEXTBOX_TOP, width: box.width + 2 * TEXTBOX_PAD, height: box.height + TEXTBOX_TOP + TEXTBOX_PAD });
+      const at = m.kind === 'text' ? { left: head.left, top: head.top - TEXTBOX_TOP } : head;
       if (m.author.cls === 'agent') out.push({ type: 'seal', id: m.id, ...at, seal: sealOf(m.author.id, m.author.name), name: m.author.name, on: m.kind === 'text' ? 'text' : 'pin' });
       else out.push({ type: hand === 'you' ? 'pin' : 'hollow', id: m.id, ...at });
     } else if (m.selected && m.author.cls === 'agent') {

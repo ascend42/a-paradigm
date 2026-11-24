@@ -29,7 +29,7 @@
 // browser sends NO report never loaded the page; it is retried ONCE per engine and both attempts stay in the
 // evidence. A run that reported is never retried.
 import { gnomonCsp } from '../_shared/browser.mjs';
-import { NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
+import { exercisedChecks, NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
 
 export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'G-DDL-07', 'S25-M3'];
 
@@ -85,15 +85,21 @@ export default async function probe(ctx) {
   const required = ['chromium', ...(ctx.platform === 'darwin' ? ['wkwebview'] : [])];
   const missingRequired = required.filter((f) => !families.has(f));
   const clean = rows.length > 0 && rows.every((r) => r.clean) && scan.findings.length === 0;
+  const allExercised = () => never.length === 0;
   const findings = [];
   if (scan.findings.length) findings.push(`static: ${scan.findings.map((f) => `${f.rule} x${f.count} in ${f.file}`).join('; ')}`);
   for (const [n, r] of Object.entries(engines)) if (!r.clean) findings.push(`${n}: ${r.problems.join(' | ')}`);
+  // a paste or drop check that a browser reported as unsupported did not run there: each must have run somewhere
+  const exercised = {};
+  for (const [n, e] of Object.entries(out.engines)) for (const [check, ran] of Object.entries(exercisedChecks(e.runs.find((r) => r.mounted) ?? {}))) if (ran) (exercised[check] ??= []).push(n);
+  const never = Object.keys(exercisedChecks({})).filter((c) => !exercised[c]);
+  if (never.length && rows.length) findings.push(`paste or drop checks that ran in no engine: ${never.join(', ')}`);
   if (missingRequired.length) findings.push(`required engine(s) not on this machine: ${missingRequired.join(', ')}`);
 
   // On a Mac the WKWebView row is the claim (the wrapper's engine): without it the probe FAILS, on CI too. A missing
   // Chromium-family browser stays partial.
   const noWebKit = ctx.platform === 'darwin' && !families.has('wkwebview');
-  let verdict = !clean || noWebKit ? 'fail' : missingRequired.length ? 'partial' : 'pass';
+  let verdict = !clean || noWebKit || !allExercised() ? 'fail' : missingRequired.length ? 'partial' : 'pass';
   if (ctx.platform !== 'darwin' && verdict === 'pass') verdict = 'partial';
 
   return {
@@ -107,6 +113,7 @@ export default async function probe(ctx) {
       engines,
       enginesUnavailable: out.missing,
       requiredEngines: required,
+      exercised,
       clean,
       findings,
       ...(ctx.platform !== 'darwin' ? { platformNote: `${ctx.platform}: mechanics only (Windows parity phase, P8-D78)` } : {}),

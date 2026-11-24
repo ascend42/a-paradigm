@@ -42,10 +42,10 @@ export const LEAF_COPY = {
  */
 export const REFUSAL_COPY = {
   image: 'Images can’t go on a board yet · draw or write it instead',
-  'scene-file': 'A board file can’t be dropped here · this board keeps its own marks',
-  'library-file': 'A library file can’t be dropped here · draw the shapes you need',
+  'scene-file': 'Board files can’t be dropped here · nothing was changed',
+  'library-file': 'Library files can’t be dropped here · draw the shapes',
   file: 'Files can’t be dropped on a board · write or draw it instead',
-  table: 'A pasted table can’t be drawn yet · paste it into a text instead',
+  table: 'Tables can’t be pasted yet · paste it into a text',
   mark: 'Part of what you pasted isn’t a board mark · it was left out',
 } as const;
 export const refusalLine = (what: keyof typeof REFUSAL_COPY): string => REFUSAL_COPY[what];
