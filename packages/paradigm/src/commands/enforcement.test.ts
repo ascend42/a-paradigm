@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
@@ -13,7 +14,7 @@ import {
   isValidLevel,
   getPreset,
 } from '../core/enforcement/index.js';
-import { enforcementSetCommand } from './enforcement.js';
+import { enforcementSetCommand, ENFORCEMENT_SYNC_NOTE } from './enforcement.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,5 +68,34 @@ describe('enforcementSetCommand', () => {
     await enforcementSetCommand('loud');
     expect(process.exitCode).toBe(1);
     expect(chunks.join('')).toContain('Must be one of: strict, balanced, minimal, none');
+  });
+
+  it('after a change, warns that `paradigm sync` overwrites hand edits instead of telling the user to run it', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-enf-set-'));
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+    const chunks: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      chunks.push(String(chunk));
+      return true;
+    });
+    try {
+      fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.paradigm', 'config.yaml'), 'version: "2.0"\nproject: demo\n', 'utf8');
+      await enforcementSetCommand('balanced');
+      const text = chunks.join('');
+      expect(text).toContain('Enforcement level set to');
+      expect(text).toContain('`paradigm sync` regenerates CLAUDE.md: hand edits to that file are overwritten.');
+      expect(text).not.toMatch(/Run `paradigm sync`/);
+      expect(fs.readFileSync(path.join(root, '.paradigm', 'config.yaml'), 'utf8')).toMatch(/level: balanced/);
+    } finally {
+      cwd.mockRestore();
+      vi.restoreAllMocks();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('the note names both facts: the file is stale, and sync overwrites hand edits', () => {
+    expect(ENFORCEMENT_SYNC_NOTE.join(' ')).toMatch(/still states the old level/);
+    expect(ENFORCEMENT_SYNC_NOTE.join(' ')).toMatch(/hand edits to that file are overwritten/);
   });
 });

@@ -81,6 +81,17 @@ export async function enforcementStatusCommand(options: { json?: boolean }) {
   out('');
 }
 
+/**
+ * Printed after `enforcement set`. The generated CLAUDE.md states the level, so
+ * it is now out of date; but `paradigm sync` rewrites the whole file (only the
+ * Warpline block survives), so the note must not send a user with a
+ * hand-written CLAUDE.md to run it blind.
+ */
+export const ENFORCEMENT_SYNC_NOTE: readonly string[] = [
+  'A generated CLAUDE.md still states the old level.',
+  '`paradigm sync` regenerates CLAUDE.md: hand edits to that file are overwritten.',
+];
+
 // ═══════════════════════════════════════════════════════════════════
 // SET LEVEL
 // ═══════════════════════════════════════════════════════════════════
@@ -96,7 +107,7 @@ export async function enforcementSetCommand(level: string) {
   try {
     setEnforcementLevel(cwd, level);
     success(`Enforcement level set to ${colorLevel(level)}`);
-    dim('  Run `paradigm sync` so CLAUDE.md states the new level.');
+    for (const line of ENFORCEMENT_SYNC_NOTE) dim('  ' + line);
   } catch (e) {
     error(`Failed to set level: ${(e as Error).message}`);
     process.exitCode = 1;
