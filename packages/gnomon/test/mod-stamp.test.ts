@@ -6,7 +6,7 @@
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_KINDS, DIM_SURFACES, RELAYED_FOR_FIELDS, canonicalJson, foldDim } from '@a-company/gnomon-contracts';
-import { clampModAppend, createModKernelCall, createModRelayPort, MOD_APPEND_FIELDS, MOD_APPEND_MAX_BYTES, ModRefusal, type ModAppendRow } from '../src/kernel/modhost/index.js';
+import { clampModAppend, createModKernelCall, createModRelayPort, MOD_APPEND_FIELDS, MOD_APPEND_MAX_BYTES, MOD_PAYLOAD_MAX_DEPTH, MOD_PAYLOAD_MAX_VISITED, MOD_PAYLOAD_PROTOTYPE_KEYS, ModRefusal, type ModAppendRow } from '../src/kernel/modhost/index.js';
 import { relaySurfaceOf } from '../src/kernel/socket/dispatch.js';
 import { MATRIX_CLASSES } from '../src/kernel/socket/methods.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
@@ -240,5 +240,101 @@ describe('G-MOD-13: relayedFor carries only the fields of its method; identity o
     await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' }, { toolRelayedFor: { ...noTurn } });
     expect(rows[1]!.payload.relayedFor).toEqual({ ...noTurn });
     expect('causes' in rows[1]!).toBe(false);
+  });
+});
+
+describe('G-MOD-18: a prototype key at any depth of a mod payload is refused, and the walk is bounded', () => {
+  const KIND = 'modns.acme.probe.done';
+  const refusal = (payload: unknown, stamp?: { relayedFor: Record<string, string> }): ModRefusal => {
+    let err: unknown;
+    try {
+      clampModAppend('acme.probe', 'p', { kind: KIND, payload: payload as Record<string, unknown> }, stamp);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ModRefusal);
+    return err as ModRefusal;
+  };
+  /** `key` as an OWN key `depth` levels down (depth 1 = a key of the payload itself), built as JSON.parse builds it. */
+  const nested = (depth: number, key: string): unknown => {
+    let s = `{${JSON.stringify(key)}:{"relayedFor":{"principal":"p:evil/x","surface":"gui"}}}`;
+    for (let i = 1; i < depth; i++) s = `{"a":${s}}`;
+    return JSON.parse(s);
+  };
+  /** A payload whose deepest container sits `levels` deep (the payload itself is level 1). */
+  const deep = (levels: number, open: string, close: string): Record<string, unknown> => JSON.parse(`{"a":${open.repeat(levels - 1)}1${close.repeat(levels - 1)}}`) as Record<string, unknown>;
+
+  it('refused (never dropped) at depth 1, 5 and 32, for each of __proto__, constructor and prototype, with or without a stamp', () => {
+    const stamp = { relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'gui' } };
+    for (const key of MOD_PAYLOAD_PROTOTYPE_KEYS) {
+      for (const depth of [1, 5, MOD_PAYLOAD_MAX_DEPTH]) {
+        for (const st of [stamp, undefined]) {
+          const e = refusal(nested(depth, key), st);
+          expect([key, depth, e.modCode, e.detail.why, e.detail.depth]).toEqual([key, depth, 'LOG', 'prototype-key', depth]);
+          expect(JSON.stringify([e.message, e.detail]).includes('evil')).toBe(false);
+        }
+      }
+    }
+    expect(MOD_PAYLOAD_PROTOTYPE_KEYS).toEqual(['__proto__', 'constructor', 'prototype']);
+  });
+
+  it('refused inside arrays: an array element, an array in an array, and an object under both', () => {
+    const inner = '{"__proto__":{"x":1}}';
+    for (const text of [`{"ops":[${inner}]}`, `{"ops":[[${inner}]]}`, `{"ops":[1,"s",null,{"node":{"tags":[{"deep":${inner}}]}}]}`, `{"ops":[{"constructor":1}]}`, `{"ops":[[[{"prototype":[]}]]]}`]) {
+      expect([text, refusal(JSON.parse(text)).detail.why]).toEqual([text, 'prototype-key']);
+    }
+    // the same shapes without the key are accepted, and a VALUE that is one of the words is not a key
+    const text = '{"ops":[[{"node":{"tags":[{"deep":{"x":1}}]}}]],"word":"__proto__","words":["constructor","prototype"]}';
+    expect(canonicalJson(clampModAppend('acme.probe', 'p', { kind: KIND, payload: JSON.parse(text) as Record<string, unknown> }).payload)).toBe(text);
+  });
+
+  it('a mod-supplied relayedFor is walked too: a prototype key inside it refuses the row instead of being removed with it', () => {
+    expect(refusal(JSON.parse('{"note":"n","relayedFor":{"__proto__":{"surface":"gui"}}}')).detail.why).toBe('prototype-key');
+  });
+
+  it('depth bound: 32 levels pass, 33 are refused payload-depth (objects and arrays), without recursion', () => {
+    for (const [open, close] of [['{"a":', '}'], ['[', ']']] as const) {
+      expect(() => clampModAppend('acme.probe', 'p', { kind: KIND, payload: deep(MOD_PAYLOAD_MAX_DEPTH, open, close) })).not.toThrow();
+      const e = refusal(deep(MOD_PAYLOAD_MAX_DEPTH + 1, open, close));
+      expect([e.modCode, e.detail.why]).toEqual(['LOG', 'payload-depth']);
+    }
+    // far beyond any call stack: built by a loop, refused by the bound, never a RangeError
+    let huge: unknown = 1;
+    for (let i = 0; i < 200_000; i++) huge = i % 2 ? [huge] : { a: huge };
+    expect(refusal({ a: huge }).detail.why).toBe('payload-depth');
+    expect(MOD_PAYLOAD_MAX_DEPTH).toBe(32);
+  });
+
+  it('size bound: 4,096 visited keys and elements pass, one more is refused payload-size, before the byte cap is measured', () => {
+    // 1 key (`a`) + (n - 1) elements
+    const at = (n: number): Record<string, unknown> => ({ a: Array.from({ length: n - 1 }, () => 0) });
+    expect(() => clampModAppend('acme.probe', 'p', { kind: KIND, payload: at(MOD_PAYLOAD_MAX_VISITED) })).not.toThrow();
+    expect(refusal(at(MOD_PAYLOAD_MAX_VISITED + 1)).detail.why).toBe('payload-size');
+    // keys count as well as elements, across containers (64 + 64 * 64)
+    const wide = Object.fromEntries(Array.from({ length: 64 }, (_v, i) => [`k${i}`, Object.fromEntries(Array.from({ length: 64 }, (_w, j) => [`j${j}`, 0]))]));
+    expect(refusal(wide).detail.why).toBe('payload-size');
+    // a payload over BOTH bounds is refused by the walk, so nothing was canonicalised to measure it first
+    const both = refusal({ a: Array.from({ length: MOD_PAYLOAD_MAX_VISITED + 1 }, () => 'x'.repeat(64)) });
+    expect([both.detail.why, both.detail.bytes]).toEqual(['payload-size', undefined]);
+    expect(MOD_PAYLOAD_MAX_VISITED).toBe(4096);
+  });
+
+  it('the walk reads own keys only and never mutates the mod\'s object', () => {
+    const inherited = Object.assign(Object.create({ constructor: 1, prototype: 2 }) as Record<string, unknown>, { note: 'n' });
+    expect(canonicalJson(clampModAppend('acme.probe', 'p', { kind: KIND, payload: { nested: inherited } }).payload)).toBe('{"nested":{"note":"n"}}');
+    const forged = JSON.parse('{"a":{"b":{"__proto__":{"x":1}}}}') as Record<string, unknown>;
+    const before = JSON.stringify(forged);
+    refusal(forged);
+    expect(JSON.stringify(forged)).toBe(before);
+  });
+
+  it('through a running mod: a deep prototype key on a real append is refused BAD_REQUEST and no row is written', async () => {
+    const { h, rows } = await started();
+    const call = (text: string) => h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.raw', text }) as Promise<{ out: { ok: boolean; code?: unknown } }>;
+    expect((await call('{"ops":[{"node":{"__proto__":{"x":1}}}]}')).out.ok).toBe(false);
+    expect((await call(JSON.stringify(deep(MOD_PAYLOAD_MAX_DEPTH + 1, '[', ']')))).out.ok).toBe(false);
+    expect(rows).toEqual([]);
+    expect((await call('{"ops":[{"node":{"x":1}}]}')).out.ok).toBe(true);
+    expect(rows).toHaveLength(1);
   });
 });

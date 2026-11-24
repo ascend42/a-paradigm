@@ -75,6 +75,45 @@ export interface ModKernelPorts {
   append(row: ModAppendRow): Promise<{ seq: number }>;
 }
 
+/** G-MOD-18: own keys a mod payload may not hold at any depth (JSON.parse makes an OWN `__proto__` key). */
+export const MOD_PAYLOAD_PROTOTYPE_KEYS: readonly string[] = Object.freeze(['__proto__', 'constructor', 'prototype']);
+/** G-MOD-18: the deepest container a mod payload may nest (the payload's own keys are depth 1). */
+export const MOD_PAYLOAD_MAX_DEPTH = 32;
+/** G-MOD-18: object keys plus array elements the walk visits before it refuses. */
+export const MOD_PAYLOAD_MAX_VISITED = 4_096;
+
+/**
+ * Aegis S1.3 A7 (G-MOD-18): REFUSE (never drop) an own key `__proto__`, `constructor` or `prototype` at any depth of
+ * a mod payload, arrays included. A stored own `__proto__` key would become the prototype of any reader that assigns
+ * the payload, or a part of it, onto an object. The walk is iterative (no recursion a deep payload could exhaust),
+ * reads only own enumerable keys and array indexes, and refuses beyond MOD_PAYLOAD_MAX_DEPTH or
+ * MOD_PAYLOAD_MAX_VISITED, so it is bounded whatever the mod sends. It runs before any copy or canonicalisation.
+ * The refusal never echoes a mod-supplied key or value.
+ */
+export function checkModPayloadKeys(payload: Record<string, unknown>, at: { name: string; kind: string }): void {
+  const stack: Array<{ v: object; depth: number }> = [{ v: payload, depth: 1 }];
+  let visited = 0;
+  while (stack.length > 0) {
+    const { v, depth } = stack.pop()!;
+    if (depth > MOD_PAYLOAD_MAX_DEPTH) throw new ModRefusal('LOG', `log.append payload nests deeper than ${MOD_PAYLOAD_MAX_DEPTH} levels`, { ...at, why: 'payload-depth' });
+    const isArr = Array.isArray(v);
+    const keys = isArr ? null : Object.keys(v);
+    const n = isArr ? (v as unknown[]).length : keys!.length;
+    visited += n;
+    if (visited > MOD_PAYLOAD_MAX_VISITED) throw new ModRefusal('LOG', `log.append payload holds more than ${MOD_PAYLOAD_MAX_VISITED} keys and elements`, { ...at, why: 'payload-size' });
+    for (let i = 0; i < n; i++) {
+      let child: unknown;
+      if (isArr) child = (v as unknown[])[i];
+      else {
+        const k = keys![i]!;
+        if (MOD_PAYLOAD_PROTOTYPE_KEYS.includes(k)) throw new ModRefusal('LOG', 'log.append payload has a prototype key (__proto__, constructor or prototype)', { ...at, why: 'prototype-key', depth });
+        child = (v as Record<string, unknown>)[k];
+      }
+      if (child !== null && typeof child === 'object') stack.push({ v: child, depth: depth + 1 });
+    }
+  }
+}
+
 /**
  * Clamp a mod's log.append params to the fields it may supply (Aegis C2), then apply the host's stamp (S1.2 C1,
  * G-MOD-12). `relayedFor` is a HOST-OWNED payload key on every mod append: a mod-supplied value is always removed;
@@ -87,11 +126,8 @@ export function clampModAppend(name: string, principal: string, params: Record<s
   if (typeof kind !== 'string' || !ownsModKind(name, kind)) throw new ModRefusal('VERB', `${name} may append only its own modns.${name}.* kinds`, { name, verb: 'log.append' });
   const raw = params.payload ?? {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new ModRefusal('LOG', 'log.append payload must be a plain object', { name, kind });
-  // Aegis S1.2 A2: an own `__proto__` key (JSON.parse makes one) survives a spread and would be stored, and a later
-  // reader that assigns the payload onto an object would take its prototype from the mod. Refused by key class.
-  for (const k of Object.keys(raw)) {
-    if (k === '__proto__' || k === 'constructor' || k === 'prototype') throw new ModRefusal('LOG', 'log.append payload has a prototype key (__proto__, constructor or prototype) at the top level', { name, kind, why: 'prototype-key' });
-  }
+  // Aegis S1.2 A2 / S1.3 A7 (G-MOD-18): refused, never dropped, at ANY depth, before any copy or canonicalisation
+  checkModPayloadKeys(raw as Record<string, unknown>, { name, kind });
   // a copy onto a null-prototype object, key by key: the mod's object is never mutated and never trusted for this key
   const payload: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const k of Object.keys(raw)) if (k !== RELAYED_FOR_APPEND_KEY) payload[k] = (raw as Record<string, unknown>)[k];

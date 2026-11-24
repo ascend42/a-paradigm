@@ -35,6 +35,8 @@ const run = async (input, api) => {
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
   if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done' })));
   if (input.op === 'append.forged') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done', payload: { note: input.note ?? 'n', relayedFor: { principal: 'p:evil/x', surface: 'gui', agent: 'arky', hsid: 'hs-evil', turn: 'turn:hs-evil/9' } }, causes: ['turn:hs-evil/9'] })));
+  if (input.op === 'append.raw') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done', payload: JSON.parse(input.text) })));
+  if (input.op === 'args') return { ok: true, keys: Object.keys(input), args: input, hsid: input.hsid ?? null, repo: input.repo ?? null, gesture: input.gesture ?? null };
   if (input.op === 'send') return attempt(async () => JSON.stringify(await api.kernel('session.send', input.params ?? {})));
   if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
   if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
