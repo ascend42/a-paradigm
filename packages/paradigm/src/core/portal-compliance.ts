@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_process';
 import { classifyYamlError } from '@a-company/portal-core';
+import { listProjectFiles, hasDirSegment, toPosixPath, PRUNE_DIRS, type ProjectFileList } from './project-files.js';
 import { suggestForUndeclared, suggestForUnused, type ComplianceSuggestion } from './near-match.js';
 
 // ============================================================================
@@ -245,23 +246,39 @@ function runGrep(rootDir: string, pattern: string): string {
 }
 
 /**
- * Every .purpose and portal.yaml under the root: the only valid sources for gate
- * references (^name means other things in arbitrary code — regex, JSX). One walk,
- * pruning the same directories as the grep path (incl. agent worktrees and build output).
+ * Directory names whose contents never count as gate sources: the code-scan skip
+ * list plus generated state trees.
  */
-function listGateFiles(rootDir: string): string[] {
-  const pruned = SKIP_DIRECTORIES;
-  try {
-    const result = execFileSync('find', [
-      rootDir,
-      '(', ...pruned.flatMap((d, i) => (i === 0 ? ['-name', d] : ['-o', '-name', d])), ')', '-prune', '-o',
-      '(', '-name', '.purpose', '-o', '-name', 'portal.yaml', ')',
-      '-print',
-    ], { encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 });
-    return result.split('\n').filter(Boolean);
-  } catch {
-    return [];
+const GATE_FILE_PRUNE: ReadonlySet<string> = new Set([...SKIP_DIRECTORIES, ...PRUNE_DIRS]);
+
+/**
+ * Every .purpose and portal.yaml under the root: the only valid sources for gate
+ * references (^name means other things in arbitrary code — regex, JSX). Built from
+ * the shared #project-files list: `git ls-files` inside a git work tree (so a
+ * gitignored file is not a gate source), a pruned walk outside one. Either way the
+ * same directories are left out as on the grep path (incl. agent worktrees and
+ * build output). Returns absolute paths, sorted.
+ *
+ * checkPortalCompliance calls this once per run and hands the list to both
+ * consumers; pass a ProjectFileList to reuse one the caller already has.
+ */
+export function listGateFiles(rootDir: string, projectFiles?: ProjectFileList): string[] {
+  const list = projectFiles ?? listProjectFiles(rootDir);
+  const out: string[] = [];
+  for (const rel of list.files) {
+    const base = rel.slice(rel.lastIndexOf('/') + 1);
+    if (base !== '.purpose' && base !== 'portal.yaml') continue;
+    if (hasDirSegment(rel, GATE_FILE_PRUNE)) continue;
+    const full = path.join(rootDir, ...rel.split('/'));
+    // A directory with a gate file's name is not a gate file
+    try {
+      if (!fs.statSync(full).isFile()) continue;
+    } catch {
+      continue;
+    }
+    out.push(full);
   }
+  return out.sort();
 }
 
 /**
@@ -269,10 +286,10 @@ function listGateFiles(rootDir: string): string[] {
  * and a .purpose file's `gates:` section are declarations too (paradigm_purpose add_gate
  * writes the latter), so their ids are not "used but undeclared".
  */
-export function extractNestedDeclaredGates(rootDir: string): string[] {
+export function extractNestedDeclaredGates(rootDir: string, gateFiles: string[] = listGateFiles(rootDir)): string[] {
   const rootPortal = path.resolve(rootDir, 'portal.yaml');
   const gates = new Set<string>();
-  for (const file of listGateFiles(rootDir)) {
+  for (const file of gateFiles) {
     if (path.resolve(file) === rootPortal) continue;
     let content: string;
     try {
@@ -303,11 +320,19 @@ export function extractNestedDeclaredGates(rootDir: string): string[] {
  * for ^gate-name symbol references. Then scan ALL code for function-based
  * gate checks (checkGate, requireGate, @Gate) which are unambiguous.
  */
-export function findGateReferences(rootDir: string): GateReference[] {
+export function findGateReferences(rootDir: string, gateFilesArg?: string[], projectFilesArg?: ProjectFileList): GateReference[] {
   const references: GateReference[] = [];
+  const projectFiles = projectFilesArg ?? listProjectFiles(rootDir);
+  const gateFiles = gateFilesArg ?? listGateFiles(rootDir, projectFiles);
+  // The code scan and the gate-file list must cover the SAME tree. rg and grep scan
+  // more than the project's own files (gitignored directories, submodules, nested
+  // repositories), whose .purpose / portal.yaml declarations are not read; a gate
+  // used and declared only in there would read as "used but undeclared". So a
+  // code-scan hit counts only when its file is in the project file list.
+  const listed = new Set(projectFiles.files);
 
   // 1. Search for ^gate symbol references ONLY in Paradigm-specific files
-  for (const file of listGateFiles(rootDir)) {
+  for (const file of gateFiles) {
     try {
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split('\n');
@@ -344,6 +369,7 @@ export function findGateReferences(rootDir: string): GateReference[] {
       const match = line.match(/^(.+?):(\d+):(.*)$/);
       if (match) {
         const [, file, lineNum, context] = match;
+        if (!listed.has(toPosixPath(path.relative(rootDir, file)))) continue;
         const gateMatch = context.match(new RegExp(pattern));
         if (gateMatch && gateMatch[1]) {
           const gateName = gateMatch[1].startsWith('^') ? gateMatch[1].slice(1) : gateMatch[1];
@@ -379,7 +405,27 @@ function extractUniqueGates(references: GateReference[]): string[] {
  * @param rootDir - Project root directory
  * @returns Compliance report
  */
-export async function checkPortalCompliance(rootDir: string): Promise<ComplianceReport> {
+export async function checkPortalCompliance(
+  rootDir: string,
+  options: {
+    /** The run's shared #project-files list, when the caller already has one. */
+    projectFiles?: ProjectFileList;
+    /** Called with each section's wall time (compliance-check --timings). */
+    onTiming?: (section: 'file-list' | 'gate-files' | 'references' | 'nested-declared', ms: number) => void;
+    /** Called once with the file list the check used (its source, and why when it was the walk). */
+    onFileList?: (list: ProjectFileList) => void;
+  } = {},
+): Promise<ComplianceReport> {
+  const timed = <T>(section: 'file-list' | 'gate-files' | 'references' | 'nested-declared', fn: () => T): T => {
+    if (!options.onTiming) return fn();
+    const start = performance.now();
+    try {
+      return fn();
+    } finally {
+      options.onTiming(section, performance.now() - start);
+    }
+  };
+
   const loadResult = loadPortalConfig(rootDir);
 
   // FAIL-CLOSED: portal.yaml exists but cannot be parsed.
@@ -417,7 +463,10 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
 
   // If no portal.yaml exists, check if any gate references exist in code
   if (loadResult.status === 'missing') {
-    const references = findGateReferences(rootDir);
+    const projectFiles = timed('file-list', () => options.projectFiles ?? listProjectFiles(rootDir));
+    options.onFileList?.(projectFiles);
+    const missingPortalFiles = timed('gate-files', () => listGateFiles(rootDir, projectFiles));
+    const references = timed('references', () => findGateReferences(rootDir, missingPortalFiles, projectFiles));
     const usedGates = extractUniqueGates(references);
 
     if (usedGates.length === 0) {
@@ -456,7 +505,11 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
   // Extract declared gates and find references
   const declaredGates = extractDeclaredGates(config);
   const routeAttachedGates = extractRouteAttachedGates(config);
-  const references = findGateReferences(rootDir);
+  // One file list per run, shared by the reference scan and the nested-declaration scan
+  const projectFiles = timed('file-list', () => options.projectFiles ?? listProjectFiles(rootDir));
+  options.onFileList?.(projectFiles);
+  const gateFiles = timed('gate-files', () => listGateFiles(rootDir, projectFiles));
+  const references = timed('references', () => findGateReferences(rootDir, gateFiles, projectFiles));
   const usedGates = extractUniqueGates(references);
 
   // Compare declared vs used
@@ -467,7 +520,7 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
   const routeAttachedUnused = declaredButUnused.filter(g => routeAttachedGates.has(g));
   const orphanUnused = declaredButUnused.filter(g => !routeAttachedGates.has(g));
 
-  const nestedDeclared = new Set(extractNestedDeclaredGates(rootDir));
+  const nestedDeclared = new Set(timed('nested-declared', () => extractNestedDeclaredGates(rootDir, gateFiles)));
   const usedButUndeclared = usedGates.filter(g => !declaredSet.has(g) && !nestedDeclared.has(g));
   const properlyDeclared = declaredGates.filter(g => usedSet.has(g));
 
