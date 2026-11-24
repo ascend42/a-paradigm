@@ -128,7 +128,7 @@ export interface BoardAttempt {
  */
 export interface BoardRefusal {
   what: 'image' | 'scene-file' | 'library-file' | 'file' | 'mark' | 'fallback' | 'paste' | 'text' | 'clipboard';
-  why: 'no-image-kind' | 'no-file-drop' | 'no-file-paste' | 'no-plain-text' | 'too-long' | 'nothing-held' | 'not-a-board-kind' | 'kept-as-it-is';
+  why: 'no-image-kind' | 'no-file-drop' | 'no-file-paste' | 'no-plain-text' | 'too-long' | 'nothing-held' | 'not-stored' | 'not-a-board-kind' | 'kept-as-it-is';
   detail?: string;
 }
 
@@ -238,12 +238,20 @@ export interface BoardHandle {
    */
   onCopy(listener: (nodeIds: string[], cause: ClipboardEvent) => string | null | void): () => void;
   /**
-   * As `onCopy`, for a cut: once the listener has answered a text, the selected marks are deleted and reported
-   * through `onEdit` as the person's deletes. `cause` here and on that edit is the Cmd/Ctrl+X keydown when the cut
-   * came from the keyboard (a gesture stamp can be minted from it), else the `cut` event. A cut that includes a
-   * mark not stored yet only copies.
+   * As `onCopy`, for a cut: the listener answers the text AND the node ids its register took (a frame's children
+   * with it); EXACTLY those nodes are deleted, and no others, reported through `onEdit` as the person's deletes.
+   * An empty answer cuts nothing. `cause` here and on that edit is the Cmd/Ctrl+X keydown when the cut
+   * came from the keyboard (a gesture stamp can be minted from it), else the `cut` event. A copy or
+   * a cut whose selection includes a mark not stored yet takes nothing: it is refused (`clipboard`, `not-stored`)
+   * and `onCopyOutside` listeners are told, so a stale copy cannot be pasted in its place.
    */
-  onCut(listener: (nodeIds: string[], cause: Event) => string | null | void): () => void;
+  onCut(listener: (nodeIds: string[], cause: Event) => { text: string; ids: string[] } | null | void): () => void;
+  /**
+   * Select exactly these nodes (the marks a paste just added), once every one of them is rendered: at once when
+   * they are, else after the render that brings them. Dropped if the person presses or types first. Selecting is
+   * never an edit.
+   */
+  select(nodeIds: readonly string[]): void;
   /** Be told when a copy or a cut happens anywhere else on the page, so the caller can forget what it held. */
   onCopyOutside(listener: () => void): () => void;
   /** Be told when the board refused something, so the leaf can say so. The engine itself shows nothing. */

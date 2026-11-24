@@ -321,4 +321,133 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     expect(f('cmdD').edits).toBe(f('alt').edits);
     expect(await cspRows()).toBe(rowsBefore);
   }, 180_000);
+
+  // ── the review of PR #117, group A: marks lost or destroyed ──
+  const EDITS = `${D}.edits.map((e) => ({ ops: e.ops, cause: e.cause }))`;
+  const SELECTED = `${B}.marks().filter((m) => m.selected && !m.labelOf).map((m) => m.node)`;
+  const LINE = "document.querySelector('#preview-board .bd-keep').textContent";
+  const IDS = `[...${D}.state().nodes.keys()]`;
+  const CLIPTEXT = 'navigator.clipboard.readText()';
+  const FRAME = fixtureId(0);
+  const BROKER = fixtureId(2);
+  const sel = (ids: string[]): { read: string; as: string } => ({ read: `(${B}.focus(), ${B}.select(${JSON.stringify(ids)}), ${B}.state().selected)`, as: 'sel' });
+  const copy = { key: 'c', meta: true, commands: ['copy'] };
+  const cutKey = { key: 'x', meta: true, commands: ['cut'] };
+  const pasteKey = { key: 'v', meta: true, commands: ['paste'] };
+
+  it('A1: what a paste added is what is selected afterwards: Delete removes only the paste, clones and pasted text alike', async () => {
+    const a = await real([
+      { read: IDS, as: 'ids0' },
+      sel([BROKER]), copy, { wait: 200 }, pasteKey, { wait: 400 },
+      { read: EDITS, as: 'afterPaste' }, { read: SELECTED, as: 'selectedClone' },
+      { key: 'Delete' }, { wait: 300 }, { read: EDITS, as: 'afterDelete' }, { read: IDS, as: 'ids1' },
+      aim, { paste: 'pasted words' }, { wait: 400 }, { read: EDITS, as: 'afterText' }, { read: SELECTED, as: 'selectedText' },
+      { key: 'Delete' }, { wait: 300 }, { read: EDITS, as: 'afterDelete2' }, { read: IDS, as: 'ids2' },
+    ]);
+    const adds = ((a.afterPaste as Edit[]).at(-1)!.ops as Array<{ type: string; node: { id: string } }>).map((o) => o.node.id);
+    expect(adds).toHaveLength(1);
+    expect(a.selectedClone).toEqual(adds);
+    expect((a.afterDelete as Edit[]).at(-1)!.ops).toEqual([{ type: 'delete', id: adds[0] }]);
+    expect(a.ids1).toEqual(a.ids0); // the original is still there, the clone is gone
+    const text = ((a.afterText as Edit[]).at(-1)!.ops as Array<{ type: string; node: { id: string; kind: string } }>)[0]!.node;
+    expect(text.kind).toBe('text');
+    expect(a.selectedText).toEqual([text.id]);
+    expect((a.afterDelete2 as Edit[]).at(-1)!.ops).toEqual([{ type: 'delete', id: text.id }]);
+    expect(a.ids2).toEqual(a.ids0);
+  }, 120_000);
+
+  it('A2: a frame travels with its children, a cut deletes exactly what the register took, and a selection over the cap is refused whole (a copy says what it left out)', async () => {
+    const NODES = `[...${D}.state().nodes.entries()].map(([id, n]) => ({ id, parent: n.node.parent ?? null, kind: n.node.kind }))`;
+    const many = Array.from({ length: 70 }, (_, i) => ({ type: 'add', node: { id: fixtureId(1000 + i), kind: 'rect', x: 700 + (i % 10) * 30, y: 60 + Math.floor(i / 10) * 30, z: `zz${String(i).padStart(2, '0')}`, w: 20, h: 20 } }));
+    const a = await real([
+      { read: NODES, as: 'nodes0' },
+      // cut the frame alone: its children go with it, and nothing else
+      sel([FRAME]), cutKey, { wait: 400 }, { read: EDITS, as: 'cutFrame' }, { read: NODES, as: 'nodes1' },
+      pasteKey, { wait: 400 }, { read: EDITS, as: 'pasteFrame' },
+      // 70 more marks: Cmd+A, Cmd+X is refused whole
+      { read: `(${B}.render(${D}.apply(${JSON.stringify(many)}, 'arky')), 1)`, as: 'r' }, { wait: 300 },
+      { await: `navigator.clipboard.writeText('sentinel').then(() => 1)`, as: 'w' },
+      aim, { key: 'a', meta: true, commands: ['selectAll'] }, { wait: 150 }, { read: `${B}.state().selected`, as: 'selectedAll' },
+      { read: `${D}.edits.length`, as: 'editsBeforeCut' }, { read: `${B}.count()`, as: 'countBeforeCut' },
+      cutKey, { wait: 400 }, { read: `${D}.edits.length`, as: 'editsAfterCut' }, { read: `${B}.count()`, as: 'countAfterCut' }, { read: LINE, as: 'cutLine' }, { await: CLIPTEXT, as: 'clipAfterCut' },
+      // a copy of the same selection takes 64 and says how many it left out
+      copy, { wait: 300 }, { read: LINE, as: 'copyLine' },
+      pasteKey, { wait: 500 }, { read: EDITS, as: 'pasteMany' },
+    ]);
+    type N = { id: string; parent: string | null; kind: string };
+    const nodes0 = a.nodes0 as N[];
+    const children = nodes0.filter((n) => n.parent === FRAME).map((n) => n.id);
+    expect(children.length).toBeGreaterThan(3);
+    const cut = (a.cutFrame as Edit[]).at(-1)!;
+    expect(cut.ops.every((o) => o.type === 'delete')).toBe(true);
+    expect((cut.ops as Array<{ id: string }>).map((o) => o.id).sort()).toEqual([FRAME, ...children].sort());
+    expect((a.nodes1 as N[]).map((n) => n.id).sort()).toEqual(nodes0.filter((n) => n.id !== FRAME && n.parent !== FRAME).map((n) => n.id).sort());
+    // the paste brings back the frame WITH its children, each tied to the new frame
+    const back = (a.pasteFrame as Edit[]).at(-1)!.ops as Array<{ type: string; node: { id: string; kind: string; parent?: string } }>;
+    expect(back).toHaveLength(children.length + 1);
+    const frame = back.find((o) => o.node.kind === 'frame')!.node;
+    expect(back.filter((o) => o.node.kind !== 'frame').every((o) => o.node.parent === frame.id)).toBe(true);
+    // over the cap: the cut is refused whole, with a line, and the clipboard is not touched
+    expect(a.selectedAll as number).toBeGreaterThan(64);
+    expect(a.editsAfterCut).toBe(a.editsBeforeCut);
+    expect(a.countAfterCut).toBe(a.countBeforeCut);
+    expect(String(a.cutLine)).toContain('nothing was cut');
+    expect(a.clipAfterCut).toBe('sentinel');
+    // the copy says what it left out, and the paste is the 64 it took
+    expect(String(a.copyLine)).toMatch(/^\d+ marks were left out of the copy/);
+    const pasted = (a.pasteMany as Edit[]).at(-1)!;
+    expect(pasted.cause).toBe('paste');
+    expect(pasted.ops).toHaveLength(64);
+  }, 180_000);
+
+  it('A3: a copy or a cut of a mark not stored yet takes nothing, says so, and forgets the older copy so it cannot be pasted in its place', async () => {
+    const a = await real([
+      sel([BROKER]), copy, { wait: 200 },
+      // from here on the fixture records edits and does NOT store them: a drawn mark stays unstored
+      { read: `(${D}.held = true, 1)`, as: 'held' },
+      { press: '#preview-board [data-key="tool:rect"]' }, { drag: [[450, 300], [500, 330], [540, 360]] }, { wait: 200 },
+      { read: `${B}.marks().filter((m) => m.selected).map((m) => m.node)`, as: 'selectedNew' },
+      { read: `${D}.edits.length`, as: 'edits0' },
+      cutKey, { wait: 300 }, { read: LINE, as: 'cutLine' }, { read: `${B}.count()`, as: 'countAfterCut' },
+      { read: `(globalThis.__c8.said.splice(0))`, as: 'said' },
+      copy, { wait: 300 }, { read: LINE, as: 'copyLine' },
+      // the older copy's words are still on the clipboard: pasted now, they are words, never clones
+      pasteKey, { wait: 400 }, { read: EDITS, as: 'edits' },
+    ]);
+    expect(a.selectedNew).toEqual([null]);
+    expect(String(a.cutLine)).toContain('isn’t saved yet');
+    expect(String(a.copyLine)).toContain('isn’t saved yet');
+    expect(a.said).toEqual(['clipboard:not-stored']);
+    const edits = a.edits as Edit[];
+    expect(edits.length).toBe((a.edits0 as number) + 1); // the paste alone: the cut deleted nothing
+    const op = edits.at(-1)!.ops as Array<{ type: string; node: { kind: string; text?: string } }>;
+    expect(op).toHaveLength(1);
+    expect(op[0]!.node).toMatchObject({ kind: 'text', text: 'broker' });
+  }, 120_000);
+
+  it('A4: words that would take a text being typed over its limit are refused at the paste, and what was typed is kept', async () => {
+    const TA = `${HOST}.querySelector('textarea')`;
+    const a = await real([
+      { press: '#preview-board [data-key="tool:text"]' }, { at: EMPTY, press: true }, { wait: 200 },
+      { key: 'a' }, { key: 'b' },
+      { paste: 'x'.repeat(3999) }, { wait: 300 }, { read: `${TA}.value`, as: 'value' }, facts('refusedPaste'),
+      { paste: 'x'.repeat(3998) }, { wait: 300 }, { read: `${TA}.value.length`, as: 'fits' },
+      { key: 'Escape' }, { wait: 300 }, { read: EDITS, as: 'edits' }, { read: LINE, as: 'line' },
+    ]);
+    expect(a.value).toBe('ab');
+    expect((a.refusedPaste as Facts).said).toEqual(['text:too-long']);
+    expect(a.fits).toBe(4000);
+    const edits = a.edits as Edit[];
+    expect(edits).toHaveLength(1);
+    expect((edits[0]!.ops[0] as unknown as { node: { text: string } }).node.text).toBe(`ab${'x'.repeat(3998)}`);
+  }, 120_000);
+
+  it('A5: a mark copied and pasted back inside its frame, which still stands, stays in that frame', async () => {
+    const a = await real([
+      sel([BROKER]), copy, { wait: 200 }, pasteKey, { wait: 400 }, { read: EDITS, as: 'edits' },
+    ]);
+    const add = ((a.edits as Edit[]).at(-1)!.ops as Array<{ type: string; node: { id: string; parent?: string; label?: string } }>)[0]!.node;
+    expect(add).toMatchObject({ label: 'broker', parent: FRAME });
+    expect(add.id).not.toBe(BROKER);
+  }, 120_000);
 });

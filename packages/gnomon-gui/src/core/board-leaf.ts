@@ -53,6 +53,12 @@ export const REFUSAL_COPY = {
   clipboard: 'Those copied marks are no longer held · copy them again',
 } as const;
 export const refusalLine = (what: keyof typeof REFUSAL_COPY): string => REFUSAL_COPY[what];
+/** Lines of the leaf's own copy register (proposed for Luna). A copy takes 64 marks at most; a cut takes all of the selection or nothing. */
+export const CLIP_COPY = {
+  leftOut: (n: number): string => `${n} ${n === 1 ? 'mark was' : 'marks were'} left out of the copy · 64 at most, and only marks this Gnomon can draw`,
+  cutRefused: 'That can’t all be cut at once · nothing was cut · cut 64 marks or fewer',
+  notStored: 'That mark isn’t saved yet · try again in a moment',
+} as const;
 
 export type OpenedHow = 'command' | 'menu' | 'offer';
 /** '<how>' of the keep line: '/board', 'the ⋯ menu', '<agent>’s offer'. */

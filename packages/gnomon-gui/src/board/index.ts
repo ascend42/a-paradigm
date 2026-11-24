@@ -541,6 +541,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         api.history.clear();
         announce();
         sceneChanged();
+        selectWanted();
       };
 
       // ── edits: the scene diffed against `prev`, once a gesture has ended ──
@@ -635,6 +636,17 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         });
         const gone = (op: DimOp): boolean => op.type === 'delete' && !shown.has(ids.engineOf(op.id));
         return elementsToOps(basis, scene as never, ids, { line: style.line, fill: style.fill, sticky: stickyDrawn.size > 0 }).filter((op) => !gone(op));
+      };
+      /** Nodes to select once they are all rendered (the marks a paste just added). */
+      let wanted: string[] | null = null;
+      const selectWanted = (): void => {
+        if (!wanted || dead !== null || busy()) return;
+        const engineIds = wanted.map((n) => (prev.nodes.has(n) ? engineByNode.get(n) : undefined));
+        if (engineIds.some((id) => id === undefined || !shown.has(id))) return;
+        wanted = null;
+        api.updateScene({ appState: { selectedElementIds: Object.fromEntries(engineIds.map((id) => [id, true])), selectedGroupIds: {} } as never, captureUpdate: CaptureUpdateAction.NEVER });
+        announce();
+        sceneChanged();
       };
       let flushQueued = false;
       const flush = (): void => {
@@ -800,6 +812,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         touched = true;
         putBacks = 0;
         lastKey = null;
+        wanted = null; // the person has moved on: a pending selection of pasted marks is not forced on them
         note(api.getAppState() as never);
       };
       const onUp = (e: Event): void => {
@@ -817,7 +830,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         touched = true;
         putBacks = 0;
         cause = e;
-        lastKey = e;
+        lastKey = e.repeat ? null : e;
         note(api.getAppState() as never);
         setTimeout(queueFlush, 0);
         const mod = e.metaKey || e.ctrlKey;
@@ -856,14 +869,28 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const typingIn = (e: Event): boolean => e.target instanceof Node && host.contains(e.target) && takesPlainText(e.target);
       const pasteListeners = new Set<(text: string, cause: ClipboardEvent) => void>();
       const copyListeners = new Set<(nodeIds: string[], cause: ClipboardEvent) => string | null | void>();
-      const cutListeners = new Set<(nodeIds: string[], cause: Event) => string | null | void>();
+      const cutListeners = new Set<(nodeIds: string[], cause: Event) => { text: string; ids: string[] } | null | void>();
       const outsideListeners = new Set<() => void>();
       const onPasteFirst = (e: ClipboardEvent): void => {
         if (dead !== null || !within(e)) return;
         // In a text being typed the field takes the paste itself, as plain text (rich HTML arrives as its text, a
         // file as nothing); the engine's handlers on the field and on the document never see the event. The words
         // reach the state only when the text is committed, through the edit path.
-        if (typingIn(e)) return void e.stopImmediatePropagation();
+        if (typingIn(e)) {
+          e.stopImmediatePropagation();
+          // only the LENGTH of the pasted words is read: words that would take the field over what its mark may
+          // hold are refused here, at the paste, so what was already typed is never thrown away at commit
+          const field = e.target as HTMLTextAreaElement | HTMLInputElement;
+          const st = api.getAppState() as unknown as { editingTextElement?: { containerId?: string | null } | null; editingFrame?: unknown };
+          const limit = st.editingTextElement ? (st.editingTextElement.containerId ? DIM_LIMITS.label : DIM_LIMITS.text) : st.editingFrame != null || field instanceof HTMLInputElement ? DIM_LIMITS.title : DIM_LIMITS.text;
+          const replaced = Math.abs((field.selectionEnd ?? 0) - (field.selectionStart ?? 0));
+          const incoming = (e.clipboardData?.getData('text/plain') ?? '').length;
+          if (field.value.length - replaced + incoming > limit) {
+            e.preventDefault();
+            refuse({ what: 'text', why: 'too-long', detail: String(limit) });
+          }
+          return;
+        }
         e.preventDefault();
         e.stopImmediatePropagation();
         const dt = e.clipboardData;
@@ -903,26 +930,41 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         e.stopImmediatePropagation();
         if (!counts(e) || yielded) return;
         const sel = selectedNodes();
-        // a cut made with the keyboard is stamped from its key (a `cut` event carries no gesture stamp)
-        const key = lastKey && (lastKey.metaKey || lastKey.ctrlKey) && lastKey.key.toLowerCase() === 'x' ? lastKey : null;
+        // a mark not stored yet cannot be copied: nothing is taken, the person is told, and whatever was held
+        // before is forgotten so that a stale copy is not pasted in its place
+        if (!sel.all) {
+          for (const l of [...outsideListeners]) l();
+          return refuse({ what: 'clipboard', why: 'not-stored' });
+        }
+        // a cut made with the keyboard is stamped from its key (a `cut` event carries no gesture stamp); the key is
+        // used once
+        const key = cut && lastKey && (lastKey.metaKey || lastKey.ctrlKey) && lastKey.key.toLowerCase() === 'x' ? lastKey : null;
+        lastKey = null;
         let text = '';
-        if (cut) for (const l of [...cutListeners]) text = String(l(sel.ids, key ?? e) ?? '') || text;
-        else for (const l of [...copyListeners]) text = String(l(sel.ids, e) ?? '') || text;
+        let taken: string[] = [];
+        if (cut) {
+          for (const l of [...cutListeners]) {
+            const r = l(sel.ids, key ?? e);
+            if (r && typeof r.text === 'string' && r.text.length > 0) [text, taken] = [r.text, [...r.ids]];
+          }
+        } else for (const l of [...copyListeners]) text = String(l(sel.ids, e) ?? '') || text;
         if (text.length === 0) return; // nothing was taken: the system clipboard is left as it is
         // plain text and nothing else: no HTML, no engine type, no custom type
         e.clipboardData?.setData('text/plain', text);
-        // a cut removes what was copied, as the person's own edit; with a mark not stored yet it only copies
-        if (!cut || !sel.all || busy()) return;
+        if (!cut || busy()) return;
+        // a cut removes EXACTLY the nodes the register took (and their labels), as the person's own edit
+        const going = new Set<string>();
+        for (const nodeId of taken) {
+          const engineId = prev.nodes.has(nodeId) ? engineByNode.get(nodeId) : undefined;
+          if (engineId !== undefined) going.add(engineId);
+        }
+        if (going.size === 0) return;
+        const scene = api.getSceneElementsIncludingDeleted() as unknown as Element[];
+        for (const el of scene) if (typeof el.containerId === 'string' && going.has(el.containerId)) going.add(el.id);
         touched = true;
         putBacks = 0;
         cause = key ?? e;
-        note(api.getAppState() as never);
-        const selected = api.getAppState().selectedElementIds as Record<string, unknown>;
-        const going = new Set<string>();
-        const scene = api.getSceneElementsIncludingDeleted() as unknown as Array<Element & { frameId?: string | null }>;
-        for (const el of scene) if (selected[el.id] === true && !el.isDeleted) going.add(el.id);
-        for (const el of scene) if (typeof el.frameId === 'string' && going.has(el.frameId)) going.add(el.id);
-        for (const el of scene) if (typeof el.containerId === 'string' && going.has(el.containerId)) going.add(el.id);
+        for (const id of going) handled.add(id);
         api.updateScene({ elements: scene.map((el) => (going.has(el.id) && !el.isDeleted ? changed(el, { isDeleted: true }) : el)) as never, appState: { selectedElementIds: {}, selectedGroupIds: {} } as never, captureUpdate: CaptureUpdateAction.NEVER });
         queueFlush();
       };
@@ -1122,6 +1164,11 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         onCut(listener) {
           cutListeners.add(listener);
           return () => void cutListeners.delete(listener);
+        },
+        select(nodeIds) {
+          live();
+          wanted = [...nodeIds];
+          selectWanted();
         },
         onCopyOutside(listener) {
           outsideListeners.add(listener);

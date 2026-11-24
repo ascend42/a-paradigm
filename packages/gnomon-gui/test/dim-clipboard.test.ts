@@ -45,14 +45,15 @@ describe('#gui-dim-clipboard', () => {
   it('copy answers the marks’ words, and a paste of exactly that text adds clones with new ids, offset 16', () => {
     const state = board();
     const clip = new DimClipboard();
-    expect(clip.copy(state, [ULID(4), ULID(2), ULID(3)])).toEqual({ text: 'note', copied: 3, skipped: 0 });
+    expect(clip.copy(state, [ULID(4), ULID(2), ULID(3)])).toMatchObject({ text: 'note', copied: 3, skipped: 0 });
     expect(clip.matches('note')).toBe(true);
     expect(clip.matches('note ')).toBe(false);
     expect(clip.paste('other', state, minter())).toEqual({ kind: 'text' });
     const ops = clonesOf(clip.paste('note', state, minter()));
     expect(ops).toEqual([
-      // the frame was not copied, so `parent` is dropped; refs are not carried
-      { type: 'add', node: { id: ULID(800), kind: 'rect', x: 26, y: 26, z: expect.any(String), w: 50, h: 40, fill: 'lemon', label: 'note' } },
+      // the frame was not copied but still stands and the clone lands inside it: `parent` is kept (review of PR #117,
+      // A5); refs are not carried
+      { type: 'add', node: { id: ULID(800), kind: 'rect', x: 26, y: 26, z: expect.any(String), w: 50, h: 40, fill: 'lemon', label: 'note', parent: ULID(1) } },
       { type: 'add', node: { id: ULID(801), kind: 'ellipse', x: 216, y: 26, z: expect.any(String), w: 50, h: 40, color: 'cobalt', weight: 2 } },
       // from and to point at the clones; rel, the forged author and the carried link are gone
       { type: 'add', node: { id: ULID(802), kind: 'arrow', x: 76, y: 46, z: expect.any(String), points: [0, 0, 140, 0], head: 'both', from: ULID(800), to: ULID(801) } },
@@ -97,12 +98,12 @@ describe('#gui-dim-clipboard', () => {
     const clip = new DimClipboard();
     expect(clip.matches('')).toBe(false);
     expect(clip.paste('', state, minter())).toEqual({ kind: 'text' });
-    expect(clip.copy(state, [ULID(3)])).toEqual({ text: '(1 board mark)', copied: 1, skipped: 0 });
+    expect(clip.copy(state, [ULID(3)])).toMatchObject({ text: '(1 board mark)', copied: 1, skipped: 0 });
     expect(clip.matches('')).toBe(false);
     expect(clip.matches(undefined)).toBe(false);
     expect(clonesOf(clip.paste('(1 board mark)', state, minter()))).toHaveLength(1);
     // copying nothing, or only a mark this build cannot write, clears it
-    expect(clip.copy(state, [ULID(5), 'nope'])).toEqual({ text: '', copied: 0, skipped: 2 });
+    expect(clip.copy(state, [ULID(5), 'nope'])).toMatchObject({ text: '', copied: 0, skipped: 2 });
     expect(clip.holds()).toBe(false);
     expect(clip.matches('(1 board mark)')).toBe(false);
     expect(clip.matches('')).toBe(false);
@@ -127,7 +128,7 @@ describe('#gui-dim-clipboard', () => {
     }
     const state = foldDim([start, opRow(2, ops.slice(0, 64)), opRow(3, ops.slice(64))]);
     const clip = new DimClipboard();
-    expect(clip.copy(state, ids)).toEqual({ text: '(64 board marks)', copied: DIM_CLIPBOARD_LIMITS.clones, skipped: 6 });
+    expect(clip.copy(state, ids)).toMatchObject({ text: '(64 board marks)', copied: DIM_CLIPBOARD_LIMITS.clones, skipped: 6 });
     const pasted = clonesOf(clip.paste('(64 board marks)', state, minter()));
     expect(pasted).toHaveLength(64);
     expect(validateDimOps(state, pasted, ME).ok).toHaveLength(64);
@@ -149,11 +150,11 @@ describe('#gui-dim-clipboard', () => {
   it('19. skipped is the number of distinct ids asked for that were not copied', () => {
     const state = board();
     const clip = new DimClipboard();
-    expect(clip.copy(state, [ULID(2), ULID(2), 'nope'])).toEqual({ text: 'note', copied: 1, skipped: 1 });
-    expect(clip.copy(state, ['nope', 'nope'])).toEqual({ text: '', copied: 0, skipped: 1 });
+    expect(clip.copy(state, [ULID(2), ULID(2), 'nope'])).toMatchObject({ text: 'note', copied: 1, skipped: 1 });
+    expect(clip.copy(state, ['nope', 'nope'])).toMatchObject({ text: '', copied: 0, skipped: 1 });
     expect(clip.copy(state, [ULID(2), ULID(2)])).toMatchObject({ copied: 1, skipped: 0 });
     expect(clip.copy(state, [ULID(3), ULID(5), ULID(5), 'a', 'b'])).toMatchObject({ copied: 1, skipped: 3 });
-    expect(clip.copy(state, [])).toEqual({ text: '', copied: 0, skipped: 0 });
+    expect(clip.copy(state, [])).toMatchObject({ text: '', copied: 0, skipped: 0 });
   });
 
   it('19. a paste of the stand-in line when the register does not hold it is nothing-held, not plain text', () => {
@@ -201,5 +202,43 @@ describe('#gui-dim-clipboard dimPasteTextOp: a pasted text that is not the regis
     expect(long.node).toMatchObject({ kind: 'text', text: svg, w: DIM_PASTE_WRAP.w, x: 500 - DIM_PASTE_WRAP.w / 2, y: 300 });
     expect(Object.keys(long.node).sort()).toEqual(['id', 'kind', 'text', 'w', 'x', 'y', 'z']);
     for (const op of [short, long]) expect(validateDimOps(emptyDimState(), [op], { cls: 'human', principal: 'p:test/you' } as never).refused ?? []).toEqual([]);
+  });
+});
+
+describe('#gui-dim-clipboard review of PR #117: frames, parents and what a cut takes', () => {
+  it('a copied frame takes its children; `ids` is exactly what was taken; a parent outside the set is kept only in the same dimension, for a live frame the clone lands in', async () => {
+    const { DimClipboard } = await import('../src/core/dim-clipboard.js');
+    const { foldDim, DIM_KINDS } = await import('@a-company/gnomon-contracts');
+    const id = (n: number): string => `01JCL1PB0ARD0000000000000${n}`;
+    const state = (dim: string, frameW = 300) => foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['h'], opened: 'command', relayedFor: { principal: 'p:t/you', connId: 'c', surface: 'gui' } } },
+      { seq: 2, kind: DIM_KINDS.op, payload: { v: 1, dim, relayedFor: { principal: 'p:t/you', connId: 'c', surface: 'gui' }, ops: [
+        { type: 'add', node: { id: id(1), kind: 'frame', x: 0, y: 0, z: 'a', w: frameW, h: 300, title: 'f' } },
+        { type: 'add', node: { id: id(2), kind: 'rect', x: 20, y: 20, z: 'b', w: 50, h: 40, parent: id(1), label: 'in' } },
+        { type: 'add', node: { id: id(3), kind: 'text', x: 30, y: 100, z: 'c', text: 'words', parent: id(1) } },
+        { type: 'add', node: { id: id(4), kind: 'rect', x: 500, y: 20, z: 'd', w: 50, h: 40 } },
+      ] } },
+    ] as never);
+    let n = 0;
+    const mint = (): string => `01JCL1PC10NE00000000000${String(n++).padStart(3, '0')}`;
+    const a = state('dim:01JCL1PD1MA000000000000001');
+    const clip = new DimClipboard();
+    // the frame alone: its two children travel with it
+    const framed = clip.copy(a, [id(1)]);
+    expect(framed).toMatchObject({ copied: 3, skipped: 0 });
+    expect([...framed.ids].sort()).toEqual([id(1), id(2), id(3)]);
+    const back = clip.paste(framed.text, a, mint) as { kind: 'clones'; ops: Array<{ node: Record<string, unknown> }> };
+    const frame = back.ops.find((o) => o.node.kind === 'frame')!.node;
+    expect(back.ops.filter((o) => o.node.kind !== 'frame').map((o) => o.node.parent)).toEqual([frame.id, frame.id]);
+    // a child alone, pasted back into the same dimension: it lands inside the frame and keeps it
+    const child = clip.copy(a, [id(2)]);
+    expect(child.ids).toEqual([id(2)]);
+    expect((clip.paste(child.text, a, mint) as { ops: Array<{ node: Record<string, unknown> }> }).ops[0]!.node.parent).toBe(id(1));
+    // …but not when the clone lands outside the frame, when the frame is gone, or in another dimension
+    expect((clip.paste(child.text, state('dim:01JCL1PD1MA000000000000001', 60), mint) as { ops: Array<{ node: Record<string, unknown> }> }).ops[0]!.node).not.toHaveProperty('parent');
+    clip.copy(a, [id(2)]);
+    expect((clip.paste(child.text, state('dim:01JCL1PD1MB000000000000002'), mint) as { ops: Array<{ node: Record<string, unknown> }> }).ops[0]!.node).not.toHaveProperty('parent');
+    clip.clear();
+    expect(clip.copy(a, [id(4), 'nope']).skipped).toBe(1);
   });
 });

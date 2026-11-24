@@ -16,7 +16,7 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, dimKindName, resolveContentColour 
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, refusalLine, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -142,16 +142,33 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   window.addEventListener('blur', forget);
   const copied = (ids: string[]): string => {
     const view = o.view?.() ?? null;
-    return view ? clip.copy(view, ids).text : (clip.clear(), '');
+    if (!view) return clip.clear(), '';
+    const r = clip.copy(view, ids);
+    if (r.skipped > 0) say(CLIP_COPY.leftOut(r.skipped)); // what was left out is said, never silent
+    return r.text;
+  };
+  /** A cut takes the WHOLE selection (a frame's children with it) or nothing: the handle deletes exactly `ids`. */
+  const cutTaken = (ids: string[]): { text: string; ids: string[] } | null => {
+    const view = o.view?.() ?? null;
+    if (!view) return clip.clear(), null;
+    const r = clip.copy(view, ids);
+    if (r.copied === 0) return null;
+    if (r.skipped > 0) return clip.clear(), say(CLIP_COPY.cutRefused), null;
+    return { text: r.text, ids: r.ids };
   };
   const pasted = (hd: BoardHandle, text: string, cause: Event): void => {
     const view = o.view?.() ?? null;
     if (!view || !o.onOps) return;
     const r = clip.paste(text, view, o.mint ?? mintNodeId);
     if (r.kind === 'nothing-held') return say(refusalLine('clipboard'));
-    if (r.kind === 'clones') return void (r.ops.length > 0 && o.onOps(r.ops, cause));
+    // what was pasted is what is selected afterwards (the originals used to stay selected: Delete took THEM)
+    const sent = (ops: DimOp[]): void => {
+      o.onOps!(ops, cause);
+      if (hd.isAlive()) hd.select(ops.flatMap((op) => (op.type === 'add' ? [op.node.id] : [])));
+    };
+    if (r.kind === 'clones') return void (r.ops.length > 0 && sent(r.ops));
     const v = hd.view();
-    o.onOps([dimPasteTextOp(text, view, { x: v.width / 2 / v.zoom - v.scrollX, y: v.height / 2 / v.zoom - v.scrollY }, o.mint ?? mintNodeId)], cause);
+    sent([dimPasteTextOp(text, view, { x: v.width / 2 / v.zoom - v.scrollX, y: v.height / 2 / v.zoom - v.scrollY }, o.mint ?? mintNodeId)]);
   };
 
   // ── the frame ────────────────────────────────────────────────────────────
@@ -566,9 +583,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
               draw();
             }),
             hd.onScene(sceneSoon),
-            hd.onRefusal((r) => say(refusalLine(r.what))),
+            hd.onRefusal((r) => say(r.why === 'not-stored' ? CLIP_COPY.notStored : refusalLine(r.what))),
             hd.onCopy((ids) => copied(ids)),
-            hd.onCut((ids) => copied(ids)),
+            hd.onCut((ids) => cutTaken(ids)),
             hd.onCopyOutside(forget),
             hd.onPasteText((text, cause) => pasted(hd, text, cause)),
           );

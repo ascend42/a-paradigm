@@ -45,8 +45,10 @@ export interface DimCopyResult {
   /** the plain text for the system clipboard ('' when nothing was copied) */
   text: string;
   copied: number;
-  /** distinct ids asked for that were not copied: unknown, over the limit, or of a kind this build cannot write */
+  /** distinct ids asked for (a frame's children included) that were not copied: unknown, over the limit, or of a kind this build cannot write */
   skipped: number;
+  /** the node ids the register took, in copied order: a cut deletes exactly these */
+  ids: string[];
 }
 
 /**
@@ -63,10 +65,20 @@ const STAND_INS: ReadonlySet<string> = new Set(Array.from({ length: DIM_CLIPBOAR
 /** CRLF and lone CR to LF: the form texts are compared in. */
 const lf = (text: string): string => text.replace(/\r\n?/g, '\n');
 
+/** True when a node's box (or its point, for a mark with no size) lies inside a live frame's box. */
+function landsIn(node: Record<string, unknown>, frame: Record<string, unknown> | undefined): boolean {
+  if (!frame || own(frame, 'kind') !== 'frame') return false;
+  const n = (o: Record<string, unknown>, k: string): number => (typeof own(o, k) === 'number' ? (own(o, k) as number) : 0);
+  const [x, y, w, h] = [n(node, 'x'), n(node, 'y'), n(node, 'w'), n(node, 'h')];
+  return x >= n(frame, 'x') && y >= n(frame, 'y') && x + w <= n(frame, 'x') + n(frame, 'w') && y + h <= n(frame, 'y') + n(frame, 'h');
+}
+
 export class DimClipboard {
   #text = '';
   #kept: Kept[] = [];
   #pastes = 0;
+  /** the dimension the copy was made in: a `parent` outside the copied set is kept only on a paste into the same one */
+  #dim: string | null = null;
 
   /**
    * Remember the selected nodes of `state` (in paint order, the first DIM_CLIPBOARD_LIMITS.clones of them) and
@@ -76,10 +88,14 @@ export class DimClipboard {
   copy(state: DimState, nodeIds: readonly string[]): DimCopyResult {
     this.clear();
     const asked = new Set(nodeIds);
+    // a frame travels with its children: a copied or cut frame never comes back empty
+    const frames = new Set([...asked].filter((id) => own(state.nodes.get(id)?.node ?? {}, 'kind') === 'frame'));
+    if (frames.size > 0) for (const [id, n] of state.nodes) if (frames.has(own(n.node, 'parent') as string)) asked.add(id);
     const wanted = [...asked].filter((id) => state.nodes.has(id));
     const core = wanted.filter((id) => isCore(own(state.nodes.get(id)!.node, 'kind'))).sort((a, b) => dimZCompare({ z: own(state.nodes.get(a)!.node, 'z'), id: a }, { z: own(state.nodes.get(b)!.node, 'z'), id: b }));
     const taken = core.slice(0, DIM_CLIPBOARD_LIMITS.clones);
-    if (taken.length === 0) return { text: '', copied: 0, skipped: asked.size };
+    if (taken.length === 0) return { text: '', copied: 0, skipped: asked.size, ids: [] };
+    this.#dim = state.dim;
     const words: string[] = [];
     for (const id of taken) {
       const node = state.nodes.get(id)!.node;
@@ -92,7 +108,7 @@ export class DimClipboard {
       for (const k of ['text', 'label', 'title']) if (typeof fields[k] === 'string' && (fields[k] as string).length > 0) words.push(fields[k] as string);
     }
     this.#text = words.length > 0 ? lf(words.join('\n')) : dimStandInLine(taken.length);
-    return { text: this.#text, copied: taken.length, skipped: asked.size - taken.length };
+    return { text: this.#text, copied: taken.length, skipped: asked.size - taken.length, ids: taken };
   }
 
   /** True when a pasted text is the register's. An empty register, or an empty text, never matches. */
@@ -123,6 +139,9 @@ export class DimClipboard {
       for (const [key, target] of Object.entries(k.links)) {
         const to = ids.get(target);
         if (to !== undefined && target !== k.id) node[key] = to;
+        // a frame that was NOT copied but still stands in this same dimension keeps the clone that lands inside
+        // it (`parent` only: `from` and `to` to a mark outside the copied set are always dropped)
+        else if (key === 'parent' && to === undefined && this.#dim !== null && current.dim === this.#dim && landsIn(node, current.nodes.get(target)?.node)) node[key] = target;
       }
       ops.push({ tier: node.kind === 'frame' ? 0 : node.kind === 'arrow' ? 2 : 1, op: { type: 'add', node: node as unknown as DimNode } });
     }
@@ -139,6 +158,7 @@ export class DimClipboard {
     this.#text = '';
     this.#kept = [];
     this.#pastes = 0;
+    this.#dim = null;
   }
 }
 
