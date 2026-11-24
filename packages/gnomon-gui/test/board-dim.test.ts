@@ -358,6 +358,82 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
     expect(a.kernel).toEqual([212, 168]);
   }, 120_000);
 
+  // ── review batch B: strokes ──
+  const INK = (x: number, y: number): string => `document.querySelector('#preview-board canvas.static').getContext('2d').getImageData(${x}, ${y}, 1, 1).data[3]`;
+
+  it('B1, B4: a stroke rendered from the fold reaches its last point, and a stored stroke of one point is a dot that stays', async () => {
+    const LINE = fixtureId(920), DOT = fixtureId(921);
+    const a = await real([
+      { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${LINE}', kind: 'stroke', x: 460, y: 300, z: 'za', points: [0, 0, 50, 0, 100, 0], weight: 3 } }, { type: 'add', node: { id: '${DOT}', kind: 'stroke', x: 460, y: 360, z: 'zb', points: [0, 0], weight: 3 } }], 'arky')), 1)`, as: 'r' }, { wait: 300 },
+      { read: INK(510, 300), as: 'middle' }, { read: INK(557, 300), as: 'nearEnd' }, { read: INK(575, 300), as: 'past' },
+      { read: INK(460, 360), as: 'dot' },
+      { read: `${B}.marks().filter((m) => m.node === '${DOT}').length`, as: 'dotShown' },
+      { read: `${B}.drift()`, as: 'drift' }, { read: COUNT, as: 'edits' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.middle as number).toBeGreaterThan(200);
+    expect(a.nearEnd as number, 'the stroke reaches 3 units short of its last point (it stopped about 7 short)').toBeGreaterThan(200);
+    expect(a.past).toBe(0);
+    expect(a.dot as number).toBeGreaterThan(200);
+    expect(a).toMatchObject({ dotShown: 1, drift: [], edits: 0 });
+  }, 120_000);
+
+  it('B3: a stroke drawn slowly at 400% is thinned at half a unit: far fewer points than samples, no point twice, and it comes back as drawn', async () => {
+    const path: Array<[number, number]> = Array.from({ length: 90 }, (_, i) => [300 + i * 2, Math.round(300 + 60 * Math.sin(i / 14))]);
+    const a = await real([
+      { read: `(async () => { for (let i = 0; i < 30; i++) { ${B}.zoomIn(); await new Promise((r) => setTimeout(r, 20)); } return 1; })() && 1`, as: 'z' }, { wait: 900 },
+      { read: `${B}.state().zoom`, as: 'zoom' },
+      { press: '#preview-board [data-key="tool:stroke"]' },
+      { drag: path }, { wait: 200 },
+      { read: EDITS, as: 'edits' }, { read: `${B}.drift()`, as: 'drift' },
+    ], 'empty');
+    expect(a.errors).toEqual([]);
+    expect(a.zoom).toBe(4);
+    const edits = a.edits as Edit[];
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.ops).toHaveLength(1);
+    const pts = (edits[0]!.ops[0] as unknown as { node: { kind: string; points: number[] } }).node.points;
+    const n = pts.length / 2;
+    // 90 samples over about 45 board units: whole units would keep some 45 stepped points
+    expect(n).toBeGreaterThanOrEqual(4);
+    expect(n).toBeLessThan(30);
+    for (let i = 2; i < pts.length; i += 2) expect(pts[i] === pts[i - 2] && pts[i + 1] === pts[i - 1], `point ${i / 2} repeats the one before`).toBe(false);
+    expect(a.drift).toEqual([]);
+  }, 120_000);
+
+  it('B2: a stroke that cannot fit one row within the tolerance ceiling is reported as several strokes, end to end, each within the limits', async () => {
+    // a real press and release with the Stroke tool; the 3,000 corners are put into the stroke in hand (nobody can draw them in a test's time)
+    const a = await real([
+      { press: '#preview-board [data-key="tool:stroke"]' },
+      { hold: [[300, 300], [304, 302], [308, 300]] },
+      { read: `(() => { const app = ${APP}; const el = app.state.newElement; const pts = []; for (let i = 0; i < 3000; i++) pts.push([i * 7, (i % 2) * 60]); app.scene.mutateElement ? app.scene.mutateElement(el, { points: pts }) : Object.assign(el, { points: pts, version: el.version + 1 }); return el.points.length; })()`, as: 'stuffed' },
+      { hold: null, release: [312, 302] }, { wait: 400 },
+      { read: EDITS, as: 'edits' }, { read: `${B}.drift()`, as: 'drift' },
+    ], 'empty');
+    expect(a.errors).toEqual([]);
+    expect(a.stuffed as number).toBeGreaterThanOrEqual(3000);
+    const edits = a.edits as Edit[];
+    expect(edits).toHaveLength(1);
+    const adds = edits[0]!.ops as unknown as Array<{ type: string; node: { kind: string; x: number; y: number; points: number[] } }>;
+    expect(adds.length).toBeGreaterThanOrEqual(2);
+    let corners = 0;
+    for (const [i, op] of adds.entries()) {
+      expect(op.type).toBe('add');
+      expect(op.node.kind).toBe('stroke');
+      expect(op.node.points.length).toBeLessThanOrEqual(1900 * 2);
+      expect(JSON.stringify(op.node.points).length).toBeLessThanOrEqual(12 * 1024);
+      corners += op.node.points.length / 2 - (i > 0 ? 1 : 0);
+      // each piece starts where the one before it ended
+      if (i > 0) {
+        const before = adds[i - 1]!.node;
+        expect([op.node.x, op.node.y]).toEqual([before.x + before.points.at(-2)!, before.y + before.points.at(-1)!]);
+      }
+    }
+    expect(corners).toBeGreaterThanOrEqual(3000); // nothing was flattened
+    expect(validateDimOps(boardFixture('empty').state(), adds, { cls: 'human', principal: 'p:preview/matt' } as never).refused ?? []).toEqual([]);
+    expect(a.drift).toEqual([]);
+  }, 120_000);
+
   it('a mark of another hand is never drawn the same as yours: the engine dashes it, or the host lays a seal or a hollow pin over it', async () => {
     const MARK: Record<string, Record<string, unknown>> = {
       text: { kind: 'text', x: 60, y: 60, text: 'plain text' },

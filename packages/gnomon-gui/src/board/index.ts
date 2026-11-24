@@ -27,7 +27,7 @@ import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
 import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
 import { dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
 import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, fillColour, lineColour, normalOf, offNormal } from './normal.js';
-import { fitStroke, strokeFits } from './simplify.js';
+import { fitStroke } from './simplify.js';
 import { applySkin, gnomonBoardSkin, onBoardRefusal, setBoardYielded } from './skin.js';
 
 declare const __GNOMON_BOARD_ENGINE__: string;
@@ -73,6 +73,12 @@ interface Versioned extends Element {
   readonly originalText?: string;
 }
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+/** 26 random characters (130 bits) from `crypto.getRandomValues`, which needs no secure context (`randomUUID` does). */
+function randomId(): string {
+  let out = '';
+  for (const b of crypto.getRandomValues(new Uint8Array(26))) out += B32[b % 32];
+  return out;
+}
 /** A new node id (a ULID: `DIM_NODE_ID_PATTERN`). Minted here, in the handle, for a mark a person drew. */
 function mintNodeId(): string {
   let t = Date.now();
@@ -190,7 +196,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         },
         engineOf(nodeId) {
           let engineId = engineByNode.get(nodeId);
-          if (engineId === undefined) tie((engineId = `g-${crypto.randomUUID()}`), nodeId);
+          if (engineId === undefined) tie((engineId = `g-${randomId()}`), nodeId);
           return engineId;
         },
       };
@@ -373,7 +379,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         if (el.type === 'text') Object.assign(out, { originalText: el.text ?? '', textAlign: label ? 'center' : 'left', verticalAlign: label ? 'middle' : 'top', autoResize: label || !(el.width > 0), ...(el.width > 0 ? {} : { width: 1 }) });
         // (a text with no size is dropped by the engine before it measures it, so it is 1 wide until it has; it
         // carries NO height, or the engine would work a line height out of it)
-        if (el.type === 'freedraw') Object.assign(out, { pressures: [], simulatePressure: true });
+        if (el.type === 'freedraw') {
+          // a stored stroke of ONE point is a dot: the engine holds no stroke of fewer than two points
+          const points = el.points && el.points.length === 1 ? [el.points[0]!, el.points[0]!] : (el.points ?? []);
+          // `lastCommittedPoint` is what makes the engine draw a stroke to its END: without it every stroke
+          // re-rendered from the fold stopped some 7px short (Mika, review batch B1)
+          Object.assign(out, { points, pressures: [], simulatePressure: true, lastCommittedPoint: points.length > 0 ? points[points.length - 1] : null });
+        }
         if (el.type === 'arrow') Object.assign(out, { elbowed: false });
         // a fallback's words are the host's (one owner: the overlay cuts them to the scrap; a label here would say the kind twice)
         if (stub) out.boundElements = (el.boundElements ?? []).filter((b) => b.type !== 'text');
@@ -426,6 +438,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             if (!done) return null; // the engine holds no such element (a text with no size, a line with one point)
             const want = target.find((t) => t.id === el.id)!;
             // a label is centred on the point the map gave it; a line's label is placed by the engine as it draws
+            // (the engine's restore clears a stroke's `lastCommittedPoint`: it is set again here, see complete())
+            if (done.type === 'freedraw' && done.points?.length) return { ...done, lastCommittedPoint: done.points[done.points.length - 1] };
             if (done.type !== 'text') return done;
             return done.containerId ? { ...done, x: want.x - done.width / 2, y: want.y - done.height / 2 } : { ...done, x: want.x, y: want.y };
           }).filter((el): el is Versioned => el !== null);
@@ -459,12 +473,36 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const undoListeners = new Set<(event: KeyboardEvent, redo: boolean) => void>();
       /** A new freehand stroke is fitted to the size a row may carry before it is read (src/board/simplify.ts). */
       const fitNewStrokes = (): void => {
+        const thin = api.getAppState().zoom.value > 1;
+        const extra: unknown[] = [];
         for (const el of api.getSceneElements() as unknown as Element[]) {
-          if (el.type !== 'freedraw' || !el.points || foldNodeOf(el.id)) continue;
-          const pts = el.points.map((p) => [p[0], p[1]] as const);
-          if (strokeFits(pts.map(([x, y]) => [Math.round(x), Math.round(y)] as const))) continue;
-          mutateElement(el as never, { points: fitStroke(pts).points.map(([x, y]) => [x, y]), pressures: [], simulatePressure: true } as never, false);
+          if (el.type !== 'freedraw' || !el.points || foldNodeOf(el.id) || !isDirty(el as Versioned)) continue;
+          // above 100% there are several samples per board unit, and whole-unit rounding leaves them as steps
+          const fit = fitStroke(el.points.map((p) => [p[0], p[1]] as const), { thin });
+          const first = fit.strokes[0]!;
+          if (first.length === 0) continue;
+          const shape = (pts: ReadonlyArray<readonly [number, number]>): Record<string, unknown> => {
+            const o = pts[0]!;
+            const rel = (pts.length === 1 ? [o, o] : pts).map(([x, y]) => [x - o[0], y - o[1]] as [number, number]);
+            let w = 0;
+            let h = 0;
+            let minX = 0;
+            let minY = 0;
+            for (const [x, y] of rel) {
+              if (x < minX) minX = x;
+              if (y < minY) minY = y;
+            }
+            for (const [x, y] of rel) {
+              if (x - minX > w) w = x - minX;
+              if (y - minY > h) h = y - minY;
+            }
+            return { x: el.x + o[0], y: el.y + o[1], points: rel, width: w, height: h, pressures: [], simulatePressure: true, lastCommittedPoint: rel[rel.length - 1] };
+          };
+          mutateElement(el as never, shape(first) as never, false);
+          // a stroke that cannot fit one row within the tolerance ceiling is several strokes, end to end: never lost
+          for (const piece of fit.strokes.slice(1)) extra.push(changed(el, { ...shape(piece), id: `g-${randomId()}`, index: null }));
         }
+        if (extra.length > 0) api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...extra] as never, captureUpdate: CaptureUpdateAction.NEVER });
       };
       /** Everything back to the state last rendered, with nothing left counted as changed. Always terminates. */
       const putBack = (): void => {
@@ -505,7 +543,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       /** The unfiltered diff of the scene against the state last rendered. */
       const diff = (basis: DimState): DimOp[] => {
         // a wrapped text holds its line breaks in `text`: what was typed is `originalText`
-        const scene = all().map((el) => (el.type === 'text' && typeof el.originalText === 'string' && el.originalText !== el.text ? { ...el, text: el.originalText } : el));
+        const scene = all().map((el) => {
+          if (el.type === 'text' && typeof el.originalText === 'string' && el.originalText !== el.text) return { ...el, text: el.originalText };
+          // a stored dot is one point; the engine holds it as the same point twice
+          const stored = el.type === 'freedraw' && el.points?.length === 2 ? seen.get(el.id)?.points : undefined;
+          if (Array.isArray(stored) && stored.length === 2 && el.points![0]![0] === el.points![1]![0] && el.points![0]![1] === el.points![1]![1]) return { ...el, points: [el.points![0]] };
+          return el;
+        });
         const gone = (op: DimOp): boolean => op.type === 'delete' && !shown.has(ids.engineOf(op.id));
         return elementsToOps(basis, scene as never, ids, { line: style.line, fill: style.fill, sticky: stickyDrawn.size > 0 }).filter((op) => !gone(op));
       };

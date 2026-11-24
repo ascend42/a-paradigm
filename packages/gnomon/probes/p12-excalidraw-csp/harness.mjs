@@ -635,8 +635,11 @@ const DRIVER = `'use strict';
     R.zoom400 = { zoom: h.state().zoom, editsBefore: R.edits.length };
     h.setTool('stroke'); await wait(60);
     pointer(canvas, 'pointerdown', 200, 330, 1); await wait(30);
-    for (var sn = 1; sn <= 60; sn++) { pointer(canvas, 'pointermove', 200 + sn * 14, 330 - 150 * Math.sin(sn / 9) - sn * 1.5, 1); await frame(); }
-    pointer(canvas, 'pointerup', 200 + 60 * 14, 330 - 150 * Math.sin(60 / 9) - 90, 0); await wait(300);
+    // a SLOW stroke: 240 samples 3.5px apart, about one per board unit at 400%
+    for (var sn = 1; sn <= 240; sn++) { pointer(canvas, 'pointermove', 200 + sn * 3.5, 330 - 150 * Math.sin(sn / 36) - sn * 0.375, 1); await frame(); }
+    pointer(canvas, 'pointerup', 200 + 240 * 3.5, 330 - 150 * Math.sin(240 / 36) - 90, 0); await wait(300);
+    R.zoom400.samples = 240;
+    R.zoom400.points = (function () { var out = 0; m.foldDim(rows).nodes.forEach(function (n) { if (n.node.kind === 'stroke') out = n.node.points.length / 2; }); return out; })();
     R.zoom400.edits = R.edits.slice(R.zoom400.editsBefore);
     R.zoom400.strokes = h.marks().filter(function (k) { return k.kind === 'stroke' && k.node; }).length;
     h.setTool('select'); await click(60, 760);
@@ -822,7 +825,7 @@ export function reskinProblems(r) {
   const mx = r.matrix;
   if (!mx || mx.hands?.human !== 19 || mx.hands?.agent !== 19 || mx.hands?.unknown !== 19 || mx.kinds?.join() !== 'arrow,diamond,ellipse,frame,rect,sticky,stroke,stub,text') p.push(`the kind and style matrix did not render per hand: ${JSON.stringify({ hands: mx?.hands, kinds: mx?.kinds })}`);
   const z4 = r.zoom400;
-  if (!z4 || Math.round(z4.zoom * 100) !== 400 || z4.edits?.length !== 1 || z4.edits[0].types.join() !== 'add' || z4.edits[0].cause !== 'pointerup' || z4.strokes !== 1) p.push(`a stroke drawn at 400% was not one add at pointer-up: ${JSON.stringify({ ...z4, capture: undefined })}`);
+  if (!z4 || Math.round(z4.zoom * 100) !== 400 || z4.edits?.length !== 1 || z4.edits[0].types.join() !== 'add' || z4.edits[0].cause !== 'pointerup' || z4.strokes !== 1 || !(z4.points >= 8 && z4.points < z4.samples / 2)) p.push(`a stroke drawn at 400% was not one add at pointer-up, thinned to fewer than half its samples: ${JSON.stringify({ ...z4, capture: undefined })}`);
   if (f.undo?.afterDraw !== 2 || f.undo?.afterUndo !== 1) p.push(`an undo after a programmatic add took the added marks with it: ${JSON.stringify(f.undo)}`);
   if (!(f.textAfterShape?.selectedBefore === 1 && f.textAfterShape?.selectedAfterTool === 0 && f.textAfterShape?.editing === true)) p.push(`text did not start on the first click after a shape: ${JSON.stringify(f.textAfterShape)}`);
   if (!f.sceneDrop || (!f.sceneDrop.unsupported && (f.sceneDrop.added !== 0 || f.sceneDrop.said?.join() !== 'scene-file' || f.sceneDrop.dragStopped !== true))) p.push(`a dropped scene file reached the board: ${JSON.stringify(f.sceneDrop)}`);

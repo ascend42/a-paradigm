@@ -37,7 +37,7 @@ export const RESKIN_CLEAN: Record<string, unknown> = {
   colours: { day: shot, night: shot },
   handleKeys: [],
   matrix: { hands: { human: 19, agent: 19, unknown: 19 }, kinds: ['arrow', 'diamond', 'ellipse', 'frame', 'rect', 'sticky', 'stroke', 'stub', 'text'], day: shot, night: shot },
-  zoom400: { zoom: 4, edits: [{ types: ['add'], cause: 'pointerup' }], strokes: 1, capture: shot },
+  zoom400: { zoom: 4, edits: [{ types: ['add'], cause: 'pointerup' }], strokes: 1, samples: 240, points: 61, capture: shot },
   narrow: { stock: [], width: 374, height: 304, capture: { width: 374, height: 304, png: 'iVBORw0KGgo=' } },
   stateEvents: 34,
 };

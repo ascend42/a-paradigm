@@ -83,7 +83,8 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     // every scene update the handle makes is outside the engine's history
     expect(src.match(/captureUpdate: CaptureUpdateAction\.NEVER/g)!.length).toBe(src.match(/captureUpdate:/g)!.length);
     // an engine id is minted by the handle and is never the node id
-    expect(src).toMatch(/tie\(\(engineId = `g-\$\{crypto\.randomUUID\(\)\}`\), nodeId\)/);
+    expect(src).toMatch(/tie\(\(engineId = `g-\$\{randomId\(\)\}`\), nodeId\)/);
+    expect(src).not.toMatch(/randomUUID/); // it needs a secure context; getRandomValues does not
     const core = readFileSync(path.join(ROOT, 'src', 'core', 'board.ts'), 'utf8');
     expect(core).not.toMatch(/\badd\(|\bundo\(\)|\bredo\(\)|interface BoardMark\b/);
   });
