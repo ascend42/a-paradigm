@@ -478,6 +478,29 @@ components:
     tests:
       - test/dim-undo.test.ts
       - test/dim-live.test.ts
+  gui-dim-clipboard:
+    description: >-
+      #gui-dim-clipboard (boards S1.3 pass P3a, s1.3-draft point 4 copy and
+      cut; condition C8; Aegis A6) - the in-memory copy register of a board.
+      PURE: no DOM and no clipboard access; the caller wires the events.
+      DimClipboard.copy(state, nodeIds) remembers a snapshot of the selected
+      core nodes (the first 64 in paint order, and says how many it left out)
+      and answers the plain text for the system clipboard: their words, one
+      per line, or a fixed line when they have none. paste(text, current,
+      mint) answers add ops only when the text EQUALS the register's; an
+      empty register or an empty text never matches. Every clone has a new
+      id, sits 16 units further for each paste and on top; from, to and
+      parent are renamed to the clone when the target was copied too and
+      dropped otherwise; only the closed list DIM_CLIPBOARD_KEYS is carried
+      (shape, words, colour; no author, refs, rel or carried-through field).
+      The clones are ordinary adds, so whoever pastes is their author.
+      clear() forgets the register (window blur, unmount). Nothing in the
+      app imports it yet (pass P3b wires paste interception).
+    path: src/core/dim-clipboard.ts
+    type: module
+    tags: [gnomon, gui, dimension, clipboard, pure]
+    tests:
+      - test/dim-clipboard.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
