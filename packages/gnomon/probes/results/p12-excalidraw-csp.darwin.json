@@ -37,12 +37,12 @@
           "gzip": 22458
         },
         "board/board.js": {
-          "bytes": 1277894,
-          "gzip": 410620
+          "bytes": 1277913,
+          "gzip": 410629
         }
       },
-      "totalBytes": 1535962,
-      "totalGzip": 443786
+      "totalBytes": 1535981,
+      "totalGzip": 443795
     },
     "staticFindings": [],
     "engines": {
@@ -57,18 +57,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 54,
-          "mounted": 76
+          "module": 62,
+          "mounted": 82
         },
         "firstRun": {
-          "wallMs": 19917,
+          "wallMs": 20772,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 48,
-            "mounted": 66
+            "module": 56,
+            "mounted": 78
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -78,7 +78,7 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 17,
+          "finalCount": 22,
           "cursors": {
             "select": "",
             "sticky": "crosshair",
@@ -322,6 +322,14 @@
               "unsupported": "the synthetic paste did not reach the engine",
               "nodes": []
             },
+            "hands": [
+              "rect:agent:Arky:60",
+              "ellipse:unknown:60",
+              "stub:agent:Luna:live:session:288",
+              "sticky:human:80",
+              "text:agent:Quill:65"
+            ],
+            "agentEdgeGaps": 12,
             "frame": {
               "title": "a frame title that is long enough to be cut off",
               "weight": "600",
@@ -350,12 +358,12 @@
             "day": {
               "width": 1280,
               "height": 800,
-              "pngBytes": 35415
+              "pngBytes": 38847
             },
             "night": {
               "width": 1280,
               "height": 800,
-              "pngBytes": 35427
+              "pngBytes": 38751
             }
           },
           "narrow": {
@@ -368,13 +376,13 @@
               "pngBytes": 8007
             }
           },
-          "stateEvents": 53,
+          "stateEvents": 54,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 32360,
-            "ms": 27
+            "bytes": 35541,
+            "ms": 16
           },
           "violationCount": 0,
           "violations": [],
@@ -430,18 +438,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 37,
-          "mounted": 58
+          "module": 33,
+          "mounted": 52
         },
         "firstRun": {
-          "wallMs": 20944,
+          "wallMs": 21748,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 40,
-            "mounted": 60
+            "module": 34,
+            "mounted": 55
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -451,7 +459,7 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 19,
+          "finalCount": 24,
           "cursors": {
             "select": "",
             "sticky": "crosshair",
@@ -600,7 +608,7 @@
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 101196
+                "pngBytes": 101190
               },
               "arrowAdded": 1,
               "afterUndo": 0,
@@ -644,7 +652,7 @@
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 102324
+                "pngBytes": 102327
               },
               "arrowAdded": 1,
               "afterUndo": 0,
@@ -721,6 +729,14 @@
                 "edgeGaps": 0
               }
             },
+            "hands": [
+              "rect:agent:Arky:60",
+              "ellipse:unknown:60",
+              "stub:agent:Luna:live:session:288",
+              "sticky:human:80",
+              "text:agent:Quill:65"
+            ],
+            "agentEdgeGaps": 12,
             "frame": {
               "title": "a frame title that is long enough to be cut off",
               "weight": "600",
@@ -749,12 +765,12 @@
             "day": {
               "width": 2560,
               "height": 1600,
-              "pngBytes": 115626
+              "pngBytes": 127785
             },
             "night": {
               "width": 2560,
               "height": 1600,
-              "pngBytes": 116979
+              "pngBytes": 129180
             }
           },
           "narrow": {
@@ -767,13 +783,13 @@
               "pngBytes": 23544
             }
           },
-          "stateEvents": 57,
+          "stateEvents": 58,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 36999,
-            "ms": 11
+            "bytes": 41823,
+            "ms": 12
           },
           "violationCount": 0,
           "violations": [],
@@ -860,5 +876,5 @@
     "G-DDL-07",
     "S25-M3"
   ],
-  "at": "2026-11-24T11:55:13.296Z"
+  "at": "2026-11-24T12:30:19.598Z"
 }

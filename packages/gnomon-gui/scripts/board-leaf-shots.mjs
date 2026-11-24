@@ -91,7 +91,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         const [key, code] = KEYS[a.key] ?? [a.key, a.key.toUpperCase().charCodeAt(0)];
         const modifiers = (a.shift ? 8 : 0) | (a.meta ? 4 : 0) | (a.ctrl ? 2 : 0);
         const base = { key, code: KEYS[a.key] ? key : `Key${a.key.toUpperCase()}`, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers };
-        await call('Input.dispatchKeyEvent', { type: KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(KEYS[a.key] || modifiers ? {} : { text: a.key }) });
+        await call('Input.dispatchKeyEvent', { type: KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(KEYS[a.key] || modifiers ? {} : { text: a.key }), ...(a.commands ? { commands: a.commands } : {}) });
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
       } else if (a.paste !== undefined) {
         await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
@@ -122,7 +122,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
       await evaluate(`(() => {
         const r = (q) => { const e = document.querySelector(q); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
         const leaf = globalThis.gnomonPreviewLeaf;
-        return JSON.stringify({ state: leaf ? leaf.state() : null, leaf: r('#preview-board'), stage: r('#preview-board .bd-stage'), rail: r('#preview-board .bd-rail'), stack: r('#stack'), pinned: r('#pinned'), composer: r('#composer'), status: r('#status-line'), active: document.activeElement ? document.activeElement.className : null, stock: ['.App-toolbar', '.layer-ui__wrapper', '.excalidraw--mobile', '.Island'].filter((q) => document.querySelector(q)) });
+        return JSON.stringify({ state: leaf ? leaf.state() : null, leaf: r('#preview-board'), stage: r('#preview-board .bd-stage'), rail: r('#preview-board .bd-rail'), stack: r('#stack'), pinned: r('#pinned'), composer: r('#composer'), status: r('#status-line'), active: document.activeElement ? document.activeElement.className : null, overlay: { seals: document.querySelectorAll('#preview-board .bd-over .bd-seal').length, stubs: document.querySelectorAll('#preview-board .bd-over .bd-stub').length, stubWords: [...document.querySelectorAll('#preview-board .bd-over .bd-stub-k')].map((e) => e.textContent.replace(/^kind/, 'kind ')), pins: document.querySelectorAll('#preview-board .bd-over .bd-pin:not(.unk)').length, textboxes: document.querySelectorAll('#preview-board .bd-over .bd-textbox').length }, foot: [...document.querySelectorAll('#preview-board .bd-foot .bd-hand')].map((e) => e.textContent.trim().replace(/\\s+/g, ' ')).join(' · '), stock: ['.App-toolbar', '.layer-ui__wrapper', '.excalidraw--mobile', '.Island'].filter((q) => document.querySelector(q)) });
       })()`),
     );
     const params = { format: 'png' };

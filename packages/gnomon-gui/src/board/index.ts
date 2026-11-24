@@ -348,7 +348,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       return {
         add(marks: readonly BoardMark[]): number {
           const before = live();
-          const added = convertToExcalidrawElements(marks.map(skeletonOf) as Skeleton);
+          // regenerateIds: false. The engine replaces every skeleton id by default; the authorship record is keyed by
+          // the id skeletonOf made, so with new ids every added mark was a plain mark of yours (review round 2, R1)
+          const added = convertToExcalidrawElements(marks.map(skeletonOf) as Skeleton, { regenerateIds: false });
           // never an undo step: the first undo after it used to take every added mark with it (Mika, pass A finding 2)
           api.updateScene({ elements: [...before, ...added], captureUpdate: CaptureUpdateAction.NEVER });
           announce();

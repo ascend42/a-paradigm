@@ -469,6 +469,26 @@ const DRIVER = `'use strict';
       if (R.fix.hostile.added === 0 && said.length === 0) R.fix.hostile = { unsupported: 'the synthetic paste did not reach the engine', nodes: nodes.slice() };
     } catch (e) { R.fix.hostile = { unsupported: String(e).slice(0, 200) }; }
     watch.disconnect();
+    // R1 (review round 2). What the host adds through the REAL engine keeps its hand: an agent's mark, an unknown
+    // hand's mark, a stub and a sticky are reported as such (the engine used to replace the ids the record is
+    // keyed by, so every added mark came back as a plain mark of yours)
+    var seen0 = h.marks().length;
+    h.add([
+      { type: 'rectangle', x: 700, y: 520, width: 60, height: 40, by: { cls: 'agent', id: 'arky', name: 'Arky' } },
+      { type: 'ellipse', x: 780, y: 520, width: 60, height: 40, by: { cls: 'unknown' } },
+      { type: 'stub', x: 860, y: 520, kind: 'live:session', by: { cls: 'agent', id: 'luna', name: 'Luna' } },
+      { type: 'sticky', x: 700, y: 600, width: 80, height: 50 },
+      { type: 'text', x: 800, y: 610, text: 'by quill', by: { cls: 'agent', id: 'quill', name: 'Quill' } },
+    ]);
+    await wait(250);
+    R.fix.hands = h.marks().slice(seen0).map(function (m) { return m.kind + ':' + m.author.cls + (m.author.name ? ':' + m.author.name : '') + (m.stubKind ? ':' + m.stubKind : '') + ':' + Math.round(m.width); });
+    await click(1100, 700); await wait(150);
+    (function () {
+      // an agent's rectangle is dashed (gaps along its top edge); yours stays solid
+      var v3 = h.view(), g4 = staticCanvas.getContext('2d'), gaps3 = 0;
+      for (var ax = 706; ax < 754; ax += 2) { if (g4.getImageData(Math.round((ax + v3.scrollX) * v3.zoom * dpr), Math.round((520 + v3.scrollY) * v3.zoom * dpr), 1, 1).data[3] < 128) gaps3++; }
+      R.fix.agentEdgeGaps = gaps3;
+    })();
     // 4. the frame title editor wears the system, and Esc ends it
     h.add([{ type: 'frame', x: 60, y: 560, width: 220, height: 120, text: 'a frame title that is long enough to be cut off' }]);
     await wait(200);
@@ -688,6 +708,7 @@ export function reskinProblems(r) {
   if (!dd || (!dd.unsupported && (dd.added !== 0 || dd.said?.join() !== 'library-file' || dd.stopped !== true || dd.stock?.length !== 0))) p.push(`a drag of the library type with no file reached the board: ${JSON.stringify(dd)}`);
   const ho = f.hostile;
   if (!ho || ho.nodes?.length || (!ho.unsupported && (ho.added !== 1 || ho.said?.join() !== 'image,mark:embeddable,mark:iframe' || ho.violations !== 0 || ho.forged?.kind !== 'rect' || ho.forged?.author !== 'human' || ho.forged?.stubKind !== null || ho.forged?.edgeGaps !== 0))) p.push(`hostile pasted content got through: ${JSON.stringify(ho)}`);
+  if (f.hands?.join() !== 'rect:agent:Arky:60,ellipse:unknown:60,stub:agent:Luna:live:session:288,sticky:human:80,text:agent:Quill:' + String(f.hands?.[4] ?? '').split(':').pop() || !(f.agentEdgeGaps > 0)) p.push(`marks added by the host lost their hand: ${JSON.stringify({ hands: f.hands, agentEdgeGaps: f.agentEdgeGaps })}`);
   const fr = f.frame ?? {};
   if (fr.title !== 'a frame title that is long enough to be cut off' || fr.weight !== '600' || !fr.editor || !/^"?JetBrains Mono"?, monospace$/.test(fr.editor.fontFamily) || fr.editor.fontSize !== '11.5px' || fr.editor.fontWeight !== '600' || fr.editor.color !== RGB_INK.day || fr.editor.radius !== '0px' || fr.editor.editing !== true || fr.afterEsc?.input !== false || fr.afterEsc?.editing !== false) p.push(`the frame title: ${JSON.stringify(fr)}`);
   if (f.label?.lines?.join() !== 'ink' || f.label?.marksAdded !== 1) p.push(`a label in a sticky: ${JSON.stringify(f.label)}`);

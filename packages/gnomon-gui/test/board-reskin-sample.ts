@@ -29,6 +29,8 @@ export const RESKIN_CLEAN: Record<string, unknown> = {
     frame: { title: 'a frame title that is long enough to be cut off', weight: '600', editor: { fontFamily: '"JetBrains Mono", monospace', fontSize: '11.5px', fontWeight: '600', color: 'rgb(22, 21, 15)', radius: '0px', editing: true }, afterEsc: { input: false, editing: false } },
     dataDrop: { added: 0, said: ['library-file'], stopped: true, stock: [] },
     hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: [], violations: 0, forged: { kind: 'rect', author: 'human', stubKind: null, edgeGaps: 0 } },
+    hands: ['rect:agent:Arky:60', 'ellipse:unknown:60', 'stub:agent:Luna:live:session:288', 'sticky:human:80', 'text:agent:Quill:62'],
+    agentEdgeGaps: 9,
     label: { lines: ['ink'], marksAdded: 1, countAdded: 1 },
   },
   colours: { day: shot, night: shot },

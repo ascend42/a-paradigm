@@ -243,6 +243,43 @@ components:
       the review's follow-up list: the rail menus still use .bd-menu (not
       .mode-menu); a stub smaller than its words is clipped, not shortened
       line by line, and its words do not scale with the board.
+      Review round 2 (PR #107). R1: add() now passes regenerateIds: false to
+      the engine's convertToExcalidrawElements. Round 1 keyed the authorship
+      record by the id skeletonOf made, and the engine replaced every id, so
+      every host-added mark came back as a plain mark of yours (no pins, no
+      seals, no dashed strokes, no stub words) and the eight leaf goldens
+      re-taken in round 1 recorded that broken board. They are re-taken and
+      were looked at. The golden test now counts the fixture's 3 seals, 2
+      stubs with their words, 2 pins, the boxed text and the five hands of
+      the foot before it compares pixels, and the P12 harness adds an
+      agent's mark, an unknown hand's mark, a stub, a sticky and an agent's
+      text through the real engine and checks what marks() reports and that
+      the agent's edge is dashed. R2: a menu item returns focus to the
+      board. R3: the custom-colour lines name a role once and quote a night
+      value only for a role the colour is offered in. R4: while it loads,
+      and when it is too short to draw on, the leaf's focus is on its head
+      key (never taken from a focused card). R5, checked and not changed:
+      every image call site (a pasted image file, SVG source, mixed HTML, a
+      drop, the tool) goes through insertImageElement, which patch
+      image-insert-refused returns from before scene.insertElement, so no
+      image element enters the scene; a real paste of SVG source in Chrome
+      adds no element and no img node. R6: touchmove, touchend and
+      touchcancel are stopped while yielded; the engine's keyup and Safari
+      gesture listeners are on the document and are NOT stopped.
+      For S1.3 (recorded from round 2, not built): a copied sticky loses its
+      pin (Mika: a defect before first dogfood; proposal for Aegis: carry
+      kind sticky only, rectangles only, through a copy, never an author or
+      a stub); the 500 ms wake hold also swallows a drag, a wheel or a draw
+      begun 150 to 450 ms after waking (hold only a second press within 500
+      ms and about 4px of the first; let a wheel, a press elsewhere and
+      anything after a key press through); opening the tray by Enter should
+      put focus on its chosen line well; a custom colour in use has no
+      chosen ring; the too-short and crashed lines at 424px; a real-paste
+      test must run on CI (today it runs only where Chrome is installed);
+      prune the authorship record on delete; per-board refusal listeners;
+      pasted styling is normalised after the engine's commit and can paint
+      for one frame; the engine's document-level keyup and gesture
+      listeners while a card has the keys.
       For S1.3 and S1.4 (recorded from the review, not built): the sticky is
       not yet the specimen's scrap; whether a new sticky goes straight into
       its text; the tray covers the board at a 1024 window; dash lengths by

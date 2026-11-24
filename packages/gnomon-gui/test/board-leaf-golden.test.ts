@@ -33,7 +33,7 @@ const NAMES = SIZES.flatMap((s) => STATES.flatMap((st) => THEMES.map((t) => `lea
 const golden = (name: string): Png => decodePng(readFileSync(path.join(DIR, `${name}.png`))) as Png;
 
 type Rect = { x: number; y: number; w: number; h: number } | null;
-interface Facts { state: string; leaf: Rect; stage: Rect; rail: Rect; stack: Rect; pinned: Rect; composer: Rect; status: Rect; stock: string[] }
+interface Facts { overlay: { seals: number; stubs: number; stubWords: string[]; pins: number; textboxes: number }; foot: string; state: string; leaf: Rect; stage: Rect; rail: Rect; stack: Rect; pinned: Rect; composer: Rect; status: Rect; stock: string[] }
 const overlaps = (a: Rect, b: Rect): boolean => !!a && !!b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 describe('G-DDL-07 leaf goldens (the committed files, every OS)', () => {
@@ -68,6 +68,10 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
           const { png, facts } = (await shootLeaf({ chrome, url: leafUrl(p.url, state, theme), ...size, clip: true })) as { png: Buffer; facts: Facts };
           expect(facts.state, name).toBe('open');
           expect(facts.stock, name).toEqual([]);
+          // the fixture's hands are on the board: 3 seals (two scraps and a text), 2 stubs with their words, your
+          // pins, and five hands in the foot (review round 2: a golden of a board with none of them once passed)
+          expect(facts.overlay, name).toEqual({ seals: 3, stubs: 2, stubWords: ['kind live:session', 'kind allow:approved-by-you'], pins: 2, textboxes: 1 });
+          if (size.width === 1440) expect(facts.foot, name).toBe('you 5 · A Arky 3 · L Luna 1 · Q Quill 1 · unknown hand 1'); // each agent's seal letter, then its name
           if (process.env.GNOMON_UPDATE_GOLDENS === '1') {
             if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true });
             writeFileSync(path.join(DIR, `${name}.png`), png);
@@ -151,6 +155,18 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     }
   }, 300_000);
 
+  it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {
+    const acted = await real('open', [
+      { press: '#preview-board [data-key="percent"]' },
+      { press: '#preview-board .bd-menu .bd-mi' }, { read: ACTIVE, as: 'afterMenuItem' }, { read: `${B}.state().zoom > 1`, as: 'zoomed' },
+      { press: '#preview-board [data-key="ink"]' },
+      { read: "(() => { const f = document.querySelector('#preview-board .bd-hex'); f.focus(); f.value = '#111111'; f.dispatchEvent(new Event('input', { bubbles: true })); return [...document.querySelectorAll('#preview-board .bd-tr .meta, #preview-board .bd-refuse')].map((e) => e.textContent); })()", as: 'nearInk' },
+    ]);
+    expect(acted).toMatchObject({ afterMenuItem: 'board', zoomed: true });
+    // #111111 passes as a line and is refused as a fill: one night value quoted, the role named once
+    expect(acted.nearInk).toEqual([expect.stringMatching(/^custom · at night #[0-9A-F]{6} as a line$/), '✕ not used · as a fill it would hide the ink drawn on it']);
+  }, 120_000);
+
   it('review S4 (REAL input): while a card has the keys, a double-click, a wheel and a key change nothing; one press only wakes the board', async () => {
     const VIEW = `JSON.stringify(${B}.view())`;
     const acted = await real('open', [
@@ -196,6 +212,30 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(after.filter((m) => !before.includes(m))).toEqual(['rect:human:160x90']);
     expect(acted.nodes).toEqual([]);
     expect(String(acted.said)).toMatch(/isn’t a board mark|Images can’t go on a board/);
+    // a copy of an agent's mark is a new element: it is yours, solid and unsealed (Alt-drag and copy/paste alike)
+    const copied = await real('open', [
+      { read: `${B}.marks().filter((m) => m.author.cls === 'agent').length`, as: 'agentBefore' },
+      { read: `${B}.marks().length`, as: 'before' },
+      { at: [262, 204], press: true }, // the edge of Arky's ellipse: selects it
+      { read: `${B}.state().selected`, as: 'selected' },
+      { key: 'c', meta: process.platform === 'darwin', ctrl: process.platform !== 'darwin', commands: ['copy'] },
+      { key: 'v', meta: process.platform === 'darwin', ctrl: process.platform !== 'darwin', commands: ['paste'], settle: 800 },
+      { read: `${B}.marks().length`, as: 'after' },
+      { read: `${B}.marks().filter((m) => m.author.cls === 'agent').length`, as: 'agentAfter' },
+    ]);
+    if ((copied.after as number) > (copied.before as number)) expect(copied.agentAfter, JSON.stringify(copied)).toBe(copied.agentBefore);
+    // an SVG source pasted as text (the engine's image path): nothing arrives and no image node is made (R5)
+    const svg = await real('open', [
+      { read: `${B}.count()`, as: 'before' },
+      { at: [500, 330], press: true },
+      { paste: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40"/></svg>', as: 'clipboard', settle: 900 },
+      { read: `${B}.count()`, as: 'after' },
+      { read: `${B}.state().selected`, as: 'selected' },
+      { read: "document.querySelectorAll('#preview-board img').length", as: 'imgs' },
+      { read: "document.querySelector('#preview-board .bd-keep').textContent", as: 'said' },
+    ]);
+    expect(svg).toMatchObject({ clipboard: 'written', selected: 0, imgs: 0, said: 'Images can’t go on a board yet · draw or write it instead' });
+    expect(svg.after).toBe(svg.before);
   }, 120_000);
 
   it('G-DDL-08 (keys): a rail letter acts with the board focused and does nothing while a card is focused; a refused colour changes nothing', async () => {

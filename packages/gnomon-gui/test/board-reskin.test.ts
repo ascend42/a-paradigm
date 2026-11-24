@@ -72,6 +72,14 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     expect(src).toMatch(/currentItemStrokeStyle: 'solid',/);
   });
 
+  it('add() hands its skeleton ids to the engine unchanged: the authorship record is keyed by them (review round 2, R1)', () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'board', 'index.ts'), 'utf8');
+    expect(src).toMatch(/convertToExcalidrawElements\(marks\.map\(skeletonOf\) as Skeleton, \{ regenerateIds: false \}\)/);
+    // and it is the only place skeletons go to the engine
+    expect(src.match(/convertToExcalidrawElements\(/g)).toHaveLength(1);
+    expect(src).toMatch(/const id = crypto\.randomUUID\(\);/);
+  });
+
   it('every S1.1 patch is in the manifest', () => {
     const ids = (PATCHES as Array<{ id: string }>).map((p) => p.id);
     for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'paste-types-filtered', 'stroke-exact', 'frame-name-editor', 'frame-name-editor-ink', 'frame-name-editor-keys', 'frame-name-title', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
@@ -229,6 +237,8 @@ describe('G-DDL-07 predicate: what a clean reskin run reports (every OS)', () =>
     ['an iframe node that existed for one commit', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: ['iframe'], violations: 0, forged: { kind: 'rect', author: 'human', stubKind: null, edgeGaps: 0 } } } }, /hostile pasted content got through/],
     ['an img node from a paste the browser otherwise ignored', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { unsupported: 'x', nodes: ['img'] } } }, /hostile pasted content got through/],
     ['a CSP violation raised by a paste', { fix: { ...(RESKIN_CLEAN.fix as object), hostile: { added: 1, said: ['image', 'mark:embeddable', 'mark:iframe'], nodes: [], violations: 2, forged: { kind: 'rect', author: 'human', stubKind: null, edgeGaps: 0 } } } }, /hostile pasted content got through/],
+    ['host-added marks that all came back as yours (the engine replaced their ids)', { fix: { ...(RESKIN_CLEAN.fix as object), hands: ['rect:human:60', 'ellipse:human:60', 'rect:human:288', 'rect:human:80', 'text:human:62'], agentEdgeGaps: 0 } }, /marks added by the host lost their hand/],
+    ['an agent mark drawn solid', { fix: { ...(RESKIN_CLEAN.fix as object), agentEdgeGaps: 0 } }, /marks added by the host lost their hand/],
     ['a stock frame title editor', { fix: { ...(RESKIN_CLEAN.fix as object), frame: { title: 'a frame title that is long enough to be cut off', weight: '600', editor: { fontFamily: 'Times', fontSize: '14px', fontWeight: '400', color: 'rgb(61, 61, 61)', radius: '4px', editing: true }, afterEsc: { input: true, editing: true } } } }, /the frame title/],
     ['a label in the current line colour', { fix: { ...(RESKIN_CLEAN.fix as object), label: { lines: ['raspberry'], marksAdded: 1 } } }, /a label in a sticky/],
     ['a missing content-colour capture', { colours: { day: RESKIN_CLEAN.colours && (RESKIN_CLEAN.colours as Record<string, unknown>).day } }, /no night content-colour capture/],

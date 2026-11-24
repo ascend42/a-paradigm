@@ -306,7 +306,7 @@ export const PATCHES = Object.freeze([
   {
     id: 'paste-types-filtered',
     file: 'index.js',
-    why: 'pasted or inserted elements are filtered BEFORE the engine commits them (review S3): an element that is not a board type (image, embeddable, iframe, diamond, line, magicframe) never enters the scene, so no iframe, embed or image node exists even for one commit; each removed type is reported to the host (gnomonBoardAdmit in src/board/skin.ts)',
+    why: 'pasted or inserted elements are filtered BEFORE the engine commits them (review S3): an element that is not a board type (image, embeddable, iframe, diamond, line, magicframe) never enters the scene, so no iframe or embed node exists even for one commit (an image FILE, SVG source or HTML image goes through insertImageElement instead, which patch image-insert-refused returns from before it inserts); each removed type is reported to the host (gnomonBoardAdmit in src/board/skin.ts)',
     find: 'C(this,"addElementsFromPasteOrLibrary",t=>{let r=Pm(t.elements,null,void 0),',
     replace: 'C(this,"addElementsFromPasteOrLibrary",t=>{let r=Pm(gnomonBoardAdmit(t.elements),null,void 0),',
     expect: 1,

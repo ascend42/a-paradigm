@@ -192,6 +192,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         menu = null;
         it.run();
         draw();
+        handle?.focus(); // the menu is gone: the keyboard goes back to the board, never to the page body
       });
       m.append(b);
     }
@@ -325,12 +326,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         });
         custom.append(w);
       }
+      // the night values are quoted only for the roles the colour is offered in
       const first = passing[0]?.c;
-      if (first?.ok) custom.append(h('span', 'meta', {}, first.line));
+      if (first?.ok) custom.append(h('span', 'meta', {}, `custom · at night ${passing.map(({ role, c }) => (c.ok ? `${c.night[role]} as a ${role}` : '')).join(', ')}`));
       // a role the colour fails for: nothing is applied and nothing is substituted; the nearest swatch is an offer
       for (const { role, c } of entries) {
         if (c.ok) continue;
-        answer.append(h('span', 'bd-refuse', {}, passing.length ? `${c.line} as a ${role}` : c.line));
+        answer.append(h('span', 'bd-refuse', {}, passing.length && !c.line.includes(`as a ${role}`) ? `${c.line} as a ${role}` : c.line));
         if (c.offer) {
           const offer = c.offer;
           const b = h('button', 'key quiet', { type: 'button', 'data-key': `offer:${role}` }, passing.length ? `Use ${offer} as the ${role}` : `Use ${offer}`);
@@ -497,6 +499,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       }
     }, LOADING_QUIET_MS);
     draw();
+    if (!o.cardFocused()) headKey.focus(); // while it loads the keyboard is in the head, not on the page body
     o.load()
       .then((m) => m.mountBoard(boardHost, { theme, onError: (err) => mine === generation && fail(err, true) }))
       .then(
@@ -518,7 +521,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
             globalThis.reportError(err); // the opener's mistake is reported, and the board still opens
           }
           draw();
-          if (!o.cardFocused()) hd.focus(); // opening moves focus to the board, unless a card has the keys
+          // opening moves focus to the board, unless a card has the keys; a leaf too short to draw on has no board
+          // to focus, so the head key takes it (never the page body)
+          if (!o.cardFocused()) short() ? headKey.focus() : hd.focus();
         },
         (err: unknown) => mine === generation && fail(err, false),
       );
@@ -581,7 +586,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     e.preventDefault();
     e.stopPropagation();
   };
-  for (const type of ['pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'dragover', 'drop', 'paste', 'touchstart']) stage.addEventListener(type, onHeld, true);
+  // (touchmove, touchend and touchcancel too: the engine handles touches on its canvas. Its keyup and Safari
+  // gesture listeners are on the DOCUMENT and cannot be stopped from here: recorded for S1.3)
+  for (const type of ['pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'dragover', 'drop', 'paste', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) stage.addEventListener(type, onHeld, true);
   stage.addEventListener('wheel', onHeld, { capture: true, passive: false });
   headKey.addEventListener('click', () => load === 'failed' && start());
   escKey.addEventListener('click', () => o.onFold?.());
