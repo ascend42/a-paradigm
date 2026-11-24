@@ -33,18 +33,32 @@ describe('workLogDateFromId', () => {
   });
 });
 
-describe('loadWorkLogEntry for a hyphenated agent', () => {
-  it('finds the entry in its own date folder, with no other folder present to scan', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-log-'));
+
+describe("loadWorkLogEntry for a hyphenated agent", () => {
+  it("reads the entry from its own date folder, not from the scan of every folder", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "work-log-"));
     try {
-      const written = recordWorkLog(root, { agent: 'ui-builder', summary: 'built a thing', outcome: 'success' } as Parameters<typeof recordWorkLog>[1]);
-      expect(written.id.startsWith('WL-ui-builder-')).toBe(true);
+      const written = recordWorkLog(root, { agent: "ui-builder", summary: "the real entry", outcome: "pass" });
+      expect(written.id.startsWith("WL-ui-builder-")).toBe(true);
       const date = workLogDateFromId(written.id);
       expect(date).not.toBeNull();
-      expect(fs.existsSync(path.join(root, '.paradigm', 'work-log', date as string, `${written.id}.yaml`))).toBe(true);
-      expect(loadWorkLogEntry(root, written.id)?.summary).toBe('built a thing');
+      const base = path.join(root, ".paradigm", "work-log");
+      expect(fs.existsSync(path.join(base, date as string, `${written.id}.yaml`))).toBe(true);
+
+      // A decoy with the SAME id in every other date folder the scan could reach
+      // first (one sorting before the real date, one after). The fallback scan
+      // returns the first folder that holds the id, so with the old pattern this
+      // lookup returned a decoy; the direct lookup can only return the real one.
+      for (const decoyDate of ["0000-01-01", "9999-12-31"]) {
+        fs.mkdirSync(path.join(base, decoyDate), { recursive: true });
+        fs.writeFileSync(
+          path.join(base, decoyDate, `${written.id}.yaml`),
+          `id: ${written.id}\nagent: ui-builder\nsummary: decoy\noutcome: pass\ntimestamp: "2000-01-01T00:00:00.000Z"\n`,
+        );
+      }
+      expect(loadWorkLogEntry(root, written.id)?.summary).toBe("the real entry");
     } finally {
-      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
   });
 });

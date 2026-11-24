@@ -63,6 +63,15 @@ const CHECKOUT_GATED = [
   '',
 ].join('\n');
 
+/**
+ * The environment without inherited GIT_* variables. A run from inside a git
+ * hook exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE, which would point this
+ * test's git (and the CLI's) at the real checkout instead of the temp repo.
+ */
+const CLEAN_ENV: NodeJS.ProcessEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith('GIT_')),
+);
+
 function write(dir: string, rel: string, body: string): void {
   const full = path.join(dir, rel);
   fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -81,7 +90,7 @@ describe('warpline oracle — writes under .warpline/, leaves git and your files
       await run(
         'git',
         ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'core.autocrlf=false', ...args],
-        { cwd: root },
+        { cwd: root, env: CLEAN_ENV },
       )
     ).stdout.trim();
 
@@ -103,7 +112,7 @@ describe('warpline oracle — writes under .warpline/, leaves git and your files
     await git('commit', '-q', '-a', '-m', 'side-b: use the gate');
   });
 
-  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
 
   it('records oracle.jsonl, states/ and warp/ and changes nothing in git', async () => {
     const before = {
@@ -118,7 +127,7 @@ describe('warpline oracle — writes under .warpline/, leaves git and your files
     expect(before.top).not.toContain('.warpline');
     expect(before.status).toBe('');
 
-    const { stdout } = await run(process.execPath, [distCli, 'oracle', 'side-a', 'side-b'], { cwd: root });
+    const { stdout } = await run(process.execPath, [distCli, 'oracle', 'side-a', 'side-b'], { cwd: root, env: CLEAN_ENV });
     expect(stdout).toContain('ORACLE  side-a  vs  side-b');
     // The command says where it recorded the result.
     expect(stdout).toContain('.warpline/oracle.jsonl');
@@ -143,7 +152,7 @@ describe('warpline oracle — writes under .warpline/, leaves git and your files
   });
 
   it('`oracle --help` says what it writes and does not call it read-only', async () => {
-    const { stdout } = await run(process.execPath, [distCli, 'oracle', '--help'], { cwd: root });
+    const { stdout } = await run(process.execPath, [distCli, 'oracle', '--help'], { cwd: root, env: CLEAN_ENV });
     const help = stdout.replace(/\s+/g, ' ');
     expect(help).toContain('Leaves git history and your files alone');
     expect(help).toContain('Records its result under .warpline/');
@@ -153,7 +162,7 @@ describe('warpline oracle — writes under .warpline/, leaves git and your files
   });
 
   it('`warpline --help` no longer calls the oracle a read-only forecast', async () => {
-    const { stdout } = await run(process.execPath, [distCli, '--help'], { cwd: root });
+    const { stdout } = await run(process.execPath, [distCli, '--help'], { cwd: root, env: CLEAN_ENV });
     const help = stdout.replace(/\s+/g, ' ');
     expect(help).not.toContain('read-only forecasts');
     expect(help).toContain('`oracle` records its result under .warpline/');

@@ -10,72 +10,71 @@ Paradigm exposes 32 grouped MCP tools (more on demand) that AI agents can call f
 
 ## Navigation & Discovery
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_status` | Project overview and symbol counts | ~100 |
-| `paradigm_navigate` | Find symbols, explore areas, get task context | ~200 |
-| `paradigm_search` | Search symbols by name, tag, or type | ~150 |
-| `paradigm_related` | Find connections between symbols | ~200 |
-| `paradigm_ripple` | Impact analysis before modifying a symbol | ~300 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_status` | Project overview and symbol counts |
+| `paradigm_navigate` | Find symbols, explore areas, get task context |
+| `paradigm_search` | Search symbols by name, tag, or type |
+| `paradigm_related` | Find connections between symbols |
+| `paradigm_ripple` | Impact analysis before modifying a symbol |
 
 ## Context Management
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_session` (op `health`) | Check context window usage | ~100 |
-| `paradigm_session` (op `handoff_prepare`) | Prepare context for session handoff | ~200 |
-| `paradigm_session` (op `checkpoint`) | Save work-in-progress state | ~100 |
-| `paradigm_session` (op `recover`) | Recover previous session context | ~200 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_session` (op `health`) | Check context window usage |
+| `paradigm_session` (op `handoff_prepare`) | Prepare context for session handoff |
+| `paradigm_session` (op `checkpoint`) | Save work-in-progress state |
+| `paradigm_session` (op `recover`) | Recover previous session context |
 
 ## Code Quality
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_purpose` (op `validate`) | Validate .purpose and portal.yaml | ~200 |
-| `paradigm_flow` (op `check`) | Check flow completeness | ~200 |
-| `paradigm_flow` (op `affected`) | Which flows are impacted by a change | ~200 |
-| `paradigm_gates_for_route` | Suggest gates for an API endpoint | ~150 |
-| `paradigm_pm` (op `preflight`) | Compliance plan before starting work | ~200 |
-| `paradigm_pm` (op `postflight`) | Check for violations after finishing | ~200 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_purpose` (op `validate`) | Validate .purpose and portal.yaml |
+| `paradigm_flow` (op `check`) | Check flow completeness |
+| `paradigm_flow` (op `affected`) | Which flows are impacted by a change |
+| `paradigm_gates_for_route` | Suggest gates for an API endpoint |
+| `paradigm_pm` (op `preflight`) | Compliance plan before starting work |
+| `paradigm_pm` (op `postflight`) | Check for violations after finishing |
 
 ## Knowledge & Lore
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_lore` (op `record`) | Record a decision or reflection | ~150 |
-| `paradigm_lore` (op `search`) | Search lore by tag, symbol, or type | ~200 |
-| `paradigm_wisdom` (op `context`) | Get wisdom for symbols you're modifying | ~200 |
-| `paradigm_history` (op `context`) | Recent changes to a symbol | ~200 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_lore` (op `record`) | Record a decision or reflection |
+| `paradigm_lore` (op `search`) | Search lore by tag, symbol, or type |
+| `paradigm_wisdom` (op `context`) | Get wisdom for symbols you're modifying |
+| `paradigm_history` (op `context`) | Recent changes to a symbol |
 
 ## Documentation
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_docs` (op `manifest`) | Get documentation sidebar structure | ~200 |
-| `paradigm_docs` (op `page`) | Get page data for any symbol | ~300 |
-| `paradigm_docs` (op `search`) | Search across all documentation | ~150 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_docs` (op `manifest`) | Get documentation sidebar structure |
+| `paradigm_docs` (op `page`) | Get page data for any symbol |
+| `paradigm_docs` (op `search`) | Search across all documentation |
 
 ## Multi-Agent
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_symphony` (op `send`) | Send message to another agent | ~100 |
-| `paradigm_symphony` (op `poll`) | Check inbox for messages | ~200 |
-| `paradigm_symphony` (op `peek`) | Near-free inbox stat check | ~15 |
-| `paradigm_orchestrate_inline` | Plan multi-agent task decomposition | ~300 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_symphony` (op `send`) | Send message to another agent |
+| `paradigm_symphony` (op `poll`) | Check inbox for messages |
+| `paradigm_symphony` (op `peek`) | Inbox stat check |
+| `paradigm_orchestrate_inline` | Plan multi-agent task decomposition |
 
 ## University
 
-| Tool | Description | Tokens |
-|------|-------------|--------|
-| `paradigm_university` (op `search`) | Search pack content; pass `id` for the full entry | ~150 |
-| `paradigm_university` (op `pack_list`) | List packs, their content counts and pack skills | ~150 |
+| Tool | Description |
+|------|-------------|
+| `paradigm_university` (op `search`) | Search pack content; pass `id` for the full entry |
+| `paradigm_university` (op `pack_list`) | List packs, their content counts and pack skills |
 
 Authoring, onboarding and quizzes moved to the CLI (`paradigm university add|show|quiz|validate`) and the Platform **Academy** section.
 
 ## Token Budget Tips
 
-- The default tool list is 32 tools, about 7,800 tokens (estimated as JSON length / 4 on Paradigm's own repository). A test fails the build past 40 tools or 8,000 tokens. How many tokens a tool result costs compared with reading the files has not been measured.
+- The default tool list is 32 tools, about 7,800 tokens (estimated as JSON length / 4 on Paradigm's own repository). A test fails the build past 40 tools, or at 8,000 estimated tokens. How many tokens a tool result costs compared with reading the files has not been measured.
 - Use `response_format: 'concise'` for a shorter response on supported tools
 - Call `paradigm_session` (op `health`) every 10-15 tool calls to monitor usage
-- Results are cached for 30 seconds — repeated calls are free

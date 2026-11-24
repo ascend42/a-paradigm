@@ -31,13 +31,13 @@ export const metadata: Metadata = {
     siteName: 'Paradigm',
     title: 'Paradigm — Structure for AI-assisted development',
     description:
-      'Structure your codebase so AI agents understand it. Five symbols, one symbol graph.',
+      'Structure your codebase so AI agents can read it. Five symbols, one symbol graph.',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Paradigm — Structure for AI-assisted development',
     description:
-      'Structure your codebase so AI agents understand it. Five symbols, one symbol graph.',
+      'Structure your codebase so AI agents can read it. Five symbols, one symbol graph.',
   },
   robots: {
     index: true,

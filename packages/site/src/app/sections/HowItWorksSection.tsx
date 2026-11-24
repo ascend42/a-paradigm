@@ -9,18 +9,24 @@ const STEPS = [
     number: '01',
     title: 'Initialize',
     description: 'One command adds a .paradigm/ directory to your project, with a config file and a navigator, and writes the instruction files and hooks your agents read.',
-    code: `# Example run, 2026-11-23, in a new sample project (excerpt)
+    code: `# Example run, 2026-11-24, in a new sample project (excerpt)
 $ paradigm shift
   ...
   Created/Updated:
+  ...
   ✓ .paradigm/config.yaml       Project configuration
   ✓ .paradigm/navigator.yaml    Symbol navigation map
   ✓ .paradigm/agents.yaml       Team agent configuration
+  ✓ .paradigm/adoptions.yaml    Agent adoption records
   ✓ .purpose                    Root feature definitions
+  ✓ .paradigm/lore/             Project lore timeline
   ✓ portal.yaml                 Authorization gates
+  ✓ .paradigm/roster.yaml       Agent roster for this project
   ✓ CLAUDE.md                   Claude Code AI instructions
   ✓ AGENTS.md                   Universal AI agent instructions
-  ✓ .claude/hooks/              Claude Code enforcement hooks`,
+  ✓ .cursor/rules/              Cursor AI instructions
+  ✓ .claude/hooks/              Claude Code hooks (checks follow your enforcement level)
+  ...`,
   },
   {
     number: '02',
@@ -71,7 +77,7 @@ $ paradigm ripple "#auth-middleware"
 ];
 
 // The code blocks above are real. Steps 01 and 03 are excerpts of output
-// captured on 2026-11-23 from a sample project holding the step 02 file and a
+// captured on 2026-11-23 and 2026-11-24 from a sample project holding the step 02 file and a
 // second .purpose file; "..." marks lines left out. Step 02 passes
 // \`paradigm lint\`. If you change one, re-run the commands and paste what they
 // print; do not write output by hand.

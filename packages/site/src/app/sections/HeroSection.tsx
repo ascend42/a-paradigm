@@ -44,7 +44,7 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
         >
           Structure your codebase so{' '}
-          <span className={styles.gradient}>AI&nbsp;agents understand&nbsp;it</span>
+          <span className={styles.gradient}>AI&nbsp;agents can read&nbsp;it</span>
         </motion.h1>
 
         <motion.p

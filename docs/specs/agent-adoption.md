@@ -366,7 +366,7 @@ Individual adoption card. Full scope list.
 
 ## PAN v1.0 — Paradigm Agent Norm
 
-The standard for all agents, including Neverland marketplace agents.
+The standard for all agents. (Design history: this once included marketplace agents; the registry was removed in 8.0.2.)
 
 | # | Requirement | Level |
 |---|-------------|-------|
@@ -378,7 +378,7 @@ The standard for all agents, including Neverland marketplace agents.
 | PAN-6 | **Surface Configuration** — support `paradigm agent show <id> --prefs` for visibility | SHOULD |
 | PAN-7 | **Report Applied Preferences** — one-line summary in orchestration output | SHOULD |
 
-Neverland validates PAN-1 and PAN-2 at publish time. Agents without declared behaviors and scopes cannot be published to the marketplace.
+Design history, removed in 8.0.2: the registry was to validate PAN-1 and PAN-2 at publish time, so that agents without declared behaviors and scopes could not be published. Nothing validates this at publish today, because there is no publish.
 
 ## Documentor + University Resolution
 

@@ -169,6 +169,6 @@ export async function costCommand(targetPath: string | undefined, options: CostO
   out('');
   dim(`How counted: ${analysis.method}`);
   dim(analysis.scope);
-  dim('Token usage recorded from real orchestration runs is a separate command: `paradigm calibrate`.');
+  dim("Token actuals captured from orchestration runs feed `paradigm calibrate`, which rebuilds the planner's estimate table.");
   out('');
 }
