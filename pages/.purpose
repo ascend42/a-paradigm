@@ -1,0 +1,63 @@
+version: 2.0.0
+description: >
+  The public hero pages GitHub Pages serves: a hub and one page each for Paradigm, Gnomon, Warpline
+  and the learning path. Plain static files, complete from file:// with scripting off, with no request
+  to any other origin. Every number is stamped into the committed HTML from facts.json; nothing numeric
+  is typed by hand. Design system: .atelier/systems/pages/. All five pages and the 404 are built.
+
+components:
+  pages-stamp:
+    description: >-
+      build/stamp.mjs. Rewrites the stamped regions of each page (facts, source lines, standing ledgers,
+      file excerpts at the pinned commit, command captures, lately rows, the symbol graph, the shared
+      head, masthead and footer) from facts.json. --check fails when a page is out of date; --release
+      also refuses slots, facts without a source or date, standing rows without evidence and excerpts
+      that stop inside a list.
+    type: build
+    tags: [site, build, facts]
+  pages-check:
+    description: >-
+      build/check.mjs. Fails on a custom property that is not a foundation value in the design system,
+      light and dark token sets that differ, an undeclared var(), a symbol hue outside a sigil, a digit
+      in page text that was not stamped, an unresolved token or visible slot in a release, an excerpt
+      that ends inside a list, a request to another origin, a dead internal link, and a file over its
+      size budget. Runs its planted failures first on every run.
+    type: build
+    tags: [site, build, design-system]
+  pages-frame:
+    description: >-
+      assets/pages.css and assets/pages.js. One stylesheet and one deferred script shared by every page:
+      tokens in light and dark (by prefers-color-scheme and by the theme key), masthead, key, command
+      line, prompt line, standing, fact line, before and after, paired table, proof excerpt, ledger,
+      numbered rows, lately, footer. The script adds the theme key, the Copy keys and the graph ripple;
+      a page is complete without it.
+    type: view
+    tags: [site, ui]
+  pages-hub:
+    description: index.html. The overview - what Paradigm is, one lead fact, the index of the three products and the path, how they fit, the last releases, where each stands.
+    type: view
+    tags: [site, ui]
+  pages-paradigm:
+    description: paradigm/index.html. Seven sections - hero with the symbol graph plate, the three claims, what has been measured, one session, lately, the standing ledger with limits, and the first thing to do.
+    type: view
+    tags: [site, ui]
+  pages-gnomon:
+    description: gnomon/index.html. Seven sections - hero with the requirements preflight and a drawn decision card (an illustration, said to be one; no real card or log row was captured), what it holds, the four verification commands with their recorded output, the desk drawn in Gnomon's own palette, lately, the standing ledger with limits, and the first thing to do. The card's stamp is the page's one motion.
+    type: view
+    tags: [site, ui]
+  pages-warpline:
+    description: warpline/index.html. The shortest page - the standing ledger with the strand as the lead, one fact line for the base-rate study, the idea as one plate, the one real oracle run (an agreement), and the way back to the repository.
+    type: view
+    tags: [site, ui]
+  pages-learn:
+    description: learn/index.html. The path - four numbered stations and two spurs as native details elements, each with an outcome, one exercise, its practice and a guide link; the thirteen practices as Do, Instead of, Why; and a field card that prints alone on one sheet. Ticks are kept on the reader's device only.
+    type: view
+    tags: [site, ui]
+  pages-symbol-graph:
+    description: >-
+      The Paradigm plate. stamp.mjs reads two features from packages/paradigm/.purpose at the pinned
+      commit and draws them as an inline SVG whose nodes are focusable symbol ids; hover or focus ripples
+      to the node's dependents. The stamp fails if the captured paradigm ripple answer does not name the
+      same symbols. Below 620px the same symbols and edges are a nested list.
+    type: view
+    tags: [site, ui, graph]

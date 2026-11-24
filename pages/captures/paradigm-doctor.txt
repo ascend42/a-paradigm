@@ -1,0 +1,13 @@
+# Captured 2026-11-23, HEAD d4dd05b7. Selected lines of 'paradigm doctor' on Paradigm's own repo, each exactly as printed (long lines cut at 200 characters).
+# Changed since the dossier's run the same day: isolated symbols 579 -> 580; Stop hook timing was 'p50 0.09s, p95 4.72s, max 4.72s over 14 run(s)'.
+
+$ paradigm doctor
+  ✓ portal.yaml                    Valid (20 gates, 140 routes)
+  ✗ Learning liveness              FLATLINE: 0 journals / 20 completions (postflight 440, settlement 62 rows) — the loop is turning but producing no learnings · chain live (20 recent settlements)
+  ✓ Hook Stop                      p50 0.10s, p95 0.23s, max 0.23s over 9 run(s)
+  Survival: no exercise events recorded yet (spec sub-phase 1): no cert can survive.
+  ✗ stale-references               15 dead path references in instruction files
+  ⚠ purpose-coverage               65% purpose coverage (186/288 source directories) — below 80% threshold
+  ℹ orphaned-symbols               580 isolated symbols (no connections to other symbols)
+  ✗ stale-portal                   4 portal routes with no matching implementation file
+  ℹ always-on-budget               claude-code: 16,606 chars (~4,152 tokens est.) over the 12,000-char cap

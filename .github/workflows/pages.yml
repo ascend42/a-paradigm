@@ -1,0 +1,78 @@
+# Publishes pages/ to GitHub Pages. The release check runs first; nothing is published if it fails.
+# Pages must be turned on once by the repository owner (Settings > Pages > Source: GitHub Actions).
+# Until then the deploy job is skipped, not failed.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pages/**'
+      - 'CHANGELOG.md'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Release check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      enabled: ${{ steps.pages.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fetch the commit the excerpts are pinned to
+        run: git fetch --quiet origin "$(node -p "require('./pages/facts.json').excerpts_pinned_to.commit")" || true
+      - name: The committed HTML is up to date with facts.json, and release rules hold
+        run: node pages/build/stamp.mjs --check --release
+      - name: Tokens, typed digits, slots, links and budgets
+        run: node pages/build/check.mjs --release
+      - name: Is Pages turned on for this repository?
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" --silent 2>/dev/null; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is not turned on for this repository, so nothing was deployed."
+          fi
+      - name: Assemble the site (pages/ without its authoring files)
+        if: steps.pages.outputs.enabled == 'true'
+        run: |
+          mkdir _site
+          rsync -a --exclude 'build/' --exclude 'content/' --exclude 'README.md' --exclude '.purpose' pages/ _site/
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.enabled == 'true'
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy
+    needs: check
+    if: needs.check.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

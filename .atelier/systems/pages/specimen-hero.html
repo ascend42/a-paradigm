@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pages system: hero specimen (proposal, 2026-11-23)</title>
+<!--
+  Specimen for the proposed `pages` design system (.atelier/systems/pages/design-system.yaml).
+  Shows: the hub's first screen, and the Paradigm page's first two sections, in light and in dark.
+  Hand-written, static, no network requests. Fonts are read from the Gnomon GUI's self-hosted
+  files (the build copies them into pages/assets/fonts/).
+  Every statement on it is one of three kinds, and says which:
+    real          an excerpt or a fact that is in the repo today, with its path
+    illustration  a drawn example of a product surface, labelled as drawn
+    slot          a place a measured number or step will go; says what evidence fills it
+  Copy is a draft. No number here is invented: each one is from
+  .paradigm/research/hero-pages/evidence-dossier.md (measured 2026-11-23) and names its source.
+-->
+<style>
+@font-face { font-family: "Fraunces"; src: url("../../../packages/gnomon-gui/static/fonts/Fraunces-opsz-wght.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../packages/gnomon-gui/static/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../packages/gnomon-gui/static/fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+
+/* ── tokens: the frame ─────────────────────────────────────────────────── */
+.theme[data-theme="light"] {
+  --ground: #F4F4F1; --surface: #FBFBF9; --sunk: #E9E9E4;
+  --ink: #17181C; --ink-2: #4B4D56; --edge: #70727B; --rule: #D3D3CC; --on-ink: #FBFBF9;
+  --sym-component: #166534; --sym-flow: #6D28D9; --sym-gate: #B91C1C; --sym-signal: #854D0E; --sym-aspect: #4B5563;
+  /* plate: Gnomon by day (papercraft), values from .atelier/systems/gnomon verbatim */
+  --g-ground: #EDE8DC; --g-sheet: #F8F5EE; --g-ink: #16150F; --g-sec: #5A5850; --g-edge: #2A2925; --g-on-ink: #F8F5EE;
+  --g-shadow: 4px 4px 0 #2A2925;
+}
+.theme[data-theme="dark"] {
+  --ground: #0E0F13; --surface: #15171D; --sunk: #090A0D;
+  --ink: #ECEBE6; --ink-2: #A4A7B1; --edge: #7D818D; --rule: #2B2E37; --on-ink: #15171D;
+  --sym-component: #4ADE80; --sym-flow: #A78BFA; --sym-gate: #F87171; --sym-signal: #EAB308; --sym-aspect: #9CA3AF;
+  /* plate: Gnomon by night (phosphor) */
+  --g-ground: #0F1116; --g-sheet: #171A21; --g-ink: #E8F4F0; --g-sec: #86998F; --g-edge: #C9DCD6; --g-on-ink: #171A21;
+  --g-shadow: none;
+}
+.theme {
+  /* plate: Warpline keeps its ink loom in both themes */
+  --w-ground: #0B0D14; --w-rule: #1C2138; --w-text: #F4F1EA; --w-muted: #8B8A82; --w-a: #E9A23B; --w-b: #2DD4BF; --w-seam: #7C6FF0;
+  --display: "Fraunces", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* ── base ──────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: #17181C; }
+.theme { background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.6; }
+.theme a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.theme a:hover { text-decoration-thickness: 2px; }
+.theme :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+:where(.theme) p, :where(.theme) figure { margin: 0; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+.mono { font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.quiet { color: var(--ink-2); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* long paths and ids wrap inside their block instead of running off a narrow page */
+.mono, .fact-src, .ledger-ev, .prov, .standing, .asof, .slot { overflow-wrap: break-word; }
+/* skip link: first focusable thing on every page; shown only when focused */
+.skip { position: absolute; left: 16px; top: 8px; z-index: 2; }
+.skip:not(:focus) { width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+
+/* ── specimen chrome (not part of the system) ──────────────────────────── */
+.spec-bar { background: #17181C; color: #ECEBE6; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 13px; line-height: 1.6; padding: 16px 32px; }
+.spec-bar b { font-weight: 600; }
+.spec-bar ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 32px; color: #A4A7B1; }
+.spec-tag { background: #17181C; color: #A4A7B1; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 13px; padding: 8px 32px; border-top: 1px solid #2B2E37; }
+.spec-tag b { color: #ECEBE6; font-weight: 600; }
+
+/* ── masthead ──────────────────────────────────────────────────────────── */
+.mast { display: flex; align-items: baseline; gap: 32px; padding: 24px 0 16px; border-bottom: 1px solid var(--ink); position: relative; }
+.mast-name { font-family: var(--display); font-size: 21px; font-weight: 600; text-decoration: none !important; }
+.mast nav { display: flex; gap: 24px; flex: 1; }
+.mast nav a, .mast-side a, .mast-side button { font-family: var(--mono); font-size: 13px; text-decoration: none; padding: 12px 0; }
+.mast nav a:hover, .mast-side a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+.mast nav a[aria-current="page"] { font-weight: 600; position: relative; }
+/* the register tick: the masthead rule is notched under the page you are on */
+.mast nav a[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 4px; background: var(--ink); }
+.mast-side { display: flex; gap: 24px; align-items: baseline; }
+.theme-key { background: none; border: 0; color: var(--ink-2); cursor: pointer; }
+.theme-key b { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+
+/* ── type ──────────────────────────────────────────────────────────────── */
+.display { font-family: var(--display); font-weight: 500; font-size: 68px; line-height: 1.04; letter-spacing: -0.02em; margin: 0; font-variation-settings: "opsz" 144; }
+.h2 { font-family: var(--display); font-weight: 500; font-size: 44px; line-height: 1.1; letter-spacing: -0.015em; margin: 0; }
+.h3 { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; margin: 0; }
+.lede { font-size: 21px; line-height: 1.5; max-width: 34em; }
+
+/* ── key (the one button) and the command line ─────────────────────────── */
+.key { font-family: var(--mono); font-size: 13px; font-weight: 600; min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--ink); border-radius: 2px; cursor: pointer; text-decoration: none !important; }
+.key:hover { background: var(--sunk); }
+.key:active { transform: translateY(1px); }
+.key.pri { background: var(--ink); color: var(--on-ink); }
+.key.pri:hover { background: var(--ink-2); border-color: var(--ink-2); }
+.cmd { display: flex; align-items: stretch; border: 1px solid var(--ink); border-radius: 2px; background: var(--surface); min-width: 0; max-width: min(520px, 100%); }
+.cmd code { font-family: var(--mono); font-size: 15px; padding: 12px 16px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+/* a run of commands: joined, numbered by order, each with a word saying where it is typed */
+.cmds { max-width: min(520px, 100%); }
+.cmds .cmd { max-width: none; }
+.cmds .cmd + .cmd { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.cmds .cmd:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.cmd .where { font-family: var(--mono); font-size: 13px; color: var(--ink-2); align-self: center; padding: 0 16px 0 0; white-space: nowrap; }
+.cmd code::before { content: "$ "; color: var(--ink-2); }
+.cmd .key { border: 0; border-left: 1px solid var(--ink); border-radius: 0; background: transparent; }
+.cmd .key:hover { background: var(--sunk); }
+/* prompt line: a sentence you say to your agent (not a shell command) */
+.say { border-left: 4px solid var(--ink); padding: 4px 0 4px 16px; max-width: 520px; }
+.say-who { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+.say q { display: block; font-size: 17px; line-height: 1.5; quotes: none; }
+.say q var { font-style: normal; font-family: var(--mono); font-size: 15px; border-bottom: 1px dashed var(--edge); }
+.next { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; }
+
+/* ── standing: built, in progress, untested (read by mark and word, never by hue) ── */
+.standing { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.standing li { display: grid; grid-template-columns: 16px 104px 1fr; gap: 0 8px; align-items: baseline; padding: 4px 0; }
+.standing b { font-weight: 600; }
+.standing .of { grid-column: 2 / -1; color: var(--ink-2); }
+.mark { width: 12px; height: 12px; display: inline-block; border: 2px solid var(--ink); transform: translateY(1px); }
+.mark.built { background: var(--ink); }
+.mark.progress { background: linear-gradient(135deg, var(--ink) 50%, transparent 50%); }
+.mark.untested { border: 1px dashed var(--ink); }
+/* fourth state: measured against a bar set in advance, and it did not hold. A hollow square, struck through. */
+.mark.nothold { position: relative; }
+.mark.nothold::after { content: ""; position: absolute; left: -4px; right: -4px; top: calc(50% - 1px); height: 2px; background: var(--ink); }
+/* what a state row says is prose, so it is set as prose */
+.standing li > span:last-child:not(.of) { font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.asof { font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+
+/* ── slot: a place evidence will go; never ships ───────────────────────── */
+.slot { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); border: 1px dashed var(--edge); padding: 8px 12px;
+  background: repeating-linear-gradient(135deg, transparent 0 8px, var(--sunk) 8px 12px); }
+.slot b { color: var(--ink); font-weight: 600; }
+.slot.inline { display: inline-block; padding: 0 8px; }
+
+/* ── provenance caption under every exhibit ────────────────────────────── */
+.prov { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); margin-top: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 12px; }
+.prov b { color: var(--ink); font-weight: 600; }
+
+/* ── hub: first screen ─────────────────────────────────────────────────── */
+.hub { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 64px; padding: 64px 0 96px; align-items: start; }
+.hub-lead > * + * { margin-top: 32px; }
+.contents { border-top: 4px solid var(--ink); list-style: none; margin: 0; padding: 0; }
+.entry { display: grid; grid-template-columns: 72px 1fr; gap: 0 24px; padding: 24px 0; border-bottom: 1px solid var(--rule); }
+.entry:last-child { border-bottom: 1px solid var(--ink); }
+.entry-name { font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.1; margin: 0; }
+.entry-name a { text-decoration: none; }
+.entry-name a::after { content: " \2192"; font-family: var(--mono); font-size: 21px; font-weight: 400; color: var(--ink-2); }
+.entry-name a:hover::after { color: var(--ink); }
+.entry p { font-size: 15px; margin: 8px 0 12px; max-width: 30em; }
+.entry.minor .entry-name { font-size: 21px; }
+.entry.minor p { margin-bottom: 8px; }
+.device { padding-top: 4px; }
+
+/* device: Paradigm, the sigil (prefix glyph on its own hue socket) */
+.sigils { font-family: var(--mono); font-weight: 600; font-size: 21px; line-height: 1.1; display: grid; grid-template-columns: repeat(3, 20px); gap: 8px 4px; }
+.sig { display: inline-block; width: 20px; text-align: center; border-bottom: 4px solid currentColor; padding-bottom: 4px; }
+.sig.c, .s-c { color: var(--sym-component); } .sig.f, .s-f { color: var(--sym-flow); } .sig.g, .s-g { color: var(--sym-gate); }
+.sig.s, .s-s { color: var(--sym-signal); } .sig.a, .s-a { color: var(--sym-aspect); }
+
+/* device: Gnomon, the cut sheet with the one hard shadow */
+.sheet { width: 64px; background: var(--g-sheet); color: var(--g-ink); border: 1px solid var(--g-edge); border-radius: 3px; box-shadow: var(--g-shadow); padding: 8px; font-family: var(--mono); }
+.sheet i { display: block; height: 2px; background: var(--g-sec); margin-bottom: 4px; }
+.sheet i:nth-child(2) { width: 60%; }
+.sheet span { display: block; height: 12px; margin-top: 8px; background: var(--g-ink); border-radius: 3px; width: 28px; }
+
+/* device: Warpline, the strand (two threads; a loose end where nothing is tested yet) */
+.strand { display: block; width: 64px; height: 48px; background: var(--w-ground); }
+
+/* device: the path, stations on a line */
+.stations { display: flex; align-items: center; width: 64px; height: 24px; position: relative; font-family: var(--mono); }
+.stations::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; border-top: 1px solid var(--ink); }
+.stations i { position: relative; width: 8px; height: 8px; background: var(--ground); border: 1px solid var(--ink); margin-right: 12px; }
+.stations i:first-child { background: var(--ink); }
+
+/* ── product page ──────────────────────────────────────────────────────── */
+.crumb { font-family: var(--mono); font-size: 13px; color: var(--ink-2); padding-top: 32px; }
+.hero { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); gap: 64px; padding: 32px 0 64px; align-items: start; }
+.hero-lead > * + * { margin-top: 24px; }
+.plate { background: var(--surface); border: 1px solid var(--ink); padding: 24px; }
+.plate svg { display: block; width: 100%; height: auto; }
+.hero-exhibit > * + * { margin-top: 24px; }
+/* the same symbols and edges as a list, for when the drawing would set its labels under 13px */
+.graph-list { display: none; list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.graph-list ul { list-style: none; margin: 4px 0 16px 4px; padding: 0 0 0 16px; border-left: 1px solid var(--edge); }
+.graph-list li li { padding: 4px 0; }
+.graph-list .hit { font-weight: 600; }
+.graph-list .hit span { font-weight: 400; color: var(--ink-2); }
+.graph text { font-family: var(--mono); font-size: 13px; fill: var(--ink); }
+.graph .edge { fill: none; stroke: var(--edge); stroke-width: 1; }
+.graph .edge.hit { stroke: var(--ink); stroke-width: 2; }
+.graph .node { cursor: default; }
+.graph .node rect { fill: transparent; stroke: none; }
+.graph .node.hit rect { stroke: var(--ink); stroke-width: 1; fill: var(--sunk); }
+.graph .p-c { fill: var(--sym-component); font-weight: 600; } .graph .p-f { fill: var(--sym-flow); font-weight: 600; } .graph .p-s { fill: var(--sym-signal); font-weight: 600; }
+.legend { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 4px 24px; font-family: var(--mono); font-size: 13px; }
+.legend b { font-weight: 600; }
+
+/* section frame: a margin column where marks hang */
+.section { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 10fr); gap: 0 32px; padding: 64px 0; border-top: 1px solid var(--ink); }
+.section-n { font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1.1; color: var(--ink-2); font-variation-settings: "opsz" 144; }
+.section .section-body > * + * { margin-top: 32px; }
+
+/* the three claims, as a run of rows (never three cards) */
+.claims { margin: 0; }
+.claims > div { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-top: 1px solid var(--rule); }
+.claims > div:last-child { border-bottom: 1px solid var(--rule); }
+.claims dt { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; }
+.claims dd { margin: 0; }
+.claims dd p + p { margin-top: 8px; }
+
+/* fact line: numeral, claim, source. No source, no line. */
+.facts { border-top: 4px solid var(--ink); }
+.fact { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-bottom: 1px solid var(--rule); align-items: start; }
+.fact-n { font-family: var(--mono); font-weight: 600; font-size: 56px; line-height: 1; letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.fact-n small { font-size: 15px; font-weight: 400; line-height: 1.6; letter-spacing: 0; color: var(--ink-2); }
+.fact-n.slot { font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.6; min-height: 56px; display: flex; align-items: center; }
+.fact-claim { font-size: 17px; }
+.fact-src { font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+/* the lead fact: the one number in a first screen. Stacked, under the same 4px rule. */
+.fact.lead { display: block; border-top: 4px solid var(--ink); border-bottom: 0; padding: 16px 0 0; }
+.fact.lead .fact-claim { margin-top: 8px; max-width: 34em; }
+.fact-claim, .claims dd p, .ledger-what { max-width: 66ch; }
+.prov > span, .fact-src { max-width: 76ch; }
+
+/* before and after: one unit, one scale, two rows */
+.pair { border: 1px solid var(--ink); background: var(--surface); padding: 24px; }
+.pair-row { display: grid; grid-template-columns: 200px minmax(0, 1fr) 160px; gap: 16px; align-items: center; font-family: var(--mono); font-size: 13px; padding: 8px 0; }
+.pair-track { height: 16px; border: 1px dashed var(--edge); background: repeating-linear-gradient(135deg, transparent 0 8px, var(--sunk) 8px 12px); }
+.pair-bar { height: 16px; background: var(--ink); }
+.pair-bar.w-26 { width: 26%; }
+.pair-row .v { text-align: right; color: var(--ink-2); }
+.pair-row .v b { color: var(--ink); font-weight: 600; font-size: 17px; }
+/* a single paired run: every measure it took, as a table. Never drawn as bars. */
+.study-head { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
+.study table { border-collapse: collapse; width: 100%; max-width: 640px; margin-top: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.study th, .study td { text-align: left; padding: 8px 16px 8px 0; border-bottom: 1px solid var(--rule); font-weight: 400; vertical-align: baseline; }
+.study thead th { color: var(--ink-2); border-bottom-color: var(--ink); }
+.study td { font-size: 17px; font-weight: 600; }
+
+/* proof excerpt: the real file, its path, its lines */
+.proof { border-left: 4px solid var(--ink); background: var(--surface); }
+.proof-head { font-family: var(--mono); font-size: 13px; padding: 0 24px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; gap: 0 16px; flex-wrap: wrap; }
+.proof-head > * { padding: 12px 0; }
+.proof pre { margin: 0; padding: 16px 24px; max-width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; }
+.proof pre .ln { color: var(--ink-2); user-select: none; display: inline-block; width: 32px; }
+
+/* standing ledger: one row per feature; state, what, evidence. Rows by rules. */
+.ledger { border-top: 4px solid var(--ink); }
+.ledger-row { display: grid; grid-template-columns: 136px minmax(0, 5fr) minmax(0, 4fr); gap: 0 24px; padding: 16px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.ledger-state { font-family: var(--mono); font-size: 13px; line-height: 1.6; font-weight: 600; display: flex; gap: 8px; align-items: baseline; padding-top: 4px; }
+.ledger-what { font-size: 17px; }
+.ledger-ev { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); padding-top: 4px; }
+/* on the Warpline page the ledger gains the strand: woven where built, loose where untested */
+.ledger.loom .ledger-row { grid-template-columns: 48px 136px minmax(0, 5fr) minmax(0, 4fr); padding: 0; align-items: stretch; }
+.ledger.loom .ledger-row > :not(.thread) { padding: 16px 0; }
+.ledger.loom .ledger-row > .ledger-state, .ledger.loom .ledger-row > .ledger-ev { padding-top: 20px; }
+.thread { background: var(--w-ground); position: relative; }
+.thread::before, .thread::after { content: ""; position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--w-a); left: 12px; }
+.thread::after { border-left-color: var(--w-b); left: 24px; }
+.ledger-row.is-progress .thread::after { border-left-style: dashed; }
+.ledger-row.is-untested .thread::after { border-left-style: dotted; bottom: 50%; }
+.ledger-row.is-untested .thread::before { border-left-style: dashed; }
+/* did not hold: the weft was really run (solid) and stops at a cap; the warp carries on */
+.ledger-row.is-nothold .thread::after { bottom: 50%; }
+.ledger-row.is-nothold .thread { background: linear-gradient(var(--w-b), var(--w-b)) 20px 50% / 10px 2px no-repeat var(--w-ground); }
+/* on a dark page the ink strip has no edge of its own (1.01:1), so it is ruled like the rows */
+.theme[data-theme="dark"] .thread { box-shadow: inset 1px 0 0 var(--rule), inset -1px 0 0 var(--rule); }
+.theme[data-theme="dark"] .strand { outline: 1px solid var(--rule); }
+.ledger-foot { margin-top: 48px; }
+.lead-short { padding: 64px 0 32px; max-width: 800px; }
+.lead-short > * + * { margin-top: 24px; }
+.foot-space { height: 64px; }
+
+/* ── narrow ────────────────────────────────────────────────────────────── */
+/* ── four steps: 1280 display drops a size · 1100 heroes go to one column · 860 rows stack · 620 compact ── */
+@media (max-width: 1279px) { .display { font-size: 56px; } }
+@media (max-width: 1099px) {
+  .hub, .hero { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+  .plate { max-width: 560px; } .contents { max-width: 640px; }
+}
+@media (min-width: 861px) and (max-width: 1099px) {
+  .hero-exhibit { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .hero-exhibit > * + * { margin-top: 0; }
+}
+@media (max-width: 860px) {
+  .wrap { padding: 0 16px; }
+  .h2 { font-size: 32px; } .lede { font-size: 17px; }
+  .hub { padding: 32px 0 64px; }
+  .section, .claims > div, .fact { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .section-n { font-size: 21px; }
+  .mast { flex-wrap: wrap; gap: 4px 24px; } .mast nav { order: 3; flex-basis: 100%; overflow-x: auto; }
+  .pair-row { grid-template-columns: 1fr; gap: 4px; } .pair-row .v { text-align: left; }
+  .ledger-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .ledger.loom .ledger-row { grid-template-columns: 48px minmax(0, 1fr); gap: 0 16px; } .ledger.loom .thread { grid-row: 1 / span 3; }
+  .ledger.loom .ledger-row > :not(.thread) { padding: 4px 0; grid-column: 2; } .ledger.loom .ledger-row > .ledger-state { padding-top: 16px; } .ledger.loom .ledger-row > .ledger-ev { padding-bottom: 16px; }
+  .standing li { grid-template-columns: 16px 1fr; } .standing li > span:last-child { grid-column: 2; }
+}
+@media (max-width: 620px) {
+  .display { font-size: 44px; } .fact-n:not(.slot) { font-size: 44px; }
+  .plate { padding: 16px; } .plate .graph { display: none; } .graph-list { display: block; }
+  .cmd .where { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .key:active { transform: none; } }
+</style>
+</head>
+<body>
+
+<div class="spec-bar">
+  <b>Pages system: hero specimen.</b> Proposal by Luna, 2026-11-23, for the founder's review. Draft copy; real size. Light first, then the same markup in dark.
+  <ul>
+    <li><b>real</b> is in the repo today, with its path</li>
+    <li><b>illustration</b> is a drawn example, labelled</li>
+    <li><b>slot</b> (hatched) waits for evidence, and never ships</li>
+    <li>numbers are from the evidence dossier, measured 2026-11-23</li>
+    <li>headlines, ledes and section titles are draft copy</li>
+    <li><b>reviewed and amended by Mika, 2026-11-23</b>: changes and reasons are in DIRECTION.md, "Mika's review"</li>
+  </ul>
+</div>
+
+<template id="page">
+
+  <div class="spec-tag"><b>1 · Hub, first screen</b> &nbsp; pages/index.html</div>
+  <div class="wrap" style="position:relative">
+    <a class="key skip" href="#main">Skip to the page</a>
+    <header class="mast">
+      <a class="mast-name" href="#">Paradigm</a>
+      <nav aria-label="Pages">
+        <a href="#" aria-current="page">Overview</a>
+        <a href="#">Paradigm</a>
+        <a href="#">Gnomon</a>
+        <a href="#">Warpline</a>
+        <a href="#">Learn</a>
+      </nav>
+      <div class="mast-side">
+        <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+        <button class="theme-key" type="button" aria-label="Theme: follows your system. Switch theme"><b>Auto</b> · Light · Dark</button>
+      </div>
+    </header>
+
+    <main class="hub" id="main">
+      <div class="hub-lead">
+        <h1 class="display">A map of your code that agents can be held to.</h1>
+        <p class="lede">Paradigm describes each part of a codebase in plain YAML next to the code, and agents read that map through MCP tools. Hooks can block a session that changes code and leaves the description behind. They are off until you turn them on.</p>
+        <div class="next">
+          <div class="cmd">
+            <code>npm install -g @a-company/paradigm</code>
+            <button class="key" type="button">Copy</button>
+          </div>
+          <a href="#">Start the path</a>
+        </div>
+        <div class="fact lead">
+          <div class="fact-n">7,800<small>tokens, about</small></div>
+          <p class="fact-claim">for the whole default tool list an agent loads: 32 tools, cut from about 134 tools and 30,000 tokens in 7.13.0. A test fails the build above 8,000.</p>
+          <p class="fact-src">real · packages/paradigm-mcp/src/tools/tools-list-budget.test.ts, lines 18 to 19 · run 2026-11-23 (7,793, estimated as length / 4) · the earlier figures are recorded in CHANGELOG.md, line 441, and were not re-measured</p>
+        </div>
+        <figure class="proof">
+          <div class="proof-head"><span>packages/paradigm/.purpose</span><a href="https://github.com/ascend42/a-paradigm/blob/main/packages/paradigm/.purpose">lines 32 to 40 ↗</a></div>
+<pre><span class="ln">32</span>    flows:
+<span class="ln">33</span>      - <b class="s-f">$</b>init-flow
+<span class="ln">34</span>    signals:
+<span class="ln">35</span>      - '<b class="s-s">!</b>init-success'
+<span class="ln">36</span>      - '<b class="s-s">!</b>init-skipped'
+<span class="ln">37</span>    components:
+<span class="ln">38</span>      - '<b class="s-c">#</b>init-handler'
+<span class="ln">39</span>      - '<b class="s-c">#</b>template-copier'
+<span class="ln">40</span>      - '<b class="s-c">#</b>detection-engine'</pre>
+          <figcaption class="prov" style="padding:0 24px 16px"><b>real</b><span>The whole idea is a file like this one, next to the code it describes.</span></figcaption>
+        </figure>
+      </div>
+
+      <ul class="contents" aria-label="In this repository">
+        <li class="entry">
+          <div class="device" aria-hidden="true">
+            <div class="sigils"><span class="sig c">#</span><span class="sig f">$</span><span class="sig g">^</span><span class="sig s">!</span><span class="sig a">~</span></div>
+          </div>
+          <div>
+            <h2 class="entry-name"><a href="#">Paradigm</a></h2>
+            <p>Structure, deterministic checks and calibrated memory for AI coding agents.</p>
+            <ul class="standing">
+              <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>8.1.3 on npm · a fresh install audits at 0 vulnerabilities</span></li>
+              <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>whether what agents learn improves their work</span></li>
+              <li><span></span><span class="of">as of 2026-11-23 · real: npm audit; paradigm doctor</span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="entry">
+          <div class="device" aria-hidden="true">
+            <div class="sheet"><i></i><i></i><span></span></div>
+          </div>
+          <div>
+            <h2 class="entry-name"><a href="#">Gnomon</a></h2>
+            <p>A local console for your Claude Code sessions. Every permission, question and plan lands on one decision stack, and your answer is signed.</p>
+            <ul class="standing">
+              <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>signed and notarized app, Apple silicon Macs only</span></li>
+              <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>boards (first slice on a branch)</span></li>
+              <li><span></span><span class="of">as of 2026-11-23 · real: spctl on the npm package; git log</span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="entry minor">
+          <div class="device" aria-hidden="true">
+            <svg class="strand" viewBox="0 0 64 48" focusable="false">
+              <path d="M12 0 V48" stroke="#E9A23B" stroke-width="2" fill="none"/>
+              <path d="M24 0 V20" stroke="#2DD4BF" stroke-width="2" fill="none"/>
+              <path d="M24 20 C24 30 40 28 40 38 V48" stroke="#2DD4BF" stroke-width="2" stroke-dasharray="2 4" fill="none"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="entry-name"><a href="#">Warpline</a></h2>
+            <p>Checks a merge by what the code means, before the merge.</p>
+            <ul class="standing">
+              <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>0.3.1 on npm, experimental</span></li>
+              <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>not yet run end to end with a server, or at scale</span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="entry minor">
+          <div class="device" aria-hidden="true"><div class="stations"><i></i><i></i><i></i><i></i></div></div>
+          <div>
+            <h2 class="entry-name"><a href="#">Learn the path</a></h2>
+            <p>Four levels, each with one exercise on your own repo.</p>
+            <div class="slot"><b>slot</b> · time for the first level. The audit estimates about 10 minutes; nobody has timed it.</div>
+          </div>
+        </li>
+      </ul>
+    </main>
+  </div>
+
+  <div class="spec-tag"><b>2 · Paradigm page, section 1 (hero)</b> &nbsp; pages/paradigm/index.html</div>
+  <div class="wrap">
+    <header class="mast">
+      <a class="mast-name" href="#">Paradigm</a>
+      <nav aria-label="Pages">
+        <a href="#">Overview</a>
+        <a href="#" aria-current="page">Paradigm</a>
+        <a href="#">Gnomon</a>
+        <a href="#">Warpline</a>
+        <a href="#">Learn</a>
+      </nav>
+      <div class="mast-side">
+        <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+        <button class="theme-key" type="button" aria-label="Theme: follows your system. Switch theme"><b>Auto</b> · Light · Dark</button>
+      </div>
+    </header>
+
+    <div class="hero">
+      <div class="hero-lead">
+        <h1 class="display">Your code, written down where agents answer to it.</h1>
+        <p class="lede">Five symbols name every component, flow, gate, signal and aspect. Agents ask the map through MCP tools. The checks that hold them to it are off until you turn them on.</p>
+        <ul class="standing" aria-label="Where Paradigm stands">
+          <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>the symbol map, the hooks, the MCP server · 8.1.3 on npm</span></li>
+          <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>whether what agents learn improves their work: no outcome data yet</span></li>
+          <li><span></span><span class="of">as of 2026-11-23 · real: paradigm doctor on this repo</span></li>
+        </ul>
+        <div class="cmds">
+          <div class="cmd">
+            <code>npm install -g @a-company/paradigm</code>
+            <button class="key" type="button">Copy</button>
+          </div>
+          <div class="cmd">
+            <code>paradigm shift</code>
+            <span class="where">in your project</span>
+            <button class="key" type="button">Copy</button>
+          </div>
+        </div>
+        <div class="say">
+          <span class="say-who">then say to your agent</span>
+          <q>Map this codebase with Paradigm: draft .purpose files for the main directories, then tell me what would be affected if I changed <var>a module you know</var>.</q>
+        </div>
+        <div class="next"><a class="key pri" href="#">Start the path</a></div>
+      </div>
+
+      <div class="hero-exhibit">
+      <figure class="plate">
+        <svg class="graph" viewBox="0 0 430 300" role="img" aria-labelledby="g-title g-desc">
+          <title id="g-title">A slice of this repository's symbol graph</title>
+          <desc id="g-desc">Two flows, shift-flow and init-flow, each point at their components. The component init-handler belongs to both, so a change to it touches both flows. init-flow emits two signals, init-success and init-skipped.</desc>
+          <path class="edge" d="M108 66 C160 66 170 26 242 26"/>
+          <path class="edge" d="M108 66 H242"/>
+          <path class="edge" d="M108 66 C160 66 170 106 242 106"/>
+          <path class="edge hit" d="M108 66 C170 66 170 150 242 150"/>
+          <path class="edge hit" d="M100 214 C170 214 170 150 242 150"/>
+          <path class="edge" d="M100 214 C160 214 170 198 242 198"/>
+          <path class="edge" d="M100 214 C160 214 170 238 242 238"/>
+          <path class="edge" d="M20 224 V282 H32 M20 258 H32"/>
+          <g class="node"><text x="16" y="70"><tspan class="p-f">$</tspan>shift-flow</text></g>
+          <g class="node"><text x="16" y="218"><tspan class="p-f">$</tspan>init-flow</text></g>
+          <g class="node"><text x="250" y="30"><tspan class="p-c">#</tspan>team-loader</text></g>
+          <g class="node"><text x="250" y="70"><tspan class="p-c">#</tspan>manifest-generator</text></g>
+          <g class="node"><text x="250" y="110"><tspan class="p-c">#</tspan>model-configurator</text></g>
+          <g class="node hit"><rect x="244" y="136" width="116" height="24"/><text x="250" y="154"><tspan class="p-c">#</tspan>init-handler</text></g>
+          <g class="node"><text x="250" y="202"><tspan class="p-c">#</tspan>template-copier</text></g>
+          <g class="node"><text x="250" y="242"><tspan class="p-c">#</tspan>detection-engine</text></g>
+          <g class="node"><text x="38" y="262"><tspan class="p-s">!</tspan>init-success</text></g>
+          <g class="node"><text x="38" y="286"><tspan class="p-s">!</tspan>init-skipped</text></g>
+        </svg>
+        <ul class="graph-list" aria-label="A slice of this repository's symbol graph">
+          <li><b class="s-f">$</b>shift-flow
+            <ul>
+              <li><b class="s-c">#</b>team-loader</li>
+              <li><b class="s-c">#</b>manifest-generator</li>
+              <li><b class="s-c">#</b>model-configurator</li>
+              <li class="hit"><b class="s-c">#</b>init-handler <span>also in $init-flow</span></li>
+            </ul>
+          </li>
+          <li><b class="s-f">$</b>init-flow
+            <ul>
+              <li class="hit"><b class="s-c">#</b>init-handler <span>also in $shift-flow</span></li>
+              <li><b class="s-c">#</b>template-copier</li>
+              <li><b class="s-c">#</b>detection-engine</li>
+              <li><b class="s-s">!</b>init-success</li>
+              <li><b class="s-s">!</b>init-skipped</li>
+            </ul>
+          </li>
+        </ul>
+        <ul class="legend" aria-label="The five symbols">
+          <li><b class="s-c">#</b> component</li><li><b class="s-f">$</b> flow</li><li><b class="s-g">^</b> gate</li><li><b class="s-s">!</b> signal</li><li><b class="s-a">~</b> aspect</li>
+        </ul>
+        <figcaption class="prov"><b>real</b><span>packages/paradigm/.purpose, features shift-command and init-command. The edges are the file's; the layout is drawn. <code>#init-handler</code> sits in both flows, which is the question <code>paradigm ripple #init-handler</code> answers.</span></figcaption>
+      </figure>
+      <div class="fact lead">
+        <div class="fact-n">7,800<small>tokens, about</small></div>
+        <p class="fact-claim">for the whole default tool list an agent loads: 32 tools, cut from about 134 tools and 30,000 tokens in 7.13.0. A test fails the build above 8,000.</p>
+        <p class="fact-src">real · packages/paradigm-mcp/src/tools/tools-list-budget.test.ts, lines 18 to 19 · run 2026-11-23 (7,793, estimated as length / 4) · the earlier figures are recorded in CHANGELOG.md, line 441, and were not re-measured</p>
+      </div>
+      </div>
+    </div>
+
+    <section class="section" aria-labelledby="s1">
+      <div class="section-n" aria-hidden="true">1</div>
+      <div class="section-body">
+        <h2 class="h2" id="s1">Three things it holds an agent to.</h2>
+        <dl class="claims">
+          <div>
+            <dt>Structure</dt>
+            <dd><p>Each part of your code is described in plain YAML next to the code: <code class="mono">.purpose</code> files for components, flows and signals, and <code class="mono">portal.yaml</code> for authorization gates. Agents get answers from this map through MCP tools.</p>
+              <p class="mono quiet">real: README.md</p></dd>
+          </div>
+          <div>
+            <dt>Determinism</dt>
+            <dd><p>Shell hooks run at fixed points in a session. With enforcement turned on, the Stop hook blocks a session when code changed but its <code class="mono">.purpose</code> file, gate or lore entry did not. It is off by default, and you choose the level.</p>
+              <p class="mono quiet">real: packages/paradigm/src/core/enforcement/loader.ts, line 21</p></dd>
+          </div>
+          <div>
+            <dt>Calibration</dt>
+            <dd><p>A new learning is designed to be proposed, tested against scenarios and signed off before it reaches a notebook. We have no outcome data yet: on this repo the loop has recorded nothing.</p>
+              <p class="mono quiet">real: paradigm doctor, 2026-11-23 ("0 journals / 20 completions")</p></dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  </div>
+
+  <div class="spec-tag"><b>3 · Paradigm page, section 2 (measured)</b> &nbsp; the components that carry numbers, in their real and slot states</div>
+  <div class="wrap">
+    <section class="section" aria-labelledby="s2">
+      <div class="section-n" aria-hidden="true">2</div>
+      <div class="section-body">
+        <h2 class="h2" id="s2">What has been measured, and what hasn't.</h2>
+
+        <figure class="pair">
+            <h3 class="h3">The tool list an agent loads, before and after 7.13.0</h3>
+            <div class="pair-row" style="margin-top:16px"><span>before · about 134 tools</span><div><div class="pair-bar"></div></div><span class="v"><b>about 30,000</b> tokens</span></div>
+            <div class="pair-row"><span>today · 32 tools</span><div><div class="pair-bar w-26"></div></div><span class="v"><b>about 7,800</b> tokens</span></div>
+            <figcaption class="prov"><b>real</b><span>Tokens for the default tool list on this repo, estimated as length / 4. Today's figure is printed by packages/paradigm-mcp/src/tools/tools-list-budget.test.ts, run 2026-11-23, and the same test fails the build above 40 tools or 8,000 tokens. The earlier figure is the one recorded in CHANGELOG.md, line 441 (7.13.0, 2026-09-29); it was not re-measured.</span></figcaption>
+          </figure>
+
+        <div class="facts">
+          <div class="fact">
+            <div class="fact-n">1,769<small>symbols</small></div>
+            <div>
+              <p class="fact-claim">indexed in Paradigm's own repository, from 129 <code class="mono">.purpose</code> files: 1,246 components, 106 flows, 42 gates, 137 signals and 238 aspects.</p>
+              <p class="fact-src">real · <code>paradigm status</code> · run 2026-11-23 · the count moves with every change, which is why the build stamps it</p>
+            </div>
+          </div>
+          <div class="fact">
+            <div class="fact-n">0<small>known vulnerabilities</small></div>
+            <div>
+              <p class="fact-claim">in a fresh lockfile install of 8.1.3.</p>
+              <p class="fact-src">real · <code>npm audit</code> · run 2026-11-23</p>
+            </div>
+          </div>
+          <div class="fact">
+            <div class="fact-n slot"><span><b>slot</b> · a count over a stated period</span></div>
+            <div>
+              <p class="slot"><b>slot</b> · how often the Stop hook blocked a session that left its description behind, on a repo with enforcement on</p>
+              <p class="fact-src">needs: the event log it was counted from, the period, and the query. Not in the dossier.</p>
+            </div>
+          </div>
+        </div>
+
+        <figure class="study">
+            <div class="study-head">
+              <span class="ledger-state"><span class="mark nothold" aria-hidden="true"></span>Did not hold</span>
+              <h3 class="h3">Our one with-and-without study showed no benefit.</h3>
+            </div>
+            <table>
+              <caption class="vh">The same task done without and with Paradigm, one run each</caption>
+              <thead><tr><th scope="col">measure</th><th scope="col">without Paradigm</th><th scope="col">with Paradigm</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">tests passed</th><td>28 of 28</td><td>28 of 28</td></tr>
+                <tr><th scope="row">tool calls</th><td>71</td><td>about 95</td></tr>
+                <tr><th scope="row">file reads</th><td>31</td><td>25</td></tr>
+              </tbody>
+            </table>
+            <figcaption class="prov"><b>real</b><span>case-study/compare.md, lines 12 and 40. February 2026, Paradigm v2 (today's is 8.1.3), a 15-file project, one run each. The study calls itself underpowered, and we have not run a larger one. Until we do, these pages make no claim that Paradigm saves tokens or tool calls.</span></figcaption>
+          </figure>
+
+        <figure class="proof">
+            <div class="proof-head"><span>packages/paradigm/.purpose</span><a href="https://github.com/ascend42/a-paradigm/blob/main/packages/paradigm/.purpose">lines 29 to 40 ↗</a></div>
+<pre><span class="ln">29</span>  init-command:
+<span class="ln">30</span>    description: Initialize Paradigm in a project with smart detection. ...
+<span class="ln">31</span>    type: command
+<span class="ln">32</span>    flows:
+<span class="ln">33</span>      - <b class="s-f">$</b>init-flow
+<span class="ln">34</span>    signals:
+<span class="ln">35</span>      - '<b class="s-s">!</b>init-success'
+<span class="ln">36</span>      - '<b class="s-s">!</b>init-skipped'
+<span class="ln">37</span>    components:
+<span class="ln">38</span>      - '<b class="s-c">#</b>init-handler'
+<span class="ln">39</span>      - '<b class="s-c">#</b>template-copier'
+<span class="ln">40</span>      - '<b class="s-c">#</b>detection-engine'</pre>
+            <figcaption class="prov" style="padding:0 24px 16px"><b>real</b><span>proof excerpt: the file as it is, never retyped. Line 30 is shortened here; the build pins the link to a commit.</span></figcaption>
+          </figure>
+
+        <div class="slot"><b>slot</b> · chart. One small step-line is allowed on this page, and only for one series with five or more dated measurements taken the same way. Fewer points are written as fact lines. The dossier holds no such series, so this page has no chart.</div>
+      </div>
+    </section>
+    <div class="foot-space"></div>
+  </div>
+
+  <div class="spec-tag"><b>4 · Warpline page, the whole lead</b> &nbsp; pages/warpline/index.html &nbsp; the standing ledger, per feature, with the strand</div>
+  <div class="wrap">
+    <div class="lead-short">
+      <h1 class="display">Warpline checks a merge by what the code means. It is not yet proven.</h1>
+      <p class="lede">It is experimental, at 0.3.1. This page says what exists, what is being measured, and what nobody has run yet.</p>
+    </div>
+    <section aria-labelledby="w-led">
+      <h2 class="vh" id="w-led">What has and hasn't been tested</h2>
+      <div class="ledger loom">
+        <div class="ledger-row is-built"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div>
+          <div class="ledger-what">The command line: init, orient, and the save cycle (fork, propose, admit)</div>
+          <div class="ledger-ev">real: CHANGELOG.md 8.1.3 · tests: <span class="slot inline"><b>slot</b> · suite and count</span></div></div>
+        <div class="ledger-row is-built"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div>
+          <div class="ledger-what">The record kept on its own git branch, with verified adoption on a fresh clone</div>
+          <div class="ledger-ev">real: CHANGELOG.md 8.1.2 (Warpline 0.3.0)</div></div>
+        <div class="ledger-row is-nothold"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark nothold" aria-hidden="true"></span>Did not hold</div>
+          <div class="ledger-what">An advantage from calibrating to one codebase. We set the bar before the run, and the run did not clear it.</div>
+          <div class="ledger-ev">recorded 2026-07-15 · seeded run, 144 scored admissions · gate K3 fired: 76.7% against 79.3% survival, p = 0.756 · .paradigm/research/warpline-dogfood/run-results-full.md</div></div>
+        <div class="ledger-row is-progress"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div>
+          <div class="ledger-what">Whether an agent with no prior knowledge can use it from the shipped guide alone</div>
+          <div class="ledger-ev">real: CHANGELOG.md 8.1.3 (F4 runs) · result: <span class="slot inline"><b>slot</b> · dossier</span></div></div>
+        <div class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div>
+          <div class="ledger-what">The field test we wrote down in advance</div>
+          <div class="ledger-ev">not run yet · real: CHANGELOG.md, line 686</div></div>
+        <div class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div>
+          <div class="ledger-what">A full run with a server, end to end</div>
+          <div class="ledger-ev">not run yet · founder, 2026-11-23</div></div>
+        <div class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div>
+          <div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div>
+          <div class="ledger-what">What it looks like at large: many agents, large repositories</div>
+          <div class="ledger-ev">not run yet · founder, 2026-11-23</div></div>
+      </div>
+      <div class="facts ledger-foot">
+        <div class="fact">
+          <div class="fact-n">17<small>of 275 clean merges</small></div>
+          <div>
+            <p class="fact-claim">in zod, nest and xstate were flagged as changing what the code means, though git merged them without a conflict. Of the 18 flags checked by hand, none was a break at the merge: 3 were defects someone fixed within a day and 15 were harmless. The type checker caught none of the 18.</p>
+            <p class="fact-src">recorded 2026-07-01 and 2026-07-02, not re-run · .paradigm/research/warpline-guard-base-rate/results.md, lines 38 to 47, and ground-truth.md, lines 13 to 27 · three repositories; most flags are from zod's 2021 to 2022 history</p>
+          </div>
+        </div>
+      </div>
+      <p class="prov"><b>draft</b><span>The rows and their states are a draft from the changelog, the dossier and the founder's words. The headline stands in for a tagline the founder has not chosen (TBD-FOUNDER: warpline-tagline). The fourth state and the one fact line are Mika's ruling on the two recorded results, as a working default for the founder. On every other page the ledger is the same rows without the thread.</span></p>
+    </section>
+    <div class="foot-space"></div>
+  </div>
+</template>
+
+<div class="theme" data-theme="light" id="light"></div>
+<div class="theme" data-theme="dark" id="dark"></div>
+
+<script>
+  // Specimen only: stamp the same markup into both themes, with unique ids per theme.
+  (function () {
+    var t = document.getElementById('page');
+    ['light', 'dark'].forEach(function (name) {
+      var frag = t.content.cloneNode(true);
+      frag.querySelectorAll('[id]').forEach(function (el) { el.id = el.id + '-' + name; });
+      frag.querySelectorAll('[aria-labelledby]').forEach(function (el) {
+        el.setAttribute('aria-labelledby', el.getAttribute('aria-labelledby').split(' ').map(function (i) { return i + '-' + name; }).join(' '));
+      });
+      document.getElementById(name).appendChild(frag);
+    });
+  })();
+</script>
+</body>
+</html>

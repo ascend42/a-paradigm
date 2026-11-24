@@ -1,0 +1,27 @@
+# RECORDED, not re-run for this capture. Copied from .paradigm/research/hero-pages/evidence-dossier.md, section 3B, G1
+# (lines 128-142). The dossier's author ran these on 2026-11-23 against the npm artifact
+# @a-company/gnomon-darwin-arm64@8.1.0 in a scratch folder and deleted the download afterwards. The app was not
+# downloaded again. The dossier abbreviates the unpack step with an ellipsis; it is kept as written.
+# A reader can run the same four checks: npm pack, shasum, spctl, stapler.
+
+$ npm pack @a-company/gnomon-darwin-arm64@8.1.0 ; tar -xzf … ; ditto -x -k Gnomon.app.zip app
+$ cat Gnomon.app.zip.sha256 ; shasum -a 256 Gnomon.app.zip
+45eb7ad6d3b627776537b93b3c167a0b266c2a16cd19c7bb2d32b3f583d693c6  (both)
+$ codesign --verify --deep --strict Gnomon.app
+Gnomon.app: valid on disk / satisfies its Designated Requirement
+$ spctl -a -vv Gnomon.app
+Gnomon.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)
+$ xcrun stapler validate Gnomon.app
+The validate action worked!
+
+# Caveats the dossier records beside this result:
+# - The copy in /Applications on the founder's Mac is a local dev build that spctl rejects as "Unnotarized Developer ID".
+#   The result above is for the published package, not that build.
+# - The bundle's CFBundleShortVersionString reads 8.0.0 inside the 8.1.0 package.
+#
+# Not captured: a real decision card and the signed log row it produced (DIRECTION.md asks for one as the Gnomon plate
+# and as the proof excerpt). Gnomon was not launched; the dossier did not launch it either. The slot stays empty.
+# What would fill it: one row from `gnomon replay` or `gnomon trace` on a real session, with prompt text removed,
+# and the head hash `gnomon replay` prints.
