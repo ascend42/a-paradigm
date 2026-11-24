@@ -22,10 +22,9 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
 import { pathFor } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 import { gitHookState, readGitHook } from '../hooks/git-hook-state.js';
-import { WALK_PRUNE_DIRS, type ProjectFileList } from '../../core/project-files.js';
+import { PRUNE_DIRS, listProjectFiles, type ProjectFileList } from '../../core/project-files.js';
 
 export interface HookHealthCheck {
   name: string;
@@ -164,15 +163,7 @@ export interface RepoTraits {
   untrackedCount: number;
 }
 
-const TRAIT_WALK_PRUNE: ReadonlySet<string> = new Set(WALK_PRUNE_DIRS);
-
-function gitLines(rootDir: string, args: string[]): string[] | null {
-  try {
-    return execFileSync('git', args, { cwd: rootDir, encoding: 'utf8', timeout: 10_000, maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
-  } catch {
-    return null;
-  }
-}
+const TRAIT_WALK_PRUNE: ReadonlySet<string> = new Set(PRUNE_DIRS);
 
 /** Count anchor lines with the Stop hook's Check 4 rules (an "anchors:" line opens a list of "- " items). */
 export function countAnchorLines(text: string): number {
@@ -211,10 +202,10 @@ export function repoTraits(rootDir: string, maxDepth = 4, projectFiles?: Project
     }
   };
   walk(rootDir, 0);
-  // The run's shared list when doctor has one and it came from git (outside git this trait stays 0, as before)
-  const files = projectFiles
-    ? (projectFiles.source === 'git' ? projectFiles.files : [])
-    : gitLines(rootDir, ['ls-files', '-co', '--exclude-standard']) ?? [];
+  // The run's shared list (doctor passes its own). These traits describe what the hooks ask git
+  // for, so outside git, or when the list came from the walk, they stay 0 as before.
+  const list = projectFiles ?? listProjectFiles(rootDir);
+  const files = list.source === 'git' ? list.files : [];
   const purposes = files.filter((f) => f === '.purpose' || f.endsWith('/.purpose'));
   let anchorLines = 0;
   for (const p of purposes) {
@@ -224,8 +215,8 @@ export function repoTraits(rootDir: string, maxDepth = 4, projectFiles?: Project
       // unreadable .purpose: skip
     }
   }
-  const untracked = gitLines(rootDir, ['ls-files', '-o', '--exclude-standard']) ?? [];
-  return { nestedRepos, purposeCount: purposes.length, anchorLines, untrackedCount: untracked.length };
+  const untrackedCount = list.source === 'git' ? list.untrackedCount ?? 0 : 0;
+  return { nestedRepos, purposeCount: purposes.length, anchorLines, untrackedCount };
 }
 
 export function repoTraitChecks(t: RepoTraits): HookHealthCheck[] {

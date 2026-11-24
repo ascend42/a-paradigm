@@ -15,6 +15,7 @@ import { execSync } from 'child_process';
 import chalk from 'chalk';
 import * as yaml from 'js-yaml';
 import { out, header, kv } from '../utils/cli-output.js';
+import { describeFileListSource } from '../core/project-files.js';
 import {
   loadHabits,
   evaluateHabits,
@@ -126,6 +127,11 @@ export interface SectionTiming {
 }
 
 export interface ComplianceTimings {
+  /**
+   * Where the portal check's file list came from. 'walk' with a fallbackReason
+   * means git was not used; absent when the portal check did not run.
+   */
+  fileList?: { source: 'git' | 'walk'; files: number; fallbackReason?: string };
   /** Process start to the command body: Node start-up, the CLI entry file and this module's imports. */
   startupMs: number;
   /** The command body, start to the point the result is ready to print. */
@@ -139,6 +145,8 @@ export interface ComplianceTimings {
  */
 export class SectionTimer {
   readonly sections: SectionTiming[] = [];
+  fileList?: ComplianceTimings['fileList'];
+  fileListText?: string;
 
   record(section: string, ms: number): void {
     this.sections.push({ section, ms: Math.round(ms * 10) / 10 });
@@ -358,6 +366,10 @@ async function runPortalCheck(rootDir: string, timer: SectionTimer): Promise<Por
     const { checkPortalCompliance } = await import('../core/portal-compliance.js');
     const report = await checkPortalCompliance(rootDir, {
       onTiming: (section, ms) => timer.record(`portal.${section}`, ms),
+      onFileList: (list) => {
+        timer.fileList = { source: list.source, files: list.files.length, ...(list.fallbackReason ? { fallbackReason: list.fallbackReason } : {}) };
+        timer.fileListText = describeFileListSource(list);
+      },
     });
 
     return {
@@ -503,6 +515,7 @@ export async function complianceCheckCommand(options: {
         startupMs: Math.round(startupMs * 10) / 10,
         commandMs: Math.round((performance.now() - startupMs) * 10) / 10,
         sections: timer.sections,
+        ...(timer.fileList ? { fileList: timer.fileList } : {}),
       }
     : undefined;
 
@@ -597,6 +610,7 @@ export async function complianceCheckCommand(options: {
         kv(t.section.includes('.') ? `  ${t.section}` : t.section, `${t.ms.toFixed(0)} ms`);
       }
       kv('command', `${timings.commandMs.toFixed(0)} ms`);
+      if (timer.fileListText) kv('file list', timer.fileListText);
       out('');
     }
   }

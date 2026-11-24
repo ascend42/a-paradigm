@@ -75,9 +75,13 @@ describe('compliance-check --timings', () => {
     expect(timings.startupMs).toBeGreaterThan(0);
     expect(timings.commandMs).toBeGreaterThanOrEqual(0);
     const names = timings.sections.map((s) => s.section);
-    for (const expected of ['habits', 'habits.load', 'habits.evaluate', 'drift', 'portal', 'portal.gate-files', 'portal.references', 'portal.nested-declared']) {
+    for (const expected of ['habits', 'habits.load', 'habits.evaluate', 'drift', 'portal', 'portal.file-list', 'portal.gate-files', 'portal.references', 'portal.nested-declared']) {
       expect(names).toContain(expected);
     }
+    // Where the portal check's file list came from: this fixture is not a git repository
+    expect(timings.fileList?.source).toBe('walk');
+    expect(timings.fileList?.fallbackReason).toBe('not-a-git-repo');
+    expect(timings.fileList?.files).toBeGreaterThan(0);
     // No learning pass was asked for, so none is timed
     expect(names).not.toContain('learn');
     for (const s of timings.sections) {
@@ -97,6 +101,8 @@ describe('compliance-check --timings', () => {
     expect(text).toContain('Timings');
     expect(text).toContain('portal.gate-files');
     expect(text).toContain('start-up');
+    expect(text).toContain('directory walk');
+    expect(text).toContain('not a git repository');
   });
 });
 

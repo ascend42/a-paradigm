@@ -12,13 +12,17 @@ import { doctorCommand } from './index.js';
 import { listProjectFiles } from '../../core/project-files.js';
 import { createTempProject } from '../../test-utils.js';
 
-/** git with every inherited GIT_* variable cleared, so a run from a git hook stays in its fixture. */
+/**
+ * git with every inherited GIT_* variable cleared, so a run from a git hook stays in its fixture,
+ * and with no developer or system git config.
+ */
 function git(cwd: string, args: string[]): void {
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (!k.startsWith('GIT_')) env[k] = v;
   }
   env.GIT_CONFIG_NOSYSTEM = '1';
+  env.GIT_CONFIG_GLOBAL = path.join(fakeHome, 'empty-gitconfig');
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=', ...args], {
     cwd,
     env,
@@ -35,7 +39,12 @@ function write(root: string, rel: string, content = 'x\n'): void {
 const BIG_PURPOSE = `version: 2.0.0\ndescription: big\n${'# filler line\n'.repeat(600)}`;
 const WORKTREE = '.claude/worktrees/agent-abc';
 
-const realHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+const realHome = {
+  HOME: process.env.HOME,
+  USERPROFILE: process.env.USERPROFILE,
+  GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+  GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+};
 let fakeHome = '';
 let rootDir = '';
 
@@ -43,6 +52,10 @@ beforeEach(() => {
   fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-list-home-'));
   process.env.HOME = fakeHome;
   process.env.USERPROFILE = fakeHome;
+  // The code under test runs git with the process environment: no developer or system git config
+  fs.writeFileSync(path.join(fakeHome, 'empty-gitconfig'), '');
+  process.env.GIT_CONFIG_GLOBAL = path.join(fakeHome, 'empty-gitconfig');
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
   // Removed in afterEach with retries (Windows), not with the helper's own cleanup
   const project = createTempProject({ withPurpose: true });
   rootDir = project.rootDir;
@@ -92,11 +105,14 @@ function initRepo(root: string, ignore: string): void {
   git(root, ['commit', '-q', '-m', 'seed']);
 }
 
-for (const mode of ['walk', 'git'] as const) {
+// 'git-unignored': the worktree copies, Warpline state and build trees are COMMITTED (no ignore
+// line), so only the shared prune list keeps them out of doctor's checks.
+for (const mode of ['walk', 'git', 'git-unignored'] as const) {
   describe(`doctor file list (${mode})`, () => {
     function prepare(): void {
       if (mode === 'git') initRepo(rootDir, '.claude/worktrees/\n.warpline/\n.build/\nnode_modules/\n');
-      expect(listProjectFiles(rootDir).source).toBe(mode);
+      if (mode === 'git-unignored') initRepo(rootDir, 'node_modules/\n');
+      expect(listProjectFiles(rootDir).source).toBe(mode === 'walk' ? 'walk' : 'git');
     }
 
     it('purpose-file-health does not count a .purpose under .claude/worktrees/', async () => {
@@ -183,6 +199,36 @@ describe('doctor file list (git only)', () => {
   });
 });
 
+describe('doctor says where its file list came from', () => {
+  async function doctorOutput(): Promise<string> {
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await doctorCommand({ rootDir, homeDir: fakeHome });
+    return lines.join('\n');
+  }
+
+  it('outside git: a walk, with the reason, and not a warning', async () => {
+    const output = await doctorOutput();
+    expect(output).toMatch(/Project file list\s+directory walk \(\d+ files\): not a git repository/);
+    expect(output).not.toContain('git would hide new gate files');
+  });
+
+  it('inside git: from git', async () => {
+    initRepo(rootDir, 'node_modules/\n');
+    expect(await doctorOutput()).toMatch(/Project file list\s+git \(\d+ files\)/);
+  });
+
+  it('an ignore rule that hides gate files: the fallback is reported with its fix', async () => {
+    write(rootDir, 'src/a.ts', 'export const a = 1;\n');
+    initRepo(rootDir, '.*\n');
+    expect(listProjectFiles(rootDir).fallbackReason).toBe('gate-files-ignored');
+    const output = await doctorOutput();
+    expect(output).toContain('git would hide new gate files');
+    expect(output).toContain('git check-ignore -v --no-index .purpose portal.yaml');
+  });
+});
+
 describe('repoTraits (hook health)', () => {
   it('still reports an agent worktree as a nested repo, and skips generated state trees', () => {
     write(rootDir, `${WORKTREE}/.git`, 'gitdir: elsewhere\n');
@@ -203,5 +249,17 @@ describe('repoTraits (hook health)', () => {
     expect(withList.purposeCount).toBe(without.purposeCount);
     expect(withList.anchorLines).toBe(without.anchorLines);
     expect(withList.purposeCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the untracked count comes from the shared list and counts every untracked, not-ignored file', () => {
+    initRepo(rootDir, 'node_modules/\nignored/\n');
+    expect(repoTraits(rootDir).untrackedCount).toBe(0);
+    write(rootDir, 'new one.txt');
+    write(rootDir, 'src/new/.purpose', 'components: {}\n');
+    write(rootDir, 'ignored/x.txt');
+    // generated state that is not ignored is still an untracked file the hooks list
+    write(rootDir, '.warpline/states/s1/blob');
+    expect(repoTraits(rootDir).untrackedCount).toBe(3);
+    expect(repoTraits(rootDir, 4, listProjectFiles(rootDir)).untrackedCount).toBe(3);
   });
 });

@@ -14,7 +14,7 @@ import { GIT_HOOK_VERSION, outdatedGitHooks } from '../hooks/git-hook-state.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
-import { listProjectFiles, hasDirSegment, type ProjectFileList } from '../../core/project-files.js';
+import { listProjectFiles, hasDirSegment, describeFileListSource, type ProjectFileList } from '../../core/project-files.js';
 import {
   computeRepeatFailureRate,
   NO_EXERCISE_WRITER_NOTICE,
@@ -521,6 +521,23 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     // Check for clarification markers in .purpose files
     const clarificationMarkerRegex = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
     let clarificationCount = 0;
+
+    // Say where this run's file list came from, so a fallback to the walk is never silent.
+    // Not being a git repository is normal; any other reason for the walk is worth a warning.
+    {
+      const list = getProjectFiles();
+      const expected = list.source === 'git' || list.fallbackReason === 'not-a-git-repo';
+      results.push({
+        name: 'Project file list',
+        status: expected ? 'ok' : 'warn',
+        message: describeFileListSource(list),
+        ...(expected ? {} : {
+          fix: list.fallbackReason === 'gate-files-ignored'
+            ? 'A git ignore rule matches .purpose or portal.yaml by name (run `git check-ignore -v --no-index .purpose portal.yaml`); un-ignore them with `!.purpose` and `!portal.yaml`, or narrow the pattern. Until then every check walks the tree, which is slower.'
+            : 'Checks walk the directory tree instead of asking git, which is slower. Run `git status` in the project to see what git reports.',
+        }),
+      });
+    }
 
     const purposeSkipDirs = new Set(['node_modules', 'dist', '.git']);
     const purposeFiles = getProjectFiles().files
