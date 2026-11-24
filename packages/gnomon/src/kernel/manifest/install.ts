@@ -83,9 +83,9 @@ export const SUPERSEDED_FIRST_PARTY_PINS: ReadonlySet<string> = new Set<string>(
 ]);
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S1.2: the modAbiId move (relayedFor on tool.call) changes the three trees that echo the id
-  'sha256:3e3902e1cf0a970f9c53ac2df73d65e5daa99dd79dfd515c37d0a3f1342f7146', // packages/gnomon-mods/workshop 1.1.1 (gnomon.workshop)
-  'sha256:df476ed5dcfbe1a6d00460d7eded68b7c95ccd86a1ce2cfd7bd10b48116fa432', // packages/gnomon-mods/ledger 1.1.1 (gnomon.ledger)
-  'sha256:1d8f8468a5bc2e767e52dabe56432ba30919d7cc3d9d77c180aec2d2d872caa8', // packages/gnomon-mods/paradigm-context 1.1.2 (gnomon.paradigm-context)
+  'sha256:a5745505b524cf5675cea5d70f0a6219a729ed78e6f6ce6adef071bdc0b1a8b1', // packages/gnomon-mods/workshop 1.1.1 (gnomon.workshop)
+  'sha256:504da78f2a97ffb4b51b103025aa2f9629485ff00d089d5448c7fc8df347d217', // packages/gnomon-mods/ledger 1.1.1 (gnomon.ledger)
+  'sha256:bd25b714bff0cc79910399c8aa48248184f30a87d360ce71694e4da8029e0dad', // packages/gnomon-mods/paradigm-context 1.1.2 (gnomon.paradigm-context)
   // S0b: manifest:2, publisher gnomon (no index.mjs, so no modAbiId echo: unchanged by the S1.2 move)
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
@@ -629,6 +629,13 @@ export function stageInstall(opts: StageOptions): StageResult {
   const mh = read.manifestHash;
   const current = effectiveInstall(grants, name);
   if (!opts.recard && current && current.packageHash === snap.packageHash && current.manifestHash === mh && current.source === source) return { state: 'unchanged', packageHash: snap.packageHash };
+  // Rollback protection (Aegis S1.2 point 9a): a superseded first-party tree keeps the tier of an EXISTING install only.
+  // A new stage of one (not the tree pinned now) is refused, so an old first-party build can never be put back.
+  if (SUPERSEDED_FIRST_PARTY_PINS.has(snap.packageHash) && !(current && current.packageHash === snap.packageHash)) {
+    if (snap.created) removeTree(snap.dir);
+    emit('manifest.refuse', { name, code: 'TIER', why: 'superseded' });
+    throw new ManifestRefusal('TIER', `${name}: this is a superseded first-party build; install the one shipped with this Gnomon`, { name, why: 'superseded' });
+  }
   const pending = pendingFor(opts.home, name, snap.packageHash, mh, source);
   if (pending) return { state: 'staged', cardId: pending.card.cardId, record: pending };
   const prevRead = current ? pinnedRead(opts.home, current, grants.trust.get(current.manifestHash)) : null;

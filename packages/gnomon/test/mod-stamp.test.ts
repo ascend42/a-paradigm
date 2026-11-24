@@ -18,6 +18,7 @@ afterEach(async () => {
   for (const c of cleanups.splice(0).reverse()) await c();
 });
 
+const text0 = (...v: unknown[]): string => JSON.stringify(v);
 const TOOL = { principal: 'p:abcdefgh/s-01', surface: 'bridge', agent: 'kit', hsid: 'hs-1', turn: 'turn:hs-1/4' } as const;
 
 async function started(caps: string[] = []) {
@@ -212,11 +213,19 @@ describe('G-MOD-13: relayedFor carries only the fields of its method; identity o
     expect(Object.keys(JSON.parse((rv.block as { text: string }).text))).toEqual([...RELAYED_FOR_FIELDS['view.render']]);
   });
 
-  it('a third-party mod without log.read gets agent and surface only, and its row has no causes', async () => {
+  it('A3: a third-party mod without log.read gets surface and agent only (no principal, hsid or turn), and its row has no causes', async () => {
     const { h, rows } = await started();
     const out = (await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' }, { hsid: 'hs-1', toolRelayedFor: { ...TOOL } })) as { relayedFor: Record<string, string> };
-    expect(out.relayedFor).toEqual({ principal: 'p:abcdefgh/s-01', surface: 'bridge', agent: 'kit' });
-    expect(rows[0]!.payload).toEqual({ note: 'n', relayedFor: { principal: 'p:abcdefgh/s-01', surface: 'bridge', agent: 'kit' } });
+    expect(out.relayedFor).toEqual({ surface: 'bridge', agent: 'kit' });
+    expect(rows[0]!.payload).toEqual({ note: 'n', relayedFor: { surface: 'bridge', agent: 'kit' } });
+    expect(text0(out, rows).includes('p:abcdefgh/s-01')).toBe(false);
+    // with no principal the row vouches for nobody: the unknown hand, not the agent and not a human
+    const dim = 'dim:01JVA1D0000000000000000001';
+    const st = foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['hs-1'], opened: 'command' } },
+      { seq: 2, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [{ type: 'add', node: { id: '01JVA1D0000000000000000041', kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 } }], relayedFor: rows[0]!.payload.relayedFor } },
+    ]);
+    expect(st.nodes.get('01JVA1D0000000000000000041')!.by).toEqual({ cls: 'unknown', principal: 'unknown' });
     expect('causes' in rows[0]!).toBe(false);
     const text = JSON.stringify([out, rows]);
     expect(text.includes('hs-1')).toBe(false);

@@ -23,8 +23,8 @@
  * exact. `relayedFor` is a HOST-STAMPED top-level param whose fields are fixed
  * per method (RELAYED_FOR_FIELDS, S1.2 C2): `view.render` {principal, connId};
  * `command.run` adds `surface` (gui | cli); `tool.call` carries {principal,
- * surface (bridge | voice), agent} and, only for a first-party mod or one
- * granted `log.read`, {hsid, turn}. It is absent when the host itself renders
+ * {surface (bridge | voice), agent} and, only for a first-party mod or one
+ * granted `log.read`, {principal, hsid, turn}. It is absent when the host itself renders
  * or runs (fixtures, Tier 0 templates). The host writes the SAME object into
  * the reserved payload key `relayedFor` of every row the mod appends inside
  * that call and removes a mod-supplied one (S1.2 C1). `pickRelayedFor` is the
@@ -105,7 +105,7 @@ export interface RelayedFor {
 }
 /** `tool.call` only. Never sent on `view.render` or `command.run`. */
 export interface ToolRelayedFor {
-  /** the calling session's principal */
+  /** the calling session's principal; identity: sent only to a first-party mod or one granted `log.read` */
   principal: string;
   /** `voice` is derived by the host from the cause turn's source */
   surface: 'bridge' | 'voice';
@@ -123,8 +123,13 @@ export const RELAYED_FOR_FIELDS = deepFreeze({
   'tool.call': ['principal', 'surface', 'agent', 'hsid', 'turn'],
 } as const);
 export type RelayedForMethod = keyof typeof RELAYED_FOR_FIELDS;
-/** The identity fields, and who may receive them: a `gnomon`-published mod, or one granted `log.read`. */
-export const RELAYED_FOR_IDENTITY = deepFreeze({ fields: ['hsid', 'turn'], onlyFor: ['first-party', 'log.read'] } as const);
+/**
+ * The identity fields per method, and who may receive them: a `gnomon`-published mod, or one granted `log.read`.
+ * On `tool.call` the calling session's `principal` is identity too (Aegis S1.2 A3: a principal may be unique to a
+ * session), so an unentitled mod is told only the `surface` and the `agent` label. The client relays keep
+ * `principal` and `connId` for every mod, as before.
+ */
+export const RELAYED_FOR_IDENTITY = deepFreeze({ fields: { 'view.render': [], 'command.run': [], 'tool.call': ['principal', 'hsid', 'turn'] }, onlyFor: ['first-party', 'log.read'] } as const);
 /** The `surface` values each method may carry. */
 export const RELAYED_FOR_SURFACES = deepFreeze({ 'command.run': ['gui', 'cli'], 'tool.call': ['bridge', 'voice'] } as const);
 /** The reserved payload key of a mod's appended row that only the host writes. */
@@ -134,7 +139,7 @@ export const RELAYED_FOR_VALUE_MAX = 256;
 
 /**
  * THE one builder of a `relayedFor` the host sends and stamps. From host-known `raw` it keeps only the method's
- * fields, only non-empty strings of bounded length, drops `hsid` and `turn` unless `identity` is true, and drops a
+ * fields, only non-empty strings of bounded length, drops the method's identity fields unless `identity` is true, and drops a
  * `surface` the method may not carry. It never invents a value: a field the host does not know is absent (a row
  * stamped without `principal` or `surface` then folds as the unknown hand, never as human).
  */
@@ -143,7 +148,7 @@ export function pickRelayedFor(method: RelayedForMethod, raw: Readonly<Record<st
   if (!raw || typeof raw !== 'object') return out;
   const surfaces: readonly string[] = method === 'view.render' ? [] : RELAYED_FOR_SURFACES[method];
   for (const f of RELAYED_FOR_FIELDS[method] as readonly string[]) {
-    if (!identity && (RELAYED_FOR_IDENTITY.fields as readonly string[]).includes(f)) continue;
+    if (!identity && (RELAYED_FOR_IDENTITY.fields[method] as readonly string[]).includes(f)) continue;
     const v = Object.prototype.hasOwnProperty.call(raw, f) ? (raw as Record<string, unknown>)[f] : undefined;
     if (typeof v !== 'string' || v.length === 0 || v.length > RELAYED_FOR_VALUE_MAX) continue;
     if (f === 'surface' && !surfaces.includes(v)) continue;

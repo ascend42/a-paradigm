@@ -453,15 +453,88 @@ function zMid(a: string, b: string | null): string {
   return Z_DIGITS[da]! + zMid(a.slice(1), null);
 }
 
+const Z_BASE = 'V';
+const Z_UPPER = Z_DIGITS.indexOf(Z_BASE); // heads from here up count upward
+/** Digits after the head of an open-end key: the further the head is from the middle, the more digits it carries. */
+const zTail = (head: number): number => (head >= Z_UPPER ? head - Z_UPPER : Z_UPPER - 1 - head);
+
+/** The next open-end key above `a`: its counter part plus one. Growth is logarithmic in the number of appends. */
+function zAfter(a: string): string {
+  let head = Z_DIGITS.indexOf(a[0]!);
+  if (head < Z_UPPER) return Z_BASE;
+  let digits = a.slice(1, 1 + zTail(head)).padEnd(zTail(head), '0').split('').map((c) => Z_DIGITS.indexOf(c));
+  for (;;) {
+    let i = digits.length - 1;
+    while (i >= 0 && digits[i] === Z_DIGITS.length - 1) digits[i--] = 0;
+    if (i >= 0) digits[i]! += 1;
+    else {
+      head += 1;
+      if (head >= Z_DIGITS.length) throw new RangeError('dimZBetween: no key space left above');
+      digits = new Array<number>(zTail(head)).fill(0);
+    }
+    // a key never ends in 0: step once more
+    if (digits.length === 0 || digits[digits.length - 1] !== 0) return Z_DIGITS[head]! + digits.map((d) => Z_DIGITS[d]).join('');
+  }
+}
+
+/** The next open-end key below `b`: its counter part minus one. */
+function zBefore(b: string): string {
+  let head = Z_DIGITS.indexOf(b[0]!);
+  if (head >= Z_UPPER) return Z_DIGITS[Z_UPPER - 1]!;
+  let digits = b.slice(1, 1 + zTail(head)).padEnd(zTail(head), '0').split('').map((c) => Z_DIGITS.indexOf(c));
+  for (;;) {
+    let i = digits.length - 1;
+    while (i >= 0 && digits[i] === 0) digits[i--] = Z_DIGITS.length - 1;
+    if (i >= 0) digits[i]! -= 1;
+    else {
+      head -= 1;
+      if (head < 0) throw new RangeError('dimZBetween: no key space left below');
+      digits = new Array<number>(zTail(head)).fill(Z_DIGITS.length - 1);
+    }
+    const out = Z_DIGITS[head]! + digits.map((d) => Z_DIGITS[d]).join('');
+    if (!out.endsWith('0')) return out;
+  }
+}
+
 /**
- * A key strictly between `a` and `b` by digit-wise midpoint (`null` is an open end). The result never ends in
- * `0`. Keys compare by code unit, so they sort the same in JS, SQLite and JSON, and a reorder is one `update`
- * of one node. Throws RangeError when a key is malformed or `a` is not below `b`: that is a caller bug.
+ * A key strictly between `a` and `b` (`null` is an open end). The result never ends in `0` and is never longer
+ * than DIM_LIMITS.z. Keys compare by code unit, so they sort the same in JS, SQLite and JSON, and a reorder is one
+ * `update` of one node.
+ *  - An OPEN end counts: "draw on top" and "send to back" step a counter whose length grows with the logarithm of
+ *    the number of steps (the head character says how many digits follow), so ten thousand in a row stay short.
+ *  - Between two keys it is the digit-wise midpoint, which adds a character about every six inserts at one spot.
+ * Throws RangeError when a key is malformed, `a` is not below `b`, or no key of legal length fits: caller bugs
+ * and exhaustion are never answered with a key that would fail DIM_Z_PATTERN. For stored data use `dimZPlace`.
  */
 export function dimZBetween(a: string | null, b: string | null): string {
   if ((a !== null && !DIM_Z_PATTERN.test(a)) || (b !== null && !DIM_Z_PATTERN.test(b))) throw new RangeError('dimZBetween: malformed key');
   if (a !== null && b !== null && !(a < b)) throw new RangeError('dimZBetween: keys out of order');
-  return zMid(a ?? '', b);
+  const out = a === null && b === null ? Z_BASE : b === null ? zAfter(a!) : a === null ? zBefore(b) : zMid(a, b);
+  if (out.length > DIM_LIMITS.z || !DIM_Z_PATTERN.test(out) || (a !== null && !(a < out)) || (b !== null && !(out < b))) throw new RangeError('dimZBetween: no key of legal length fits here');
+  return out;
+}
+
+/**
+ * TOTAL placement for stored data (what a renderer calls when it derives a key for a new or moved mark from its
+ * neighbours' stored `z`). The fold carries anything, so a neighbour's `z` may be malformed, missing, equal to
+ * the other's or out of order. Rules, never a throw:
+ *  - a neighbour whose `z` is not a well-formed key counts as an open end;
+ *  - when nothing fits strictly between (equal keys, keys out of order, or no room left), the key is taken ABOVE
+ *    the lower neighbour, and if even that has no room the lower neighbour's own key is reused (ties are ordered
+ *    by id, `dimZCompare`). The mark is then drawn at or just above where it was dropped, never lost.
+ */
+export function dimZPlace(below: unknown, above: unknown): string {
+  const a = typeof below === 'string' && DIM_Z_PATTERN.test(below) ? below : null;
+  const b = typeof above === 'string' && DIM_Z_PATTERN.test(above) ? above : null;
+  try {
+    return dimZBetween(a, a !== null && b !== null && !(a < b) ? null : b);
+  } catch {
+    try {
+      return dimZBetween(a, null);
+    } catch {
+      return a ?? b ?? Z_BASE;
+    }
+  }
 }
 
 /** Order by `z` (code units; a non-string `z` sorts first), ties broken by id. */
@@ -694,7 +767,7 @@ function checkOp(d: Draft, op: unknown, actor: DimActor): { problems: Problem[];
       const x = (e.cur.node.x as number) + (op.dx as number);
       const y = (e.cur.node.y as number) + (op.dy as number);
       if (!inRange(x, -DIM_LIMITS.coord, DIM_LIMITS.coord) || !inRange(y, -DIM_LIMITS.coord, DIM_LIMITS.coord)) problems.push({ field: 'ids', code: 'field-range' });
-      touched.push(id as string);
+      // J3: a move changes no string, so the moved nodes are not re-read by the secret check
     }
     return out;
   }
@@ -916,5 +989,22 @@ export const DIM_HASH_VECTOR_ROWS: readonly DimRow[] = deepFreeze([
       relayedFor: { principal: 'p:vector/human', surface: 'cli' },
     },
   },
+  // the unknown hand, three ways (cls is hashed): no stamp at all; a tool surface with no agent; an unentitled
+  // mod's tool row, which carries no principal
+  {
+    seq: 5,
+    kind: DIM_KINDS.op,
+    payload: { v: 1, dim: 'dim:01JD1MVECT0R00000000000001', ops: [{ type: 'add', node: { id: '01JD1MVECT0R000000000000D1', kind: 'ellipse', x: 400, y: 300, z: 'W1', w: 40, h: 40 } }] },
+  },
+  {
+    seq: 6,
+    kind: DIM_KINDS.op,
+    payload: { v: 1, dim: 'dim:01JD1MVECT0R00000000000001', ops: [{ type: 'add', node: { id: '01JD1MVECT0R000000000000D2', kind: 'diamond', x: 460, y: 300, z: 'W2', w: 40, h: 40 } }], relayedFor: { principal: 'p:vector/session', surface: 'bridge' } },
+  },
+  {
+    seq: 7,
+    kind: DIM_KINDS.op,
+    payload: { v: 1, dim: 'dim:01JD1MVECT0R00000000000001', ops: [{ type: 'add', node: { id: '01JD1MVECT0R000000000000D3', kind: 'text', x: 520, y: 300, z: 'W3', text: 'Three' } }], relayedFor: { surface: 'bridge', agent: 'other-agent' } },
+  },
 ]);
-export const DIM_HASH_VECTOR_HASH = 'sha256:f8aca26992fe143d58e3078b588350aa78518e4c657146283699a8aacbea5ff3' as const;
+export const DIM_HASH_VECTOR_HASH = 'sha256:d8b171c96fbdc391befc39a0553896a842f503ac8cc094ad4581f003fed4b596' as const;

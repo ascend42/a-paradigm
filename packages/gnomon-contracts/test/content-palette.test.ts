@@ -325,7 +325,9 @@ describe('the package copies equal the design foundations', () => {
     }
     const nightFills = CONTENT_SWATCHES.map((s) => s.night.fill!);
     const nearest = Math.min(...nightFills.flatMap((f) => composites.map((c) => dist(f, c))));
-    // the named night fills sit close to these darks (the nearest is under 0.1 away), so listing them would leave no room
+    // every named night fill is still clear of both composites by the palette minimum (and close: under 0.1 away)
+    expect(nearest).toBeGreaterThanOrEqual(CONTENT_MIN_DISTANCE);
+    for (const f of nightFills) for (const c of composites) expect(coloursClear(f, c)).toBe(true);
     expect(nearest).toBeLessThan(0.1);
     // the wash's own colour is the reserved warn-ink, so its edge and text are protected
     expect(`#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`.toUpperCase()).toBe(CONTENT_RESERVED_COLOURS.night['state.warn-ink']);
@@ -336,7 +338,8 @@ describe('one implementation', () => {
   it('no second copy of the OKLab matrices exists under packages/', () => {
     // split so this file does not match itself
     const needles = [['0.4122', '2147'], ['1.9779', '9849'], ['4.0767', '4166'], ['0.2104', '5425'], ['0.3963', '3777']].map((p) => p.join(''));
-    const skip = new Set(['node_modules', 'dist', '.git', '.build', 'build', 'coverage', '.turbo']);
+    // build output and the packaged app are copies of source, not second implementations
+    const skip = new Set(['node_modules', 'dist', '.git', '.build', 'build', 'coverage', '.turbo', 'release', 'out', 'DerivedData', '.next']);
     const hits: string[] = [];
     const walk = (dir: string): void => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

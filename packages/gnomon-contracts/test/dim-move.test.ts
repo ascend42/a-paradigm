@@ -1,6 +1,7 @@
 /**
- * The ONE dimension clientApiId move (S1.2): what it publishes, what it leaves alone, and the version pins.
- * kitId and modAbiId do not move here (their literals are also held in cap.test.ts and mod-abi.test.ts).
+ * The two S1.2 contract moves, one each: clientApiId (the dimension descriptor, names, schemes) and modAbiId
+ * (relayedFor per method). kitId does not move. All three literals are held here; cap.test.ts and mod-abi.test.ts
+ * hold kitId and modAbiId too.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -17,10 +18,10 @@ const readJson = (...p: string[]): any => JSON.parse(fs.readFileSync(path.join(h
 const copy = (): any => JSON.parse(JSON.stringify(CLIENT_API_DESCRIPTOR));
 
 describe('the dimension clientApiId move', () => {
-  it('pins: clientApiId moved once; kitId and modAbiId did not move', () => {
-    expect(CLIENT_API_ID).toBe('sha256:0d6b5f1a43af00225dff0478b85f872e326ee33deae162bddc7bc8e6c4304ee1');
+  it('pins: clientApiId moved once (from the released sha256:af070b92\u2026); kitId did not move; modAbiId is the S1.2 value', () => {
+    expect(CLIENT_API_ID).toBe('sha256:e21ffbb2ca618808d3692028d0457a8bf1010f23698e56bd1dd3c115d60142ea');
     expect(KIT_ID).toBe('sha256:3d3f917de8f745846f4e7216583bdb6bdef4a966aff62a152c26d730dccecf9a');
-    expect(MOD_ABI_ID).toBe('sha256:cc5625dac7fdbc8a987ed0295991e553710137ec65c5f20623daab1d035dc49a');
+    expect(MOD_ABI_ID).toBe('sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66');
     expect(computeKitId()).toBe(KIT_ID);
     expect(computeModAbiId()).toBe(MOD_ABI_ID);
     // parsed, never bytes
@@ -116,9 +117,9 @@ describe('the dimension clientApiId move', () => {
 describe('the modAbiId move (S1.2 C1, C2): relayedFor per method', () => {
   it('pins: modAbiId moved once; kitId and clientApiId did not move', async () => {
     const m = await import('../src/index.js');
-    expect(m.MOD_ABI_ID).toBe('sha256:cc5625dac7fdbc8a987ed0295991e553710137ec65c5f20623daab1d035dc49a');
+    expect(m.MOD_ABI_ID).toBe('sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66');
     expect(m.KIT_ID).toBe('sha256:3d3f917de8f745846f4e7216583bdb6bdef4a966aff62a152c26d730dccecf9a');
-    expect(m.CLIENT_API_ID).toBe('sha256:0d6b5f1a43af00225dff0478b85f872e326ee33deae162bddc7bc8e6c4304ee1');
+    expect(m.CLIENT_API_ID).toBe('sha256:e21ffbb2ca618808d3692028d0457a8bf1010f23698e56bd1dd3c115d60142ea');
     // modAbiId is not an input of clientApiId, and the relays are untouched
     const d = JSON.parse(JSON.stringify(m.MOD_ABI_DESCRIPTOR));
     d.relayedFor.fields['tool.call'].push('nickname');
@@ -136,7 +137,7 @@ describe('the modAbiId move (S1.2 C1, C2): relayedFor per method', () => {
     expect(new Set(Object.keys(row))).toEqual(union);
     expect(m.RELAYED_FOR_APPEND_KEY).toBe('relayedFor');
     expect(m.MOD_ABI_DESCRIPTOR.relayedFor.appendKey).toBe('relayedFor');
-    expect(m.MOD_ABI_DESCRIPTOR.relayedFor.identity).toEqual({ fields: ['hsid', 'turn'], onlyFor: ['first-party', 'log.read'] });
+    expect(m.MOD_ABI_DESCRIPTOR.relayedFor.identity).toEqual({ fields: { 'view.render': [], 'command.run': [], 'tool.call': ['principal', 'hsid', 'turn'] }, onlyFor: ['first-party', 'log.read'] });
     expect(m.MOD_ABI_RPCS.find((r) => r.method === 'tool.call')!.params).toEqual(['name', 'input', 'cancelToken', 'callId', 'relayedFor']);
     expect(m.MOD_ABI_RPCS.length).toBeLessThanOrEqual(m.MOD_ABI_MAX_RPCS);
   });
@@ -152,7 +153,11 @@ describe('the modAbiId move (S1.2 C1, C2): relayedFor per method', () => {
     expect(pickRelayedFor('tool.call', all, true)).toEqual({ principal: 'p:n/x', agent: 'kit', hsid: 'hsid-1', turn: 'turn:hsid-1/2' });
     const tool = { ...all, surface: 'bridge' };
     expect(pickRelayedFor('tool.call', tool, true)).toEqual({ principal: 'p:n/x', surface: 'bridge', agent: 'kit', hsid: 'hsid-1', turn: 'turn:hsid-1/2' });
-    expect(pickRelayedFor('tool.call', tool, false)).toEqual({ principal: 'p:n/x', surface: 'bridge', agent: 'kit' });
+    // A3: on a tool call the session principal is identity too
+    expect(pickRelayedFor('tool.call', tool, false)).toEqual({ surface: 'bridge', agent: 'kit' });
+    // the client relays keep principal and connId for every mod
+    expect(pickRelayedFor('command.run', all, false)).toEqual({ principal: 'p:n/x', connId: 'conn:1', surface: 'gui' });
+    expect(pickRelayedFor('view.render', all, false)).toEqual({ principal: 'p:n/x', connId: 'conn:1' });
     expect(pickRelayedFor('tool.call', { ...tool, surface: 'voice' }, false).surface).toBe('voice');
     // non-strings, empty strings, over-long values, inherited keys and a missing source
     const proto = Object.create({ principal: 'p:inherited/x' }) as Record<string, unknown>;
@@ -177,14 +182,16 @@ describe('the modAbiId move (S1.2 C1, C2): relayedFor per method', () => {
     };
     const raw = { principal: 'p:n/x', connId: 'conn:1', surface: 'gui', agent: 'kit', hsid: 'h', turn: 't' };
     expect(fold(m.pickRelayedFor('command.run', raw, false))).toBe('human');
-    expect(fold(m.pickRelayedFor('tool.call', { ...raw, surface: 'bridge' }, false))).toBe('agent');
+    expect(fold(m.pickRelayedFor('tool.call', { ...raw, surface: 'bridge' }, true))).toBe('agent');
+    // A3: an unentitled mod's tool row has no principal, so it vouches for nobody
+    expect(fold(m.pickRelayedFor('tool.call', { ...raw, surface: 'bridge' }, false))).toBe('unknown');
     expect(fold(m.pickRelayedFor('tool.call', { ...raw, surface: 'voice' }, true))).toBe('agent');
     expect(fold(m.pickRelayedFor('command.run', { ...raw, surface: 'telepathy' }, false))).toBe('unknown');
     expect(fold(m.pickRelayedFor('command.run', { connId: 'conn:1', surface: 'gui' }, false))).toBe('unknown');
     // view.render never carries a surface, so it can never vouch for a written row
     expect(fold(m.pickRelayedFor('view.render', raw, true))).toBe('unknown');
     // a tool stamp without the host-known agent label vouches for nobody: never an agent row, never a human one
-    expect(fold(m.pickRelayedFor('tool.call', { principal: 'p:n/x', surface: 'bridge' }, false))).toBe('unknown');
+    expect(fold(m.pickRelayedFor('tool.call', { principal: 'p:n/x', surface: 'bridge' }, true))).toBe('unknown');
     expect(fold({ principal: 'p:n/x', surface: 'voice' })).toBe('unknown');
     // an agent label on a client surface is still drawn as an agent (the cautious reading)
     expect(fold({ principal: 'p:n/x', surface: 'gui', agent: 'kit' })).toBe('agent');

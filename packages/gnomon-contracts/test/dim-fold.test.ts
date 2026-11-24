@@ -8,8 +8,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-  DIM_CORE_KINDS, DIM_FALLBACK_LEAD, DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KIND_PATTERN, DIM_KINDS, DIM_NODE_KEYS, DIM_REFUSAL_CODES, DIM_Z_PATTERN,
-  dimCanonical, dimFallbackLabel, dimHash, dimHsidOf, dimViewOf, dimZBetween, dimZCompare, emptyDimState, foldDim, foldDimRow, validateDimOps, type DimRow,
+  DIM_CORE_KINDS, DIM_FALLBACK_LEAD, DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KIND_PATTERN, DIM_LIMITS, DIM_KINDS, DIM_NODE_KEYS, DIM_REFUSAL_CODES, DIM_Z_PATTERN,
+  dimCanonical, dimFallbackLabel, dimHash, dimHsidOf, dimViewOf, dimZBetween, dimZCompare, dimZPlace, emptyDimState, foldDim, foldDimRow, validateDimOps, type DimRow,
 } from '../src/dim.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -22,23 +22,27 @@ describe('G-DDL-04: the fold hash', () => {
   it('equals the published vector', () => {
     const s = foldDim(rows);
     expect(dimHash(s)).toBe(DIM_HASH_VECTOR_HASH);
-    expect(s.nodes.size).toBe(4);
+    expect(s.nodes.size).toBe(7);
     expect(s.gone.has('01JD1MVECT0R000000000000C1')).toBe(true);
     expect(s.unapplied).toBe(0);
-    expect(s.ops).toBe(8);
-    expect(s.seq).toBe(4);
+    expect(s.ops).toBe(11);
+    expect(s.seq).toBe(7);
+    // J2: the vector exercises every `by` class, the unknown hand three ways
+    expect([...s.nodes.values()].map((n) => n.by.cls).sort()).toEqual(['agent', 'agent', 'human', 'human', 'unknown', 'unknown', 'unknown']);
+    for (const id of ['D1', 'D2', 'D3']) expect(s.nodes.get(`01JD1MVECT0R000000000000${id}`)!.by).toEqual({ cls: 'unknown', principal: 'unknown' });
   });
 
   it('is the same folded twice, in two chunks, row by row, and with shifted seqs', () => {
-    const whole = dimHash(foldDim(rows));
-    expect(dimHash(foldDim(rows))).toBe(whole);
+    const whole = DIM_HASH_VECTOR_HASH;
+    // from a deep copy of the rows (nothing is shared with the first fold)
+    expect(dimHash(foldDim(JSON.parse(JSON.stringify(rows)) as DimRow[]))).toBe(whole);
     expect(dimHash(foldDim(rows.slice(2), undefined, foldDim(rows.slice(0, 2))))).toBe(whole);
     let s = emptyDimState();
     for (const r of rows) s = foldDimRow(s, r);
     expect(dimHash(s)).toBe(whole);
     const shifted = rows.map((r) => ({ ...r, seq: r.seq * 1000 + 7 }));
     expect(dimHash(foldDim(shifted))).toBe(whole);
-    expect(foldDim(shifted).seq).toBe(4007);
+    expect(foldDim(shifted).seq).toBe(7007);
   });
 
   it('upToSeq stops the fold, and a different order or author changes the hash', () => {
@@ -68,7 +72,7 @@ describe('G-DDL-04: the fold hash', () => {
     const foreign = { seq: 99, kind: DIM_KINDS.op, payload: { v: 1, dim: 'dim:01JD1MVECT0R0000000000ZZZZ', ops: [{ type: 'delete', id: '01JD1MVECT0R000000000000A1' }] } };
     const s1 = foldDimRow(s0, foreign);
     expect(dimHash(s1)).toBe(DIM_HASH_VECTOR_HASH);
-    expect(s1.seq).toBe(4);
+    expect(s1.seq).toBe(7);
     expect(foldDim([rows[1]!]).nodes.size).toBe(0);
     expect(foldDim(rows, undefined, emptyDimState('dim:01JD1MVECT0R0000000000ZZZZ')).nodes.size).toBe(0);
   });
@@ -80,13 +84,13 @@ describe('G-DDL-04: the fold hash', () => {
     const add = (relayedFor: unknown, id: string): DimRow => ({ seq: 5, kind: DIM_KINDS.op, payload: { v: 1, dim: s.dim, ops: [{ type: 'add', node: { id, kind: 'rect', x: 0, y: 0, z: 'k', w: 1, h: 1, by: { cls: 'human' } } }], ...(relayedFor === undefined ? {} : { relayedFor }) } });
     const cases: unknown[] = [undefined, null, 'p:x', {}, { principal: '' , surface: 'gui' }, { principal: 'p:x' }, { principal: 'p:x', surface: 'telepathy' }, { principal: 'p:x', surface: 'gui', agent: 7 }, { principal: 'p:x', surface: 'bridge', agent: '' }];
     for (const c of cases) {
-      const n = foldDimRow(s, add(c, '01JD1MVECT0R000000000000D1')).nodes.get('01JD1MVECT0R000000000000D1')!;
+      const n = foldDimRow(s, add(c, '01JD1MVECT0R000000000000F1')).nodes.get('01JD1MVECT0R000000000000F1')!;
       expect(n.by).toEqual({ cls: 'unknown', principal: 'unknown' });
       // a carried field named `by` is just data on the node; it never becomes the author
       expect(n.node.by).toEqual({ cls: 'human' });
     }
-    const unknownHash = dimHash(foldDimRow(s, add(undefined, '01JD1MVECT0R000000000000D1')));
-    const humanHash = dimHash(foldDimRow(s, add({ principal: 'unknown', surface: 'gui' }, '01JD1MVECT0R000000000000D1')));
+    const unknownHash = dimHash(foldDimRow(s, add(undefined, '01JD1MVECT0R000000000000F1')));
+    const humanHash = dimHash(foldDimRow(s, add({ principal: 'unknown', surface: 'gui' }, '01JD1MVECT0R000000000000F1')));
     expect(unknownHash).not.toBe(humanHash);
   });
 
@@ -218,6 +222,108 @@ describe('z order keys', () => {
     expect(() => dimZBetween('A', 'A')).toThrow(RangeError);
     expect(() => dimZBetween('A0', null)).toThrow(RangeError);
     expect(() => dimZBetween('a b', null)).toThrow(RangeError);
+  });
+
+  it('J1: 10,000 appends in a row and 10,000 prepends in a row stay well-formed, ordered and short', () => {
+    let top: string | null = null;
+    let bottom: string | null = null;
+    let longest = 0;
+    const seen = new Set<string>();
+    for (let i = 0; i < 10_000; i++) {
+      const up = dimZBetween(top, null);
+      const down = dimZBetween(null, bottom ?? up);
+      for (const k of [up, down]) {
+        expect(DIM_Z_PATTERN.test(k)).toBe(true);
+        expect(seen.has(k)).toBe(false);
+        seen.add(k);
+        longest = Math.max(longest, k.length);
+      }
+      if (top !== null) expect(top < up).toBe(true);
+      expect(down < (bottom ?? up)).toBe(true);
+      top = up;
+      bottom = down;
+    }
+    expect(longest).toBeLessThanOrEqual(5);
+    expect(dimZBetween(null, null)).toBe('V');
+  });
+
+  it('J1: appends and prepends continue from any stored key, and interleaved inserts between them still work', () => {
+    for (const from of ['1', '5abc', 'A', 'U', 'V', 'Vz', 'W', 'Wz', 'Xzz', 'zzz', 'k9Qp', 'T', 'Tz', 'S5']) {
+      let up = from;
+      let down = from;
+      for (let i = 0; i < 300; i++) {
+        const u = dimZBetween(up, null);
+        const d = dimZBetween(null, down);
+        expect(up < u && d < down && DIM_Z_PATTERN.test(u) && DIM_Z_PATTERN.test(d)).toBe(true);
+        up = u;
+        down = d;
+      }
+      // legal from anywhere; short from the keys this scheme itself hands out (a head far from the middle carries more digits)
+      expect(Math.max(up.length, down.length)).toBeLessThanOrEqual(DIM_LIMITS.z);
+      if (from >= 'S' && from < 'Y') expect(Math.max(up.length, down.length)).toBeLessThanOrEqual(6);
+    }
+    // a board built by appends, then 10,000 inserts at seeded positions (ends included)
+    let seed = 0x51ab3;
+    const rnd = (): number => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 0x100000000);
+    const keys: string[] = [];
+    for (let i = 0; i < 200; i++) keys.push(dimZBetween(keys[keys.length - 1] ?? null, null));
+    for (let i = 0; i < 10_000; i++) {
+      const at = Math.floor(rnd() * (keys.length + 1));
+      keys.splice(at, 0, dimZBetween(at > 0 ? keys[at - 1]! : null, at < keys.length ? keys[at]! : null));
+    }
+    expect(new Set(keys).size).toBe(keys.length);
+    expect([...keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))).toEqual(keys);
+    expect(Math.max(...keys.map((k) => k.length))).toBeLessThanOrEqual(DIM_LIMITS.z);
+  });
+
+  it('J1: exhaustion throws; it never returns a key that would fail the pattern', () => {
+    // always inserting just above the same key halves the gap each time: it ends in a RangeError, not a long key
+    let hi = 'W';
+    let threw = false;
+    for (let i = 0; i < 2000 && !threw; i++) {
+      try {
+        hi = dimZBetween('V', hi);
+        expect(hi.length).toBeLessThanOrEqual(DIM_LIMITS.z);
+        expect(DIM_Z_PATTERN.test(hi)).toBe(true);
+      } catch (e) {
+        expect(e).toBeInstanceOf(RangeError);
+        threw = true;
+      }
+    }
+    expect(threw).toBe(true);
+    expect(() => dimZBetween(`z${'z'.repeat(30)}`, null)).toThrow(RangeError);
+    expect(() => dimZBetween(null, `0${'0'.repeat(29)}1`)).toThrow(RangeError);
+  });
+
+  it('J1: dimZPlace is total over anything the fold can hold', () => {
+    const odd: unknown[] = [undefined, null, 7, '', 'A0', 'a b', 'z'.repeat(65), {}, [], '\u200b'];
+    for (const a of [...odd, 'V', 'W1']) {
+      for (const b of [...odd, 'V', 'W1']) {
+        const k = dimZPlace(a, b);
+        expect(DIM_Z_PATTERN.test(k)).toBe(true);
+        const lo = typeof a === 'string' && DIM_Z_PATTERN.test(a) ? a : null;
+        const hi = typeof b === 'string' && DIM_Z_PATTERN.test(b) ? b : null;
+        if (lo !== null) expect(lo < k).toBe(true);
+        if (lo !== null && hi !== null && lo < hi) expect(k < hi).toBe(true);
+        if (lo === null && hi !== null) expect(k < hi).toBe(true);
+      }
+    }
+    // a malformed neighbour is an open end
+    expect(dimZPlace('V', 'A0')).toBe(dimZBetween('V', null));
+    expect(dimZPlace(7, 'V')).toBe(dimZBetween(null, 'V'));
+    // two nodes with the same z, or out of order: above the lower one (ties are then broken by id)
+    expect(dimZPlace('V', 'V')).toBe(dimZBetween('V', null));
+    expect(dimZPlace('W1', 'V')).toBe(dimZBetween('W1', null));
+    // no room between, and none above: the lower key itself, never a throw
+    const top = `z${'z'.repeat(30)}`;
+    expect(dimZPlace(top, null)).toBe(top);
+    let hi = 'W';
+    for (let i = 0; i < 2000; i++) {
+      const next = dimZPlace('V', hi);
+      if (!(next < hi)) break;
+      hi = next;
+    }
+    expect(DIM_Z_PATTERN.test(dimZPlace('V', hi))).toBe(true);
   });
 
   it('1000 seeded random inserts stay sorted and well-formed', () => {

@@ -244,7 +244,7 @@ describe('C3: refs', () => {
       ['card:01JVA1D0000000000000000001', 'ref-scheme'], ['permit:v1:abc', 'ref-scheme'], ['gkey:abc', 'ref-scheme'], ['hsid:abc', 'ref-scheme'], ['doodle:abc', 'ref-scheme'],
       ['ev:01JVA1D0000000000000000001', 'ref-scheme'], ['peer:log:x/sym:#a', 'ref-scheme'], ['turn:h/1', 'ref-scheme'], ['http://example.invalid/x', 'ref-scheme'], ['javascript:alert(1)', 'ref-scheme'],
       [`sym:${'a'.repeat(125)}`, 'ref-too-long'], ['sym:a b', 'ref-bad'], ['sym:a//b', 'ref-bad'], ['sym:../x', 'ref-bad'], ['sym:a/../b', 'ref-bad'], ['#foo', 'ref-bad'], ['TD-2026-11-24-500', 'ref-bad'],
-      ['sym:', 'ref-bad'], ['sym:.hidden', 'ref-bad'], ['sym:a@', 'ref-bad'], ['sym:a@b@c', 'ref-bad'], ['sym:a?b=c', 'ref-bad'], ['sym:a%2Fb', 'ref-bad'], ['sym:a​b', 'ref-bad'], ['SYM:a', 'ref-bad'], [7, 'ref-bad'], [null, 'ref-bad'], ['', 'ref-bad'],
+      ['sym:', 'ref-bad'], ['sym:.hidden', 'ref-bad'], ['sym:a@', 'ref-bad'], ['sym:a@b@c', 'ref-bad'], ['sym:a?b=c', 'ref-bad'], ['sym:a%2Fb', 'ref-bad'], ['sym:a\u200bb', 'ref-bad'], ['SYM:a', 'ref-bad'], [7, 'ref-bad'], [null, 'ref-bad'], ['', 'ref-bad'],
     ];
     for (const [r, want] of cases) {
       expect(validateDimRef(r)).toBe(want);
@@ -298,7 +298,7 @@ describe('C4: the secret check', () => {
 
   it('zero-width characters, bidi marks, a soft hyphen and a newline inside the key', () => {
     const cut = (sep: string): string => `${KEY.slice(0, 9)}${sep}${KEY.slice(9, 20)}${sep}${KEY.slice(20)}`;
-    for (const sep of ['​', '‍', '‌', '⁠', '﻿', '­', '‮', ' ', ' ', '\n', '\r\n', '\t', '\u0000', '\u{e0041}']) {
+    for (const sep of ['\u200b', '\u200d', '\u200c', '\u2060', '\ufeff', '\u00ad', '\u202e', '\u2028', '\u2029', '\n', '\r\n', '\t', '\u0000', '\u{e0041}']) {
       expect(cut(sep)).not.toBe(KEY);
       expect(dimTextForScan(cut(sep))).toBe(KEY);
       expectSecret([text(cut(sep))], state, 'anthropic-key');
@@ -308,9 +308,9 @@ describe('C4: the secret check', () => {
   it('fullwidth forms (NFKC)', () => {
     const wide = [...KEY].map((c) => (c >= '!' && c <= '~' ? String.fromCodePoint(c.codePointAt(0)! + 0xfee0) : c)).join('');
     expect(wide).not.toBe(KEY);
-    expect(wide.startsWith('ｓｋ－')).toBe(true);
+    expect(wide.startsWith('\uff53\uff4b\uff0d')).toBe(true);
     expectSecret([text(wide)], state, 'anthropic-key');
-    expectSecret([text(`ＡＫＩＡ${AWS.slice(4)}`)], state, 'aws-access-key');
+    expectSecret([text(`\uff21\uff2b\uff29\uff21${AWS.slice(4)}`)], state, 'aws-access-key');
   });
 
   it('split over two updates, in one batch and across two rows', () => {
@@ -341,7 +341,7 @@ describe('C4: the secret check', () => {
     // a carried node of a later version with text and label: an add that tries it is refused as a secret first
     expectSecret(add({ id: id(22), kind: 'rect', x: 0, y: 0, z: 'M', w: 1, h: 1, label: KEY.slice(0, 12), text: KEY.slice(12) }));
     // split with zero-width characters on top
-    expectSecret(add({ ...arrow, id: id(23), label: `​${KEY.slice(14, 20)}‍${KEY.slice(20)}` }));
+    expectSecret(add({ ...arrow, id: id(23), label: `\u200b${KEY.slice(14, 20)}\u200d${KEY.slice(20)}` }));
   });
 
   it('a node that already matches by itself (an old or later-version row) does not block a clean edit of it', () => {
@@ -355,11 +355,33 @@ describe('C4: the secret check', () => {
     expect(validateDimOps(carried, [{ type: 'update', id: id(30), patch: { label: `x ${AWS}` } }], human).secret).toBe(true);
   });
 
+  it('J3: a move re-reads no node; scan work for a 64-op move batch over 64 text nodes is linear in the ops', () => {
+    const texts = Array.from({ length: 64 }, (_, i) => ({ type: 'add', node: { id: id(30 + i), kind: 'arrow', x: 0, y: 0, z: 'M', points: [0, 0, 1, 1], rel: 'leads-to', label: `note ${i}`, refs: ['sym:a', 'sym:b', 'sym:c'] } }));
+    const board = foldDim([{ seq: 4, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: texts, relayedFor: stamp(human) } }], undefined, state);
+    expect(board.nodes.size).toBe(state.nodes.size + 64);
+    const all = texts.map((t) => t.node.id);
+    let scans = 0;
+    const moves = Array.from({ length: 64 }, () => ({ type: 'move', ids: all, dx: 1, dy: 1 }));
+    const res = validateDimOps(board, moves, human, { scan: () => (scans++, []) });
+    expect(res.refused).toEqual([]);
+    expect(res.ok).toHaveLength(64);
+    // each move op is read once for its own strings (its type and 64 ids); the moved nodes are never re-read
+    expect(scans).toBe(64 * 65);
+    // an update still reads the node it touches (joined and pairwise), and a move after it does not
+    scans = 0;
+    validateDimOps(board, [{ type: 'update', id: all[0], patch: { label: 'x' } }], human, { scan: () => (scans++, []) });
+    const forUpdate = scans;
+    expect(forUpdate).toBeGreaterThan(2);
+    scans = 0;
+    validateDimOps(board, [{ type: 'move', ids: [all[0]], dx: 1, dy: 1 }], human, { scan: () => (scans++, []) });
+    expect(scans).toBe(2);
+  });
+
   it('an injected scanner sees normalised text, and ordinary text passes', () => {
     const seen: string[] = [];
-    const res = validateDimOps(state, [text('café Ａ​B')], human, { scan: (t) => (seen.push(t), []) });
+    const res = validateDimOps(state, [text('caf\u00e9 \uff21\u200bB')], human, { scan: (t) => (seen.push(t), []) });
     expect(res.secret).toBe(false);
-    expect(seen).toContain('café AB');
+    expect(seen).toContain('caf\u00e9 AB');
     expect(validateDimOps(state, [text('Ship the board on Friday; ask Luna about the token colours.')], human)).toMatchObject({ secret: false, refused: [] });
     const flagged = validateDimOps(state, [text('anything')], human, { scan: () => ['custom-rule'] });
     expect(flagged.secret).toBe(true);

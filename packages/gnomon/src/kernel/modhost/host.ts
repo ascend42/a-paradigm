@@ -47,8 +47,13 @@
  * proxy refuses a tunnel opened while the call in force lacks `network`.
  * Rendered blocks pass the closed-kit gate (block.ts) and come back fenced and
  * labelled `mod:<name>` (+ `dev`); `mod.view.rendered{name, slot, ms}`.
- * RELAYS: `relayView` / `relayCommand` stamp `relayedFor{principal, connId}`
- * from the CALLER's authenticated connection — a mod can never name who acted.
+ * RELAYS: `relayView` / `relayCommand` stamp `relayedFor` from the CALLER's
+ * authenticated connection — a mod can never name who acted. Its fields are fixed
+ * per method by the contracts `pickRelayedFor` (S1.2): {principal, connId} for a
+ * view; plus `surface` for a command, and only for a human-class caller; a tool
+ * call gets {surface, agent} and, for a first-party or `log.read` mod only,
+ * {principal, hsid, turn}. The same object is stamped on every row the mod
+ * appends inside the call (CallStamp → bridge.clampModAppend).
  *
  * SUPERVISION: an unexpected exit ⇒ `mod.health{ok:false}` and a restart
  * (cap 3 per 10 min, then the mod stays down until started again); a crash
@@ -591,7 +596,9 @@ export class ModHost {
       }
       if (init?.abi !== MOD_ABI_V1 || init?.modAbiId !== MOD_ABI_ID) {
         await this.stop(name, 'abi-mismatch');
-        throw new ModRefusal('ABI', `${name} answered abi ${String(init?.abi)} / modAbiId ${String(init?.modAbiId)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
+        // the echoes are MOD-SUPPLIED and this text reaches the GUI: shown only when they have the expected shape, clipped
+        const shown = (v: unknown, re: RegExp): string => (typeof v === 'string' && v.length <= 80 && re.test(v) ? v : 'a malformed value');
+        throw new ModRefusal('ABI', `${name} answered abi ${shown(init?.abi, /^mod-abi:v[0-9]{1,4}$/)} / modAbiId ${shown(init?.modAbiId, /^sha256:[0-9a-f]{64}$/)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
       }
       this.#primeFeed(r);
       this.#emit('mod.health', { name, ok: true });
@@ -847,9 +854,10 @@ export class ModHost {
 
   /** `tool.call` — effects in force = that tool's declared effects (∩ the dev cap). */
   /**
-   * C2: may this mod learn which session and turn called it? Only a `gnomon`-published mod (the loader enforces
-   * publisher gnomon ⇔ first-party tier, both ways) or one granted `log.read`. Anything else gets neither `hsid`
-   * nor `turn`, and no `causes` on its rows (a turn ref holds the session id).
+   * C2 / A3: may this mod learn which session, principal and turn called it? Only a `gnomon`-published mod (the
+   * loader enforces publisher gnomon ⇔ first-party tier, both ways) or one granted `log.read`. Anything else gets
+   * neither `principal`, `hsid` nor `turn` on a tool call, and no `causes` on its rows (a turn ref holds the session
+   * id). Its rows then carry no principal and a dimension fold reads them as the unknown hand.
    */
   #identityAllowed(r: Running): boolean {
     return r.manifest.publisher === 'gnomon' || feedAccessOf(r.manifest.requires?.capabilities).base;
@@ -864,9 +872,11 @@ export class ModHost {
     const r = this.#require(name);
     if (!r.manifest.provides?.tools?.some((t) => t.name === tool)) throw new ModRefusal('UNDECLARED', `${name} declares no tool ${tool}`, { name, tool });
     const identity = this.#identityAllowed(r);
-    const picked = opts.toolRelayedFor ? pickRelayedFor('tool.call', opts.toolRelayedFor as unknown as Record<string, unknown>, identity) : null;
-    // fail closed: a partial tool stamp vouches for nobody
-    const rf = picked && picked.principal && picked.surface && picked.agent ? picked : null;
+    // fail closed: the HOST-KNOWN value must be whole (principal, a tool surface, an agent label) or it vouches for nobody
+    const whole = opts.toolRelayedFor ? pickRelayedFor('tool.call', opts.toolRelayedFor as unknown as Record<string, unknown>, true) : null;
+    const complete = !!whole && !!whole.principal && !!whole.surface && !!whole.agent;
+    // A3: an unentitled mod is told the surface and the agent label only; the session principal is identity
+    const rf = complete ? pickRelayedFor('tool.call', whole, identity) : null;
     const stamp: CallStamp | null = rf ? { relayedFor: rf, ...(identity && rf.turn ? { causes: [rf.turn] } : {}) } : null;
     const out = (await this.#call(name, 'tool.call', { name: tool, input: input ?? null, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'tool', tool, ...(opts.hsid ? { hsid: opts.hsid } : {}), ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
