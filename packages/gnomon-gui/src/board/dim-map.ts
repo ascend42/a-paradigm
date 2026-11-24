@@ -21,7 +21,7 @@
  * validator refuses those), an element whose node id was deleted before (ids are never reused), an element of a
  * type the board does not have, and a text with no characters.
  */
-import { CONTENT_DEFAULTS, CONTENT_SWATCH_NAME_PATTERN, DIM_CORE_KINDS, DIM_LIMITS, dimFallbackLabel, dimZCompare, dimZPlace, isContentColour } from '@a-company/gnomon-contracts';
+import { CONTENT_DEFAULTS, CONTENT_SWATCH_NAME_PATTERN, DIM_CORE_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, dimZPlace, isContentColour } from '@a-company/gnomon-contracts';
 import type { DimCoreKind, DimFoldNode, DimNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_WEIGHTS, type BoardTheme } from '../core/board.js';
 import { fillColour, lineColour } from './normal.js';
@@ -81,10 +81,18 @@ export interface DimMapStyle {
   sticky?: boolean;
 }
 
+/**
+ * KNOWN DISAGREEMENTS with ./normal.ts, which still holds the S1.1 rules (test/dim-map.test.ts pins all three, so
+ * the pass that wires this map into the handle has to resolve them on purpose):
+ *  - `diamond` is a core kind here and is not in normal.ts BOARD_TYPES, so the handle's normaliser would remove it;
+ *  - `diamond` takes a fill here and is not in normal.ts FILLABLE, so its fill would be painted out;
+ *  - an arrow's `head` gives `none` or `both` here, and normal.ts normalOf forces every arrow to one end head.
+ */
 const KIND_TYPE: Readonly<Record<DimCoreKind, string>> = { stroke: 'freedraw', rect: 'rectangle', ellipse: 'ellipse', diamond: 'diamond', arrow: 'arrow', text: 'text', frame: 'frame' };
 const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map(DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k]));
 const FILL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond']);
 const LABEL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond', 'arrow']);
+const LABEL_TYPES: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow']);
 const WEIGHT_WIDTHS: readonly number[] = [BOARD_WEIGHTS.fine, BOARD_WEIGHTS.bold, BOARD_WEIGHTS.marker];
 /** A fallback mark's fixed box and tokens (design component fallback-node; the same numbers as the S1.1 stub). */
 export const DIM_FALLBACK_BOX = Object.freeze({ width: 288, height: 52, line: 'graphite', fill: 'paper' });
@@ -110,9 +118,15 @@ export function dimIsSticky(node: Record<string, unknown>): boolean {
 function drawable(node: Record<string, unknown>): node is Record<string, unknown> & { kind: DimCoreKind; x: number; y: number } {
   const kind = own(node, 'kind');
   if (!isCore(kind) || !num(own(node, 'x')) || !num(own(node, 'y'))) return false;
-  if (kind === 'stroke') return flatPoints(own(node, 'points'), 2) !== null;
-  if (kind === 'arrow') return flatPoints(own(node, 'points'), 4) !== null;
-  if (kind === 'text') return typeof own(node, 'text') === 'string';
+  // over the write limits (a row from a later version, or a hostile one): the fallback box, never the payload
+  if (kind === 'stroke' || kind === 'arrow') {
+    const pts = own(node, 'points');
+    return Array.isArray(pts) && pts.length <= DIM_LIMITS.points && flatPoints(pts, kind === 'arrow' ? 4 : 2) !== null;
+  }
+  if (kind === 'text') {
+    const text = own(node, 'text');
+    return typeof text === 'string' && text.length <= DIM_LIMITS.text;
+  }
   const w = own(node, 'w');
   const h = own(node, 'h');
   return num(w) && num(h) && w > 0 && h > 0;
@@ -126,7 +140,8 @@ interface Built {
 function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds, live: ReadonlyMap<string, DimFoldNode>): Built {
   const node = n.node;
   const id = ids.engineOf(nodeId);
-  const strokeStyle = n.by.cls === 'agent' || n.by.cls === 'unknown' ? 'dashed' : 'solid';
+  // fails closed: solid only for a hand the fold calls human; a missing `by` or a class this build does not know is dashed
+  const strokeStyle = (n.by as { cls?: unknown } | undefined)?.cls === 'human' ? 'solid' : 'dashed';
   const x0 = num(own(node, 'x')) ? Math.round(own(node, 'x') as number) : 0;
   const y0 = num(own(node, 'y')) ? Math.round(own(node, 'y') as number) : 0;
   const parentId = own(node, 'parent');
@@ -154,6 +169,7 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
   const tokens = { line: isContentColour(color, 'line') ? color : CONTENT_DEFAULTS.line, fill: FILL_KINDS.has(kind) && isContentColour(fill, 'fill') ? fill : null };
   const weight = own(node, 'weight');
   const rot = own(node, 'rot');
+  let mid: [number, number] | null = null;
   const main: EngineElement = {
     id, type: KIND_TYPE[kind], x: x0, y: y0, width: 0, height: 0,
     angle: num(rot) ? (rot / 1800) * Math.PI : 0,
@@ -170,13 +186,24 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
     const py = Math.round(flat[1] as number);
     const points: Array<[number, number]> = [];
     for (let i = 0; i < flat.length; i += 2) points.push([Math.round(flat[i] as number) - px, Math.round(flat[i + 1] as number) - py]);
-    const xs = points.map((p) => p[0]);
-    const ys = points.map((p) => p[1]);
+    // a loop, not a spread: a long stroke must not overflow the call stack
+    let minX = 0;
+    let maxX = 0;
+    let minY = 0;
+    let maxY = 0;
+    for (const [qx, qy] of points) {
+      if (qx < minX) minX = qx;
+      if (qx > maxX) maxX = qx;
+      if (qy < minY) minY = qy;
+      if (qy > maxY) maxY = qy;
+    }
     main.x = x0 + px;
     main.y = y0 + py;
     main.points = points;
-    main.width = Math.max(...xs) - Math.min(...xs);
-    main.height = Math.max(...ys) - Math.min(...ys);
+    main.width = maxX - minX;
+    main.height = maxY - minY;
+    // a line may run left or up of its first point: its middle is the middle of its points
+    mid = [main.x + Math.round((minX + maxX) / 2), main.y + Math.round((minY + maxY) / 2)];
   } else if (kind === 'text') {
     const w = own(node, 'w');
     main.text = node.text as string;
@@ -199,7 +226,8 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
     }
   }
   const text = LABEL_KINDS.has(kind) ? own(node, 'label') : undefined;
-  const label = typeof text === 'string' && text.length > 0 ? labelEl(text, main.x + Math.round(main.width / 2), main.y + Math.round(main.height / 2)) : null;
+  const at = mid ?? [main.x + Math.round(main.width / 2), main.y + Math.round(main.height / 2)];
+  const label = typeof text === 'string' && text.length > 0 && text.length <= DIM_LIMITS.label ? labelEl(text, at[0], at[1]) : null;
   if (label) main.boundElements = [{ type: 'text', id: label.id }];
   return { main, label };
 }
@@ -333,9 +361,12 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
   const mains = new Map<string, EngineElementIn>();
   const labels = new Map<string, string>();
   const order: EngineElementIn[] = [];
+  // a text is a label only of a live mark that can carry one; a `containerId` naming nothing is no container
+  const carriers = new Set<string>();
+  for (const el of elements) if (el && !el.isDeleted && typeof el.id === 'string' && LABEL_TYPES.has(el.type)) carriers.add(el.id);
   for (const el of elements) {
     if (!el || el.isDeleted || typeof el.id !== 'string' || typeof el.type !== 'string') continue;
-    if (el.type === 'text' && typeof el.containerId === 'string') {
+    if (el.type === 'text' && typeof el.containerId === 'string' && el.containerId !== el.id && carriers.has(el.containerId)) {
       if (typeof el.text === 'string' && !labels.has(el.containerId)) labels.set(el.containerId, el.text);
       continue;
     }
@@ -402,18 +433,25 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
   }
 
   // order keys: the longest run already in order keeps its keys; every other mark is placed between its neighbours
-  const stored = items.map((it, i) => ({ it, i })).filter((x) => !x.it.fresh);
+  // (a stored key that is not a well-formed order key is never kept: a legal key cannot be placed against it)
+  const wellFormed = (z: unknown): boolean => typeof z === 'string' && z.length <= DIM_LIMITS.z && DIM_Z_PATTERN.test(z);
+  const stored = items.map((it, i) => ({ it, i })).filter((x) => !x.it.fresh && wellFormed(x.it.z));
   const kept = keepers(stored.map((x) => ({ z: x.it.z, id: x.it.nodeId })));
   const keeps = new Set(stored.filter((_, n) => kept.has(n)).map((x) => x.i));
   const zOf: unknown[] = items.map((it) => it.z);
   const placed = new Map<number, string>();
-  let below: unknown = null;
+  // Walk in paint order. A kept mark stays only while it still sorts above the mark before it: a key placed next to
+  // equal, malformed or exhausted neighbours can land above the next kept mark, which is then placed in its turn,
+  // so ONE diff always leaves the stored order equal to the order on screen.
+  let last: { z: unknown; id: string } | null = null;
   items.forEach((it, i) => {
-    if (keeps.has(i) || (!it.fresh && it.was === null)) {
-      // an uneditable mark that fell out of order stays where its key puts it; only later marks step over a kept one
-      if (keeps.has(i)) below = it.z;
+    const self = { z: it.z, id: it.nodeId };
+    if (keeps.has(i) && (last === null || dimZCompare(last, self) < 0)) {
+      last = self;
       return;
     }
+    // an uneditable mark that is out of order stays where its key puts it
+    if (!it.fresh && it.was === null) return;
     let above: unknown = null;
     for (let j = i + 1; j < items.length; j++) {
       if (keeps.has(j)) {
@@ -421,10 +459,10 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
         break;
       }
     }
-    const z = dimZPlace(below, above);
+    const z = dimZPlace(last === null ? null : last.z, above);
     placed.set(i, z);
     zOf[i] = z;
-    below = z;
+    last = { z, id: it.nodeId };
   });
 
   const adds: Array<{ tier: number; op: DimOp }> = [];
@@ -444,12 +482,18 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
     }
     // an emptied label of a sticky keeps its key (the key is what makes the rect a sticky)
     if (patch.label === null && it.now.kind === 'rect' && dimIsSticky(prev.nodes.get(it.nodeId)!.node)) patch.label = '';
-    // points are stored relative to (x, y): a changed shape always restates where it starts
-    if ('points' in patch) {
+    const z = placed.get(i);
+    // Points are stored relative to (x, y), and the engine's x and y are those of the FIRST point. So for a line,
+    // x, y and points travel together: a patch that names one of them restates all three in the engine's terms.
+    // (A stored line whose points do not start at the origin would otherwise jump by its first point.) A pure
+    // drag stays a relative move, which is right whatever the stored origin is.
+    const linear = it.now.kind === 'stroke' || it.now.kind === 'arrow';
+    const pureMove = z === undefined && Object.keys(patch).length > 0 && Object.keys(patch).every((k) => k === 'x' || k === 'y');
+    if (linear && !pureMove && ('points' in patch || 'x' in patch || 'y' in patch)) {
       patch.x = it.now.x;
       patch.y = it.now.y;
+      patch.points = it.now.points;
     }
-    const z = placed.get(i);
     const keys = Object.keys(patch);
     if (z === undefined && keys.length > 0 && keys.every((k) => k === 'x' || k === 'y')) {
       const dx = (it.now.x as number) - (it.was.x as number);

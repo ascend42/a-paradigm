@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DIM_HASH_VECTOR_ROWS, DIM_KINDS, dimFallbackLabel, dimZCompare, emptyDimState, foldDim, validateDimOps } from '@a-company/gnomon-contracts';
+import { DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, emptyDimState, foldDim, validateDimOps } from '@a-company/gnomon-contracts';
 import type { DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
 import { DIM_ENGINE_KEYS, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
 import type { DimMapIds, EngineElement } from '../src/board/dim-map.js';
+import { BOARD_TYPES, FILLABLE, normalOf } from '../src/board/normal.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIM = 'dim:01JD1MVECT0R00000000000001';
@@ -305,5 +306,204 @@ describe('#gui-dim-map source rules', () => {
     const specs = [...src.matchAll(/\bfrom\s+'([^']+)'/g)].map((m) => m[1]);
     expect(specs.sort()).toEqual(['../core/board.js', './normal.js', '@a-company/gnomon-contracts', '@a-company/gnomon-contracts']);
     expect(src).not.toMatch(/console\.|document\.|window\./);
+  });
+});
+
+describe('#gui-dim-map review fixes (PR #113)', () => {
+  const STYLE = { line: 'ink', fill: null };
+
+  it('1. the dash fails closed: solid only for cls human; a missing by or an unknown class is dashed', () => {
+    const node = (n: number): Record<string, unknown> => ({ id: ULID(n), kind: 'rect', x: 0, y: 0, z: 'V', w: 10, h: 10 });
+    const raw = (by: unknown): DimState => ({ ...emptyDimState(DIM), nodes: new Map([[ULID(1), { node: node(1), by: by as never, hsid: null, addedSeq: 2 }]]) });
+    const styleOf = (by: unknown): string => dimToElements(raw(by), 'day', idTable())[0]!.strokeStyle;
+    expect(styleOf({ cls: 'human', principal: 'p' })).toBe('solid');
+    for (const by of [undefined, null, {}, { cls: 'robot' }, { cls: 'Human' }, { cls: ['human'] }, { cls: 'agent' }, { cls: 'unknown' }, 'human']) expect(styleOf(by)).toBe('dashed');
+  });
+
+  it('2. a drag with a recolour or a reorder of a line whose stored points are off the origin restates x, y and points', () => {
+    const state = fold(opRow(2, [add({ id: ULID(1), kind: 'stroke', x: 100, y: 100, z: 'V', points: [10, 10, 20, 20] }), add({ id: ULID(2), kind: 'rect', x: 0, y: 0, z: 'W', w: 5, h: 5 })]));
+    const ids = idTable();
+    const els = dimToElements(state, 'day', ids);
+    expect(els[0]).toMatchObject({ x: 110, y: 110, points: [[0, 0], [10, 10]] });
+    // Probe's case: drag (5, 5) and recolour
+    const edited = els.map((e) => (e.type === 'freedraw' ? { ...e, x: e.x + 5, y: e.y + 5, customData: { gnomon: { line: 'cobalt', fill: null } } } : e));
+    const ops = elementsToOps(state, edited, ids, STYLE);
+    expect(ops).toEqual([{ type: 'update', id: ULID(1), patch: { x: 115, y: 115, color: 'cobalt', points: [0, 0, 10, 10] } }]);
+    const next = foldDim([opRow(3, validateDimOps(state, ops, ME).ok)], undefined, state);
+    expect(dimToElements(next, 'day', ids)[0]).toMatchObject({ x: 115, y: 115, points: [[0, 0], [10, 10]] });
+    expect(elementsToOps(next, edited, ids, STYLE)).toEqual([]);
+    // drag and bring to front
+    const three = foldDim([opRow(3, [add({ id: ULID(3), kind: 'rect', x: 0, y: 0, z: 'X', w: 5, h: 5 })])], undefined, state);
+    const all = dimToElements(three, 'day', ids);
+    const front = [all[1]!, all[2]!, { ...all[0]!, x: all[0]!.x - 3 }];
+    expect(elementsToOps(three, front, ids, STYLE)).toEqual([{ type: 'update', id: ULID(1), patch: { x: 107, y: 110, points: [0, 0, 10, 10], z: expect.any(String) } }]);
+    // a pure drag stays one relative move
+    expect(elementsToOps(state, els.map((e) => (e.type === 'freedraw' ? { ...e, x: e.x + 5 } : e)), ids, STYLE)).toEqual([{ type: 'move', ids: [ULID(1)], dx: 5, dy: 0 }]);
+  });
+
+  it('2. fuzz: any single or combined edit, saved and rendered again, leaves nothing more to save', () => {
+    let seed = 0x5eed1234;
+    const rnd = (n: number): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed % n;
+    };
+    const base = fold(
+      opRow(2, [
+        add({ id: ULID(1), kind: 'frame', x: 0, y: 0, z: 'V', w: 640, h: 480, title: 'Plan' }),
+        add({ id: ULID(2), kind: 'rect', x: 40, y: 40, z: 'W', w: 200, h: 120, fill: 'lemon', label: 'One', parent: ULID(1) }),
+        add({ id: ULID(3), kind: 'ellipse', x: 300, y: 40, z: 'X', w: 80, h: 60, color: 'ink', weight: 1 }),
+        add({ id: ULID(4), kind: 'stroke', x: 100, y: 100, z: 'Y', points: [10, 10, 20, 20, -5, 7] }),
+        add({ id: ULID(5), kind: 'arrow', x: 50, y: 60, z: 'Y', points: [-4, 9, 60, -20], from: ULID(2), to: ULID(3), head: 'end', rel: 'leads-to', label: 'go' }),
+        add({ id: ULID(6), kind: 'text', x: 40, y: 300, z: 'Z', text: 'Two words', size: 2 }),
+        add({ id: ULID(7), kind: 'diamond', x: 300, y: 200, z: 'Z', w: 90, h: 90, rot: 450 }),
+      ]),
+    );
+    const colours = ['ink', 'cobalt', 'graphite', 'raspberry'];
+    for (let round = 0; round < 300; round++) {
+      let state = base;
+      const ids = idTable();
+      let scene: Array<Record<string, unknown>> = dimToElements(state, 'day', ids).map((e) => ({ ...e }));
+      for (let step = 0; step < 3; step++) {
+        const mains = scene.filter((e) => typeof e.containerId !== 'string');
+        // one, two or three edits at once, on one mark or on several
+        for (let k = 0, edits = 1 + rnd(3); k < edits && mains.length > 0; k++) {
+          const el = mains[rnd(mains.length)]!;
+          switch (rnd(6)) {
+            case 0:
+              el.x = (el.x as number) + rnd(41) - 20;
+              el.y = (el.y as number) + rnd(41) - 20;
+              break;
+            case 1:
+              el.customData = { gnomon: { line: colours[rnd(colours.length)], fill: (el.customData as { gnomon: { fill: unknown } }).gnomon.fill } };
+              break;
+            case 2: {
+              // to the front or to the back, its label with it
+              const mine = scene.filter((e) => e === el || e.containerId === el.id);
+              const others = scene.filter((e) => !mine.includes(e));
+              scene = rnd(2) ? [...others, ...mine] : [...mine, ...others];
+              break;
+            }
+            case 3:
+              if (Array.isArray(el.points)) el.points = [[0, 0], [rnd(50) + 1, rnd(50) - 25], [rnd(50) - 25, rnd(50) + 1]];
+              else if (el.type !== 'text') el.width = (el.width as number) + 1 + rnd(9);
+              break;
+            case 4:
+              el.strokeWidth = [2, 4, 8][rnd(3)];
+              break;
+            default:
+              // a text never loses its words here; a deleted mark takes its label along
+              if (el.type !== 'frame' && rnd(3) === 0) scene = scene.filter((e) => e !== el && e.containerId !== el.id);
+          }
+        }
+        const live = new Set(scene.map((e) => e.id));
+        for (const e of scene) for (const k of ['startBinding', 'endBinding'] as const) if (e[k] && !live.has((e[k] as { elementId: string }).elementId)) e[k] = null;
+        const ops = elementsToOps(state, scene as never, ids, STYLE);
+        const v = validateDimOps(state, ops, ME);
+        expect(v.refused, `round ${round} step ${step}`).toEqual([]);
+        state = foldDim([opRow(10 + step, v.ok)], undefined, state);
+        // saved: the same scene has nothing more to say
+        expect(elementsToOps(state, scene as never, ids, STYLE), `round ${round} step ${step}: second diff`).toEqual([]);
+        // rendered again: every mark sits where the person left it, in the order they left it
+        const again = dimToElements(state, 'day', ids);
+        const where = (list: ReadonlyArray<Record<string, unknown> | EngineElement>): unknown[] => list.filter((e) => typeof e.containerId !== 'string').map((e) => [e.id, e.x, e.y, Array.isArray(e.points) ? e.points : null]);
+        expect(where(again), `round ${round} step ${step}: render`).toEqual(where(scene));
+        expect(elementsToOps(state, again, ids, STYLE)).toEqual([]);
+      }
+    }
+  });
+
+  it('3. a label of an arrow that runs left or up sits at the middle of its points', () => {
+    const state = fold(opRow(2, [add({ id: ULID(1), kind: 'arrow', x: 500, y: 400, z: 'V', points: [0, 0, -200, -100], label: 'back' })]));
+    const [arrow, label] = dimToElements(state, 'day', idTable());
+    expect(arrow).toMatchObject({ x: 500, y: 400, width: 200, height: 100 });
+    expect(label).toMatchObject({ text: 'back', x: 400, y: 350 });
+    // and a shape's label at the middle of its box
+    const [, l2] = dimToElements(fold(opRow(2, [add({ id: ULID(2), kind: 'rect', x: 10, y: 20, z: 'V', w: 100, h: 40, label: 'r' })])), 'day', idTable());
+    expect(l2).toMatchObject({ x: 60, y: 40 });
+  });
+
+  it('4. a very long stroke does not throw; points or text over the write limits draw as the fallback box', () => {
+    const pts = (n: number): number[] => Array.from({ length: n }, (_, i) => (i % 2 ? -i : i));
+    const big = { ...emptyDimState(DIM), nodes: new Map([[ULID(1), { node: { id: ULID(1), kind: 'stroke', x: 0, y: 0, z: 'V', points: pts(400_000) }, by: { cls: 'human' as const, principal: 'p' }, hsid: null, addedSeq: 2 }]]) };
+    const els = dimToElements(big, 'day', idTable());
+    expect(els.map((e) => [e.type, e.text])).toEqual([['rectangle', undefined], ['text', dimFallbackLabel('stroke')]]);
+    expect(els[0]!.points).toBeUndefined();
+    const atLimit = fold(opRow(2, [add({ id: ULID(2), kind: 'stroke', x: 0, y: 0, z: 'V', points: pts(DIM_LIMITS.points) }), add({ id: ULID(3), kind: 'text', x: 0, y: 0, z: 'W', text: 'x'.repeat(DIM_LIMITS.text) })]));
+    expect(dimToElements(atLimit, 'day', idTable()).map((e) => e.type)).toEqual(['freedraw', 'text']);
+    const over = fold(opRow(2, [add({ id: ULID(2), kind: 'arrow', x: 0, y: 0, z: 'V', points: pts(DIM_LIMITS.points + 2) }), add({ id: ULID(3), kind: 'text', x: 0, y: 0, z: 'W', text: 'x'.repeat(DIM_LIMITS.text + 1) }), add({ id: ULID(4), kind: 'rect', x: 0, y: 0, z: 'X', w: 5, h: 5, label: 'y'.repeat(DIM_LIMITS.label + 1) })]));
+    const out = dimToElements(over, 'day', idTable());
+    expect(out.map((e) => [e.type, e.text])).toEqual([['rectangle', undefined], ['text', 'kind arrow'], ['rectangle', undefined], ['text', 'kind text'], ['rectangle', undefined]]);
+    expect(JSON.stringify(out)).not.toMatch(/xxxx|yyyy/);
+  });
+
+  it('5. a containerId that names nothing is no container: a stored text is not deleted, a new one is stored', () => {
+    const state = fold(opRow(2, [add({ id: ULID(1), kind: 'text', x: 5, y: 5, z: 'V', text: 'kept' }), add({ id: ULID(2), kind: 'rect', x: 0, y: 0, z: 'W', w: 50, h: 50 })]));
+    const ids = idTable();
+    const els: Array<Record<string, unknown>> = dimToElements(state, 'day', ids).map((e) => (e.type === 'text' ? { ...e, containerId: 'nowhere' } : e));
+    expect(elementsToOps(state, els as never, ids, STYLE)).toEqual([]);
+    els.push({ id: 'new-t', type: 'text', x: 9, y: 9, text: 'new', containerId: 'gone-container' });
+    els.push({ id: 'self', type: 'text', x: 1, y: 1, text: 'self', containerId: 'self' });
+    els.push({ id: 'on-text', type: 'text', x: 2, y: 2, text: 'on a text', containerId: ids.engineOf(ULID(1)) });
+    els.push({ id: 'dead', type: 'rectangle', x: 0, y: 0, width: 5, height: 5, isDeleted: true });
+    els.push({ id: 'on-dead', type: 'text', x: 3, y: 3, text: 'on a deleted mark', containerId: 'dead' });
+    const ops = elementsToOps(state, els as never, ids, STYLE) as Array<{ type: string; node: { text: string } }>;
+    expect(ops.map((o) => [o.type, o.node.text])).toEqual([['add', 'new'], ['add', 'self'], ['add', 'on a text'], ['add', 'on a deleted mark']]);
+    // a real container still takes it as its label
+    const bound = [...dimToElements(state, 'day', ids), { id: 'lab', type: 'text', x: 0, y: 0, text: 'label', containerId: ids.engineOf(ULID(2)) }];
+    expect(elementsToOps(state, bound as never, ids, STYLE)).toEqual([{ type: 'update', id: ULID(2), patch: { label: 'label' } }]);
+  });
+
+  it('6. PINNED: three disagreements with normal.ts that the wiring pass must resolve on purpose', () => {
+    const state = fold(opRow(2, [add({ id: ULID(1), kind: 'diamond', x: 0, y: 0, z: 'V', w: 9, h: 9, fill: 'lemon' }), add({ id: ULID(2), kind: 'arrow', x: 0, y: 0, z: 'W', points: [0, 0, 5, 5], head: 'both' }), add({ id: ULID(3), kind: 'arrow', x: 0, y: 0, z: 'X', points: [0, 0, 5, 5], head: 'none' })]));
+    const [diamond, both, none] = dimToElements(state, 'day', idTable());
+    // (a) this map emits a diamond; normal.ts would remove it
+    expect(diamond!.type).toBe('diamond');
+    expect(BOARD_TYPES.has('diamond')).toBe(false);
+    // (b) this map fills a diamond; normal.ts would paint the fill out
+    expect(diamond!.backgroundColor).not.toBe('transparent');
+    expect(FILLABLE.has('diamond')).toBe(false);
+    expect(normalOf({ type: 'diamond' }, { line: 'ink', fill: 'lemon' }, 'day').backgroundColor).toBe('transparent');
+    // (c) this map draws head `both` and `none`; normal.ts forces one end head on every arrow
+    expect([both!.startArrowhead, both!.endArrowhead, none!.startArrowhead, none!.endArrowhead]).toEqual(['arrow', 'arrow', null, null]);
+    expect(normalOf({ type: 'arrow' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow' });
+  });
+
+  it('7. a mark placed next to equal, malformed and exhausted order keys gets a legal key and never throws', () => {
+    const top = 'z'.repeat(DIM_LIMITS.z);
+    const rectAt = (n: number, z: unknown): unknown => add({ id: ULID(n), kind: 'rect', x: 0, y: 0, z, w: 5, h: 5 });
+    const fresh = (n: number): Record<string, unknown> => ({ id: `f${n}`, type: 'ellipse', x: 0, y: 0, width: 5, height: 5 });
+    const zsOf = (ops: DimOp[]): unknown[] => ops.map((o) => (o.type === 'add' ? (o.node as { z: unknown }).z : o.type === 'update' ? o.patch.z : 'V'));
+    const legal = (ops: DimOp[]): void => {
+      for (const z of zsOf(ops)) {
+        expect(z).toMatch(DIM_Z_PATTERN);
+        expect((z as string).length).toBeLessThanOrEqual(DIM_LIMITS.z);
+      }
+    };
+    // equal keys, a malformed string and a number: one new mark in every gap
+    const state = fold(opRow(2, [rectAt(1, 'V'), rectAt(2, 'V'), rectAt(3, 'V'), rectAt(4, 'not a key!'), rectAt(5, 42)]));
+    const ids = idTable();
+    const els = dimToElements(state, 'day', ids);
+    const scene = [fresh(0), ...els.flatMap((e, i) => [e, fresh(i + 1)])];
+    const ops = elementsToOps(state, scene as never, ids, STYLE);
+    expect(ops.filter((o) => o.type === 'add')).toHaveLength(6);
+    legal(ops);
+    const v = validateDimOps(state, ops, ME);
+    expect(v.refused).toEqual([]);
+    // one diff is enough: the stored order is now the order on screen
+    const next = foldDim([opRow(3, v.ok)], undefined, state);
+    expect(elementsToOps(next, scene as never, ids, STYLE)).toEqual([]);
+    expect(dimToElements(next, 'day', ids).map((e) => e.id)).toEqual(scene.map((e) => e.id));
+    // exhausted: nothing fits above the top key, so the mark reuses it (ties are ordered by id) instead of throwing
+    const full = fold(opRow(2, [rectAt(1, 'V'), rectAt(2, top)]));
+    const ids2 = idTable();
+    const onTop = [...dimToElements(full, 'day', ids2), fresh(9)];
+    const last = elementsToOps(full, onTop as never, ids2, STYLE);
+    expect(zsOf(last)).toEqual([top]);
+    expect(validateDimOps(full, last, ME).refused).toEqual([]);
+    const between = [dimToElements(full, 'day', ids2)[0]!, fresh(8), dimToElements(full, 'day', ids2)[1]!];
+    legal(elementsToOps(full, between as never, ids2, STYLE));
+    const src = readFileSync(path.join(ROOT, 'src', 'board', 'dim-map.ts'), 'utf8');
+    expect(src).not.toMatch(/dimZBetween/);
+    expect(src).toMatch(/dimZPlace\(/);
   });
 });
