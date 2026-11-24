@@ -41,6 +41,17 @@ components:
       - test/app-bundle.test.ts
   mod-host:
     description: >-
+      Stage cleanup (security triage): control.ts modNames no longer truncates
+      in silence. Up to MAX_PICKUP_MODS names it returns every mod directory as
+      before; above that it first skips names that hold neither a pinned
+      snapshot nor a staged card nor any regular file of their own (a pause
+      marker or a start / uninstall request: a legacy format-1 install keeps
+      its markers under mods/gnomon.<name>/ with no pin there), by listing and
+      lstat only, so leftover directories
+      cannot push a real mod out of the pickup scans, and if real mods alone
+      still exceed the cap it logs one warning per home through an optional
+      Paradigm-logger-shaped port (PickupOptions.logger; the daemon wires none
+      today, as with the supervisor's port).
       TD-2026-10-20-514: the uninstall card shows its grant.uninstall row in
       detail.rootRows, prepares it (pin still effective) and commits it via
       appendSignedGrantRows: ONE presence; a dropped request expires the card.
