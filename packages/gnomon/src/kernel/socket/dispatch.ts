@@ -544,7 +544,7 @@ export const HUMAN_DEVICE_VERB_MILESTONES: Readonly<Record<string, string>> = Ob
 export interface ModRelayPort {
   /** relayedFor.principalClass (Aegis M1): the caller's §5 class, for the host's K3 focus join; never forwarded to the mod */
   view(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; viewId: string; input: unknown }): Promise<unknown>;
-  command(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  command(relayedFor: { principal: string; connId: string; principalClass: string; surface: 'gui' | 'cli' }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
   /** full for the human class; counts only otherwise (F4) */
   status(full: boolean): Record<string, unknown>;
 }
@@ -914,7 +914,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       }
       const q = p as Record<string, unknown>;
       // Aegis M1: the class rides with the principal, so the host joins a focus only for a caller entitled to it
-      const relayedFor = { principal: s.principal!, connId: s.connId, principalClass: cls };
+      // S1.2 C2: the surface is derived HERE from the connection's credential, never from params
+      const relayedFor = { principal: s.principal!, connId: s.connId, principalClass: cls, surface: s.credential === 'gui' ? ('gui' as const) : ('cli' as const) };
       try {
         return await (m === 'mod.view' ? o.mods.view(relayedFor, { name: String(q.name), viewId: String(q.viewId), input: q.input ?? null }) : o.mods.command(relayedFor, { name: String(q.name), commandId: String(q.commandId), args: q.args ?? null }));
       } catch (err) {

@@ -84,7 +84,7 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import os from 'node:os';
 import * as path from 'node:path';
-import { isModId, MOD_ABI_ID, MOD_ABI_V1, type RelayedFor } from '@a-company/gnomon-contracts';
+import { isModId, MOD_ABI_ID, MOD_ABI_V1, pickRelayedFor, type RelayedFor, type ToolRelayedFor } from '@a-company/gnomon-contracts';
 import { ownsModKind } from '../manifest/mod-kind.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { registerSeams } from '../internal-seams.js';
@@ -102,7 +102,7 @@ import type { ChildLaunchPlan } from '../sandbox/transport.js';
 import { sanitizeModBlock } from './block.js';
 import { RowFold } from './fold.js';
 import { ModChannel, ModRpcError } from './channel.js';
-import { declaredEffects, effectsFor, methodEffect, type CallContext } from './effects.js';
+import { declaredEffects, effectsFor, methodEffect, type CallContext, type CallStamp } from './effects.js';
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
@@ -155,6 +155,8 @@ export interface KernelCallRequest {
   hsid?: string;
   /** the bound host → mod call (absent ⇒ idle); the bridge's per-call append budget keys on it */
   callId?: string;
+  /** S1.2 C1: the host's stamp of the bound command or tool call (absent ⇒ idle, view or host-initiated); never mod input */
+  stamp?: CallStamp;
 }
 
 export interface ModHostOptions {
@@ -772,7 +774,9 @@ export class ModHost {
     if (!view) throw new ModRefusal('UNDECLARED', `${name} declares no view ${viewId}`, { name, viewId });
     const t0 = this.#now();
     if (opts.relayedFor) input = this.#composeRelayedInput(r, input, opts.relayedFor, opts.relayedClass ?? null);
-    const out = (await this.#call(name, 'view.render', { viewId, input: input ?? null, width: opts.width ?? 80, prefs: opts.prefs ?? {}, ...(opts.relayedFor ? { relayedFor: opts.relayedFor } : {}) }, { kind: 'view' }, opts)) as Record<string, unknown>;
+    // C2 (G-MOD-13): exactly the view.render fields, whatever the caller object holds
+    const rf = opts.relayedFor ? pickRelayedFor('view.render', opts.relayedFor as unknown as Record<string, unknown>, false) : null;
+    const out = (await this.#call(name, 'view.render', { viewId, input: input ?? null, width: opts.width ?? 80, prefs: opts.prefs ?? {}, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'view' }, opts)) as Record<string, unknown>;
     const s = sanitizeModBlock(out?.block, name);
     this.#emit('mod.view.rendered', { name, slot: view.slot, ms: this.#now() - t0 });
     return { label: `mod:${name}`, dev: r.dev, block: s.block, nodes: s.nodes, flags: s.flags };
@@ -829,20 +833,41 @@ export class ModHost {
   async runCommand(name: string, commandId: string, args: unknown, opts: CallOptions = {}): Promise<unknown> {
     const r = this.#require(name);
     if (!r.manifest.provides?.commands?.some((c) => c.id === commandId)) throw new ModRefusal('UNDECLARED', `${name} declares no command ${commandId}`, { name, commandId });
-    const out = (await this.#call(name, 'command.run', { commandId, args: args ?? null, ...(opts.relayedFor ? { relayedFor: opts.relayedFor } : {}) }, { kind: 'command' }, opts)) as Record<string, unknown>;
+    // C1/C2: one pickRelayedFor output is both what the mod is sent and what its rows are stamped with
+    const rf = opts.relayedFor ? pickRelayedFor('command.run', opts.relayedFor as unknown as Record<string, unknown>, false) : null;
+    const out = (await this.#call(name, 'command.run', { commandId, args: args ?? null, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', ...(rf ? { stamp: { relayedFor: rf } } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 
   /** The `mod.command` client relay (a GUI caller additionally needs a user gesture — the endpoint's rule, slice 2). */
-  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; principalClass?: string }): Promise<unknown> {
-    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId } });
+  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; surface: 'gui' | 'cli'; principalClass?: string }): Promise<unknown> {
+    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId, surface: req.surface } });
   }
 
   /** `tool.call` — effects in force = that tool's declared effects (∩ the dev cap). */
-  async callTool(name: string, tool: string, input: unknown, opts: CallOptions & { hsid?: string } = {}): Promise<unknown> {
+  /**
+   * C2: may this mod learn which session and turn called it? Only a `gnomon`-published mod (the loader enforces
+   * publisher gnomon ⇔ first-party tier, both ways) or one granted `log.read`. Anything else gets neither `hsid`
+   * nor `turn`, and no `causes` on its rows (a turn ref holds the session id).
+   */
+  #identityAllowed(r: Running): boolean {
+    return r.manifest.publisher === 'gnomon' || feedAccessOf(r.manifest.requires?.capabilities).base;
+  }
+
+  /**
+   * `toolRelayedFor` is the full HOST-KNOWN value of the calling session (the bridge supplies it from S1.4); it is
+   * never read from tool input. A value without a principal, a tool surface and an agent label is not sent and not
+   * stamped: rows the mod appends in that call then fold as the unknown hand, never as a human or a named agent.
+   */
+  async callTool(name: string, tool: string, input: unknown, opts: CallOptions & { hsid?: string; toolRelayedFor?: ToolRelayedFor } = {}): Promise<unknown> {
     const r = this.#require(name);
     if (!r.manifest.provides?.tools?.some((t) => t.name === tool)) throw new ModRefusal('UNDECLARED', `${name} declares no tool ${tool}`, { name, tool });
-    const out = (await this.#call(name, 'tool.call', { name: tool, input: input ?? null }, { kind: 'tool', tool, ...(opts.hsid ? { hsid: opts.hsid } : {}) }, opts)) as Record<string, unknown>;
+    const identity = this.#identityAllowed(r);
+    const picked = opts.toolRelayedFor ? pickRelayedFor('tool.call', opts.toolRelayedFor as unknown as Record<string, unknown>, identity) : null;
+    // fail closed: a partial tool stamp vouches for nobody
+    const rf = picked && picked.principal && picked.surface && picked.agent ? picked : null;
+    const stamp: CallStamp | null = rf ? { relayedFor: rf, ...(identity && rf.turn ? { causes: [rf.turn] } : {}) } : null;
+    const out = (await this.#call(name, 'tool.call', { name: tool, input: input ?? null, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'tool', tool, ...(opts.hsid ? { hsid: opts.hsid } : {}), ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 
@@ -953,7 +978,8 @@ export class ModHost {
         }
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
         const callId = typeof params.callId === 'string' ? params.callId : undefined;
-        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}) }) };
+        const stamp = (ctx.kind === 'command' || ctx.kind === 'tool') && ctx.stamp ? ctx.stamp : undefined;
+        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}) }) };
       }
     } catch (err) {
       if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {
