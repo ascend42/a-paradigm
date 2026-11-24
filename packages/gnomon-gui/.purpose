@@ -58,7 +58,20 @@ components:
       package (vendored MIT notices where the tarball ships none; an unknown
       licence stops the build). Budget 4 MB raw (now 1.5 MB, 435 KB gzipped);
       `--check` names an unpinned board file, a sourcemap or an over-budget
-      chunk. Known and left for later slices: the image tool still builds
+      chunk. Review round 1 (2026-11-24): mountBoard resolves only once the
+      engine has cleared its loading flag (a mark added in the same tick used
+      to be wiped moments later); an engine error after mount goes to the
+      handle's onError listeners or, with none, to reportError; the handle
+      says isAlive() false after a crash or unmount and its methods then
+      throw; loadBoard fails after LOAD_TIMEOUT_MS. Root overrides scoped
+      under @excalidraw/excalidraw (nanoid 3.3.20, lodash-es 4.18.1, katex
+      0.19.1) keep a fresh install at 0 audit findings. Probe's
+      test/board-hardening.test.ts pins the patch manifest by id, file and
+      count, scans the shipped chunk by stricter rules than the P12 scanner
+      and proves the served page has no loader that could reach the chunk.
+      The kernel's bundle scan pins the chunk's HTML sinks by exact count
+      (packages/gnomon/test/web-units.test.ts).
+      Known and left for later slices: the image tool still builds
       data: URLs (images are refused until S2); React and Excalidraw carry
       HTML sinks (the kernel's bundle scan exempts board/* from that one
       clause); react-style-singleton can inject a <style> for a modal
@@ -74,6 +87,7 @@ components:
       - test/board-loader.test.ts
       - test/board-csp.test.ts
       - test/board-preview.test.ts
+      - test/board-hardening.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
@@ -1161,6 +1175,15 @@ components:
       host (the GUI {focus:{hsid}} joined to a fixture K1 slice by hsid,
       other keys ignored) through the REAL mod model
       (src/preview/paradigm-context.ts), drawn by the real mod-panel path.
+      Boards S1.0: fixture pages are served under the kernel's rule 6
+      Content-Security-Policy (previewCsp, compared with the kernel's in
+      test/board-preview.test.ts); the page POSTs every
+      securitypolicyviolation to /diag, which the server keeps (bounded,
+      truncated, control characters stripped) and lists at GET /diag with a
+      CSP row count; /board/* serves the #gui-board chunk from a fresh
+      scripts/board-build.mjs build by its exact pinned-tree names. Fixture
+      `board` mounts the chunk over the transcript through the real loader
+      and posts a `board ready` row once its marks have stayed.
     path: src/preview/
     type: module
     tags: [gnomon, gui, dev-tool, preview]
