@@ -429,6 +429,55 @@ components:
     oracles: [G-GUI-04]
     tests:
       - test/mod-command.test.ts
+  gui-dim-live:
+    description: >-
+      #gui-dim-live (boards S1.3 pass P3a, s1.3-draft point 6 write path;
+      Mika's open items 1 and 2; Aegis B3) - the live loop of one open
+      dimension as a PURE controller: no DOM, no socket and no timer; the
+      clock, the sender, the confirmed state (#gui-dim-store stateAt) and the
+      id minter are injected. Events: local(ops, gesture), ack(id, outcome),
+      row(row), timeout(), plus link(up) and undo(gesture). view() is the
+      confirmed fold plus every pending batch folded as rows stamped as me.
+      One send is in flight per dimension; queued edits coalesce into batches
+      of at most 64 ops (an undo is never merged). A batch is confirmed when
+      the row with the acked seq arrives, in either order; a row carrying
+      exactly the in-flight ops under my stamp confirms at once. A refusal,
+      or the injected clock passing DIM_LIVE_TIMEOUT_MS with no ack and no
+      row, drops the batch, validates later pending batches again against the
+      new view and yields ONE notice naming the field and the code, with the
+      count of ops lost: a mark never vanishes without a line. Link down:
+      nothing is sent, a new edit is refused with a notice, pending rolls
+      back at the timeout (no offline queue in S1.3). status() answers the
+      keep line's state; nextDeadline() tells the caller when to tick. Undo
+      keeps only this page's own confirmed rows (at most 64) and sends the
+      inverse planned by #gui-dim-undo like any edit. dimAckOf reads the
+      relay's result. Stated bounds: 16 pending batches, 256 early rows, 64
+      undo entries. Nothing in the app imports it yet.
+    path: src/core/dim-live.ts
+    type: module
+    tags: [gnomon, gui, dimension, pure]
+    tests:
+      - test/dim-live.test.ts
+  gui-dim-undo:
+    description: >-
+      #gui-dim-undo (boards S1.3 pass P3a, s1.3-draft point 6 undo; Aegis B3)
+      - undo as ops; the engine's own history is bypassed. PURE.
+      invertDimOps(before, ops, mint): add inverts to delete, update to an
+      update with the prior values (null for a key that was absent), move to
+      the negated move, and delete to an add with a NEW id (ids are never
+      reused) plus updates of every from, to and parent that pointed at the
+      old id; every later mention of the old id is renamed, and re-adds come
+      first (frames, marks, arrows). An op the fold skipped has no inverse.
+      planUndo is all or nothing: the inverse goes through validateDimOps
+      against the board as it stands and is refused whole when any op fails,
+      when it is over 64 ops, or when it undoes more than 4 rows. Stated:
+      undoing a delete of an agent's mark re-adds it as the person's own.
+    path: src/core/dim-undo.ts
+    type: module
+    tags: [gnomon, gui, dimension, undo, pure]
+    tests:
+      - test/dim-undo.test.ts
+      - test/dim-live.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
