@@ -68,10 +68,11 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
           const { png, facts } = (await shootLeaf({ chrome, url: leafUrl(p.url, state, theme), ...size, clip: true })) as { png: Buffer; facts: Facts };
           expect(facts.state, name).toBe('open');
           expect(facts.stock, name).toEqual([]);
-          // the fixture's hands are on the board: 3 seals (two scraps and a text), 2 stubs with their words, your
-          // pins, and five hands in the foot (review round 2: a golden of a board with none of them once passed)
-          expect(facts.overlay, name).toEqual({ seals: 3, stubs: 2, stubWords: ['kind live:session', 'kind allow:approved-by-you'], pins: 2, textboxes: 1 });
-          if (size.width === 1440) expect(facts.foot, name).toBe('you 5 · A Arky 3 · L Luna 1 · Q Quill 1 · unknown hand 1'); // each agent's seal letter, then its name
+          // the fixture's hands are on the board, read from the fold's `by` (S1.3): 3 seals (two scraps and a text),
+          // 2 stubs with their words, your 3 pins (a filled, labelled rect is a sticky: the broker is one), and five
+          // hands in the foot (review round 2: a golden of a board with none of them once passed)
+          expect(facts.overlay, name).toEqual({ seals: 3, stubs: 2, stubWords: ['kind live:session', 'kind allow:approved-by-you'], pins: 3, textboxes: 1 });
+          if (size.width === 1440) expect(facts.foot, name).toBe('you 5 · A arky 3 · L luna 1 · Q quill 1 · unknown hand 1'); // each agent's seal letter, then its id (agents have no display name yet)
           if (process.env.GNOMON_UPDATE_GOLDENS === '1') {
             if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true });
             writeFileSync(path.join(DIR, `${name}.png`), png);

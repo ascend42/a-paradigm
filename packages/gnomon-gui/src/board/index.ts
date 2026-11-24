@@ -402,7 +402,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
               continue;
             }
             fresh.set(el.id, sig);
-            next.push({ ...done, version: (have?.version ?? 0) + 1, versionNonce: Math.floor(Math.random() * 2 ** 31), index: have?.index ?? null, seed: have?.seed ?? 1, isDeleted: false });
+            next.push({ ...done, version: (have?.version ?? 0) + 1, versionNonce: crypto.getRandomValues(new Uint32Array(1))[0]! >>> 1, index: have?.index ?? null, seed: have?.seed ?? 1, isDeleted: false });
           }
           // a mark drawn since the last render stays on top; anything else the state does not hold is gone
           for (const el of scene.values()) if (!inTarget.has(el.id) && !el.isDeleted && keepAsIs(el)) next.push(el);

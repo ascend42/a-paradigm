@@ -37,7 +37,7 @@ import { colourLiterals, pixelColours } from '../scripts/board-colours.mjs';
 import { COLOUR_ALLOWLIST, PATCHES } from '../scripts/board-patches.mjs';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../src/core/board.js';
 import { gnomonBoardKeyActions, SKIN_ALPHA, skinOf } from '../src/board/skin.js';
-import { contentColours, differingShare, golden, GOLDENS, isMixOf, nearReserved, RESERVED, SHOTS, strayPixels, THEMES, type Theme } from './board-golden.js';
+import { contentColours, differingShare, golden, GOLDENS, isMixOf, isMixOf3, MATRIX_SHOTS, nearReserved, RESERVED, SHOTS, strayPixels, THEMES, ZOOM_SHOT, type Theme } from './board-golden.js';
 import { RESKIN_CLEAN } from './board-reskin-sample.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -158,7 +158,7 @@ describe('G-DDL-07 no colour literal near a reserved colour outside the per-patc
 
 describe('G-DDL-07 the day and night goldens (decoded pixels)', () => {
   const ink = [...THEMES.flatMap((t) => SHOTS.map((s) => `${s}-${t}`)), 'narrow-day'];
-  const names = [...ink, 'colours-day', 'colours-night'];
+  const names = [...ink, 'colours-day', 'colours-night', ...MATRIX_SHOTS, ZOOM_SHOT];
   const themeOf = (name: string): Theme => (name.endsWith('-night') ? 'night' : 'day');
 
   it('the goldens are exactly the expected set', () => {
@@ -187,6 +187,35 @@ describe('G-DDL-07 the day and night goldens (decoded pixels)', () => {
     for (const c of allowed) expect(colours.get(c) ?? 0, `${name} ${c}`).toBeGreaterThan(20);
     // and without the allowlist the same capture fails: the rule sees content colours
     expect(strayPixels(png, theme).stray.length).toBeGreaterThan(5);
+  });
+
+  it.each(MATRIX_SHOTS)('%s: every kind and style per hand; yours are solid, an agent\'s and the unknown hand\'s are dashed (a golden once recorded every agent mark as yours)', (name) => {
+    const theme = themeOf(name);
+    const png = golden(name);
+    expect(png.width).toBe(1280);
+    expect(strayPixels(png, theme, contentColours(theme), isMixOf3).stray).toEqual([]);
+    const ground = (GROUND as Record<Theme, string>)[theme];
+    const at = (x: number, y: number): string => `#${[0, 1, 2].map((c) => png.data[(y * png.width + x) * png.channels + c]!.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+    /** ground-coloured pixels along a horizontal run: the gaps of a dashed edge */
+    const gaps = (x0: number, x1: number, y: number): number => Array.from({ length: x1 - x0 }, (_, i) => at(x0 + i, y)).filter((c) => c === ground.toUpperCase()).length;
+    // the three columns start at 0, 424 and 848. Per column: the first rect's top edge (y 136), the plain ellipse's
+    // middle row is skipped (curved); the diamond is read on the first arrow's line (y 300) and the rect's edge
+    for (const [dx, dashed] of [[0, false], [424, true], [848, true]] as const) {
+      expect(gaps(dx + 20, dx + 96, 136) > 0, `${name}: rect edge at column ${dx}`).toBe(dashed);
+      expect(gaps(dx + 20, dx + 96, 300) > 0, `${name}: headless arrow at column ${dx}`).toBe(dashed);
+      expect(gaps(dx + 120, dx + 180, 300) > 0, `${name}: arrow at column ${dx}`).toBe(dashed);
+    }
+    // a diamond and both arrowheads are drawn: the capture is not the same with them painted out
+    const colours = pixelColours(png) as Map<string, number>;
+    expect(colours.size).toBeGreaterThan(40);
+  });
+
+  it('zoom400-day: a stroke drawn at 400% is on the board after its round trip through whole units', () => {
+    const png = golden(ZOOM_SHOT);
+    expect(strayPixels(png, 'day')).toEqual({ stray: [], reserved: [] });
+    const colours = pixelColours(png) as Map<string, number>;
+    const inked = [...colours].filter(([c]) => c !== (GROUND as Record<Theme, string>).day.toUpperCase() && c !== (GROUND as Record<Theme, string>).day).reduce((n, [, k]) => n + k, 0);
+    expect(inked).toBeGreaterThan(4000); // a stroke some 900px long and 8px wide
   });
 
   it('the states differ from the plain marks: selection, the marquee, the binding highlight and the guides were drawn', () => {

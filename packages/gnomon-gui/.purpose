@@ -86,7 +86,8 @@ components:
       out and 100%, and finalize run from a key), key-dialogs-removed,
       key-tools-removed (the engine's letter and number tool keys; Space
       still pans), text-size-keys-removed; api-run-action (one API method
-      that runs a registered action by name, used for zoom, undo and redo).
+      that runs a registered action by name, used for zoom; undo and redo
+      left it in S1.3).
       One text face: font-family-table, font-defaults, font-metrics,
       font-family-string and font-registry-empty make JetBrains Mono at 13.5
       the only family, registered from the bundle's own
@@ -228,8 +229,8 @@ components:
       in ui/board-leaf.ts) so its own double-click starts no text. Engine: authorship is the handle's record (above); every drop is
       refused, with or without files; patch paste-types-filtered removes
       elements that are not board types before the engine commits a paste or
-      an insert; the api-run-action patch carries its closed list of six
-      actions; a pasted lock and stock arrowheads are normalised away. Each
+      an insert; the api-run-action patch carries its closed list of
+      actions (six in S1.1, four since S1.3); a pasted lock and stock arrowheads are normalised away. Each
       is tested with real pointer and key events over the DevTools protocol
       (test/board-leaf-golden.test.ts) or replayed in the P12 harness, which
       now paces synthetic moves by animation frame and reports which engine
@@ -266,47 +267,87 @@ components:
       adds no element and no img node. R6: touchmove, touchend and
       touchcancel are stopped while yielded; the engine's keyup and Safari
       gesture listeners are on the document and are NOT stopped.
-      For S1.3 (recorded from round 2, not built): a copied sticky loses its
-      pin (Mika: a defect before first dogfood; proposal for Aegis: carry
-      kind sticky only, rectangles only, through a copy, never an author or
-      a stub); the wake hold also swallows a drag, a wheel or a draw
-      begun shortly after waking (hold only a second press that lands
-      within the hold and about 4px of the first; let a wheel, a press
-      elsewhere and anything after a key press through); opening the tray by Enter should
-      put focus on its chosen line well; a custom colour in use has no
-      chosen ring; the too-short and crashed lines at 424px; a real-paste
-      test runs on CI since the P12 probe pastes over the DevTools protocol
-      in Chrome and Edge (Windows and Linux are verified by CI only);
-      prune the authorship record on delete; per-board refusal listeners;
-      pasted styling is normalised after the engine's commit and can paint
-      for one frame; the engine's document-level keyup and gesture
-      listeners while a card has the keys.
-      For S1.3 and S1.4 (recorded from the review, not built): the sticky is
-      not yet the specimen's scrap; whether a new sticky goes straight into
-      its text; the tray covers the board at a 1024 window; dash lengths by
-      a counted patch before S1.4, and a small agent mark must not render as
-      [ ] (the night key shape); screen-reader names in the hands foot;
-      hover seals, the low-zoom ring and the scrap shadow (Mika timed the
-      overlay's frames with 208 overlay nodes in headless Chromium on the
-      founder's Mac; the figure is in her review, not here, and WKWebView
-      has not been timed); refusal listeners in skin.ts are module-wide, so
-      two boards on one page would hear each other; a copy of a sticky is a
-      plain filled rectangle with no pin (the copy is not in the record).
-      For S1.3 (carried, not built): the binding highlight is under 3:1;
-      Alt-drag duplicates a mark while Cmd+D is off; drawing by keyboard
-      alone is impossible; Luna's open questions (square or rounded
-      handles, stroke taper, sticky text size, whether layer order,
-      grouping and alignment are gone on purpose); the stub's fixed line
-      does not fit the design's 156 by 52 minimum; contracts' dimKindName
-      answers `unknown` for a kind that fails the grammar, a word the stub
-      design forbids; the refusal lines are proposed copy, not the design's.
+      Boards S1.3, pass P3b-1 (the handle on a folded dimension): the board
+      is a VIEW of a dim-shape:v1 state. handle.render(state) maps with
+      #gui-dim-map, completes every element through normalOf BEFORE the
+      engine sees it, passes the new ones through the engine's own
+      restoreElements (which measures every text), and updates the scene
+      with CaptureUpdateAction.NEVER; an element whose mapped content and
+      engine version are unchanged is kept as it is, and a mark in hand
+      (being drawn, dragged or typed, or changed and not yet reported) is
+      left alone. handle.onEdit(ops, cause) fires once a gesture has ended
+      (pointer-up, a text commit, a delete, a restyle of the selection)
+      with elementsToOps against EXACTLY the state last rendered; `cause`
+      is the trusted pointerup or keydown that ended it, for the leaf's
+      gesture stamp. The signal for "a real edit" is the engine's own
+      element `version` (raised on every mutation and on nothing else),
+      compared with the versions recorded at the last render or report,
+      and only after a person's input since then: render() never fires
+      onEdit (Aegis A1), nor does a selection, a marquee, a pan, a zoom or
+      a hover, also on a board holding a malformed order key. A change
+      that maps to no op (a fallback mark moved) is put back. A delete is
+      never reported for a node the engine could not hold. Engine ids are
+      minted by the handle (`g-<uuid>`), never the node id. Authorship,
+      sticky and stub are read from the rendered state only: the
+      authorship record, add(), BoardMark, undo() and redo() are removed,
+      and a fallback's words have one owner (the leaf's overlay; the map's
+      label is not given to the engine). normal.ts and dim-map.ts agree:
+      diamond is a board type and takes a fill (no rail tool: a stored
+      diamond is drawn and edited); an arrow keeps the heads its `head`
+      says (none, end, both) and normalOf fixes only the head's shape. The
+      engine dashes rectangle, ellipse, diamond and arrow for a hand that
+      is not yours and does NOT dash a stroke, a frame or a text: for
+      those the overlay's seal or hollow pin is always on
+      (core/board-overlay.ts ENGINE_DASHES; test/board-dim.test.ts compares
+      the engine's pixels per kind). Undo: `undo` and `redo` left the key
+      allowlist and patch api-run-action; handle.onUndoKey hands Cmd+Z to
+      the host; the engine still records history for its own captured
+      changes, so the handle empties it at every render and report.
+      handle.setYielded: four counted patches (yield-keyup,
+      yield-gesture-start, -change, -end) make the engine's document-level
+      listeners return at once; refusal listeners and the handle's window
+      listeners are removed at unmount. src/board/simplify.ts fits a new
+      freehand stroke to 1,024 points and 8,192 bytes (half of each limit
+      the mod refuses at) with Ramer-Douglas-Peucker before it is read.
+      The board build's contracts allowlist is content-palette.ts, dim.ts,
+      secret-rules.ts and internal.ts, exactly; the chunk re-exports
+      foldDim and emptyDimState for a page that has only the chunk (the
+      P12 harness). Preview and harness boards are rows folded by foldDim.
+      Goldens added: matrix-day, matrix-night (every kind and style per
+      hand) and zoom400-day (a stroke drawn at 400%: whole-unit rounding
+      shows as short straight runs at that zoom, judged acceptable; the
+      contract is unchanged).
+      Still open for the next passes: paste and copy interception (C8),
+      the leaf's live wiring, the wake hold that swallows a drag or a wheel
+      begun shortly after waking, a real-paste test on CI, the foot of the
+      leaf growing by a few pixels when it holds a seal. Not shown: a
+      stored stroke of a single point (the engine holds no such element).
+      A pen's pressure is not stored, so a stroke re-rendered from the
+      fold has the simulated taper.
+      For S1.4 (recorded from the reviews, not built): opening the tray by
+      Enter should put focus on its chosen line well; a custom colour in
+      use has no chosen ring; the too-short and crashed lines at 424px; the
+      tray covers the board at a 1024 window; whether a new sticky goes
+      straight into its text; dash lengths by a counted patch, and a small
+      agent mark must not render as [ ] (the night key shape);
+      screen-reader names in the hands foot; hover seals, the low-zoom ring
+      and the scrap shadow (Mika timed the overlay's frames with 208
+      overlay nodes in headless Chromium on the founder's Mac; the figure
+      is in her review, not here, and WKWebView has not been timed);
+      refusal listeners in skin.ts are module-wide, so two boards on one
+      page would hear each other (the yielded flag is module-wide too); the
+      binding highlight is under 3:1; Alt-drag duplicates a mark while
+      Cmd+D is off; drawing by keyboard alone is impossible; Luna's open
+      questions (square or rounded handles, stroke taper, sticky text size,
+      whether layer order, grouping and alignment are gone on purpose); the
+      stub's fixed line does not fit the design's 156 by 52 minimum;
+      contracts' dimKindName answers `unknown` for a kind that fails the
+      grammar, a word the stub design forbids; the refusal lines are
+      proposed copy, not the design's; agents have no display name yet (the
+      seal's name is the agent id).
       Known and left for later slices: React and Excalidraw carry HTML sinks
       (the kernel's bundle scan exempts board/* from that one clause);
       react-style-singleton can inject a <style> for a modal popover.
-      S1.3 pass P3a: src/board/dim-map.ts (the pure mapping between a folded
-      dimension and engine elements, built from an allowlist of engine keys)
-      and its goldens have landed as #gui-dim-map. Nothing here imports it
-      yet: src/board/index.ts renders from it in pass P3b.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
@@ -328,6 +369,8 @@ components:
       - test/board-csp.test.ts
       - test/board-preview.test.ts
       - test/board-hardening.test.ts
+      - test/board-dim.test.ts
+      - test/board-simplify.test.ts
   gui-dim-map:
     description: >-
       #gui-dim-map (boards S1.3 pass P3a, s1.3-draft point 5; conditions C4
@@ -357,14 +400,14 @@ components:
       diff, so one diff leaves the stored order equal to the order on screen.
       A patch that names x, y or points of a stroke or arrow restates all
       three in the engine's terms (a pure drag stays a relative move). A text
-      whose containerId names no live carrier is a mark of its own. Three
-      disagreements with normal.ts are pinned by test for the wiring pass:
-      diamond is not in its BOARD_TYPES or FILLABLE, and it forces one end
-      head on every arrow. It writes nothing for a fallback
+      whose containerId names no live carrier is a mark of its own. It
+      agrees with normal.ts since pass P3b (diamond is a board type and
+      takes a fill; an arrow keeps its heads), held by test over the whole
+      kind and style matrix per hand. It writes nothing for a fallback
       mark, a deleted id, an engine type the board does not have or an empty
-      text, and validates nothing (the caller runs validateDimOps). Not
-      imported by src/board/index.ts or the app yet (pass P3b), so the board
-      chunk and the bundle are unchanged.
+      text, and validates nothing (the caller runs validateDimOps).
+      src/board/index.ts renders from it and reports edits with it since
+      pass P3b; the app does not import the board yet.
     path: src/board/dim-map.ts
     type: module
     tags: [gnomon, gui, board, dimension, pure]
