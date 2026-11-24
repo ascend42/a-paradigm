@@ -73,6 +73,9 @@ _pm_lines_off() {
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
+# Warnings from every check accumulate here. Initialised ONCE: a later reset
+# (there used to be one at Check 6) discards the warnings of earlier checks.
+ADVISORY=""
 AUTO_FIXED=""
 AUTO_FIX_COUNT=0
 PARADIGM_AUTO_FIX="${PARADIGM_AUTO_FIX:-0}"
@@ -675,7 +678,6 @@ fi
 
 _pm_mark check6-aspect-advisory
 # --- Check 6: Aspect coverage advisory ---
-ADVISORY=""
 _SEV=$(_check_severity "aspect-advisory" "warn")
 if [ "$_SEV" != "off" ]; then
   HAS_ASPECTS=false
@@ -705,8 +707,9 @@ if [ "$_SEV" != "off" ]; then
     # advisories). Detection above runs unconditionally for data-continuity
     # symmetry with Check 10; only the user-facing emission is gated.
     if [ "$ASPECT_UPDATED" = false ] && [ "$HAS_COMPLIANCE_CLAIMANT" = "true" ]; then
-      ADVISORY="  This project defines ~aspects with code anchors. Check if existing
-  ~aspects need updated anchors or applies-to patterns."
+      ADVISORY="$ADVISORY
+  - (aspects) This project defines ~aspects with code anchors. Check if existing
+    ~aspects need updated anchors or applies-to patterns."
     fi
   fi
 fi
