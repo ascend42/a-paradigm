@@ -1041,7 +1041,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const examples: Record<string, string[]> = {};
             for (const type of Object.keys(counts) as Array<keyof typeof counts>) {
               const symbols = getSymbolsByType(ctx.index, type);
-              examples[type] = symbols.slice(0, 3).map(s => s.symbol);
+              examples[type] = symbols.filter(s => s.declared !== false).slice(0, 3).map(s => s.symbol);
             }
 
             // Detect OS for terminal command guidance

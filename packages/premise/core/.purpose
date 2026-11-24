@@ -29,6 +29,37 @@ features:
       - '#reference-tracker'
       - '#graph-builder'
 components:
+  symbol-counts:
+    description: >-
+      getSymbolCounts in src/symbol-index.ts counts DECLARED symbols only. A reference stub
+      (declared false, created by the aggregator for something a .purpose mentions and nothing
+      declares) is never part of a count a user sees. isDeclared and getUndeclaredCount expose the
+      other side, so paradigm status, paradigm doctor and the MCP status tool report one number per
+      kind and say how many undeclared references were left out. Tests in src/symbol-counts.test.ts.
+      findIsolatedSymbols in src/integrity.ts is the one definition of an isolated symbol used by
+      paradigm integrity, doctor, status and the MCP integrity check. A declared symbol is
+      isolated when it has no edge in or out, and is not a gate named on a portal.yaml route
+      (SymbolEntry.routes, filled by collectGateRoutes), and is not an aspect with an anchor or an
+      applies-to pattern. Edges include bare ids in structured fields (parent, a flow step's
+      component, gate or signal, emits, emitters, and bare entries of the symbol lists), read by
+      structuredReferences in src/aggregator.ts. Tests in src/isolated-symbols.test.ts.
+      splitDeclared separates declared entries from stubs for any list printed beside a total.
+    file: packages/premise/core/src/symbol-index.ts
+    tags:
+      - index
+      - counts
+  double-prefix-tolerance:
+    description: >-
+      resolveSymbol in src/symbol-index.ts collapses a repeated leading prefix before lookup
+      (collapseRepeatedPrefix, all five prefixes), so an id saved in the doubled form by an older
+      index (in .paradigm/graphs, lore entries and decisions) still resolves in ripple, related,
+      navigate, graph-slice roots and the MCP symbol resource. getSymbol stays exact. The CLI and
+      MCP graph builders strip the whole prefix run when matching a saved name. Tests in
+      src/double-prefix-resolve.test.ts.
+    file: packages/premise/core/src/symbol-index.ts
+    tags:
+      - index
+      - compatibility
   aggregator:
     description: '#aggregator: Main aggregation logic — anchors: strings go through the shared #symbol-index parseAnchorString (heading/block section anchors since 7.12.0), and resolveReferences stringifies symbol data WITHOUT the anchors field so a section anchor like docs/x.md#setup never registers a reference to #setup — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011). INDEX_DISCOVERY ({ respectGitignore: true }, T-2026-10-27-003): the default .purpose loader skips gitignored build/release output, so a packages/gnomon/release/Gnomon.app copy is never indexed and never wins duplicate resolution (test: src/index-discovery-gitignore.test.ts).'
   source-loader:

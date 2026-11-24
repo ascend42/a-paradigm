@@ -15,6 +15,7 @@ import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
 import { listProjectFiles, hasDirSegment, describeFileListSource, type ProjectFileList } from '../../core/project-files.js';
+import { collectProjectCounts, countLoreEntries, describeGateCounts, type ProjectCounts } from '../../core/project-counts.js';
 import {
   computeRepeatFailureRate,
   NO_EXERCISE_WRITER_NOTICE,
@@ -215,6 +216,16 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // project's files filters this instead of walking the tree itself.
   let projectFiles: ProjectFileList | undefined;
   const getProjectFiles = (): ProjectFileList => (projectFiles ??= listProjectFiles(cwd));
+  // The shared numbers (#project-counts): the same module `paradigm status` prints
+  // from, so the two commands cannot disagree. Null when the index cannot be built.
+  let projectCounts: Promise<ProjectCounts | null> | undefined;
+  let projectCountsError: string | undefined;
+  const getProjectCounts = (): Promise<ProjectCounts | null> =>
+    (projectCounts ??= collectProjectCounts(cwd, getProjectFiles()).catch((e: unknown) => {
+      // Built once per run. The context audit reports this; it does not try again.
+      projectCountsError = e instanceof Error ? e.message : String(e);
+      return null;
+    }));
 
   // ──────────────────────────────────────────────────────────────────────
   // Core health checks (skipped when --context is specified)
@@ -582,7 +593,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           results.push({
             name: 'portal.yaml',
             status: 'ok',
-            message: `Valid (${gateCount} gates, ${routeCount} routes)`,
+            message: `Valid (${gateCount} gate${gateCount === 1 ? '' : 's'} in this file, ${routeCount} routes)`,
           });
         } else {
           results.push({
@@ -598,6 +609,20 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           status: 'error',
           message: `Invalid YAML: ${(e as Error).message}`,
           fix: 'Check YAML syntax in portal.yaml',
+        });
+      }
+    }
+
+    // Gates across the whole project, counted where `paradigm status` counts them:
+    // a gate may be declared in the root portal.yaml, in a package's portal.yaml,
+    // or in a .purpose `gates:` section, and counts once.
+    {
+      const counts = await getProjectCounts();
+      if (counts && counts.gates.total > 0) {
+        results.push({
+          name: 'Gates',
+          status: 'ok',
+          message: `${describeGateCounts(counts.gates)}; same count as paradigm status`,
         });
       }
     }
@@ -723,12 +748,12 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
-    // Check lore health
+    // Check lore health. Entries are `.lore` files under .paradigm/lore/entries/<date>/.
     const loreDir = path.join(cwd, '.paradigm', 'lore');
     if (fs.existsSync(loreDir)) {
       try {
-        const loreFiles = fs.readdirSync(loreDir).filter((f) => f.endsWith('.yaml'));
-        if (loreFiles.length === 0) {
+        const loreEntries = countLoreEntries(cwd) ?? 0;
+        if (loreEntries === 0) {
           results.push({
             name: 'Lore entries',
             status: 'warn',
@@ -739,7 +764,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           results.push({
             name: 'Lore entries',
             status: 'ok',
-            message: `${loreFiles.length} lore file${loreFiles.length > 1 ? 's' : ''}`,
+            message: `${loreEntries} lore entr${loreEntries > 1 ? 'ies' : 'y'}`,
           });
         }
       } catch {
@@ -1397,7 +1422,13 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // ──────────────────────────────────────────────────────────────────────
 
   const { runContextAudit } = await import('./context-audit.js');
-  const contextResults = await runContextAudit(cwd, { quiet, homeDir: options.homeDir, projectFiles: getProjectFiles() });
+  const contextResults = await runContextAudit(cwd, {
+    quiet,
+    homeDir: options.homeDir,
+    projectFiles: getProjectFiles(),
+    isolated: (await getProjectCounts())?.isolated,
+    indexError: projectCountsError,
+  });
 
   let contextErrorCount = 0;
   let contextWarnCount = 0;
@@ -1524,6 +1555,19 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     } catch {
       // Gap narrations are advisory — do not fail if narrator cannot load
+    }
+  }
+
+  // --explain covers every check that failed, warned or raised an advisory (the
+  // narrator above knows four check names), and says so when there is nothing.
+  if (!quiet && options.explain) {
+    const { explainFindings } = await import('./explain.js');
+    console.log(chalk.blue('\n  Explanations (--explain)\n'));
+    for (const line of explainFindings([
+      ...results,
+      ...contextResults.map((r) => ({ name: r.check, status: r.status, message: r.message, details: r.details, fix: r.fix })),
+    ])) {
+      out(line ? `  ${line}` : '');
     }
   }
 

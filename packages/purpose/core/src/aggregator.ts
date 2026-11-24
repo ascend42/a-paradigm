@@ -146,35 +146,77 @@ export function aggregatePurposes(parsedFiles: ParsedPurposeFile[]): AggregatedP
 }
 
 /**
- * Default ignore globs for .purpose discovery (relative to the search root).
+ * Directories whose .purpose files are never symbol sources, at ANY depth.
  *
- * The first three are the historical set. The rest keep tool/build output and
- * agent scratch checkouts out of the symbol graph: Claude Code worktrees
- * (`.claude/**`), generic `.worktrees`, the Warpline object store, JS/Swift/iOS
- * build output (build, .build, coverage, .next, .turbo, Pods, DerivedData).
- * A `.purpose` copied into e.g. `.next/standalone/**` is a stale duplicate, and
- * duplicates are resolved last-write-wins — so leaving them in made the WINNING
- * definition depend on build artefacts.
- *
- * Note: glob runs with `dot: false`, so dot-directories are not traversed anyway;
- * the dot entries are listed explicitly so the policy is legible and survives a
- * future `dot: true`.
+ * Compare PRUNE_DIRS in the CLI's core/project-files.ts (this package cannot
+ * import it). PRUNE_DIRS holds what NO check reads: node_modules, .git,
+ * .warpline, .build, .loom. Those five are here too. The rest of this list is
+ * intentionally only here: build and tool output (dist, build, coverage, .next,
+ * .turbo, .venv, .cache, Pods, DerivedData) and agent checkouts (.worktrees)
+ * can hold real project files that other checks must still see, but a .purpose
+ * in them is a copy, and duplicates are resolved last-write-wins, so leaving
+ * them in made the winning definition depend on build artefacts.
+ */
+export const PURPOSE_IGNORE_DIR_NAMES: readonly string[] = Object.freeze([
+  'node_modules',
+  'dist',
+  '.git',
+  '.worktrees',
+  '.warpline',
+  '.loom',
+  'build',
+  '.build',
+  'coverage',
+  '.next',
+  '.turbo',
+  '.venv',
+  '.cache',
+  'Pods',
+  'DerivedData',
+]);
+
+/**
+ * Root-relative directories whose .purpose files are never symbol sources:
+ * Claude Code state (agent worktrees are full copies of the repository) and
+ * Paradigm's own records. `.paradigm/agents/.purpose` and `.github/**` stay
+ * visible; lore, events, history, work logs and research notes are records
+ * with thousands of files, not code, and are not walked.
+ */
+export const PURPOSE_IGNORE_ROOT_DIRS: readonly string[] = Object.freeze([
+  '.claude',
+  '.paradigm/lore',
+  '.paradigm/events',
+  '.paradigm/history',
+  '.paradigm/work-log',
+  '.paradigm/research',
+]);
+
+/**
+ * Default ignore globs for .purpose discovery (relative to the search root),
+ * derived from the two lists above. glob runs with `dot: true`, so a .purpose
+ * under a dot-directory the project tracks is a symbol source like any other;
+ * these entries are what keeps tool state, records and copies out.
  */
 export const DEFAULT_PURPOSE_IGNORE: readonly string[] = Object.freeze([
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/.git/**',
-  '.claude/**',
-  '**/.worktrees/**',
-  '.warpline/**',
-  '**/build/**',
-  '**/.build/**',
-  '**/coverage/**',
-  '**/.next/**',
-  '**/.turbo/**',
-  '**/Pods/**',
-  '**/DerivedData/**',
+  ...PURPOSE_IGNORE_DIR_NAMES.map((name) => `**/${name}/**`),
+  ...PURPOSE_IGNORE_ROOT_DIRS.map((dir) => `${dir}/**`),
 ]);
+
+/**
+ * The same policy as DEFAULT_PURPOSE_IGNORE for a root-relative, forward-slash
+ * path, for callers that hold a file list instead of running the glob (the
+ * CLI's shared project file list). True when the path is not a symbol source.
+ */
+export function isPurposePathIgnored(relPath: string): boolean {
+  for (const dir of PURPOSE_IGNORE_ROOT_DIRS) {
+    if (relPath.startsWith(`${dir}/`)) return true;
+  }
+  const segments = relPath.split('/');
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (PURPOSE_IGNORE_DIR_NAMES.includes(segments[i])) return true;
+  }
+  return false;
+}
 
 /**
  * Extra globs used by findPurposeFiles({ respectGitignore: true }) when git
@@ -202,6 +244,7 @@ export async function findPurposeFiles(rootDir: string, options: FindPurposeFile
   let files = await glob('**/.purpose', {
     cwd: absoluteRoot,
     absolute: true,
+    dot: true,
     ignore: [...DEFAULT_PURPOSE_IGNORE],
   });
 
@@ -213,6 +256,7 @@ export async function findPurposeFiles(rootDir: string, options: FindPurposeFile
       const fallback = await glob('**/.purpose', {
         cwd: absoluteRoot,
         absolute: true,
+        dot: true,
         ignore: [...DEFAULT_PURPOSE_IGNORE, ...NON_GIT_RELEASE_IGNORE],
       });
       const keep = new Set(fallback.map((f) => path.resolve(f)));
@@ -621,6 +665,44 @@ const SYMBOL_BLOCKLIST = new Set([
   '$virtual', '$schema', '$ref', '$id', '$type',
 ]);
 
+/** Kebab-case id: lowercase words of letters and digits joined by single hyphens. */
+const KEBAB_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+/** A CSS hex colour body (3, 4, 6 or 8 hex digits). */
+const HEX_COLOUR_RE = /^(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/** Hex-shaped words that are colours even without a digit: `fff`, `cccccc`, `aabbcc`. */
+const HEX_REPEAT_RE = /^(?:([a-f])\1{2,3}|(?:([a-f])\2){3,4})$/i;
+/** Placeholders documentation uses for a colour value. */
+const COLOUR_PLACEHOLDERS = new Set(['rgb', 'rgba', 'rrggbb', 'rrggbbaa']);
+
+/**
+ * Decide whether a prefixed token found in PROSE names a Paradigm symbol.
+ *
+ * Prose is full of things that only look like symbols: environment variables
+ * (`$HOME`, `$CLAUDE_PROJECT_DIR`), DOM ids and member paths (`#session.active`),
+ * CSS colours (`#1a2b3c`, `#fff`, `#rrggbb`), and a real symbol followed by the
+ * full stop that ends its sentence (`^peer-paired.`). Returns the id to use (with
+ * sentence punctuation trimmed) or null when the token is not a symbol.
+ *
+ * Only prose goes through this. A structured reference (`gates: [^x]`) is kept
+ * as written, whatever its shape, so a reference to a symbol nobody declared is
+ * still reported.
+ */
+export function proseSymbolId(prefix: string, rawId: string): string | null {
+  // "…guarded by ^peer-paired." ends a sentence; the dot is not part of the id.
+  const id = rawId.replace(/[._-]+$/, '');
+  if (!id) return null;
+  // Environment variables and constants: HOME, XDG_RUNTIME_DIR, N.
+  if (/^[A-Z][A-Z0-9_]*$/.test(id)) return null;
+  // Symbol ids are kebab-case; a dotted path, a snake_case or a camelCase name
+  // in prose is some other kind of identifier.
+  if (!KEBAB_ID_RE.test(id)) return null;
+  if (prefix === '#') {
+    if (COLOUR_PLACEHOLDERS.has(id)) return null;
+    if (HEX_COLOUR_RE.test(id) && (/[0-9]/.test(id) || HEX_REPEAT_RE.test(id))) return null;
+  }
+  return id;
+}
+
 /**
  * Extract symbol references from text using regex (v2)
  *
@@ -637,7 +719,8 @@ function extractSymbolsFromText(text: string): Array<{ symbol: string; type: Ext
 
   while ((match = pattern.exec(text)) !== null) {
     const prefix = match[1];
-    const id = match[2];
+    const id = proseSymbolId(prefix === '%' ? '#' : prefix, match[2]);
+    if (id === null) continue;
 
     let symbol: string;
     let type: ExtractedSymbolRef['type'];

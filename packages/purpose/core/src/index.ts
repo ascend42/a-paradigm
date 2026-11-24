@@ -21,6 +21,7 @@ export type {
   Reference,
   ParseResult,
   ParseError,
+  ParseWarning,
   ValidationResult,
   ValidationIssue,
   GraphNode,
@@ -33,6 +34,7 @@ export {
   parsePurposeFile,
   parsePurposeFileDetailed,
   parsePurposeContent,
+  normalizeSymbolKeys,
   serializePurposeFile,
   getDefaultPurposeContent,
 } from './parser.js';
@@ -46,6 +48,9 @@ export {
   aggregateForPath,
   getAllPurposeFiles,
   DEFAULT_PURPOSE_IGNORE,
+  PURPOSE_IGNORE_DIR_NAMES,
+  PURPOSE_IGNORE_ROOT_DIRS,
+  isPurposePathIgnored,
   NON_GIT_RELEASE_IGNORE,
   extractFeatures,
   extractComponents,
@@ -55,6 +60,7 @@ export {
   extractSignals,
   extractAspects,
   extractSymbolReferences,
+  proseSymbolId,
 } from './aggregator.js';
 
 // Parse cache (#purpose-parse-cache)

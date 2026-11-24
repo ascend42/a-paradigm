@@ -91,7 +91,7 @@ function textOf(r: ContextAuditResult): string {
 function seedNoise(root: string): void {
   write(root, `${WORKTREE}/packages/warpline/.purpose`, BIG_PURPOSE);
   write(root, `${WORKTREE}/packages/warpline/src/copy.ts`, 'export const c = 1;\n');
-  write(root, `${WORKTREE}/src/widgets/handler.ts`, 'export const w = 1;\n');
+  write(root, `${WORKTREE}/src/widgets/handler.ts`, "export const w = router.get('/api/widgets', h);\n");
   write(root, '.warpline/states/s1/.purpose', BIG_PURPOSE);
   write(root, '.warpline/states/s1/src/state.ts', 'export const s = 1;\n');
   write(root, 'ios/.build/checkouts/dep/.purpose', BIG_PURPOSE);
@@ -153,12 +153,12 @@ for (const mode of ['walk', 'git', 'git-unignored'] as const) {
     it('stale-portal does not match a route against a file that exists only in a worktree copy', async () => {
       suppressOutput();
       seedNoise(rootDir);
-      write(rootDir, 'src/orders/handler.ts', 'export const o = 1;\n');
+      write(rootDir, 'src/orders/handler.ts', "export const o = router.get('/api/orders', h);\n");
       write(rootDir, 'portal.yaml', 'version: 1.0.0\ngates:\n  g:\n    description: g\nroutes:\n  "GET /api/widgets": [g]\n  "GET /api/orders": [g]\n');
       prepare();
       const check = findCheck(await runContextAudit(rootDir, { quiet: true, homeDir: fakeHome }), 'stale-portal');
       const text = textOf(check);
-      // widgets lives only under .claude/worktrees/: stale. orders has a real file: not stale.
+      // widgets is handled only in a copy under .claude/worktrees/: stale. orders has a real handler: not stale.
       expect(text).toContain('/api/widgets');
       expect(text).not.toContain('/api/orders');
     });

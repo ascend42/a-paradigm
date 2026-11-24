@@ -314,7 +314,7 @@ function loadScanIndex(rootDir: string): SymbolData[] {
 
 function resolveSymbol(name: string, allSymbols: SymbolData[]): SymbolData | undefined {
   // Try exact match with prefix stripped
-  const stripped = name.replace(/^[#$^!~]/, '');
+  const stripped = name.replace(/^[#$^!~]+/, '');
   return allSymbols.find(
     (s) => s.id === stripped || s.name === stripped || s.id === name || s.name === name,
   );

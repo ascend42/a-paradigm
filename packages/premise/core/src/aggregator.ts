@@ -2,7 +2,9 @@
  * Aggregator - pulls symbols from Purpose and Gate into a unified index
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import {
   getAllPurposeFiles,
   extractFeatures,
@@ -325,6 +327,16 @@ export async function aggregateFromPremise(
   const donorData = new Map<SymbolEntry, unknown[]>();
   const canonical = canonicalizeSymbols(symbols, shadowed, donorData);
 
+  // Routes each gate protects (portal.yaml `routes:`). A route is not a symbol,
+  // so this is not an edge; it is what makes a route-protecting gate connected.
+  const routesByGate = collectGateRoutes(portalFiles);
+  if (routesByGate.size > 0) {
+    for (const entry of canonical) {
+      const routes = entry.type === 'gate' ? routesByGate.get(entry.symbol) : undefined;
+      if (routes) entry.routes = routes;
+    }
+  }
+
   // Resolve cross-references
   resolveReferences(canonical, donorData, awardEdges);
 
@@ -341,6 +353,97 @@ export async function aggregateFromPremise(
     timestamp: Date.now(),
     ...(duplicateSymbols.length > 0 ? { duplicateSymbols } : {}),
   };
+}
+
+/**
+ * Read the `routes:` map of each portal.yaml and return, per gate symbol, the
+ * routes that name it. A route's value is a list of gates (`- ^local-only`), a
+ * single gate, or an object with a `gates` list; a gate may be written with or
+ * without its prefix. Unreadable files are skipped: parseGateConfig has already
+ * reported them.
+ */
+export function collectGateRoutes(portalFiles: string[]): Map<string, string[]> {
+  const byGate = new Map<string, Set<string>>();
+  for (const file of portalFiles) {
+    let doc: unknown;
+    try {
+      doc = yaml.load(fs.readFileSync(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    const routes = (doc as { routes?: unknown } | null)?.routes;
+    if (!routes || typeof routes !== 'object' || Array.isArray(routes)) continue;
+    for (const [route, value] of Object.entries(routes as Record<string, unknown>)) {
+      const listed = Array.isArray(value)
+        ? value
+        : value && typeof value === 'object'
+          ? ((value as { gates?: unknown }).gates as unknown[] | undefined) ?? []
+          : [value];
+      if (!Array.isArray(listed)) continue;
+      for (const gate of listed) {
+        if (typeof gate !== 'string' || !gate) continue;
+        const symbol = `^${gate.replace(/^\^+/, '')}`;
+        let set = byGate.get(symbol);
+        if (!set) byGate.set(symbol, (set = new Set()));
+        set.add(route);
+      }
+    }
+  }
+  return new Map([...byGate].map(([gate, set]) => [gate, [...set].sort()]));
+}
+
+/**
+ * Structured fields whose values name a symbol by id, and the prefix that id
+ * takes. A value may be written bare (`component: session-row`, `parent: shell`,
+ * `gates: [authenticated]`); a bare id carries no prefix for the reference
+ * pattern to find, so these fields are read by name.
+ */
+const STRUCTURED_REF_FIELDS: Readonly<Record<string, string>> = Object.freeze({
+  parent: '#',
+  component: '#',
+  components: '#',
+  states: '#',
+  emitters: '#',
+  gate: '^',
+  gates: '^',
+  signal: '!',
+  signals: '!',
+  emits: '!',
+  flow: '$',
+  flows: '$',
+  aspect: '~',
+  aspects: '~',
+});
+
+const BARE_ID_RE = /^[A-Za-z][\w-]*$/;
+
+/**
+ * Symbols named by bare id in the structured fields of one entry's data, at any
+ * depth (flow steps are objects in a list). Prefixed values are left to the
+ * reference pattern. `anchors` and `referencedFrom` are skipped for the reasons
+ * given in resolveReferences.
+ */
+export function structuredReferences(data: unknown): string[] {
+  const found = new Set<string>();
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'anchors' || key === 'referencedFrom') continue;
+      const prefix = STRUCTURED_REF_FIELDS[key];
+      if (prefix) {
+        for (const item of Array.isArray(value) ? value : [value]) {
+          if (typeof item === 'string' && BARE_ID_RE.test(item)) found.add(`${prefix}${item}`);
+        }
+      }
+      if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(data);
+  return [...found];
 }
 
 /** A shadowed .purpose definition, keyed by the symbol it would have produced. */
@@ -578,6 +681,9 @@ function resolveReferences(
       const matches = ((dataStr ?? '').match(refPattern) || []).filter(m => !SYMBOL_BLOCKLIST.has(m));
 
       for (const match of matches) link(symbol, match);
+      // Bare ids in structured fields (`component: session-row`, `parent: shell`).
+      // `link` ignores a name no symbol has, so free text in such a field is harmless.
+      for (const named of structuredReferences(data)) link(symbol, named);
     }
   }
 

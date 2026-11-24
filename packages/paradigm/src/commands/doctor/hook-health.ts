@@ -25,6 +25,7 @@ import * as path from 'path';
 import { pathFor } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 import { gitHookState, readGitHook } from '../hooks/git-hook-state.js';
 import { PRUNE_DIRS, listProjectFiles, type ProjectFileList } from '../../core/project-files.js';
+import { listPurposeFiles } from '../../core/project-counts.js';
 
 export interface HookHealthCheck {
   name: string;
@@ -205,8 +206,8 @@ export function repoTraits(rootDir: string, maxDepth = 4, projectFiles?: Project
   // The run's shared list (doctor passes its own). These traits describe what the hooks ask git
   // for, so outside git, or when the list came from the walk, they stay 0 as before.
   const list = projectFiles ?? listProjectFiles(rootDir);
-  const files = list.source === 'git' ? list.files : [];
-  const purposes = files.filter((f) => f === '.purpose' || f.endsWith('/.purpose'));
+  // The one definition of the project's .purpose files (#project-counts), as `paradigm status` prints
+  const purposes = list.source === 'git' ? listPurposeFiles(list) : [];
   let anchorLines = 0;
   for (const p of purposes) {
     try {

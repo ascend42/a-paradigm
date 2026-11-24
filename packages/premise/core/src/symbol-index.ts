@@ -139,21 +139,37 @@ export function buildSymbolIndex(result: AggregationResult): SymbolIndex {
 }
 
 /**
+ * Collapse a repeated leading symbol prefix: "$$name" -> "$name", "^^gate" ->
+ * "^gate" (all five prefixes). Anything else is returned unchanged.
+ */
+export function collapseRepeatedPrefix(symbol: string): string {
+  return symbol.replace(/^([#$^!~])\1+/, '$1');
+}
+
+/**
  * Resolve a USER-TYPED symbol to its canonical entry (input boundaries only —
  * ripple, related, navigate, graph-slice roots; never edges):
  *  1. exact full-symbol hit ("^authenticated");
  *  2. prefixed, case-insensitive ("^Authenticated") — unique hit with that prefix;
  *  3. bare name ("authenticated") — unique hit across all prefixes.
+ * A repeated leading prefix ("$$fleet-switch") is collapsed first.
  * Anything else returns `entry: undefined` with the matches as `candidates`
  * (several → ambiguous, none → unknown).
  */
 export function resolveSymbol(
   index: SymbolIndex,
-  q: string,
+  input: string,
 ): { entry?: SymbolEntry; candidates: SymbolEntry[] } {
+  const asTyped = index.bySymbol.get(input);
+  if (asTyped) return { entry: asTyped, candidates: [asTyped] };
+  if (!input) return { candidates: [] };
+
+  // "$$fleet-switch" is "$fleet-switch": a key that repeated its section's prefix
+  // used to be indexed double-prefixed, and those ids are still written in saved
+  // graphs, lore and decisions. Read them as the symbol they name.
+  const q = collapseRepeatedPrefix(input);
   const exact = index.bySymbol.get(q);
   if (exact) return { entry: exact, candidates: [exact] };
-  if (!q) return { candidates: [] };
 
   const prefixed = isValidPrefix(q[0]) || isLegacyPrefix(q[0]);
   const matches = prefixed
@@ -438,7 +454,12 @@ export function getAllTags(index: SymbolIndex): string[] {
 }
 
 /**
- * Get symbol counts by type (v2)
+ * Count DECLARED symbols by type (v2).
+ *
+ * A reference stub (`declared: false`: something a .purpose mentions but nothing
+ * declares) is not a symbol of the project and is never counted. Every symbol
+ * count a user sees comes from here, so `status`, `doctor` and the MCP status
+ * tool agree. Use getUndeclaredCount for the stubs.
  */
 export function getSymbolCounts(index: SymbolIndex): Record<SymbolType, number> {
   const counts: Record<SymbolType, number> = {
@@ -451,11 +472,35 @@ export function getSymbolCounts(index: SymbolIndex): Record<SymbolType, number> 
 
   for (const [type, symbols] of index.byType) {
     if (type in counts) {
-      counts[type as SymbolType] = symbols.length;
+      counts[type as SymbolType] = symbols.filter(isDeclared).length;
     }
   }
 
   return counts;
+}
+
+/** True unless the entry is a reference stub (`declared: false`). */
+export function isDeclared(entry: SymbolEntry): boolean {
+  return entry.declared !== false;
+}
+
+/**
+ * Split entries into declared symbols and reference stubs. Anything that prints
+ * a list next to a getSymbolCounts total uses `declared`, so the list and the
+ * total agree.
+ */
+export function splitDeclared(entries: SymbolEntry[]): { declared: SymbolEntry[]; undeclared: SymbolEntry[] } {
+  const declared: SymbolEntry[] = [];
+  const undeclared: SymbolEntry[] = [];
+  for (const entry of entries) (isDeclared(entry) ? declared : undeclared).push(entry);
+  return { declared, undeclared };
+}
+
+/** How many index entries are reference stubs: referenced, declared nowhere. */
+export function getUndeclaredCount(index: SymbolIndex): number {
+  let n = 0;
+  for (const entry of index.entries.values()) if (!isDeclared(entry)) n++;
+  return n;
 }
 
 /**
