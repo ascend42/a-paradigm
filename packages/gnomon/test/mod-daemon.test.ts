@@ -109,6 +109,26 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     await expect(d.modKernelCall({ name: 'acme.probe', principal: p, verb: 'log.append', params: { kind: 'modns.acme.probe.x', audience: 'team' } })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN', data: { reason: 'label-relaxed' } } });
   });
 
+  it('G-MOD-17 row scope: the real log takes the host-stamped scope.repo on a userland mod row, a scope filter finds it, and the chain verifies offline', async () => {
+    const { d, ns, home } = await rig();
+    const p = `p:${ns}/mod-gnomon.probe`;
+    const repo = 'repo:0123456789abcdef';
+    const stamp = { relayedFor: { principal: `p:${ns}/founder`, connId: 'conn-7', surface: 'gui' }, scope: { repo } };
+    // the mod supplies ANOTHER scope: only the stamp's reaches the envelope
+    await d.modKernelCall({ name: 'gnomon.probe', principal: p, verb: 'log.append', params: { kind: 'modns.gnomon.probe.x', payload: { a: 1 }, scope: { repo: 'repo:fedcba9876543210' } }, stamp });
+    await d.modKernelCall({ name: 'gnomon.probe', principal: p, verb: 'log.append', params: { kind: 'modns.gnomon.probe.x', payload: { a: 2 }, scope: { repo } }, stamp: { relayedFor: stamp.relayedFor } });
+    const events = [...d.log.read({ reader: { class: 'human' }, kinds: ['modns.gnomon.probe.x'] })].map((v) => (v as { event: Record<string, unknown> }).event);
+    expect(events.map((e) => e.scope)).toEqual([{ org: null, team: null, repo }, undefined]);
+    expect(events[0]).toMatchObject({ principal: p, payload: { a: 1, relayedFor: stamp.relayedFor } });
+    await d.shutdown('signal');
+    const ring = new KeyRing();
+    const pubs = readKernelPubs(home);
+    for (const k of pubs) ring.addEd25519(k.publicKeyPem);
+    const rep = verifyLog(home, { keyRing: ring, kernelPrincipal: d.kernelPrincipal, kernelKeyIds: pubs.map((k) => k.keyId) });
+    expect(rep.failures).toEqual([]);
+    expect(rep.ok).toBe(true);
+  });
+
   it('reviewer: an OFFLINE chain verify accepts the userland row with a mod principal signed by the kernel key', async () => {
     const { d, ns, home } = await rig();
     await d.modKernelCall({ name: 'acme.probe', principal: `p:${ns}/mod-acme.probe`, verb: 'log.append', params: { kind: 'modns.acme.probe.x', payload: { a: 1 } } });

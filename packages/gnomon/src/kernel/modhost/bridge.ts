@@ -66,6 +66,12 @@ export interface ModAppendRow {
   sensitivity?: (typeof SENSITIVITIES)[number];
   /** HOST-ONLY (S1.2 C1): the turn that caused an entitled tool call. Never a mod-supplied field (MOD_APPEND_FIELDS). */
   causes?: string[];
+  /**
+   * HOST-ONLY (S1.3, Aegis A4): the repo scope of the session a first-party command was focused on, for the row's
+   * ENVELOPE `scope` (the daemon writes `{org: null, team: null, repo}`). Only from the call's stamp: a mod-supplied
+   * `scope` is not in MOD_APPEND_FIELDS and is never read.
+   */
+  scope?: { repo: string };
 }
 
 export interface ModKernelPorts {
@@ -118,8 +124,9 @@ export function checkModPayloadKeys(payload: Record<string, unknown>, at: { name
  * Clamp a mod's log.append params to the fields it may supply (Aegis C2), then apply the host's stamp (S1.2 C1,
  * G-MOD-12). `relayedFor` is a HOST-OWNED payload key on every mod append: a mod-supplied value is always removed;
  * with a stamp (a relayed command or a tool call) the host's value is written; without one (idle, event-driven or
- * host-initiated) the key is absent. `causes` comes only from the stamp; a mod-supplied `causes` is never read. The
- * size cap is measured AFTER stamping, so the stamp cannot push a row past it.
+ * host-initiated) the key is absent. `causes` and the envelope `scope` (S1.3: the repo scope of a first-party
+ * command's joined focus) come only from the stamp; a mod-supplied `causes` or `scope` is never read. The size cap
+ * is measured AFTER stamping, so the stamp cannot push a row past it.
  */
 export function clampModAppend(name: string, principal: string, params: Record<string, unknown>, stamp?: CallStamp): ModAppendRow {
   const kind = params.kind;
@@ -134,7 +141,10 @@ export function clampModAppend(name: string, principal: string, params: Record<s
   if (stamp) payload[RELAYED_FOR_APPEND_KEY] = { ...stamp.relayedFor };
   const bytes = Buffer.byteLength(canonicalJson(payload), 'utf8');
   if (bytes > MOD_APPEND_MAX_BYTES) throw new ModRefusal('LOG', `log.append payload is ${bytes} bytes; a mod may append at most ${MOD_APPEND_MAX_BYTES}`, { name, kind, bytes });
-  const row: ModAppendRow = { kind, principal, payload, ...(stamp?.causes && stamp.causes.length > 0 ? { causes: [...stamp.causes] } : {}) };
+  // S1.3 A4: the envelope scope comes from the stamp alone, and only in the one form the envelope accepts
+  const repo = stamp?.scope?.repo;
+  const scope = typeof repo === 'string' && /^repo:[0-9a-f]{16}$/.test(repo) ? { repo } : null;
+  const row: ModAppendRow = { kind, principal, payload, ...(stamp?.causes && stamp.causes.length > 0 ? { causes: [...stamp.causes] } : {}), ...(scope ? { scope } : {}) };
   if (params.audience !== undefined) {
     if (!(AUDIENCES as readonly unknown[]).includes(params.audience)) throw new ModRefusal('LOG', 'log.append audience is not an audience value', { name, kind });
     row.audience = params.audience as ModAppendRow['audience'];
@@ -206,7 +216,7 @@ export function createModRelayPort(host: ModHost): ModRelays {
     },
     command: async (rf, req) => {
       await ensure(req.name);
-      return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId, ...(rf.surface ? { surface: rf.surface } : {}) }) };
+      return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId, principalClass: rf.principalClass, ...(rf.surface ? { surface: rf.surface } : {}) }) };
     },
     status: (full) => {
       const st = host.status() as { modAbiId: string; running: unknown[]; paused: unknown[] };

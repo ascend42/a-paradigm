@@ -12,6 +12,9 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { appendGrantRow, MANIFEST_FILE, readStaged, removeTree, stageInstall, type ManifestV2 } from '../src/kernel/manifest/index.js';
 import { installPresenceBinding } from '../src/kernel/manifest/install.js';
+import { readManifest } from '../src/kernel/manifest/manifest.js';
+import { noEvents } from '../src/kernel/manifest/refusal.js';
+import { snapshotFolder } from '../src/kernel/manifest/snapshot.js';
 import { createModHostForTest, decideInstallCard, mintTestPresence } from '../src/kernel/testing.js';
 import type { ModHostOptions, ModHostSeams } from '../src/kernel/modhost/host.js';
 import { PKG_ROOT } from './helpers.js';
@@ -125,6 +128,29 @@ export function install(r: Rig, folder: string, opts: { via?: 'package' | 'linke
   appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: d.manifestHash, capabilities: ['log.append:modns.acme.probe.*', 'log.append:modns.example.hello.*'] });
   if (opts.egress) appendGrantRow(r.home, r.auth, { kind: 'grant.egress', manifestHash: d.manifestHash, hosts: opts.egress });
   return { manifestHash: d.manifestHash, packageHash: d.packageHash };
+}
+
+/** The probe as a `gnomon`-published mod (S1.3: only a first-party mod's command may write, and only it is given hsid and repo). */
+export const FIRST_PARTY_PROBE = 'gnomon.probe';
+export function firstPartyProbeManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
+  return probeManifest({ publisher: 'gnomon', provides: { ...probeManifest().provides, events: ['modns.gnomon.probe.done'] }, requires: { capabilities: ['log.append:modns.gnomon.probe.*'], egress: 'none' }, ...over });
+}
+
+/**
+ * Install a `gnomon`-published mod as an earlier kernel left one behind: the pinned snapshot plus root-signed
+ * grant.trust{first-party}, grant.capability and grant.install rows (the tier is derived from provenance, so no card
+ * path can produce it for a test tree). Returns the mod id.
+ */
+export function installFirstParty(r: Rig, m: ManifestV2 = firstPartyProbeManifest(), source = PROBE_SOURCE.replaceAll('modns.acme.probe.', `modns.gnomon.${m.name}.`)): string {
+  const name = `gnomon.${m.name}`;
+  const snap = snapshotFolder(r.home, writeModFolder(path.join(r.root, 'src', name), m, source), name, noEvents);
+  const read = readManifest(fs.readFileSync(path.join(snap.dir, MANIFEST_FILE)), { tier: 'first-party' });
+  const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
+  appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
+  const caps = read.manifest.requires?.capabilities ?? [];
+  if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: read.manifestHash, capabilities: [...caps] });
+  appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
+  return name;
 }
 
 export function host(r: Rig, seams: ModHostSeams = {}, over: Partial<ModHostOptions> = {}) {

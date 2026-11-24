@@ -1272,6 +1272,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     focusCwd: (hsid) => supervisor.scopeOf(hsid)?.cwd ?? null,
     // Aegis M1: an agent/session caller is joined only to the session whose principal it is
     focusPrincipal: (hsid) => supervisor.principalOf(hsid),
+    // S1.3 (Aegis A4): a first-party command's focus → the LIVE session's repo scope (`repo:<16 hex>`, the same
+    // id the offer router uses); null for anything that is not a live session, so nothing is composed for it
+    focusRepo: (hsid) => {
+      const sc = supervisor.scopeOf(hsid);
+      return sc ? deskRepoScope(sc.repoKey) : null;
+    },
     // founder report 2026-10-23: a mod started after a session opened is primed with this boot's state in force.
     // Aegis M: the fold below is fed as rows are released (flushFeed), so a prime is O(state) with no disk read; only a
     // fold that missed rows (queue overflow) re-reads, bounded to this boot (fromSeq = its daemon.start seq).
@@ -1341,7 +1347,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       append: async (row) => {
         // B1: modns.* is userland-owned (L7) ⇒ appended `as: 'userland'` under the MOD principal; the kernel key signs it as an
         // attestation that the kernel accepted a mod-originated row — readers attribute it by principal, never by keyId
-        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}), ...(row.causes ? { causes: row.causes } : {}) });
+        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}), ...(row.causes ? { causes: row.causes } : {}), ...(row.scope ? { scope: { org: null, team: null, repo: row.scope.repo } } : {}) });
         return { seq: r.seq };
       },
   });

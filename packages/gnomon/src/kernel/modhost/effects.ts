@@ -32,6 +32,12 @@ import { ModRefusal } from './refusal.js';
 export interface CallStamp {
   relayedFor: Record<string, string>;
   causes?: string[];
+  /**
+   * S1.3 (Aegis A4): the repo scope (`repo:<16 hex>`) of the session a first-party command was focused on, joined
+   * by the host (host.ts #composeRelayedArgs). The bridge writes it on the ENVELOPE `scope` of every row appended
+   * inside the call, so "listed by repo" is a read filter. Never mod input: `scope` is not in MOD_APPEND_FIELDS.
+   */
+  scope?: { repo: string };
 }
 
 export type CallContext = { kind: 'tool'; tool: string; hsid?: string; stamp?: CallStamp } | { kind: 'command'; stamp?: CallStamp } | { kind: 'view' } | { kind: 'idle' };

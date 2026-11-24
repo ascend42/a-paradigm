@@ -11,7 +11,8 @@ import { relaySurfaceOf } from '../src/kernel/socket/dispatch.js';
 import { MATRIX_CLASSES } from '../src/kernel/socket/methods.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { appendGrantRow } from '../src/kernel/manifest/index.js';
-import { host, install, probeManifest, rig, writeModFolder } from './mod-helpers.js';
+import { HOST_ARG_KEYS, type ModHostOptions } from '../src/kernel/modhost/host.js';
+import { FIRST_PARTY_PROBE, host, install, installFirstParty, probeManifest, rig, writeModFolder } from './mod-helpers.js';
 
 const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -240,6 +241,130 @@ describe('G-MOD-13: relayedFor carries only the fields of its method; identity o
     await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' }, { toolRelayedFor: { ...noTurn } });
     expect(rows[1]!.payload.relayedFor).toEqual({ ...noTurn });
     expect('causes' in rows[1]!).toBe(false);
+  });
+});
+
+const LIVE = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+const LIVE2 = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZC';
+const GONE = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
+const REPO = 'repo:0123456789abcdef';
+const REPO2 = 'repo:fedcba9876543210';
+const SESSION_OWNER: Record<string, string> = { [LIVE]: 'p:abcdefgh/s-live', [LIVE2]: 'p:abcdefgh/s-other' };
+const GUI = { principal: 'p:abcdefgh/matt', connId: 'conn-7', principalClass: 'human', surface: 'gui' } as const;
+interface ProbeArgs {
+  keys: string[];
+  args: Record<string, unknown>;
+  hsid: unknown;
+  repo: unknown;
+  gesture: unknown;
+}
+
+/** The first-party probe (gnomon.probe) and the third-party one (acme.probe) in one host, with a live-session port. */
+async function both(over: Partial<ModHostOptions> = {}) {
+  const r = rig();
+  cleanups.push(r.cleanup);
+  install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
+  installFirstParty(r);
+  const rows: ModAppendRow[] = [];
+  const kernelCall = createModKernelCall({ callAs: async () => ({}), append: async (row) => (rows.push(row), { seq: rows.length }) });
+  const joins: string[] = [];
+  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall, focusRepo: (hsid) => (joins.push(hsid), hsid === LIVE ? REPO : hsid === LIVE2 ? REPO2 : null), focusPrincipal: (hsid) => SESSION_OWNER[hsid] ?? null, ...over });
+  cleanups.push(() => h.stopAll());
+  await h.start('acme.probe');
+  await h.start(FIRST_PARTY_PROBE);
+  /** what the mod's command handler received as `args` */
+  const seen = async (name: string, args: unknown, who: { principal: string; connId: string; principalClass?: string; surface?: 'gui' | 'cli' } = GUI): Promise<ProbeArgs> =>
+    ((await h.relayCommand({ name, commandId: 'probe.who', args, ...who })) as { out: ProbeArgs }).out;
+  return { h, rows, joins, seen };
+}
+
+describe('G-MOD-17: a command\'s args are host-composed; hsid and repo come from the host, for a first-party mod and a live joinable session only', () => {
+  it('args survival: a client repo, hsid, focus, paradigm, gesture or prototype key never reaches any mod', async () => {
+    const { seen, rows } = await both();
+    const hostile = '{"op":"args","keep":{"a":[1]},"repo":"repo:evil","hsid":"hs-evil","focus":{"hsid":"hs-evil","repo":"/evil"},"paradigm":{"evil":1},"gesture":{"n":1,"kind":"key","evil":1},"__proto__":{"hsid":"hs-evil","repo":"repo:evil"},"constructor":{"evil":1},"prototype":{"evil":1}}';
+    for (const name of ['acme.probe', FIRST_PARTY_PROBE]) {
+      for (const who of [GUI, { ...GUI, surface: 'cli' as const }, { principal: 'p:abcdefgh/s-live', connId: 'conn-8', principalClass: 'agent' }, { principal: 'p:abcdefgh/v', connId: 'conn-9', principalClass: 'voice' }]) {
+        const got = await seen(name, JSON.parse(hostile), who);
+        expect([name, who.principalClass, got.keys]).toEqual([name, who.principalClass, ['op', 'keep']]);
+        expect([got.hsid, got.repo, got.gesture]).toEqual([null, null, null]);
+        expect(JSON.stringify(got).includes('evil')).toBe(false);
+      }
+    }
+    expect(HOST_ARG_KEYS).toEqual(['repo', 'hsid', 'focus', 'paradigm', 'gesture']);
+    expect(rows).toEqual([]);
+  });
+
+  it('args that are not a plain object compose to an empty one', async () => {
+    const { h } = await both();
+    for (const args of [null, undefined, 'op', 7, [{ op: 'args' }], [['op', 'args']]]) {
+      // the probe answers {relayedFor} alone when its args carry no `op`: nothing of a non-object got through
+      expect(await h.relayCommand({ name: FIRST_PARTY_PROBE, commandId: 'probe.who', args, ...GUI })).toEqual({ relayedFor: { principal: GUI.principal, connId: GUI.connId, surface: 'gui' } });
+    }
+  });
+
+  it('hsid and repo are composed, both or neither: a first-party mod, a caller entitled to the focus, and a session the host knows as live', async () => {
+    const { seen, joins } = await both();
+    const focus = (hsid: unknown): Record<string, unknown> => ({ op: 'args', focus: { hsid } });
+    const pair = (g: ProbeArgs): unknown[] => [g.hsid, g.repo, g.keys];
+    const none = [null, null, ['op']];
+    // the human on the GUI, a live session: both, and the repo is the HOST's value
+    expect(pair(await seen(FIRST_PARTY_PROBE, { ...focus(LIVE), repo: REPO2, hsid: LIVE2 }))).toEqual([LIVE, REPO, ['op', 'hsid', 'repo']]);
+    expect(pair(await seen(FIRST_PARTY_PROBE, focus(LIVE2)))).toEqual([LIVE2, REPO2, ['op', 'hsid', 'repo']]);
+    // a human naming a string that is no live session (#mayJoin alone says yes to any string): neither
+    expect(pair(await seen(FIRST_PARTY_PROBE, focus(GONE)))).toEqual(none);
+    expect(pair(await seen(FIRST_PARTY_PROBE, focus('made-up')))).toEqual(none);
+    // no focus, the K0 bare {hsid}, a malformed focus: neither (and no join is attempted)
+    const before = joins.length;
+    for (const args of [{ op: 'args' }, { op: 'args', hsid: LIVE }, focus(7), focus('has space'), focus(''), { op: 'args', focus: LIVE }, { op: 'args', focus: [LIVE] }, { op: 'args', focus: JSON.parse(`{"__proto__":{"hsid":"${LIVE}"}}`) }]) {
+      expect([args, pair(await seen(FIRST_PARTY_PROBE, args))]).toEqual([args, none]);
+    }
+    expect(joins.length).toBe(before);
+    // a third-party mod: neither, whatever the caller and the session
+    expect(pair(await seen('acme.probe', focus(LIVE)))).toEqual(none);
+    // an agent or session principal: only its OWN session
+    const agent = { principal: SESSION_OWNER[LIVE]!, connId: 'conn-8', principalClass: 'agent' };
+    expect(pair(await seen(FIRST_PARTY_PROBE, focus(LIVE), agent))).toEqual([LIVE, REPO, ['op', 'hsid', 'repo']]);
+    expect(pair(await seen(FIRST_PARTY_PROBE, focus(LIVE2), agent))).toEqual(none);
+    expect(pair(await seen(FIRST_PARTY_PROBE, focus(LIVE), { ...agent, principalClass: 'session' }))).toEqual([LIVE, REPO, ['op', 'hsid', 'repo']]);
+    // voice, mod, an unknown class and a call with no class: never
+    for (const principalClass of ['voice', 'mod', 'readToken', 'peer', 'root', undefined]) {
+      expect([principalClass, pair(await seen(FIRST_PARTY_PROBE, focus(LIVE), { principal: SESSION_OWNER[LIVE]!, connId: 'conn-9', ...(principalClass ? { principalClass } : {}) }))]).toEqual([principalClass, none]);
+    }
+  });
+
+  it('fails closed on the port: absent, throwing, or returning anything but repo:<16 hex> composes neither', async () => {
+    for (const focusRepo of [undefined, () => null, () => '/Users/x/repo', () => 'repo:XYZ', () => `${REPO}0`, () => 'sha256:' + '0'.repeat(64), () => 7 as unknown as string, () => { throw new Error('boom'); }] as Array<ModHostOptions['focusRepo']>) {
+      const { seen, h } = await both({ focusRepo });
+      const got = await seen(FIRST_PARTY_PROBE, { op: 'args', focus: { hsid: LIVE } });
+      expect([got.hsid, got.repo, got.keys]).toEqual([null, null, ['op']]);
+      await h.stopAll();
+    }
+  });
+
+  it('a host-initiated runCommand (no relayedFor) is composed too: no client key survives and nothing is joined', async () => {
+    const { h } = await both();
+    const out = ((await h.runCommand(FIRST_PARTY_PROBE, 'probe.who', { op: 'args', focus: { hsid: LIVE }, hsid: LIVE, repo: REPO, gesture: { n: 1, kind: 'key' } })) as { out: ProbeArgs }).out;
+    expect([out.keys, out.hsid, out.repo, out.gesture]).toEqual([['op'], null, null, null]);
+  });
+
+  it('row scope: a joined focus stamps the envelope scope.repo on the rows of that call; a mod can never supply it', async () => {
+    const { h, rows } = await both();
+    const append = (name: string, args: Record<string, unknown>) => h.relayCommand({ name, commandId: 'probe.who', args: { op: 'append.forged', ...args }, ...GUI });
+    await append(FIRST_PARTY_PROBE, { focus: { hsid: LIVE } });
+    await append(FIRST_PARTY_PROBE, { focus: { hsid: LIVE2 } });
+    await append(FIRST_PARTY_PROBE, {});
+    await append(FIRST_PARTY_PROBE, { focus: { hsid: GONE }, repo: REPO });
+    expect(rows.map((r) => r.scope)).toEqual([{ repo: REPO }, { repo: REPO2 }, undefined, undefined]);
+    expect('scope' in rows[2]!).toBe(false);
+    // the scope is on the envelope only: the payload holds the stamp and the mod's keys, never a repo
+    expect(rows[0]!.payload).toEqual({ note: 'n', relayedFor: { principal: GUI.principal, connId: GUI.connId, surface: 'gui' } });
+    // the pure clamp: a mod-supplied scope is never read; a stamp's scope passes only as repo:<16 hex>
+    const stamp = { relayedFor: { principal: GUI.principal, connId: GUI.connId, surface: 'gui' } };
+    const kind = 'modns.gnomon.probe.done';
+    expect(clampModAppend(FIRST_PARTY_PROBE, 'p', { kind, payload: {}, scope: { repo: REPO2 } }, stamp).scope).toBeUndefined();
+    expect(clampModAppend(FIRST_PARTY_PROBE, 'p', { kind, payload: { scope: { repo: REPO2 } }, scope: { repo: REPO2 } }, { ...stamp, scope: { repo: REPO } }).scope).toEqual({ repo: REPO });
+    for (const repo of ['/Users/x/repo', 'repo:XYZ', '', `${REPO}0`, 7 as unknown as string]) expect(clampModAppend(FIRST_PARTY_PROBE, 'p', { kind, payload: {} }, { ...stamp, scope: { repo } }).scope).toBeUndefined();
+    expect(MOD_APPEND_FIELDS).toEqual(['kind', 'payload', 'audience', 'sensitivity']);
   });
 });
 

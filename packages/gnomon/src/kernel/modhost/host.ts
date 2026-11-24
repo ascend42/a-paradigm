@@ -54,6 +54,14 @@
  * call gets {surface, agent} and, for a first-party or `log.read` mod only,
  * {principal, hsid, turn}. The same object is stamped on every row the mod
  * appends inside the call (CallStamp → bridge.clampModAppend).
+ * COMMAND ARGS (S1.3, Aegis A4): a command's `args` are HOST-COMPOSED
+ * (#composeRelayedArgs). For every mod a client `repo`, `hsid`, `focus`,
+ * `paradigm` or `gesture` key and any prototype key is removed, and the mod
+ * receives a null-prototype object. A `gnomon`-published mod alone gets
+ * `args.hsid` and `args.repo`, both or neither: the client's `focus.hsid`
+ * when the caller may join it and `focusRepo` knows it as a live session, and
+ * that session's repo scope. The same repo scope is stamped on the envelope of
+ * every row appended inside the call (CallStamp.scope). A mod names neither.
  *
  * SUPERVISION: an unexpected exit ⇒ `mod.health{ok:false}` and a restart
  * (cap 3 per 10 min, then the mod stays down until started again); a crash
@@ -145,6 +153,18 @@ const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const FOCUS_HSID = /^[A-Za-z0-9:._-]{1,128}$/;
 /** Relayed-input keys only the HOST composes (a client value is replaced or dropped, never forwarded). */
 export const HOST_INPUT_KEYS: readonly string[] = Object.freeze(['focus', 'hsid', 'paradigm']);
+/**
+ * Relayed COMMAND arg keys only the host composes (S1.3, Aegis A4): removed from the client's args for EVERY mod.
+ * `gesture` is the socket's gesture stamp (socket/gesture.ts); it is removed here as well, so no caller class and no
+ * host-level call can hand one to a mod.
+ */
+export const HOST_ARG_KEYS: readonly string[] = Object.freeze(['repo', 'hsid', 'focus', 'paradigm', 'gesture']);
+/** Keys never copied from a client object onto a host-composed one (an own `__proto__` key would become its prototype). */
+const PROTOTYPE_KEYS: readonly string[] = Object.freeze(['__proto__', 'constructor', 'prototype']);
+/** event:v1 `scope.repo` (`repo:<16 hex>`): the only form `focusRepo` may return and the host may pass on. Never a path. */
+const REPO_SCOPE = /^repo:[0-9a-f]{16}$/;
+const ownPlain = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+const own = (o: Record<string, unknown>, k: string): unknown => (Object.hasOwn(o, k) ? o[k] : undefined);
 
 export interface ModChildrenPort {
   track(input: TrackInput): Promise<void>;
@@ -184,6 +204,12 @@ export interface ModHostOptions {
    * caller is joined only to its OWN session. Absent ⇒ agent/session callers are never joined (unfocused).
    */
   focusPrincipal?: (hsid: string) => string | null;
+  /**
+   * S1.3 (Aegis A4): the repo scope (`repo:<16 hex>`, event:v1 scope.repo; never a path) of a LIVE hsid, or null
+   * when the hsid is not a live session (daemon: supervisor.scopeOf → deskRepoScope). It is the ONLY liveness test
+   * for a command's focus: absent, or returning anything but a repo scope, ⇒ no command is ever given `hsid` or `repo`.
+   */
+  focusRepo?: (hsid: string) => string | null;
   /**
    * The state in force when a log.read mod starts (feed.ts FeedBacklog; daemon: snapshot() of the ONE fold it feeds as
    * rows are released, O(state), no disk read). Replayed through the same projection as the live feed, to that mod
@@ -839,10 +865,47 @@ export class ModHost {
       const paradigm = cwd ? this.#slices.get(cwd, this.#now(), this.#o.userHome ? { home: this.#o.userHome } : {}) : unfocusedSlice();
       return { ...(hsid && cwd ? { hsid } : {}), paradigm };
     }
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(client)) if (!HOST_INPUT_KEYS.includes(k)) out[k] = v;
+    // Aegis S1.3 A4: composed onto a null-prototype object and prototype keys dropped. Copied onto `{}`, a client's
+    // own `__proto__` key (JSON.parse makes one) became the prototype, and host reads of the result saw client values.
+    const out: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+    for (const k of Object.keys(client)) if (!HOST_INPUT_KEYS.includes(k) && !PROTOTYPE_KEYS.includes(k)) out[k] = client[k];
     if (hsid) out.hsid = hsid;
     return out;
+  }
+
+  /**
+   * S1.3 (Aegis A4): a command's args are host-composed, for EVERY mod and every caller (a host-initiated
+   * runCommand included). The client's own keys are copied onto a null-prototype object, minus HOST_ARG_KEYS
+   * (`repo`, `hsid`, `focus`, `paradigm`, `gesture`) and the prototype keys: none of those ever reaches a mod from
+   * a client. Args that are not a plain object compose to an empty one.
+   *
+   * `hsid` and `repo` are then SET by the host, both or neither, and only for a `gnomon`-published mod: the client
+   * may name `focus: {hsid}`; the caller must be entitled to join it (#mayJoin: a human any session, an agent or
+   * session principal only its own) AND `focusRepo` must know it as a LIVE session and return its repo scope
+   * (`repo:<16 hex>`). A human naming a string that is no live session gets neither. A third-party mod gets
+   * neither whatever the client names: `hsid` is identity (S1.2 C2) and a repo scope is not its to learn.
+   * Returns the composed args and, when a focus was joined, the scope the call's rows are stamped with.
+   */
+  #composeRelayedArgs(r: Running, args: unknown, rf: Record<string, string> | null, cls: string | null): { args: Record<string, unknown>; scope: { repo: string } | null } {
+    const client = ownPlain(args) ?? {};
+    const out: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+    for (const k of Object.keys(client)) if (!HOST_ARG_KEYS.includes(k) && !PROTOTYPE_KEYS.includes(k)) out[k] = client[k];
+    if (r.manifest.publisher !== 'gnomon' || !rf || typeof rf.principal !== 'string') return { args: out, scope: null };
+    const focus = ownPlain(own(client, 'focus'));
+    const named = focus ? own(focus, 'hsid') : undefined;
+    const hsid = typeof named === 'string' && FOCUS_HSID.test(named) ? named : null;
+    if (!hsid) return { args: out, scope: null };
+    let repo: string | null = null;
+    try {
+      const got = this.#mayJoin({ principal: rf.principal, connId: rf.connId ?? '' }, cls, hsid) ? (this.#o.focusRepo?.(hsid) ?? null) : null;
+      repo = typeof got === 'string' && REPO_SCOPE.test(got) ? got : null;
+    } catch {
+      repo = null;
+    }
+    if (!repo) return { args: out, scope: null };
+    out.hsid = hsid;
+    out.repo = repo;
+    return { args: out, scope: { repo } };
   }
 
   /**
@@ -871,14 +934,18 @@ export class ModHost {
     if (!r.manifest.provides?.commands?.some((c) => c.id === commandId)) throw new ModRefusal('UNDECLARED', `${name} declares no command ${commandId}`, { name, commandId });
     // C1/C2: one pickRelayedFor output is both what the mod is sent and what its rows are stamped with
     const rf = opts.relayedFor ? pickRelayedFor('command.run', opts.relayedFor as unknown as Record<string, unknown>, false) : null;
-    const out = (await this.#call(name, 'command.run', { commandId, args: args ?? null, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', ...(rf ? { stamp: { relayedFor: rf } } : {}) }, opts)) as Record<string, unknown>;
+    // S1.3 A4: the args are host-composed for every mod; a joined focus also scopes the rows of this call
+    const composed = this.#composeRelayedArgs(r, args, rf, opts.relayedClass ?? null);
+    const stamp: CallStamp | null = rf ? { relayedFor: rf, ...(composed.scope ? { scope: composed.scope } : {}) } : null;
+    const out = (await this.#call(name, 'command.run', { commandId, args: composed.args, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 
-  /** The `mod.command` client relay (a GUI caller additionally needs a user gesture — the endpoint's rule, slice 2). */
+  /** The `mod.command` client relay (a GUI caller additionally carries a gesture stamp: the socket's rule, socket/gesture.ts). */
   relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; surface?: 'gui' | 'cli'; principalClass?: string }): Promise<unknown> {
-    // A1: no surface (a non-human caller) stays absent; the row then folds as the unknown hand
-    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId, ...(req.surface ? { surface: req.surface } : {}) } });
+    // A1: no surface (a non-human caller) stays absent; the row then folds as the unknown hand.
+    // The class stays host-side (Aegis M1): it only decides whose focus may be joined, and is never sent to the mod.
+    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId, ...(req.surface ? { surface: req.surface } : {}) }, ...(req.principalClass ? { relayedClass: req.principalClass } : {}) });
   }
 
   /** `tool.call` — effects in force = that tool's declared effects (∩ the dev cap). */
