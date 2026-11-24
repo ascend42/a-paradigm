@@ -294,7 +294,7 @@ components:
       - data-policy
       - sovereignty
   work-log-loader:
-    description: Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/
+    description: "Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/. workLogDateFromId reads the date folder from WL-<agent>-<date>-<suffix> and allows hyphens in the agent id (ui-builder); tests in work-log-loader.test.ts"
     type: loader
     tags:
       - feature
