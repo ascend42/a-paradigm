@@ -82,9 +82,13 @@
  * (§12.3) go to the `mods` port for every class the matrix lets call them
  * ("caller principal"; read tokens and peers are FORBIDDEN), with
  * `relayedFor{principal, connId}` stamped HERE from the authenticated
- * connection — never from params. `mod.command` from a GUI connection needs a
- * user gesture (§11.5) that no GUI can prove yet ⇒ ENGINE{not-implemented,
- * M1.10}. `callAs(principal, verb, params)` is the mod's `kernel.call`: the
+ * connection — never from params. `mod.command` from a GUI connection carries
+ * a GESTURE STAMP in `args.gesture` (§11.5; S1.3, G-MOD-16; gesture.ts): a
+ * missing, malformed, replayed or spent one ⇒ FORBIDDEN{gesture}, and the key
+ * is removed before the mod host sees the args. The stamp proves nothing
+ * about a human; what a command may WRITE is the host's rule (the command
+ * read cap, modhost/effects.ts commandCap, G-MOD-17): only a human on the
+ * GUI and a `gnomon`-published mod. `callAs(principal, verb, params)` is the mod's `kernel.call`: the
  * same post-auth dispatch run as a connection-less mod principal (matrix
  * class `mod`): status = own view (served), log.read pages through
  * readerFor (own modns; `follow` needs a connection ⇒ BAD_REQUEST
@@ -120,6 +124,7 @@ import {
 import { KERNEL_METHODS, type MatrixClass, type MethodRegistry } from './methods.js';
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
+import { takeGesture } from './gesture.js';
 import { LOOPS_DISABLED_MESSAGE, LOOPS_DISABLED_REASON } from '../loops/gate.js'; // #loops-gate
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
 import { SERVER_FEATURES } from './auth.js';
@@ -686,7 +691,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   };
 
   const relayAvailable = (relay: string, s: ConnAuthState): boolean =>
-    o.mods !== undefined && accessOf_(relay, matrixClassOf(s)) !== false && !(relay === 'mod.command' && s.credential === 'gui');
+    o.mods !== undefined && accessOf_(relay, matrixClassOf(s)) !== false; // S1.3: a GUI mod.command is served, with a gesture stamp (gesture.ts)
 
   const recheckMs = o.tokenRecheckMs ?? TOKEN_RECHECK_MS;
   /** A read-token connection whose token died: log (best-effort), then close. Returns the refusal to answer with. */
@@ -920,16 +925,18 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       const id = pr?.[m === 'mod.view' ? 'viewId' : 'commandId'];
       const ok = pr !== null && typeof pr.name === 'string' && RELAY_MOD_NAME.test(pr.name) && typeof id === 'string' && RELAY_ID.test(id);
       if (!ok) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${m} params are {name: a mod name, ${m === 'mod.view' ? 'viewId: a view id, input' : 'commandId: a command id, args'}}`, { verb: m });
-      if (m === 'mod.command' && s.credential === 'gui') {
-        throw new RpcRefusal('ENGINE', 'not-implemented', 'mod.command from a GUI needs a user gesture (§11.5); the gesture proof lands with the GUI (M1.10)', { verb: m, milestone: 'M1.10' });
-      }
       const q = p as Record<string, unknown>;
+      // S1.3 (Aegis A1, B1; G-MOD-16): a GUI connection's mod.command carries a gesture stamp in args.gesture, checked
+      // and spent HERE per connection and removed before the mod host sees the args. It proves nothing about a human
+      // (gesture.ts). The write it can lead to is bounded by the host's command read cap (modhost/effects.ts
+      // commandCap): only a gnomon-published mod writes, and only for this surface.
+      const args = m === 'mod.command' && s.credential === 'gui' ? takeGesture(s, q.args) : (q.args ?? null);
       // Aegis M1: the class rides with the principal, so the host joins a focus only for a caller entitled to it
       // S1.2 C2 / A1: the surface is derived HERE from the connection's credential AND class, never from params
       const surface = relaySurfaceOf(s.credential, cls);
       const relayedFor = { principal: s.principal!, connId: s.connId, principalClass: cls, ...(surface ? { surface } : {}) };
       try {
-        return await (m === 'mod.view' ? o.mods.view(relayedFor, { name: String(q.name), viewId: String(q.viewId), input: q.input ?? null }) : o.mods.command(relayedFor, { name: String(q.name), commandId: String(q.commandId), args: q.args ?? null }));
+        return await (m === 'mod.view' ? o.mods.view(relayedFor, { name: String(q.name), viewId: String(q.viewId), input: q.input ?? null }) : o.mods.command(relayedFor, { name: String(q.name), commandId: String(q.commandId), args }));
       } catch (err) {
         throw asRpcRefusal(err);
       }

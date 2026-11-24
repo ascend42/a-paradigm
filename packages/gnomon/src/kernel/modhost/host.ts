@@ -115,7 +115,7 @@ import type { ChildLaunchPlan } from '../sandbox/transport.js';
 import { sanitizeModBlock } from './block.js';
 import { RowFold } from './fold.js';
 import { ModChannel, ModRpcError } from './channel.js';
-import { declaredEffects, effectsFor, methodEffect, type CallContext, type CallStamp } from './effects.js';
+import { commandCap, declaredEffects, effectsFor, methodEffect, type CallContext, type CallStamp } from './effects.js';
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
@@ -1067,7 +1067,8 @@ export class ModHost {
       ctx = this.#boundContext(r, method, params);
       effect = methodEffect(method, params);
       const allowed = effectsFor(r.manifest, ctx, r.dev);
-      if (!allowed.has(effect)) throw new ModRefusal('EFFECT', `${name} called ${method}${method === 'kernel.call' ? ` ${String(params.verb)}` : ''} needing \`${effect}\` outside its effects in force [${[...allowed].sort().join(', ')}]${r.dev ? ' (dev mode: read only)' : ''}`, { name, method, effect });
+      const capped = ctx.kind === 'command' && commandCap(r.manifest, ctx) === 'read';
+      if (!allowed.has(effect)) throw new ModRefusal('EFFECT', `${name} called ${method}${method === 'kernel.call' ? ` ${String(params.verb)}` : ''} needing \`${effect}\` outside its effects in force [${[...allowed].sort().join(', ')}]${r.dev ? ' (dev mode: read only)' : ''}${capped ? ' (a command writes only for a human on the GUI and a gnomon-published mod: read only)' : ''}`, { name, method, effect, ...(capped ? { cap: 'command-read' } : {}) });
       if (method === 'kernel.call') {
         const verb = String(params.verb);
         const vp = params.params && typeof params.params === 'object' && !Array.isArray(params.params) ? (params.params as Record<string, unknown>) : {};

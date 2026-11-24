@@ -14,7 +14,9 @@
  * `callId` is idle (read, which only narrows); one naming any other call —
  * ended, foreign or guessed — is refused (host.ts, FORBIDDEN `CALL`):
  *   - `tool.call{name}` → that tool's effects;
- *   - `command.run`     → the mod's declared set (a user command, §12.3);
+ *   - `command.run`     → the mod's declared set for a human on the GUI and a
+ *                         `gnomon`-published mod; `read` only for every other
+ *                         command context (commandCap, S1.3, G-MOD-17);
  *   - `view.render`     → `read` only (views are pure, §12.2);
  *   - idle / `event`    → `read` only.
  * A dev-mode mod is capped at `read` whatever it declares (§12.5).
@@ -48,13 +50,30 @@ export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
   return out;
 }
 
-/** The effects in force for a call context (∩ the dev cap). */
+/**
+ * The command READ CAP (S1.3, Aegis A2 and B1; G-MOD-17), generic to every mod. A command runs with its mod's
+ * declared set only when BOTH hold:
+ *   - the stamp the host built for the call (the `pickRelayedFor` output, never the request) has an own
+ *     `surface: 'gui'`: the caller is a human on the GUI credential (socket/dispatch.ts relaySurfaceOf);
+ *   - the mod's publisher is `gnomon` (the loader keeps publisher gnomon ⇔ the first-party tier).
+ * Everything else is capped at `read`, and it fails CLOSED because the full set is the exception here, not the
+ * default: a command context with no stamp (a direct `runCommand` with no `relayedFor`), a stamp without a surface
+ * (an agent, session, voice or mod caller), `surface: 'cli'` (a human on a device key) and a third-party mod on any
+ * surface can never `state.set` or `log.append` through a command.
+ */
+export function commandCap(m: ManifestV2, ctx: Extract<CallContext, { kind: 'command' }>): 'read' | null {
+  const rf = ctx.stamp?.relayedFor;
+  const gui = rf !== undefined && rf !== null && Object.hasOwn(rf, 'surface') && rf.surface === 'gui';
+  return gui && m.publisher === 'gnomon' ? null : 'read';
+}
+
+/** The effects in force for a call context (∩ the command read cap ∩ the dev cap). */
 export function effectsFor(m: ManifestV2, ctx: CallContext, dev: boolean): Set<ToolEffect> {
   let set: Set<ToolEffect>;
   if (ctx.kind === 'tool') set = new Set(m.provides?.tools?.find((t) => t.name === ctx.tool)?.effects ?? []);
   else if (ctx.kind === 'command') set = declaredEffects(m);
   else set = new Set<ToolEffect>(['read']);
-  if (dev) set = new Set([...set].filter((e) => e === 'read'));
+  if (dev || (ctx.kind === 'command' && commandCap(m, ctx) === 'read')) set = new Set([...set].filter((e) => e === 'read'));
   return set;
 }
 

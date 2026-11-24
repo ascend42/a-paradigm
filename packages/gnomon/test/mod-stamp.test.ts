@@ -12,6 +12,8 @@ import { MATRIX_CLASSES } from '../src/kernel/socket/methods.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { appendGrantRow } from '../src/kernel/manifest/index.js';
 import { HOST_ARG_KEYS, type ModHostOptions } from '../src/kernel/modhost/host.js';
+import { commandCap, effectsFor, type CallContext } from '../src/kernel/modhost/effects.js';
+import type { ManifestV2 } from '../src/kernel/manifest/manifest.js';
 import { FIRST_PARTY_PROBE, host, install, installFirstParty, probeManifest, rig, writeModFolder } from './mod-helpers.js';
 
 const cleanups: Array<() => Promise<unknown>> = [];
@@ -38,11 +40,12 @@ async function started(caps: string[] = []) {
 
 describe('G-MOD-12: a mod-supplied relayedFor or causes on an append is replaced by the host\'s', () => {
   it('a relayed command: the row carries the caller\'s {principal, connId, surface}; the forged stamp and causes are gone', async () => {
-    const { h, rows } = await started();
-    const out = (await h.relayCommand({ name: 'acme.probe', commandId: 'probe.who', args: { op: 'append.forged' }, principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'cli' })) as { relayedFor: unknown; out: { ok: boolean } };
+    // S1.3 (G-MOD-17): a command appends only for a human on the GUI and a gnomon-published mod
+    const { h, rows } = await both();
+    const out = (await h.relayCommand({ name: FIRST_PARTY_PROBE, commandId: 'probe.who', args: { op: 'append.forged' }, principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'gui' })) as { relayedFor: unknown; out: { ok: boolean } };
     expect(out.out.ok).toBe(true);
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.payload).toEqual({ note: 'n', relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'cli' } });
+    expect(rows[0]!.payload).toEqual({ note: 'n', relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'gui' } });
     expect(rows[0]!.causes).toBeUndefined();
     expect('causes' in rows[0]!).toBe(false);
     // the row holds exactly what the mod was sent
@@ -64,9 +67,9 @@ describe('G-MOD-12: a mod-supplied relayedFor or causes on an append is replaced
     const { h, rows } = await started();
     // a tool call the host has no toolRelayedFor for (every caller before the S1.4 bridge)
     expect(((await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' })) as { relayedFor: unknown }).relayedFor).toBeNull();
-    // a host-initiated command (no relay)
-    await h.runCommand('acme.probe', 'probe.who', { op: 'append.forged' });
-    expect(rows).toHaveLength(2);
+    // a host-initiated command (no relay) is read-only since S1.3 (G-MOD-17): its append is refused, so no row
+    expect(((await h.runCommand('acme.probe', 'probe.who', { op: 'append.forged' })) as { out: { ok: boolean } }).out.ok).toBe(false);
+    expect(rows).toHaveLength(1);
     for (const row of rows) {
       expect(row.payload).toEqual({ note: 'n' });
       expect('relayedFor' in row.payload).toBe(false);
@@ -145,10 +148,11 @@ describe('G-MOD-12: a mod-supplied relayedFor or causes on an append is replaced
   });
 
   it('a stamped dimension row folds as the right hand; an unstamped one as the unknown hand, never as human', async () => {
-    const { h, rows } = await started(['log.read']);
-    await h.relayCommand({ name: 'acme.probe', commandId: 'probe.who', args: { op: 'append.forged' }, principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'gui' });
-    await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' }, { toolRelayedFor: { ...TOOL, surface: 'voice' } });
-    await h.callTool('acme.probe', 'probe.write', { who: true, op: 'append.forged' });
+    // the first-party probe: its command may write from the GUI (G-MOD-17), and a gnomon mod is told who called its tool
+    const { h, rows } = await both();
+    await h.relayCommand({ name: FIRST_PARTY_PROBE, commandId: 'probe.who', args: { op: 'append.forged' }, principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'gui' });
+    await h.callTool(FIRST_PARTY_PROBE, 'probe.write', { who: true, op: 'append.forged' }, { toolRelayedFor: { ...TOOL, surface: 'voice' } });
+    await h.callTool(FIRST_PARTY_PROBE, 'probe.write', { who: true, op: 'append.forged' });
     const dim = 'dim:01JVA1D0000000000000000001';
     const stamps = rows.map((r) => r.payload.relayedFor as Record<string, string> | undefined);
     for (const s of stamps.slice(0, 2)) {
@@ -181,20 +185,25 @@ describe('G-MOD-14: only a human-class caller earns a surface; a row without pri
   });
 
   it('per caller class, through the relay port and the host: a non-human command row has no surface and folds as the unknown hand', async () => {
-    const { h, rows } = await started();
+    const { h, rows } = await both();
     const port = createModRelayPort(h);
     const classes = ['human', 'agent', 'session', 'mod', 'voice'] as const;
+    // what the mod was SENT is what a row of that call would be stamped with (one pickRelayedFor output)
+    const sent: Array<Record<string, string>> = [];
     for (const cls of classes) {
       const surface = relaySurfaceOf('device', cls);
-      await port.command({ principal: `p:abcdefgh/${cls}-1`, connId: 'conn-7', principalClass: cls, ...(surface ? { surface } : {}) }, { name: 'acme.probe', commandId: 'probe.who', args: { op: 'append.forged' } });
+      const out = (await port.command({ principal: `p:abcdefgh/${cls}-1`, connId: 'conn-7', principalClass: cls, ...(surface ? { surface } : {}) }, { name: FIRST_PARTY_PROBE, commandId: 'probe.who', args: { op: 'append.forged' } })) as { result: { relayedFor: Record<string, string>; out: { ok: boolean } } };
+      expect([cls, out.result.out.ok]).toEqual([cls, false]); // S1.3 (G-MOD-17): none of them is a human on the GUI, so none appends
+      sent.push(out.result.relayedFor);
     }
+    expect(rows).toEqual([]);
     const dim = 'dim:01JVA1D0000000000000000001';
     const node = (n: number): Record<string, unknown> => ({ id: `01JVA1D000000000000000002${n}`, kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 });
     const state = foldDim([
       { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['hs-1'], opened: 'command' } },
-      ...rows.map((r, i) => ({ seq: 2 + i, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [{ type: 'add', node: node(i) }], relayedFor: r.payload.relayedFor } })),
+      ...sent.map((relayedFor, i) => ({ seq: 2 + i, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [{ type: 'add', node: node(i) }], relayedFor } })),
     ]);
-    expect(rows.map((r) => (r.payload.relayedFor as Record<string, string>).surface)).toEqual(['cli', undefined, undefined, undefined, undefined]);
+    expect(sent.map((rf) => rf.surface)).toEqual(['cli', undefined, undefined, undefined, undefined]);
     expect(classes.map((_c, i) => state.nodes.get(node(i).id as string)!.by.cls)).toEqual(['human', 'unknown', 'unknown', 'unknown', 'unknown']);
   });
 });
@@ -275,7 +284,7 @@ async function both(over: Partial<ModHostOptions> = {}) {
   /** what the mod's command handler received as `args` */
   const seen = async (name: string, args: unknown, who: { principal: string; connId: string; principalClass?: string; surface?: 'gui' | 'cli' } = GUI): Promise<ProbeArgs> =>
     ((await h.relayCommand({ name, commandId: 'probe.who', args, ...who })) as { out: ProbeArgs }).out;
-  return { h, rows, joins, seen };
+  return { h, rows, joins, seen, r };
 }
 
 describe('G-MOD-17: a command\'s args are host-composed; hsid and repo come from the host, for a first-party mod and a live joinable session only', () => {
@@ -365,6 +374,122 @@ describe('G-MOD-17: a command\'s args are host-composed; hsid and repo come from
     expect(clampModAppend(FIRST_PARTY_PROBE, 'p', { kind, payload: { scope: { repo: REPO2 } }, scope: { repo: REPO2 } }, { ...stamp, scope: { repo: REPO } }).scope).toEqual({ repo: REPO });
     for (const repo of ['/Users/x/repo', 'repo:XYZ', '', `${REPO}0`, 7 as unknown as string]) expect(clampModAppend(FIRST_PARTY_PROBE, 'p', { kind, payload: {} }, { ...stamp, scope: { repo } }).scope).toBeUndefined();
     expect(MOD_APPEND_FIELDS).toEqual(['kind', 'payload', 'audience', 'sensitivity']);
+  });
+});
+
+describe('G-MOD-17: the command read cap: a command writes only for a human on the GUI and a gnomon-published mod', () => {
+  type Out = { relayedFor: Record<string, string> | null; out: { ok: boolean; v?: string; code?: unknown } };
+  const M = (publisher: string): ManifestV2 => ({ ...probeManifest(), publisher });
+  const cmd = (rf?: Record<string, string>): Extract<CallContext, { kind: 'command' }> => ({ kind: 'command', ...(rf ? { stamp: { relayedFor: rf } } : {}) });
+
+  it('the pure rule: full effects need an own surface: gui on the stamp AND publisher gnomon; every other command context is read', () => {
+    const full = ['read', 'write', 'network', 'spend'];
+    const table: Array<[string, string, Record<string, string> | undefined, string[]]> = [
+      ['human on the GUI, first-party', 'gnomon', { principal: 'p', connId: 'c', surface: 'gui' }, full],
+      ['human on the GUI, third-party', 'acme', { principal: 'p', connId: 'c', surface: 'gui' }, ['read']],
+      ['human on a device key (cli), first-party', 'gnomon', { principal: 'p', connId: 'c', surface: 'cli' }, ['read']],
+      ['no surface (agent, session, voice, mod), first-party', 'gnomon', { principal: 'p', connId: 'c' }, ['read']],
+      ['an unknown surface, first-party', 'gnomon', { principal: 'p', connId: 'c', surface: 'GUI' }, ['read']],
+      ['a tool surface on a command, first-party', 'gnomon', { principal: 'p', connId: 'c', surface: 'bridge' }, ['read']],
+      ['no stamp at all (a direct runCommand), first-party', 'gnomon', undefined, ['read']],
+      ['no stamp at all, third-party', 'acme', undefined, ['read']],
+      ['publisher local', 'local', { principal: 'p', connId: 'c', surface: 'gui' }, ['read']],
+    ];
+    for (const [label, publisher, rf, want] of table) {
+      expect([label, [...effectsFor(M(publisher), cmd(rf), false)]]).toEqual([label, want]);
+      expect([label, commandCap(M(publisher), cmd(rf))]).toEqual([label, want.length > 1 ? null : 'read']);
+    }
+    // a surface reachable only through a prototype vouches for nothing
+    const inherited = Object.create({ surface: 'gui' }) as Record<string, string>;
+    expect(commandCap(M('gnomon'), cmd(inherited))).toBe('read');
+    // the dev cap still applies on top, and the cap never widens a mod that declared no read
+    expect([...effectsFor(M('gnomon'), cmd({ surface: 'gui' }), true)]).toEqual(['read']);
+    expect([...effectsFor({ ...M('acme'), provides: { tools: [{ name: 'probe.write', effects: ['write'] }] } }, cmd({ surface: 'gui' }), false)]).toEqual([]);
+    // tools, views and idle are untouched by the command cap
+    expect([...effectsFor(M('acme'), { kind: 'tool', tool: 'probe.write' }, false)]).toEqual(['read', 'write']);
+    expect([...effectsFor(M('gnomon'), { kind: 'view' }, false)]).toEqual(['read']);
+  });
+
+  it('per caller class, through the relay port and the running mods: only the human on the GUI with the first-party mod appends a row or sets state', async () => {
+    const { h, rows, r } = await both();
+    const port = createModRelayPort(h);
+    const state = async (name: string): Promise<string | undefined> => ((await h.callTool(name, 'probe.read', { op: 'state.get' })) as { v?: string }).v;
+    const before = { acme: await state('acme.probe'), gnomon: await state(FIRST_PARTY_PROBE) };
+    // [label, class, credential]: the surface is derived as the dispatcher derives it (relaySurfaceOf)
+    const callers: Array<[string, (typeof MATRIX_CLASSES)[number], string]> = [
+      ['human on the GUI', 'human', 'gui'],
+      ['human on a device key', 'human', 'device'],
+      ['agent', 'agent', 'device'],
+      ['session', 'session', 'device'],
+      ['voice', 'voice', 'device'],
+      ['mod', 'mod', 'device'],
+      // a class that could never hold the GUI credential still earns no surface from it
+      ['agent on a gui credential', 'agent', 'gui'],
+    ];
+    const seen: Array<[string, string, string | undefined, boolean, boolean, boolean]> = [];
+    for (const name of [FIRST_PARTY_PROBE, 'acme.probe']) {
+      for (const [label, cls, cred] of callers) {
+        const surface = relaySurfaceOf(cred, cls);
+        const rf = { principal: `p:abcdefgh/${cls}-1`, connId: 'conn-7', principalClass: cls, ...(surface ? { surface } : {}) };
+        const run = async (args: Record<string, unknown>): Promise<Out> => ((await port.command(rf, { name, commandId: 'probe.who', args })) as { result: Out }).result;
+        const n = rows.length;
+        const append = await run({ op: 'append.forged' });
+        const set = await run({ op: 'state.set', value: `${label} ${name}` });
+        const get = await run({ op: 'state.get' });
+        seen.push([name, label, append.relayedFor?.surface, append.out.ok, set.out.ok, get.out.ok]);
+        // read-only means NOTHING was written: no row, and the state is what it was
+        if (!append.out.ok) expect([label, name, rows.length]).toEqual([label, name, n]);
+        if (!set.out.ok) expect([label, name, await state(name)]).toEqual([label, name, name === 'acme.probe' ? before.acme : JSON.stringify('human on the GUI gnomon.probe')]);
+      }
+    }
+    expect(seen).toEqual([
+      // mod, caller, surface the mod was told, append, state.set, state.get
+      [FIRST_PARTY_PROBE, 'human on the GUI', 'gui', true, true, true],
+      [FIRST_PARTY_PROBE, 'human on a device key', 'cli', false, false, true],
+      [FIRST_PARTY_PROBE, 'agent', undefined, false, false, true],
+      [FIRST_PARTY_PROBE, 'session', undefined, false, false, true],
+      [FIRST_PARTY_PROBE, 'voice', undefined, false, false, true],
+      [FIRST_PARTY_PROBE, 'mod', undefined, false, false, true],
+      [FIRST_PARTY_PROBE, 'agent on a gui credential', undefined, false, false, true],
+      ['acme.probe', 'human on the GUI', 'gui', false, false, true],
+      ['acme.probe', 'human on a device key', 'cli', false, false, true],
+      ['acme.probe', 'agent', undefined, false, false, true],
+      ['acme.probe', 'session', undefined, false, false, true],
+      ['acme.probe', 'voice', undefined, false, false, true],
+      ['acme.probe', 'mod', undefined, false, false, true],
+      ['acme.probe', 'agent on a gui credential', undefined, false, false, true],
+    ]);
+    // exactly one row in all, stamped with the GUI human, under the first-party mod's principal
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: 'modns.gnomon.probe.done', payload: { relayedFor: { principal: 'p:abcdefgh/human-1', connId: 'conn-7', surface: 'gui' } } });
+    expect(before.gnomon).not.toBe(JSON.stringify('human on the GUI gnomon.probe'));
+    expect(await state('acme.probe')).toBe(before.acme);
+    // every refused write is logged, for both mods, as an effect refusal (never silently dropped)
+    const refused = r.events.filter((e) => e.kind === 'mod.effect.refused').map((e) => e.payload);
+    for (const name of [FIRST_PARTY_PROBE, 'acme.probe']) {
+      expect(refused.some((p) => p.name === name && p.effect === 'write' && p.method === 'state.set')).toBe(true);
+      expect(refused.some((p) => p.name === name && p.effect === 'write' && p.verb === 'log.append')).toBe(true);
+    }
+  });
+
+  it('fails closed: a direct runCommand with no relayedFor, or one whose relayedFor has no surface, is read-only for both mods', async () => {
+    const { h, rows } = await both();
+    for (const name of [FIRST_PARTY_PROBE, 'acme.probe']) {
+      for (const opts of [{}, { relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7' } }, { relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7' }, relayedClass: 'human' }, { relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7', surface: 'cli' as const }, relayedClass: 'human' }]) {
+        const run = async (args: Record<string, unknown>): Promise<Out> => (await h.runCommand(name, 'probe.who', args, opts)) as Out;
+        expect([name, opts, (await run({ op: 'append.forged' })).out.ok, (await run({ op: 'state.set', value: 9 })).out.ok, (await run({ op: 'state.get' })).out.ok]).toEqual([name, opts, false, false, true]);
+      }
+      expect(((await h.callTool(name, 'probe.read', { op: 'state.get' })) as { v?: string }).v).not.toBe('9');
+    }
+    expect(rows).toEqual([]);
+  });
+
+  it('a capped write is refused to the mod (the call itself still answers) and logged mod.effect.refused', async () => {
+    const { h, r } = await both();
+    const out = (await h.relayCommand({ name: 'acme.probe', commandId: 'probe.who', args: { op: 'state.set' }, ...GUI })) as Out;
+    expect(out.out).toMatchObject({ ok: false });
+    expect(out.relayedFor).toEqual({ principal: GUI.principal, connId: GUI.connId, surface: 'gui' });
+    expect(r.events.find((e) => e.kind === 'mod.effect.refused')?.payload).toMatchObject({ name: 'acme.probe', effect: 'write', method: 'state.set' });
   });
 });
 
