@@ -36,7 +36,7 @@
 // browser sends NO report never loaded the page; it is retried ONCE per engine and both attempts stay in the
 // evidence. A run that reported is never retried.
 import { gnomonCsp } from '../_shared/browser.mjs';
-import { exercisedChecks, NO_REPORT, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
+import { exercisedChecks, NO_REPORT, pasteCarried, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
 
 export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'G-DDL-07', 'S25-M3'];
 
@@ -125,6 +125,9 @@ export default async function probe(ctx) {
       exercised,
       // how each engine's paste was made: `devtools` is a real paste (clipboard plus the platform's paste chord)
       pasteVia: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, e.runs.find((r) => r.mounted)?.fix?.paste?.via ?? e.runs.find((r) => r.mounted)?.fix?.paste?.unsupported ?? null])),
+      // what each paste check's event carried in each engine (`text`, `file`, or `nothing` where the engine strips
+      // script-built clipboard data): a check is judged, and counted as exercised, by this and never by the engine's name
+      pasteCarried: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, pasteCarried(e.runs.find((r) => r.mounted) ?? {})])),
       pasteModifier: process.platform === 'darwin' ? 'Meta' : 'Control',
       clean,
       findings,
