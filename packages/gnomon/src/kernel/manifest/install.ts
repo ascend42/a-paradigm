@@ -657,7 +657,9 @@ export function stageInstall(opts: StageOptions): StageResult {
   const current = effectiveInstall(grants, name);
   if (!opts.recard && current && current.packageHash === snap.packageHash && current.manifestHash === mh && current.source === source) return { state: 'unchanged', packageHash: snap.packageHash };
   // Rollback protection (Aegis S1.2 point 9a): a superseded first-party tree keeps the tier of an EXISTING install only.
-  // A new stage of one (not the tree pinned now) is refused, so an old first-party build can never be put back.
+  // A new stage of one (not the tree pinned now) is refused here, and rollbackMod refuses to re-pin one from an
+  // earlier grant row, so an old first-party build is not put back by a stage or by a rollback. (An install that is
+  // still pinned at a superseded hash stays as it is until its Update card is approved.)
   if (SUPERSEDED_FIRST_PARTY_PINS.has(snap.packageHash) && !(current && current.packageHash === snap.packageHash)) {
     if (snap.created) removeTree(snap.dir);
     emit('manifest.refuse', { name, code: 'TIER', why: 'superseded' });
@@ -974,6 +976,7 @@ function pick(d: Surface & { packageHash: string }): Record<string, unknown> {
 /**
  * Human-only rollback: re-pin a previous APPROVED snapshot (an earlier
  * grant.install row for the mod), never an unapproved one; keeps the link.
+ * A target in SUPERSEDED_FIRST_PARTY_PINS is refused TIER (rollback protection).
  */
 export function rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
   const emit = opts.emit ?? noEvents;
@@ -989,6 +992,12 @@ export function rollbackMod(home: string, name: string, toPackageHash: string | 
     ? [...rows].reverse().find((r) => r.packageHash === toPackageHash)
     : [...rows].reverse().find((r) => r.packageHash !== current.packageHash);
   if (!target) throw new ManifestRefusal('NOT_INSTALLED', `no previously approved snapshot ${toPackageHash ?? '(previous)'} for ${name}`, { name, toPackageHash });
+  // Rollback protection (Aegis S1.2 point 9a, S1.1 carry-over): an earlier approved row at a superseded first-party
+  // pin is not a rollback target. Only the tree pinned now may stay at such a hash (the same rule as stageInstall).
+  if (SUPERSEDED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== current.packageHash) {
+    emit('manifest.refuse', { name, code: 'TIER', why: 'superseded' });
+    throw new ManifestRefusal('TIER', `${name}: the earlier snapshot is a superseded first-party build and is not re-pinned by rollback`, { name, why: 'superseded', toPackageHash: target.packageHash });
+  }
   const files = hashPinnedTree(pinnedDir(home, pinDirKey(target), target.packageHash));
   if (computePackageHash(files) !== target.packageHash) throw new ManifestRefusal('INTEGRITY', `snapshot ${target.packageHash} of ${name} is damaged`, { name });
   // a rollback to a legacy (format-1) pin keeps it as a v1 row would resolve; S0b rows carry the full id
