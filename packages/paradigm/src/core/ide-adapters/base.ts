@@ -703,29 +703,46 @@ export function generateFooter(): string {
   return lines.join('\n');
 }
 
-/** Plain-language name of each stop-hook check, for generated instruction files. */
-const ENFORCEMENT_CHECK_LABELS: Record<CheckId, string> = {
-  'purpose-coverage': 'source files changed without a .purpose update',
-  'purpose-exists': 'a required directory with no .purpose file',
-  'portal-gates': 'routes with no portal.yaml gates',
-  'aspect-anchors': 'aspects with missing code anchors',
-  'purpose-freshness': 'stale .purpose files',
-  'aspect-advisory': 'suggested aspects',
-  'lore-required': 'no lore entry for a multi-file session',
+/**
+ * What each stop-hook check tests, written from the hook itself
+ * (commands/hooks/scripts/paradigm-common.sh), not from the check id. Keys
+ * must be ids the hook reads with `_check_severity "<id>"`
+ * (enforcement-section.test.ts pins that). `graduation-tracking` has no entry:
+ * it only records failures of graduated habits when another check fails, so
+ * it is not something the hook blocks or warns "on".
+ */
+export const ENFORCEMENT_CHECK_LABELS: Partial<Record<CheckId, string>> = {
+  'purpose-coverage': 'source changed and no Paradigm file updated',
+  'purpose-exists': 'changed source directories no .purpose documents',
+  'portal-gates': 'route code changed in a project with no portal.yaml',
+  'aspect-anchors': 'aspect anchors naming files that do not exist',
+  'purpose-freshness': '.purpose files covering changed source but not updated',
+  'aspect-advisory': 'aspects that may need new anchors (compliance agent on the roster only)',
+  'lore-required': '3+ changed source files and no lore entry (projects with .paradigm/lore/)',
   'habits-blocking': 'unmet blocking habits',
-  'purpose-required-patterns': 'purpose-required patterns not covered',
-  'drift-detection': 'symbol drift',
-  'portal-compliance': 'portal.yaml compliance',
-  'graduation-tracking': 'graduation tracking',
-  'orchestration-required': 'multi-file work done without orchestration',
+  'purpose-required-patterns': 'purpose-required directories with no .purpose',
+  'drift-detection': 'drifted aspect anchors (compliance agent on the roster only)',
+  'portal-compliance': 'gates used in code but not declared in portal.yaml, or the compliance check not running',
+  'orchestration-required': 'large changes made without team orchestration',
 };
+
+/**
+ * True of the hook at EVERY level, so the section never says "nothing blocks":
+ * Check 14 blocks on a `guard` remediation whatever the level, and with no
+ * resolvable CLI the hook cannot read the level at all, so it blocks ("CLI not
+ * found") and runs each check at its built-in default.
+ */
+const ENFORCEMENT_ANY_LEVEL =
+  'At any level: a `guard` remediation blocks until resolved or overridden (`paradigm override <id>`), ' +
+  'and if the `paradigm` CLI cannot be found the hook cannot read this level, so it blocks and runs every check at its built-in default.';
 
 /**
  * "Automatic Enforcement (Hooks)" section, written from the project's RESOLVED
  * enforcement level (preset plus per-check overrides), so the file never claims
  * the stop hook blocks when its checks are off. `files.enforcement` unset is
  * the default level `none`. Depends only on config.yaml, so it is byte-stable
- * across syncs and safe in CLAUDE.md's cacheable head.
+ * across syncs and safe in CLAUDE.md's cacheable head. Always-on text: keep it
+ * short.
  */
 export function generateEnforcementSection(files: ParadigmFiles): string {
   const config = files.enforcement ?? {
@@ -734,8 +751,9 @@ export function generateEnforcementSection(files: ParadigmFiles): string {
     orchestration: { threshold: 3, detection: 'git-diff', exempt: [] },
   };
   const resolved = resolveAllChecks(config);
-  const blocking = CHECK_IDS.filter((id) => resolved[id] === 'block');
-  const warning = CHECK_IDS.filter((id) => resolved[id] === 'warn');
+  const named = CHECK_IDS.filter((id) => ENFORCEMENT_CHECK_LABELS[id] !== undefined);
+  const blocking = named.filter((id) => resolved[id] === 'block');
+  const warning = named.filter((id) => resolved[id] === 'warn');
   const overrides = Object.keys(config.checks).length;
   const levelText =
     `\`${config.level}\`` + (overrides > 0 ? ` with ${overrides} per-check override${overrides === 1 ? '' : 's'}` : '');
@@ -747,31 +765,33 @@ export function generateEnforcementSection(files: ParadigmFiles): string {
 
   let stopRow: string;
   if (blocking.length === 0 && warning.length === 0) {
-    lines.push(`Enforcement level: ${levelText}. The stop hook checks are **off** in this project: nothing blocks and nothing warns.`);
-    lines.push('');
-    lines.push('Turn them on with `paradigm enforcement set <level>` (`minimal`, `balanced` or `strict`), then run `paradigm sync` to refresh this file.');
-    stopRow = 'All checks off';
+    lines.push(
+      `Enforcement level: ${levelText}. This level's stop-hook checks are **off**. Turn them on with \`paradigm enforcement set <level>\` (\`minimal\`, \`balanced\` or \`strict\`).`,
+    );
+    stopRow = "This level's checks are off";
   } else if (blocking.length === 0) {
-    lines.push(`Enforcement level: ${levelText}. The stop hook **warns but never blocks** in this project.`);
-    lines.push('');
-    lines.push('Raise it with `paradigm enforcement set <level>` (`balanced` or `strict`), then run `paradigm sync` to refresh this file.');
+    lines.push(
+      `Enforcement level: ${levelText}. This level's stop-hook checks **warn and do not block**. Raise it with \`paradigm enforcement set <level>\` (\`balanced\` or \`strict\`).`,
+    );
     stopRow = `Warns on: ${list(warning)}`;
   } else {
-    lines.push(`Enforcement level: ${levelText}. The stop hook **BLOCKS** in this project until the blocking checks below pass.`);
+    lines.push(
+      `Enforcement level: ${levelText}. The stop hook **blocks once** for each new set of violations; the same set is advisory after that.`,
+    );
     stopRow = `Blocks on: ${list(blocking)}` + (warning.length > 0 ? `. Warns on: ${list(warning)}` : '');
   }
   lines.push('');
   lines.push('| Hook | Behavior |');
   lines.push('|------|----------|');
   lines.push(`| **Stop** | ${stopRow} |`);
-  lines.push('| **Pre-commit** | Auto-rebuilds index \u2014 never blocks |');
+  lines.push('| **Pre-commit** | Auto-rebuilds index — never blocks |');
   lines.push('| **Post-write** | Advisory reminder for .purpose coverage |');
   lines.push('');
   if (blocking.length > 0) {
-    lines.push('**If blocked:** Update .purpose files \u2192 update portal.yaml if needed \u2192 `paradigm_reindex` \u2192 finish');
+    lines.push('**If blocked:** Update .purpose files → update portal.yaml if needed → `paradigm_reindex` → finish');
     lines.push('');
   }
-  lines.push('See every check and its severity with `paradigm enforcement`.');
+  lines.push(ENFORCEMENT_ANY_LEVEL);
   lines.push('');
   return lines.join('\n');
 }
