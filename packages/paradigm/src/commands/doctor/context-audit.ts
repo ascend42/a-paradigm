@@ -486,7 +486,7 @@ async function checkOrphanedSymbols(rootDir: string): Promise<ContextAuditResult
     results.push({
       check: 'orphaned-symbols',
       status: 'advisory',
-      message: 'No scan-index.json found — run paradigm scan first',
+      message: 'No scan-index.json found — run paradigm reindex first',
     });
     return results;
   }

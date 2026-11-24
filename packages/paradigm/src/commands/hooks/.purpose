@@ -1,5 +1,11 @@
 version: 2.0.0
 components:
+  hook-advisory:
+    description: "scripts/paradigm-common.sh ADVISORY: the list of non-blocking warnings the Stop hooks print under 'Advisory:'. Initialised ONCE beside VIOLATIONS and only ever appended to (ADVISORY=\"$ADVISORY…\"). It used to be reset to \"\" at Check 6, which discarded the warnings of the missing-CLI check and Checks 1-5 (purpose-coverage, purpose-exists, portal-gates, aspect-anchors, purpose-freshness), so `warn` behaved like `off` for them; Check 6 also assigned instead of appending. Edit the script here and run `node scripts/generate-hooks.mjs`: generated-hooks.ts and both plugin scripts/ directories are generated copies."
+    type: utility
+    path: scripts/paradigm-common.sh
+    tests:
+      - packages/paradigm/tests/hooks-advisory.test.ts
   skill-used-hook:
     description: 'v7.10.0 (Skills Phase 1) Claude Code PostToolUse hook (matcher: Skill) — scripts/claude-code-skill-used.sh, copied to the plugin as paradigm-skill-used.sh and installed by `paradigm hooks install --claude-code`. Pre-filters payloads without `pdg-`, then pipes the payload to the hidden `paradigm skill record-usage` verb, which appends a !skill-used row. Always exit 0, no output.'
     type: hook

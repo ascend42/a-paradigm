@@ -4,6 +4,7 @@
  */
 
 import type { ParadigmConfig } from '../paradigm-config.js';
+import type { EnforcementConfig } from '../enforcement/types.js';
 
 /**
  * Spec files loaded from .paradigm/specs/
@@ -55,6 +56,13 @@ export interface ParadigmFiles {
     };
   }>;
   /**
+   * The project's enforcement config (core/enforcement loadEnforcementConfig).
+   * Unset is treated as the default level (`none`: every check off), so a
+   * generated file never claims the stop hook blocks when it does not. Stable
+   * config, so the section it renders lives in CLAUDE.md's cacheable head.
+   */
+  enforcement?: EnforcementConfig;
+  /**
    * Set when the project is versioned by Warpline (core/warpline-detect.ts).
    * Unset → no generated file mentions Warpline. The block it renders is
    * config-free and byte-stable, so it lives in CLAUDE.md's cacheable head.
@@ -69,7 +77,7 @@ export interface ParadigmFiles {
    * `ClaudeAdapter.generate` and `.paradigm/docs/` docgen guidance.
    */
   meta?: {
-    /** Paradigm symbol-schema version string, e.g. "v2.0". */
+    /** Symbol-schema version (NOT the product version), e.g. "v2". Rendered as "symbol schema v2". */
     paradigmVersion?: string;
     /** Total symbol count at generation time. */
     symbolCount?: number;
@@ -79,6 +87,9 @@ export interface ParadigmFiles {
     currentArc?: string;
   };
 }
+
+/** The public repository that generated files link to. */
+export const PARADIGM_REPO_URL = 'https://github.com/ascend42/a-paradigm';
 
 /**
  * Result of IDE detection

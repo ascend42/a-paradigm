@@ -16,7 +16,7 @@ export type {
   OrchestrationConfig,
 } from './types.js';
 
-export { CHECK_IDS } from './types.js';
+export { CHECK_IDS, ENFORCEMENT_LEVELS, ENFORCEMENT_SET_DESCRIPTION } from './types.js';
 
 export {
   getPreset,

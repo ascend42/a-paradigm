@@ -128,7 +128,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
 import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV, type RootArm } from './root.js';
 import { health, healthExitCode, type HealthReport } from './health.js';
-import { orient, type OrientReport } from './orient.js';
+import { orient, agentGuideLine, type OrientReport } from './orient.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { runMcpServer } from './mcp/server.js';
@@ -3615,9 +3615,7 @@ function printOrient(r: OrientReport): void {
           : 'no — run `warpline init`'
     }`,
   );
-  lines.push(
-    `agent guide  AGENTS.md ${r.agentGuide.agentsMd ? 'present' : 'missing'}, CLAUDE.md ${r.agentGuide.claudeMd === null ? '(no file)' : r.agentGuide.claudeMd ? 'present' : 'missing'}`,
-  );
+  lines.push(agentGuideLine(r));
   lines.push(
     `daemon       ${r.daemon.state}; MCP ${r.daemon.mcpConfigured ? 'configured' : 'not configured'}${r.daemon.mcpTokens ? `, ${r.daemon.mcpTokens} agent token${r.daemon.mcpTokens === 1 ? '' : 's'}` : ''}`,
   );

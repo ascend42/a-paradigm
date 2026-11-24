@@ -1,6 +1,20 @@
 version: 2.0.0
 description: CLI command implementations for the paradigm binary
 components:
+  reindex-command:
+    description: 'paradigm reindex [path] [--json] [-q] (reindex/index.ts): the CLI form of the MCP tool paradigm_reindex. Calls the same rebuildStaticFiles and prints the same compact summary (summarizeRebuild), both imported from packages/paradigm-mcp/src/tools/reindex.ts, so no rebuild logic lives in the CLI. Writes .paradigm/scan-index.json, navigator.yaml, the flow index and the other generated indexes. Refuses (exit 1, "paradigm shift") when there is no .paradigm/ directory, so it never scaffolds one. --json and --quiet skip the operation tracker so stdout is only the JSON (or nothing). Doctor names this command for a missing or stale scan-index.json (#doctor-fix-commands). Bare `paradigm scan` still only prints usage, and `paradigm index` (commands/probe/index.ts) still writes scan-index.json through the older probe-core path without navigator.yaml or the aspect graph.'
+    type: command
+    file: packages/paradigm/src/commands/reindex/index.ts
+    tags: [index, cli, onboarding]
+    tests:
+      - packages/paradigm/src/commands/reindex/index.test.ts
+  shift-first-prompt:
+    description: 'How paradigm shift closes. shift-recommendations.ts exports FIRST_PROMPT ("Map this codebase with Paradigm: draft .purpose files for the main directories, then tell me what would be affected if I changed <a module I know>."), formatFirstPrompt() (the prompt alone on one line so it copies cleanly, plus the health-check hint) and VERIFY_COMMAND (paradigm doctor; doctor has no --verify flag, that flag belongs to shift). shift.ts prints formatFirstPrompt() last, after the recommendations, and also when the recommendations engine fails. The empty-purpose and no-sub-purpose recommendations point at the first prompt instead of telling the user to hand-edit .purpose.'
+    type: command
+    file: packages/paradigm/src/commands/shift-recommendations.ts
+    tags: [shift, onboarding]
+    tests:
+      - packages/paradigm/src/commands/shift-recommendations.test.ts
   ServeCommand:
     description: paradigm serve — launches the unified Platform server
     type: command

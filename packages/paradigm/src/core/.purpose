@@ -4,6 +4,12 @@ description: |
   Contains agent management, budget tracking, IDE adapters, provider registry,
   and all internal logic that powers the CLI commands.
 components:
+  enforcement-levels:
+    description: "enforcement/types.ts ENFORCEMENT_LEVELS (strict, balanced, minimal, none; none is the default and turns every check off) is the single list of valid levels: the EnforcementLevel type, presets.ts isValidLevel, the `paradigm enforcement set` help (ENFORCEMENT_SET_DESCRIPTION, used by src/index.ts) and the invalid-level error in commands/enforcement.ts all derive from it, so none can no longer be left out. After `enforcement set`, commands/enforcement.ts ENFORCEMENT_SYNC_NOTE says a generated CLAUDE.md still states the old level and that `paradigm sync` regenerates the file, overwriting hand edits (syncToIDE keeps only the Warpline block), so it never sends a user with a hand-written CLAUDE.md to sync blind (#enforcement-section)."
+    type: utility
+    path: enforcement/types.ts
+    tests:
+      - packages/paradigm/src/commands/enforcement.test.ts
   warpline-detect:
     description: "T-2026-11-12-001 detectWarpline(rootDir) → {mode: native|git} | null. Present when the project has a .warpline/ directory or a .warpignore file; mode git when .git (directory or worktree file) exists in the root or any ancestor folder (hasGitAncestor, no git call; same rule as Warpline agentGuideModeOf, asserted in the parity test). File checks only — never PATH or package deps — so generated output stays byte-stable. readWarplineGuidance honours the opt-out integrations.warpline.guidance: auto|off in .paradigm/config.yaml (registered in config-schema.ts). Consumed by ide-adapters loadParadigmFiles and doctor context-audit check 11. Never throws. scanWarplineBlocks/singleWarplineBlock: a marker counts only as a whole line (whitespace and CR allowed) outside fenced code (``` or ~~~); several blocks or unpaired markers are malformed. Used by preserveWarplineBlock, doctor check 11 and always-on-budget; paradigm-mcp hasSingleWarplineBlock mirrors it (parity test)."
     file: warpline-detect.ts

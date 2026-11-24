@@ -313,7 +313,7 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
   // Record current git HEAD for Layer 2 drift detection
   let headCommit: string | null = null;
   try {
-    headCommit = execSync('git rev-parse HEAD', { cwd: rootDir, encoding: 'utf8' }).trim();
+    headCommit = execSync('git rev-parse HEAD', { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
     // Not a git repo or git not available — skip Layer 2 support
   }

@@ -2862,6 +2862,11 @@ components:
       covers native, git, --json shape and the fork → propose progression.
       `orient:v1` is ADDITIVE ONLY (fields added, never removed/renamed/retyped);
       the fields are documented in README.md and docs/specs/warpline-flows.md §4.
+      The human `agent guide` line (orient.ts agentGuideLine) reports the
+      Warpline guidance BLOCK, not the files: "<file> has the Warpline guidance
+      block", "<file> has no Warpline guidance block" (the file exists without
+      it), or "no <file>". It used to say "AGENTS.md missing, CLAUDE.md missing"
+      for files that exist without the block. The JSON shape is unchanged.
     type: module
     tags: [warpline, cli, read-only, f4, orientation]
     components:

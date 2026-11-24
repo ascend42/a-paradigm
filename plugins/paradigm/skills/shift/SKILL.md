@@ -63,7 +63,8 @@ Based on the project state, recommend next steps:
 
 **If this is a new project**:
 - "Your project is ready. As you build features, I'll help maintain `.purpose`
-  files and the stop hook will enforce compliance."
+  files. The stop hook's checks are off by default; turn them on with
+  `paradigm enforcement set <level>` (`minimal`, `balanced` or `strict`)."
 
 ## Step 5: Lore Setup
 
@@ -73,8 +74,9 @@ Check if `.paradigm/lore/` exists. If not, create the directory structure:
 mkdir -p .paradigm/lore/entries
 ```
 
-Tell the user lore tracking is now active — the stop hook will prompt for lore
-entries when 3+ source files are modified in a session.
+Tell the user lore tracking is now set up. The stop hook asks for a lore entry
+when 3+ source files are modified in a session only if the `lore-required`
+check is on (it is off at the default enforcement level `none`).
 
 ## Error Handling
 

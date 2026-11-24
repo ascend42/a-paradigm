@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'node:module';
 import { registerUtilCommands } from './commands/util/index.js';
+import { ENFORCEMENT_SET_DESCRIPTION } from './core/enforcement/types.js';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
@@ -358,6 +359,17 @@ program
   .action(async (path, options) => {
     const { indexCommand } = await import('./commands/probe/index.js');
     await indexCommand(path, options);
+  });
+
+// paradigm reindex — the CLI form of the MCP tool paradigm_reindex
+program
+  .command('reindex [path]')
+  .description('Rebuild the symbol index (scan-index.json, navigator.yaml, flow index) from .purpose files and portal.yaml')
+  .option('--json', 'Output the rebuild summary as JSON')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { reindexCommand } = await import('./commands/reindex/index.js');
+    await reindexCommand(path, options);
   });
 
 // paradigm probe <subcommand>
@@ -3258,7 +3270,7 @@ const enforcementCmd = program
 
 enforcementCmd
   .command('set <level>')
-  .description('Set enforcement level preset (strict, balanced, minimal)')
+  .description(ENFORCEMENT_SET_DESCRIPTION)
   .action(async (level) => {
     const { enforcementSetCommand } = await import('./commands/enforcement.js');
     await enforcementSetCommand(level);

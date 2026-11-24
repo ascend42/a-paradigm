@@ -103,4 +103,3 @@ Based on the health data:
 **If mature (accept rate >70%):**
 - "The team is well-calibrated"
 - "Focus on cross-project transfer — patterns learned here should appear in other projects"
-- "Consider publishing successful agent profiles to nevr.land"

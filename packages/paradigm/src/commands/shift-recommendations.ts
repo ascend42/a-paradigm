@@ -38,6 +38,25 @@ const DEFAULT_MODEL_TIERS: Record<string, string[]> = {
   'fallback': ['sonnet', 'sonnet', 'sonnet'],
 };
 
+/**
+ * The one thing to do after `paradigm shift`: a prompt the user pastes to their
+ * agent. Shift ends with it (formatFirstPrompt) instead of telling a newcomer
+ * to hand-edit `.purpose` files.
+ */
+export const FIRST_PROMPT =
+  'Map this codebase with Paradigm: draft .purpose files for the main directories, ' +
+  'then tell me what would be affected if I changed <a module I know>.';
+
+/**
+ * The health-check command shift recommends. `paradigm doctor` takes no
+ * `--verify` flag; `--verify` belongs to `paradigm shift` (it runs doctor as
+ * the last setup step).
+ */
+export const VERIFY_COMMAND = 'paradigm doctor';
+
+const EMPTY_PURPOSE_MESSAGE =
+  'Have your agent describe this project in `.purpose` (first prompt below)';
+
 // ============================================================================
 // Core API
 // ============================================================================
@@ -143,6 +162,23 @@ export function formatRecommendations(recs: ShiftRecommendation[]): string {
   return lines.join('\n');
 }
 
+/**
+ * The closing block of `paradigm shift`: one copyable prompt for the user's
+ * agent. The prompt sits alone on its own line so it copies cleanly.
+ */
+export function formatFirstPrompt(): string {
+  const lines: string[] = [];
+  lines.push(chalk.bold('  Your first prompt'));
+  lines.push(chalk.gray('  ' + '\u2500'.repeat(49)));
+  lines.push(chalk.white('  Open your AI agent in this folder and paste this, naming a module you know:'));
+  lines.push('');
+  lines.push(chalk.cyan(FIRST_PROMPT));
+  lines.push('');
+  lines.push(chalk.dim(`  Check setup health any time with \`${VERIFY_COMMAND}\`.`));
+  lines.push('');
+  return lines.join('\n');
+}
+
 // ============================================================================
 // Individual Checks
 // ============================================================================
@@ -163,7 +199,7 @@ async function checkEmptyPurpose(
       return {
         id: 'empty-purpose',
         priority: 1,
-        message: 'Edit `.purpose` to define your project\'s features',
+        message: EMPTY_PURPOSE_MESSAGE,
         command: undefined,
         type: 'action',
       };
@@ -177,7 +213,7 @@ async function checkEmptyPurpose(
       return {
         id: 'empty-purpose',
         priority: 1,
-        message: 'Edit `.purpose` to define your project\'s features',
+        message: EMPTY_PURPOSE_MESSAGE,
         command: undefined,
         type: 'action',
       };
@@ -188,7 +224,7 @@ async function checkEmptyPurpose(
     return {
       id: 'empty-purpose',
       priority: 1,
-      message: 'Edit `.purpose` to define your project\'s features',
+      message: EMPTY_PURPOSE_MESSAGE,
       command: undefined,
       type: 'action',
     };
@@ -229,7 +265,7 @@ async function checkNoSubPurpose(
     return {
       id: 'no-sub-purpose',
       priority: 2,
-      message: 'Add `.purpose` files to feature directories',
+      message: 'Have your agent draft `.purpose` files for the main directories (first prompt below)',
       command: undefined,
       type: 'action',
     };
@@ -471,7 +507,7 @@ async function checkVerifyNotRun(): Promise<ShiftRecommendation> {
     id: 'verify-not-run',
     priority: 6,
     message: 'Verify setup health',
-    command: 'paradigm doctor --verify',
+    command: VERIFY_COMMAND,
     type: 'action',
   };
 }

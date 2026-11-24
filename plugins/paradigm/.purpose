@@ -3,6 +3,8 @@ description: "The Paradigm Claude Code plugin: hooks (enforcement), skills, agen
 context:
   - ".claude-plugin/plugin.json version must equal @a-company/paradigm's (tests/plugin-version.test.ts): Claude Code caches installs by version"
   - "scripts/ is generated except paradigm-mcp-launch.cjs and migrate-to-plugin.sh (paradigm-resolve.sh, the hooks' CLI lookup, is generated like the other hook scripts)"
+  - "skills/agents/SKILL.md offers agent install from GitHub only: nevr.land registry support was removed in 8.0.1 and must not be re-added to any skill description or step (skills/health no longer suggests publishing there)"
+  - "skills/shift/SKILL.md must not promise enforcement: the stop hook's level checks are off at the default level none, including lore-required"
 components:
   claude-code-plugin:
     description: >-

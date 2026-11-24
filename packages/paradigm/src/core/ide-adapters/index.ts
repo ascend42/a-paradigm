@@ -23,6 +23,7 @@ import * as yaml from 'js-yaml';
 import { parseParadigmConfig, type ParadigmConfig } from '../paradigm-config.js';
 import { detectWarpline } from '../warpline-detect.js';
 import { preserveWarplineBlock } from './base.js';
+import { loadEnforcementConfig } from '../enforcement/loader.js';
 import { CursorAdapter } from './cursor.js';
 
 // Export types
@@ -239,7 +240,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
   // on real symbol add/remove — meaningful, low git-churn) and deliberately omit
   // generatedAt (a per-sync timestamp would rewrite the trailer on every sync,
   // producing meaningless CLAUDE.md diffs) and currentArc (no canonical source).
-  // paradigmVersion is left to its schema-version default ("v2.0").
+  // paradigmVersion is left to its schema-version default ("v2").
   let meta: ParadigmFiles['meta'];
   try {
     const scanIndexPath = path.join(rootDir, '.paradigm', 'scan-index.json');
@@ -259,6 +260,10 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
   // integrations.warpline.guidance opt-out.
   const warpline = detectWarpline(rootDir);
 
+  // Enforcement level (resolved from config.yaml; default `none`) so generated
+  // files state what the stop hook really does in this project.
+  const enforcement = loadEnforcementConfig(rootDir);
+
   return {
     config,
     specs,
@@ -266,6 +271,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     projectName: path.basename(rootDir),
     workspace,
     agents,
+    enforcement,
     ...(warpline ? { warpline } : {}),
     ...(meta ? { meta } : {}),
   };

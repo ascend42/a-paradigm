@@ -27,7 +27,8 @@ import { detectDiscipline } from '../core/discipline.js';
 import { detectProjectRole } from './workspace/index.js';
 import { detectProjectType, ROSTER_SUGGESTIONS } from '../core/project-type.js';
 import { ensureGuaranteedFiles } from './shift-files.js';
-import { getRecommendations, formatRecommendations } from './shift-recommendations.js';
+import { getRecommendations, formatRecommendations, formatFirstPrompt } from './shift-recommendations.js';
+import { out } from '../utils/cli-output.js';
 import {
   loadAdoptions,
   saveAdoptions,
@@ -128,7 +129,7 @@ function buildAgentSummaries(
  * For existing-project upgrades that match cohort C (project defines
  * `~aspects` in any `.purpose` file but the `compliance` archetype is NOT
  * on the roster), prompt the user to add Rune (compliance) to the roster.
- * Without a claimant, paradigm 6.0.4 no longer enforces aspect coverage —
+ * Without a claimant, Paradigm does not enforce aspect coverage —
  * this nomination step is the recovery path.
  *
  * No-ops silently when:
@@ -192,8 +193,8 @@ export async function runComplianceNominationStep(
   console.log('  This project defines ~aspects but no compliance-archetype agent');
   console.log('  (Rune) is on the roster.');
   console.log('');
-  console.log('  Without a claimant, paradigm 6.0.4 no longer enforces aspect');
-  console.log('  coverage. You can:');
+  console.log('  Without a claimant, Paradigm does not enforce aspect coverage.');
+  console.log('  You can:');
   console.log('');
   console.log(`    ${chalk.green('[Y]')} Add Rune (compliance) to the roster — recommended`);
   console.log('        Authority defaults will be written to .paradigm/authority.yaml.');
@@ -551,7 +552,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   // v6.0.4 — Step 2c-nominate-compliance.
   // For existing-project upgrades where the project defines ~aspects but the
   // compliance archetype (Rune) is NOT on the roster, prompt to add him.
-  // Without a claimant, paradigm 6.0.4 no longer enforces aspect coverage.
+  // Without a claimant, Paradigm does not enforce aspect coverage.
   // Predicate matches the cohort-C definition in migration-notices.ts.
   await runComplianceNominationStep(cwd, rosterPath, options);
 
@@ -841,23 +842,22 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   }
 
   // Post-shift recommendations
+  let recsShown = false;
   try {
     const recs = await getRecommendations(cwd);
     const recsOutput = formatRecommendations(recs);
     if (recsOutput) {
       console.log(recsOutput);
+      recsShown = true;
     }
   } catch (e) {
     log.operation('shift').debug('Recommendations engine failed', { error: (e as Error).message });
-    // Fallback: show minimal next steps if recommendations engine fails
-    console.log('');
-    console.log(chalk.white('  Next steps:'));
-    console.log(chalk.gray('  ' + '\u2500'.repeat(49)));
-    console.log(chalk.white('  1. ') + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
-    console.log(chalk.white('  2. ') + chalk.gray('Run ') + chalk.cyan('paradigm shift --verify') + chalk.gray(' to check health'));
-    console.log('');
+    // The first prompt below still gives the user a next step.
   }
 
+  // Close with ONE first action: a prompt to paste to the user's agent.
+  if (!recsShown) out('');
+  out(formatFirstPrompt());
 
   tracker.success('Paradigm shift complete', { project: projectName });
 }

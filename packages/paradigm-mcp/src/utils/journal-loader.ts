@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { JournalEntry, JournalFilter, JournalTrigger } from '../types/knowledge-streams.js';
+import { writeUniqueRecord } from './unique-record.js';
 
 // ────────────────────────────────────────────────────────
 // Helpers
@@ -20,12 +21,11 @@ function getJournalDir(agentId: string): string {
   return path.join(home, '.paradigm', 'agents', agentId, 'journal');
 }
 
-function generateJournalId(): string {
-  const now = new Date();
+/** `LJ-<date>-<hhmmss>-<suffix>`; the suffix is allocated by writeUniqueRecord. */
+function journalIdFor(now: Date, suffix: string): string {
   const date = now.toISOString().slice(0, 10);
   const time = now.toISOString().slice(11, 19).replace(/:/g, '');
-  const counter = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-  return `LJ-${date}-${time}-${counter}`;
+  return `LJ-${date}-${time}-${suffix}`;
 }
 
 // ────────────────────────────────────────────────────────
@@ -37,20 +37,17 @@ export function recordJournalEntry(
   entry: Omit<JournalEntry, 'id' | 'timestamp' | 'agent'>
 ): JournalEntry {
   const now = new Date();
-  const id = generateJournalId();
-
-  const full: JournalEntry = {
-    id,
-    agent: agentId,
-    timestamp: now.toISOString(),
-    ...entry,
-  };
-
-  const dir = getJournalDir(agentId);
-  fs.mkdirSync(dir, { recursive: true });
-
-  const filePath = path.join(dir, `${id}.yaml`);
-  fs.writeFileSync(filePath, yaml.dump(full, { lineWidth: 120, noRefs: true }), 'utf8');
+  // Never overwrite: two entries recorded in the same second used to collide
+  // about once in 999 and the second replaced the first.
+  let full!: JournalEntry;
+  writeUniqueRecord(
+    getJournalDir(agentId),
+    (suffix) => journalIdFor(now, suffix),
+    (id) => {
+      full = { id, agent: agentId, timestamp: now.toISOString(), ...entry };
+      return yaml.dump(full, { lineWidth: 120, noRefs: true });
+    },
+  );
 
   return full;
 }
