@@ -9,7 +9,7 @@
  *
  * Guards the contract properties:
  *  1. flow membership — a flow-member symbol yields an `in-flow` edge (the
- *     #cockpit-view → $$fleet-switch case the old projector hid);
+ *     #cockpit-view → $fleet-switch case the old projector hid);
  *  2. references — referencesTo/From yield used-by/uses edges;
  *  3. determinism — same input → byte-identical sorted output;
  *  4. did-you-mean — fires on an unknown symbol and renders NOTHING;
@@ -93,8 +93,8 @@ function writePurpose(rootDir: string, spec: PurposeSpec, subdir?: string): void
   if (spec.flows && Object.keys(spec.flows).length > 0) {
     lines.push('flows:');
     for (const [id, f] of Object.entries(spec.flows)) {
-      // The parser canonicalizes a `$id` YAML flow key to the double-prefix
-      // `$$id` symbol form the repo uses (e.g. `$fleet-switch` → `$$fleet-switch`).
+      // The key is written with its prefix on purpose: the parser reads
+      // `$id:` under flows as the flow `id` (symbol `$id`), not `$$id`.
       lines.push(`  $${id}:`);
       lines.push(`    description: "fixture flow ${id}"`);
       lines.push('    steps:');
@@ -305,9 +305,9 @@ describe('edge-kind taxonomy', () => {
     const find = (t: string) => slice.edges.find((e) => e.source === '#root' && e.target === t)?.kind;
 
     expect(find('^auth')).toBe('gated-by');
-    // The parser canonicalizes the `$checkout` reference to the `$$checkout`
-    // flow symbol form; the edge to it is in-flow.
-    expect(find('$$checkout')).toBe('in-flow');
+    // A `$checkout:` key under flows is the flow `$checkout` (the redundant
+    // prefix is dropped, not doubled); the edge to it is in-flow.
+    expect(find('$checkout')).toBe('in-flow');
     // #peer references #root back, so from #root's view #peer is a used-by (upstream) edge.
     expect(find('#peer')).toBe('used-by');
     expect(find('#plain')).toBe('uses');
@@ -325,15 +325,15 @@ describe('freshness', () => {
 });
 
 describe('unioned edge sources (flow membership + ripple dependents)', () => {
-  it('yields an in-flow edge from a flow member to its $$flow (the #cockpit-view → $$fleet-switch case)', async () => {
-    // #cockpit-view has NO direct references yet is a step of $$fleet-switch.
+  it('yields an in-flow edge from a flow member to its $flow (the #cockpit-view → $fleet-switch case)', async () => {
+    // #cockpit-view has NO direct references yet is a step of $fleet-switch.
     // The old related-only projector rendered it bare; the live projector must
     // surface the in-flow edge.
     writePurpose(tmpDir, {
       components: { 'cockpit-view': {}, 'session-row': {}, 'fleet-store': {} },
       flows: {
         'fleet-switch': {
-          symbol: '$$fleet-switch',
+          symbol: '$fleet-switch',
           steps: ['#session-row', '#fleet-store', '#cockpit-view'],
         },
       },
@@ -343,10 +343,10 @@ describe('unioned edge sources (flow membership + ripple dependents)', () => {
 
     const flowEdge = slice.edges.find((e) => e.source === '#cockpit-view' && e.kind === 'in-flow');
     expect(flowEdge).toBeDefined();
-    expect(flowEdge!.target).toBe('$$fleet-switch');
+    expect(flowEdge!.target).toBe('$fleet-switch');
 
     // The $flow node is present and correctly kinded.
-    const flowNode = slice.nodes.find((n) => n.id === '$$fleet-switch');
+    const flowNode = slice.nodes.find((n) => n.id === '$fleet-switch');
     expect(flowNode).toBeDefined();
     expect(flowNode!.kind).toBe('flow');
 

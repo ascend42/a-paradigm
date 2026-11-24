@@ -50,6 +50,19 @@ components:
     description: '#validator: Validates parsed purpose data — includes cross-file validation (validateCrossFile) for parent refs, symbol list refs, and flow step refs across all .purpose files'
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
+  purpose-key-normalizer:
+    description: >-
+      normalizeSymbolKeys in src/parser.ts, shared by both parse entry points. A prefixed top-level
+      key moves into its section, and a key inside a section that repeats the section's own prefix
+      (a dollar key under flows, a caret key under gates, quoted bang and hash keys under signals
+      and components, a tilde key under aspects) is read as the plain id instead of being indexed
+      double-prefixed. Each one yields a redundant-prefix ParseWarning on ParseResult.warnings,
+      which paradigm lint prints as a warning. When both spellings are present the plain key wins.
+      Array-format ids and flow names are treated the same. Tests in src/redundant-prefix.test.ts.
+    file: packages/purpose/core/src/parser.ts
+    tags:
+      - parser
+      - lint
   prose-symbol-filter:
     description: >-
       proseSymbolId in src/aggregator.ts decides whether a prefixed token found in a description

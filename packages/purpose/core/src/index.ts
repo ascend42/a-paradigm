@@ -21,6 +21,7 @@ export type {
   Reference,
   ParseResult,
   ParseError,
+  ParseWarning,
   ValidationResult,
   ValidationIssue,
   GraphNode,
@@ -33,6 +34,7 @@ export {
   parsePurposeFile,
   parsePurposeFileDetailed,
   parsePurposeContent,
+  normalizeSymbolKeys,
   serializePurposeFile,
   getDefaultPurposeContent,
 } from './parser.js';

@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
-import type { PurposeFile, ParseResult, ParseError } from './types.js';
+import type { PurposeFile, ParseResult, ParseError, ParseWarning } from './types.js';
 
 // ============================================
 // Zod Schema for Validation
@@ -155,6 +155,105 @@ const PurposeFileSchema = z.object({
 });
 
 // ============================================
+// Symbol key normalization (#purpose-key-normalizer)
+// ============================================
+
+/** Top-level section of a .purpose file for each symbol prefix. */
+const SECTION_FOR_PREFIX: Record<string, string> = {
+  '#': 'components', '$': 'flows', '^': 'gates', '!': 'signals', '~': 'aspects',
+};
+/** The prefix each section's keys take in the index. `features` are components. */
+const PREFIX_FOR_SECTION: Record<string, string> = {
+  components: '#', features: '#', flows: '$', gates: '^', signals: '!', aspects: '~',
+};
+
+/**
+ * Normalize symbol keys in freshly loaded YAML, in place.
+ *
+ * 1. A prefixed top-level key moves into its section: `"#MCPServer": {...}`
+ *    becomes `components: { MCPServer: {...} }`.
+ * 2. A key inside a section that repeats the section's prefix loses it:
+ *    `flows: { $checkout: … }` is the flow `checkout`, indexed as `$checkout`.
+ *    Left alone, the index adds the prefix again and files it as `$$checkout`,
+ *    so every reference to `$checkout` reads as undeclared. Array-format entries
+ *    (`id:` for components and features, `name:` for flows) are treated the same.
+ *
+ * Returns one warning per redundant prefix; the file is still valid.
+ */
+export function normalizeSymbolKeys(data: unknown): ParseWarning[] {
+  const warnings: ParseWarning[] = [];
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return warnings;
+  const obj = data as Record<string, unknown>;
+
+  for (const key of Object.keys(obj)) {
+    const target = SECTION_FOR_PREFIX[key[0]];
+    if (!target || key.length < 2) continue;
+    const id = key.slice(1);
+    const value = obj[key];
+    if (typeof value !== 'object' || value === null) continue;
+    const dict = (obj[target] as Record<string, unknown>) || {};
+    if (!(target in obj)) obj[target] = dict;
+    if (!(id in dict)) dict[id] = value;
+    delete obj[key];
+  }
+
+  for (const [section, prefix] of Object.entries(PREFIX_FOR_SECTION)) {
+    const block = obj[section];
+    if (typeof block !== 'object' || block === null) continue;
+    const strip = (raw: string): string => {
+      let i = 0;
+      while (raw[i] === prefix) i++;
+      return raw.slice(i);
+    };
+    const warn = (raw: string, id: string, extra = ''): void => {
+      warnings.push({
+        type: 'redundant-prefix',
+        path: `${section}.${raw}`,
+        message: `"${raw}" under ${section}: repeats the section's "${prefix}" prefix; read as "${id}" (symbol ${prefix}${id}). Write the key as "${id}".${extra}`,
+      });
+    };
+
+    if (Array.isArray(block)) {
+      const field = section === 'flows' ? 'name' : 'id';
+      for (const entry of block) {
+        if (typeof entry !== 'object' || entry === null) continue;
+        const rec = entry as Record<string, unknown>;
+        const raw = rec[field];
+        if (typeof raw !== 'string' || raw[0] !== prefix) continue;
+        const id = strip(raw);
+        if (!id) continue;
+        rec[field] = id;
+        warn(raw, id);
+      }
+      continue;
+    }
+
+    const dict = block as Record<string, unknown>;
+    // Rebuilt in written order, so a serialized file does not shuffle its keys.
+    const rebuilt: Record<string, unknown> = {};
+    let changed = false;
+    for (const raw of Object.keys(dict)) {
+      const id = raw[0] === prefix ? strip(raw) : '';
+      if (!id) {
+        rebuilt[raw] = dict[raw];
+        continue;
+      }
+      changed = true;
+      if (id in dict || id in rebuilt) {
+        // The same symbol is written twice in one section; the plain key wins.
+        warn(raw, id, ` "${id}" is also defined in this section, so this entry is ignored.`);
+        continue;
+      }
+      rebuilt[id] = dict[raw];
+      warn(raw, id);
+    }
+    if (changed) obj[section] = rebuilt;
+  }
+
+  return warnings;
+}
+
+// ============================================
 // Parser Functions
 // ============================================
 
@@ -233,26 +332,9 @@ export function parseRawPurposeFileContent(rawContent: string): ParseResult {
     };
   }
 
-  // Normalize symbol-prefixed top-level keys into standard dicts
-  // e.g., "#MCPServer": {...} → components: { MCPServer: {...} }
-  if (typeof data === 'object' && data !== null) {
-    const obj = data as Record<string, unknown>;
-    const prefixMap: Record<string, string> = {
-      '#': 'components', '$': 'flows', '^': 'gates', '!': 'signals', '~': 'aspects',
-    };
-    for (const key of Object.keys(obj)) {
-      const prefix = key[0];
-      const target = prefixMap[prefix];
-      if (!target || key.length < 2) continue;
-      const id = key.slice(1);
-      const value = obj[key];
-      if (typeof value !== 'object' || value === null) continue;
-      const dict = (obj[target] as Record<string, unknown>) || {};
-      if (!(target in obj)) obj[target] = dict;
-      if (!(id in dict)) dict[id] = value;
-      delete obj[key];
-    }
-  }
+  // Normalize symbol keys: a prefixed top-level key moves into its section, and
+  // a key that repeats its section's prefix loses it (with a warning).
+  const warnings = normalizeSymbolKeys(data);
 
   // Validate against schema
   const parseResult = PurposeFileSchema.safeParse(data);
@@ -269,10 +351,10 @@ export function parseRawPurposeFileContent(rawContent: string): ParseResult {
       });
     }
     // Return data even with schema errors - allows raw editing
-    return { data: data as PurposeFile, errors, detailedErrors, rawContent, isYamlValid: true };
+    return { data: data as PurposeFile, errors, detailedErrors, warnings, rawContent, isYamlValid: true };
   }
 
-  return { data: parseResult.data as PurposeFile, errors: [], detailedErrors: [], rawContent, isYamlValid: true };
+  return { data: parseResult.data as PurposeFile, errors: [], detailedErrors: [], warnings, rawContent, isYamlValid: true };
 }
 
 /**
@@ -315,25 +397,8 @@ export function parsePurposeContent(content: string): ParseResult {
     };
   }
 
-  // Normalize symbol-prefixed top-level keys into standard dicts
-  if (typeof data === 'object' && data !== null) {
-    const obj = data as Record<string, unknown>;
-    const prefixMap: Record<string, string> = {
-      '#': 'components', '$': 'flows', '^': 'gates', '!': 'signals', '~': 'aspects',
-    };
-    for (const key of Object.keys(obj)) {
-      const prefix = key[0];
-      const target = prefixMap[prefix];
-      if (!target || key.length < 2) continue;
-      const id = key.slice(1);
-      const value = obj[key];
-      if (typeof value !== 'object' || value === null) continue;
-      const dict = (obj[target] as Record<string, unknown>) || {};
-      if (!(target in obj)) obj[target] = dict;
-      if (!(id in dict)) dict[id] = value;
-      delete obj[key];
-    }
-  }
+  // Same key normalization as parseRawPurposeFileContent
+  const warnings = normalizeSymbolKeys(data);
 
   // Validate against schema
   const parseResult = PurposeFileSchema.safeParse(data);
@@ -349,10 +414,10 @@ export function parsePurposeContent(content: string): ParseResult {
         type: 'schema',
       });
     }
-    return { data: data as PurposeFile, errors, detailedErrors, rawContent: content, isYamlValid: true };
+    return { data: data as PurposeFile, errors, detailedErrors, warnings, rawContent: content, isYamlValid: true };
   }
 
-  return { data: parseResult.data as PurposeFile, errors: [], detailedErrors: [], rawContent: content, isYamlValid: true };
+  return { data: parseResult.data as PurposeFile, errors: [], detailedErrors: [], warnings, rawContent: content, isYamlValid: true };
 }
 
 /**
