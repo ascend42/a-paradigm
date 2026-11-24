@@ -1,0 +1,11 @@
+# Captured 2026-11-23 from this repo's history. A real commit in the format the path teaches: the subject names its primary symbol,
+# and the Symbols: trailer lists every symbol the change touched. The commit also changed 2 .purpose files.
+
+$ git log -1 --format='%h %ad %s' --date=short d4a92798
+d4a92798 2026-11-05 feat(#fabric-mirror): Warpline 0.3.0 records the ledger on a protected branch; release 8.1.2 (#96)
+
+$ git log -1 --format=%B d4a92798 | grep '^Symbols:'
+Symbols: #fabric-mirror, #fabric-mirror-sync, #fabric-writer, #fabric-adopt, #mirror-audit, #git-run, #fabric-lock, #fabric-verify, #hook, #release
+
+$ git show --stat --format= d4a92798 | grep -c '\.purpose'
+2
