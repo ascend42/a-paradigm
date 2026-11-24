@@ -1,0 +1,35 @@
+id: L-2026-11-24-ascend-041554-001
+type: review
+timestamp: '2026-11-24T04:15:54.449Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon boards: team analysis (Arky, Aegis, Luna, Loid, Jinx, Helix)'
+summary: 'Panel found boards are spec §12.7 Doodle grown up: designed, unbuilt (kit.Canvas is a placeholder). Consensus: agents propose boards via offer slips; hybrid truth (kernel-log ops, compacted to lore-style per-node files in .paradigm/boards/ through a human export card with redaction); declarative board mods with fallbacks, no third-party JS or live iframes; structured node model so voice/gesture/VR stay open; boards never cover approval surfaces. Luna''s device: pins with author seals and a shadow that lengthens as live data goes stale. Splits: first slice (live context board vs whiteboard), renderer (Excalidraw P12 ''partial'' and stock look vs custom SVG vs React Flow), and Jinx''s two-week falsifier. Options and recommendation in .paradigm/research/gnomon-canvas/synthesis.md; awaiting founder pick.'
+symbols_touched:
+  - '#gnomon'
+  - '#doodle-mod'
+files_created:
+  - .paradigm/research/gnomon-canvas/arky.md
+  - .paradigm/research/gnomon-canvas/aegis.md
+  - .paradigm/research/gnomon-canvas/luna.md
+  - .paradigm/research/gnomon-canvas/loid-jinx-helix.md
+  - .paradigm/research/gnomon-canvas/synthesis.md
+tags:
+  - gnomon
+  - boards
+  - canvas
+  - team-analysis
+  - doodle
+linked_lore:
+  - L-2026-11-24-ascend-034709-001
+  - L-2026-11-24-ascend-041233-001
+linked_tasks:
+  - T-2026-11-06-003
+  - T-2026-10-20-012
+  - T-2026-10-27-001
+git_context:
+  ref: d5eeb750efc2f3c7a0b6c1a16fd9d4717b16b2bc
+  branch: main
+  dirty: true
