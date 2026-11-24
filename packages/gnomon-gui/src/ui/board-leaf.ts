@@ -40,8 +40,8 @@ export interface BoardLeafOptions {
   cardFocused: () => boolean;
   /** called once the engine is up (the fixture adds its marks here) */
   onReady?: (handle: BoardHandle) => void;
-  /** Esc with nothing else to leave */
-  onFold?: () => void;
+  /** Esc with nothing else to leave, or the head's esc key: with the trusted event that asked (the fold's gesture stamp is minted from it) */
+  onFold?: (cause: Event) => void;
   /**
    * The dimension as the leaf's owner holds it now (the live controller's view; the fixture's fold). A copy reads
    * the copied nodes from it and a paste is placed on top of it. Without it nothing is copied and nothing pasted.
@@ -78,6 +78,10 @@ export interface BoardLeaf {
   setTheme(theme: BoardTheme): void;
   /** load again from scratch (the head's Try again) */
   retry(): void;
+  /** Say one line in the keep line's place and to a screen reader (a notice of the live loop, in the leaf's own words). */
+  say(line: string): void;
+  /** Forget the copy register (the kernel link went down). */
+  forget(): void;
   destroy(): void;
 }
 
@@ -621,7 +625,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       // Esc order: a text edit or the tool first (the rail action below), then the tray, then the leaf folds
       if (menu) return void ((menu = null), draw(), e.stopPropagation());
       if (trayOpen) return void ((trayOpen = false), draw(), handle?.focus(), e.stopPropagation());
-      return void o.onFold?.();
+      return void o.onFold?.(e);
     }
     if (isField(active) && !boardHost.contains(active)) return;
     const a = railKeyAction(e, { boardFocused: el.contains(active), editingText: s?.editingText ?? false, cardFocused: o.cardFocused() });
@@ -699,7 +703,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   for (const type of ['pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'dragover', 'drop', 'paste', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) stage.addEventListener(type, onHeld, true);
   stage.addEventListener('wheel', onHeld, { capture: true, passive: false });
   headKey.addEventListener('click', () => load === 'failed' && start());
-  escKey.addEventListener('click', () => o.onFold?.());
+  escKey.addEventListener('click', (e) => o.onFold?.(e));
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
   // the rail key under the pointer and looped with the redraw's own refocus)
   const onFocus = (): void => void queueMicrotask(() => yielded() !== wasYielded && draw());
@@ -719,6 +723,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       draw();
     },
     retry: start,
+    say,
+    forget,
     destroy() {
       generation++;
       clearTimeout(saidTimer);

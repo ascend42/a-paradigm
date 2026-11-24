@@ -68,6 +68,27 @@ export const CLIP_COPY = {
   notStored: 'That mark isn’t saved yet · try again in a moment',
 } as const;
 
+/**
+ * What the leaf says for a notice of the live loop (core/dim-session.ts `DimSessionNotice`). A STAND-IN table,
+ * proposed for Luna: the pass that mounts the leaf in the app owns the keep line's words. Plain words only: a
+ * notice's `code`, `field` and `why` are never shown. Every line fits the leaf at a 1024 window.
+ */
+export function noticeLine(n: { about: string; code: string; lost: number }): string {
+  if (n.about === 'link') return 'Not saved · reconnecting';
+  if (n.code === 'link-down') return 'The link is down · that change wasn’t saved';
+  if (n.code === 'redo-unavailable') return 'Redo isn’t on the board yet';
+  if (n.code === 'undo-nothing') return 'Nothing to undo';
+  if (n.about === 'undo') return 'That can’t be undone any more';
+  if (n.about === 'open') return 'The dimension didn’t open · try again';
+  if (n.about === 'close') return 'The dimension didn’t close · try again';
+  if (n.code === 'hash-mismatch') return 'This board may be out of date · fold it and open it again';
+  if (n.code === 'too-large' || n.code === 'row-too-large') return 'That is too much for one change · do it in smaller parts';
+  if (n.code === 'busy') return 'Too many changes are waiting · try again in a moment';
+  if (n.code === 'not-sent' || n.code === 'gesture-refused') return 'That change wasn’t sent · do it again';
+  if (n.code === 'timeout' || n.code === 'no-answer') return 'That change wasn’t saved · do it again';
+  return n.lost > 1 ? `${n.lost} changes weren’t kept · the board is as it was` : 'That change wasn’t kept · the board is as it was';
+}
+
 export type OpenedHow = 'command' | 'menu' | 'offer';
 /** '<how>' of the keep line: '/board', 'the ⋯ menu', '<agent>’s offer'. */
 export const openedFrom = (how: OpenedHow, agent?: string): string => (how === 'command' ? '/board' : how === 'menu' ? 'the ⋯ menu' : `${agent ?? 'an agent'}’s offer`);

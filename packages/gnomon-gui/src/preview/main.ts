@@ -12,14 +12,20 @@
 import { PREVIEW } from './env.js'; // FIRST: stubs matchMedia and the surface before app.ts evaluates
 import { PIN_KEY } from '../core/launch.js';
 import { devArmOfferOnce, devRulesState, main } from '../ui/app.js';
-import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-kernel.js';
-import { FIXTURES } from './fixtures.js';
+import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey } from './fake-kernel.js';
+import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
+import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
+import { followLog, GnomonClient } from '../core/client.js';
+import { noticeLine } from '../core/board-leaf.js';
+import { DimSessions, type DimSession } from '../core/dim-session.js';
+import { DimStore } from '../core/dim-store.js';
+import { GuiStore } from '../core/store.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
 import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
 import { loadBoard, type BoardModule } from '../core/board.js';
-import type { DimOp } from '@a-company/gnomon-contracts';
-import { boardFixture, fixtureState } from './board-fixture.js';
-import { mountBoardLeaf } from '../ui/board-leaf.js';
+import type { DimOp, LogRow } from '@a-company/gnomon-contracts';
+import { boardFixture, FIXTURE_DIM, fixtureRows, fixtureState } from './board-fixture.js';
+import { mountBoardLeaf, type BoardLeaf } from '../ui/board-leaf.js';
 import { cardHasFocus } from '../ui/card-focus.js';
 
 // DEV ONLY: every CSP refusal on a preview page goes to the preview server's /diag (GET /diag lists them), so a
@@ -36,7 +42,7 @@ document.addEventListener('securitypolicyviolation', (e) => {
  * The marks are rows folded by `foldDim` (src/preview/board-fixture.ts) and drawn with `handle.render`; an edit made
  * on the board is appended as a row of yours and rendered back, as the live leaf will do. Sized with CSSOM.
  */
-async function openBoardFixture(): Promise<void> {
+async function openBoardFixture(key: PreviewKey): Promise<void> {
   const pane = document.getElementById('pane-transcript');
   const feed = pane?.querySelector('.feed') as HTMLElement | null;
   if (!pane || !feed) return;
@@ -65,6 +71,7 @@ async function openBoardFixture(): Promise<void> {
         ? Promise.reject(new Error('the board stylesheet did not load'))
         : loadBoard().then((m) => ({ BOARD_ENGINE: m.BOARD_ENGINE, mountBoard: (h, opts) => ((crash = opts?.onError), m.mountBoard(h, opts)) }));
   const fx = boardFixture(variant === 'empty' ? 'empty' : (new URLSearchParams(location.search).get('marks') ?? 'sample'));
+  if (variant === 'live') return void (await openLiveBoard(host, key, load, diag));
   let send: (ops: DimOp[], cause: Event | null) => void = () => undefined;
   const ready = new Promise<void>((done) => {
     const leaf = mountBoardLeaf(host, {
@@ -113,6 +120,83 @@ async function openBoardFixture(): Promise<void> {
     if (variant === 'loading' || variant === 'failed') setTimeout(done, 500);
   });
   await ready;
+  await new Promise((r) => setTimeout(r, 150));
+}
+
+/**
+ * #gui-dim-session DEV fixture (boards S1.3 pass P4a; `?board=live`): the REAL live loop over the fake kernel. Its
+ * own GnomonClient on its own fake-kernel connection, `followLog` into a DimStore through `DimSessions`, the one
+ * sender with real gesture stamps, the dimension mod's real checks (dim-mod.ts), rows back on the followed log, and
+ * the leaf mounted with the session's wiring. What the app will do when it mounts the leaf, in small.
+ * Test hooks on `gnomonPreviewLive`: the mod (`refuseNext`, `silent`), `down()` and `up()` for the link.
+ */
+async function openLiveBoard(host: HTMLElement, key: PreviewKey, load: () => Promise<BoardModule>, diag: (row: string) => void): Promise<void> {
+  const set = new URLSearchParams(location.search).get('marks') ?? 'sample';
+  const mod = new PreviewDimMod();
+  const seedRows = fixtureRows(set);
+  mod.seed(seedRows);
+  const url = 'ws://preview.invalid/rpc';
+  const logRows = seedRows.map((r) => ({ seq: r.seq, view: 'full', event: { schemaVersion: 'event:v1', log: PREVIEW_LOG_ID, seq: r.seq, at: '2026-11-24T14:02:00.000Z', principal: 'p:preview/mod-gnomon.dimension', kind: r.kind, payload: r.payload, scope: { repo: PREVIEW_DIM_REPO } } })) as unknown as LogRow[];
+  const kernel = new FakeKernel({ status: {} }, logRows, key, url);
+  kernel.dim = mod;
+  const dims = new DimStore();
+  const sessions = new DimSessions({ store: dims });
+  const gui = new GuiStore();
+  let client!: GnomonClient;
+  const connect = async (): Promise<void> => {
+    client = new GnomonClient(kernel);
+    const out = await client.connect({ surface: 'browser', endpointPath: url, verifyKey: key.spki, auth: { launchToken: 'preview-launch' }, subtle: crypto.subtle });
+    if (!out.ok) throw new Error(`preview live board: ${out.message}`);
+    const take = (rows: unknown[]): void => (gui.apply(rows), sessions.apply(rows));
+    client.onNotification((method, params) => {
+      const row = method === 'event' ? (params as { row?: unknown } | null)?.row : undefined;
+      if (row) take([row]);
+    });
+    client.onClose(() => sessions.linkDown());
+    await followLog(client, { cursor: () => gui.cursor(), adopt: (id: string) => gui.adopt(id), apply: take, advance: (n: number) => gui.advance(n), reset: () => (gui.reset(), sessions.reset()) } as unknown as GuiStore);
+    sessions.connect({ client, principal: out.session.principal, connId: out.session.connId });
+  };
+  await connect();
+  const live = { sessions, dims, mod, kernel, session: null as DimSession | null, notices: [] as unknown[], leaf: null as BoardLeaf | null, down: (): void => client.close(), up: async (): Promise<void> => (kernel.reopen(), await connect()) };
+  (globalThis as { gnomonPreviewLive?: unknown }).gnomonPreviewLive = live;
+  const mount = (session: DimSession): Promise<void> =>
+    new Promise<void>((done) => {
+      live.session = session;
+      const leaf = mountBoardLeaf(host, {
+        title: session.status().title || 'auth handoff',
+        project: 'billing',
+        projectHue: 'h0',
+        session: 'Totals are off by a cent',
+        how: 'command',
+        time: '14:02',
+        theme: PREVIEW.theme,
+        load,
+        cardFocused: () => cardHasFocus(document),
+        onFold: (cause) => void session.fold(cause).then((closed) => diag(`board fold ${closed ? 'closed' : 'stayed'}`)),
+        ...session.leafOptions(),
+        onReady: (handle) => {
+          session.attachHandle(handle);
+          (globalThis as { gnomonPreviewBoard?: unknown }).gnomonPreviewBoard = handle;
+          void loadBoard().then(async (m) => {
+            document.documentElement.dataset.previewBoard = m.BOARD_ENGINE;
+            await new Promise((r) => setTimeout(r, 300));
+            diag(`board ready ${m.BOARD_ENGINE} marks=${handle.count()} live=1 surface=${PREVIEW.surface}`);
+            done();
+          });
+        },
+      });
+      live.leaf = leaf;
+      (globalThis as { gnomonPreviewLeaf?: unknown }).gnomonPreviewLeaf = leaf;
+      session.bindLeaf(leaf);
+      session.onChange((c) => {
+        if (!c.notice) return;
+        live.notices.push(c.notice);
+        if (session.alive) leaf.say(noticeLine(c.notice));
+      });
+    });
+  // a reconnect destroys the session and its leaf: the new session gets a new leaf
+  sessions.onEvent((e) => void (e.type === 'rebuilt' && mount(e.session)));
+  await mount(sessions.resume({ dim: FIXTURE_DIM, hsid: 'hsid-preview' }));
   await new Promise((r) => setTimeout(r, 150));
 }
 
@@ -189,7 +273,7 @@ async function boot(): Promise<void> {
     hd?.scrollIntoView({ block: 'start' });
     hd?.focus({ preventScroll: true });
   }
-  if (fx.open === 'board') await openBoardFixture();
+  if (fx.open === 'board') await openBoardFixture(key);
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }

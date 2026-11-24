@@ -4,7 +4,8 @@
  * DEV ONLY: the board fixture's dimension (boards S1.3 pass P3b). The marks are ROWS of `dim-shape:v1`, stamped
  * as the host stamps them, and folded by `foldDim`: whose hand a mark is in comes from the fold's `by` and from
  * nowhere else. `apply` is the fixture's stand-in for the live loop (a board edit becomes one more row of yours).
- * Sets: `sample` (the leaf goldens), `matrix` (every kind and style per hand, the G-DDL-07 board goldens), `empty`.
+ * Sets: `sample` (the leaf goldens), `matrix` (every kind and style per hand, the G-DDL-07 board goldens), `many`
+ * (64 marks, for the live loop's 64-clone paste), `empty`.
  */
 import { DIM_KINDS, foldDim, type DimOp, type DimRow, type DimState } from '@a-company/gnomon-contracts';
 
@@ -78,7 +79,14 @@ function matrix(): Group[] {
   return [{ hand: 'you', marks: column(0) }, { hand: 'arky', marks: column(424) }, { hand: null, marks: column(848) }];
 }
 
-export const FIXTURE_SETS: Readonly<Record<string, () => Group[]>> = { sample: () => SAMPLE, matrix, empty: () => [] };
+/** 64 labelled rects of yours in an 8 by 8 grid: a copy of all of them is the most a paste may add, and too much for one row. */
+function many(): Group[] {
+  const marks: Mark[] = [];
+  for (let i = 0; i < 64; i++) marks.push({ kind: 'rect', x: 24 + (i % 8) * 50, y: 24 + Math.floor(i / 8) * 34, w: 40, h: 24, label: `${i} ${'board mark '.repeat(17)}`.slice(0, 190) });
+  return [{ hand: 'you', marks }];
+}
+
+export const FIXTURE_SETS: Readonly<Record<string, () => Group[]>> = { sample: () => SAMPLE, matrix, many, empty: () => [] };
 
 export interface BoardFixture {
   rows: DimRow[];
