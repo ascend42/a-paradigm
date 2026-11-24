@@ -196,12 +196,12 @@ components:
       - test/loop-check.test.ts
       - test/loop-check-sandbox.test.ts
     anchors:
-      - src/kernel/loops/check-exec.ts
-      - src/kernel/loops/check-parse.ts
-      - src/kernel/loops/secret-scan.ts
-      - src/kernel/loops/shebang.ts
-      - src/kernel/sandbox/loop-check.ts
-      - src/platform/darwin/loop-check-sbpl.ts
+      - packages/gnomon/src/kernel/loops/check-exec.ts
+      - packages/gnomon/src/kernel/loops/check-parse.ts
+      - packages/gnomon/src/kernel/loops/secret-scan.ts
+      - packages/gnomon/src/kernel/loops/shebang.ts
+      - packages/gnomon/src/kernel/sandbox/loop-check.ts
+      - packages/gnomon/src/platform/darwin/loop-check-sbpl.ts
   loop-land:
     description: >-
       #loop-land (docs/specs/gnomon-loops.md §3.2 Landing, Conflicts,
@@ -268,8 +268,8 @@ components:
       - test/loop-act-e2e.test.ts
       - test/loop-events.test.ts
     anchors:
-      - src/kernel/loops/land.ts
-      - src/kernel/git/land.ts
+      - packages/gnomon/src/kernel/loops/land.ts
+      - packages/gnomon/src/kernel/git/land.ts
   loop-act:
     description: >-
       #loop-act (docs/specs/gnomon-loops.md §2 act role and tools, §3.3
@@ -337,12 +337,12 @@ components:
       - test/loop-act-e2e.test.ts
       - test/loop-act-sandbox.test.ts
     anchors:
-      - src/kernel/loops/propose.ts
-      - src/kernel/sandbox/loop-act.ts
-      - src/platform/darwin/loop-act-sbpl.ts
-      - src/kernel/supervisor/loop-clamp.ts
-      - src/kernel/supervisor/local-session.ts
-      - src/kernel/loops/model-node.ts
+      - packages/gnomon/src/kernel/loops/propose.ts
+      - packages/gnomon/src/kernel/sandbox/loop-act.ts
+      - packages/gnomon/src/platform/darwin/loop-act-sbpl.ts
+      - packages/gnomon/src/kernel/supervisor/loop-clamp.ts
+      - packages/gnomon/src/kernel/supervisor/local-session.ts
+      - packages/gnomon/src/kernel/loops/model-node.ts
   loop-runner:
     description: >-
       #loop-runner (docs/specs/gnomon-loops.md §2 graph semantics, §3.3 kill
@@ -475,12 +475,12 @@ components:
       - test/loop-model.test.ts
       - test/loop-model-e2e.test.ts
     anchors:
-      - src/kernel/loops/runner.ts
-      - src/kernel/loops/model-node.ts
-      - src/kernel/supervisor/loop-clamp.ts
-      - src/kernel/loops/ledger.ts
-      - src/kernel/loops/wire.ts
-      - src/cli/loop-cli.ts
+      - packages/gnomon/src/kernel/loops/runner.ts
+      - packages/gnomon/src/kernel/loops/model-node.ts
+      - packages/gnomon/src/kernel/supervisor/loop-clamp.ts
+      - packages/gnomon/src/kernel/loops/ledger.ts
+      - packages/gnomon/src/kernel/loops/wire.ts
+      - packages/gnomon/src/cli/loop-cli.ts
   loop-timers:
     description: >-
       #loop-timers (docs/specs/gnomon-loops.md §4 scheduler integration and
@@ -513,10 +513,10 @@ components:
     tests:
       - test/loop-timers.test.ts
     anchors:
-      - src/kernel/loops/timers.ts
-      - src/kernel/scheduler/zoned.ts
-      - src/kernel/scheduler/scheduler.ts
-      - src/kernel/lifecycle/idle.ts
+      - packages/gnomon/src/kernel/loops/timers.ts
+      - packages/gnomon/src/kernel/scheduler/zoned.ts
+      - packages/gnomon/src/kernel/scheduler/scheduler.ts
+      - packages/gnomon/src/kernel/lifecycle/idle.ts
   loop-events:
     description: >-
       #loop-events (docs/specs/gnomon-loops.md §2 triggers, §4 #loop-events;
@@ -565,10 +565,10 @@ components:
       - test/loop-events.test.ts
     oracles: [G-LOOP-15, G-LOOP-17]
     anchors:
-      - src/kernel/loops/events.ts
-      - src/kernel/loops/ledger.ts
-      - src/kernel/log/replay.ts
-      - src/kernel/loops/wire.ts
+      - packages/gnomon/src/kernel/loops/events.ts
+      - packages/gnomon/src/kernel/loops/ledger.ts
+      - packages/gnomon/src/kernel/log/replay.ts
+      - packages/gnomon/src/kernel/loops/wire.ts
   loop-strictness:
     description: >-
       #loop-strictness (docs/specs/gnomon-loops.md §3.3; build plan step 9,
@@ -596,9 +596,9 @@ components:
       - test/loop-strictness.test.ts
     oracles: [G-LOOP-10]
     anchors:
-      - src/kernel/loops/strictness-cap.ts
-      - src/kernel/loops/runner.ts
-      - src/kernel/loops/wire.ts
+      - packages/gnomon/src/kernel/loops/strictness-cap.ts
+      - packages/gnomon/src/kernel/loops/runner.ts
+      - packages/gnomon/src/kernel/loops/wire.ts
   loop-agent-ops:
     description: >-
       #loop-agent-ops (docs/specs/gnomon-loops.md §5 "What an agent may do",
@@ -639,9 +639,9 @@ components:
       - test/loop-agent-ops.test.ts
     oracles: [G-LOOP-03, G-LOOP-05]
     anchors:
-      - src/kernel/loops/agent-ops.ts
-      - src/kernel/loops/registry.ts
-      - src/kernel/loops/trust.ts
-      - src/kernel/loops/wire.ts
-      - src/kernel/socket/dispatch.ts
-      - src/agent/index.ts
+      - packages/gnomon/src/kernel/loops/agent-ops.ts
+      - packages/gnomon/src/kernel/loops/registry.ts
+      - packages/gnomon/src/kernel/loops/trust.ts
+      - packages/gnomon/src/kernel/loops/wire.ts
+      - packages/gnomon/src/kernel/socket/dispatch.ts
+      - packages/gnomon/src/agent/index.ts
