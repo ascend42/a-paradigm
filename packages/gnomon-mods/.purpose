@@ -172,9 +172,15 @@ components:
       move only after a seq. State: `dims`, `idx:<ulid>` {repo, firstSeq,
       lastSeq, title, log}, `kfs`, and keyframes `kf:<ulid>` + chunks of at
       most 60 KiB for the 4 most recent dimensions (at close and every 256
-      ops, skipped above 256 KiB, 640 KiB in all). A cold open verifies the
-      keyframe (sum and dimHash), then pages log.read with a cursor `since`
-      and `until`, one foldDim per page. dim-shape.mjs is GENERATED from
+      ops, skipped above 256 KiB, 640 KiB in all), each bound to its log id.
+      The LOG is the truth and the index a hint: a cold open verifies the
+      keyframe (sum, dimHash, log id), then pages log.read for the four
+      kinds from its seq to the log head, one foldDim per page, and heals
+      the index; a dimension with rows but no index is adopted from its first
+      start row and that row's repo scope; entries of another log are pruned
+      once (`log` key); a failed append drops the in-memory fold. apply
+      measures the caller's ops (16 KiB, 4,096 values, depth 32) BEFORE the
+      validator reads them. dim-shape.mjs is GENERATED from
       #contract-dim-shape by packages/gnomon/scripts/build-dimension-mod.mjs
       and compared with a fresh build by a test. Tier first-party
       (packageHash pinned). Tested in test/dimension-mod.test.ts (rules,

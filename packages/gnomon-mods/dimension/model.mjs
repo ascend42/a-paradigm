@@ -93,16 +93,21 @@ export function actorOf(relayedFor) {
 /**
  * The ONE entry for ops (A6): the command and, from S1.4, the agent tool are thin callers. Validates against the
  * state with the published validator and previews the state after. A secret anywhere, or no accepted op, yields
- * `ok: []` and `next === state`: nothing may be appended. `ok` holds the validator's own copies (prototype keys
+ * `ok: []` and `next === state`: nothing may be appended; so do ops too large for one row (`tooLarge`), which never
+ * reach the validator. `ok` holds the validator's own copies (prototype keys
  * dropped at every depth); a row is built from `ok` only, never from the caller's ops.
  */
-export function apply(state, ops, actor) {
-  if (!actor || (actor.cls !== 'human' && actor.cls !== 'agent')) return { ok: [], refused: [], secret: false, next: state };
-  const v = validateDimOps(state, ops, actor);
-  if (v.secret || v.ok.length === 0) return { ok: [], refused: v.refused, secret: v.secret, next: state };
+export function apply(state, ops, actor, opts = {}) {
+  const none = { ok: [], refused: [], secret: false, tooLarge: false, next: state };
+  if (!actor || (actor.cls !== 'human' && actor.cls !== 'agent')) return none;
   const stamp = actor.cls === 'human' ? { principal: actor.principal, surface: 'gui' } : { principal: actor.principal, surface: 'bridge', agent: actor.agent };
+  // SIZE FIRST (Aegis S1.3 M2): the validator's secret scan reads a node's strings pairwise, on refused ops too, so
+  // ops that could never fit one row (16 KiB, 4,096 values, depth 32) are refused before it is called at all
+  if (Array.isArray(ops) && rowProblem(opPayload(state.dim, ops), opts.stamp ?? stamp)) return { ...none, tooLarge: true };
+  const v = (opts.validate ?? validateDimOps)(state, ops, actor);
+  if (v.secret || v.ok.length === 0) return { ...none, refused: v.refused, secret: v.secret };
   const next = landed(state, DIM_KINDS.op, opPayload(state.dim, v.ok), stamp, state.seq + 1);
-  return { ok: v.ok, refused: v.refused, secret: false, next };
+  return { ok: v.ok, refused: v.refused, secret: false, tooLarge: false, next };
 }
 
 /** The state after a row this mod appended came back with its seq (the single-row fold step). */
@@ -151,16 +156,30 @@ const utf8 = new TextEncoder();
  */
 export function rowProblem(payload, stamp) {
   const full = { ...payload, relayedFor: stamp };
-  if (utf8.encode(JSON.stringify(full)).length > ROW_MAX_BYTES) return 'row-too-large';
+  // the walk first: it stops after 4,096 values whatever it is given, so the byte count below reads a bounded tree
   const stack = [{ v: full, depth: 1 }];
   let visited = 0;
+  let chars = 0;
   while (stack.length > 0) {
     const { v, depth } = stack.pop();
     if (depth > ROW_MAX_DEPTH) return 'row-too-large';
-    const items = Array.isArray(v) ? v : Object.values(v);
-    visited += items.length;
+    const keys = Array.isArray(v) ? null : Object.keys(v);
+    const n = keys ? keys.length : v.length;
+    visited += n;
     if (visited > ROW_MAX_VISITED) return 'row-too-large';
-    for (const c of items) if (c !== null && typeof c === 'object') stack.push({ v: c, depth: depth + 1 });
+    for (let i = 0; i < n; i++) {
+      const c = keys ? v[keys[i]] : v[i];
+      if (keys) chars += keys[i].length;
+      if (typeof c === 'string') chars += c.length;
+      else if (c !== null && typeof c === 'object') stack.push({ v: c, depth: depth + 1 });
+      // a UTF-8 byte count is never below the UTF-16 length: past the limit already, without encoding anything
+      if (chars > ROW_MAX_BYTES) return 'row-too-large';
+    }
+  }
+  try {
+    if (utf8.encode(JSON.stringify(full)).length > ROW_MAX_BYTES) return 'row-too-large';
+  } catch {
+    return 'row-too-large';
   }
   return null;
 }
@@ -223,9 +242,9 @@ function byOk(by) {
 
 /**
  * A state as a keyframe: a head and chunks of at most KEYFRAME_CHUNK_BYTES each. `hash` is the published
- * `dimHash`; `sum` covers every stored field, so a damaged chunk or head is found. `null` above KEYFRAME_MAX_BYTES.
+ * `dimHash`; `sum` covers every stored field, the log id included, so a damaged chunk or head is found. `null` above KEYFRAME_MAX_BYTES.
  */
-export function encodeKeyframe(state) {
+export function encodeKeyframe(state, log) {
   const items = [];
   for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq]);
   for (const id of state.gone) items.push(['g', id]);
@@ -247,21 +266,23 @@ export function encodeKeyframe(state) {
   }
   if (cur.length > 0) chunks.push(cur);
   const meta = { dim: state.dim, title: state.title, attached: [...state.attached], ended: state.ended, ops: state.ops, unapplied: state.unapplied };
-  const head = { v: 1, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta };
+  const head = { v: 1, log, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta };
   return { head: { ...head, sum: sumOf(JSON.stringify([head, chunks])) }, chunks };
 }
 
 /** The state a stored keyframe holds, or `null` when anything about it is wrong (it is then ignored and rebuilt). */
-export function decodeKeyframe(headIn, chunks, dim) {
+export function decodeKeyframe(headIn, chunks, dim, log) {
   try {
     const h = plain(headIn);
-    if (!h || own(h, 'v') !== 1 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
+    // a keyframe is a fold of ONE log's rows: another log's seqs mean nothing here (Aegis S1.3 L1)
+    if (!h || typeof log !== 'string' || own(h, 'log') !== log) return null;
+    if (own(h, 'v') !== 1 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
     const m = plain(own(h, 'meta'));
     if (!m || own(m, 'dim') !== dim || typeof own(m, 'title') !== 'string' || typeof own(m, 'ended') !== 'boolean') return null;
     const attached = own(m, 'attached');
     if (!Array.isArray(attached) || !attached.every((x) => typeof x === 'string') || !Number.isSafeInteger(own(m, 'ops')) || !Number.isSafeInteger(own(m, 'unapplied'))) return null;
     if (!Array.isArray(chunks) || chunks.length !== own(h, 'n')) return null;
-    const head = { v: 1, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied } };
+    const head = { v: 1, log, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied } };
     if (sumOf(JSON.stringify([head, chunks])) !== h.sum) return null;
     const nodes = new Map();
     const gone = new Set();

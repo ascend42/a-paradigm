@@ -26,7 +26,7 @@ const io = () => {
 
 describe('gnomon dim replay (S1.3; Aegis: replay output is stripped of control characters)', () => {
   const D = dimId(1);
-  const HOSTILE = 'line one\nREFUSED  FORGED  line\u001b[2J\u001b]0;title\u0007 ‮gnp.exe next​';
+  const HOSTILE = 'line one\nREFUSED  FORGED  line\u001b[2J\u001b]0;title\u0007 \u202egnp.exe\u2028next\u200b';
   const rows: DimRow[] = [
     { seq: 3, kind: DIM_KINDS.start, payload: { v: 1, dim: D, title: `Plan\u001b[31m\nfake`, attached: [A], opened: 'command', relayedFor: GUI } },
     { seq: 4, kind: DIM_KINDS.op, payload: { v: 1, dim: D, ops: [{ type: 'add', node: { id: ulid(1), kind: 'text', x: 1, y: 2, z: 'V', text: HOSTILE } }, rectOp(2, { label: 'ok\r\nlabel' })], relayedFor: GUI } },
@@ -37,8 +37,10 @@ describe('gnomon dim replay (S1.3; Aegis: replay output is stripped of control c
   it('stripControl removes control, format, line-separator and paragraph-separator code points, at any depth for --json', () => {
     expect(stripControl(HOSTILE)).toBe('line oneREFUSED  FORGED  line[2J]0;title gnp.exenext');
     expect(CONTROL.test(stripControl(HOSTILE))).toBe(false);
-    const deep = stripControlDeep({ 'k\u001b': ['a\nb', { 'x‮': 'c\u0000d', n: 7 }], ok: true, __proto__: { evil: 1 } });
-    expect(deep).toEqual({ k: ['ab', { x: 'cd', n: 7 }], ok: true });
+    const deep = stripControlDeep(JSON.parse('{"k\\u001b":["a\\nb",{"x\\u202e":"c\\u0000d","n":7}],"ok":true,"__proto__":{"evil":1}}')) as Record<string, unknown>;
+    expect(JSON.parse(JSON.stringify(deep))).toEqual(JSON.parse('{"k":["ab",{"x":"cd","n":7}],"ok":true,"__proto__":{"evil":1}}'));
+    // a key read from the log stays a key: it never becomes a prototype
+    expect([Object.getPrototypeOf(deep), Object.keys(deep), (deep as { evil?: unknown }).evil]).toEqual([null, ['k', 'ok', '__proto__'], undefined]);
     expect(CONTROL.test(JSON.stringify(deep))).toBe(false);
   });
 
@@ -183,5 +185,29 @@ describe('gnomon dim stats: the five A9 signals on a fixture log', () => {
     expect(foldDimStats(untimed)[D2]!.closedQuick).toBe(0);
     expect(foldDimStats([])).toEqual({});
     expect(sumDimStats({})).toMatchObject({ dimensions: 0, rows: 0 });
+  });
+
+  it('L5: maps keyed by strings from the log have no prototype, so a session or dimension named __proto__ or constructor is counted like any other', () => {
+    const rows: DimCliRow[] = [];
+    let n = 0;
+    for (const dim of ['__proto__', 'constructor', 'toString']) {
+      rows.push({ seq: ++n, kind: DIM_KINDS.start, payload: JSON.parse(`{"v":1,"dim":"${dim}","title":"t","attached":["__proto__"],"opened":"__proto__"}`) });
+      rows.push({ seq: ++n, kind: DIM_KINDS.attach, payload: { v: 1, dim, hsid: 'constructor' } });
+      rows.push({ seq: ++n, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [rectOp(n)], relayedFor: GUI } });
+      rows.push({ seq: ++n, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [rectOp(n)], relayedFor: { ...AGENT, hsid: '__proto__' } } });
+    }
+    const per = foldDimStats(rows);
+    expect(Object.getPrototypeOf(per)).toBeNull();
+    expect(Object.keys(per).sort()).toEqual(['__proto__', 'constructor', 'toString']);
+    for (const dim of Object.keys(per)) {
+      const s = per[dim]!;
+      expect([Object.getPrototypeOf(s.opsBySession), Object.getPrototypeOf(s.openedBy)]).toEqual([null, null]);
+      expect([dim, Object.keys(s.opsBySession).sort(), s.opsBySession['__proto__'], s.opsBySession.constructor, s.openedBy.unknown, s.rows]).toEqual([dim, ['__proto__', 'constructor'], 1, 1, 1, 4]);
+    }
+    const total = sumDimStats(per);
+    expect([total.dimensions, total.rows, total.opsBySession['__proto__'], total.opsBySession.constructor]).toEqual([3, 12, 3, 3]);
+    expect(({} as { rows?: unknown }).rows).toBeUndefined(); // nothing was set on Object.prototype
+    const json = JSON.parse(JSON.stringify(stripControlDeep({ dimensions: per }))) as { dimensions: Record<string, unknown> };
+    expect(Object.keys(json.dimensions).sort()).toEqual(['__proto__', 'constructor', 'toString']);
   });
 });

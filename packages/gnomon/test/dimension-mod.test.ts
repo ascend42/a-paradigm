@@ -16,7 +16,8 @@ import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { hostDir } from '../src/kernel/modhost/state.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { PKG_ROOT } from './helpers.js';
-import { DIMENSION, DIMENSION_TREE, dimId, fakeLog, installDimension, rectOp, ulid } from './dimension-helpers.js';
+import { stageInstall } from '../src/kernel/manifest/install.js';
+import { DIMENSION, DIMENSION_TREE, FAKE_LOG_ID, dimId, fakeLog, installDimension, rectOp, ulid } from './dimension-helpers.js';
 import { host, rig as modRig } from './mod-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
@@ -130,7 +131,7 @@ describe('#dimension-mod model: actorOf, apply, titleProblem, grantDefault (pure
     const m = await load();
     expect(['Plan', 'a'.repeat(120), 'Café — notes'].map((t) => m.titleProblem!(t))).toEqual([null, null, null]);
     expect([undefined, null].map((t) => m.titleProblem!(t))).toEqual(['title-missing', 'title-missing']);
-    for (const t of ['', '   ', 'a'.repeat(121), 'a\u0000b', 'a\nb', 'a​b', 'a b', 'a‮b', 7, ['x'], { a: 1 }]) expect([t, m.titleProblem!(t)]).toEqual([t, 'title-bad']);
+    for (const t of ['', '   ', 'a'.repeat(121), 'a\u0000b', 'a\nb', 'a\u200bb', 'a\u2028b', 'a\u202eb', 7, ['x'], { a: 1 }]) expect([t, m.titleProblem!(t)]).toEqual([t, 'title-bad']);
     expect(m.titleProblem!('password = hunter2hunter2')).toBe('title-secret');
     const s = foldDim([{ seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: 'dim:x', title: 't', attached: [A], opened: 'menu' } }, { seq: 2, kind: DIM_KINDS.attach, payload: { v: 1, dim: 'dim:x', hsid: B } }]);
     expect([m.grantDefault!(s, A), m.grantDefault!(s, B), m.grantDefault!(s, C), m.grantDefault!(emptyDimState(), A)]).toEqual(['on', 'off', 'off', 'off']);
@@ -266,7 +267,7 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
       let n = 10;
       const open = (title: unknown, more: Record<string, unknown> = {}) => w.run('dim.open', { dim: dimId(++n), ...(title === undefined ? {} : { title }), opened: 'command', ...more });
       expect((await open(undefined)).code).toBe('title-missing');
-      for (const t of ['a\u0007b', 'a​b', 'line\nbreak', 'x'.repeat(121), '  ', 9]) expect([t, (await open(t)).code]).toEqual([t, 'title-bad']);
+      for (const t of ['a\u0007b', 'a\u200bb', 'line\nbreak', 'x'.repeat(121), '  ', 9]) expect([t, (await open(t)).code]).toEqual([t, 'title-bad']);
       const secret = await open('password = hunter2hunter2');
       expect([secret.code, JSON.stringify(secret).includes('hunter2')]).toEqual(['title-secret', false]);
       expect(w.log.rows).toEqual([]);
@@ -319,7 +320,7 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
       const w = await dimRig({
         seed: (file) => {
           fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-          fs.writeFileSync(file, JSON.stringify({ dims: Array.from({ length: 511 }, (_, i) => ulid(i, '01JD1S')) }), { mode: 0o600 });
+          fs.writeFileSync(file, JSON.stringify({ log: FAKE_LOG_ID, dims: Array.from({ length: 511 }, (_, i) => ulid(i, '01JD1S')) }), { mode: 0o600 });
         },
       });
       expect((await w.run('dim.open', { dim, title: 'The 512th', opened: 'command' })).ok).toBe(true);
@@ -398,7 +399,7 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
 
 describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
   it(
-    'a keyframe is written at close and every 256 ops; a restarted mod opens from it and pages log.read with since and until; the hash equals a full fold',
+    'a keyframe is written at close and every 256 ops; a restarted mod opens from it and pages log.read from the keyframe\'s seq to the log head; the hash equals a full fold',
     async () => {
       const w = await dimRig();
       const dim = dimId(60);
@@ -408,7 +409,7 @@ describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
       const batch = (size: number) => Array.from({ length: size }, () => rectOp(++n, { label: `n${n}` }));
       for (let i = 0; i < 3; i++) await w.run('dim.op', { dim, ops: batch(64) });
       expect(w.state()[`kf:${id}`]).toBeUndefined();
-      w.log.pad(25_000); // rows of other writers: a cold open must not scan them
+      w.log.pad(25_000); // rows of other writers
       await w.run('dim.op', { dim, ops: batch(64) });
       const head = w.state()[`kf:${id}`] as { seq: number; hash: string; n: number };
       expect([head.seq, head.n, head.hash]).toEqual([w.log.rows.at(-1)!.seq, 1, dimHash(w.log.fold(dim))]);
@@ -420,9 +421,13 @@ describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
       const re = await w.run('dim.open', { dim, opened: 'menu' });
       expect(re).toMatchObject({ ok: true, created: false, title: 'Frames' });
       expect(re.hash).toBe(dimHash(w.log.fold(dim)));
-      // one page that names the log, then pages bounded on both sides by the keyframe's seq and the index's last seq
-      const idxLast = w.log.rows.at(-2)!.seq;
-      expect(w.log.reads).toEqual([{ until: 0, limit: 1 }, { since: { logId: w.log.logId, seq: head.seq }, until: idxLast, kinds: Object.values(DIM_KINDS).sort((a, b) => Object.values(DIM_KINDS).indexOf(a) - Object.values(DIM_KINDS).indexOf(b)), limit: 1000 }]);
+      // one page that names the log, then pages of the four kinds from the keyframe's seq to the LOG HEAD (Aegis M1:
+      // no `until`, the index is only a hint). The fake scans 10,000 rows a page, as the kernel does: 25,000 padded
+      // rows and a few of the mod's own are three pages.
+      expect(w.log.reads[0]).toEqual({ until: 0, limit: 1 });
+      expect(w.log.reads[1]).toEqual({ since: { logId: w.log.logId, seq: head.seq }, kinds: [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end], limit: 1000 });
+      expect(w.log.reads.slice(1).every((p) => p.until === undefined && (p.since as { seq: number }).seq >= head.seq)).toBe(true);
+      expect(w.log.reads).toHaveLength(1 + 3);
       // the fold from the keyframe keeps authorship, deleted ids and counters: a deleted id is still refused
       expect((await w.run('dim.op', { dim, ops: [rectOp(1)] })).refused?.map((r) => r.code)).toEqual(['id-exists']);
       const closed = await w.run('dim.close', { dim });
@@ -460,7 +465,7 @@ describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
         const re = await w.run('dim.open', { dim, opened: 'menu' });
         expect([i, re.ok, re.hash === truth || re.hash === dimHash(w.log.fold(dim))]).toEqual([i, true, true]);
         // no keyframe was trusted: the read starts before the first row
-        expect([i, (w.log.reads[1]!.since as { seq: number }).seq]).toEqual([i, 0]);
+        expect([i, w.log.reads[1]!.since]).toEqual([i, undefined]);
         // C was never attached, whatever the damaged head said
         expect([i, (await w.run('dim.op', { dim, ops: [rectOp(50 + i)] }, C)).code]).toEqual([i, 'repo-mismatch']);
         const closed = await w.run('dim.close', { dim });
@@ -493,4 +498,239 @@ describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
     },
     MOD_MS,
   );
+});
+
+describe('#dimension-mod: the log is the truth, the index a hint (Aegis S1.3 M1, M2, L1, L2, L4)', () => {
+  const model = async () => (await import(pathToFileURL(path.join(DIMENSION_TREE, 'model.mjs')).href)) as Record<string, (...a: unknown[]) => unknown>;
+  /** Stop the mod, rewrite its store as a crash would have left it, start it again. */
+  const crash = async (w: Awaited<ReturnType<typeof dimRig>>, edit: (s: Record<string, unknown>) => void): Promise<void> => {
+    await w.h.stop(DIMENSION);
+    const s = w.state();
+    edit(s);
+    fs.writeFileSync(w.stateFile, JSON.stringify(s));
+    await w.h.start(DIMENSION);
+  };
+  const dropKf = (s: Record<string, unknown>, id: string): void => {
+    for (const k of Object.keys(s)) if (k.startsWith(`kf:${id}`)) delete s[k];
+    s.kfs = [];
+  };
+
+  it(
+    'M1 close, then a crash before the index write: the cold open folds to the log head, so dim.op is refused dim-ended, the index is healed and the hash equals a full replay',
+    async () => {
+      const w = await dimRig();
+      const dim = dimId(80);
+      const id = dim.slice(4);
+      await w.run('dim.open', { dim, title: 'Lag', opened: 'command' });
+      await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+      const closed = await w.run('dim.close', { dim });
+      expect(closed.seq).toBe(3);
+      // the end row is in the log; the index still names the row before it, and no keyframe was written
+      await crash(w, (s) => {
+        (s[`idx:${id}`] as { lastSeq: number }).lastSeq = 2;
+        dropKf(s, id);
+      });
+      expect(await w.run('dim.op', { dim, ops: [rectOp(3)] })).toMatchObject({ ok: false, code: 'dim-ended' });
+      expect(w.log.rows).toHaveLength(3);
+      expect((w.state()[`idx:${id}`] as { lastSeq: number }).lastSeq).toBe(3);
+      const re = await w.run('dim.open', { dim, opened: 'menu' });
+      expect(re.hash).toBe(dimHash(w.log.fold(dim)));
+      // the same lag with a keyframe from BEFORE the lost rows: the fold still reaches the head
+      await w.run('dim.op', { dim, ops: [rectOp(3)] });
+      const again = await w.run('dim.close', { dim });
+      const kfAtClose = JSON.parse(JSON.stringify(w.state())) as Record<string, unknown>;
+      await w.run('dim.open', { dim, opened: 'menu' });
+      await w.run('dim.op', { dim, ops: [rectOp(4)] });
+      const last = await w.run('dim.close', { dim });
+      await crash(w, (s) => {
+        for (const k of Object.keys(s)) delete s[k];
+        Object.assign(s, kfAtClose); // the store as it stood at the earlier close: index and keyframe both behind the log
+      });
+      expect((await w.run('dim.op', { dim, ops: [rectOp(5)] })).code).toBe('dim-ended');
+      const final = await w.run('dim.open', { dim, opened: 'menu' });
+      expect([again.seq! < last.seq!, final.hash]).toEqual([true, dimHash(w.log.fold(dim))]);
+      expect(w.log.fold(dim).nodes.size).toBe(4);
+    },
+    MOD_MS,
+  );
+
+  it(
+    'M1 delete, then a crash before the index write: an update of the deleted mark is refused id-missing and nothing is appended; the hash equals a full replay',
+    async () => {
+      const w = await dimRig();
+      const dim = dimId(81);
+      const id = dim.slice(4);
+      await w.run('dim.open', { dim, title: 'Lag 2', opened: 'command' });
+      await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+      expect(await w.run('dim.op', { dim, ops: [{ type: 'delete', id: ulid(1) }] })).toMatchObject({ ok: true, seq: 3 });
+      await crash(w, (s) => void ((s[`idx:${id}`] as { lastSeq: number }).lastSeq = 2));
+      const upd = await w.run('dim.op', { dim, ops: [{ type: 'update', id: ulid(1), patch: { label: 'ghost' } }] });
+      expect([upd.code, upd.refused?.map((r) => r.code)]).toEqual(['ops-refused', ['id-missing']]);
+      expect((await w.run('dim.op', { dim, ops: [rectOp(1)] })).refused?.map((r) => r.code)).toEqual(['id-exists']);
+      expect(w.log.rows).toHaveLength(3);
+      expect((await w.run('dim.close', { dim })).hash).toBe(dimHash(w.log.fold(dim)));
+    },
+    MOD_MS,
+  );
+
+  it(
+    'M1 an append whose reply is lost: the mod forgets its fold, so the next command reads the log and sees the row that landed',
+    async () => {
+      const w = await dimRig();
+      const dim = dimId(82);
+      await w.run('dim.open', { dim, title: 'Lost reply', opened: 'command' });
+      w.log.loseReplies = 1;
+      expect((await w.run('dim.op', { dim, ops: [rectOp(1)] })).code).toBe('append-failed');
+      expect(w.log.rows).toHaveLength(2); // the row is in the log although the mod was told it failed
+      expect((await w.run('dim.op', { dim, ops: [rectOp(1)] })).refused?.map((r) => r.code)).toEqual(['id-exists']);
+      expect((await w.run('dim.close', { dim })).hash).toBe(dimHash(w.log.fold(dim)));
+    },
+    MOD_MS,
+  );
+
+  it('M2 ops too large for one row are refused before the validator is called (counted); small ops reach it once', async () => {
+    const m = await model();
+    const human = { cls: 'human', principal: HUMAN };
+    let calls = 0;
+    const validate = (...a: unknown[]): unknown => {
+      calls += 1;
+      return (validateDimOps as (...x: unknown[]) => unknown)(...a);
+    };
+    const state = emptyDimState('dim:x');
+    const hostile: unknown[][] = [
+      [rectOp(1, { refs: Array.from({ length: 5000 }, (_, i) => `a${i}`) })], // thousands of short strings
+      [{ type: 'update', id: ulid(1), patch: Object.fromEntries(Array.from({ length: 5000 }, (_, i) => [`k${i}`, 'v'])) }],
+      Array.from({ length: 64 }, (_, i) => rectOp(i, { label: 'x'.repeat(300) })), // over 16 KiB together
+      [rectOp(1, { label: 'y'.repeat(20_000) })],
+      [JSON.parse(`${'{"a":'.repeat(40)}1${'}'.repeat(40)}`)], // nested past 32
+    ];
+    for (const ops of hostile) {
+      const r = m.apply!(state, ops, human, { validate }) as { ok: unknown[]; tooLarge: boolean; next: unknown };
+      expect([r.tooLarge, r.ok, r.next === state]).toEqual([true, [], true]);
+    }
+    expect(calls).toBe(0);
+    const ok = m.apply!(state, [rectOp(1)], human, { validate }) as { ok: unknown[]; tooLarge: boolean };
+    expect([calls, ok.tooLarge, ok.ok.length]).toEqual([1, false, 1]);
+    // ops that are not a list are the validator's to refuse by name
+    expect((m.apply!(state, 'nope', human, { validate }) as { refused: Array<{ code: string }> }).refused.map((r) => r.code)).toEqual(['field-type']);
+  });
+
+  it(
+    'M2 through the mod: an op whose node carries thousands of short strings is refused row-too-large and appends nothing',
+    async () => {
+      const w = await dimRig();
+      const dim = dimId(83);
+      await w.run('dim.open', { dim, title: 'Wide', opened: 'command' });
+      const res = await w.run('dim.op', { dim, ops: [rectOp(1, { refs: Array.from({ length: 5000 }, (_, i) => `a${i}`) })] });
+      expect(res).toEqual({ ok: false, code: 'row-too-large', fix: expect.any(String) });
+      expect(w.log.rows).toHaveLength(1);
+    },
+    MOD_MS,
+  );
+
+  it('L1 a keyframe is bound to its log: it decodes under the log it was written for and under no other, and the sum covers the log id', async () => {
+    const m = await model();
+    const state = foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: 'dim:x', title: 't', attached: [A], opened: 'menu', relayedFor: { principal: HUMAN, surface: 'gui' } } },
+      { seq: 2, kind: DIM_KINDS.op, payload: { v: 1, dim: 'dim:x', ops: [rectOp(1)], relayedFor: { principal: HUMAN, surface: 'gui' } } },
+    ]);
+    const enc = m.encodeKeyframe!(state, 'log:a') as { head: Record<string, unknown>; chunks: unknown[] };
+    expect(enc.head.log).toBe('log:a');
+    expect(dimHash(m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as DimState)).toBe(dimHash(state));
+    for (const log of ['log:b', '', undefined, null]) expect([log, m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', log)]).toEqual([log, null]);
+    // a head re-labelled for another log no longer sums
+    expect(m.decodeKeyframe!({ ...enc.head, log: 'log:b' }, enc.chunks, 'dim:x', 'log:b')).toBeNull();
+    // a keyframe with no log (written before this rule) is not trusted
+    const { log: _log, ...old } = enc.head;
+    expect(m.decodeKeyframe!(old, enc.chunks, 'dim:x', 'log:a')).toBeNull();
+  });
+
+  it(
+    'L1 creating a dimension drops any keyframe left under its id',
+    async () => {
+      const dim = dimId(84);
+      const id = dim.slice(4);
+      const w = await dimRig({
+        seed: (file) => {
+          fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+          fs.writeFileSync(file, JSON.stringify({ log: FAKE_LOG_ID, [`kf:${id}`]: { v: 1, log: FAKE_LOG_ID, seq: 9, hash: 'sha256:x', n: 2, bytes: 10, meta: {}, sum: 'sha256:y' }, [`kf:${id}:0`]: [['g', 'x']], [`kf:${id}:1`]: [['g', 'y']], kfs: [{ id, bytes: 10 }] }), { mode: 0o600 });
+        },
+      });
+      expect((await w.run('dim.open', { dim, title: 'Fresh', opened: 'command' })).created).toBe(true);
+      expect(Object.keys(w.state()).filter((k) => k.startsWith('kf:'))).toEqual([]);
+      await w.run('dim.op', { dim, ops: [rectOp(1)] });
+      await w.restart();
+      expect((await w.run('dim.open', { dim, opened: 'menu' })).hash).toBe(dimHash(w.log.fold(dim)));
+    },
+    MOD_MS,
+  );
+
+  it(
+    'L2 a dimension whose start row landed but whose index did not is ADOPTED from the log: no second titled start row, the first row\'s repo holds, and it counts once',
+    async () => {
+      const w = await dimRig();
+      const dim = dimId(85);
+      const id = dim.slice(4);
+      await w.run('dim.open', { dim, title: 'First', opened: 'command' });
+      await w.run('dim.op', { dim, ops: [rectOp(1)] });
+      await crash(w, (s) => {
+        for (const k of Object.keys(s)) delete s[k]; // neither idx nor dims was written
+      });
+      // another repo's session cannot re-create it under its own repo and title
+      expect(await w.run('dim.open', { dim, title: 'Stolen', opened: 'command' }, C)).toMatchObject({ ok: false, code: 'repo-mismatch' });
+      expect(w.log.rows).toHaveLength(2);
+      expect(w.state()[`idx:${id}`]).toEqual({ repo: REPO, firstSeq: 1, lastSeq: 2, title: 'First', log: FAKE_LOG_ID });
+      expect(w.state().dims).toEqual([id]);
+      // its own session reopens it: a start row with NO title
+      const re = await w.run('dim.open', { dim, title: 'Second', opened: 'menu' });
+      expect(re).toMatchObject({ ok: true, created: false, title: 'First', firstSeq: 1, seq: 3 });
+      expect(w.log.rows[2]!.payload.title).toBeUndefined();
+      expect(re.hash).toBe(dimHash(w.log.fold(dim)));
+      // the same for the other commands after a second loss: dim.op adopts too
+      await crash(w, (s) => {
+        for (const k of Object.keys(s)) delete s[k];
+      });
+      expect(await w.run('dim.op', { dim, ops: [rectOp(2)] })).toMatchObject({ ok: true, seq: 4 });
+      expect(w.state().dims).toEqual([id]);
+    },
+    MOD_MS,
+  );
+
+  it(
+    'L2 an index written for another log is pruned once: its ids stop counting toward the cap, and their index entries and keyframes are removed',
+    async () => {
+      const stale = Array.from({ length: 512 }, (_, i) => ulid(i, '01JD1S'));
+      const w = await dimRig({
+        seed: (file) => {
+          fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+          const s: Record<string, unknown> = { log: 'log:01JD1M0LD00000000000000001', dims: stale, kfs: [{ id: stale[0], bytes: 9 }], [`kf:${stale[0]}`]: { v: 1, n: 1 }, [`kf:${stale[0]}:0`]: [['g', 'x']] };
+          for (const id of stale.slice(0, 3)) s[`idx:${id}`] = { repo: REPO, firstSeq: 1, lastSeq: 5, title: 'Old', log: 'log:01JD1M0LD00000000000000001' };
+          fs.writeFileSync(file, JSON.stringify(s), { mode: 0o600 });
+        },
+      });
+      const dim = dimId(86);
+      // 512 stale ids would have refused this as dim-cap for good
+      expect(await w.run('dim.open', { dim, title: 'New log', opened: 'command' })).toMatchObject({ ok: true, created: true });
+      const s = w.state();
+      expect([s.dims, s.log, s.kfs]).toEqual([[dim.slice(4)], FAKE_LOG_ID, []]);
+      expect(Object.keys(s).sort()).toEqual(['dims', `idx:${dim.slice(4)}`, 'kfs', 'log'].sort());
+      // a stale id is unknown under this log, not served from an old index
+      expect((await w.run('dim.op', { dim: `dim:${stale[0]}`, ops: [rectOp(1)] })).code).toBe('dim-unknown');
+    },
+    MOD_MS,
+  );
+
+  it('L4 the negative pin: the dimension tree with one byte changed and publisher still gnomon is refused (publisher gnomon is first-party only)', () => {
+    const r = modRig();
+    cleanups.push(r.cleanup);
+    const copy = path.join(r.root, 'src', 'gnomon.dimension');
+    fs.cpSync(DIMENSION_TREE, copy, { recursive: true });
+    fs.appendFileSync(path.join(copy, 'model.mjs'), ' ');
+    expect(hashSourceTree(copy, DIMENSION, () => undefined).packageHash).not.toBe(hashSourceTree(DIMENSION_TREE, DIMENSION, () => undefined).packageHash);
+    expect(FIRST_PARTY_PACKAGE_HASHES.has(hashSourceTree(copy, DIMENSION, () => undefined).packageHash)).toBe(false);
+    expect(() => stageInstall({ home: r.home, source: copy, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth })).toThrow(/publisher gnomon is first-party only/);
+    // the untouched tree stages (and is first-party by its pin)
+    const ok = stageInstall({ home: r.home, source: DIMENSION_TREE, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth });
+    expect(ok.state === 'staged' && ok.record.detail.tier).toBe('first-party');
+  });
 });

@@ -43,6 +43,7 @@ const KINDS = [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end];
 const TOOLS = ['dim-view', 'dim-draw'];
 const RELAYED_FIELDS = ['principal', 'connId', 'surface', 'agent', 'hsid', 'turn'];
 const PAGE_ROWS = 1000;
+/** pages one cold open may read; the kernel scans at most 10,000 log rows per page */
 const MAX_PAGES = 4096;
 /** Folds kept in memory; the rest are re-read from a keyframe and the log when next used. */
 const LOADED_MAX = 8;
@@ -76,6 +77,8 @@ let logId = null;
 const loaded = new Map();
 
 const ulidOf = (dim) => dim.slice(4);
+const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+const REPO = /^repo:[0-9a-f]{16}$/;
 
 async function boot(host) {
   if (logId === null) {
@@ -88,8 +91,28 @@ async function boot(host) {
   if (dims === null) {
     const list = await host.get('dims');
     const k = await host.get('kfs');
-    dims = Array.isArray(list) ? list.filter((x) => typeof x === 'string').slice(0, DIM_CAP) : [];
-    kfs = Array.isArray(k) ? k.map((e) => plain(e)).filter((e) => e && typeof own(e, 'id') === 'string' && Number.isSafeInteger(own(e, 'bytes'))).map((e) => ({ id: e.id, bytes: e.bytes })) : [];
+    let listed = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && ULID.test(x)).slice(0, DIM_CAP) : [];
+    let frames = Array.isArray(k) ? k.map((e) => plain(e)).filter((e) => e && typeof own(e, 'id') === 'string' && ULID.test(own(e, 'id')) && Number.isSafeInteger(own(e, 'bytes'))).map((e) => ({ id: e.id, bytes: e.bytes })) : [];
+    // the index was written for ONE log. Under another log (another kernel, or a log a quarantine replaced) its
+    // entries name seqs that mean nothing: they are pruned once, so they never count toward the cap again (L2)
+    if (listed.length > 0 && (await host.get('log')) !== logId) {
+      const keep = [];
+      for (const id of listed) {
+        const idx = idxOf(await host.get(`idx:${id}`));
+        if (idx && idx.log === logId) keep.push(id);
+        else {
+          await dropKeyframe(host, id);
+          if ((await host.get(`idx:${id}`)) !== null) await host.set(`idx:${id}`, null);
+        }
+      }
+      frames = frames.filter((e) => keep.includes(e.id));
+      await host.set('dims', keep);
+      await host.set('kfs', frames);
+      await host.set('log', logId);
+      listed = keep;
+    }
+    dims = listed;
+    kfs = frames;
   }
 }
 
@@ -113,13 +136,55 @@ async function readKeyframe(host, dim) {
     if (!Number.isSafeInteger(n) || n < 0 || n > 64) return null;
     const chunks = [];
     for (let i = 0; i < n; i++) chunks.push(await host.get(`kf:${id}:${i}`));
-    return decodeKeyframe(head, chunks, dim);
+    return decodeKeyframe(head, chunks, dim, logId);
   } catch {
     return null;
   }
 }
 
-/** Cold open: the keyframe when it verifies, then the rows after it up to the index's last seq, folded page by page. */
+/**
+ * Read this dimension's rows after `since` up to the LOG HEAD, folding page by page. Pages ask for the four
+ * dimension kinds only, so a page returns at most PAGE_ROWS rows while the kernel scans at most 10,000 log rows
+ * for it. Worst case for one cold open: every log row after `since` is scanned once (MAX_PAGES pages, so at most
+ * 40,960,000 scanned rows; past that the open is refused `unavailable`), and every dimension row among them is
+ * read. Returns the state, and the repo scope and seq of the first start row seen (for an adoption).
+ */
+async function foldFromLog(host, dim, from, since) {
+  let state = from;
+  let at = since;
+  let first = null;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const page = plain(await host.kernel('log.read', { ...(at > 0 ? { since: { logId, seq: at } } : {}), kinds: KINDS, limit: PAGE_ROWS }));
+    const rows = page && Array.isArray(own(page, 'rows')) ? page.rows : null;
+    const next = page ? own(page, 'next') : undefined;
+    if (!rows) throw new Error('no page');
+    const batch = [];
+    for (const r of rows) {
+      const ev = plain(r) && own(r, 'view') === 'full' ? plain(own(r, 'event')) : null;
+      if (!ev || typeof own(ev, 'kind') !== 'string' || !Number.isSafeInteger(own(r, 'seq'))) continue;
+      const payload = plain(own(ev, 'payload'));
+      if (!payload || own(payload, 'dim') !== dim) continue;
+      if (first === null && ev.kind === DIM_KINDS.start) {
+        const scope = plain(own(ev, 'scope'));
+        first = { seq: r.seq, repo: scope ? own(scope, 'repo') : undefined };
+      }
+      batch.push({ seq: r.seq, kind: ev.kind, payload });
+    }
+    // ONE linear fold per page, continuing the last (never a fold per row: that copies the state per row)
+    if (batch.length > 0) state = foldDim(batch, undefined, state);
+    if (own(page, 'caughtUp') === true) return { state, first };
+    if (!Number.isSafeInteger(next) || next <= at) throw new Error('no progress');
+    at = next;
+  }
+  throw new Error('log too long');
+}
+
+/**
+ * Cold open. The LOG is the truth and the index is a hint (Aegis S1.3 M1): the fold runs from a verified keyframe,
+ * or from the dimension's first row, to the log head, so a row that landed while its index write did not is
+ * folded and the index is healed. A dimension whose rows are in the log but whose index is missing (or was written
+ * for another log) is ADOPTED from its first start row and that row's host-stamped repo scope (L2).
+ */
 async function load(host, dim) {
   const hit = loaded.get(dim);
   if (hit) {
@@ -127,32 +192,34 @@ async function load(host, dim) {
     loaded.set(dim, hit);
     return hit;
   }
-  if (!dims.includes(ulidOf(dim))) return null;
-  const idx = idxOf(await host.get(`idx:${ulidOf(dim)}`));
-  // an index written for another log names seqs that mean nothing here
-  if (!idx || idx.log !== logId) return null;
-  const kf = await readKeyframe(host, dim);
-  const usable = kf && kf.seq >= idx.firstSeq && kf.seq <= idx.lastSeq ? kf : null;
-  let state = usable ?? emptyDimState(dim);
-  let since = usable ? usable.seq : idx.firstSeq - 1;
-  for (let i = 0; i < MAX_PAGES && since < idx.lastSeq; i++) {
-    const page = plain(await host.kernel('log.read', { since: { logId, seq: since }, until: idx.lastSeq, kinds: KINDS, limit: PAGE_ROWS }));
-    const rows = page && Array.isArray(own(page, 'rows')) ? page.rows : null;
-    const next = page ? own(page, 'next') : undefined;
-    if (!rows) break;
-    const batch = [];
-    for (const r of rows) {
-      const ev = plain(r) && own(r, 'view') === 'full' ? plain(own(r, 'event')) : null;
-      if (ev && typeof own(ev, 'kind') === 'string' && Number.isSafeInteger(own(r, 'seq'))) batch.push({ seq: r.seq, kind: ev.kind, payload: own(ev, 'payload') });
-    }
-    // ONE linear fold per page, continuing the last (never foldDimRow in a loop: that copies the state per row)
-    state = foldDim(batch, undefined, state);
-    if (!Number.isSafeInteger(next) || next <= since) break;
-    since = next;
+  const id = ulidOf(dim);
+  const known = dims.includes(id) ? idxOf(await host.get(`idx:${id}`)) : null;
+  const idx = known && known.log === logId ? known : null;
+  if (idx) {
+    const kf = await readKeyframe(host, dim);
+    const usable = kf && kf.seq >= idx.firstSeq ? kf : null;
+    const { state } = await foldFromLog(host, dim, usable ?? emptyDimState(dim), usable ? usable.seq : idx.firstSeq - 1);
+    // the fold must have reached at least the row the index names: anything less means rows are missing
+    if (state.seq < idx.lastSeq || state.dim !== dim) throw new Error('fold short');
+    const entry = { idx: { ...idx, lastSeq: state.seq }, state, sinceKf: 0, dirty: state.seq !== idx.lastSeq };
+    remember(dim, entry);
+    return entry;
   }
-  // the fold must have reached the row the index names: anything else means rows are missing, so nothing is served
-  if (state.seq !== idx.lastSeq || state.dim !== dim) throw new Error('fold short');
-  const entry = { idx, state, sinceKf: 0, dirty: false };
+  // no usable index: look for the dimension in the log before anyone may create it again
+  const { state, first } = await foldFromLog(host, dim, emptyDimState(dim), 0);
+  if (state.seq === 0 || first === null) return null;
+  if (typeof first.repo !== 'string' || !REPO.test(first.repo)) throw new Error('start row without a repo scope');
+  if (!dims.includes(id)) {
+    if (dims.length >= DIM_CAP) return null;
+    const list = [...dims, id];
+    await host.set('dims', list);
+    await host.set('log', logId);
+    dims = list;
+  }
+  // a keyframe under this id predates the adoption: it is not this fold's
+  await dropKeyframe(host, id);
+  kfs = kfs.filter((e) => e.id !== id);
+  const entry = { idx: { repo: first.repo, firstSeq: first.seq, lastSeq: state.seq, title: state.title, log: logId }, state, sinceKf: 0, dirty: true };
   remember(dim, entry);
   return entry;
 }
@@ -173,16 +240,20 @@ async function saveIdx(host, dim, entry) {
   }
 }
 
-async function dropKeyframe(host, id, n) {
-  for (let i = 0; i < n; i++) await host.set(`kf:${id}:${i}`, null);
+async function dropKeyframe(host, id) {
+  const head = plain(await host.get(`kf:${id}`));
+  if (head === null && (await host.get(`kf:${id}:0`)) === null) return;
+  const n = head && Number.isSafeInteger(own(head, 'n')) ? Math.min(Math.max(head.n, 1), 64) : 64;
+  // the head first: chunks without a head are never read
   await host.set(`kf:${id}`, null);
+  for (let i = 0; i < n; i++) await host.set(`kf:${id}:${i}`, null);
 }
 
 /** Best effort: a keyframe only shortens a cold open, so no failure here ever fails a command. */
 async function saveKeyframe(host, dim, entry) {
   const id = ulidOf(dim);
   try {
-    const enc = encodeKeyframe(entry.state);
+    const enc = encodeKeyframe(entry.state, logId);
     entry.sinceKf = 0;
     if (!enc) return;
     const old = plain(await host.get(`kf:${id}`));
@@ -192,8 +263,7 @@ async function saveKeyframe(host, dim, entry) {
     while (keep.length > 0 && (keep.length >= KEYFRAME_DIMS || keep.reduce((a, e) => a + e.bytes, enc.head.bytes) > KEYFRAME_BUDGET_BYTES)) {
       const gone = keep[0];
       keep = keep.slice(1);
-      const head = plain(await host.get(`kf:${gone.id}`));
-      await dropKeyframe(host, gone.id, head && Number.isSafeInteger(own(head, 'n')) ? Math.min(head.n, 64) : 0);
+      await dropKeyframe(host, gone.id);
     }
     // chunks, then the head that sums them: a write cut short leaves a head that does not verify
     for (let i = 0; i < enc.chunks.length; i++) await host.set(`kf:${id}:${i}`, enc.chunks[i]);
@@ -248,18 +318,21 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     const seq = await append(host, DIM_KINDS.start, payload);
     if (seq === null) return refusal('append-failed');
     const fresh = { idx: { repo: a.repo, firstSeq: seq, lastSeq: seq, title: t.title, log: logId }, state: landed(emptyDimState(a.dim), DIM_KINDS.start, payload, stamp, seq), sinceKf: 0, dirty: false };
-    remember(a.dim, fresh);
-    await saveIdx(host, a.dim, fresh);
-    if (!dims.includes(ulidOf(a.dim))) {
-      const list = [...dims, ulidOf(a.dim)];
-      try {
+    try {
+      // a keyframe left under this id is another dimension's fold (L1)
+      await dropKeyframe(host, ulidOf(a.dim));
+      kfs = kfs.filter((e) => e.id !== ulidOf(a.dim));
+      await host.set(`idx:${ulidOf(a.dim)}`, fresh.idx);
+      if (!dims.includes(ulidOf(a.dim))) {
+        const list = [...dims, ulidOf(a.dim)];
         await host.set('dims', list);
+        await host.set('log', logId);
         dims = list;
-      } catch {
-        // the row is in the log but the index could not take it: the dimension is not served from memory either
-        loaded.delete(a.dim);
-        return refusal('unavailable');
       }
+      remember(a.dim, fresh);
+    } catch {
+      // the row is in the log but the index could not take it: the next command adopts the dimension from the log
+      return refusal('unavailable');
     }
     return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: dimHash(fresh.state) };
   }
@@ -274,7 +347,11 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   const write = async (kind, payload) => {
     if (rowProblem(payload, stamp)) return refusal('row-too-large');
     const seq = await append(host, kind, payload);
-    if (seq === null) return refusal('append-failed');
+    if (seq === null) {
+      // the mod cannot tell "not written" from "written, reply lost": forget the fold, so the next command reads the log
+      loaded.delete(a.dim);
+      return refusal('append-failed');
+    }
     entry.state = landed(entry.state, kind, payload, stamp, seq);
     entry.idx = { ...entry.idx, lastSeq: seq };
     await saveIdx(host, a.dim, entry);
@@ -308,7 +385,9 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
 
   // dim.op
   if (state.ended) return refusal('dim-ended');
-  const v = apply(state, a.ops, actor);
+  const v = apply(state, a.ops, actor, { stamp });
+  // ops that could never fit one row are refused before the validator reads them
+  if (v.tooLarge) return refusal('row-too-large');
   // a secret anywhere, or nothing accepted: no row at all
   if (v.secret) return refusal('secret', { refused: v.refused });
   if (v.ok.length === 0) return refusal('ops-refused', { refused: v.refused });

@@ -58,12 +58,9 @@ export function stripControlDeep(v: unknown, depth = 0): unknown {
   if (typeof v === 'string') return stripControl(v);
   if (v === null || typeof v !== 'object' || depth > 64) return v;
   if (Array.isArray(v)) return v.map((x) => stripControlDeep(x, depth + 1));
-  const out: Record<string, unknown> = {};
-  for (const k of Object.keys(v)) {
-    const key = stripControl(k);
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-    out[key] = stripControlDeep((v as Record<string, unknown>)[k], depth + 1);
-  }
+  // no prototype: a key read from the log (`__proto__`, `constructor`) is kept as a plain key and sets nothing
+  const out = Object.create(null) as Record<string, unknown>;
+  for (const k of Object.keys(v)) out[stripControl(k)] = stripControlDeep((v as Record<string, unknown>)[k], depth + 1);
   return out;
 }
 
@@ -155,7 +152,9 @@ function handOf(payload: Record<string, unknown>): DimBy {
   return by;
 }
 
-const emptyStats = (): DimStats => ({ rows: 0, reopens: 0, openedBy: {}, agentMarks: { added: 0, surviving: 0 }, roundTrips: 0, voice: { rows: 0, withHumanRows: false }, closedQuick: 0, opsBySession: {} });
+/** A map keyed by strings read from the log (session ids, dimension ids): no prototype, so a key such as `__proto__` or `constructor` is only a key. */
+const logKeyed = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
+const emptyStats = (): DimStats => ({ rows: 0, reopens: 0, openedBy: logKeyed<number>(), agentMarks: { added: 0, surviving: 0 }, roundTrips: 0, voice: { rows: 0, withHumanRows: false }, closedQuick: 0, opsBySession: logKeyed<number>() });
 const bump = (m: Record<string, number>, k: string): void => void (m[k] = (m[k] ?? 0) + 1);
 const QUICK_MS = 60_000;
 
@@ -226,7 +225,7 @@ export function foldDimStats(rows: Iterable<DimCliRow>): Record<string, DimStats
       }
     }
   }
-  const out: Record<string, DimStats> = {};
+  const out = logKeyed<DimStats>();
   for (const [dim, a] of accs) {
     // what is on the board now, and by whose hand: the published fold, once
     const state = foldDim(a.rows, undefined, emptyDimState(dim));

@@ -43,6 +43,8 @@ export const dimId = (n: number): string => `dim:${ulid(n, '01JD1D')}`;
 
 export const rectOp = (n: number, more: Record<string, unknown> = {}): Record<string, unknown> => ({ type: 'add', node: { id: ulid(n), kind: 'rect', x: n, y: n, z: 'V', w: 10, h: 10, ...more } });
 
+export const FAKE_LOG_ID = 'log:01JD1MFAKE0000000000000001';
+
 export interface FakeLog {
   logId: string;
   rows: Array<ModAppendRow & { seq: number }>;
@@ -50,6 +52,8 @@ export interface FakeLog {
   reads: Array<Record<string, unknown>>;
   /** set to make the next append(s) fail before anything is written */
   failAppends: number;
+  /** set to make the next append(s) land in the log and then report an error to the mod */
+  loseReplies: number;
   /** rows of other writers between the mod's rows (advances the seq) */
   pad(n: number): void;
   kernelCall: ModKernelCall;
@@ -68,10 +72,11 @@ export function fakeLog(opts: { pageScan?: number } = {}): FakeLog {
   let clock = 0;
   const pageScan = opts.pageScan ?? 10_000;
   const log: FakeLog = {
-    logId: 'log:01JD1MFAKE0000000000000001',
+    logId: FAKE_LOG_ID,
     rows: [],
     reads: [],
     failAppends: 0,
+    loseReplies: 0,
     pad: (n) => void (seq += n),
     kernelCall: undefined as unknown as ModKernelCall,
     dimRows: () => log.rows.map((r) => ({ seq: r.seq, kind: r.kind, payload: r.payload })),
@@ -86,6 +91,10 @@ export function fakeLog(opts: { pageScan?: number } = {}): FakeLog {
         }
         seq += 1;
         log.rows.push({ ...row, payload: JSON.parse(JSON.stringify(row.payload)) as Record<string, unknown>, seq });
+        if (log.loseReplies > 0) {
+          log.loseReplies -= 1;
+          throw new Error('reply lost (test)');
+        }
         return { seq };
       },
       callAs: async (_principal, verb, params) => {
