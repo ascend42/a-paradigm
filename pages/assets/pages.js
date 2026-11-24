@@ -136,7 +136,8 @@
       l.className = 'saw';
       c.type = 'checkbox';
       l.appendChild(c);
-      l.appendChild(document.createTextNode('I saw it: ' + s.querySelector('.station-name').textContent));
+      l.appendChild(document.createTextNode('I saw it'));
+      c.setAttribute('aria-label', 'I saw it: ' + s.querySelector('.station-name').textContent.trim());
       c.addEventListener('change', function () {
         seen = seen.filter(function (x) { return x !== s.id; });
         if (c.checked) seen.push(s.id);
@@ -148,7 +149,10 @@
       seen = [];
       mark();
       live.textContent = 'Ticks cleared.';
-      path.querySelector('summary').focus();
+      /* back to the start: every station closed, the first one open, and focus on it */
+      each('details', function (d) { d.open = false; }, path);
+      var first = path.querySelector('details');
+      if (first) { first.open = true; first.querySelector('summary').focus(); }
     });
     path.parentNode.insertBefore(clear, path.nextSibling);
     /* on return, the station you are on is the one that is open */

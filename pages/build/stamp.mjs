@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   PAGES, REGION_RE, STATES, esc, inl, hl, fmt, linkify, blobUrl, srcLine, resolveFact, readPinned, pinState,
-  loadFacts, loadManifest, listCut, isYaml, midCut, parseOpts, lineGroups, strayMarkers,
+  loadFacts, loadManifest, listCut, isYaml, midCut, parseOpts, lineGroups, strayMarkers, latelyBehind,
 } from './lib.mjs';
 
 const args = new Set(process.argv.slice(2));
@@ -223,7 +223,7 @@ function graph(ctx, id, o) {
     if (!shared.includes(asked)) fail(ctx.file, `graph ${id}: the capture asks about ${asked}, which is not the shared symbol (${shared.join(', ')})`);
     feats.forEach((f) => named.includes(f.id) || fail(ctx.file, `graph ${id}: the capture does not name ${f.id}`));
   }
-  const PITCH = 22, LX = 8, RX = 256, CH = 7.8, W = 424;
+  const PITCH = 24, LX = 8, RX = 256, CH = 7.8, W = 424;
   const y = (i) => 22 + i * PITCH;
   const H = y(right.length - 1) + 14;
   const mean = (X) => X.members.reduce((s, m) => s + y(right.indexOf(m)), 0) / X.members.length;
@@ -233,7 +233,7 @@ function graph(ctx, id, o) {
   const label = (sym) => `<tspan class="p-${CLS[sym[0]]}">${esc(sym[0])}</tspan>${esc(midCut(sym.slice(1), 19))}`;
   const node = (sym, x, yy, say, ripple, cls) => {
     const w = Math.round(midCut(sym, 20).length * CH + 12);
-    return `<g class="node${cls ? ` ${cls}` : ''}" tabindex="0" role="img" aria-label="${esc(`${sym}, ${KIND[sym[0]]}. ${say}`)}" data-id="${esc(sym)}" data-ripple="${esc(ripple.join(' '))}"${cls === 'at' ? ' data-o' : cls === 'hit' ? ' data-d' : ''}><title>${esc(sym)}</title><rect x="${x - 6}" y="${yy - 15}" width="${w}" height="22"/><text x="${x}" y="${yy}">${label(sym)}</text></g>`;
+    return `<g class="node${cls ? ` ${cls}` : ''}" tabindex="0" role="img" aria-label="${esc(`${sym}, ${KIND[sym[0]]}. ${say}`)}" data-id="${esc(sym)}" data-ripple="${esc(ripple.join(' '))}"${cls === 'at' ? ' data-o' : cls === 'hit' ? ' data-d' : ''}><title>${esc(sym)}</title><rect x="${x - 6}" y="${yy - 16}" width="${w}" height="24"/><text x="${x}" y="${yy}">${label(sym)}</text></g>`;
   };
   const edges = [];
   const nodes = [];
@@ -304,8 +304,8 @@ for (const page of M.pages.filter((p) => p.built)) {
 }
 
 if (RELEASE) {
-  const newest = (fs.readFileSync(path.join(PAGES, '..', F.lately.source), 'utf8').match(/^## \[([^\]]+)\]/m) || [])[1];
-  if (newest && newest !== F.lately.paradigm[0].version) fail(F.lately.source, `has a newer release (${newest}) than facts.json lately.paradigm[0] (${F.lately.paradigm[0].version})`);
+  // the first version heading; [Unreleased] is not a release
+  latelyBehind(fs.readFileSync(path.join(PAGES, '..', F.lately.source), 'utf8'), F.lately.paradigm[0].version).forEach((m) => fail(F.lately.source, m));
   if (pinState.missing) notices.push(`the pinned commit ${F.excerpts_pinned_to.commit.slice(0, 8)} is not in this clone; excerpts were checked against the working tree`);
   if (tbd.size) notices.push(`deferred founder decisions shown with their working default: ${[...tbd].join(', ')}`);
 }

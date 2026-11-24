@@ -30,6 +30,9 @@ CI (`.github/workflows/pages.yml`) runs the first two on every push to `main` th
 or `CHANGELOG.md`, and deploys only if they pass. While a page in `build/pages.json` is still
 `"built": false`, a strict release check fails on purpose; use `--allow-pending` while building.
 
+The release stamp also fails when the first version heading in `CHANGELOG.md` is not the first row of
+`lately.paradigm` in `facts.json`: update the lately rows at each release. `## [Unreleased]` is not a release.
+
 ## Stamped regions
 
 A region is `<!-- kind:arg key=value -->...<!-- /kind -->`. Leave it empty; the stamp fills it.

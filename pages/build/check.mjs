@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { PAGES, REPO, REGION_RE, loadFacts, loadManifest, readPinned, listCut, isYaml, typedDigits, parseOpts, midCut } from './lib.mjs';
+import { PAGES, REPO, REGION_RE, loadFacts, loadManifest, readPinned, listCut, isYaml, typedDigits, parseOpts, midCut, latelyBehind } from './lib.mjs';
 
 const args = new Set(process.argv.slice(2));
 const RELEASE = args.has('--release');
@@ -150,6 +150,7 @@ function selfTest(found) {
   const themed = (l1, d1, l2, d2) => `:root{${l1}}@media (prefers-color-scheme: dark){:root{${d1}}}:root[data-theme="light"]{${l2}}:root[data-theme="dark"]{${d2}}`;
   const page = (body) => `<!doctype html><html lang="en"><head><title>t</title></head><body><a class="key skip" href="#main">Skip</a><main id="main"><h1>One</h1>${body}</main></body></html>`;
   const yaml = ['a:', '  - one', '  - two', '  - three', 'b: x'];
+  const log = (...heads) => `# Changelog\n\n${heads.map((h) => `## ${h}\n\ntext\n`).join('\n')}`;
   const cases = [
     ['a custom property off the foundations', () => checkCss(':root{--ground:#FF00AA}', found, 't'), true],
     ['a size off the scales in a custom property', () => checkCss(':root{--gap:13.5px}', found, 't'), true],
@@ -173,7 +174,11 @@ function selfTest(found) {
     ['a font from another origin', () => externalLoads('@font-face{src:url("https://fonts.example/f.woff2")}', 't'), true],
     ['a runtime fetch', () => externalLoads('fetch("facts.json")', 't'), true],
     ['a long id is not cut in the drawing', () => (midCut('x'.repeat(60)).length <= 20 ? ['cut'] : []), true],
+    ['a changelog release newer than the first lately row', () => latelyBehind(log('[8.1.4] — 2026-11-20', '[8.1.3] — 2026-11-12'), '8.1.3'), true],
+    ['a newer release under an Unreleased heading', () => latelyBehind(log('[Unreleased]', '[8.1.4] — 2026-11-20', '[8.1.3] — 2026-11-12'), '8.1.3'), true],
     // and the same checks stay quiet on clean input
+    ['an Unreleased heading above the first lately row is not a release', () => latelyBehind(log('[Unreleased]', '[8.1.3] — 2026-11-12'), '8.1.3'), false],
+    ['an unreleased heading in any case', () => latelyBehind(log('[UNRELEASED]', '[8.1.3] — 2026-11-12'), '8.1.3'), false],
     ['clean tokens', () => checkCss(`${themed(light, dark, light, dark)}:root{--display:"Fraunces", "Fraunces Fallback", Georgia, serif;--trace:120ms linear}.s-c{color:var(--sym-component)}`, found, 't'), false],
     ['a clean page with a stamped number', () => checkHtml(page('<p><!-- fact:x -->42<!-- /fact --> tools</p><h2>Two</h2>'), 't', { release: true }), false],
     ['an excerpt that ends where its list ends', () => listCut(yaml, 1, 4), false],
