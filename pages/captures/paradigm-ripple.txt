@@ -1,0 +1,33 @@
+# Captured 2026-11-23, HEAD d4dd05b7. The CLI has a ripple command (paradigm ripple --help).
+# The absolute checkout path is replaced with <repo>; nothing else is changed.
+# #init-handler is declared in packages/paradigm/.purpose and listed under two features, init-command and shift-command.
+
+$ paradigm ripple '#init-handler'
+
+🌊 Ripple Analysis for #init-handler
+
+ℹ [ripple] Analyzing ripple effects {"symbol":"#init-handler"}
+- Analyzing impact...
+✔ Impact analyzed
+✔ [ripple] Ripple analysis complete {"symbol":"#init-handler","requires":0,"requiredBy":2,"duration":"164ms"}
+Symbol Info
+──────────────────────────────────────────────────
+  Type:        component
+  Path:        <repo>/packages/paradigm/.purpose
+  Description: Handles paradigm init command logic
+
+⬇️  Downstream (What would be affected)
+──────────────────────────────────────────────────
+  Components:  #shift-command, #init-command
+
+🧪 Test Suggestion
+──────────────────────────────────────────────────
+  npm test -- --testPathPattern="<repo>/packages/paradigm"
+
+📊 Impact Summary
+──────────────────────────────────────────────────
+  Direct dependents: 2
+  Impact level:      Medium
+
+  ⚠️  Changes to this symbol may affect the above dependents.
+

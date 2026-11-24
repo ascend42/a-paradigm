@@ -1,0 +1,34 @@
+# Captured 2026-11-23, HEAD d4dd05b7. Tokens are estimated as JSON length / 4 (tools-list-budget.test.ts:77), not counted by a tokenizer.
+# Budgets: TOKEN_BUDGET = 8000 (line 18), TOOL_BUDGET = 40 (line 19).
+
+$ cd packages/paradigm-mcp && npx vitest run src/tools/tools-list-budget.test.ts --reporter=verbose
+
+ RUN  v5.0.5 <repo>/packages/paradigm-mcp
+
+stdout | src/tools/tools-list-budget.test.ts > tools/list budget (7.13) > this repo: ≤40 tools, <8000 tokens, no aliases key
+[tools-list-budget] repo default: 32 tools, ~7793 tokens
+
+23:08:27.979 #index-loader WARN  config.yaml missing "version" field
+23:08:28.008 #index-loader WARN  config.yaml missing "version" field
+23:08:28.051 #index-loader WARN  config.yaml missing "version" field
+ ✓ src/tools/tools-list-budget.test.ts > tools/list budget (7.13) > worst case (all detectors): ≤40 tools, <8000 tokens, no aliases key 11ms
+ ✓ src/tools/tools-list-budget.test.ts > tools/list budget (7.13) > this repo: ≤40 tools, <8000 tokens, no aliases key 4ms
+ ✓ src/tools/tools-list-budget.test.ts > T-2026-11-06-002: concise paradigm_status names a detected, unlisted family > habits detected → the concise status carries the activate hint; not detected → no habits hint 61ms
+ ✓ src/tools/tools-list-budget.test.ts > legacy map completeness > every registered legacy tool name is mapped (to a family op or an anchor) 3ms
+ ✓ src/tools/tools-list-budget.test.ts > legacy map completeness > canonicalizeToolRef understands family forms 1ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > every map key dispatches while hidden and is absent from tools/list 208ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > deprecated alias writes a deprecation breadcrumb 1ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > lore record/search: legacy and family produce identical output; toolsCalled gets legacy name 89ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > purpose add_component: legacy and family identical 53ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > task create: legacy and family identical 2ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > op validation: unknown op and missing required params echo the op params 1ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > anchor folds: status check:plugins and reindex scope:workspace resolve to legacy names 0ms
+ ✓ src/tools/tools-list-budget.test.ts > family + alias dispatch > tool_activate lists an on-demand family and emits list_changed 1ms
+ ✓ src/tools/tools-list-budget.test.ts > config: mcp.tools.enable + legacy_listing > enable lists on-demand tools; legacy_listing relists the pre-7.13 surface 3ms
+ ✓ src/tools/tools-list-budget.test.ts > habits canonical tool names > tool-called habits match family references and family-form toolsCalled 0ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  23:08:27
+   Duration  852ms (tests 62%, import 21%, transform 15%, setup 1%)
+

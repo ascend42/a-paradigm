@@ -1,0 +1,29 @@
+# Captured 2026-11-23 in a scratch clone of this repo (git clone --local --no-checkout), not in the working checkout.
+# Refs: fix/onboarding-truth at a65e3014, feat/gnomon-boards-s1.0 at d4dd05b7. Warpline 0.3.1. Wall time 2 min 11 s on an Apple silicon Mac.
+# Finding: the command is described as read-only, and it leaves git alone, but it created a .warpline/ folder in the
+# clone (oracle.jsonl, 97,516 bytes, plus states/ and warp/). Its last line says so. A page must not call it 'writes nothing'.
+# This pair is a plain agreement: git merges clean and Warpline predicts clean. It shows the shape of the answer, not a catch.
+
+$ warpline oracle origin/fix/onboarding-truth origin/feat/gnomon-boards-s1.0
+ORACLE  origin/fix/onboarding-truth  vs  origin/feat/gnomon-boards-s1.0
+mergeBase a4e7e621e916f5d3714af2545340d60578d95299
+states    base=…bf27bdd5  A=…3e5292e7  B=…23103015
+
+MERGE   CLEAN ✓   (no knots, no dangling, git merges clean)
+
+PREDICTION (from meaning):
+  autoClean 107
+  knots     0
+  dangling  0
+
+GIT REALITY: clean  (0 path(s), 0 symbol(s))
+
+CONVERGENCE — did MEANING agree with GIT? (the experiment, not "is it safe"):
+  agreeClean          107
+  agreeConflict       0
+  divergeGitOnly  ★   0
+  divergeMeaningOnly ★ 0
+  score               1
+  VERDICT             CONVERGENT
+
+appended → .warpline/oracle.jsonl

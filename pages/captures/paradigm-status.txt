@@ -1,0 +1,35 @@
+# Captured 2026-11-23 on the a-paradigm checkout, branch feat/gnomon-boards-s1.0, HEAD d4dd05b7. CLI 8.1.3.
+# The dossier's run earlier the same day printed 1246 components and a total of 1769.
+
+$ paradigm status
+
+📊 Paradigm Status
+
+────────────────────────────────────────
+ℹ [status] Getting project status
+- Scanning project...
+
+Configuration Files
+────────────────────────────────────────
+  .premise:     ✓ Found
+  .purpose:   ✓ Found
+  portal.yaml:  ✓ Found
+- Counting files...
+
+Source Files
+────────────────────────────────────────
+  Purpose files:  129
+  Gate files:     2
+- Aggregating symbols...
+
+Symbol Index
+────────────────────────────────────────
+  # Components   1247
+  $ Flows        106
+  ^ Gates        42
+  ! Signals      137
+  ~ Aspects      238
+────────────────────────────────────────
+  Total:          1770
+✔ [status] Status retrieved {"symbols":1770,"files":131,"duration":"366ms"}
+
