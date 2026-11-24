@@ -1263,7 +1263,7 @@
         },
         {
           "state": "not built",
-          "what": "Intel Macs and Linux: refused. Windows is the row above",
+          "what": "Intel Macs and Linux: refused. Windows is under In progress",
           "evidence": "CHANGELOG.md:295",
           "facts": [
             "gnomon.platform"

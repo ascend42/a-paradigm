@@ -56,7 +56,8 @@ components:
   pages-symbol-graph:
     description: >-
       The Paradigm plate. stamp.mjs reads two features from packages/paradigm/.purpose at the pinned
-      commit and draws them as an inline SVG whose nodes are focusable symbol ids; hover or focus ripples
+      commit and draws them as an inline SVG whose nodes are focusable symbol ids on a 24 unit pitch, each
+      with a 24 unit tall target that abuts its neighbours and never overlaps them; hover or focus ripples
       to the node's dependents. The stamp fails if the captured paradigm ripple answer does not name the
       same symbols. Below 620px the same symbols and edges are a nested list.
     type: view

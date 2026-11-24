@@ -120,7 +120,7 @@ code { font-family: var(--mono); font-size: 15px; }
 .cmds .cmd + .cmd { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
 .cmds .cmd:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .cmd .where { font-family: var(--mono); font-size: 13px; color: var(--ink-2); align-self: center; padding: 0 16px 0 0; white-space: nowrap; }
-.cmd .key { border: 0; border-left: 1px solid var(--ink); border-radius: 0; background: transparent; min-width: calc(6ch + 32px); }
+.cmd .key { border: 0; border-left: 1px solid var(--ink); border-radius: 0; background: transparent; min-width: calc(10ch + 33px); flex: none; }
 .cmd .key:hover { background: var(--sunk); }
 .cmd .key[data-done], .cmd .key[data-done]:hover { background: var(--ink); color: var(--on-ink); }
 /* prompt line: a sentence you say to your agent (never a shell command, never a $ prompt) */
@@ -146,7 +146,7 @@ code { font-family: var(--mono); font-size: 15px; }
 .mark.notbuilt { border: 0; border-bottom: 2px solid var(--ink); }
 .ledger-key { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); }
 .ledger-key li { display: flex; gap: 8px; align-items: baseline; }
-.ledger-key b { color: var(--ink); font-weight: 600; }
+.ledger-key b { color: var(--ink); font-weight: 600; white-space: nowrap; flex: none; }
 .mark.nothold { position: relative; }
 .mark.nothold::after { content: ""; position: absolute; left: -4px; right: -4px; top: calc(50% - 1px); height: 2px; background: var(--ink); }
 /* what a state row says is prose, so it is set as prose */
@@ -555,7 +555,7 @@ code { font-family: var(--mono); font-size: 15px; }
   .desk { grid-template-columns: minmax(0, 1fr); } .dz-shop { grid-auto-flow: row; grid-auto-columns: auto; } .desk-note { display: block; }
   .display { font-size: 44px; } .fact-n { font-size: 44px; }
   .plate { padding: 16px; } .plate svg.graph { display: none; } .graph-list { display: block; }
-  .cmd .where { display: none; }
+  .cmd .where { display: none; } .cmd .key { padding: 0 8px; min-width: calc(10ch + 17px); }
   .pair { padding: 16px; } .proof-head, .proof pre { padding-left: 16px; padding-right: 16px; } .proof-cut, .proof .prov { padding-left: 16px; padding-right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -569,6 +569,9 @@ code { font-family: var(--mono); font-size: 15px; }
   :root, :root[data-theme="dark"], :root[data-theme="light"] { color-scheme: light; --ink: #17181C; --ink-2: #4B4D56; --edge: #70727B; --rule: #D3D3CC; --surface: transparent; --sunk: transparent; }
   :root, :root[data-theme="dark"], :root[data-theme="light"] { --sym-component: #166534; --sym-flow: #6D28D9; --sym-gate: #B91C1C; --sym-signal: #854D0E; --sym-aspect: #4B5563; --g-ground: transparent; --g-sheet: transparent; --g-ink: #17181C; --g-sec: #4B4D56; --g-edge: #17181C; --g-on-ink: #17181C; --g-shadow: none; --w-ground: transparent; --w-text: #17181C; --w-muted: #4B4D56; --w-rule: #D3D3CC; --on-ink: #17181C; }
   .gkey.pri, .graph .node.at rect { background: none; fill: none; }
+  /* the back sheets would strike through the card on paper, and paper has no scroll to land the stamp */
+  .gstack::before, .gstack::after { display: none; }
+  .gplate .gstamp, .gplate.wait .gstamp, .gplate.land .gstamp { opacity: 1; animation: none; }
   body { background: none; font-size: 13px; }
   .mast, .skip, .key, .foot, .onward, .saw, .path-clear { display: none; }
   body:has(.field-card) main > :not(.field-sheet), .field-sheet > :not(.section-body), .field-sheet .section-body > :not(.field-card) { display: none; }
