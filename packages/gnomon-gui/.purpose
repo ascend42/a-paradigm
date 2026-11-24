@@ -303,9 +303,10 @@ components:
       Known and left for later slices: React and Excalidraw carry HTML sinks
       (the kernel's bundle scan exempts board/* from that one clause);
       react-style-singleton can inject a <style> for a modal popover.
-      DEFERRED to S1.3, tracked here: src/board/dim-map.ts (the pure mapping between
-      a folded dimension and engine elements, built from an allowlist of engine keys)
-      and its forward and reverse goldens; it lands with the board leaf.
+      S1.3 pass P3a: src/board/dim-map.ts (the pure mapping between a folded
+      dimension and engine elements, built from an allowlist of engine keys)
+      and its goldens have landed as #gui-dim-map. Nothing here imports it
+      yet: src/board/index.ts renders from it in pass P3b.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
@@ -327,6 +328,38 @@ components:
       - test/board-csp.test.ts
       - test/board-preview.test.ts
       - test/board-hardening.test.ts
+  gui-dim-map:
+    description: >-
+      #gui-dim-map (boards S1.3 pass P3a, s1.3-draft point 5; conditions C4
+      and Aegis A6) - the two-way map between a folded dimension
+      (#contract-dim-shape) and the board engine's elements. PURE: no DOM and
+      no engine import, not even a type (the element shape is the structural
+      EngineElement), so the tests load it in Node. dimToElements(state,
+      theme, ids) emits elements in dimZCompare order, a label straight after
+      its mark, each BUILT from the closed list DIM_ENGINE_KEYS: no node key
+      is copied, so a stored link, embeddable, free customData or prototype
+      key never reaches the engine. The stroke is dashed when the fold says
+      an agent or an unknown hand drew the node. dimIsSticky (a rect with a
+      named fill and a label key) is paint only and never changes that. A
+      node of a non-core kind, or a core node missing what it is drawn from,
+      is a fixed rectangle labelled by dimFallbackLabel(kind). Coordinates
+      are rounded; a stroke or arrow is emitted with its first point at the
+      origin. elementsToOps(prev, elements, ids, style) diffs the engine's
+      scene against the state it was rendered from, reading both sides the
+      same way, so fields the engine does not carry (refs, rel, a text's size
+      and w) are never patched. It yields add, update, move (one op for a
+      pure translation of several marks) and delete; a new or reordered mark
+      gets its order key from dimZPlace of its neighbours, and the longest
+      run already in order keeps its keys. It writes nothing for a fallback
+      mark, a deleted id, an engine type the board does not have or an empty
+      text, and validates nothing (the caller runs validateDimOps). Not
+      imported by src/board/index.ts or the app yet (pass P3b), so the board
+      chunk and the bundle are unchanged.
+    path: src/board/dim-map.ts
+    type: module
+    tags: [gnomon, gui, board, dimension, pure]
+    tests:
+      - test/dim-map.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
