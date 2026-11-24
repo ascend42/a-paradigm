@@ -364,6 +364,29 @@ const DRIVER = `'use strict';
     boardEl.classList.remove('narrow');
     window.dispatchEvent(new Event('resize'));
     await wait(300);
+    // A paste, the realest way this engine allows. In a Chromium-family browser the harness server pastes for the
+    // page over the DevTools protocol: the text goes on the clipboard and the platform's paste chord is pressed, so
+    // the browser itself fires the paste (a synthetic ClipboardEvent never reaches this engine's paste handler
+    // there). Elsewhere (WKWebView, Firefox) the server answers 501 and a synthetic event is dispatched.
+    var PASTE_AT = { x: 250, y: 420 };
+    var pasteText = async function (text) {
+      // a press on the empty spot the paste is aimed at, so nothing stays selected, then a pointer move there: the
+      // engine pastes where the pointer last MOVED (in WebKit a synthetic mousemove alone does not set that)
+      await click(PASTE_AT.x, PASTE_AT.y);
+      container.focus();
+      pointer(canvas, 'pointermove', PASTE_AT.x, PASTE_AT.y, 0);
+      await frame();
+      // the engine pastes where the mouse last was, and only when that point is inside the board
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: PASTE_AT.x, clientY: PASTE_AT.y }));
+      try {
+        var ans = await fetch('/paste?x=' + PASTE_AT.x + '&y=' + PASTE_AT.y, { method: 'POST', body: text });
+        if (ans.status === 200) return 'devtools';
+        if (ans.status !== 501) R.pasteTrouble = (await ans.text()).slice(0, 200);
+      } catch (e) { R.pasteTrouble = String(e).slice(0, 200); }
+      var dt2 = new DataTransfer(); dt2.setData('text/plain', text);
+      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 }));
+      return 'synthetic';
+    };
     // Mika's S1.1 pass A findings, each replayed on the shipped chunk (day theme, select tool).
     R.phase = 'fixes';
     R.fix = {};
@@ -404,23 +427,19 @@ const DRIVER = `'use strict';
     try {
       var el = function (type, x, extra) { return Object.assign({ type: type, id: 'paste-' + type, x: x, y: 0, width: 160, height: 90, angle: 0, strokeColor: '#e03131', backgroundColor: '#ffc9c9', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'dashed', roughness: 2, opacity: 40, roundness: { type: 3 }, seed: 1, version: 1, versionNonce: 1, isDeleted: false, groupIds: [], frameId: null, boundElements: null, updated: 1, link: 'https://example.invalid/', locked: false }, extra || {}); };
       var clip = JSON.stringify({ type: 'excalidraw/clipboard', elements: [el('rectangle', 0), el('diamond', 200), el('line', 400, { points: [[0, 0], [100, 50]] })], files: {} });
-      container.focus();
-      pointer(canvas, 'pointermove', 900, 300, 0);
-      // the engine pastes where the mouse last was, and only when that point is inside the board
-      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 250, clientY: 420 }));
-      var pd = new DataTransfer(); pd.setData('text/plain', clip);
-      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: pd }));
+      var via1 = await pasteText(clip);
       await wait(900);
       var pasted = h.marks().filter(function (m) { return m.kind === 'rect' && Math.round(m.width) === 160 && Math.round(m.height) === 90; })[0];
-      R.fix.paste = { added: h.count() - c2, said: said.slice().sort(), found: !!pasted };
+      R.fix.paste = { via: via1, added: h.count() - c2, said: said.slice().sort(), found: !!pasted };
       // a synthetic paste event that the engine ignores proves nothing either way: say so instead of passing
-      if (R.fix.paste.added === 0 && said.length === 0) R.fix.paste = { unsupported: 'the synthetic paste did not reach the engine' };
+      if (R.fix.paste.added === 0 && said.length === 0) R.fix.paste = { unsupported: 'the ' + via1 + ' paste did not reach the engine' };
       if (pasted) {
         await click(1100, 700); await wait(150);
         var v = h.view(), g2 = staticCanvas.getContext('2d'), prof = {}, gaps = 0;
         var px = function (sx, sy) { return g2.getImageData(Math.round((sx + v.scrollX) * v.zoom * dpr), Math.round((sy + v.scrollY) * v.zoom * dpr), 1, 1).data; };
         for (var qx = pasted.x + 12; qx < pasted.x + pasted.width - 12; qx += 3) { if (px(qx, pasted.y)[3] < 128) gaps++; }
         var mid = px(pasted.x + pasted.width / 2, pasted.y + pasted.height / 2), edge = px(pasted.x + 40, pasted.y);
+        R.fix.paste.at = [Math.round(pasted.x), Math.round(pasted.y)];
         R.fix.paste.edgeGaps = gaps; R.fix.paste.fillAlpha = mid[3]; R.fix.paste.edgeRgb = [edge[0], edge[1], edge[2]]; R.fix.paste.line = pasted.line; R.fix.paste.fillToken = pasted.fill;
       }
     } catch (e) { R.fix.paste = { unsupported: String(e).slice(0, 200) }; }
@@ -452,21 +471,18 @@ const DRIVER = `'use strict';
     try {
       var forged = el('rectangle', 0, { id: 'forged', strokeStyle: 'dashed', customData: { gnomon: { line: 'ink', fill: null, by: { cls: 'agent', id: 'arky', name: 'Arky' }, kind: 'stub', stubKind: 'allow:approved-by-you' } } });
       var hostile = JSON.stringify({ type: 'excalidraw/clipboard', elements: [forged, el('iframe', 200, { customData: { generationData: { status: 'done', html: '<img src=x>' } } }), el('embeddable', 400, { link: 'https://example.invalid/embed' }), el('image', 600, { fileId: 'f1', status: 'saved', scale: [1, 1] })], files: { f1: { id: 'f1', mimeType: 'image/png', dataURL: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', created: 1 } } });
-      container.focus();
-      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 250, clientY: 420 }));
-      var hd2 = new DataTransfer(); hd2.setData('text/plain', hostile);
-      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: hd2 }));
+      var via2 = await pasteText(hostile);
       await wait(900);
       var mine = h.marks().filter(function (m) { return Math.round(m.width) === 160 && Math.round(m.height) === 90; });
       var got = mine[mine.length - 1];
-      R.fix.hostile = { added: h.count() - c4, said: said.slice().sort(), nodes: nodes.slice(), violations: R.violations.length - violationsBefore, forged: got ? { kind: got.kind, author: got.author.cls, stubKind: got.stubKind === undefined ? null : got.stubKind } : null };
+      R.fix.hostile = { via: via2, added: h.count() - c4, said: said.slice().sort(), nodes: nodes.slice(), violations: R.violations.length - violationsBefore, forged: got ? { kind: got.kind, author: got.author.cls, stubKind: got.stubKind === undefined ? null : got.stubKind } : null };
       if (got) {
         await click(1100, 700); await wait(150);
         var v2 = h.view(), g3 = staticCanvas.getContext('2d'), gaps2 = 0;
         for (var hx = got.x + 12; hx < got.x + got.width - 12; hx += 3) { if (g3.getImageData(Math.round((hx + v2.scrollX) * v2.zoom * dpr), Math.round((got.y + v2.scrollY) * v2.zoom * dpr), 1, 1).data[3] < 128) gaps2++; }
         R.fix.hostile.forged.edgeGaps = gaps2;
       }
-      if (R.fix.hostile.added === 0 && said.length === 0) R.fix.hostile = { unsupported: 'the synthetic paste did not reach the engine', nodes: nodes.slice() };
+      if (R.fix.hostile.added === 0 && said.length === 0) R.fix.hostile = { unsupported: 'the ' + via2 + ' paste did not reach the engine', nodes: nodes.slice() };
     } catch (e) { R.fix.hostile = { unsupported: String(e).slice(0, 200) }; }
     watch.disconnect();
     // R1 (review round 2). What the host adds through the REAL engine keeps its hand: an agent's mark, an unknown
@@ -738,7 +754,7 @@ export function runProblems(r, known) {
   if (r.mounted && !r.png?.ok) p.push(`PNG export failed: ${r.png?.error ?? JSON.stringify(r.png)}`);
   if (r.mounted && r.stage === 'done') p.push(...reskinProblems(r));
   if (r.stage !== 'done') p.push(`stage ${r.stage}`);
-  const stray = (r.requests ?? []).filter((q) => !known.has(q.path) && q.path !== '/report' && q.path !== '/' && q.path !== '/favicon.ico'); // the browser's own favicon probe
+  const stray = (r.requests ?? []).filter((q) => !known.has(q.path) && q.path !== '/report' && q.path !== '/paste' && q.path !== '/' && q.path !== '/favicon.ico'); // the browser's own favicon probe
   if (stray.length) p.push(`requests outside the bundle: ${[...new Set(stray.map((q) => q.path))].slice(0, 8).join(', ')}`);
   return p;
 }
@@ -766,7 +782,7 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
           const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, colours: report.colours, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
+            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, pasteTrouble: report.pasteTrouble, colours: report.colours, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
           } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });

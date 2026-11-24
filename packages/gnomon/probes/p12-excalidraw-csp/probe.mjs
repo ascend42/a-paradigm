@@ -114,6 +114,9 @@ export default async function probe(ctx) {
       enginesUnavailable: out.missing,
       requiredEngines: required,
       exercised,
+      // how each engine's paste was made: `devtools` is a real paste (clipboard plus the platform's paste chord)
+      pasteVia: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, e.runs.find((r) => r.mounted)?.fix?.paste?.via ?? e.runs.find((r) => r.mounted)?.fix?.paste?.unsupported ?? null])),
+      pasteModifier: process.platform === 'darwin' ? 'Meta' : 'Control',
       clean,
       findings,
       ...(ctx.platform !== 'darwin' ? { platformNote: `${ctx.platform}: mechanics only (Windows parity phase, P8-D78)` } : {}),

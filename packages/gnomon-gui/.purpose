@@ -224,8 +224,8 @@ components:
       body); under 148px of board no state draws the body or the foot and
       the leaf clips to its own box; while yielded every press, the wheel, a
       double-click, a drop and a paste are stopped, and the waking press
-      holds the engine off for 500 ms so its own double-click starts no
-      text. Engine: authorship is the handle's record (above); every drop is
+      holds the engine off for the length of a double-click (WAKE_HOLD_MS
+      in ui/board-leaf.ts) so its own double-click starts no text. Engine: authorship is the handle's record (above); every drop is
       refused, with or without files; patch paste-types-filtered removes
       elements that are not board types before the engine commits a paste or
       an insert; the api-run-action patch carries its closed list of six
@@ -269,13 +269,14 @@ components:
       For S1.3 (recorded from round 2, not built): a copied sticky loses its
       pin (Mika: a defect before first dogfood; proposal for Aegis: carry
       kind sticky only, rectangles only, through a copy, never an author or
-      a stub); the 500 ms wake hold also swallows a drag, a wheel or a draw
-      begun 150 to 450 ms after waking (hold only a second press within 500
-      ms and about 4px of the first; let a wheel, a press elsewhere and
-      anything after a key press through); opening the tray by Enter should
+      a stub); the wake hold also swallows a drag, a wheel or a draw
+      begun shortly after waking (hold only a second press that lands
+      within the hold and about 4px of the first; let a wheel, a press
+      elsewhere and anything after a key press through); opening the tray by Enter should
       put focus on its chosen line well; a custom colour in use has no
       chosen ring; the too-short and crashed lines at 424px; a real-paste
-      test must run on CI (today it runs only where Chrome is installed);
+      test runs on CI since the P12 probe pastes over the DevTools protocol
+      in Chrome and Edge (Windows and Linux are verified by CI only);
       prune the authorship record on delete; per-board refusal listeners;
       pasted styling is normalised after the engine's commit and can paint
       for one frame; the engine's document-level keyup and gesture
@@ -285,9 +286,10 @@ components:
       its text; the tray covers the board at a 1024 window; dash lengths by
       a counted patch before S1.4, and a small agent mark must not render as
       [ ] (the night key shape); screen-reader names in the hands foot;
-      hover seals, the low-zoom ring and the scrap shadow (Mika measured
-      16.7 ms frames with 208 overlay nodes in headless Chromium; measure
-      once in WKWebView); refusal listeners in skin.ts are module-wide, so
+      hover seals, the low-zoom ring and the scrap shadow (Mika timed the
+      overlay's frames with 208 overlay nodes in headless Chromium on the
+      founder's Mac; the figure is in her review, not here, and WKWebView
+      has not been timed); refusal listeners in skin.ts are module-wide, so
       two boards on one page would hear each other; a copy of a sticky is a
       plain filled rectangle with no pin (the copy is not in the record).
       For S1.3 (carried, not built): the binding highlight is under 3:1;

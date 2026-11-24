@@ -57,18 +57,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 62,
-          "mounted": 82
+          "module": 54,
+          "mounted": 76
         },
         "firstRun": {
-          "wallMs": 20772,
+          "wallMs": 21924,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 56,
-            "mounted": 78
+            "module": 54,
+            "mounted": 77
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -78,7 +78,7 @@
           "captureRefused": 0,
           "afterPointerRect": 4,
           "afterPointerStroke": 5,
-          "finalCount": 22,
+          "finalCount": 24,
           "cursors": {
             "select": "",
             "sticky": "crosshair",
@@ -308,7 +308,26 @@
               "dragStopped": true
             },
             "paste": {
-              "unsupported": "the synthetic paste did not reach the engine"
+              "via": "devtools",
+              "added": 1,
+              "said": [
+                "mark:diamond",
+                "mark:line"
+              ],
+              "found": true,
+              "at": [
+                170,
+                706
+              ],
+              "edgeGaps": 0,
+              "fillAlpha": 0,
+              "edgeRgb": [
+                22,
+                21,
+                15
+              ],
+              "line": "ink",
+              "fillToken": null
             },
             "dataDrop": {
               "added": 0,
@@ -319,8 +338,21 @@
               "stock": []
             },
             "hostile": {
-              "unsupported": "the synthetic paste did not reach the engine",
-              "nodes": []
+              "via": "devtools",
+              "added": 1,
+              "said": [
+                "image",
+                "mark:embeddable",
+                "mark:iframe"
+              ],
+              "nodes": [],
+              "violations": 0,
+              "forged": {
+                "kind": "rect",
+                "author": "human",
+                "stubKind": null,
+                "edgeGaps": 0
+              }
             },
             "hands": [
               "rect:agent:Arky:60",
@@ -358,12 +390,12 @@
             "day": {
               "width": 1280,
               "height": 800,
-              "pngBytes": 38847
+              "pngBytes": 38868
             },
             "night": {
               "width": 1280,
               "height": 800,
-              "pngBytes": 38751
+              "pngBytes": 38883
             }
           },
           "narrow": {
@@ -376,13 +408,13 @@
               "pngBytes": 8007
             }
           },
-          "stateEvents": 54,
+          "stateEvents": 58,
           "libraryTrigger": false,
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 35541,
-            "ms": 16
+            "bytes": 38765,
+            "ms": 15
           },
           "violationCount": 0,
           "violations": [],
@@ -419,6 +451,14 @@
             },
             {
               "method": "POST",
+              "path": "/paste"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
+            },
+            {
+              "method": "POST",
               "path": "/report"
             }
           ],
@@ -438,18 +478,18 @@
         "violatedDirectives": [],
         "exportPng": true,
         "medianMs": {
-          "module": 33,
-          "mounted": 52
+          "module": 34,
+          "mounted": 57
         },
         "firstRun": {
-          "wallMs": 21748,
+          "wallMs": 22166,
           "stage": "done",
           "mounted": true,
           "engine": "@excalidraw/excalidraw@0.18.1",
           "visibility": "visible",
           "ms": {
-            "module": 34,
-            "mounted": 55
+            "module": 33,
+            "mounted": 53
           },
           "afterAdd": 3,
           "afterAddSettled": 3,
@@ -608,7 +648,7 @@
               "binding": {
                 "width": 2560,
                 "height": 1600,
-                "pngBytes": 101190
+                "pngBytes": 101202
               },
               "arrowAdded": 1,
               "afterUndo": 0,
@@ -689,12 +729,17 @@
               "dragStopped": true
             },
             "paste": {
+              "via": "synthetic",
               "added": 1,
               "said": [
                 "mark:diamond",
                 "mark:line"
               ],
               "found": true,
+              "at": [
+                170,
+                375
+              ],
               "edgeGaps": 0,
               "fillAlpha": 0,
               "edgeRgb": [
@@ -714,6 +759,7 @@
               "stock": []
             },
             "hostile": {
+              "via": "synthetic",
               "added": 1,
               "said": [
                 "image",
@@ -765,12 +811,12 @@
             "day": {
               "width": 2560,
               "height": 1600,
-              "pngBytes": 127785
+              "pngBytes": 127830
             },
             "night": {
               "width": 2560,
               "height": 1600,
-              "pngBytes": 129180
+              "pngBytes": 128970
             }
           },
           "narrow": {
@@ -788,7 +834,7 @@
           "libraryOpen": false,
           "png": {
             "ok": true,
-            "bytes": 41823,
+            "bytes": 41927,
             "ms": 12
           },
           "violationCount": 0,
@@ -819,6 +865,14 @@
             {
               "method": "GET",
               "path": "/fonts/JetBrainsMono-Regular.woff2"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
+            },
+            {
+              "method": "POST",
+              "path": "/paste"
             },
             {
               "method": "POST",
@@ -857,12 +911,19 @@
         "wkwebview"
       ],
       "paste: stock marks": [
+        "chrome",
         "wkwebview"
       ],
       "paste: forged author, iframe, embeddable, image": [
+        "chrome",
         "wkwebview"
       ]
     },
+    "pasteVia": {
+      "chrome": "devtools",
+      "wkwebview": "synthetic"
+    },
+    "pasteModifier": "Meta",
     "clean": true,
     "findings": []
   },
@@ -876,5 +937,5 @@
     "G-DDL-07",
     "S25-M3"
   ],
-  "at": "2026-11-24T12:30:19.598Z"
+  "at": "2026-11-24T13:01:13.154Z"
 }
