@@ -37,10 +37,12 @@ const WATCH = {
  * That row is the test's own write, not the board's: it is set apart here and counted, so "zero CSP rows" is held
  * for everything the paste itself does.
  */
-const WROTE = '(__c8.wrote = (__c8.wrote ?? 0) + __c8.csp.splice(0).length)';
+const WROTE = "(() => { const rows = __c8.csp.splice(0); __c8.wrote = (__c8.wrote ?? 0) + rows.filter((d) => d === 'script-src-attr').length; __c8.csp.push(...rows.filter((d) => d !== 'script-src-attr')); })()";
+/** Read just before a clipboard write: no CSP row may be waiting (a late row of the case before would otherwise be taken for the write's). */
+const CLEAR = { read: '__c8.csp.slice()', as: 'cspBeforeWrite' };
 /** What every case is judged on. */
-const FACTS = `({ csp: __c8.csp.slice(), errs: __c8.errs.slice(), nodes: ${HOST}.querySelectorAll('iframe, img, embed, object').length, foreign: ${B}.marks().filter((m) => m.kind === 'other').length, alive: ${B}.isAlive(), runs: globalThis.gnomonPreviewBoardModule.boardEngineRuns(), pastes: __c8.pastes.splice(0), said: __c8.said.splice(0), count: ${B}.count(), edits: ${D}.edits.length, pwn: globalThis.__pwn ?? null, texts: [...${D}.state().nodes.values()].filter((n) => n.node.kind === 'text').map((n) => n.node.text) })`;
-interface Facts { csp: string[]; errs: string[]; nodes: number; foreign: number; alive: boolean; runs: { paste: number; copy: number; cut: number }; pastes: string[]; said: string[]; count: number; edits: number; pwn: unknown; texts: string[] }
+const FACTS = `({ csp: __c8.csp.slice(), errs: __c8.errs.slice(), nodes: ${HOST}.querySelectorAll('iframe, img, embed, object, svg image').length, foreign: ${B}.marks().filter((m) => m.kind === 'other').length, alive: ${B}.isAlive(), runs: globalThis.gnomonPreviewBoardModule.boardEngineRuns(), pastes: __c8.pastes.splice(0), said: __c8.said.splice(0), count: ${B}.count(), edits: ${D}.edits.length, pwn: globalThis.__pwn ?? null, texts: [...${D}.state().nodes.values()].filter((n) => n.node.kind === 'text').map((n) => n.node.text) })`;
+interface Facts { csp: string[]; errs: string[]; nodes: number; foreign: number; alive: boolean; runs: { paste: number; copy: number; cut: number; drop: number }; pastes: string[]; said: string[]; count: number; edits: number; pwn: unknown; texts: string[] }
 type Acted = Record<string, unknown>;
 type Edit = { ops: DimOp[]; cause: string | null };
 const facts = (as: string): { read: string; as: string } => ({ read: FACTS, as });
@@ -51,7 +53,7 @@ function contained(f: Facts, name: string): void {
   expect(f.nodes, `${name}: iframe/img/embed nodes under the host`).toBe(0);
   expect(f.foreign, `${name}: elements outside the board's kinds`).toBe(0);
   expect(f.alive, `${name}: the handle is alive`).toBe(true);
-  expect(f.runs, `${name}: the engine's own handlers`).toEqual({ paste: 0, copy: 0, cut: 0 });
+  expect(f.runs, `${name}: the engine's own handlers`).toEqual({ paste: 0, copy: 0, cut: 0, drop: 0 });
   expect(f.pwn, `${name}: no handler ran`).toBeNull();
 }
 /** Exactly one onPasteText with the literal text, which became exactly one more mark: a text node holding it. */
@@ -118,8 +120,8 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       aim, { paste: IFRAME }, { wait: 250 }, facts('iframe'),
       aim, { paste: FRAME }, { wait: 250 }, facts('frame'),
       // V7: HTML only, then HTML with a plain-text form
-      aim, { clip: { 'text/html': HTML }, between: WROTE }, { wait: 250 }, facts('v7'),
-      aim, { clip: { 'text/html': HTML, 'text/plain': 'words' }, between: WROTE }, { wait: 250 }, facts('v7b'),
+      aim, CLEAR, { clip: { 'text/html': HTML }, between: WROTE }, { wait: 250 }, facts('v7'),
+      aim, { ...CLEAR, as: 'cspBeforeWrite2' }, { clip: { 'text/html': HTML, 'text/plain': 'words' }, between: WROTE }, { wait: 250 }, facts('v7b'),
       // V3: a PNG on the clipboard
       aim, { clip: { 'image/png': PNG }, as: 'pngClip' }, { wait: 250 }, facts('v3'),
       // a text over what one mark may hold
@@ -139,6 +141,8 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${fixtureId(950)}', kind: 'frame', x: 700, y: 500, z: 'zzz', w: 120, h: 80, title: { a: 1 } } }], 'arky')), 1)`, as: 'r' }, { wait: 250 },
       facts('frameRow'),
       { read: '__c8.wrote ?? 0', as: 'wrote' },
+      // every negative judged above after a fixed wait is judged again at the end
+      { wait: 600 }, facts('final'),
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     pastedAsText(f('v1'), f('start'), SVG, 'V1 SVG source');
@@ -163,6 +167,11 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     contained(f('end'), 'V5 the image tool');
     expect(f('end').count).toBe(f('standIn').count);
     contained(f('frameRow'), 'a rendered frame whose title is an object');
+    contained(f('final'), 'at the end');
+    expect(f('final').count).toBe(f('frameRow').count);
+    expect(f('final').edits).toBe(f('frameRow').edits);
+    expect([a.cspBeforeWrite, a.cspBeforeWrite2]).toEqual([[], []]);
+    expect(a.wrote).toBe(2); // one script-src-attr row per HTML write of the test's own, and nothing else
     // the only CSP rows of the whole run are the ones the test's own clipboard writes raised
     expect(await diagCsp()).toBe(await diagWant(a.wrote as number));
   }, 180_000);
@@ -175,6 +184,7 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       { drop: { files: [path.join(dir, 'scene.excalidraw')] }, at: EMPTY }, { wait: 250 }, facts('scene'),
       { drop: { items: [{ mimeType: 'application/vnd.excalidrawlib+json', data: JSON.stringify({ itemIds: ['x'] }) }, { mimeType: 'text/plain', data: 'dragged words' }] }, at: EMPTY }, { wait: 250 }, facts('library'),
       { read: `${B}.marks().map((m) => m.id).join()`, as: 'sceneAfter' },
+      { wait: 600 }, facts('final'),
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     // (a real drag is refused once, as it enters the board: the browser never fires `drop` after a refused dragover)
@@ -183,6 +193,8 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     refused(f('scene'), f('v4'), ['file:no-file-drop'], 'a dropped .excalidraw file');
     refused(f('library'), f('scene'), ['library-file:no-file-drop'], 'a library-type drag with no file');
     expect(a.sceneAfter).toBe(a.sceneBefore);
+    contained(f('final'), 'at the end');
+    expect(f('final').count).toBe(f('start').count);
     expect(await diagCsp()).toMatch(/, \d+ CSP row\(s\)$/);
     expect(await cspRows()).toBe(rowsBefore);
   }, 120_000);
@@ -193,7 +205,7 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       facts('start'),
       { press: '#preview-board [data-key="tool:text"]' }, { at: EMPTY, press: true }, { wait: 200 },
       { read: `!!${TA} && document.activeElement === ${TA}`, as: 'typing' },
-      { clip: { 'text/html': `<b>bold</b> ${HTML}<i>words</i>`, 'text/plain': 'bold words' }, between: WROTE }, { wait: 250 },
+      CLEAR, { clip: { 'text/html': `<b>bold</b> ${HTML}<i>words</i>`, 'text/plain': 'bold words' }, between: WROTE }, { wait: 250 },
       { read: `${TA}.value`, as: 'afterHtml' }, facts('html'),
       { clip: { 'image/png': PNG } }, { wait: 250 },
       { read: `${TA}.value`, as: 'afterFile' }, facts('file'),
@@ -204,6 +216,7 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       { key: 'Escape' }, { wait: 300 },
       { read: `${D}.edits.map((e) => ({ ops: e.ops, cause: e.cause }))`, as: 'edits' }, facts('committed'),
       { read: '__c8.wrote ?? 0', as: 'wrote' },
+      { wait: 600 }, facts('final'),
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.typing).toBe(true);
@@ -223,6 +236,10 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     expect(edits[0]!.ops[0]).toMatchObject({ type: 'add', node: { kind: 'text', text: `bold words日本${IFRAME}` } });
     expect(validateDimOps(boardFixture('sample').state(), edits[0]!.ops, YOU).refused ?? []).toEqual([]);
     expect(f('committed').count - f('start').count).toBe(1);
+    contained(f('final'), 'at the end');
+    expect(f('final').count).toBe(f('committed').count);
+    expect(a.cspBeforeWrite).toEqual([]);
+    expect(a.wrote).toBe(1);
     expect(await diagCsp()).toBe(await diagWant(a.wrote as number));
   }, 120_000);
 
@@ -234,8 +251,8 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       // two marks of an agent's with labels, and a labelled arrow tied to both
       { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${fixtureId(960)}', kind: 'rect', x: 560, y: 500, z: 'zx', w: 90, h: 50, label: 'alpha' } }, { type: 'add', node: { id: '${fixtureId(961)}', kind: 'ellipse', x: 760, y: 500, z: 'zy', w: 90, h: 50, label: 'beta', fill: 'sky' } }, { type: 'add', node: { id: '${fixtureId(962)}', kind: 'arrow', x: 650, y: 525, z: 'zz', points: [0, 0, 110, 0], from: '${fixtureId(960)}', to: '${fixtureId(961)}', label: 'calls' } }], 'arky')), 1)`, as: 'r' }, { wait: 250 },
       { read: NODES, as: 'nodes0' },
-      // select everything, copy
-      aim, { key: 'a', meta: true, commands: ['selectAll'] }, { wait: 150 },
+      // select exactly the three, copy
+      { read: `(${B}.focus(), ${B}.select(['${fixtureId(960)}', '${fixtureId(961)}', '${fixtureId(962)}']), 1)`, as: 's' }, { wait: 150 },
       { read: `${B}.state().selected`, as: 'selected' },
       { key: 'c', meta: true, commands: ['copy'] }, { wait: 250 },
       { await: CLIPBOARD, as: 'clipboard' }, facts('copied'),
@@ -247,7 +264,7 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       { key: 'v', meta: true, commands: ['paste'] }, { wait: 400 },
       { read: `${D}.edits.map((e) => ({ ops: e.ops, cause: e.cause }))`, as: 'editsCrlf' }, facts('crlf'),
       // cut one mark
-      { at: [272, 86], press: true }, { read: `${B}.marks().filter((m) => m.selected).map((m) => m.node)`, as: 'cutSel' },
+      { read: `(${B}.select(['${fixtureId(2)}']), 1)`, as: 's2' }, { read: `${B}.marks().filter((m) => m.selected).map((m) => m.node)`, as: 'cutSel' },
       { key: 'x', meta: true, commands: ['cut'] }, { wait: 400 },
       { await: CLIPBOARD, as: 'clipboardCut' },
       { read: `${D}.edits.map((e) => ({ ops: e.ops, cause: e.cause }))`, as: 'editsCut' }, facts('cut'),
@@ -256,17 +273,17 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
       { read: `${D}.edits.map((e) => ({ ops: e.ops, cause: e.cause }))`, as: 'editsAlt' }, facts('alt'),
       // Cmd+D: nothing
       { key: 'd', meta: true }, { wait: 200 }, facts('cmdD'),
+      { wait: 600 }, facts('final'),
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     type N = { id: string; by: { cls?: string }; node: Record<string, unknown> };
     const nodes0 = a.nodes0 as N[];
-    expect(a.selected as number).toBeGreaterThan(3);
+    expect(a.selected).toBe(3);
     // copy: text/plain only, the words of the copied marks
     contained(f('copied'), 'copy');
     const clipboard = a.clipboard as { types: string[]; text: string };
     expect(clipboard.types).toEqual(['text/plain']);
-    expect(clipboard.text.length).toBeGreaterThan(0);
-    expect(clipboard.text).not.toMatch(/excalidraw|"type"|customData/);
+    expect(clipboard.text).toBe('alpha\nbeta\ncalls'); // the copied marks' words, in paint order, and nothing else
     expect(f('copied').edits).toBe(f('start').edits);
     // paste: ONE batch of adds, each a new id, links inside the copied set remapped to the clones, nothing else carried
     contained(f('pasted'), 'paste of a copy');
@@ -303,9 +320,8 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     expect(crlf.ops.every((o) => o.type === 'add')).toBe(true);
     // cut: plain text on the clipboard, the mark deleted as the person's own op
     contained(f('cut'), 'cut');
-    // (the press lands on whichever mark is on top there: a clone of the labelled rect)
-    expect(a.cutSel).toHaveLength(1);
-    expect((a.cutSel as string[])[0]).toMatch(DIM_NODE_ID_PATTERN);
+    expect(a.cutSel).toEqual([fixtureId(2)]); // the labelled rect "broker", by name
+    expect((a.clipboardCut as { text: string }).text).toBe('broker');
     expect((a.clipboardCut as { types: string[] }).types).toEqual(['text/plain']);
     const cut = (a.editsCut as Edit[]).at(-1)!;
     expect(cut.ops).toEqual([{ type: 'delete', id: (a.cutSel as string[])[0] }]);
@@ -319,6 +335,9 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     contained(f('cmdD'), 'Cmd+D');
     expect(f('cmdD').count).toBe(f('alt').count);
     expect(f('cmdD').edits).toBe(f('alt').edits);
+    contained(f('final'), 'at the end');
+    expect(f('final').count).toBe(f('cmdD').count);
+    expect(f('final').edits).toBe(f('cmdD').edits);
     expect(await cspRows()).toBe(rowsBefore);
   }, 180_000);
 
@@ -449,5 +468,112 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     const add = ((a.edits as Edit[]).at(-1)!.ops as Array<{ type: string; node: { id: string; parent?: string; label?: string } }>)[0]!.node;
     expect(add).toMatchObject({ label: 'broker', parent: FRAME });
     expect(add.id).not.toBe(BROKER);
+  }, 120_000);
+
+  // ── the review of PR #117, group B: the second line, and keys ──
+  const APP = "(() => { const el = document.querySelector('#preview-board .excalidraw'); let f = el[Object.keys(el).find((k) => k.startsWith('__reactFiber'))]; while (f && !(f.stateNode && f.stateNode.scene && f.stateNode.scene.replaceAllElements)) f = f.return; return f.stateNode; })()";
+  const RUNS = 'globalThis.gnomonPreviewBoardModule.boardEngineRuns()';
+  const VIEW = `(() => { const v = ${B}.view(); return [Math.round(v.scrollX), Math.round(v.scrollY), v.zoom]; })()`;
+  const STATE = `JSON.stringify([...${D}.state().nodes.entries()])`;
+
+  it('B5: each second-line patch holds with the first line bypassed: the engine\'s own paste, copy, cut, drop and duplicate handlers, called directly, count and do nothing', async () => {
+    const a = await real([
+      sel([BROKER]),
+      { read: `${B}.count()`, as: 'count0' }, { read: STATE, as: 'state0' },
+      { read: `(() => { const dt = new DataTransfer(); dt.setData('text/plain', ${JSON.stringify(V2)}); ${APP}.pasteFromClipboard(new ClipboardEvent('paste', { clipboardData: dt, cancelable: true })); return 1; })()`, as: 'p' }, { wait: 500 },
+      { read: RUNS, as: 'afterPaste' }, { read: `${B}.count()`, as: 'countPaste' },
+      { read: `(() => { const dt = new DataTransfer(); ${APP}.onCopy(new ClipboardEvent('copy', { clipboardData: dt, cancelable: true })); return [...dt.types]; })()`, as: 'copyTypes' },
+      { read: `(() => { const dt = new DataTransfer(); ${APP}.onCut(new ClipboardEvent('cut', { clipboardData: dt, cancelable: true })); return [...dt.types]; })()`, as: 'cutTypes' }, { wait: 300 },
+      { read: RUNS, as: 'afterCut' }, { read: `${B}.count()`, as: 'countCut' },
+      { read: `(() => { const dt = new DataTransfer(); dt.items.add(new File([${JSON.stringify(JSON.stringify({ type: 'excalidraw', version: 2, elements: [el('rectangle', 10)], appState: {}, files: {} }))}], 'scene.excalidraw', { type: 'application/json' })); let stopped = 0; ${APP}.handleAppOnDrop({ dataTransfer: dt, clientX: 600, clientY: 400, preventDefault() { stopped++; }, stopPropagation() {} }); return stopped; })()`, as: 'dropStopped' }, { wait: 500 },
+      { read: RUNS, as: 'afterDrop' }, { read: `${B}.count()`, as: 'countDrop' },
+      { read: `(() => { const app = ${APP}; app.actionManager.executeAction(app.actionManager.actions.duplicateSelection); return 1; })()`, as: 'd' }, { wait: 300 },
+      { read: `${B}.count()`, as: 'countDup' }, { read: `${D}.edits.length`, as: 'edits' }, { read: STATE, as: 'state1' },
+      // the text editor's own paste handler is not installed
+      { press: '#preview-board [data-key="tool:text"]' }, { at: EMPTY, press: true }, { wait: 200 },
+      { read: `${HOST}.querySelector('textarea').onpaste`, as: 'onpaste' }, { key: 'Escape' },
+    ]);
+    expect(a.afterPaste).toEqual({ paste: 1, copy: 0, cut: 0, drop: 0 });
+    expect(a.copyTypes).toEqual([]);
+    expect(a.cutTypes).toEqual([]);
+    expect(a.afterCut).toEqual({ paste: 1, copy: 1, cut: 1, drop: 0 });
+    expect(a.afterDrop).toEqual({ paste: 1, copy: 1, cut: 1, drop: 1 });
+    expect(a.dropStopped).toBe(1);
+    for (const k of ['countPaste', 'countCut', 'countDrop', 'countDup']) expect(a[k], k).toBe(a.count0);
+    expect(a.edits).toBe(0);
+    expect(a.state1).toBe(a.state0);
+    expect(a.onpaste).toBeNull();
+  }, 120_000);
+
+  it('B7: a paste and a copy made elsewhere on the page are not counted against the board; with the keyboard on the board\'s own rail a paste is the board\'s', async () => {
+    const a = await real([
+      { read: "(() => { const t = document.querySelector('#composer textarea, #composer input, textarea'); t.focus(); return document.activeElement === t && !document.querySelector('#preview-board').contains(t); })()", as: 'outside' },
+      { paste: 'typed elsewhere' }, { wait: 250 }, { key: 'a', meta: true, commands: ['selectAll'] }, { key: 'c', meta: true, commands: ['copy'] }, { wait: 250 },
+      facts('elsewhere'),
+      // focus a rail key (inside the leaf, outside the engine's host) and paste
+      { read: "(() => { const k = document.querySelector('#preview-board [data-key=\"tool:select\"]'); k.focus(); return document.activeElement === k; })()", as: 'onRail' },
+      { paste: 'from the rail' }, { wait: 400 }, facts('rail'),
+    ]);
+    expect(a.outside).toBe(true);
+    const f = (k: string): Facts => a[k] as Facts;
+    contained(f('elsewhere'), 'a paste and a copy in the composer');
+    expect(f('elsewhere').pastes).toEqual([]);
+    expect(a.onRail).toBe(true);
+    pastedAsText(f('rail'), f('elsewhere'), 'from the rail', 'a paste with the keyboard on the rail');
+  }, 120_000);
+
+  it('B2 and B3: a sweep of key chords leaves the board as it was; Cmd+Arrow and Alt+Arrow make nothing, select nothing else and do not move the view', async () => {
+    const keys = [...'abcdefghijklmnopqrstuvwxyz123456789[];\',./\\'];
+    const mods: Array<Record<string, boolean>> = [{ meta: true }, { meta: true, shift: true }, { meta: true, alt: true }, { alt: true }, { alt: true, shift: true }, { ctrl: true }];
+    // not swept: Cmd+A (select all) and Cmd+0/-/= (zoom) are the documented keys
+    const chords = mods.flatMap((m) => keys.filter((k) => !(m.meta && !m.shift && !m.alt && k === 'a')).map((k) => ({ key: k, ...m, settle: 8 })));
+    const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].flatMap((k) => [{ key: k, meta: true, settle: 60 }, { key: k, alt: true, settle: 60 }]);
+    const a = await real([
+      sel([BROKER]), { read: STATE, as: 'state0' }, { read: VIEW, as: 'view0' }, { read: `${B}.count()`, as: 'count0' },
+      ...arrows, { wait: 500 },
+      { read: VIEW, as: 'viewArrows' }, { read: SELECTED, as: 'selectedArrows' }, { read: `${B}.count()`, as: 'countArrows' }, { read: `${D}.edits.length`, as: 'editsArrows' },
+      ...chords, { wait: 600 },
+      { read: STATE, as: 'state1' }, { read: VIEW, as: 'view1' }, { read: `${B}.count()`, as: 'count1' }, { read: SELECTED, as: 'selected1' },
+      { read: `${D}.edits.length`, as: 'edits' }, { read: `${B}.state()`, as: 'st' }, facts('end'),
+      { read: `${HOST}.querySelectorAll('.Modal, .Dialog, [role="dialog"], .popover, .context-menu, .dropdown-menu').length`, as: 'dialogs' },
+    ]);
+    expect(chords.length).toBeGreaterThan(150);
+    expect(a.viewArrows).toEqual(a.view0);
+    expect(a.selectedArrows).toEqual([BROKER]);
+    expect(a.countArrows).toBe(a.count0);
+    expect(a.editsArrows).toBe(0);
+    expect(a.state1).toBe(a.state0);
+    expect(a.view1).toEqual(a.view0);
+    expect(a.count1).toBe(a.count0);
+    expect(a.selected1).toEqual([BROKER]);
+    expect(a.edits).toBe(0);
+    expect(a.st).toMatchObject({ tool: 'select', editingText: false });
+    expect(a.dialogs).toBe(0);
+    contained(a.end as Facts, 'after the key sweep');
+  }, 240_000);
+
+  it('B1: a scene file dropped while the engine is up and its handle is not (loading), and a drop after the handle has died, reach nothing', async () => {
+    const drop = (target: string): string => `(() => { const dt = new DataTransfer(); dt.items.add(new File(['{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}'], 'scene.excalidraw', { type: 'application/json' })); const t = ${target}; const over = new DragEvent('dragover', { bubbles: true, cancelable: true, composed: true, dataTransfer: dt }); t.dispatchEvent(over); const ev = new DragEvent('drop', { bubbles: true, cancelable: true, composed: true, dataTransfer: dt }); t.dispatchEvent(ev); return { stopped: ev.defaultPrevented, over: over.defaultPrevented }; })()`;
+    const a = await real([
+      // a second board, mounted by hand. The first drop is made the moment the engine's canvas exists, before
+      // mountBoard resolves; then its engine is made to throw while rendering (the handle is dead, the guard is
+      // still installed) and a second drop is made on whatever of it is left in the page
+      { await: `new Promise((done) => { const div = document.createElement('div'); div.id = 'c8-second'; div.className = 'bd-board'; document.querySelector('#preview-board .bd-stage').appendChild(div); const out = { resolved: false }; new MutationObserver((_r, mo) => { const c = div.querySelector('canvas'); if (!c || out.loading) return; mo.disconnect(); out.loading = Object.assign(${drop('c')}, { resolvedAtDrop: out.resolved }); }).observe(div, { childList: true, subtree: true }); globalThis.gnomonPreviewBoardModule.mountBoard(div, { onError() { out.crashed = true; } }).then((h) => { out.resolved = true; setTimeout(() => { try { out.count = h.count(); const el = div.querySelector('.excalidraw'); let f = el[Object.keys(el).find((k) => k.startsWith('__reactFiber'))]; while (f && !(f.stateNode && f.stateNode.scene && f.stateNode.scene.replaceAllElements)) f = f.return; try { f.stateNode.setState(() => { throw new Error('c8: the engine stopped'); }); } catch (e) { /* reported through the root */ } setTimeout(() => { try { out.alive = h.isAlive(); const left = div.querySelector('canvas') ?? div; out.dead = ${drop('left')}; out.runs = ${RUNS}; h.unmount(); div.remove(); done(out); } catch (e) { done({ failed: 'late: ' + (e && e.stack || e) }); } }, 400); } catch (e) { done({ failed: 'crash: ' + (e && e.stack || e) }); } }, 400); }, (e) => done({ failed: String(e) })); })`, as: 'second' },
+      // and a REAL drop on the leaf afterwards goes nowhere
+      { drop: { files: [path.join(dir, 'scene.excalidraw')] }, at: EMPTY }, { wait: 400 },
+      { read: RUNS, as: 'runs' }, { read: 'location.pathname + location.search', as: 'where' },
+      { read: "document.querySelectorAll('#preview-board iframe, #preview-board img').length", as: 'nodes' }, facts('end'),
+    ]);
+    const second = a.second as { loading?: { stopped: boolean; over: boolean; resolvedAtDrop: boolean }; dead?: { stopped: boolean; over: boolean }; alive?: boolean; crashed?: boolean; count?: number; runs?: Record<string, number>; failed?: string };
+    expect(second.failed).toBeUndefined();
+    expect(second.loading).toEqual({ stopped: true, over: true, resolvedAtDrop: false });
+    expect(second.count).toBe(0);
+    expect(second).toMatchObject({ crashed: true, alive: false });
+    expect(second.dead).toEqual({ stopped: true, over: true });
+    expect(second.runs).toEqual({ paste: 0, copy: 0, cut: 0, drop: 0 });
+    expect(a.runs).toEqual({ paste: 0, copy: 0, cut: 0, drop: 0 });
+    expect(String(a.where)).toContain('board=open'); // the page did not navigate to the dropped file
+    expect(a.nodes).toBe(0);
+    expect((a.end as Facts).alive).toBe(true); // the leaf's own board is untouched
   }, 120_000);
 });

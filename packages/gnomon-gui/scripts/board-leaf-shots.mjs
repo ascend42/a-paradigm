@@ -51,9 +51,11 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
   let ws = null;
   try {
     const portFile = path.join(profile, 'DevToolsActivePort');
-    for (let i = 0; i < 150 && !existsSync(portFile); i++) await sleep(100);
-    if (!existsSync(portFile)) throw new Error('chrome did not open its DevTools port');
-    const port = readFileSync(portFile, 'utf8').split(/\r?\n/)[0];
+    // (the file appears before its first line is written: an empty read used to give port "" and a refused connection)
+    const portOf = () => (existsSync(portFile) ? readFileSync(portFile, 'utf8').split(/\r?\n/)[0] : '');
+    for (let i = 0; i < 150 && !/^\d+$/.test(portOf()); i++) await sleep(100);
+    if (!/^\d+$/.test(portOf())) throw new Error('chrome did not open its DevTools port');
+    const port = portOf();
     let page = null;
     for (let i = 0; i < 50 && !page; i++) {
       page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === 'page') ?? null;
@@ -126,7 +128,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
       } else if (a.read) acted[a.as] = JSON.parse((await evaluate(`JSON.stringify((() => (${a.read}))() ?? null)`)) ?? 'null');
       else if (a.key) {
         const [key, code] = KEYS[a.key] ?? [a.key, a.key.toUpperCase().charCodeAt(0)];
-        const modifiers = (a.shift ? 8 : 0) | (a.meta ? 4 : 0) | (a.ctrl ? 2 : 0);
+        const modifiers = (a.shift ? 8 : 0) | (a.meta ? 4 : 0) | (a.ctrl ? 2 : 0) | (a.alt ? 1 : 0);
         const base = { key, code: KEYS[a.key] ? key : `Key${a.key.toUpperCase()}`, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers };
         await call('Input.dispatchKeyEvent', { type: KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(KEYS[a.key] || modifiers ? {} : { text: a.key }), ...(a.commands ? { commands: a.commands } : {}) });
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });

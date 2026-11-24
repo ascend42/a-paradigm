@@ -276,6 +276,12 @@ export interface BoardMountOptions {
   /** The theme to draw in (default day). Change it later with handle.setTheme. */
   theme?: BoardTheme;
   /**
+   * The leaf's own element around the board (head, rail, tray, foot). A paste, a copy or a cut made with the
+   * keyboard focus on that chrome is the board's (it used to add nothing and say nothing); a text field of the
+   * chrome keeps its own. Drags over it are the leaf's to refuse.
+   */
+  chrome?: HTMLElement;
+  /**
    * PROBE BUILD ONLY. The chunk that ships IGNORES it: the branch that reads it is removed at build time (define
    * `__GNOMON_BOARD_PROBE__` is false in scripts/board-build.mjs; test/board-patches.test.ts holds that the pinned
    * `board/board.js` does not contain the word). Only the probe build the P12 harness makes for WKWebView, which

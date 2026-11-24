@@ -276,7 +276,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
   it('words over what a label may hold are refused at commit: nothing is reported and the label is as it was', async () => {
     const a = await real([
       SAID,
-      { dbl: true, at: [302, 86] }, { wait: 150 }, { paste: 'y'.repeat(201) }, { wait: 250 }, { key: 'Escape' }, { wait: 400 },
+      // typed (inserted by the input method, not pasted: a paste over the limit is refused earlier, at the paste)
+      { dbl: true, at: [302, 86] }, { wait: 150 }, { ime: 'y', commit: 'y'.repeat(201) }, { wait: 250 }, { key: 'Escape' }, { wait: 400 },
       { read: COUNT, as: 'edits' }, { read: 'globalThis.__said', as: 'said' }, { read: nodeOf(BROKER), as: 'broker' }, { read: `${B}.drift()`, as: 'drift' },
       { read: `globalThis.gnomonPreviewBoardModule.boardEngineRuns()`, as: 'runs' },
     ]);
@@ -285,7 +286,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
     expect(a.edits).toBe(0);
     expect(a.broker).toMatchObject({ label: 'broker' });
     expect(a.drift).toEqual([]);
-    expect(a.runs).toEqual({ paste: 0, copy: 0, cut: 0 });
+    expect(a.runs).toEqual({ paste: 0, copy: 0, cut: 0, drop: 0 });
   }, 120_000);
 
   it('A1: an engine change nobody made is put back once, in a bounded number of scene calls, and the next click reports nothing', async () => {

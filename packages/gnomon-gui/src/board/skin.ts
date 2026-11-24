@@ -126,11 +126,19 @@ export function gnomonBoardAdmit<T extends { type?: unknown }>(elements: readonl
 }
 
 /**
- * How often the engine's own clipboard handlers were entered (patches `engine-paste-removed`, `engine-copy-removed`,
- * `engine-cut-removed`: each counts here and returns). The handle stops paste, copy and cut before the engine
- * (condition C8), so these stay 0; the C8 test and the P12 probe read them through `boardEngineRuns()`.
+ * How often the engine's own paste, copy, cut and drop handlers were entered FOR A BOARD (patches
+ * `engine-paste-removed`, `engine-copy-removed`, `engine-cut-removed`, `engine-drop-removed`: each counts here and
+ * returns). The engine listens for paste, copy and cut on the whole document, so its handlers are also entered for
+ * an event made elsewhere on the page (the composer); those are NOT counted: a count is an event whose target or
+ * focused element was inside that engine's own container, or a call with no event. The handle stops such events
+ * first (condition C8), so these stay 0; the C8 test and the P12 probe read them through `boardEngineRuns()`.
  */
-export const gnomonBoardRuns: { paste: number; copy: number; cut: number } = { paste: 0, copy: 0, cut: 0 };
-export function gnomonBoardRan(what: 'paste' | 'copy' | 'cut'): void {
+export const gnomonBoardRuns: { paste: number; copy: number; cut: number; drop: number } = { paste: 0, copy: 0, cut: 0, drop: 0 };
+export function gnomonBoardRan(what: 'paste' | 'copy' | 'cut' | 'drop', container?: unknown, event?: unknown): void {
+  if (what !== 'drop' && event && container && typeof (container as Node).contains === 'function') {
+    const box = container as Node;
+    const target = (event as Event).target;
+    if (!(target instanceof Node && box.contains(target)) && !box.contains(document.activeElement)) return;
+  }
   gnomonBoardRuns[what] += 1;
 }

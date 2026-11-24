@@ -49,11 +49,13 @@ export { BOARD_FONT_ID, BOARD_FONT_SIZE };
  */
 export { emptyDimState, foldDim };
 /**
- * How often the ENGINE's own paste, copy and cut handlers were entered on this page (patches `engine-paste-removed`,
- * `engine-copy-removed`, `engine-cut-removed` count and return). A board stops those events before the engine, so
- * every number stays 0: test/board-c8.test.ts and the P12 probe read it. Diagnostic; nothing is decided from it.
+ * How often the ENGINE's own paste, copy, cut and drop handlers were entered for an event inside a board (patches
+ * `engine-paste-removed`, `engine-copy-removed`, `engine-cut-removed`, `engine-drop-removed` count and return; an
+ * event made elsewhere on the page, which the engine's document listeners also see, is not counted: skin.ts). A
+ * board stops those events before the engine, so every number stays 0: test/board-c8.test.ts and the P12 probe
+ * read it. Diagnostic; nothing is decided from it.
  */
-export const boardEngineRuns = (): { paste: number; copy: number; cut: number } => ({ ...gnomonBoardRuns });
+export const boardEngineRuns = (): { paste: number; copy: number; cut: number; drop: number } => ({ ...gnomonBoardRuns });
 export const BOARD_FONT_FAMILY = 'JetBrains Mono';
 
 type StockApi = Parameters<NonNullable<Parameters<typeof Excalidraw>[0]['excalidrawAPI']>>[0];
@@ -164,6 +166,24 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
     };
     // React 19 root options (the workspace's hoisted @types/react-dom is the 18 line, which does not know them yet)
     const rootOptions = { onUncaughtError: crashed, onCaughtError: crashed };
+    // The guard (Aegis M2): installed BEFORE the engine renders and kept until the board is unmounted. While no
+    // handle is alive (the engine is still loading its scene and its face, or it has crashed and its root is still
+    // rendered) every paste, copy, cut, drag and drop inside the host is stopped here, so the engine's own handlers
+    // never see one. Once the handle is alive it does nothing: the handle's own listeners decide.
+    let handleLive = false;
+    const guard = (e: Event): void => {
+      if (handleLive && dead === null) return;
+      const drag = e.type.startsWith('drag') || e.type === 'drop';
+      if (!(e.target instanceof Node && host.contains(e.target)) && (drag || !host.contains(document.activeElement))) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (drag && (e as DragEvent).dataTransfer) (e as DragEvent).dataTransfer!.dropEffect = 'none';
+    };
+    const GUARDED = ['paste', 'copy', 'cut', 'dragenter', 'dragover', 'drop'] as const;
+    for (const type of GUARDED) document.addEventListener(type, guard, true);
+    const unguard = (): void => {
+      for (const type of GUARDED) document.removeEventListener(type, guard, true);
+    };
     const root = createRoot(host, rootOptions as Parameters<typeof createRoot>[1]);
     const fail = (e: Error): void => {
       if (settled) return;
@@ -171,6 +191,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       clearTimeout(timer);
       clearTimeout(poll);
       root.unmount();
+      unguard();
       reject(e);
     };
     const timer = setTimeout(() => fail(new Error('the board engine did not come up in time')), options.timeoutMs ?? DEFAULT_MOUNT_TIMEOUT_MS);
@@ -196,6 +217,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
     });
 
     const handleOf = (api: Api): BoardHandle => {
+      handleLive = true; // from here the handle's own listeners decide (the guard above stands down)
       // ── the rendered dimension ────────────────────────────────────────────
       // `prev` is EXACTLY the state the scene was last rendered from: the diff's other side, and the only place
       // an author, a sticky or a stub is read from (an element says nothing about itself but its two tokens).
@@ -833,6 +855,14 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         lastKey = e.repeat ? null : e;
         note(api.getAppState() as never);
         setTimeout(queueFlush, 0);
+        // Cmd/Ctrl+Arrow and Alt+Arrow never reach the engine (its flowchart keys were hard-coded in its keydown;
+        // patches `flowchart-keys-removed` and `flowchart-navigate-removed` are the second line): no node is made,
+        // nothing else is selected, the view does not jump. In a text being typed they move the caret as always.
+        if ((e.metaKey || e.ctrlKey || e.altKey) && e.key.startsWith('Arrow') && !takesPlainText(e.target)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         const mod = e.metaKey || e.ctrlKey;
         const key = e.key.toLowerCase();
         if (!mod || e.altKey || (key !== 'z' && !(key === 'y' && e.ctrlKey && !e.metaKey))) return;
@@ -864,7 +894,11 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const attempt = (kind: BoardAttempt['kind'], dt: DataTransfer | null): void => {
         for (const l of [...attemptListeners]) l({ kind, types: [...(dt?.types ?? [])], files: dt?.files.length ?? 0 });
       };
-      const within = (e: Event): boolean => (e.target instanceof Node && host.contains(e.target)) || host.contains(document.activeElement);
+      const chrome = options.chrome ?? null;
+      const inBoard = (n: unknown): boolean => n instanceof Node && (host.contains(n) || (chrome !== null && chrome.contains(n)));
+      /** A text field of the leaf's chrome (not of the board): it keeps its own paste, copy and cut. */
+      const chromeField = (e: Event): boolean => chrome !== null && e.target instanceof Node && chrome.contains(e.target) && !host.contains(e.target) && (takesPlainText(e.target) || (e.target as HTMLElement).isContentEditable === true);
+      const within = (e: Event): boolean => !chromeField(e) && (inBoard(e.target) || inBoard(document.activeElement));
       /** A text field of this board that is being typed in (the engine's text editor, a frame's title): it pastes natively. */
       const typingIn = (e: Event): boolean => e.target instanceof Node && host.contains(e.target) && takesPlainText(e.target);
       const pasteListeners = new Set<(text: string, cause: ClipboardEvent) => void>();
@@ -1214,6 +1248,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           editListeners.clear();
           undoListeners.clear();
           root.unmount();
+          unguard();
         },
       };
     };

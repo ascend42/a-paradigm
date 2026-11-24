@@ -571,7 +571,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     draw();
     if (!o.cardFocused()) headKey.focus(); // while it loads the keyboard is in the head, not on the page body
     o.load()
-      .then((m) => m.mountBoard(boardHost, { theme, onError: (err) => mine === generation && fail(err, true) }))
+      .then((m) => m.mountBoard(boardHost, { theme, chrome: el, onError: (err) => mine === generation && fail(err, true) }))
       .then(
         (hd) => {
           if (mine !== generation) return hd.unmount();

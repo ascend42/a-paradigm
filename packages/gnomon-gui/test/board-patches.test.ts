@@ -126,7 +126,13 @@ describe('#gui-board build report (a real build of the pinned engine)', () => {
     // the probe build differs from the shipped one by that branch alone, and build.mjs (the embed) never asks for it
     const probe = ((await buildBoard({ probe: true })) as { files: Map<string, Buffer> }).files.get('board/board.js')!.toString('utf8');
     expect(probe).toContain('syntheticInput');
-    expect(readFileSync(new URL('../scripts/build.mjs', import.meta.url), 'utf8')).not.toMatch(/probe\s*:/);
+    // what is embedded (build.mjs) and what the dev preview serves (preview.mjs) call buildBoard() with NO argument:
+    // an object literal, a `{ probe }` shorthand or a variable would all fail here
+    for (const script of ['build.mjs', 'preview.mjs']) {
+      const calls = [...readFileSync(new URL(`../scripts/${script}`, import.meta.url), 'utf8').matchAll(/buildBoard\(([^)]*)\)/g)].map((m) => m[1]);
+      expect(calls.length, script).toBeGreaterThan(0);
+      expect(calls, script).toEqual(calls.map(() => ''));
+    }
   }, 120_000);
 
   it('the hosts stripped from the minified chunk are exactly the pinned list (a new host in a bump is seen here)', () => {
