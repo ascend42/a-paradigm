@@ -37,7 +37,7 @@ import { colourLiterals, pixelColours } from '../scripts/board-colours.mjs';
 import { COLOUR_ALLOWLIST, PATCHES } from '../scripts/board-patches.mjs';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../src/core/board.js';
 import { gnomonBoardKeyActions, SKIN_ALPHA, skinOf } from '../src/board/skin.js';
-import { contentColours, differingShare, golden, GOLDENS, isMixOf, nearReserved, RESERVED, SHOTS, strayPixels, THEMES, type Theme } from './board-golden.js';
+import { contentColours, differingShare, golden, GOLDENS, isMixOf, isMixOf3, MATRIX_SHOTS, nearReserved, RESERVED, SHOTS, strayPixels, THEMES, ZOOM_SHOT, type Theme } from './board-golden.js';
 import { RESKIN_CLEAN } from './board-reskin-sample.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,12 +72,23 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     expect(src).toMatch(/currentItemStrokeStyle: 'solid',/);
   });
 
-  it('add() hands its skeleton ids to the engine unchanged: the authorship record is keyed by them (review round 2, R1)', () => {
+  it('the handle has no add(), undo() or redo(), keeps no authorship record, and gives the engine only what the map built and the normal form completed (S1.3)', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'board', 'index.ts'), 'utf8');
-    expect(src).toMatch(/convertToExcalidrawElements\(marks\.map\(skeletonOf\) as Skeleton, \{ regenerateIds: false \}\)/);
-    // and it is the only place skeletons go to the engine
-    expect(src.match(/convertToExcalidrawElements\(/g)).toHaveLength(1);
-    expect(src).toMatch(/const id = crypto\.randomUUID\(\);/);
+    expect(src).not.toMatch(/convertToExcalidrawElements/);
+    expect(src).not.toMatch(/\btrusted\b|skeletonOf|\badd\(marks|undo: \(\)|redo: \(\)/);
+    // one place elements enter the scene from a state: dimToElements → complete (normalOf) → restoreElements
+    // (dimToElements is called twice: to render, and to read the stored geometry of a bound arrow when a report is made)
+    expect(src.match(/dimToElements\(/g)).toHaveLength(2);
+    expect(src.match(/const target = dimToElements\(state, theme, ids\)/g)).toHaveLength(1);
+    expect(src.match(/restoreElements\(/g)).toHaveLength(1);
+    expect(src).toMatch(/const out: Record<string, unknown> = \{ \.\.\.el, \.\.\.normalOf\(/);
+    // every scene update the handle makes is outside the engine's history
+    expect(src.match(/captureUpdate: CaptureUpdateAction\.NEVER/g)!.length).toBe(src.match(/captureUpdate:/g)!.length);
+    // an engine id is minted by the handle and is never the node id
+    expect(src).toMatch(/tie\(\(engineId = `g-\$\{randomId\(\)\}`\), nodeId\)/);
+    expect(src).not.toMatch(/crypto\.randomUUID\(/); // it needs a secure context; getRandomValues does not
+    const core = readFileSync(path.join(ROOT, 'src', 'core', 'board.ts'), 'utf8');
+    expect(core).not.toMatch(/\badd\(|\bundo\(\)|\bredo\(\)|interface BoardMark\b/);
   });
 
   it('every S1.1 patch is in the manifest', () => {
@@ -85,11 +96,11 @@ describe('G-DDL-07 one face, one size, exact strokes (the shipped bytes)', () =>
     for (const id of ['font-family-table', 'font-defaults', 'font-metrics', 'font-family-string', 'font-registry-empty', 'image-tool-removed', 'roughness-zero', 'skin-frame', 'skin-marquee', 'layer-ui-removed', 'loading-message-removed', 'phone-layout-removed', 'toast-removed', 'link-popup-removed', 'context-menu-removed', 'image-insert-refused', 'key-actions-allowlist', 'key-dialogs-removed', 'key-tools-removed', 'text-size-keys-removed', 'api-run-action', 'paste-types-filtered', 'stroke-exact', 'frame-name-editor', 'frame-name-editor-ink', 'frame-name-editor-keys', 'frame-name-title', 'skin-selection', 'skin-point-hover', 'skin-point-handles', 'skin-binding', 'skin-box-highlight', 'skin-transform-handles', 'skin-guides', 'skin-guide-literals', 'css-engine-violets', 'eraser-cursor']) expect(ids, id).toContain(id);
   });
 
-  it('the rail is nine tools, three weights and seven key actions (⌘0 is the host\'s: it fits); nothing of the engine\'s tool list', () => {
+  it('the rail is nine tools, three weights and five key actions (⌘0 is the host\'s: it fits; undo and redo are the host\'s since S1.3); nothing of the engine\'s tool list', () => {
     expect([...BOARD_TOOLS]).toEqual(TOOLS);
     for (const t of REFUSED_TOOLS as string[]) expect(BOARD_TOOLS as readonly string[]).not.toContain(t);
     expect(BOARD_WEIGHTS).toEqual({ fine: 2, bold: 4, marker: 8 });
-    expect([...gnomonBoardKeyActions].sort()).toEqual(['deleteSelectedElements', 'finalize', 'redo', 'selectAll', 'undo', 'zoomIn', 'zoomOut']);
+    expect([...gnomonBoardKeyActions].sort()).toEqual(['deleteSelectedElements', 'finalize', 'selectAll', 'zoomIn', 'zoomOut']);
   });
 
   it('the skin is the theme tokens and nothing else', () => {
@@ -150,7 +161,7 @@ describe('G-DDL-07 no colour literal near a reserved colour outside the per-patc
 
 describe('G-DDL-07 the day and night goldens (decoded pixels)', () => {
   const ink = [...THEMES.flatMap((t) => SHOTS.map((s) => `${s}-${t}`)), 'narrow-day'];
-  const names = [...ink, 'colours-day', 'colours-night'];
+  const names = [...ink, 'colours-day', 'colours-night', ...MATRIX_SHOTS, ZOOM_SHOT];
   const themeOf = (name: string): Theme => (name.endsWith('-night') ? 'night' : 'day');
 
   it('the goldens are exactly the expected set', () => {
@@ -179,6 +190,35 @@ describe('G-DDL-07 the day and night goldens (decoded pixels)', () => {
     for (const c of allowed) expect(colours.get(c) ?? 0, `${name} ${c}`).toBeGreaterThan(20);
     // and without the allowlist the same capture fails: the rule sees content colours
     expect(strayPixels(png, theme).stray.length).toBeGreaterThan(5);
+  });
+
+  it.each(MATRIX_SHOTS)('%s: every kind and style per hand; yours are solid, an agent\'s and the unknown hand\'s are dashed (a golden once recorded every agent mark as yours)', (name) => {
+    const theme = themeOf(name);
+    const png = golden(name);
+    expect(png.width).toBe(1280);
+    expect(strayPixels(png, theme, contentColours(theme), isMixOf3).stray).toEqual([]);
+    const ground = (GROUND as Record<Theme, string>)[theme];
+    const at = (x: number, y: number): string => `#${[0, 1, 2].map((c) => png.data[(y * png.width + x) * png.channels + c]!.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+    /** ground-coloured pixels along a horizontal run: the gaps of a dashed edge */
+    const gaps = (x0: number, x1: number, y: number): number => Array.from({ length: x1 - x0 }, (_, i) => at(x0 + i, y)).filter((c) => c === ground.toUpperCase()).length;
+    // the three columns start at 0, 424 and 848. Per column: the first rect's top edge (y 136), the plain ellipse's
+    // middle row is skipped (curved); the diamond is read on the first arrow's line (y 300) and the rect's edge
+    for (const [dx, dashed] of [[0, false], [424, true], [848, true]] as const) {
+      expect(gaps(dx + 20, dx + 96, 136) > 0, `${name}: rect edge at column ${dx}`).toBe(dashed);
+      expect(gaps(dx + 20, dx + 96, 300) > 0, `${name}: headless arrow at column ${dx}`).toBe(dashed);
+      expect(gaps(dx + 120, dx + 180, 300) > 0, `${name}: arrow at column ${dx}`).toBe(dashed);
+    }
+    // a diamond and both arrowheads are drawn: the capture is not the same with them painted out
+    const colours = pixelColours(png) as Map<string, number>;
+    expect(colours.size).toBeGreaterThan(40);
+  });
+
+  it('zoom400-day: a stroke drawn at 400% is on the board after its round trip through whole units', () => {
+    const png = golden(ZOOM_SHOT);
+    expect(strayPixels(png, 'day')).toEqual({ stray: [], reserved: [] });
+    const colours = pixelColours(png) as Map<string, number>;
+    const inked = [...colours].filter(([c]) => c !== (GROUND as Record<Theme, string>).day.toUpperCase() && c !== (GROUND as Record<Theme, string>).day).reduce((n, [, k]) => n + k, 0);
+    expect(inked).toBeGreaterThan(4000); // a stroke some 900px long and 8px wide
   });
 
   it('the states differ from the plain marks: selection, the marquee, the binding highlight and the guides were drawn', () => {

@@ -284,8 +284,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         w.addEventListener('focus', show);
         w.addEventListener('pointerleave', back);
         w.addEventListener('blur', back);
-        w.addEventListener('click', () => {
-          handle?.setStyle(role === 'line' ? { line: t as string } : { fill: t });
+        w.addEventListener('click', (e) => {
+          handle?.setStyle(role === 'line' ? { line: t as string } : { fill: t }, e);
           draw();
         });
         r.append(w);
@@ -298,8 +298,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     for (const wgt of TRAY_WEIGHTS) {
       const off = wgt === 'marker' && s!.tool !== 'stroke';
       const b = h('button', `key quiet seg-key${style.weight === wgt ? ' current' : ''}`, { type: 'button', 'aria-pressed': style.weight === wgt ? 'true' : 'false', disabled: off, title: off ? MARKER_OFF_TITLE : undefined, tabindex: style.weight === wgt ? 0 : -1, 'data-key': `weight:${wgt}` }, wgt);
-      b.addEventListener('click', () => {
-        handle?.setStyle({ weight: wgt });
+      b.addEventListener('click', (e) => {
+        handle?.setStyle({ weight: wgt }, e);
         draw();
       });
       weight.append(b);
@@ -320,8 +320,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         if (!c.ok) continue;
         const w = h('button', `bd-well ${role}`, { type: 'button', title: `use as ${role}`, 'aria-label': `Use this colour as the ${role}`, 'data-key': `custom:${role}` });
         w.style.setProperty(role === 'line' ? '--wl' : '--wf', colour(c.token, role));
-        w.addEventListener('click', () => {
-          handle?.setStyle(role === 'line' ? { line: c.token } : { fill: c.token });
+        w.addEventListener('click', (e) => {
+          handle?.setStyle(role === 'line' ? { line: c.token } : { fill: c.token }, e);
           draw();
         });
         custom.append(w);
@@ -336,10 +336,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         if (c.offer) {
           const offer = c.offer;
           const b = h('button', 'key quiet', { type: 'button', 'data-key': `offer:${role}` }, passing.length ? `Use ${offer} as the ${role}` : `Use ${offer}`);
-          b.addEventListener('click', () => {
+          b.addEventListener('click', (e) => {
             hexText = '';
             trayKey = '';
-            handle?.setStyle(role === 'line' ? { line: offer } : { fill: offer });
+            handle?.setStyle(role === 'line' ? { line: offer } : { fill: offer }, e);
             draw();
           });
           answer.append(b);
@@ -458,6 +458,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       drawFoot();
       drawOver();
       wasYielded = yielded();
+      // while a card has the keyboard the engine's document-level listeners do nothing (G-DDL-08)
+      if (handle?.isAlive()) handle.setYielded(wasYielded);
     } finally {
       drawing = false;
     }

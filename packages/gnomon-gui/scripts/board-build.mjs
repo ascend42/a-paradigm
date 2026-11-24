@@ -18,8 +18,17 @@ import { applyPatches, BOARD_FONT_METRICS, ENGINE, ENGINE_FILES, extractCssAsset
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const STUB_DIR = path.join(ROOT, 'src', 'board', 'stubs');
-/** The one file of gnomon-contracts the board chunk carries (resolveContentColour, contentColourCheck, the theme tokens). */
-export const CONTENT_PALETTE_SRC = path.resolve(ROOT, '..', 'gnomon-contracts', 'src', 'content-palette.ts');
+const CONTRACTS_SRC = path.resolve(ROOT, '..', 'gnomon-contracts', 'src');
+/** The content palette's source (resolveContentColour, contentColourCheck, the theme tokens). */
+export const CONTENT_PALETTE_SRC = path.join(CONTRACTS_SRC, 'content-palette.ts');
+/**
+ * The files of gnomon-contracts the board chunk may carry, EXACTLY (boards S1.3): the content palette, the
+ * dimension shape (the fold, the order keys, the limits: src/board/dim-map.ts maps it), and the two files those
+ * import. The build throws on any other input from that package.
+ */
+export const CONTRACTS_ALLOW = Object.freeze(['src/content-palette.ts', 'src/dim.ts', 'src/internal.ts', 'src/secret-rules.ts']);
+/** The two files the chunk's `@a-company/gnomon-contracts` import resolves to (the others are their imports). */
+export const CONTRACTS_ENTRIES = Object.freeze(['content-palette.ts', 'dim.ts']);
 
 /** The board chunk's size budget, raw bytes over every board/ file (s1-build-plan §2 S1.0). */
 export const BOARD_BUDGET_BYTES = 4 * 1024 * 1024;
@@ -168,6 +177,11 @@ export async function buildBoard() {
     setup(b) {
       b.onResolve({ filter: /^gnomon-board:refused$/ }, () => ({ path: path.join(STUB_DIR, 'refused.ts') }));
       b.onResolve({ filter: /^gnomon-board:skin$/ }, () => ({ path: path.join(ROOT, 'src', 'board', 'skin.ts') }));
+      // The contracts package's published entry is one file that cannot be tree-shaken (it would bring the
+      // conformance vectors and every schema into the chunk): its import resolves to the two source files the
+      // board needs, re-exported, and the check below holds the inputs to CONTRACTS_ALLOW.
+      b.onResolve({ filter: /^@a-company\/gnomon-contracts$/ }, () => ({ path: 'contracts', namespace: 'gnomon-board-contracts' }));
+      b.onLoad({ filter: /^contracts$/, namespace: 'gnomon-board-contracts' }, () => ({ contents: CONTRACTS_ENTRIES.map((f) => `export * from ${JSON.stringify(`./${f}`)};`).join('\n'), resolveDir: CONTRACTS_SRC, loader: 'ts' }));
       for (const s of STUBS) {
         b.onResolve({ filter: s.filter }, (args) => {
           // relative stubs apply only to the engine's own files; bare ones (mermaid, pica) wherever they are imported
@@ -211,10 +225,7 @@ export async function buildBoard() {
     target: 'es2022',
     conditions: ['production'],
     // one React for the whole chunk: the engine and its dependencies are hoisted beside a different major
-    // The board needs the content palette and nothing else of the contracts package, whose published entry is one
-    // file that cannot be tree-shaken (it would bring the conformance vectors and every schema into the chunk): the
-    // palette's own source file is bundled instead (pure, no imports but its freeze helper).
-    alias: { react: reactDir, 'react-dom': reactDomDir, '@a-company/gnomon-contracts': CONTENT_PALETTE_SRC },
+    alias: { react: reactDir, 'react-dom': reactDomDir },
     define: {
       'process.env.NODE_ENV': '"production"',
       __GNOMON_BOARD_ENGINE__: JSON.stringify(`${ENGINE.name}@${ENGINE.version}`),
@@ -236,9 +247,9 @@ export async function buildBoard() {
     throw new Error(`board build: React is not the production build (${reactInputs.join(', ')})`);
   }
   report.reactInputs = reactInputs;
-  // of gnomon-contracts, only the palette source and its freeze helper are inputs
+  // of gnomon-contracts, exactly the allowed source files are inputs
   const contractInputs = Object.keys(r.metafile.inputs).filter((i) => /(^|\/)gnomon-contracts\//.test(i)).map((i) => i.slice(i.lastIndexOf('gnomon-contracts/') + 'gnomon-contracts/'.length)).sort();
-  if (contractInputs.join() !== 'src/content-palette.ts,src/internal.ts') throw new Error(`board build: unexpected gnomon-contracts inputs (${contractInputs.join(', ')})`);
+  if (contractInputs.join() !== [...CONTRACTS_ALLOW].sort().join()) throw new Error(`board build: unexpected gnomon-contracts inputs (${contractInputs.join(', ')})`);
   report.contractInputs = contractInputs;
 
   for (const f of PATCHED_FILES) if (!seenPatched.has(f)) throw new PatchError('patched-file-loaded', f, 1, 0);

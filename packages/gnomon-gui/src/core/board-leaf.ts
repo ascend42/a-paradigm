@@ -47,6 +47,7 @@ export const REFUSAL_COPY = {
   file: 'Files can’t be dropped on a board · write or draw it instead',
   table: 'Tables can’t be pasted yet · paste it into a text',
   mark: 'Part of what you pasted isn’t a board mark · it was left out',
+  fallback: 'This Gnomon can’t draw that mark · it is kept as it is and can’t be moved or deleted here',
 } as const;
 export const refusalLine = (what: keyof typeof REFUSAL_COPY): string => REFUSAL_COPY[what];
 

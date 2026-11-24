@@ -14,8 +14,12 @@
  * loader. Since S1.1 the engine is a bare drawing surface (its own toolbar,
  * menus and panels are removed at build time) and the handle is what a rail
  * drives it with: tools, line, fill and weight from content-palette tokens,
- * zoom, undo and redo, the theme. The stored shape vocabulary arrives with S1.3.
+ * zoom, the theme. Since S1.3 (pass P3b) the board is a VIEW of a folded
+ * dimension (`dim-shape:v1`): `render(state)` draws it, `onEdit` reports what a
+ * person changed as ops, and the engine's own history is not used (undo is the
+ * host's: `onUndoKey`). Only types are imported from the contracts here.
  */
+import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 
 /** Bundle-relative paths of the board chunk (scripts/board-build.mjs emits exactly these names). */
 export const BOARD_SCRIPT = 'board/board.js';
@@ -53,27 +57,33 @@ export interface BoardStyleRefusal {
 
 /**
  * Who drew a mark, as the HOST knows it (design component author-seal: three hands). `human` is you; `agent` is an
- * agent the host named (`id` is the host-stamped author id the seal is worked out from, `name` the text beside
- * it); `unknown` is a mark with no author the host vouches for. The handle keeps it in a record of its OWN, keyed
- * by element id and written only by `add`; it is never read from an element, so nothing pasted, dropped or copied
- * can carry one (a copy of an agent's mark is a new element and is yours). Until S1.3 maps real rows, only the
- * fixture calls `add` with an author.
+ * agent the host named (`id` is the host-stamped agent id the seal is worked out from, `name` the text beside it:
+ * the same id until a later pass gives agents display names; the leaf shows it through
+ * core/board-overlay.ts boardAgentName, never raw); `unknown` is a mark with no author the host vouches
+ * for. It is read ONLY from the `by` of the folded dimension the board last rendered, never from an element, so
+ * nothing pasted, dropped or copied can carry one.
  */
 export type BoardAuthor = { cls: 'human' } | { cls: 'agent'; id: string; name: string } | { cls: 'unknown' };
 
 /** What the host layer needs to know about one mark, to lay DOM over it. Scene units; see BoardView for the screen. */
 export interface BoardMarkView {
+  /** the ENGINE's id of the element (minted by the handle; never the node id) */
   id: string;
+  /** the node id in the rendered dimension; null for a mark drawn since the last render and for a label */
+  node: string | null;
   /** `stub`: a node of a kind this build cannot draw (fallback-node); `other`: an engine element outside the rail's kinds */
-  kind: 'sticky' | 'rect' | 'ellipse' | 'arrow' | 'frame' | 'stroke' | 'text' | 'stub' | 'other';
+  kind: 'sticky' | 'rect' | 'ellipse' | 'diamond' | 'arrow' | 'frame' | 'stroke' | 'text' | 'stub' | 'other';
   /** bounding box */
   x: number;
   y: number;
   width: number;
   height: number;
-  /** the mark's first point (where a drawn mark's seal sits) */
+  /** the mark's first point (a drawn mark's seal stands just off it) */
   firstX: number;
   firstY: number;
+  /** the second point of a stroke or an arrow, when it has one (the seal stands on the far side of the first from it) */
+  secondX?: number;
+  secondY?: number;
   author: BoardAuthor;
   /** the mark's content-palette tokens (a label is always the default line) */
   line: string;
@@ -108,29 +118,13 @@ export interface BoardAttempt {
  *  - `scene-file`, `library-file`, `file`: a file dropped on the board; the drop never reaches the engine
  *  - `table`: tab-separated text pasted (the engine's chart dialog is not built into the board)
  *  - `mark`: a pasted mark of a kind the board does not have (`detail` names the engine type); it was removed
+ *  - `fallback`: a press on a mark this build cannot draw (`detail` is its kind). It is locked in the engine: it
+ *    starts no drag, shows no handles and cannot be selected or deleted, so the leaf says why nothing happened
  */
 export interface BoardRefusal {
-  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'table' | 'mark';
-  why: 'no-image-kind' | 'no-file-drop' | 'no-table-kind' | 'not-a-board-kind';
+  what: 'image' | 'scene-file' | 'library-file' | 'file' | 'table' | 'mark' | 'fallback';
+  why: 'no-image-kind' | 'no-file-drop' | 'no-table-kind' | 'not-a-board-kind' | 'kept-as-it-is';
   detail?: string;
-}
-
-/** A mark added through the handle (enough for the fixture and the probes; not the stored shape vocabulary). */
-export interface BoardMark {
-  type: 'rectangle' | 'ellipse' | 'text' | 'sticky' | 'arrow' | 'frame' | 'stub';
-  /** who drew it (default: you). An agent's or an unknown hand's mark is drawn dashed; that is derived, never set */
-  by?: BoardAuthor;
-  /** a stub's kind */
-  kind?: string;
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  text?: string;
-  /** content-palette tokens; a token that fails the palette's check draws as ink (line) or as no fill */
-  line?: string;
-  fill?: string | null;
-  weight?: BoardWeight;
 }
 
 /** What a rail needs to draw itself; read with `state()` or pushed to `onState` listeners when it changes. */
@@ -149,8 +143,40 @@ export interface BoardState {
 }
 
 export interface BoardHandle {
-  /** Append marks to the scene; returns the scene's element count afterwards. */
-  add(marks: readonly BoardMark[]): number;
+  /**
+   * Draw a folded dimension. The scene is DIFFED against it and updated outside the engine's history; a mark being
+   * drawn, dragged or typed at that moment is left alone and is diffed against this state when the gesture ends.
+   * NEVER fires `onEdit` (Aegis A1): a rendered row is not a gesture. Authorship, sticky and stub are read from
+   * this state only.
+   */
+  render(state: DimState): void;
+  /**
+   * Be told what a person changed, as ops against the state last rendered: once at pointer-up (a drag is one
+   * `move`), at a text commit, at a delete, at a restyle of the selection. Never for a selection, a pan, a zoom, a
+   * hover or a render. `cause` is the trusted DOM event that ended the gesture (the last pointerup or keydown the
+   * board saw), for the gesture stamp; null when there was none. The ops are NOT validated here. A change that
+   * maps to no op is undone on the board and not reported. ONLY marks the person touched are in the ops, and a
+   * mark in hand is compared with the node it was drawn from: a remote change that landed mid-gesture is kept.
+   * `cause` is cleared after every report. Returns the unsubscribe.
+   */
+  onEdit(listener: (ops: DimOp[], cause: Event | null) => void): () => void;
+  /**
+   * Be told when Cmd/Ctrl+Z (`redo` false) or Cmd/Ctrl+Shift+Z / Ctrl+Y (`redo` true) is pressed in the board while
+   * no text is being typed. The engine has no undo of its own (boards S1.3): the host inverts ops. The event is
+   * the listener's own trusted keydown; its default is prevented. Returns the unsubscribe.
+   */
+  onUndoKey(listener: (event: KeyboardEvent, redo: boolean) => void): () => void;
+  /**
+   * While yielded (a card has the keyboard) the board reports no edit and the engine's document-level keyup and
+   * gesture listeners do nothing (G-DDL-08).
+   */
+  setYielded(on: boolean): void;
+  /**
+   * The UNFILTERED diff of the scene against the state last rendered: empty when the board shows exactly that
+   * state (a board holding a malformed order key always drifts by its re-key). A probe for tests and diagnostics;
+   * never sent.
+   */
+  drift(): DimOp[];
   /** Non-deleted elements in the scene. */
   count(): number;
   /** Choose a rail tool. Throws on anything that is not in BOARD_TOOLS. */
@@ -158,9 +184,11 @@ export interface BoardHandle {
   /**
    * Set the current line, fill and/or weight from content-palette tokens. Applies to what is drawn next and to the
    * selected marks. A token that fails `contentColourCheck` is refused and nothing changes (never stepped to a
-   * passing colour). `marker` is kept as the choice but draws as `bold` unless the tool is Stroke.
+   * passing colour). `marker` is kept as the choice but draws as `bold` unless the tool is Stroke. `by` is the
+   * rail's own trusted event (the press on a well): a restyle of the selection is reported as an edit only with
+   * one, and it is that edit's `cause`; without it the restyle is put back.
    */
-  setStyle(style: Partial<BoardStyle>): { ok: true } | BoardStyleRefusal;
+  setStyle(style: Partial<BoardStyle>, by?: Event | null): { ok: true } | BoardStyleRefusal;
   /** Day or night: re-reads the skin and re-resolves every mark's colours through the content palette. */
   setTheme(theme: BoardTheme): void;
   zoomIn(): void;
@@ -169,8 +197,6 @@ export interface BoardHandle {
   zoomReset(): void;
   /** Fit everything drawn into the pane. */
   zoomToFit(): void;
-  undo(): void;
-  redo(): void;
   state(): BoardState;
   /** Be told when `state()` would answer differently. Returns the unsubscribe. */
   onState(listener: (state: BoardState) => void): () => void;
@@ -209,6 +235,12 @@ export interface BoardMountOptions {
   timeoutMs?: number;
   /** The theme to draw in (default day). Change it later with handle.setTheme. */
   theme?: BoardTheme;
+  /**
+   * PROBE ONLY (the P12 harness, which has no trusted input in WKWebView): untrusted pointer and key events count
+   * as a person's input. The app never sets it (test/board-leaf.test.ts scans for it): there, only trusted events
+   * can make an engine change an edit.
+   */
+  syntheticInput?: boolean;
 }
 
 export interface BoardModule {

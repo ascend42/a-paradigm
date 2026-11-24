@@ -19,6 +19,9 @@ import { decodePng, pixelColours } from '../scripts/board-colours.mjs';
 
 export const GOLDENS = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'test', 'goldens', 'board');
 export const SHOTS = ['marks', 'selection', 'marquee', 'multi', 'binding', 'guides'] as const;
+/** Since S1.3: the whole kind and style matrix per hand (content colours), and a stroke drawn at 400% (ink only). */
+export const MATRIX_SHOTS = ['matrix-day', 'matrix-night'] as const;
+export const ZOOM_SHOT = 'zoom400-day';
 export const THEMES = ['day', 'night'] as const;
 export type Theme = (typeof THEMES)[number];
 export type Png = { width: number; height: number; channels: number; data: Buffer };
@@ -45,19 +48,50 @@ export function isMixOf(hex: string, palette: readonly string[]): boolean {
 }
 
 /**
+ * True when a pixel is a mix of up to THREE of `palette` (every channel within MIX_SLACK of a point of the triangle).
+ * Where a dashed edge ends over a fill, the line, the fill and the ground meet in one antialiased pixel: the matrix
+ * captures (dashed marks with fills) are read with this; every other capture keeps the two-colour rule.
+ */
+export function isMixOf3(hex: string, palette: readonly string[]): boolean {
+  if (isMixOf(hex, palette)) return true;
+  const own = [...new Set(palette)].map(rgb);
+  const p = rgb(hex);
+  for (let i = 0; i < own.length; i++) {
+    for (let j = i + 1; j < own.length; j++) {
+      for (let k = j + 1; k < own.length; k++) {
+        const a = own[i]!;
+        const u = own[j]!.map((v, n) => v - a[n]!);
+        const w = own[k]!.map((v, n) => v - a[n]!);
+        const d = p.map((v, n) => v - a[n]!);
+        const dot = (x: number[], y: number[]): number => x[0]! * y[0]! + x[1]! * y[1]! + x[2]! * y[2]!;
+        const uu = dot(u, u), uw = dot(u, w), ww = dot(w, w), du = dot(d, u), dw = dot(d, w);
+        const det = uu * ww - uw * uw;
+        if (det === 0) continue;
+        let sx = (du * ww - dw * uw) / det;
+        let tx = (dw * uu - du * uw) / det;
+        sx = Math.min(1, Math.max(0, sx));
+        tx = Math.min(1 - sx, Math.max(0, tx));
+        if (p.every((v, n) => Math.abs(v - (a[n]! + sx * u[n]! + tx * w[n]!)) <= MIX_SLACK)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * What a capture holds that it must not (Mika's pass A finding 8). `stray`: every chromatic pixel that is not one of
  * the theme's own colours, a colour in `extra` (the content colours a capture was drawn with), or a mix of two of
  * them: an engine blue or violet is stray wherever it sits, not only near a reserved colour, and ONE pixel fails.
  * `reserved`: every chromatic pixel inside the minimum distance of a reserved colour, with no exemption (the
  * selection is the ink, so no theme colour the board draws with sits there).
  */
-export function strayPixels(png: Png, theme: Theme, extra: readonly string[] = []): { stray: Array<[string, number]>; reserved: Array<[string, number]> } {
+export function strayPixels(png: Png, theme: Theme, extra: readonly string[] = [], mix: (hex: string, palette: readonly string[]) => boolean = isMixOf): { stray: Array<[string, number]>; reserved: Array<[string, number]> } {
   const palette = [...Object.values(CONTENT_THEME_TOKENS[theme]), (GROUND as Record<Theme, string>)[theme], ...extra];
   const stray: Array<[string, number]> = [];
   const reserved: Array<[string, number]> = [];
   for (const [hex, n] of pixelColours(png) as Map<string, number>) {
     if (isNeutralColour(hex)) continue;
-    if (!isMixOf(hex, palette)) stray.push([hex, n]);
+    if (!mix(hex, palette)) stray.push([hex, n]);
     if (nearReserved(hex) && !extra.some((c) => isMixOf(hex, [c, (GROUND as Record<Theme, string>)[theme], ...Object.values(CONTENT_THEME_TOKENS[theme])]))) reserved.push([hex, n]);
   }
   return { stray, reserved };
@@ -89,6 +123,8 @@ export interface LiveRun {
   skin?: Record<Theme, Record<string, Shot>>;
   narrow?: { capture: Shot };
   colours?: Record<Theme, Shot>;
+  matrix?: Partial<Record<Theme, Shot>>;
+  zoom400?: { capture?: Shot };
   canvasFonts?: string[];
   stockNodes?: string[];
   requests?: Array<{ path: string }>;
@@ -104,15 +140,18 @@ export function checkLiveReskin(name: string, family: string, r: LiveRun): void 
   expect(r.canvasFonts, name).toEqual([BOARD_FONT_STRING]);
   // the only font request is the bundle's own face: no Excalifont, Virgil or CDN path
   expect([...new Set((r.requests ?? []).map((q) => q.path).filter((p) => /font|woff|ttf/i.test(p)))], name).toEqual([`/${BOARD_FONT}`]);
-  const shots: Array<[string, Theme, Shot]> = [...THEMES.flatMap((t) => SHOTS.map((s) => [`${s}-${t}`, t, r.skin![t]![s]!] as [string, Theme, Shot])), ['narrow-day', 'day', r.narrow!.capture]];
+  const shots: Array<[string, Theme, Shot]> = [...THEMES.flatMap((t) => SHOTS.map((s) => [`${s}-${t}`, t, r.skin![t]![s]!] as [string, Theme, Shot])), ['narrow-day', 'day', r.narrow!.capture], [ZOOM_SHOT, 'day', r.zoom400!.capture!]];
   // one capture per theme with a mark in every content colour: exactly those colours and the theme's own
   for (const theme of THEMES) {
     const png = decodePng(Buffer.from(r.colours![theme]!.png, 'base64')) as Png;
     expect(strayPixels(png, theme, contentColours(theme)).stray, `${name} colours-${theme}`).toEqual([]);
     shots.push([`colours-${theme}`, theme, r.colours![theme]!]);
+    const matrix = decodePng(Buffer.from(r.matrix![theme]!.png, 'base64')) as Png;
+    expect(strayPixels(matrix, theme, contentColours(theme), isMixOf3).stray, `${name} matrix-${theme}`).toEqual([]);
+    shots.push([`matrix-${theme}`, theme, r.matrix![theme]!]);
   }
   for (const [shot, theme, cap] of shots) {
-    if (shot.startsWith('colours-')) {
+    if (shot.startsWith('colours-') || shot.startsWith('matrix-')) {
       const png = decodePng(Buffer.from(cap.png, 'base64')) as Png;
       if (family !== 'chromium' || png.width !== 1280) continue;
       if (process.env.GNOMON_UPDATE_GOLDENS === '1') writeFileSync(path.join(GOLDENS, `${shot}.png`), Buffer.from(cap.png, 'base64'));
@@ -121,7 +160,7 @@ export function checkLiveReskin(name: string, family: string, r: LiveRun): void 
     }
     const png = decodePng(Buffer.from(cap.png, 'base64')) as Png;
     expect(strayPixels(png, theme), `${name} ${shot}`).toEqual({ stray: [], reserved: [] });
-    if (family !== 'chromium' || png.width !== golden(shot).width) continue; // goldens are Chromium at device pixel ratio 1
+    if (family !== 'chromium' || png.width !== (shot === 'narrow-day' ? 374 : 1280)) continue; // goldens are Chromium at device pixel ratio 1
     if (process.env.GNOMON_UPDATE_GOLDENS === '1') {
       if (!existsSync(GOLDENS)) mkdirSync(GOLDENS, { recursive: true });
       writeFileSync(path.join(GOLDENS, `${shot}.png`), Buffer.from(cap.png, 'base64'));

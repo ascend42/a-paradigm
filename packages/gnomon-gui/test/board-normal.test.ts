@@ -30,17 +30,28 @@ describe('#gui-board the normal form of a mark', () => {
     expect(offNormal({ type: 'ellipse', ...normalOf({ type: 'ellipse' }, { line: 'ink', fill: null }, 'day'), strokeStyle: 'solid' }, { line: 'ink', fill: null, by: { cls: 'agent', id: 'a', name: 'A' } }, 'day')).toBe(true);
   });
 
-  it('what is not a board type must go: image, embeddable, iframe, diamond, line, magicframe', () => {
-    expect([...BOARD_TYPES].sort()).toEqual(['arrow', 'ellipse', 'frame', 'freedraw', 'rectangle', 'text']);
-    for (const type of ['image', 'embeddable', 'iframe', 'diamond', 'line', 'magicframe', 'selection']) expect(offNormal({ type }, null, 'day'), type).toBe(true);
+  it('what is not a board type must go: image, embeddable, iframe, line, magicframe (a diamond is a core kind since S1.3 and stays)', () => {
+    expect([...BOARD_TYPES].sort()).toEqual(['arrow', 'diamond', 'ellipse', 'frame', 'freedraw', 'rectangle', 'text']);
+    expect(offNormal({ type: 'diamond' }, null, 'day')).toBe(false);
+    for (const type of ['image', 'embeddable', 'iframe', 'line', 'magicframe', 'selection']) expect(offNormal({ type }, null, 'day'), type).toBe(true);
     expect(offNormal({ type: 'image', isDeleted: true }, null, 'day')).toBe(false);
-    expect([...FILLABLE].sort()).toEqual(['ellipse', 'rectangle']); // no diamond
+    expect([...FILLABLE].sort()).toEqual(['diamond', 'ellipse', 'rectangle']);
   });
 
-  it('a pasted lock is taken off and a pasted arrow keeps no stock head', () => {
+  it('a pasted lock is taken off and a pasted arrow keeps no stock head: the ends that had one get the open arrow (none, end or both)', () => {
     expect(offNormal({ type: 'rectangle', locked: true } as never, null, 'day')).toBe(true);
-    expect(normalOf({ type: 'arrow' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow', locked: false });
+    // ONE mark is locked, by the handle and never by a paste: a fallback, which no op may touch (review batch C2)
+    expect(normalOf({ type: 'rectangle' }, { line: 'graphite', fill: 'paper', kind: 'stub' }, 'day').locked).toBe(true);
+    expect(normalOf({ type: 'rectangle' }, { line: 'ink', fill: 'lemon', kind: 'sticky' }, 'day').locked).toBe(false);
+    expect(offNormal({ type: 'rectangle', locked: false } as never, { line: 'graphite', fill: 'paper', kind: 'stub' }, 'day')).toBe(true);
+    expect(normalOf({ type: 'arrow', endArrowhead: 'arrow' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow', locked: false });
     expect(offNormal({ type: 'arrow', startArrowhead: 'dot', endArrowhead: 'triangle' } as never, null, 'day')).toBe(true);
+    expect(normalOf({ type: 'arrow', startArrowhead: 'dot', endArrowhead: 'triangle' }, null, 'day')).toMatchObject({ startArrowhead: 'arrow', endArrowhead: 'arrow' });
+    expect(normalOf({ type: 'arrow', startArrowhead: null, endArrowhead: 'triangle' }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: 'arrow' });
+    expect(normalOf({ type: 'arrow', startArrowhead: null, endArrowhead: null }, null, 'day')).toMatchObject({ startArrowhead: null, endArrowhead: null });
+    // a start head never stands alone (`head` is none, end or both)
+    expect(normalOf({ type: 'arrow', startArrowhead: 'arrow', endArrowhead: null }, null, 'day')).toMatchObject({ startArrowhead: 'arrow', endArrowhead: 'arrow' });
+    for (const head of [{ startArrowhead: null, endArrowhead: null }, { startArrowhead: null, endArrowhead: 'arrow' }, { startArrowhead: 'arrow', endArrowhead: 'arrow' }]) expect(offNormal({ type: 'arrow', ...head } as never, null, 'day'), JSON.stringify(head)).toBe(false);
     expect('endArrowhead' in normalOf({ type: 'rectangle' }, null, 'day')).toBe(false);
   });
 
@@ -49,8 +60,8 @@ describe('#gui-board the normal form of a mark', () => {
     const off = onBoardRefusal((what, detail) => void heard.push(`${what}:${detail}`));
     const kept = gnomonBoardAdmit([{ type: 'rectangle' }, { type: 'iframe' }, { type: 'embeddable' }, { type: 'image' }, { type: 'text' }, { type: 'diamond' }, { type: 42 }, null as never]);
     off();
-    expect(kept.map((e) => e.type)).toEqual(['rectangle', 'text']);
-    expect(heard).toEqual(['mark:iframe', 'mark:embeddable', 'image:image', 'mark:diamond', 'mark:unknown', 'mark:unknown']);
+    expect(kept.map((e) => e.type)).toEqual(['rectangle', 'text', 'diamond']);
+    expect(heard).toEqual(['mark:iframe', 'mark:embeddable', 'image:image', 'mark:unknown', 'mark:unknown']);
     expect(gnomonBoardAdmit(null)).toEqual([]);
     expect([...gnomonBoardTypes].sort()).toEqual([...BOARD_TYPES].sort());
   });

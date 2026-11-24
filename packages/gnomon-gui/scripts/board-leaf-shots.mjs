@@ -28,12 +28,15 @@ export function findChrome() {
  * the rects of the leaf, the stack, the pinned zone, the composer and the status strip), read after it is ready.
  */
 /** DevTools key descriptions for the keys the tests press. */
-const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], ArrowDown: ['ArrowDown', 40], ArrowUp: ['ArrowUp', 38], ArrowRight: ['ArrowRight', 39], ArrowLeft: ['ArrowLeft', 37] };
+const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], ArrowDown: ['ArrowDown', 40], ArrowUp: ['ArrowUp', 38], ArrowRight: ['ArrowRight', 39], ArrowLeft: ['ArrowLeft', 37], Delete: ['Delete', 46], Backspace: ['Backspace', 8] };
 
 /**
  * `actions` are REAL input, sent through the DevTools Input domain (trusted pointer and key events, the kind a person
  * makes), in order: {press: selector} moves the mouse to the element's centre and presses and releases it;
  * {at: [x, y], press: true} does the same at a point of #preview-board's stage; {dbl: selector}; {wheel: selector};
+ * {drag: [[x, y], [x, y], …]} presses at the first point of the stage, moves through the others with a frame
+ * between moves (the engine keeps the first move of a frame) and releases at the last; {hold: [[x, y], …]} does the
+ * same and does NOT release ({release: [x, y]} does);
  * {key: 'Tab' | 'r' | …, shift?, meta?}; {paste: text} puts text on the clipboard and pastes it with the keyboard;
  * {read: expression} evaluates and records the value under `as`; {wait: ms}.
  */
@@ -99,6 +102,26 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         await call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2, commands: ['paste'] });
         await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2 });
       } else {
+        if (a.drag || a.hold || a.release) {
+          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+          const pts = (a.drag ?? a.hold ?? [a.release]).map(([x, y]) => ({ x: box.x + x, y: box.y + y }));
+          if (!a.release) {
+            await mouse('mouseMoved', pts[0].x, pts[0].y, { button: 'none' });
+            await mouse('mousePressed', pts[0].x, pts[0].y);
+            for (const q of pts.slice(1)) {
+              await sleep(34);
+              await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: q.x, y: q.y, button: 'left', buttons: 1 });
+            }
+            await sleep(34);
+          }
+          if (a.release) {
+            await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pts[0].x, y: pts[0].y, button: 'left', buttons: 1 });
+            await sleep(34);
+          }
+          if (!a.hold) await mouse('mouseReleased', pts[pts.length - 1].x, pts[pts.length - 1].y);
+          await sleep(a.settle ?? 120);
+          continue;
+        }
         let p = null;
         if (a.at) {
           const stage = await centre('#preview-board .bd-stage');
@@ -142,7 +165,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
   }
 }
 
-export const leafUrl = (base, state, theme) => `${fixtureUrl(base, 'board', theme, 'off')}&board=${state}`;
+export const leafUrl = (base, state, theme, marks = null) => `${fixtureUrl(base, 'board', theme, 'off')}&board=${state}${marks ? `&marks=${marks}` : ''}`;
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);

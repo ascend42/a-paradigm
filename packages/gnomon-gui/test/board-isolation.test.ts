@@ -61,9 +61,10 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     expect(importers).toEqual(['board/index.ts']);
   });
 
-  it('core/board.ts reaches the chunk only by URL: import() of a computed bundle path, no static specifier', () => {
+  it('core/board.ts reaches the chunk only by URL: import() of a computed bundle path, and its one static specifier is a TYPE-ONLY import of the contracts (the handle speaks DimState and DimOp since S1.3)', () => {
     const src = readFileSync(path.join(SRC, 'core', 'board.ts'), 'utf8');
-    expect(specifiers(src)).toEqual([]);
+    expect(specifiers(src)).toEqual(['@a-company/gnomon-contracts']);
+    expect(src.match(/^import .*$/gm)).toEqual(["import type { DimOp, DimState } from '@a-company/gnomon-contracts';"]);
     expect(src).toMatch(/import\(\/\* @vite-ignore \*\/ url\)/);
     expect(src).toMatch(/BOARD_SCRIPT = 'board\/board\.js'/);
   });

@@ -345,7 +345,7 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
       // the kernel's structured questions: the card's picker renders them (askDetailOf), the text lines above show them
       return h(doc, 'span', { class: 'blk blk-ask-user' });
     case 'Canvas':
-      return h(doc, 'div', { class: 'blk blk-canvas' }, `[canvas ${str(data.ds)}] rendered by the host surface`);
+      return h(doc, 'div', { class: 'blk blk-canvas' }, `[canvas ${str(data.dim)}] rendered by the host surface`);
     default:
       // unknown (or a kernel card block nested as a child): opaque label + its strings as text, never dropped
       return h(doc, 'div', { class: 'blk blk-opaque' }, `[block ${name || '?'}] `, ...kids.map((c) => child(c)), typeof data.text === 'string' ? data.text : null);

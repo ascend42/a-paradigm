@@ -130,13 +130,59 @@ const DRIVER = `'use strict';
     R.tModule = Math.round(performance.now() - R.t0);
     R.engine = m.BOARD_ENGINE;
     R.phase = 'mount';
-    var h = await m.mountBoard(document.getElementById('board'));
+    var h = await m.mountBoard(document.getElementById('board'), { syntheticInput: true });
+    // The board is a view of a folded dimension (boards S1.3): the page keeps the rows, folds them with the chunk's
+    // own foldDim and renders the fold. put() appends a row as the host would stamp it (a mark's \`by\` picks the
+    // stamp: none is you, an agent, or no stamp at all for the unknown hand); an edit the board reports becomes a
+    // row of yours and is rendered back (the live loop's stand-in); revert() takes back the last such row.
+    var DIM = 'dim:01JP12HARNESS0000000000001', B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ', ZK = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    var YOU = { principal: 'p:p12/you', connId: 'conn:p12', surface: 'gui' };
+    var rows = [{ seq: 1, kind: 'modns.gnomon.dimension.session.start', payload: { v: 1, dim: DIM, title: 'P12', attached: ['hsid-p12'], opened: 'command', relayedFor: YOU } }];
+    var nodeCount = 0;
+    R.edits = [];
+    var pushRow = function (ops, by, edit) {
+      var stamp = !by || by.cls === 'human' ? { relayedFor: YOU } : by.cls === 'agent' ? { relayedFor: { principal: 'p:p12/' + by.id, connId: 'conn:p12', surface: 'bridge', agent: by.name } } : {};
+      rows.push({ seq: rows.length + 1, kind: 'modns.gnomon.dimension.op', edit: !!edit, payload: Object.assign({ v: 1, dim: DIM, ops: ops }, stamp) });
+    };
+    var show = function () { h.render(m.foldDim(rows)); };
+    var nodeOf = function (k) {
+      var n = nodeCount++;
+      var node = { id: '01JP12HARNESS0000000000' + B32[Math.floor(n / 1024) % 32] + B32[Math.floor(n / 32) % 32] + B32[n % 32], z: ZK[Math.floor(n / ZK.length)] + ZK[n % ZK.length], x: k.x, y: k.y };
+      if (k.line) node.color = k.line;
+      if (k.weight && k.weight !== 'fine') node.weight = k.weight === 'bold' ? 2 : 3;
+      if (k.type === 'stub') { node.kind = k.kind; return node; }
+      if (k.type === 'text') { node.kind = 'text'; node.text = k.text || ''; return node; }
+      if (k.type === 'arrow') { node.kind = 'arrow'; node.points = k.points || [0, 0, k.width == null ? 120 : k.width, k.height || 0]; if (k.head) node.head = k.head; if (k.text) node.label = k.text; return node; }
+      if (k.type === 'stroke') { node.kind = 'stroke'; node.points = k.points; return node; }
+      node.w = k.width == null ? 120 : k.width; node.h = k.height == null ? 80 : k.height;
+      if (k.rot) node.rot = k.rot;
+      if (k.type === 'frame') { node.kind = 'frame'; if (k.text) node.title = k.text; return node; }
+      node.kind = k.type === 'ellipse' ? 'ellipse' : k.type === 'diamond' ? 'diamond' : 'rect';
+      if (k.type === 'sticky') { node.fill = k.fill || 'lemon'; node.label = k.text || ''; return node; }
+      if (k.fill) node.fill = k.fill;
+      if (k.text) node.label = k.text;
+      return node;
+    };
+    // marks of one hand are one row; a list that mixes hands is one row per run of the same hand
+    var put = function (marks) {
+      var run = [], by = null;
+      var flush = function () { if (run.length) pushRow(run.map(function (k) { return { type: 'add', node: nodeOf(k) }; }), by, false); run = []; };
+      marks.forEach(function (k) { var b = k.by || null; if (JSON.stringify(b) !== JSON.stringify(by)) flush(); by = b; run.push(k); });
+      flush();
+      show();
+      return h.count();
+    };
+    var revert = function () { for (var n = rows.length - 1; n > 0; n--) if (rows[n].edit) { rows.splice(n, 1); break; } show(); };
+    h.onEdit(function (ops, cause) { R.edits.push({ types: ops.map(function (o) { return o.type; }), cause: cause ? cause.type : null }); pushRow(ops, null, true); show(); });
+    R.undoKeys = [];
+    h.onUndoKey(function (e, redo) { R.undoKeys.push(redo ? 'redo' : 'undo'); });
+    R.handleKeys = Object.keys(h).filter(function (k) { return k === 'add' || k === 'undo' || k === 'redo'; });
     R.mounted = true;
     R.tMounted = Math.round(performance.now() - R.t0);
     // no wait here: a mark added in the SAME tick the mount resolves must stay (the engine initialises its scene
     // asynchronously and used to wipe it about 20 ms later)
     R.phase = 'draw';
-    R.afterAdd = h.add([{ type: 'rectangle', x: 40, y: 40, width: 160, height: 80 }, { type: 'ellipse', x: 240, y: 40, width: 120, height: 80 }, { type: 'text', x: 60, y: 160, text: 'gnomon board ✓' }]);
+    R.afterAdd = put([{ type: 'rectangle', x: 40, y: 40, width: 160, height: 80 }, { type: 'ellipse', x: 240, y: 40, width: 120, height: 80 }, { type: 'text', x: 60, y: 160, text: 'gnomon board ✓' }]);
     await wait(400);
     R.afterAddSettled = h.count();
     var canvas = document.querySelector('canvas.interactive') || document.querySelector('canvas');
@@ -327,7 +373,7 @@ const DRIVER = `'use strict';
       S.binding = await capture(theme);
       await release(203, 100);
       S.arrowAdded = h.count() - beforeArrow;
-      h.undo();
+      revert();
       await wait(120);
       S.afterUndo = h.count() - beforeArrow;
       h.setTool('select');
@@ -335,7 +381,7 @@ const DRIVER = `'use strict';
       await hold(240, 80, 322, 82); // the ellipse dragged along by its left point: its top and bottom stay level with the rectangle's
       S.guides = await capture(theme);
       await release(322, 82);
-      h.undo();
+      revert();
       await wait(120);
       await click(1100, 700);
       // the caret: a text is being typed; its colours and face are computed style, not pixels
@@ -384,7 +430,9 @@ const DRIVER = `'use strict';
         if (ans.status !== 501) R.pasteTrouble = (await ans.text()).slice(0, 200);
       } catch (e) { R.pasteTrouble = String(e).slice(0, 200); }
       var dt2 = new DataTransfer(); dt2.setData('text/plain', text);
-      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 }));
+      // on the board's own container, as a real paste is (it targets the focused element and bubbles to the document,
+      // where the engine listens): the handle counts a paste as the person's only when it passes through the board
+      container.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 }));
       return 'synthetic';
     };
     // Mika's S1.1 pass A findings, each replayed on the shipped chunk (day theme, select tool).
@@ -395,11 +443,17 @@ const DRIVER = `'use strict';
     h.setTheme('day'); h.setTool('select'); await click(1100, 700);
     // 2. a programmatic add is never an undo step: add, one user action, one undo: the added mark stays
     var c0 = h.count();
-    h.add([{ type: 'rectangle', x: 900, y: 480, width: 120, height: 80 }]);
+    put([{ type: 'rectangle', x: 900, y: 480, width: 120, height: 80 }]);
     h.setTool('rect'); await wait(60); await drag(canvas, 1060, 480, 1160, 540);
     R.fix.undo = { afterDraw: h.count() - c0 };
-    h.undo(); await wait(150);
+    revert(); await wait(150);
     R.fix.undo.afterUndo = h.count() - c0;
+    // the engine has no undo of its own (boards S1.3): Cmd+Z and Cmd+Shift+Z in the board change nothing and reach the host
+    var cz = h.count();
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true, cancelable: true }));
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+    await wait(150);
+    R.fix.undoKey = { keys: R.undoKeys.slice(), changed: h.count() - cz };
     // 5. with the last-made mark still selected, choosing Text and clicking starts a text at once
     h.setTool('rect'); await wait(60); await drag(canvas, 1060, 560, 1160, 620);
     R.fix.textAfterShape = { selectedBefore: h.state().selected };
@@ -421,7 +475,7 @@ const DRIVER = `'use strict';
       R.fix.sceneDrop = { added: h.count() - c1, said: said.slice(), dragStopped: over.defaultPrevented };
     } catch (e) { R.fix.sceneDrop = { unsupported: String(e).slice(0, 200) }; }
     // 3. pasted engine content: a dashed, rough, hachured, translucent, rounded rectangle arrives solid and exact;
-    //    a diamond and a line are removed and said
+    //    a line is removed and said (a diamond is a core kind of dim-shape:v1 since S1.3 and stays, in the same form)
     var c2 = h.count();
     said.length = 0;
     try {
@@ -488,8 +542,9 @@ const DRIVER = `'use strict';
     // R1 (review round 2). What the host adds through the REAL engine keeps its hand: an agent's mark, an unknown
     // hand's mark, a stub and a sticky are reported as such (the engine used to replace the ids the record is
     // keyed by, so every added mark came back as a plain mark of yours)
-    var seen0 = h.marks().length;
-    h.add([
+    var seen0 = {};
+    h.marks().forEach(function (k) { if (k.node) seen0[k.node] = 1; });
+    put([
       { type: 'rectangle', x: 700, y: 520, width: 60, height: 40, by: { cls: 'agent', id: 'arky', name: 'Arky' } },
       { type: 'ellipse', x: 780, y: 520, width: 60, height: 40, by: { cls: 'unknown' } },
       { type: 'stub', x: 860, y: 520, kind: 'live:session', by: { cls: 'agent', id: 'luna', name: 'Luna' } },
@@ -497,7 +552,8 @@ const DRIVER = `'use strict';
       { type: 'text', x: 800, y: 610, text: 'by quill', by: { cls: 'agent', id: 'quill', name: 'Quill' } },
     ]);
     await wait(250);
-    R.fix.hands = h.marks().slice(seen0).map(function (m) { return m.kind + ':' + m.author.cls + (m.author.name ? ':' + m.author.name : '') + (m.stubKind ? ':' + m.stubKind : '') + ':' + Math.round(m.width); });
+    // (paint order is the order keys', so the marks of this row are picked by node id, in the order they were put)
+    R.fix.hands = h.marks().filter(function (k) { return k.node && !seen0[k.node] && !k.labelOf; }).sort(function (a, b) { return a.node < b.node ? -1 : 1; }).map(function (m) { return m.kind + ':' + m.author.cls + (m.author.name ? ':' + m.author.name : '') + (m.stubKind ? ':' + m.stubKind : '') + ':' + Math.round(m.width); });
     await click(1100, 700); await wait(150);
     (function () {
       // an agent's rectangle is dashed (gaps along its top edge); yours stays solid
@@ -506,7 +562,7 @@ const DRIVER = `'use strict';
       R.fix.agentEdgeGaps = gaps3;
     })();
     // 4. the frame title editor wears the system, and Esc ends it
-    h.add([{ type: 'frame', x: 60, y: 560, width: 220, height: 120, text: 'a frame title that is long enough to be cut off' }]);
+    put([{ type: 'frame', x: 60, y: 560, width: 220, height: 120, text: 'a frame title that is long enough to be cut off' }]);
     await wait(200);
     var ft = document.querySelector('.excalidraw [id*="-frame-name-"]');
     R.fix.frame = { title: ft ? ft.getAttribute('title') : null, weight: ft ? getComputedStyle(ft).fontWeight : null };
@@ -525,7 +581,7 @@ const DRIVER = `'use strict';
     // 7. a label typed into a shape is the default ink whatever line is current; the state counts marks, not labels
     h.setStyle({ line: 'raspberry' });
     var m0 = h.state().marks;
-    h.add([{ type: 'sticky', x: 320, y: 560, width: 120, height: 70, text: 'label' }]);
+    put([{ type: 'sticky', x: 320, y: 560, width: 120, height: 70, text: 'label' }]);
     await wait(200);
     var lab = h.marks().filter(function (m) { return !!m.labelOf; });
     R.fix.label = { lines: lab.map(function (m) { return m.line; }), marksAdded: h.state().marks - m0, countAdded: lab.length };
@@ -534,7 +590,7 @@ const DRIVER = `'use strict';
     // 8. one capture per theme with a mark in every content colour: only those colours and the theme's own may show
     R.phase = 'colours';
     var pairs = [['ink', 'paper'], ['graphite', 'lemon'], ['leaf', 'leaf'], ['sky', 'sky'], ['cobalt', 'cobalt'], ['orchid', 'orchid'], ['raspberry', 'raspberry']];
-    h.add(pairs.map(function (p, n) { return { type: n % 2 ? 'ellipse' : 'rectangle', x: 480 + n * 100, y: 40, width: 80, height: 60, line: p[0], fill: p[1], weight: n % 2 ? 'bold' : 'fine' }; }));
+    put(pairs.map(function (p, n) { return { type: n % 2 ? 'ellipse' : 'rectangle', x: 480 + n * 100, y: 40, width: 80, height: 60, line: p[0], fill: p[1], weight: n % 2 ? 'bold' : 'fine' }; }));
     await click(1100, 760);
     R.colours = {};
     for (var ci = 0; ci < 2; ci++) { h.setTheme(['day', 'night'][ci]); await wait(250); R.colours[['day', 'night'][ci]] = await capture(['day', 'night'][ci]); }
@@ -542,6 +598,57 @@ const DRIVER = `'use strict';
     off();
     R.stateEvents = states;
     R.canvasFontsEnd = Object.keys(FONTS_SEEN);
+    // 9. the whole kind and style matrix, once per hand (you, an agent, the unknown hand), day and night; then a
+    // stroke drawn by pointer at 400% (a row stores whole board units, so it comes back stepped)
+    R.phase = 'matrix';
+    var keptRows = rows.slice(), TICK = [0, 0, 6, 9, 13, 15, 22, 12, 34, -2, 46, -18, 58, -30];
+    var column = function (dx, by) {
+      return [
+        { type: 'frame', x: dx + 8, y: 16, width: 392, height: 96, text: 'frame' },
+        { type: 'stroke', x: dx + 24, y: 70, points: TICK },
+        { type: 'stroke', x: dx + 100, y: 70, points: TICK, weight: 'bold', line: 'cobalt' },
+        { type: 'stroke', x: dx + 176, y: 70, points: TICK, weight: 'marker', line: 'raspberry' },
+        { type: 'text', x: dx + 260, y: 52, text: 'plain text' },
+        { type: 'rectangle', x: dx + 16, y: 136, width: 84, height: 52 },
+        { type: 'rectangle', x: dx + 116, y: 136, width: 84, height: 52, line: 'cobalt', fill: 'sky' },
+        { type: 'sticky', x: dx + 216, y: 136, width: 84, height: 52, text: 'sticky' },
+        { type: 'rectangle', x: dx + 316, y: 136, width: 84, height: 52, weight: 'bold', rot: 150 },
+        { type: 'ellipse', x: dx + 16, y: 212, width: 84, height: 52 },
+        { type: 'ellipse', x: dx + 116, y: 212, width: 84, height: 52, line: 'leaf', fill: 'leaf', text: 'label' },
+        { type: 'diamond', x: dx + 216, y: 208, width: 84, height: 60 },
+        { type: 'diamond', x: dx + 316, y: 208, width: 84, height: 60, line: 'cobalt', fill: 'orchid', text: 'if' },
+        { type: 'arrow', x: dx + 16, y: 300, width: 84, head: 'none' },
+        { type: 'arrow', x: dx + 116, y: 300, width: 84 },
+        { type: 'arrow', x: dx + 216, y: 300, width: 84, head: 'both', weight: 'bold' },
+        { type: 'arrow', x: dx + 400, y: 300, points: [0, 0, -84, 0], line: 'graphite', text: 'back' },
+        { type: 'arrow', x: dx + 16, y: 336, points: [0, 0, 40, 28, 84, 0], line: 'raspberry' },
+        { type: 'stub', x: dx + 112, y: 328, kind: 'live:session' },
+      ].map(function (k) { return by ? Object.assign(k, { by: by }) : k; });
+    };
+    rows.length = 1;
+    put(column(0, null).concat(column(424, { cls: 'agent', id: 'arky', name: 'Arky' }), column(848, { cls: 'unknown' })));
+    await click(1100, 760);
+    R.matrix = { hands: h.marks().filter(function (k) { return !k.labelOf; }).reduce(function (a, k) { a[k.author.cls] = (a[k.author.cls] || 0) + 1; return a; }, {}), kinds: Object.keys(h.marks().reduce(function (a, k) { a[k.kind] = 1; return a; }, {})).sort() };
+    for (var mi = 0; mi < 2; mi++) { h.setTheme(['day', 'night'][mi]); await wait(250); R.matrix[['day', 'night'][mi]] = await capture(['day', 'night'][mi]); }
+    h.setTheme('day');
+    rows.length = 1; show();
+    for (var zi = 0; zi < 30; zi++) { h.zoomIn(); await wait(25); }
+    await wait(200);
+    R.zoom400 = { zoom: h.state().zoom, editsBefore: R.edits.length };
+    h.setTool('stroke'); await wait(60);
+    pointer(canvas, 'pointerdown', 200, 330, 1); await wait(30);
+    // a SLOW stroke: 240 samples 3.5px apart, about one per board unit at 400%
+    for (var sn = 1; sn <= 240; sn++) { pointer(canvas, 'pointermove', 200 + sn * 3.5, 330 - 150 * Math.sin(sn / 36) - sn * 0.375, 1); await frame(); }
+    pointer(canvas, 'pointerup', 200 + 240 * 3.5, 330 - 150 * Math.sin(240 / 36) - 90, 0); await wait(300);
+    R.zoom400.samples = 240;
+    R.zoom400.points = (function () { var out = 0; m.foldDim(rows).nodes.forEach(function (n) { if (n.node.kind === 'stroke') out = n.node.points.length / 2; }); return out; })();
+    R.zoom400.edits = R.edits.slice(R.zoom400.editsBefore);
+    R.zoom400.strokes = h.marks().filter(function (k) { return k.kind === 'stroke' && k.node; }).length;
+    h.setTool('select'); await click(60, 760);
+    R.zoom400.capture = await capture('day');
+    h.zoomReset(); await wait(120);
+    rows.length = 0; keptRows.forEach(function (r) { rows.push(r); }); show();
+    await wait(150);
     R.phase = 'export-png';
     try {
       var t = performance.now();
@@ -715,11 +822,17 @@ export function reskinProblems(r) {
   }
   if (!r.narrow || r.narrow.stock?.length !== 0 || Math.round(r.narrow.width) !== NARROW.width || !r.narrow.capture?.png) p.push(`the ${NARROW.width}px board: ${JSON.stringify({ ...r.narrow, capture: r.narrow?.capture ? '(png)' : null })}`);
   const f = r.fix ?? {};
+  if (f.undoKey?.keys?.join() !== 'undo,redo' || f.undoKey?.changed !== 0) p.push(`Cmd+Z did not reach the host, or the engine acted on it: ${JSON.stringify(f.undoKey)}`);
+  if (r.handleKeys?.length !== 0) p.push(`the handle still has ${JSON.stringify(r.handleKeys)}`);
+  const mx = r.matrix;
+  if (!mx || mx.hands?.human !== 19 || mx.hands?.agent !== 19 || mx.hands?.unknown !== 19 || mx.kinds?.join() !== 'arrow,diamond,ellipse,frame,rect,sticky,stroke,stub,text') p.push(`the kind and style matrix did not render per hand: ${JSON.stringify({ hands: mx?.hands, kinds: mx?.kinds })}`);
+  const z4 = r.zoom400;
+  if (!z4 || Math.round(z4.zoom * 100) !== 400 || z4.edits?.length !== 1 || z4.edits[0].types.join() !== 'add' || z4.edits[0].cause !== 'pointerup' || z4.strokes !== 1 || !(z4.points >= 8 && z4.points < z4.samples / 2)) p.push(`a stroke drawn at 400% was not one add at pointer-up, thinned to fewer than half its samples: ${JSON.stringify({ ...z4, capture: undefined })}`);
   if (f.undo?.afterDraw !== 2 || f.undo?.afterUndo !== 1) p.push(`an undo after a programmatic add took the added marks with it: ${JSON.stringify(f.undo)}`);
   if (!(f.textAfterShape?.selectedBefore === 1 && f.textAfterShape?.selectedAfterTool === 0 && f.textAfterShape?.editing === true)) p.push(`text did not start on the first click after a shape: ${JSON.stringify(f.textAfterShape)}`);
   if (!f.sceneDrop || (!f.sceneDrop.unsupported && (f.sceneDrop.added !== 0 || f.sceneDrop.said?.join() !== 'scene-file' || f.sceneDrop.dragStopped !== true))) p.push(`a dropped scene file reached the board: ${JSON.stringify(f.sceneDrop)}`);
   const pa = f.paste;
-  if (!pa || (!pa.unsupported && (pa.added !== 1 || pa.said?.join() !== 'mark:diamond,mark:line' || pa.found !== true || pa.edgeGaps !== 0 || pa.fillAlpha !== 0 || pa.edgeRgb?.join() !== '22,21,15' || pa.line !== 'ink' || pa.fillToken !== null))) p.push(`pasted engine content kept its stock look: ${JSON.stringify(pa)}`);
+  if (!pa || (!pa.unsupported && (pa.added !== 2 || pa.said?.join() !== 'mark:line' || pa.found !== true || pa.edgeGaps !== 0 || pa.fillAlpha !== 0 || pa.edgeRgb?.join() !== '22,21,15' || pa.line !== 'ink' || pa.fillToken !== null))) p.push(`pasted engine content kept its stock look: ${JSON.stringify(pa)}`);
   const dd = f.dataDrop;
   if (!dd || (!dd.unsupported && (dd.added !== 0 || dd.said?.join() !== 'library-file' || dd.stopped !== true || dd.stock?.length !== 0))) p.push(`a drag of the library type with no file reached the board: ${JSON.stringify(dd)}`);
   const ho = f.hostile;
@@ -782,7 +895,7 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
           const requests = server.requests.slice(before).map((q) => ({ method: q.method, path: q.path }));
           if (report) {
             const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, pasteTrouble: report.pasteTrouble, colours: report.colours, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
+            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, pasteTrouble: report.pasteTrouble, colours: report.colours, matrix: report.matrix, zoom400: report.zoom400, edits: report.edits, undoKeys: report.undoKeys, handleKeys: report.handleKeys, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
           } else r = { wallMs, error: NO_REPORT, launcherTail, requests };
           if (report || retried.length >= launchRetries) break;
           retried.push({ run: i + 1, ...r });
