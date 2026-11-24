@@ -86,9 +86,10 @@ code { font-family: var(--mono); font-size: 15px; }
 /* the register tick: the masthead rule thickens under the page you are on */
 .mast nav a[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 4px; background: var(--ink); }
 .mast-side { display: flex; gap: 24px; align-items: baseline; }
-.theme-key { background: none; border: 0; color: var(--ink-2); cursor: pointer; }
-.theme-key:hover { color: var(--ink); }
-.theme-key b { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.theme-key { display: flex; gap: 12px; align-items: baseline; }
+.theme-key button { background: none; border: 0; color: var(--ink-2); cursor: pointer; }
+.theme-key button:hover { color: var(--ink); }
+.theme-key button[aria-pressed="true"] { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
 
 /* ── type ──────────────────────────────────────────────────────────────── */
 .display { font-family: var(--display); font-weight: 500; font-size: 68px; line-height: 1.04; letter-spacing: -0.02em; font-variation-settings: "opsz" 144; text-wrap: balance; }
@@ -107,7 +108,7 @@ code { font-family: var(--mono); font-size: 15px; }
 /* done: Copy says Copied for two seconds, in the filled state; no icon swap */
 .key[data-done], .key[data-done]:hover { background: var(--ink); color: var(--on-ink); }
 .cmd { display: flex; align-items: stretch; border: 1px solid var(--ink); border-radius: 2px; background: var(--surface); min-width: 0; max-width: min(520px, 100%); }
-.cmd code { font-family: var(--mono); font-size: 15px; line-height: 1.6; padding: 12px 16px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+.cmd code { font-family: var(--mono); font-size: 15px; line-height: 1.6; padding: 12px 16px; flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmd code::before { content: "$ "; color: var(--ink-2); user-select: none; }
 /* typed to the agent, not to a shell: no prompt mark */
 .cmd.agent code::before { content: none; }
@@ -141,6 +142,11 @@ code { font-family: var(--mono); font-size: 15px; }
 .mark.progress { background: linear-gradient(135deg, var(--ink) 50%, transparent 50%); }
 .mark.untested { border: 1px dashed var(--ink); }
 /* measured against a bar set in advance, and it did not hold: a hollow square, struck through */
+/* does not exist yet: no box, a rule on the baseline */
+.mark.notbuilt { border: 0; border-bottom: 2px solid var(--ink); }
+.ledger-key { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.ledger-key li { display: flex; gap: 8px; align-items: baseline; }
+.ledger-key b { color: var(--ink); font-weight: 600; }
 .mark.nothold { position: relative; }
 .mark.nothold::after { content: ""; position: absolute; left: -4px; right: -4px; top: calc(50% - 1px); height: 2px; background: var(--ink); }
 /* what a state row says is prose, so it is set as prose */
@@ -197,7 +203,7 @@ code { font-family: var(--mono); font-size: 15px; }
 /* ── product page ──────────────────────────────────────────────────────── */
 .hero { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); gap: 64px; padding: 32px 0 64px; align-items: start; }
 .hero-lead > * + * { margin-top: 24px; }
-.plate { background: var(--surface); border: 1px solid var(--ink); padding: 24px; }
+.plate { background: var(--surface); border: 1px solid var(--ink); padding: 16px 24px; }
 .plate svg.graph { display: block; width: 100%; height: auto; }
 .plate .proof { margin-top: 12px; background: var(--sunk); }
 .plate .proof pre { padding: 8px 16px; }
@@ -257,7 +263,7 @@ code { font-family: var(--mono); font-size: 15px; }
 /* fact line: numeral, claim, source. No source, no line. */
 .facts { border-top: 4px solid var(--ink); }
 .fact { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-bottom: 1px solid var(--rule); align-items: start; }
-.fact-n { font-family: var(--mono); font-weight: 600; font-size: 56px; line-height: 1; letter-spacing: -0.02em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.fact-n { font-family: var(--mono); font-weight: 600; font-size: 56px; line-height: 1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .fact-n small { font-size: 15px; font-weight: 400; line-height: 1.6; letter-spacing: 0; color: var(--ink-2); }
 .fact-claim { font-size: 17px; max-width: 66ch; }
 .fact-src { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); margin-top: 8px; max-width: 76ch; }
@@ -356,10 +362,19 @@ code { font-family: var(--mono); font-size: 15px; }
 .preflight-note { font-size: 15px; max-width: 520px; }
 
 /* ── Gnomon's plate: its own ground, papercraft by day and phosphor by night. Its colours, radius and shadow stay inside. ── */
-.gplate { background: var(--g-ground); color: var(--g-ink); border: 1px solid var(--g-edge); padding: 24px; }
-.gplate .prov { color: var(--g-sec); margin-top: 24px; }
+.gplate { background: var(--g-ground); color: var(--g-ink); border: 1px solid var(--g-edge); padding: 20px 24px; }
+.gplate .prov { color: var(--g-sec); margin-top: 16px; }
 .gplate .prov b { color: var(--g-ink); }
-.gcard { background: var(--g-sheet); border: 1px solid var(--g-edge); border-radius: 3px; box-shadow: var(--g-shadow); padding: 20px; max-width: 440px; position: relative; }
+.gstack { position: relative; padding-top: 16px; }
+.gstack::before, .gstack::after { content: ""; position: absolute; top: 8px; left: 12px; right: 12px; height: 48px; background: var(--g-sheet); border: 1px solid var(--g-edge); border-radius: 3px; }
+.gstack::before { top: 0; left: 24px; right: 24px; }
+.gcard { background: var(--g-sheet); border: 1px solid var(--g-edge); border-radius: 3px; box-shadow: var(--g-shadow); padding: 20px; position: relative; z-index: 1; }
+.gcard.mini { padding: 12px; box-shadow: none; } .gcard.mini.cast { box-shadow: var(--g-shadow); }
+.gcard.mini .gcard-head { padding-bottom: 8px; } .gcard.mini .gkeys { margin-top: 12px; gap: 8px; }
+.gcard.mini .gkey { min-height: 0; padding: 4px 12px; box-shadow: none; }
+.gline { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-sec); border-bottom: 1px solid var(--g-sec); padding: 4px 0; }
+.gline.on { color: var(--g-ink); font-weight: 600; border-bottom-color: var(--g-ink); }
+.desk-note { display: none; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-sec); margin-bottom: 12px; }
 .gcard-head { display: flex; justify-content: space-between; gap: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-sec); padding-bottom: 12px; border-bottom: 1px solid var(--g-sec); }
 .gcard-what { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; margin-top: 16px; }
 .gbars { display: grid; gap: 8px; margin: 16px 0 20px; }
@@ -373,7 +388,7 @@ code { font-family: var(--mono); font-size: 15px; }
 .gplate.wait .gstamp { opacity: 0; }
 .gplate.land .gstamp { animation: stamp var(--stamp) both; }
 @keyframes stamp { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }
-.gnotes { list-style: none; margin: 20px 0 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-ink); display: grid; gap: 4px; }
+.gnotes { list-style: none; margin: 16px 0 0; padding: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--g-ink); display: grid; gap: 4px; }
 .gnotes li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 8px; }
 .gnotes li::before { content: ""; width: 8px; height: 8px; background: var(--g-ink); margin-top: 8px; }
 /* the desk, drawn: four regions, named */
@@ -404,12 +419,15 @@ code { font-family: var(--mono); font-size: 15px; }
 .ledger-row.is-progress .thread::after { border-left-style: dashed; }
 .ledger-row.is-untested .thread::after { border-left-style: dotted; bottom: 50%; }
 .ledger-row.is-untested .thread::before { border-left-style: dashed; }
+.ledger-row.is-notbuilt .thread::after { display: none; }
+.ledger-row.is-notbuilt .thread::before { border-left-style: dashed; }
 .ledger-row.is-nothold .thread::after { bottom: 50%; }
 .ledger-row.is-nothold .thread { background: linear-gradient(var(--w-b), var(--w-b)) 20px 50% / 12px 2px no-repeat var(--w-ground); }
 .ledger-foot { margin-top: 48px; }
 /* Warpline's plate: its ink ground in both themes. Two threads and one knot. Kept small. */
 .wplate { background: var(--w-ground); color: var(--w-text); padding: 24px; max-width: 800px; outline: 1px solid var(--rule); }
 .wplate svg { display: block; width: 100%; height: auto; }
+.wplate .h3 { margin-bottom: 16px; }
 .wplate .wa { stroke: var(--w-a); } .wplate .wb { stroke: var(--w-b); }
 .wplate path { fill: none; stroke-width: 2; }
 .wplate .tick { stroke: var(--w-text); stroke-width: 2; }
@@ -462,7 +480,12 @@ code { font-family: var(--mono); font-size: 15px; }
 .do .ev dt { font-weight: 400; color: var(--ink-2); }
 .do .ev dd { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; padding-top: 4px; }
 .do .ev dd a { padding: 16px 0; } .do .ev dd code { font-size: 13px; }
-.practices { list-style: none; margin: 0; padding: 0; border-top: 4px solid var(--ink); counter-reset: prac; }
+.pgroups { counter-reset: prac; }
+.pgroup + .pgroup { margin-top: 48px; }
+.pgroup-h { font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.1; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; padding-bottom: 12px; }
+.pgroup-h a { text-decoration: none; padding: 8px 0; } .pgroup-h a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.pgroup-h small { font-family: var(--mono); font-size: 13px; line-height: 1.6; font-weight: 400; color: var(--ink-2); }
+.practices { list-style: none; margin: 0; padding: 0; border-top: 4px solid var(--ink); }
 .practice { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 0 32px; padding: 24px 0; border-bottom: 1px solid var(--rule); counter-increment: prac; align-items: start; }
 .practice-name { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; }
 .practice-name::before { content: "P" counter(prac); display: block; font-family: var(--mono); font-weight: 400; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
@@ -484,6 +507,7 @@ code { font-family: var(--mono); font-size: 15px; }
 .ways a { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.3; text-decoration: none; padding: 12px 0; }
 .station-body a, .step-body a, .prose a, .plain a, h4 a { padding: 16px 0; }
 .ways a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.ways a::after { content: " \2197"; font-family: var(--mono); font-weight: 400; font-size: 17px; color: var(--ink-2); }
 .ways span { overflow-wrap: anywhere; }
 
 /* ── four steps: 1280 the display drops a size · 1100 heroes go to one column · 860 rows stack · 620 compact ── */
@@ -491,6 +515,8 @@ code { font-family: var(--mono); font-size: 15px; }
 @media (max-width: 1099px) {
   .hub, .hero { grid-template-columns: minmax(0, 1fr); gap: 48px; }
   .plate { max-width: 560px; } .contents { max-width: 640px; }
+  .mast { flex-wrap: wrap; gap: 4px 24px; } .mast nav { order: 3; flex-basis: 100%; overflow-x: auto; }
+  .mast-side { margin-left: auto; }
 }
 @media (min-width: 861px) and (max-width: 1099px) {
   .hero-exhibit { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px; align-items: start; }
@@ -503,7 +529,6 @@ code { font-family: var(--mono); font-size: 15px; }
   .field-cols { gap: 24px; }
   .ledger.loom .ledger-row { grid-template-columns: 48px minmax(0, 1fr); gap: 0 16px; } .ledger.loom .thread { grid-row: 1 / span 3; }
   .ledger.loom .ledger-row > :not(.thread) { padding: 4px 0; grid-column: 2; } .ledger.loom .ledger-row > .ledger-state { padding-top: 16px; } .ledger.loom .ledger-row > .ledger-ev { padding-bottom: 16px; }
-  .desk { grid-template-columns: minmax(0, 1fr); } .dz-shop { grid-auto-flow: row; grid-auto-columns: auto; }
   .gplate { padding: 20px; }
   .station-body { padding-left: 0; }
   .station-name { font-size: 21px; padding-top: 12px; }
@@ -512,8 +537,6 @@ code { font-family: var(--mono); font-size: 15px; }
   .section, .claims > div, .fact, .step, .lately-row, .split { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .split { gap: 32px; }
   .section-n { font-size: 21px; }
-  .mast { flex-wrap: wrap; gap: 4px 24px; } .mast nav { order: 3; flex-basis: 100%; overflow-x: auto; }
-  .mast-side { margin-left: auto; }
   .pair-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } .pair-row .v { text-align: left; }
   .ledger-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .standing li { grid-template-columns: 16px minmax(0, 1fr); } .standing li > span:last-child { grid-column: 2; }
@@ -529,6 +552,7 @@ code { font-family: var(--mono); font-size: 15px; }
   .station summary { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 0 12px; } .station-n { font-size: 32px; }
   .path-clear { margin-left: 32px; }
   .field-card { padding: 16px; } .gplate { padding: 16px; } .gcard { padding: 16px; } .gstamp { position: static; display: inline-block; margin-top: 12px; }
+  .desk { grid-template-columns: minmax(0, 1fr); } .dz-shop { grid-auto-flow: row; grid-auto-columns: auto; } .desk-note { display: block; }
   .display { font-size: 44px; } .fact-n { font-size: 44px; }
   .plate { padding: 16px; } .plate svg.graph { display: none; } .graph-list { display: block; }
   .cmd .where { display: none; }
@@ -543,6 +567,8 @@ code { font-family: var(--mono); font-size: 15px; }
 /* print: the field card on one sheet, ink on paper, with no masthead. Ink values are the light theme's, whatever the screen was. */
 @media print {
   :root, :root[data-theme="dark"], :root[data-theme="light"] { color-scheme: light; --ink: #17181C; --ink-2: #4B4D56; --edge: #70727B; --rule: #D3D3CC; --surface: transparent; --sunk: transparent; }
+  :root, :root[data-theme="dark"], :root[data-theme="light"] { --sym-component: #166534; --sym-flow: #6D28D9; --sym-gate: #B91C1C; --sym-signal: #854D0E; --sym-aspect: #4B5563; --g-ground: transparent; --g-sheet: transparent; --g-ink: #17181C; --g-sec: #4B4D56; --g-edge: #17181C; --g-on-ink: #17181C; --g-shadow: none; --w-ground: transparent; --w-text: #17181C; --w-muted: #4B4D56; --w-rule: #D3D3CC; --on-ink: #17181C; }
+  .gkey.pri, .graph .node.at rect { background: none; fill: none; }
   body { background: none; font-size: 13px; }
   .mast, .skip, .key, .foot, .onward, .saw, .path-clear { display: none; }
   body:has(.field-card) main > :not(.field-sheet), .field-sheet > :not(.section-body), .field-sheet .section-body > :not(.field-card) { display: none; }

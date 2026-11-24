@@ -33,53 +33,22 @@
 <!-- /frame -->
 
   <main id="main">
-    <div class="lead-wide">
-      <!-- TBD-FOUNDER: warpline-tagline (the headline is a plain description standing in for a tagline) -->
-      <h1 class="display">Warpline checks a merge by what the code means. It is not yet proven.</h1>
-      <p class="lede">Warpline is an experimental command-line tool that records what TypeScript code means, symbol by symbol, and compares two changes by meaning instead of by line. When two changes contradict each other on the same symbol it stops and asks a person.</p>
-      <p class="plain">Git merges two branches cleanly because they touch different lines. The result can still be broken, because one side changed what a function means.</p>
-      <ul class="standing" aria-label="Where Warpline stands">
-        <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span><!-- fact:warpline.version -->0.3.1<!-- /fact --> on npm, experimental.</span></li>
-        <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>not yet run end to end with a server, or at scale.</span></li>
-        <li><span></span><span class="of">as of <!-- fact:warpline.version.measured -->2026-11-23<!-- /fact --> · <!-- fact:warpline.version.source -->npm view @a-company/warpline versions; warpline --version; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a><!-- /fact -->; the founder</span></li>
-      </ul>
-    </div>
-
-    <section class="lead-block" id="standing" aria-labelledby="standing-h">
-      <h2 class="h3" id="standing-h">What has and hasn't been tested</h2>
-      <ul class="ledger loom" aria-labelledby="standing-h">
-        <!-- standing:warpline.ledger loom=1 -->
-<li class="ledger-row is-built"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The command line: init, orient, and the save cycle (fork, propose, admit)</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L13">CHANGELOG.md:13</a> (the agent guide names the save cycle); <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L14">CHANGELOG.md:14</a> (warpline orient); warpline --help</div></li>
-<li class="ledger-row is-built"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The forecast: warpline oracle on two branches of any git repo</div><div class="ledger-ev">ran on this repo 2026-11-23; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/warpline-oracle.txt">pages/captures/warpline-oracle.txt</a></div></li>
-<li class="ledger-row is-built"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The record kept on its own protected git branch, with verified adoption on a fresh clone</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L26">CHANGELOG.md:26</a> (Warpline 0.3.0)</div></li>
-<li class="ledger-row is-nothold"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark nothold" aria-hidden="true"></span>Did not hold</div><div class="ledger-what">An advantage from calibrating to one codebase. We set the bar before the run, and the run did not clear it</div><div class="ledger-ev">recorded 2026-07-15, not re-run; seeded run, 144 scored admissions; gate K3 fired: 76.7% against 79.3% survival, p = 0.756; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-dogfood/run-results-full.md">.paradigm/research/warpline-dogfood/run-results-full.md</a> (evidence dossier, W4)</div></li>
-<li class="ledger-row is-progress"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">Languages: TypeScript only</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/warpline-project-setup.md">docs/guides/warpline-project-setup.md</a></div></li>
-<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Whether an agent with no prior knowledge can use it from the shipped guide alone</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L20">CHANGELOG.md:20</a> (the F4 cold-agent runs are set up); no result is recorded</div></li>
-<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">The field test we wrote down in advance</div><div class="ledger-ev">not run; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L686">CHANGELOG.md:686</a></div></li>
-<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">A full run with a server, end to end</div><div class="ledger-ev">not run; founder, 2026-11-23</div></li>
-<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">What it looks like at large: many agents, large repositories</div><div class="ledger-ev">not run; founder, 2026-11-23</div></li>
-<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">Defects that cross two symbols: it missed the one in the study</div><div class="ledger-ev">warpline-llm-judge-falsifier/results.md:45-64</div></li>
-<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">A working example on this repo: our own ledger reads UNSOUND since we stopped using it here</div><div class="ledger-ev">warpline health (dossier, 2026-11-23); commit 96e234ef</div></li>
-<!-- /standing -->
-      </ul>
-      <!-- Open question for the founder (session: warpline-measured-results-form): the calibration gate is a Did not hold row and the base-rate study is one fact line under the ledger, as the working default. -->
-      <div class="facts ledger-foot">
-        <div class="fact">
-          <div class="fact-n"><!-- fact:warpline.base-rate -->17 of 275 (6.2%)<!-- /fact --></div>
-          <div>
-            <p class="fact-claim">clean merges in zod, nest and xstate were flagged as changing what the code means, though git merged them without a conflict. Of the <!-- fact:warpline.ground-truth.hits -->18<!-- /fact --> flags checked by hand, <!-- fact:warpline.ground-truth.fixed_by_a_human_within_a_day -->3<!-- /fact --> were real defects, each fixed by a person within a day; <!-- fact:warpline.ground-truth.benign -->15<!-- /fact --> were harmless; <!-- fact:warpline.ground-truth.real_break_at_merge -->0<!-- /fact --> broke at the merge itself. The TypeScript compiler caught <!-- fact:warpline.tsc -->0 of 18<!-- /fact -->.</p>
-            <p class="fact-src"><!-- src:warpline.base-rate -->recorded 2026-07-01, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/results.md#L38-L47">.paradigm/research/warpline-guard-base-rate/results.md:38-47</a><!-- /src --> · <!-- src:warpline.ground-truth -->recorded 2026-07-02, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/ground-truth.md#L13-L27">.paradigm/research/warpline-guard-base-rate/ground-truth.md:13-27</a><!-- /src --></p>
-          </div>
-        </div>
+    <div class="hero">
+      <div class="hero-lead">
+        <!-- TBD-FOUNDER: warpline-tagline (the headline is a plain description standing in for a tagline) -->
+        <h1 class="display">Warpline checks a merge by what the code means. It is not yet proven.</h1>
+        <p class="lede">Warpline is an experimental command-line tool that records what TypeScript code means, symbol by symbol, and compares two changes by meaning instead of by line. When two changes contradict each other on the same symbol it stops and asks a person.</p>
+        <p class="plain">Git merges two branches cleanly because they touch different lines. The result can still be broken, because one side changed what a function means.</p>
+        <ul class="standing" aria-label="Where Warpline stands">
+          <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span><!-- fact:warpline.version -->0.3.1<!-- /fact --> on npm, experimental.</span></li>
+          <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>not yet run end to end with a server, or at scale.</span></li>
+          <li><span></span><span class="of">as of <!-- fact:warpline.version.measured -->2026-11-23<!-- /fact --> · <!-- fact:warpline.version.source -->npm view @a-company/warpline versions; warpline --version; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a><!-- /fact -->; the founder · <a href="#standing">every row</a></span></li>
+        </ul>
+        <div class="next"><a href="#try">Try the read-only forecast</a></div>
       </div>
-      <p class="prose">The thresholds were written before each run, and the results are printed here whichever way they went. That method is the proof we have. A win rate is not.</p>
-    </section>
-
-    <section class="section" id="idea" aria-labelledby="idea-h">
-      <div class="section-n" aria-hidden="true"></div>
-      <div class="section-body">
-        <h2 class="h2" id="idea-h">Two branches, and one place git cannot see.</h2>
-        <figure class="wplate">
+      <figure class="hero-exhibit">
+        <div class="wplate">
+          <h2 class="h3">Two branches, and one place git cannot see.</h2>
           <svg viewBox="0 0 640 160" role="img" aria-labelledby="w-title w-desc" focusable="false">
             <title id="w-title">Two branches as threads, and one knot</title>
             <desc id="w-desc">Two threads run side by side. Each has a change on it, at a different place, so git sees no conflict. Further on, where both changes bear on the same symbol and mean different things, the threads meet in a knot.</desc>
@@ -97,10 +66,45 @@
             <li><i class="kt"></i><span>a change. The two are on different lines, so git merges them cleanly.</span></li>
             <li><i class="kk"></i><span>the knot: one symbol, two meanings that contradict. Warpline stops here and waits for a person.</span></li>
           </ul>
-          <figcaption class="prov"><b>illustration</b><span>A drawing of the idea, not of a run. The one real run we show is below, and it is an agreement.</span></figcaption>
-        </figure>
-        <p class="prose">Each branch is a thread. Git compares the threads line by line, so two changes on different lines pass. Warpline compares what each symbol means on both threads, and where the two meanings contradict it ties a knot and waits for a person.</p>
-      </div>
+          <p class="prov"><b>illustration</b><span>A drawing of the idea, not of a run. The one real run we show is below, and it is an agreement.</span></p>
+        </div>
+        <div class="fact lead">
+          <div class="fact-n"><!-- fact:warpline.base-rate.count -->17 of 275<!-- /fact --><small>clean merges, <!-- fact:warpline.base-rate.rate -->6.2%<!-- /fact --></small></div>
+          <p class="fact-claim">in zod, nest and xstate were flagged as changing what the code means, though git merged them without a conflict. We checked <!-- fact:warpline.ground-truth.hits -->18<!-- /fact --> flags by hand: these and one more from a separate nest sample. Of the <!-- fact:warpline.ground-truth.hits -->18<!-- /fact -->, <!-- fact:warpline.ground-truth.fixed_by_a_human_within_a_day -->3<!-- /fact --> were real defects, each fixed by a person within a day; <!-- fact:warpline.ground-truth.benign -->15<!-- /fact --> were harmless; <!-- fact:warpline.ground-truth.real_break_at_merge -->0<!-- /fact --> broke at the merge itself. The TypeScript compiler caught <!-- fact:warpline.tsc -->0 of 18<!-- /fact -->.</p>
+          <p class="fact-src"><!-- src:warpline.base-rate -->recorded 2026-07-01, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/results.md#L38-L47">.paradigm/research/warpline-guard-base-rate/results.md:38-47</a><!-- /src --> · <!-- src:warpline.ground-truth -->recorded 2026-07-02, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/ground-truth.md#L13-L27">.paradigm/research/warpline-guard-base-rate/ground-truth.md:13-27</a><!-- /src --></p>
+        </div>
+        <figcaption class="plain">Each branch is a thread. Git compares the threads line by line, so two changes on different lines pass. Warpline compares what each symbol means on both threads, and where the two meanings contradict it ties a knot and waits for a person.</figcaption>
+      </figure>
+    </div>
+
+    <section class="lead-block" id="standing" aria-labelledby="standing-h">
+      <h2 class="h3" id="standing-h">What has and hasn't been tested</h2>
+      <ul class="ledger-key" aria-label="What the five words mean">
+        <!-- frame:standing-key -->
+<li><span class="mark built" aria-hidden="true"></span><b>Built</b> released, and exercised by tests or daily use</li>
+<li><span class="mark nothold" aria-hidden="true"></span><b>Did not hold</b> measured against a bar set beforehand, and it did not clear it</li>
+<li><span class="mark progress" aria-hidden="true"></span><b>In progress</b> being built or measured now</li>
+<li><span class="mark untested" aria-hidden="true"></span><b>Untested</b> exists, and has not been run end to end</li>
+<li><span class="mark notbuilt" aria-hidden="true"></span><b>Not built</b> does not exist yet</li>
+<!-- /frame -->
+      </ul>
+      <ul class="ledger loom" aria-labelledby="standing-h">
+        <!-- standing:warpline.ledger loom=1 -->
+<li class="ledger-row is-built"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The command line: init, orient, and the save cycle (fork, propose, admit)</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L13">CHANGELOG.md:13</a> (the agent guide names the save cycle); <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L14">CHANGELOG.md:14</a> (warpline orient); warpline --help</div></li>
+<li class="ledger-row is-built"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The forecast: warpline oracle on two branches of any git repo</div><div class="ledger-ev">ran on this repo 2026-11-23; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/warpline-oracle.txt">pages/captures/warpline-oracle.txt</a></div></li>
+<li class="ledger-row is-built"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The record kept on its own protected git branch, with verified adoption on a fresh clone</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L26">CHANGELOG.md:26</a> (Warpline 0.3.0)</div></li>
+<li class="ledger-row is-nothold"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark nothold" aria-hidden="true"></span>Did not hold</div><div class="ledger-what">An advantage from calibrating to one codebase. We set the bar before the run, and the run did not clear it</div><div class="ledger-ev">recorded 2026-07-15, not re-run; seeded run, 144 scored admissions; gate K3 fired: 76.7% against 79.3% survival, p = 0.756; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-dogfood/run-results-full.md">.paradigm/research/warpline-dogfood/run-results-full.md</a> (evidence dossier, W4)</div></li>
+<li class="ledger-row is-progress"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">Languages: TypeScript only</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/warpline-project-setup.md">docs/guides/warpline-project-setup.md</a></div></li>
+<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Whether an agent with no prior knowledge can use it from the shipped guide alone</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L20">CHANGELOG.md:20</a> (the F4 cold-agent runs are set up); no result is recorded</div></li>
+<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">The field test we wrote down in advance</div><div class="ledger-ev">not run; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L686">CHANGELOG.md:686</a></div></li>
+<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">A full run with a server, end to end</div><div class="ledger-ev">not run; founder, 2026-11-23</div></li>
+<li class="ledger-row is-untested"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">What it looks like at large: many agents, large repositories</div><div class="ledger-ev">not run; founder, 2026-11-23</div></li>
+<li class="ledger-row is-notbuilt"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">Defects that cross two symbols: it missed the one in the study</div><div class="ledger-ev">warpline-llm-judge-falsifier/results.md:45-64</div></li>
+<li class="ledger-row is-notbuilt"><div class="thread" aria-hidden="true"></div><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">A working example on this repo: our own ledger reads UNSOUND since we stopped using it here</div><div class="ledger-ev">warpline health (dossier, 2026-11-23); commit 96e234ef</div></li>
+<!-- /standing -->
+      </ul>
+      <!-- Open question for the founder (session: warpline-measured-results-form): the calibration gate is a Did not hold row and the base-rate study is the one fact line, now the page's lead fact, as the working default. -->
+      <p class="prose">The thresholds were written before each run, and the results are printed here whichever way they went. That method is the proof we have. A win rate is not.</p>
     </section>
 
     <section class="section" id="try" aria-labelledby="try-h">
@@ -136,7 +140,7 @@ appended → .warpline/oracle.jsonl</pre>
           <figcaption class="prov"><b>real</b><span>An agreement, not a catch. Warpline predicted a clean merge across <!-- fact:warpline.oracle-example.autoClean -->107<!-- /fact --> symbols and git agreed. It took <!-- fact:warpline.oracle-example.wall_time -->2 min 11 s<!-- /fact --> on this repo, on one Mac. We show it so you know the shape of the answer. The last line is the folder it leaves behind. <!-- src:warpline.oracle-example -->real · warpline oracle origin/fix/onboarding-truth origin/feat/gnomon-boards-s1.0 (scratch clone); <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/warpline-oracle.txt">pages/captures/warpline-oracle.txt</a> · run 2026-11-23<!-- /src -->.</span></figcaption>
         </figure>
         <!-- No catch example: a real run where meaning and git disagree was not re-run for this page (placeholder warpline-catch-example in facts.json). -->
-        <p class="prose">It reads TypeScript only. On most pairs of branches it will agree with git. In our study it disagreed on <!-- fact:warpline.base-rate -->17 of 275 (6.2%)<!-- /fact --> clean merges, and most of those disagreements were harmless.</p>
+        <p class="prose">It reads TypeScript only. On most pairs of branches it will agree with git. In our study it disagreed on <!-- fact:warpline.base-rate.count -->17 of 275<!-- /fact --> (<!-- fact:warpline.base-rate.rate -->6.2%<!-- /fact -->) clean merges, and most of those disagreements were harmless.</p>
       </div>
     </section>
 
@@ -145,10 +149,10 @@ appended → .warpline/oracle.jsonl</pre>
       <div class="section-body">
         <h2 class="h2" id="back-h">Read the rest in the repository.</h2>
         <ul class="ways">
-          <li><a href="https://github.com/ascend42/a-paradigm/tree/main/packages/warpline">The repository ↗</a><span>The package and its tests.</span></li>
-          <li><!-- loc:warpline.guide --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/warpline-project-setup.md">The setup guide ↗</a><!-- /loc --><span>How to put a project on Warpline, and its limits in full.</span></li>
-          <li><!-- loc:warpline.changelog --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md">The changelog ↗</a><!-- /loc --><span>What each release changed.</span></li>
-          <li><!-- loc:warpline.studies --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/results.md">The studies ↗</a><!-- /loc --><span>The base-rate study: the method, the scripts and the raw results.</span></li>
+          <li><!-- loc:warpline.package --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/warpline/README.md">The package</a><!-- /loc --><span>The package and its tests.</span></li>
+          <li><!-- loc:warpline.guide --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/warpline-project-setup.md">The setup guide</a><!-- /loc --><span>How to put a project on Warpline, and its limits in full.</span></li>
+          <li><!-- loc:warpline.changelog --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md">The changelog</a><!-- /loc --><span>What each release changed.</span></li>
+          <li><!-- loc:warpline.studies --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/results.md">The studies</a><!-- /loc --><span>The base-rate study: the method, the scripts and the raw results.</span></li>
         </ul>
       </div>
     </section>

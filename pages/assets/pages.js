@@ -1,58 +1,67 @@
 /* The one script for the public pages. Deferred; every page is complete without it.
-   It adds three things: the theme key, the Copy keys, and the ripple on the symbol graph.
-   It makes no request and reads nothing but the page and this device's stored theme. */
+   It adds: the theme key, the Copy keys, the ripple on the symbol graph, the stamp on Gnomon's card, and the path's ticks.
+   It makes no request and reads nothing but the page and what this device has stored for it. */
 (function () {
   'use strict';
   var root = document.documentElement;
   var each = function (sel, fn, el) { Array.prototype.forEach.call((el || document).querySelectorAll(sel), fn); };
+  var live = document.createElement('p');
+  live.className = 'vh';
+  live.setAttribute('aria-live', 'polite');
+  document.body.appendChild(live);
 
-  /* theme key: Auto, Light, Dark. Auto follows the system and stores nothing. */
+  /* theme key: Auto, Light, Dark, as three buttons. Auto follows the system and stores nothing. */
   var side = document.querySelector('.mast-side');
   if (side) {
-    var order = ['auto', 'light', 'dark'];
     var names = { auto: 'Auto', light: 'Light', dark: 'Dark' };
-    var key = document.createElement('button');
-    key.type = 'button';
-    key.className = 'theme-key';
-    var now = function () { return root.getAttribute('data-theme') || 'auto'; };
+    var group = document.createElement('div');
+    group.className = 'theme-key';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Theme');
     var draw = function () {
-      var c = now();
-      key.innerHTML = order.map(function (o) { return o === c ? '<b>' + names[o] + '</b>' : names[o]; }).join(' · ');
-      key.setAttribute('aria-label', 'Auto · Light · Dark: theme, now ' + names[c] + (c === 'auto' ? ', following your system' : ''));
+      var now = root.getAttribute('data-theme') || 'auto';
+      each('button', function (b) { b.setAttribute('aria-pressed', String(b.value === now)); }, group);
     };
-    key.addEventListener('click', function () {
-      var next = order[(order.indexOf(now()) + 1) % order.length];
-      try {
-        if (next === 'auto') { root.removeAttribute('data-theme'); localStorage.removeItem('pages-theme'); }
-        else { root.setAttribute('data-theme', next); localStorage.setItem('pages-theme', next); }
-      } catch (e) { /* storage is off: the theme still changes for this page */ }
-      draw();
+    Object.keys(names).forEach(function (name) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.value = name;
+      b.textContent = names[name];
+      b.addEventListener('click', function () {
+        try {
+          if (name === 'auto') { root.removeAttribute('data-theme'); localStorage.removeItem('pages-theme'); }
+          else { root.setAttribute('data-theme', name); localStorage.setItem('pages-theme', name); }
+        } catch (e) { /* storage is off: the theme still changes for this page */ }
+        draw();
+      });
+      group.appendChild(b);
     });
     draw();
-    side.appendChild(key);
+    side.appendChild(group);
   }
 
-  /* Copy keys: on every command line and prompt line. "Copied" for two seconds, said once in a polite live region. */
+  /* Copy keys: on every command line and prompt line. "Copied" for two seconds, said once in a polite live region.
+     If the clipboard refuses, the key says so; the text is still selectable. */
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    var live = document.createElement('p');
-    live.className = 'vh';
-    live.setAttribute('aria-live', 'polite');
-    document.body.appendChild(live);
     var addCopy = function (host, source, what) {
       var b = document.createElement('button');
       var timer;
+      var say = function (word, told, done) {
+        clearTimeout(timer);
+        b.textContent = word;
+        if (done) b.setAttribute('data-done', '');
+        live.textContent = told;
+        timer = setTimeout(function () { b.textContent = 'Copy'; b.removeAttribute('data-done'); live.textContent = ''; }, 2000);
+      };
       b.type = 'button';
       b.className = 'key';
       b.textContent = 'Copy';
       b.setAttribute('aria-label', 'Copy ' + what);
       b.addEventListener('click', function () {
-        navigator.clipboard.writeText(source.textContent.trim()).then(function () {
-          clearTimeout(timer);
-          b.textContent = 'Copied';
-          b.setAttribute('data-done', '');
-          live.textContent = 'Copied';
-          timer = setTimeout(function () { b.textContent = 'Copy'; b.removeAttribute('data-done'); live.textContent = ''; }, 2000);
-        }, function () { /* refused: the text is still selectable */ });
+        navigator.clipboard.writeText(source.textContent.trim()).then(
+          function () { say('Copied', 'Copied', true); },
+          function () { say('Not copied', 'Not copied. Your browser refused; select the text instead.', false); }
+        );
       });
       host.appendChild(b);
     };
@@ -108,16 +117,18 @@
     clear.className = 'path-clear';
     clear.textContent = 'Clear my ticks';
     var mark = function () {
-      var first = true;
+      var current = null;
       each('.station', function (s) {
         var on = seen.indexOf(s.id) > -1;
+        var isCurrent = !on && !current && s.classList.contains('level');
         s.classList.toggle('done', on);
-        s.classList.toggle('current', !on && first && s.classList.contains('level'));
-        if (!on && s.classList.contains('level')) first = false;
+        s.classList.toggle('current', isCurrent);
+        if (isCurrent) current = s;
         s.querySelector('.saw input').checked = on;
       }, path);
       clear.hidden = !seen.length;
       try { localStorage.setItem('pages-path', JSON.stringify(seen)); } catch (e) { /* not stored; still ticked on this page */ }
+      return current;
     };
     each('.station', function (s) {
       var l = document.createElement('label');
@@ -125,7 +136,7 @@
       l.className = 'saw';
       c.type = 'checkbox';
       l.appendChild(c);
-      l.appendChild(document.createTextNode('I saw it'));
+      l.appendChild(document.createTextNode('I saw it: ' + s.querySelector('.station-name').textContent));
       c.addEventListener('change', function () {
         seen = seen.filter(function (x) { return x !== s.id; });
         if (c.checked) seen.push(s.id);
@@ -133,9 +144,19 @@
       });
       s.querySelector('.station-body').appendChild(l);
     }, path);
-    clear.addEventListener('click', function () { seen = []; mark(); });
+    clear.addEventListener('click', function () {
+      seen = [];
+      mark();
+      live.textContent = 'Ticks cleared.';
+      path.querySelector('summary').focus();
+    });
     path.parentNode.insertBefore(clear, path.nextSibling);
-    mark();
+    /* on return, the station you are on is the one that is open */
+    var here = mark();
+    if (seen.length && here) {
+      each('details', function (d) { d.open = false; }, path);
+      here.querySelector('details').open = true;
+    }
     /* a link to a station opens it */
     var openHash = function () { var el = location.hash && document.getElementById(location.hash.slice(1)); var d = el && el.querySelector && el.querySelector('details'); if (d) d.open = true; };
     window.addEventListener('hashchange', openHash);

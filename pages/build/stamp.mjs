@@ -182,6 +182,10 @@ ${nav}
   </footer>
 `;
     }
+    if (part === 'standing-key') {
+      const k = [['built', 'Built', 'released, and exercised by tests or daily use'], ['nothold', 'Did not hold', 'measured against a bar set beforehand, and it did not clear it'], ['progress', 'In progress', 'being built or measured now'], ['untested', 'Untested', 'exists, and has not been run end to end'], ['notbuilt', 'Not built', 'does not exist yet']];
+      return `\n${k.map(([c, w, d]) => `<li><span class="mark ${c}" aria-hidden="true"></span><b>${w}</b> ${d}</li>`).join('\n')}\n`;
+    }
     return fail(ctx.file, `frame ${part}: unknown part`);
   },
 };
@@ -219,7 +223,7 @@ function graph(ctx, id, o) {
     if (!shared.includes(asked)) fail(ctx.file, `graph ${id}: the capture asks about ${asked}, which is not the shared symbol (${shared.join(', ')})`);
     feats.forEach((f) => named.includes(f.id) || fail(ctx.file, `graph ${id}: the capture does not name ${f.id}`));
   }
-  const PITCH = 20, LX = 8, RX = 256, CH = 7.8, W = 424;
+  const PITCH = 22, LX = 8, RX = 256, CH = 7.8, W = 424;
   const y = (i) => 22 + i * PITCH;
   const H = y(right.length - 1) + 14;
   const mean = (X) => X.members.reduce((s, m) => s + y(right.indexOf(m)), 0) / X.members.length;
@@ -229,7 +233,7 @@ function graph(ctx, id, o) {
   const label = (sym) => `<tspan class="p-${CLS[sym[0]]}">${esc(sym[0])}</tspan>${esc(midCut(sym.slice(1), 19))}`;
   const node = (sym, x, yy, say, ripple, cls) => {
     const w = Math.round(midCut(sym, 20).length * CH + 12);
-    return `<g class="node${cls ? ` ${cls}` : ''}" tabindex="0" role="img" aria-label="${esc(`${sym}, ${KIND[sym[0]]}. ${say}`)}" data-id="${esc(sym)}" data-ripple="${esc(ripple.join(' '))}"${cls === 'at' ? ' data-o' : cls === 'hit' ? ' data-d' : ''}><title>${esc(sym)}</title><rect x="${x - 6}" y="${yy - 13}" width="${w}" height="18"/><text x="${x}" y="${yy}">${label(sym)}</text></g>`;
+    return `<g class="node${cls ? ` ${cls}` : ''}" tabindex="0" role="img" aria-label="${esc(`${sym}, ${KIND[sym[0]]}. ${say}`)}" data-id="${esc(sym)}" data-ripple="${esc(ripple.join(' '))}"${cls === 'at' ? ' data-o' : cls === 'hit' ? ' data-d' : ''}><title>${esc(sym)}</title><rect x="${x - 6}" y="${yy - 15}" width="${w}" height="22"/><text x="${x}" y="${yy}">${label(sym)}</text></g>`;
   };
   const edges = [];
   const nodes = [];

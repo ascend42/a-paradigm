@@ -55,7 +55,7 @@
               <div class="cmds">
                 <div class="cmd"><code>npm install -g @a-company/paradigm</code></div>
                 <div class="cmd"><code>paradigm shift</code><span class="where">in your project</span></div>
-                <div class="cmd agent"><code>/plugin marketplace add <!-- ref:repo.slug -->ascend42/a-paradigm<!-- /ref --></code><span class="where">in Claude Code</span></div>
+                <div class="cmd agent"><code>/plugin marketplace add <!-- ref:repo.slug -->ascend42/a-paradigm<!-- /ref --></code></div>
                 <div class="cmd agent"><code>/plugin install paradigm@a-paradigm</code></div>
               </div>
               <div class="say">
@@ -184,7 +184,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               </figure>
               <!-- DEPENDS paradigm-reindex: the command has merged into the integration branch and will ship; it is not in the released CLI yet. -->
               <p>If the map looks out of date afterwards, rebuild the index: <code>paradigm reindex</code>. That command is not in <!-- fact:paradigm.version -->8.1.3<!-- /fact --> yet; until it ships, ask your agent to reindex.</p>
-              <h4 class="h3">The practice that belongs here: <a href="#p-same-change">P<!-- pn:p-same-change -->4<!-- /pn --></a></h4>
+              <h4 class="h3">The practice that belongs here: <a href="#p-same-change">P<!-- pn:p-same-change -->2<!-- /pn --></a></h4>
               <dl class="do">
                 <div><dt>Do</dt><dd>Let the agent update <code>.purpose</code> in the same change as the code.</dd></div>
                 <div><dt>Instead of</dt><dd>A tidy-up pass afterwards.</dd></div>
@@ -217,14 +217,14 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               <!-- No block message was captured (placeholder paradigm-session-block-output in facts.json), so there is no excerpt here. -->
               <p>The session refuses to stop, and says which description was left behind. Now say “update the .purpose file”, and it stops cleanly. We have not captured a real block message for this page, so there is no excerpt here yet.</p>
               <p><code>paradigm enforcement status</code> prints a table of checks. At <code>balanced</code>, <code><!-- fact:paradigm.enforcement-balanced-blocks -->purpose-coverage<!-- /fact --></code> is set to block and most others warn.</p>
-              <h4 class="h3">The practice that belongs here: <a href="#p-enforcement">P<!-- pn:p-enforcement -->3<!-- /pn --></a></h4>
+              <h4 class="h3">The practice that belongs here: <a href="#p-enforcement">P<!-- pn:p-enforcement -->4<!-- /pn --></a></h4>
               <!-- TBD-FOUNDER: default-enforcement (the default stays none) -->
               <dl class="do">
                 <div><dt>Do</dt><dd>Turn enforcement on deliberately, and pick the level.</dd></div>
                 <div><dt>Instead of</dt><dd>Assuming the hooks are already checking.</dd></div>
                 <div><dt>Why</dt><dd>The default level is <code><!-- fact:paradigm.enforcement-default -->none<!-- /fact --></code>.</dd></div>
               </dl>
-              <p>Also at this level: <a href="#p-affects">P<!-- pn:p-affects -->2<!-- /pn --></a> (ask what a change affects), <a href="#p-gates">P<!-- pn:p-gates -->5<!-- /pn --></a> (gates before endpoints), <a href="#p-record">P<!-- pn:p-record -->6<!-- /pn --></a> (decisions and lore as you go), <a href="#p-team">P<!-- pn:p-team -->8<!-- /pn --></a> (the team for larger work).</p>
+              <p>Also at this level: <a href="#p-affects">P<!-- pn:p-affects -->3<!-- /pn --></a> (ask what a change affects), <a href="#p-gates">P<!-- pn:p-gates -->5<!-- /pn --></a> (gates before endpoints), <a href="#p-record">P<!-- pn:p-record -->6<!-- /pn --></a> (decisions and lore as you go), <a href="#p-team">P<!-- pn:p-team -->7<!-- /pn --></a> (the team for larger work).</p>
               <p class="mono">Full guides: <!-- ref:learn.guide-default --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/v6-migration.md">docs/guides/v6-migration.md</a>, section 11<!-- /ref --> explains the default · <!-- ref:learn.guide-decisions --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/decisions.md">docs/guides/decisions.md</a>, sections 1 to 5<!-- /ref --></p>
             </div>
           </details>
@@ -251,7 +251,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
                 <div><dt>Instead of</dt><dd>Trusting a learning because it was recorded.</dd></div>
                 <div><dt>Why</dt><dd>Since <!-- ref:release.gated-learning -->8.1.1<!-- /ref --> a learning counts as survived only after <!-- fact:paradigm.learning-gate -->two confirmed scenario runs, by a different agent<!-- /fact -->.</dd></div>
               </dl>
-              <p>Also at this level: <a href="#p-roster">P<!-- pn:p-roster -->7<!-- /pn --></a> (a small roster), <a href="#p-protocol">P<!-- pn:p-protocol -->10<!-- /pn --></a> (protocols), <a href="#p-sync">P<!-- pn:p-sync -->11<!-- /pn --></a> (regenerate, don't hand-edit), <a href="#p-stores">P<!-- pn:p-stores -->12<!-- /pn --></a> (typed stores), <a href="#p-doctor">P<!-- pn:p-doctor -->13<!-- /pn --></a> (doctor after upgrades).</p>
+              <p>Also at this level: <a href="#p-roster">P<!-- pn:p-roster -->8<!-- /pn --></a> (a small roster), <a href="#p-protocol">P<!-- pn:p-protocol -->10<!-- /pn --></a> (protocols), <a href="#p-sync">P<!-- pn:p-sync -->11<!-- /pn --></a> (regenerate, don't hand-edit), <a href="#p-stores">P<!-- pn:p-stores -->12<!-- /pn --></a> (typed stores), <a href="#p-doctor">P<!-- pn:p-doctor -->13<!-- /pn --></a> (doctor after upgrades).</p>
               <p class="mono">Full guides: <!-- loc:learn.guide-agents --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/agents.md">docs/guides/agents.md</a><!-- /loc --> · <!-- loc:learn.guide-learning-scopes --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/learning-scopes.md">docs/guides/learning-scopes.md</a><!-- /loc --> · <!-- src:paradigm.learning-liveness -->real · paradigm doctor; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a> · run 2026-11-23<!-- /src --></p>
             </div>
           </details>
@@ -264,9 +264,12 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
       <div class="section-body">
         <h2 class="h2" id="practices-h">Thirteen practices, each with its reason.</h2>
         <p class="prose">Do, instead of, and why. Where the reason is measured, the measurement is named. Where it is our guidance and nothing more, we say that.</p>
-        <ol class="practices">
+        <div class="pgroups">
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#see-it">See it</a><small>the first prompt</small></h3>
+            <ol class="practices">
           <li class="practice" id="p-map-first">
-            <h3 class="practice-name">Map first.<span class="practice-at">belongs to <a href="#see-it">See it</a></span></h3>
+            <h4 class="practice-name">Map first.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Have the agent map the code before you ask it to change the code.</dd></div>
               <div><dt>Instead of</dt><dd>Asking for a change and letting the agent read its way in.</dd></div>
@@ -274,8 +277,27 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               <div class="ev"><dt>Evidence</dt><dd><!-- loc:paradigm.ripple-answer --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-ripple.txt">pages/captures/paradigm-ripple.txt</a><!-- /loc -->. Not measured: any saving in tokens or time. Our one study found fewer file reads and more tool calls with Paradigm.</dd></div>
             </dl>
           </li>
+            </ol>
+          </div>
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#work-with-it">Work with it</a><small>day one</small></h3>
+            <ol class="practices">
+          <li class="practice" id="p-same-change">
+            <h4 class="practice-name">Keep <code>.purpose</code> current in the same change.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Have the agent update <code>.purpose</code> with the code.</dd></div>
+              <div><dt>Instead of</dt><dd>A catch-up pass later.</dd></div>
+              <div><dt>Why</dt><dd>At <code>balanced</code>, <code><!-- fact:paradigm.enforcement-balanced-blocks -->purpose-coverage<!-- /fact --></code> is the check that blocks.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- src:paradigm.enforcement-balanced-blocks -->real · paradigm enforcement status on this repo; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src --></dd></div>
+            </dl>
+          </li>
+            </ol>
+          </div>
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#trust-it">Trust it</a><small>week one</small></h3>
+            <ol class="practices">
           <li class="practice" id="p-affects">
-            <h3 class="practice-name">Ask what it affects before a change that is not trivial.<span class="practice-at">belongs to <a href="#trust-it">Trust it</a></span></h3>
+            <h4 class="practice-name">Ask what it affects before a change that is not trivial.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Say “what does this affect?” before the change.</dd></div>
               <div><dt>Instead of</dt><dd>Finding out from a failing test.</dd></div>
@@ -284,7 +306,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
             </dl>
           </li>
           <li class="practice" id="p-enforcement">
-            <h3 class="practice-name">Turn enforcement on deliberately.<span class="practice-at">belongs to <a href="#trust-it">Trust it</a></span></h3>
+            <h4 class="practice-name">Turn enforcement on deliberately.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Choose a level with <code>paradigm enforcement set</code>.</dd></div>
               <div><dt>Instead of</dt><dd>Assuming the Stop hook already blocks.</dd></div>
@@ -292,17 +314,8 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p3-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/src/core/enforcement/loader.ts#L21">packages/paradigm/src/core/enforcement/loader.ts:21</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/v6-migration.md#L337-L341">docs/guides/v6-migration.md:337-341</a><!-- /ref --></dd></div>
             </dl>
           </li>
-          <li class="practice" id="p-same-change">
-            <h3 class="practice-name">Keep <code>.purpose</code> current in the same change.<span class="practice-at">belongs to <a href="#work-with-it">Work with it</a></span></h3>
-            <dl class="do">
-              <div><dt>Do</dt><dd>Have the agent update <code>.purpose</code> with the code.</dd></div>
-              <div><dt>Instead of</dt><dd>A catch-up pass later.</dd></div>
-              <div><dt>Why</dt><dd>At <code>balanced</code>, <code><!-- fact:paradigm.enforcement-balanced-blocks -->purpose-coverage<!-- /fact --></code> is the check that blocks.</dd></div>
-              <div class="ev"><dt>Evidence</dt><dd><!-- src:paradigm.enforcement-balanced-blocks -->real · paradigm enforcement status on this repo; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src --></dd></div>
-            </dl>
-          </li>
           <li class="practice" id="p-gates">
-            <h3 class="practice-name">Declare gates in <code>portal.yaml</code> before adding an endpoint.<span class="practice-at">belongs to <a href="#trust-it">Trust it</a></span></h3>
+            <h4 class="practice-name">Declare gates in <code>portal.yaml</code> before adding an endpoint.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Write the gate, then the route.</dd></div>
               <div><dt>Instead of</dt><dd>Adding auth checks in code and documenting them afterwards.</dd></div>
@@ -311,7 +324,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
             </dl>
           </li>
           <li class="practice" id="p-record">
-            <h3 class="practice-name">Record the why as a decision and what happened as lore, as you go.<span class="practice-at">belongs to <a href="#trust-it">Trust it</a></span></h3>
+            <h4 class="practice-name">Record the why as a decision and what happened as lore, as you go.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Ask the agent to record a decision when a choice is made, and lore when the work is done.</dd></div>
               <div><dt>Instead of</dt><dd>Reconstructing it at the end of the week.</dd></div>
@@ -319,17 +332,8 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p6-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/decisions.md">docs/guides/decisions.md</a>, section 3<!-- /ref -->; the <code>lore-required</code> check. Counts: <!-- src:paradigm.decisions -->real · ls .paradigm/decisions | wc -l; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src --></dd></div>
             </dl>
           </li>
-          <li class="practice" id="p-roster">
-            <h3 class="practice-name">Keep the roster small: three or four agents for a task.<span class="practice-at">belongs to <a href="#compound-it">Compound it</a></span></h3>
-            <dl class="do">
-              <div><dt>Do</dt><dd>Bench the agents you do not need, with <code>paradigm agent bench &lt;id&gt;</code>.</dd></div>
-              <div><dt>Instead of</dt><dd>Keeping all <!-- fact:paradigm.agents-bundled -->68<!-- /fact --> bundled profiles active.</dd></div>
-              <div><dt>Why</dt><dd>Our guidance is that past five the cost outweighs the value.</dd></div>
-              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p7-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/agents.md#L79">docs/guides/agents.md:79</a><!-- /ref -->. This is guidance from our own use. It has not been measured.</dd></div>
-            </dl>
-          </li>
           <li class="practice" id="p-team">
-            <h3 class="practice-name">Use the team for work across three or more files, and say so when you go solo.<span class="practice-at">belongs to <a href="#trust-it">Trust it</a></span></h3>
+            <h4 class="practice-name">Use the team for work across three or more files, and say so when you go solo.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Let the agent plan larger work with the team, or declare a solo session with <code>paradigm solo &lt;reason&gt;</code>.</dd></div>
               <div><dt>Instead of</dt><dd>Skipping the team without a record.</dd></div>
@@ -337,8 +341,22 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               <div class="ev"><dt>Evidence</dt><dd><code>paradigm enforcement status</code> on this repo (“<!-- ref:learn.p8-quote -->Orchestration threshold: 3 files<!-- /ref -->”).</dd></div>
             </dl>
           </li>
+            </ol>
+          </div>
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#compound-it">Compound it</a><small>month one</small></h3>
+            <ol class="practices">
+          <li class="practice" id="p-roster">
+            <h4 class="practice-name">Keep the roster small: three or four agents for a task.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Bench the agents you do not need, with <code>paradigm agent bench &lt;id&gt;</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Keeping all <!-- fact:paradigm.agents-bundled -->68<!-- /fact --> bundled profiles active.</dd></div>
+              <div><dt>Why</dt><dd>Our guidance is that past five the cost outweighs the value.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p7-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/agents.md#L79">docs/guides/agents.md:79</a><!-- /ref -->. This is guidance from our own use. It has not been measured.</dd></div>
+            </dl>
+          </li>
           <li class="practice" id="p-provisional">
-            <h3 class="practice-name">Treat what agents learn as provisional until you sign it off.<span class="practice-at">belongs to <a href="#compound-it">Compound it</a></span></h3>
+            <h4 class="practice-name">Treat what agents learn as provisional until you sign it off.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Review learnings in a class term.</dd></div>
               <div><dt>Instead of</dt><dd>Trusting the automatic loop alone.</dd></div>
@@ -347,7 +365,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
             </dl>
           </li>
           <li class="practice" id="p-protocol">
-            <h3 class="practice-name">Check for a protocol before repeating a pattern, and record one after.<span class="practice-at">belongs to <a href="#compound-it">Compound it</a></span></h3>
+            <h4 class="practice-name">Check for a protocol before repeating a pattern, and record one after.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Ask “is there a protocol for this?” first. There is a skill, <code>/paradigm:protocol</code>.</dd></div>
               <div><dt>Instead of</dt><dd>Solving the same pattern a second way.</dd></div>
@@ -356,7 +374,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
             </dl>
           </li>
           <li class="practice" id="p-sync">
-            <h3 class="practice-name">Regenerate instruction files with <code>paradigm sync</code>. Do not hand-edit them.<span class="practice-at">belongs to <a href="#compound-it">Compound it</a></span></h3>
+            <h4 class="practice-name">Regenerate instruction files with <code>paradigm sync</code>. Do not hand-edit them.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Change the source, then run <code>paradigm sync</code>.</dd></div>
               <div><dt>Instead of</dt><dd>Editing the generated <code>CLAUDE.md</code> directly.</dd></div>
@@ -365,7 +383,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
             </dl>
           </li>
           <li class="practice" id="p-stores">
-            <h3 class="practice-name">Put durable facts in the typed store, not in the agent's native memory.<span class="practice-at">belongs to <a href="#compound-it">Compound it</a></span></h3>
+            <h4 class="practice-name">Put durable facts in the typed store, not in the agent's native memory.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>What happened goes to lore, a rule to habits, a reason to a decision.</dd></div>
               <div><dt>Instead of</dt><dd>Letting everything pile up in one memory file.</dd></div>
@@ -374,7 +392,7 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
             </dl>
           </li>
           <li class="practice" id="p-doctor">
-            <h3 class="practice-name">Run <code>paradigm doctor</code> after every upgrade.<span class="practice-at">belongs to <a href="#compound-it">Compound it</a></span></h3>
+            <h4 class="practice-name">Run <code>paradigm doctor</code> after every upgrade.</h4>
             <dl class="do">
               <div><dt>Do</dt><dd>Upgrade, then <code>paradigm doctor</code>.</dd></div>
               <div><dt>Instead of</dt><dd>Assuming an upgrade migrated everything.</dd></div>
@@ -382,7 +400,9 @@ Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sy
               <div class="ev"><dt>Evidence</dt><dd><!-- src:paradigm.own-repo-findings -->real · paradigm doctor; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a> · run 2026-11-23<!-- /src --></dd></div>
             </dl>
           </li>
-        </ol>
+            </ol>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -416,13 +436,13 @@ warpline oracle &lt;branchA&gt; &lt;branchB&gt;</pre>
               <h3 class="h3">The thirteen, as pairs</h3>
               <ol>
                 <li>Map first, then change.</li>
+                <li><code>.purpose</code> in the same change.</li>
                 <li>Ask what it affects, before the change.</li>
                 <li>Turn enforcement on. It starts off.</li>
-                <li><code>.purpose</code> in the same change.</li>
                 <li>Gate first, then the endpoint.</li>
                 <li>Decision for the why, lore for what happened.</li>
-                <li>Three or four agents, not all of them.</li>
                 <li>Team for three files or more. Say so when solo.</li>
+                <li>Three or four agents, not all of them.</li>
                 <li>A learning is provisional until you sign it.</li>
                 <li>Look for a protocol first. Record one after.</li>
                 <li><code>paradigm sync</code>. Do not hand-edit generated files.</li>

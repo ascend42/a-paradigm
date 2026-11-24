@@ -223,6 +223,20 @@ const fontBytes = fonts.reduce((s, f) => s + fs.statSync(path.join(PAGES, 'asset
 (fontBytes > 90 * 1024 ? errors : notices).push(`fonts: ${kb(fontBytes)} in ${fonts.length} files${fontBytes > 90 * 1024 ? ', over the 90 KB budget' : ' of 90 KB'}`);
 if (!fs.readdirSync(path.join(PAGES, 'assets/fonts')).some((f) => /^OFL/.test(f))) errors.push('assets/fonts: the licence files did not travel with the fonts');
 
+const count = (html, re) => (html.match(re) || []).length;
+const learnHtml = () => fs.readFileSync(path.join(PAGES, 'learn/index.html'), 'utf8');
+const WORD_COUNTS = [
+  ['learn/index.html', /Thirteen practices/, (h) => count(h, /<li class="practice"/g) === 13],
+  ['learn/index.html', /The thirteen, as pairs/, (h) => count(h.slice(h.indexOf('The thirteen, as pairs')).split('</ol>')[0], /<li>/g) === 13],
+  ['learn/index.html', /Four levels/, (h) => count(h, /class="station level/g) === 4],
+  ['index.html', /Four levels/, () => count(learnHtml(), /class="station level/g) === 4],
+  ['index.html', /The last three releases/, (h) => /lately:paradigm rows=3 /.test(h)],
+  ['gnomon/index.html', /Run four commands/, () => F.byId['gnomon.verify-commands'].value === 4],
+  ['gnomon/index.html', /all four must hold/, () => F.byId['gnomon.requirements'].value.length === 4],
+  ['gnomon/index.html', /Check the four requirements/, () => F.byId['gnomon.requirements'].value.length === 4],
+  ['learn/index.html', /All four must hold/, () => F.byId['gnomon.requirements'].value.length === 4],
+  ['paradigm/index.html', /Three things it holds/, (h) => count(h.slice(h.indexOf('id="holds"'), h.indexOf('id="measured"')), /<dt>/g) === 3],
+];
 const built = M.pages.filter((p) => p.built);
 const pending = M.pages.filter((p) => !p.built);
 for (const page of built) {
@@ -232,6 +246,10 @@ for (const page of built) {
   errors.push(...checkHtml(html, page.file, { release: RELEASE }));
   errors.push(...undeclaredVars(html, declared, page.file));
   budget(page.file, gz(Buffer.from(html)), 30 * 1024);
+  // a number written as a word is still a number: it must match what it counts
+  for (const [file, word, counts] of WORD_COUNTS) {
+    if (file === page.file && word.test(html) && !counts(html)) errors.push(`${page.file}: "${word.source}" no longer matches what it counts`);
+  }
   // excerpts must not stop inside a list
   for (const m of html.matchAll(REGION_RE)) {
     if (m[1] !== 'excerpt') continue;

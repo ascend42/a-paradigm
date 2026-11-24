@@ -60,29 +60,31 @@
       </div>
 
       <figure class="hero-exhibit">
-        <!-- No real decision card or signed log row has been captured (placeholder gnomon-card-and-log-row in facts.json): nobody launched Gnomon for this page. The plate is a drawing and says so. It shows no hash and no log row. -->
+        <!-- No real decision card or signed log row has been captured (placeholder gnomon-card-and-log-row in facts.json): nobody launched Gnomon for this page. The plate is a drawing and says so inside itself. It shows no hash and no log row. -->
         <div class="gplate stamps">
-          <div role="img" aria-label="A drawing of one decision card. It names who is asking and what they want, and has two keys: Deny, and Approve with Touch ID. It carries a stamp that reads Signed. This is an illustration, not a capture.">
-            <div class="gcard" aria-hidden="true">
-              <div class="gcard-head"><span>a request</span><span>from one of your sessions</span></div>
-              <p class="gcard-what">What the session wants to do, in its own words.</p>
-              <div class="gbars"><i class="w-a"></i><i class="w-b"></i><i class="w-c"></i></div>
-              <div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve · Touch ID</span></div>
-              <span class="gstamp">Signed</span>
+          <div role="img" aria-label="A drawing of one decision card on top of a stack of others. It names who is asking and what they want, and has two keys: Deny, and Approve with Touch ID. It carries a stamp that reads Signed. This is an illustration, not a capture.">
+            <div class="gstack" aria-hidden="true">
+              <div class="gcard">
+                <div class="gcard-head"><span>a request</span><span>from one of your sessions</span></div>
+                <p class="gcard-what">What the session wants to do, in its own words.</p>
+                <div class="gbars"><i class="w-a"></i><i class="w-b"></i><i class="w-c"></i></div>
+                <div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve · Touch ID</span></div>
+                <span class="gstamp">Signed</span>
+              </div>
             </div>
             <ul class="gnotes" aria-hidden="true">
-              <li>Silence means deny.</li>
-              <li>Only a person decides.</li>
+              <li>One stack for every session. Silence means deny, and only a person decides.</li>
               <li>Signed with a key in the Secure Enclave.</li>
             </ul>
           </div>
+          <p class="prov"><b>illustration</b><span>A drawing, not a capture. Nobody launched Gnomon for this page.</span></p>
         </div>
+        <figcaption class="prov"><b>illustration</b>One frame shows the request, both answers and the stamp, which the app never does. The lines under the card are the changelog's: <!-- ref:gnomon.proof-stack --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">CHANGELOG.md:231</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/approval-broker.test.ts">packages/gnomon/test/approval-broker.test.ts</a><!-- /ref -->.</figcaption>
         <div class="fact lead">
           <div class="fact-n"><!-- fact:gnomon.verify-commands -->4<!-- /fact --><small>commands</small></div>
           <p class="fact-claim">let anyone check the app without trusting us: it is Developer ID signed, notarized by Apple and stapled, and its zip matches the hash we publish.</p>
           <p class="fact-src"><!-- src:gnomon.notarized -->recorded 2026-11-23, not re-run · spctl -a -vv Gnomon.app on @a-company/gnomon-darwin-arm64@8.1.0; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/gnomon-verification.txt">pages/captures/gnomon-verification.txt</a><!-- /src --> · <a href="#measured">the commands and what they printed</a></p>
         </div>
-        <figcaption class="prov"><b>illustration</b>The card is a drawing of the shape of a decision card. It is not a capture: nobody launched Gnomon for this page, so there is no real card and no log row here. The three lines under it are what the changelog says the stack does: <!-- ref:gnomon.proof-stack --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">CHANGELOG.md:231</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/approval-broker.test.ts">packages/gnomon/test/approval-broker.test.ts</a><!-- /ref -->.</figcaption>
       </figure>
     </div>
 
@@ -186,29 +188,29 @@ The validate action worked!</pre>
       <div class="section-body">
         <h2 class="h2" id="desk-h">The desk, drawn.</h2>
         <figure class="gplate">
-          <div role="img" aria-label="A drawing of the Gnomon desk. Sessions are listed on the left. One session is in the centre, with a card pinned above its composer. The stack on the right holds every card from every session, and the same card sits on top of it. A workshop strip runs along the foot. This is an illustration, not a screenshot.">
+          <div role="img" aria-label="A drawing of the Gnomon desk. Sessions are listed on the left, grouped by project. One session is in the centre, with its card pinned above the composer. The stack on the right holds every card from every session, and the same card sits on top of it. A workshop strip runs along the foot. This is an illustration, not a screenshot.">
+            <p class="desk-note" aria-hidden="true">On a narrow screen the drawing stacks: sessions first, then the session, then the stack.</p>
             <div class="desk" aria-hidden="true">
               <div class="dz">
                 <b>Sessions</b>
                 <small>one project</small>
-                <div class="drow on"><i class="w-d"></i></div>
-                <div class="drow"><i class="w-b"></i></div>
+                <div class="gline on">this session</div>
+                <div class="gline">a second session</div>
                 <small>another project</small>
-                <div class="drow"><i class="w-a"></i></div>
-                <div class="drow"><i class="w-c"></i></div>
+                <div class="gline">a third session</div>
               </div>
               <div class="dz">
                 <b>The session</b>
                 <div class="dsay"><i class="w-a"></i><i class="w-d"></i><i class="w-c"></i></div>
                 <div class="dsay"><i class="w-b"></i><i class="w-a"></i></div>
-                <div class="dsheet same"><small>this session's card, pinned</small><i class="w-b"></i><div class="dkeys"><i></i><i></i></div></div>
+                <div class="gcard mini cast"><div class="gcard-head"><span>a request</span><span>pinned here</span></div><div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve</span></div></div>
                 <div class="dcomposer"></div>
               </div>
               <div class="dz">
                 <b>The stack</b>
-                <div class="dsheet same cast"><small>the same card, most urgent first</small><i class="w-b"></i><div class="dkeys"><i></i><i></i></div></div>
-                <div class="dsheet cast"><small>a card from another session</small><i class="w-d"></i><div class="dkeys"><i></i><i></i></div></div>
-                <div class="dsheet"><small>and another</small><i class="w-c"></i></div>
+                <div class="gstack"><div class="gcard mini cast"><div class="gcard-head"><span>a request</span><span>the same card</span></div><div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve</span></div></div></div>
+                <div class="gcard mini"><div class="gcard-head"><span>a request</span><span>from a second session</span></div></div>
+                <div class="gcard mini"><div class="gcard-head"><span>a request</span><span>from a third session</span></div></div>
               </div>
               <div class="dz dz-shop">
                 <b>Workshop</b>
@@ -218,7 +220,7 @@ The validate action worked!</pre>
               </div>
             </div>
           </div>
-          <figcaption class="prov"><b>illustration</b><span>This is a drawing of the desk, made from the app's own layout and palette. It is not a screenshot, and the bars stand for text we did not invent. The region names: <!-- ref:gnomon.desk-source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.atelier/systems/gnomon/DESIGN.md#L36-L46">.atelier/systems/gnomon/DESIGN.md:36-46</a><!-- /ref -->.</span></figcaption>
+          <figcaption class="prov"><b>illustration</b><span>A drawing of the desk in the app's own palette. It is not a screenshot. The words on it name what each part is; the bars stand for a conversation we did not invent. The region names: <!-- ref:gnomon.desk-source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.atelier/systems/gnomon/DESIGN.md#L36-L46">.atelier/systems/gnomon/DESIGN.md:36-46</a><!-- /ref -->.</span></figcaption>
         </figure>
         <dl class="claims">
           <div>
@@ -246,11 +248,10 @@ The validate action worked!</pre>
       <div class="section-body">
         <h2 class="h2" id="lately-h">What changed lately.</h2>
         <ol class="lately">
-          <li class="lately-row"><div class="lately-when">In progress, not released</div><div><p class="lately-lead">Boards. <!-- fact:gnomon.boards -->first slice on a branch<!-- /fact -->.</p><p class="lately-moved"><span class="mark progress" aria-hidden="true"></span>boards: in progress · <!-- fact:gnomon.boards.source -->decision TD-2026-11-24-500; branch feat/gnomon-boards-s1.0<!-- /fact --></p></div></li>
-          <!-- lately:gnomon rows=3 -->
+          <li class="lately-row"><div class="lately-when">In progress, not released</div><div><p class="lately-lead">Boards: <!-- fact:gnomon.boards -->first slice on a branch<!-- /fact -->.</p><p class="lately-moved"><span class="mark progress" aria-hidden="true"></span>boards: in progress · <!-- fact:gnomon.boards.source -->decision TD-2026-11-24-500; branch feat/gnomon-boards-s1.0<!-- /fact --></p></div></li>
+          <!-- lately:gnomon rows=2 -->
 <li class="lately-row"><div class="lately-when">2026-10-29 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L75">8.1.0</a></div><div><p class="lately-lead">“Local models in Gnomon can use tools, and you stay in charge of every one.”</p></div></li>
 <li class="lately-row"><div class="lately-when">2026-10-24 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">8.0.2</a></div><div><p class="lately-lead">“Gnomon, the Paradigm 8.0 kernel, ships as a signed Mac app installed through npm.”</p><p class="lately-moved"><span class="mark built" aria-hidden="true"></span>the app: not built to built</p></div></li>
-<li class="lately-row"><div class="lately-when">2026-10-24 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L214">8.0.2</a></div><div><p class="lately-lead">“Gnomon 8.0 for testers, with loops switched off for this round.”</p></div></li>
 <!-- /lately -->
         </ol>
         <p class="prov"><b>real</b><span>Each dated row is the release's own lead sentence, copied from the changelog line it links to. Gnomon ships inside Paradigm releases, so the versions are Paradigm's.</span></p>
@@ -261,6 +262,15 @@ The validate action worked!</pre>
       <div class="section-n" aria-hidden="true"></div>
       <div class="section-body">
         <h2 class="h2" id="standing-h">Where it stands.</h2>
+        <ul class="ledger-key" aria-label="What the five words mean">
+          <!-- frame:standing-key -->
+<li><span class="mark built" aria-hidden="true"></span><b>Built</b> released, and exercised by tests or daily use</li>
+<li><span class="mark nothold" aria-hidden="true"></span><b>Did not hold</b> measured against a bar set beforehand, and it did not clear it</li>
+<li><span class="mark progress" aria-hidden="true"></span><b>In progress</b> being built or measured now</li>
+<li><span class="mark untested" aria-hidden="true"></span><b>Untested</b> exists, and has not been run end to end</li>
+<li><span class="mark notbuilt" aria-hidden="true"></span><b>Not built</b> does not exist yet</li>
+<!-- /frame -->
+        </ul>
         <ul class="ledger" aria-labelledby="standing-h">
           <!-- standing:gnomon.ledger -->
 <li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The app: Developer ID signed, notarized, stapled, hash-matched</div><div class="ledger-ev">four commands in <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/gnomon-verification.txt">pages/captures/gnomon-verification.txt</a></div></li>
@@ -276,10 +286,10 @@ The validate action worked!</pre>
 <li class="ledger-row is-progress"><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">Windows: tested in CI and probes, not shipped</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L295">CHANGELOG.md:295</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.github/workflows/gnomon.yml#L45">.github/workflows/gnomon.yml:45</a></div></li>
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Loops: specified, off in the app you install</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L130">CHANGELOG.md:130</a></div></li>
 <li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Any machine but the founder's: no outside reports yet</div><div class="ledger-ev">dossier section 5</div></li>
-<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">A spending cap. Gnomon meters spending and does not stop it</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L235">CHANGELOG.md:235</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1893">docs/specs/gnomon.md:1893</a></div></li>
-<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">The helper checking which program calls it</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L298">CHANGELOG.md:298</a></div></li>
-<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">Spawning from contracts, kernel linking, CI signing: specified, not built</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L302">CHANGELOG.md:302</a></div></li>
-<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Not built</div><div class="ledger-what">Intel Macs, Windows, Linux: refused</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L295">CHANGELOG.md:295</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">A spending cap. Gnomon meters spending and does not stop it</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L235">CHANGELOG.md:235</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1893">docs/specs/gnomon.md:1893</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">The helper checking which program calls it</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L298">CHANGELOG.md:298</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">Spawning from contracts, kernel linking, CI signing: specified, not built</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L302">CHANGELOG.md:302</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">Intel Macs and Linux: refused. Windows is the row above</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L295">CHANGELOG.md:295</a></div></li>
 <!-- /standing -->
         </ul>
         <p class="mono quiet">as of <!-- fact:as_of -->2026-11-23<!-- /fact --> · every row is stamped from pages/facts.json · the log's write cost: <!-- fact:gnomon.log-append -->p99 0.055 ms over 1,000,000 appends<!-- /fact -->, <!-- src:gnomon.log-append -->recorded 2026-10-17, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/probes/results/p-log-fsync-armG-1e6.darwin.json">packages/gnomon/probes/results/p-log-fsync-armG-1e6.darwin.json</a><!-- /src --></p>

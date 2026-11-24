@@ -140,8 +140,8 @@ export const STATES = {
   untested: ['untested', 'Untested'],
   'untested or not built': ['untested', 'Untested'],
   // the thing does not exist yet: the untested mark, and the true word
-  'not built': ['untested', 'Not built'],
-  'not-built': ['untested', 'Not built'],
+  'not built': ['notbuilt', 'Not built'],
+  'not-built': ['notbuilt', 'Not built'],
 };
 
 // ── excerpts ──────────────────────────────────────────────────────────────

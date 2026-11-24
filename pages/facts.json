@@ -745,7 +745,10 @@
     },
     {
       "id": "warpline.base-rate",
-      "value": "17 of 275 (6.2%)",
+      "value": {
+        "count": "17 of 275",
+        "rate": "6.2%"
+      },
       "claim": "git-clean merges in zod, nest and xstate were flagged as changing what the code means.",
       "source": ".paradigm/research/warpline-guard-base-rate/results.md:38-47",
       "measured": "2026-07-01",
@@ -1069,7 +1072,7 @@
         },
         {
           "state": "untested",
-          "what": "The learning loop has recorded no journals here",
+          "what": "Journals from the learning loop on this repo: none recorded",
           "evidence": "paradigm doctor, 2026-11-23: \"FLATLINE: 0 journals / 20 completions\"; pages/captures/paradigm-doctor.txt",
           "facts": [
             "paradigm.learning-liveness"
@@ -1094,7 +1097,7 @@
         },
         {
           "state": "not built",
-          "what": "This repository is not a working Warpline example: dogfooding here stopped on 2026-11-09 and its ledger fails `warpline health`",
+          "what": "A working example of Warpline on this repo: our own ledger fails `warpline health` since we stopped using it here on 2026-11-09",
           "evidence": "warpline health (dossier, 2026-11-23): UNSOUND, 63 failures of 374; decision TD-2026-11-09-865; commit 96e234ef",
           "facts": [
             "warpline.own-repo"
@@ -1260,7 +1263,7 @@
         },
         {
           "state": "not built",
-          "what": "Intel Macs, Windows, Linux: refused",
+          "what": "Intel Macs and Linux: refused. Windows is the row above",
           "evidence": "CHANGELOG.md:295",
           "facts": [
             "gnomon.platform"
@@ -1493,7 +1496,7 @@
     "warpline.guide": {
       "path": "docs/guides/warpline-project-setup.md",
       "lines": null,
-      "label": "The setup guide ↗",
+      "label": "The setup guide",
       "used_in": [
         "warpline page, the way back"
       ]
@@ -1501,7 +1504,7 @@
     "warpline.changelog": {
       "path": "CHANGELOG.md",
       "lines": null,
-      "label": "The changelog ↗",
+      "label": "The changelog",
       "used_in": [
         "warpline page, the way back"
       ]
@@ -1509,7 +1512,7 @@
     "warpline.studies": {
       "path": ".paradigm/research/warpline-guard-base-rate/results.md",
       "lines": null,
-      "label": "The studies ↗",
+      "label": "The studies",
       "used_in": [
         "warpline page, the way back"
       ]
@@ -1547,6 +1550,14 @@
       "lines": null,
       "used_in": [
         "learn page"
+      ]
+    },
+    "warpline.package": {
+      "path": "packages/warpline/README.md",
+      "lines": null,
+      "label": "The package",
+      "used_in": [
+        "warpline page, the way back"
       ]
     }
   },

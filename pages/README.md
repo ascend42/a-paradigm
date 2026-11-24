@@ -50,6 +50,7 @@ A region is `<!-- kind:arg key=value -->...<!-- /kind -->`. Leave it empty; the 
 | `bar:<id> of=<id>` | one bar of a before and after, to scale. |
 | `graph:<excerpt-id> features=a,b agrees=<capture>` | the symbol graph and its list, read from the `.purpose` file. |
 | `frame:head`, `frame:mast`, `frame:foot` | the shared head links, masthead and footer. |
+| `frame:standing-key` | the five standing words with their marks, as `li` for a `ul class="ledger-key"` above a ledger. |
 
 Deferred founder decisions are comments, `<!-- TBD-FOUNDER: id ... -->`; the release stamp lists them.
 
@@ -66,6 +67,10 @@ Deferred founder decisions are comments, `<!-- TBD-FOUNDER: id ... -->`; the rel
    the ledger has `id="standing"`; the hub links to it.
 5. Use the components that exist in `assets/pages.css`. A new pattern goes to the design system first.
 6. Stamp, check, run `atelier check --product pages`, and look at it at 320 to 1920 wide in both themes.
+
+## Numbers written as words
+
+"Thirteen practices", "Four levels", "four commands" are typed, so `build/check.mjs` holds each to what it counts (`WORD_COUNTS`). Add a line there when you write a new one.
 
 ## Fonts
 
