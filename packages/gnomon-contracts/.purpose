@@ -319,7 +319,9 @@ components:
       ./secret-rules.js (a test holds this) so the mod can bundle it; no DOM, no
       node:*. Not built here: the mod, the GUI leaf, the bridge tools dim_view /
       dim_draw (host stamping of relayedFor is #mod-host, S1.2). Serves #dimension-mod and
-      $dimension-session (spec symbols; no code yet).
+      $dimension-session: spec symbols that no .purpose declares, since no
+      dimension mod package exists. The code written for them so far is these
+      contracts and the lazy board chunk (#gui-board, packages/gnomon-gui).
       S1.2 review fixes: byOf and hsidOf read the stamp as own keys only; a
       bridge or voice stamp with no agent, and any stamp with no principal (an
       unentitled mod's tool row), fold as the unknown hand; the published vector
