@@ -119,8 +119,16 @@ export interface DimSessionStatus extends DimLiveStatus {
   partial: boolean;
   /** rows the store could not keep at all (`DimStore.stats().dropped`): above 0 the leaf shows a line */
   dropped: number;
-  /** the fold at the mod's last answered seq hashes as the mod said: true, false, or null while not yet comparable */
+  /**
+   * The fold at `checkedSeq` hashes as the mod said there: true or false; null is UNCHECKED (the mod has answered
+   * no hash this page could compare yet). Rows after `checkedSeq` are never vouched for: the mod's `dim.op` answer
+   * carries no hash, so only `dim.open` and `dim.close` give a point to compare at.
+   */
   verified: boolean | null;
+  /** the seq the fold was last compared at, or null */
+  checkedSeq: number | null;
+  /** true after a `hash-mismatch`: every edit is refused and said until the log is read again (`reset()`) */
+  readOnly: boolean;
 }
 
 /**
@@ -141,7 +149,9 @@ export interface DimSessionChange {
 export interface DimSessionLeaf {
   destroy(): void;
   /** forget the copy register (the link went down) */
-  forget?(): void;
+  forget(): void;
+  /** hold the board still and say why, or let it go (null): the link is down, or the fold is out of date */
+  setInert?(why: 'link-down' | 'out-of-date' | null): void;
 }
 
 /** The options a leaf is mounted with so that it is this session's leaf (spread into `mountBoardLeaf`'s options). */
@@ -152,7 +162,10 @@ export interface DimLeafWiring {
   onReady: (handle: BoardHandle) => void;
 }
 
-export type DimSessionsEvent = { type: 'opened'; session: DimSession } | { type: 'destroyed'; session: DimSession; why: DimSessionEnd } | { type: 'rebuilt'; from: DimSession; session: DimSession };
+/** `lost`: pending ops thrown away with the session (never silent: the caller says so). */
+export type DimSessionsEvent = { type: 'opened'; session: DimSession } | { type: 'destroyed'; session: DimSession; why: DimSessionEnd; lost: number } | { type: 'rebuilt'; from: DimSession; session: DimSession; lost: number };
+/** How long a dimension switch waits for pending batches before it leaves them. */
+export const DIM_SWITCH_WAIT_MS = 2000;
 
 interface Internals {
   deps: Required<Pick<DimSessionsDeps, 'now' | 'setTimer' | 'clearTimer' | 'mint'>> & { store: DimStore; limiter: DimSendLimiter };
@@ -169,13 +182,13 @@ class StampGate {
   #waiters: Array<() => void> = [];
 
   /**
-   * Resolves when no OTHER stamp holds the gate. The gate is taken (`more`: another command follows on `g`) or let
-   * go (the last one) in the same step as the check, so two stamps cannot both pass.
+   * Resolves when no OTHER stamp holds the gate, and takes it for `g` in the same step as the check, so two stamps
+   * cannot both pass. It is let go by `release(g)`: when the LAST command of the stamp has been handed to the
+   * sender (never merely when it entered), or when the stamp will send no more.
    */
-  enter(g: Gesture | null, more: boolean): Promise<void> {
-    if (this.#holder !== null && this.#holder !== g) return new Promise<void>((resolve) => void this.#waiters.push(resolve)).then(() => this.enter(g, more));
-    if (g && more) this.#holder = g;
-    else this.release(g);
+  enter(g: Gesture | null): Promise<void> {
+    if (this.#holder !== null && this.#holder !== g) return new Promise<void>((resolve) => void this.#waiters.push(resolve)).then(() => this.enter(g));
+    if (g) this.#holder = g;
     return Promise.resolve();
   }
 
@@ -206,9 +219,17 @@ export class DimSession {
   #offs: Array<() => void> = [];
   #timer: unknown = null;
   #dead = false;
-  /** the stamp this session holds the gate for */
+  /** the stamp this session holds the gate for, and what for (an edit's rows, or attach then open) */
   #held: Gesture | null = null;
+  #heldFor: 'edit' | 'command' = 'command';
+  /** `dim.open` was accepted (or the session was resumed from one that had been) */
+  #openOk = false;
+  /** the fold did not hash as the mod said: nothing more is sent from this board until a reset */
+  #readOnly = false;
+  #checkedSeq: number | null = null;
+  readonly #partial: boolean;
   #verified: boolean | null = null;
+  #lost = 0;
   #listeners = new Set<(c: DimSessionChange) => void>();
   #last: DimSessionNotice | null = null;
   /** resolves true once `dim.open` answered ok (at once for a resumed session), false when it failed */
@@ -229,10 +250,13 @@ export class DimSession {
       send: (batch) => this.#sendBatch(batch),
       now: x.deps.now,
       mint: x.deps.mint,
+      leaves: true,
     });
     if (!o.link) this.#live.link(false);
+    this.#partial = x.deps.store.list().find((l) => l.dim === o.dim)?.partial ?? false;
     if (start.resume) {
       this.#phase = 'open';
+      this.#openOk = true;
       this.#opened = Promise.resolve(true);
       this.#check();
     } else {
@@ -245,18 +269,40 @@ export class DimSession {
    * One command through the one sender, in its turn at the stamp gate and the shared limiter. Never retried.
    * `more`: another command follows on this stamp, so the gate is held for it until that one goes.
    */
-  async #command(g: Gesture | null, commandId: string, args: Record<string, unknown>, more = false): Promise<unknown> {
+  async #command(g: Gesture | null, commandId: string, args: Record<string, unknown>, more = false, batch: number | null = null): Promise<unknown> {
     const d = this.#x.deps;
-    await this.#x.gate.enter(g, more);
-    if (g && more) this.#held = g;
-    else if (this.#held === g) this.#held = null;
+    // a batch dropped while it waited (the timeout, a refusal before it) is never sent
+    const stale = (): boolean => batch !== null && !this.#live.flying(batch);
+    // a stamp I held the gate for and that is not this one will send no more: it must not keep anyone waiting
+    if (this.#held && this.#held !== g && this.#heldFor === 'edit') this.#release(this.#held);
+    if (stale()) throw new Stale();
+    await this.#x.gate.enter(g);
+    if (g) {
+      this.#held = g;
+      this.#heldFor = batch === null ? 'command' : 'edit';
+    }
+    if (this.#dead || stale()) {
+      this.#release(g);
+      throw this.#dead ? new LinkDown() : new Stale();
+    }
     const now = d.now();
     const at = d.limiter.reserve(now);
     return new Promise<unknown>((resolve, reject) => {
       const go = (): void => {
-        const link = this.#x.link();
-        if (this.#dead || !link) return reject(new LinkDown());
-        sendModCommand(link.client, g, DIM_MOD_ID, commandId, { ...args, dim: this.dim, focus: { hsid: this.hsid } }).then((r) => resolve(modAnswerOf(r)), reject);
+        try {
+          const link = this.#x.link();
+          if (this.#dead || !link) return reject(new LinkDown());
+          if (stale()) return reject(new Stale());
+          // the answer is waited for from the moment the command leaves
+          if (batch !== null) {
+            this.#live.left(batch);
+            this.#arm();
+          }
+          sendModCommand(link.client, g, DIM_MOD_ID, commandId, { ...args, dim: this.dim, focus: { hsid: this.hsid } }).then((r) => resolve(modAnswerOf(r)), reject);
+        } finally {
+          // the gate goes when the stamp's LAST command has been handed to the sender (its number is taken there)
+          if (!more) this.#release(g);
+        }
       };
       if (at <= now) void Promise.resolve().then(go);
       else d.setTimer(go, at - now);
@@ -270,6 +316,7 @@ export class DimSession {
   }
 
   #failure(err: unknown): { code: string; why: string | null } {
+    if (err instanceof Stale) return { code: 'not-sent', why: 'dropped' };
     return err instanceof LinkDown ? { code: 'link-down', why: null } : modCommandFailure(err);
   }
 
@@ -291,6 +338,7 @@ export class DimSession {
       if (!isPlainObject(r) || r.ok !== true) return fail('open-failed', refusalCodeOf(r));
       if (Number.isSafeInteger(r.seq) && typeof r.hash === 'string') this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
       this.#phase = 'open';
+      this.#openOk = true;
       this.#check();
       this.#emit(null);
       return true;
@@ -305,10 +353,16 @@ export class DimSession {
   #check(): void {
     const v = this.#x.verifiedAt(this.dim);
     const store = this.#x.deps.store;
-    if (!v || this.#verified === false || store.stateAt(this.dim).seq < v.seq) return;
+    // checked already at this seq (the whole fold is not hashed again for every row), or already known wrong
+    if (!v || this.#verified === false || this.#checkedSeq === v.seq || store.stateAt(this.dim).seq < v.seq) return;
     const same = dimHash(store.stateAt(this.dim, v.seq)) === v.hash;
     this.#verified = same;
-    if (!same) this.#emit({ about: 'check', code: 'hash-mismatch', field: 'dim', why: null, lost: 0 });
+    this.#checkedSeq = v.seq;
+    if (same) return;
+    // the page's fold is not the mod's: the board is READ-ONLY from here until the log is read again (reset)
+    this.#readOnly = true;
+    this.#leaf?.setInert?.('out-of-date');
+    this.#emit({ about: 'check', code: 'hash-mismatch', field: 'dim', why: null, lost: 0 });
   }
 
   #sendBatch(batch: DimLiveBatch): void {
@@ -320,7 +374,7 @@ export class DimSession {
     void this.#opened
       .then((ok) => {
         if (!ok) return settle({ ok: false, code: 'not-open', why: null });
-        return this.#command(batch.gesture, 'dim.op', { ops: batch.ops }, batch.more).then((r) => settle(dimAckOf(r)));
+        return this.#command(batch.gesture, 'dim.op', { ops: batch.ops }, batch.more, batch.id).then((r) => settle(dimAckOf(r)));
       })
       .catch((err: unknown) => {
         const f = this.#failure(err);
@@ -348,8 +402,9 @@ export class DimSession {
 
   #after(r: DimLiveResult, about: DimSessionNotice['about']): void {
     if (this.#dead) return;
-    // nothing of mine is waiting: whatever stamp I held the gate for has no more to send (a timeout dropped its rows)
-    if (this.#held && this.#live.status().pending === 0) this.#release(this.#held);
+    // the stamp I hold the gate for rides no pending batch any more (its rows were dropped by the timeout, a
+    // refusal, or the check of what still holds): it has no more to send, so the gate goes NOW, whatever else waits
+    if (this.#held && this.#heldFor === 'edit' && !this.#live.rides(this.#held)) this.#release(this.#held);
     if (r.changed || r.resync) this.#render();
     if (r.changed || r.resync || r.notice) this.#emit(r.notice ? { ...r.notice, about } : null);
     this.#arm();
@@ -365,6 +420,11 @@ export class DimSession {
   onChange(fn: (c: DimSessionChange) => void): () => void {
     this.#listeners.add(fn);
     return () => void this.#listeners.delete(fn);
+  }
+
+  /** @internal a notice raised for this session from outside it (what a reconnect lost); kept as the newest and told to listeners */
+  note(notice: DimSessionNotice): void {
+    if (!this.#dead) this.#emit(notice);
   }
 
   /** The newest notice, as data. */
@@ -385,11 +445,39 @@ export class DimSession {
   status(): DimSessionStatus {
     const store = this.#x.deps.store;
     const head = store.stateAt(this.dim);
-    return { ...this.#live.status(), dim: this.dim, hsid: this.hsid, phase: this.#phase, title: head.title, seq: head.seq, partial: store.list().find((l) => l.dim === this.dim)?.partial ?? false, dropped: store.stats().dropped, verified: this.#verified };
+    return { ...this.#live.status(), dim: this.dim, hsid: this.hsid, phase: this.#phase, title: head.title, seq: head.seq, partial: this.#partial, dropped: store.stats().dropped, verified: this.#verified, checkedSeq: this.#checkedSeq, readOnly: this.#readOnly };
   }
 
   get alive(): boolean {
     return !this.#dead;
+  }
+
+  /** True once `dim.open` was accepted (a session that never opened is not resumed after a reconnect). */
+  get openedOk(): boolean {
+    return this.#openOk;
+  }
+
+  /** How many pending ops were thrown away when the session was destroyed (0 while it lives). */
+  get lost(): number {
+    return this.#lost;
+  }
+
+  /** How many ops are pending now. */
+  pendingOps(): number {
+    return this.#dead ? 0 : this.#live.pendingOps();
+  }
+
+  /**
+   * Leave this dimension for another (a switch): what is pending is given up to `DIM_SWITCH_WAIT_MS` to settle,
+   * then the session is destroyed. Answers how many ops were NOT saved (also on the `destroyed` event), so the
+   * caller says so; 0 when everything was.
+   */
+  async leave(): Promise<number> {
+    if (this.#dead) return this.#lost;
+    const d = this.#x.deps;
+    await Promise.race([this.#idle(), new Promise<void>((resolve) => void d.setTimer(resolve, DIM_SWITCH_WAIT_MS))]);
+    this.destroy('switch');
+    return this.#lost;
   }
 
   /** Resolves when `dim.open` has settled: true when the dimension is open. */
@@ -426,6 +514,12 @@ export class DimSession {
    */
   edit(ops: readonly DimOp[], cause: Event | null): void {
     if (this.#dead || ops.length === 0) return;
+    // nothing is taken from a board that is out of date, or one that is being folded (it would be sent after `dim.close`)
+    const refused = this.#readOnly ? 'out-of-date' : this.#phase === 'closing' || this.#phase === 'closed' ? 'closing' : null;
+    if (refused) {
+      this.#render();
+      return this.#emit({ about: 'edit', code: refused, field: 'ops', why: null, lost: ops.length });
+    }
     const g = cause ? gestureOf(cause, Date.now()) : null;
     this.#after(this.#live.local(ops, g), 'edit');
   }
@@ -433,6 +527,7 @@ export class DimSession {
   /** Cmd/Ctrl+Z in the board, with its own keydown. */
   undo(event: Event | null): void {
     if (this.#dead) return;
+    if (this.#readOnly || this.#phase === 'closing') return this.#emit({ about: 'undo', code: this.#readOnly ? 'out-of-date' : 'closing', field: 'ops', why: null, lost: 0 });
     const g = event ? gestureOf(event, Date.now()) : null;
     this.#after(this.#live.undo(g), 'undo');
   }
@@ -454,7 +549,7 @@ export class DimSession {
   /** @internal the link went down */
   linkDown(): void {
     if (this.#dead) return;
-    this.#leaf?.forget?.();
+    this.#leaf?.forget();
     this.#release(this.#held);
     const r = this.#live.link(false);
     this.#after(r, 'link');
@@ -511,6 +606,7 @@ export class DimSession {
   destroy(why: DimSessionEnd = 'switch'): void {
     if (this.#dead) return;
     this.#dead = true;
+    this.#lost = this.#live.pendingOps();
     this.#release(this.#held);
     if (this.#phase !== 'closed' && this.#phase !== 'failed') this.#phase = 'closed';
     if (this.#timer !== null) this.#x.deps.clearTimer(this.#timer);
@@ -528,6 +624,8 @@ export class DimSession {
 }
 
 class LinkDown extends Error {}
+/** The batch was dropped while its command waited its turn: nothing is sent. */
+class Stale extends Error {}
 
 export class DimSessions {
   readonly #deps: Internals['deps'];
@@ -554,7 +652,7 @@ export class DimSessions {
       gate: new StampGate(),
       gone: (s, why) => {
         if (this.#sessions.get(s.dim) === s) this.#sessions.delete(s.dim);
-        this.#tell({ type: 'destroyed', session: s, why });
+        this.#tell({ type: 'destroyed', session: s, why, lost: s.lost });
       },
     };
   }
@@ -581,10 +679,15 @@ export class DimSessions {
     const out: DimSession[] = [];
     for (const old of [...this.#sessions.values()]) {
       const { dim, hsid } = old;
+      // only a session whose `dim.open` was accepted is open in the log: one still opening, or failed, is not resumed
+      const was = old.openedOk;
       old.destroy('link');
+      if (!was) continue;
       const session = this.resume({ dim, hsid });
+      // what was pending went with the old connection: said once, on the new session
+      if (old.lost > 0) session.note({ about: 'link', code: 'not-saved', field: 'ops', why: null, lost: old.lost });
       out.push(session);
-      this.#tell({ type: 'rebuilt', from: old, session });
+      this.#tell({ type: 'rebuilt', from: old, session, lost: old.lost });
     }
     return out;
   }
@@ -636,7 +739,9 @@ export class DimSessions {
    */
   open(o: { dim: string; hsid: string; opened: 'command' | 'menu' | 'offer'; title?: string; titleFrom?: 'session' | 'user' }, cause: Event | null): DimSession {
     const have = this.#sessions.get(o.dim);
-    if (have) return have;
+    // a session whose open failed is replaced, never handed back
+    if (have && have.status().phase === 'failed') have.destroy('gone');
+    else if (have) return have;
     const store = this.#deps.store;
     const attach = store.has(o.dim) && !store.stateAt(o.dim).attached.includes(o.hsid);
     const args: Record<string, unknown> = { opened: o.opened, ...(o.title !== undefined ? { title: o.title } : {}), ...(o.titleFrom !== undefined ? { titleFrom: o.titleFrom } : {}) };

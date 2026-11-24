@@ -8,7 +8,7 @@ import type { DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle } from '../src/core/board.js';
 import { RpcError } from '../src/core/client.js';
 import { DIM_LIVE_TIMEOUT_MS } from '../src/core/dim-live.js';
-import { DIM_SEND_LIMITS, DimSendLimiter, DimSessions, modAnswerOf, type DimSession, type DimSessionNotice, type DimSessionsEvent } from '../src/core/dim-session.js';
+import { DIM_SEND_LIMITS, DIM_SWITCH_WAIT_MS, DimSendLimiter, DimSessions, modAnswerOf, type DimSession, type DimSessionNotice, type DimSessionsEvent } from '../src/core/dim-session.js';
 import { DimStore } from '../src/core/dim-store.js';
 import { GESTURE_MAX_AGE_MS } from '../src/core/gesture.js';
 
@@ -527,6 +527,221 @@ describe('#gui-dim-session one stamp at a time on the connection', () => {
     a.s.destroy();
     await flush(DIM_SEND_LIMITS.gapMs * 2);
     expect(w.ops().map((c) => c.args.dim)).toEqual([DIM, DIM2, DIM, DIM2, DIM, DIM2]);
+  });
+});
+
+describe('#gui-dim-session review of PR #118, group A: nothing said lost is then written, and nothing is lost without a line', () => {
+  it('A1: a batch whose command is still waiting its turn is not said lost and then sent: it is sent, once, when its turn comes', async () => {
+    const w = world();
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    const h = fakeHandle();
+    s.attachHandle(h.handle);
+    const n = watch(s);
+    await flush();
+    h.edit([rect(1)], press());
+    // the open is slow, longer than the wait for an answer, shorter than the stamp's life
+    await flush(DIM_LIVE_TIMEOUT_MS + 500);
+    expect(DIM_LIVE_TIMEOUT_MS + 500).toBeLessThan(GESTURE_MAX_AGE_MS);
+    expect(n).toEqual([]); // nothing was said lost
+    expect(s.status()).toMatchObject({ pending: 1, keep: 'saving' });
+    expect(h.last().nodes.size).toBe(1);
+    w.answer(w.calls[0]!);
+    await flush(DIM_SEND_LIMITS.gapMs);
+    expect(w.ops().map((c) => c.args.ops)).toEqual([[rect(1)]]);
+    w.answer(w.ops()[0]!);
+    await flush(10);
+    expect(n).toEqual([]);
+    expect(s.status()).toMatchObject({ pending: 0, keep: 'saved', canUndo: true });
+  });
+
+  it('A1: with the link down a batch that never left is dropped and said, and is not sent when its turn would have come', async () => {
+    const w = world();
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    const n = watch(s);
+    await flush();
+    s.edit([rect(1)], press());
+    w.sessions.linkDown();
+    await flush(DIM_LIVE_TIMEOUT_MS + 10);
+    expect(n.map((x) => `${x.about}:${x.code}`)).toEqual(['link:link-down', 'edit:link-down']);
+    expect(s.status().pending).toBe(0);
+    w.answer(w.calls[0]!);
+    await flush(1000);
+    expect(w.ops()).toEqual([]);
+  });
+
+  it('A1: the wait for an answer is counted from when the command LEAVES, not from when it was handed over', async () => {
+    const w = world();
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    const n = watch(s);
+    await flush();
+    s.edit([rect(1)], press());
+    await flush(5000);
+    w.answer(w.calls[0]!); // the op leaves now, five seconds after it was handed over
+    await flush(DIM_SEND_LIMITS.gapMs);
+    expect(w.ops()).toHaveLength(1);
+    await flush(DIM_LIVE_TIMEOUT_MS - 5000 + 500); // past eight seconds since the hand-over
+    expect(s.status().pending).toBe(1);
+    expect(n).toEqual([]);
+    await flush(5000);
+    expect(n.map((x) => x.code)).toEqual(['timeout']);
+  });
+
+  it('A2: a group that dies with another edit queued behind it does not keep the gate: that session and every other one go on', async () => {
+    const w = world();
+    const a = await opened(w, DIM);
+    const b = await opened(w, DIM2);
+    a.h.edit(Array.from({ length: 9 }, (_, i) => text(10 + i, 3900)), press('paste'));
+    await flush(DIM_SEND_LIMITS.gapMs);
+    a.h.edit([rect(1)], press()); // queued behind the group: pending never reaches 0
+    b.h.edit([rect(2)], press());
+    // row 1 is acked and its row never arrives
+    w.ops()[0]!.resolve({ result: { ok: true, dim: DIM, seq: 9999, applied: 3, refused: [] } });
+    await flush(DIM_LIVE_TIMEOUT_MS + 200);
+    expect(a.n).toHaveLength(1);
+    expect(a.n[0]).toMatchObject({ code: 'timeout', why: 'no-row', lost: 9 });
+    await flush(DIM_SEND_LIMITS.gapMs * 4);
+    // both the queued edit of that session and the other session's edit left, well before THEIR timeouts
+    expect(w.ops().slice(1).map((c) => c.args.dim).sort()).toEqual([DIM, DIM2].sort());
+    expect(b.n).toEqual([]);
+    expect(a.n).toHaveLength(1);
+  });
+
+  it('A2: a group whose LAST row is removed by the check of what still holds lets the next stamp through when its sent rows settle', async () => {
+    const w = world();
+    const a = await opened(w, DIM);
+    const b = await opened(w, DIM2);
+    // row 2 of this action only updates marks row 1 adds: when row 1 is refused, row 2 falls with the group
+    a.h.edit(Array.from({ length: 9 }, (_, i) => text(10 + i, 3900)), press('paste'));
+    await flush(DIM_SEND_LIMITS.gapMs);
+    b.h.edit([rect(2)], press());
+    w.ops()[0]!.resolve({ result: { ok: false, code: 'ops-refused', fix: 'x', refused: [{ index: 0, field: 'id', code: 'id-reused' }] } });
+    await flush(DIM_SEND_LIMITS.gapMs * 4);
+    expect(w.ops().map((c) => c.args.dim)).toEqual([DIM, DIM2]);
+    expect(a.s.status().pending).toBe(0);
+  });
+
+  it('A3: a session that never opened is not resumed by connect(); a failed one is replaced by the next open(); open() before any connect() fails and is not resumed', async () => {
+    const w = world();
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    await flush();
+    expect(s.status().phase).toBe('opening');
+    const again = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:B' });
+    expect(again).toEqual([]);
+    expect(s.alive).toBe(false);
+    expect(w.sessions.list()).toEqual([]);
+    expect(w.events.filter((e) => e.type === 'rebuilt')).toEqual([]);
+    // a failed session is not handed back
+    const f = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command' }, null);
+    await flush();
+    expect(f.status().phase).toBe('failed');
+    const g = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    expect(g).not.toBe(f);
+    expect(f.alive).toBe(false);
+    expect(g.status().phase).toBe('opening');
+    // before any connection
+    const lone = new DimSessions({ store: new DimStore() });
+    const early = lone.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'x' }, press('click'));
+    await flush(100);
+    expect(early.status().phase).toBe('failed');
+    expect(lone.connect({ client: w.client as never, principal: ME, connId: 'conn:C' })).toEqual([]);
+    expect(lone.list()).toEqual([]);
+  });
+
+  it('A4: what a reconnect or a dimension switch throws away is counted and said: on the events, and as one notice on the rebuilt session', async () => {
+    const w = world();
+    const { s, h } = await opened(w);
+    h.edit([rect(1), rect(2)], press());
+    await flush();
+    h.edit([rect(3)], press());
+    expect(s.pendingOps()).toBe(3);
+    const [t] = w.sessions.connect({ client: w.client as never, principal: ME, connId: 'conn:B' });
+    expect(s.lost).toBe(3);
+    expect(w.events.filter((e) => e.type !== 'opened').map((e) => [e.type, (e as { lost: number }).lost])).toEqual([['destroyed', 3], ['rebuilt', 3]]);
+    expect(t!.lastNotice()).toEqual({ about: 'link', code: 'not-saved', field: 'ops', why: null, lost: 3 });
+    // a switch waits for what is pending, up to its bound, and answers what was not saved
+    const h2 = fakeHandle();
+    t!.attachHandle(h2.handle);
+    h2.edit([rect(4)], press());
+    await flush(DIM_SEND_LIMITS.gapMs);
+    const leaving = t!.leave();
+    await flush(500);
+    expect(t!.alive).toBe(true); // still waiting for the batch
+    w.answer(w.ops()[w.ops().length - 1]!);
+    await flush(10);
+    expect(await leaving).toBe(0);
+    expect(t!.alive).toBe(false);
+    // and one that never settles is left after the bound, counted
+    const u = await opened(w, DIM2);
+    u.h.edit([rect(5), rect(6)], press());
+    const gone = u.s.leave();
+    await flush(DIM_SWITCH_WAIT_MS + 10);
+    expect(await gone).toBe(2);
+    expect(w.events[w.events.length - 1]).toMatchObject({ type: 'destroyed', why: 'switch', lost: 2 });
+  });
+
+  it('A5: an edit or an undo made while the leaf is folding is refused, put back and said; nothing is sent after dim.close', async () => {
+    const w = world();
+    const { s, h, n } = await opened(w);
+    h.edit([rect(1)], press());
+    await flush();
+    const done = s.fold(press('keydown'));
+    await flush(10);
+    expect(s.status().phase).toBe('closing');
+    const renders = h.rendered.length;
+    h.edit([rect(2)], press());
+    expect(h.rendered.length).toBe(renders + 1);
+    expect(h.last().nodes.has(ULID(2))).toBe(false);
+    expect(n[n.length - 1]).toEqual({ about: 'edit', code: 'closing', field: 'ops', why: null, lost: 1 });
+    h.undoKey();
+    expect(n[n.length - 1]).toMatchObject({ about: 'undo', code: 'closing' });
+    w.answer(w.ops()[0]!);
+    await flush(100);
+    w.answer(w.calls[w.calls.length - 1]!);
+    expect(await done).toBe(true);
+    await flush(1000);
+    expect(w.calls.map((c) => c.commandId)).toEqual(['dim.open', 'dim.op', 'dim.close']);
+  });
+
+  it('A6: a hash mismatch makes the board READ-ONLY until a reset; an unchecked fold is said as unchecked; the fold is not hashed again for every row', async () => {
+    const w = world();
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    const h = fakeHandle();
+    s.attachHandle(h.handle);
+    const leaf = { destroy: vi.fn(), forget: vi.fn(), setInert: vi.fn() };
+    s.bindLeaf(leaf);
+    const n = watch(s);
+    await flush();
+    expect(s.status()).toMatchObject({ verified: null, checkedSeq: null, readOnly: false });
+    const row = w.append(DIM_KINDS.start, { dim: DIM, title: 'Plan', attached: [HSID], opened: 'command' });
+    w.calls[0]!.resolve({ result: { ok: true, created: true, dim: DIM, seq: row.seq, hash: 'sha256:not-this' } });
+    await flush();
+    expect(s.status()).toMatchObject({ verified: false, checkedSeq: row.seq, readOnly: true });
+    expect(leaf.setInert).toHaveBeenCalledWith('out-of-date');
+    h.edit([rect(1)], press());
+    h.undoKey();
+    await flush(1000);
+    expect(w.ops()).toEqual([]);
+    expect(h.last().nodes.size).toBe(0);
+    expect(n.map((x) => `${x.about}:${x.code}`)).toEqual(['check:hash-mismatch', 'edit:out-of-date', 'undo:out-of-date']);
+    // a reset is the way out: the session goes, and a new open starts unchecked
+    w.sessions.reset();
+    expect(s.alive).toBe(false);
+    // a good hash is compared once per vouched seq, not for every row that arrives
+    const v = world({ auto: true });
+    const ok = await opened(v);
+    await flush(50);
+    expect(ok.s.status()).toMatchObject({ verified: true, readOnly: false });
+    const at = ok.s.status().checkedSeq;
+    const spy = vi.spyOn(v.store, 'stateAt');
+    for (let i = 0; i < 5; i++) v.append(DIM_KINDS.op, { dim: DIM, ops: [rect(50 + i)] }, 'conn:other');
+    const withSeq = spy.mock.calls.filter((c) => c.length > 1 && c[1] !== undefined).length;
+    expect(withSeq).toBe(0); // no scrub back to the vouched seq
+    expect(ok.s.status().checkedSeq).toBe(at);
+    expect(ok.s.status().seq).toBeGreaterThan(at!); // the rows since are not vouched for, and the status says where the check stands
+    // a resumed session with nothing to compare against is unchecked, not verified
+    const fresh = new DimSessions({ store: v.store });
+    fresh.connect({ client: v.client as never, principal: ME, connId: 'conn:Z' });
+    expect(fresh.resume({ dim: DIM, hsid: HSID }).status()).toMatchObject({ verified: null, checkedSeq: null, readOnly: false });
   });
 });
 

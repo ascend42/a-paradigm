@@ -665,3 +665,37 @@ describe('#gui-dim-live rows that fit, and one action is one undo step (P4a)', (
     expect(r.live.status().canUndo).toBe(true);
   });
 });
+
+describe('#gui-dim-live review of PR #118: a send that waits its turn', () => {
+  it('with `leaves`, a batch handed over is not dropped by the timeout until it has left; flying() says whether it may still go; the wait counts from left()', () => {
+    const store = new DimStore();
+    store.apply([{ seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, title: 'Live', attached: ['hsid-1'], opened: 'command', relayedFor: HUMAN } }]);
+    let now = 1000;
+    const sent: DimLiveBatch[] = [];
+    const live = new DimLive({ dim: DIM, me: ME, stateAt: (s) => store.stateAt(DIM, s), send: (b) => void sent.push(b), now: () => now, mint: () => ULID(900), leaves: true });
+    const g = press(now);
+    live.local([rect(1)], g);
+    expect(live.flying(sent[0]!.id)).toBe(true);
+    expect(live.rides(g)).toBe(true);
+    expect(live.pendingOps()).toBe(1);
+    expect(live.nextDeadline()).toBeNull();
+    now += DIM_LIVE_TIMEOUT_MS * 3;
+    expect(live.timeout()).toEqual(NOTHING); // still waiting its turn: not lost
+    live.left(sent[0]!.id);
+    expect(live.nextDeadline()).toBe(now + DIM_LIVE_TIMEOUT_MS);
+    now += DIM_LIVE_TIMEOUT_MS - 1;
+    expect(live.timeout()).toEqual(NOTHING);
+    now += 1;
+    expect(live.timeout().notice).toMatchObject({ code: 'timeout', why: 'no-ack', lost: 1 });
+    expect(live.flying(sent[0]!.id)).toBe(false); // dropped: its command must not go out now
+    expect(live.rides(g)).toBe(false);
+    expect(live.pendingOps()).toBe(0);
+    // link down: one that never left falls at the timeout since it was queued
+    live.local([rect(2)], press(now));
+    live.link(false);
+    expect(live.nextDeadline()).toBe(now + DIM_LIVE_TIMEOUT_MS);
+    now += DIM_LIVE_TIMEOUT_MS;
+    expect(live.timeout().notice).toMatchObject({ code: 'link-down', lost: 1 });
+  });
+});
+

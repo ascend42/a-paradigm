@@ -118,6 +118,12 @@ export interface DimLiveDeps {
   now(): number;
   /** a fresh node id (a ULID), for a node an undo re-adds */
   mint(): string;
+  /**
+   * true: `send` only hands the batch over, and the caller reports `left(id)` when its command really goes out
+   * (it may wait its turn first). The wait for an answer is then counted from `left`, and a batch that has not
+   * left yet is never dropped by the timeout while the link is up (it would be said lost and then sent).
+   */
+  leaves?: boolean;
 }
 
 export interface DimLiveStatus {
@@ -240,6 +246,31 @@ export class DimLive {
     return this.#flight && !this.#flight.landed ? [this.#flight, ...this.#queue] : this.#queue;
   }
 
+  /** True while batch `id` is the one in flight: a send that waited its turn checks this before it leaves (a batch dropped meanwhile must never go out). */
+  flying(id: number): boolean {
+    return this.#flight !== null && this.#flight.id === id;
+  }
+
+  /** The command of batch `id` has actually left: its wait for an answer is counted from now, not from when it was handed over. */
+  left(id: number): void {
+    if (this.#flight && this.#flight.id === id) this.#flight.sentAt = this.#d.now();
+  }
+
+  /** When the in-flight batch's wait began: its ack, else when it left; one that has not left yet waits from when it was queued only while the link is down. */
+  #waitingSince(f: Pending): number | null {
+    return f.ackAt ?? f.sentAt ?? (this.#d.leaves && this.#linkUp ? null : f.at);
+  }
+
+  /** True while a pending batch (in flight or waiting) rides this stamp. */
+  rides(gesture: Gesture): boolean {
+    return this.#pending().some((b) => b.gesture === gesture);
+  }
+
+  /** How many ops are pending (what is lost if the controller is thrown away now). */
+  pendingOps(): number {
+    return this.#pending().reduce((n, b) => n + b.ops.length, 0);
+  }
+
   /** What the board draws now. Read-only. */
   view(): DimState {
     return this.#fold(this.#overlay());
@@ -262,7 +293,7 @@ export class DimLive {
     const now = this.#d.now();
     if (this.#lastSentAt !== null && now - this.#lastSentAt < DIM_LIVE_SEND_GAP_MS && now >= this.#lastSentAt) return;
     const next = this.#queue.shift()!;
-    next.sentAt = now;
+    next.sentAt = this.#d.leaves ? null : now;
     this.#lastSentAt = now;
     this.#flight = next;
     this.#seen = [];
@@ -497,7 +528,8 @@ export class DimLive {
   timeout(): DimLiveResult {
     const now = this.#d.now();
     const f = this.#flight;
-    if (f && now - (f.ackAt ?? f.sentAt ?? f.at) >= DIM_LIVE_TIMEOUT_MS) {
+    const since = f ? this.#waitingSince(f) : null;
+    if (f && since !== null && now - since >= DIM_LIVE_TIMEOUT_MS) {
       if (f.landed && f.ackSeq === null) return this.#settleFromRow(f, f.landed);
       return this.#drop(f, { code: this.#linkUp ? 'timeout' : 'link-down', field: 'ops', why: f.ackAt !== null ? 'no-row' : 'no-ack' });
     }
@@ -527,8 +559,11 @@ export class DimLive {
   nextDeadline(): number | null {
     const f = this.#flight;
     const times: number[] = [];
-    if (f) times.push((f.ackAt ?? f.sentAt ?? f.at) + DIM_LIVE_TIMEOUT_MS);
-    else if (this.#linkUp && this.#queue.length > 0 && this.#lastSentAt !== null) times.push(this.#lastSentAt + DIM_LIVE_SEND_GAP_MS);
+    const since = f ? this.#waitingSince(f) : null;
+    if (f && since !== null) times.push(since + DIM_LIVE_TIMEOUT_MS);
+    else if (f) {
+      /* handed over, not gone yet: no deadline of its own while the link is up */
+    } else if (this.#linkUp && this.#queue.length > 0 && this.#lastSentAt !== null) times.push(this.#lastSentAt + DIM_LIVE_SEND_GAP_MS);
     if (!this.#linkUp) for (const b of this.#queue) times.push(b.at + DIM_LIVE_TIMEOUT_MS);
     return times.length > 0 ? Math.min(...times) : null;
   }
