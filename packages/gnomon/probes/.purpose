@@ -28,6 +28,15 @@ components:
       group SW4BMQ8PNL.gnomon.probe; an unentitled signed binary is refused),
       built from _shared/kernel/KernelProbe.swift by _shared/kernel-probe.mjs.
       GNOMON_PROBE_ADHOC=1 forces ad-hoc signing.
+      Boards S1.0: p12-excalidraw-csp no longer installs anything; it decodes
+      the shipped board chunk (board/*) from the kernel's pinned embed and
+      loads it under the rule 6 CSP through p12-excalidraw-csp/harness.mjs
+      (static scan, mount, draw, tools, select-then-Library, PNG export),
+      shared with oracle G-DDL-06 (packages/gnomon-gui/test/board-csp.test.ts).
+      _shared/wkwebview-load.swift turns window occlusion detection off so an
+      offscreen page stays visible and requestAnimationFrame runs
+      (T-2026-11-06-003), and prints the page's visibility and phase on a
+      timeout.
       Unsigned macOS probes: p10m-sbx-deny-mac (S29-03/04 sandbox-exec session
       denies + escape matrix), p11-ws-framing (RFC 6455 over node:http with a
       forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS

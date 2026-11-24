@@ -22,6 +22,58 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-board:
+    description: >-
+      #gui-board (spec §12.7 "The GUI hosts the canvas directly", §11.2 rule
+      6; boards S1.0, s1-build-plan §2) - the board engine as a LAZY chunk of
+      the pinned bundle. src/board/index.ts is the only module that imports
+      React (19.3.1) and @excalidraw/excalidraw (0.18.1), both exact
+      devDependencies of this private package; scripts/board-build.mjs
+      bundles it as one ES module (board/board.js + board/board.css, no code
+      splitting, React's production build, minified, never a sourcemap) and
+      scripts/build.mjs adds board/* to the SAME gnomon-bundle-tree:v1 hash
+      and embed as app.js. core/board.ts is the whole surface core/ and ui/
+      may use: loadBoard() adds the stylesheet link and import()s the module
+      (resolves only when both loaded; a failure removes the link and is not
+      cached), mountBoard(host, {onError, timeoutMs}) resolves a handle (add,
+      count, setTool, exportPng, onError, unmount) and rejects on an engine
+      throw or a timeout. NOTHING the kernel serves calls loadBoard yet: the
+      stock-looking engine is reachable only from the dev preview fixture
+      `board` until the S1.1 reskin and the S1.3 board leaf.
+      scripts/board-patches.mjs holds the build-time patches, each pinned to
+      the engine file's sha256 and to an exact match count (a version bump
+      throws PatchError by name): every font family registered with zero
+      faces and the 230 font names blanked (text falls to the browser default
+      font until S1.1 registers a bundled face); the esm.sh fallback removed;
+      the font subsetter and worker, pica / image-blob-reduce, the Mermaid
+      importer, all locales but English and the build-env chunk (the
+      excalidraw.com backends, a Firebase config) replaced by src/board/stubs
+      stand-ins that fail closed; data: images in JS become blob: URLs and in
+      CSS become board/asset-<sha>.{png,svg} files; setAttribute("style") and
+      SVG style attributes replaced; every fetch( refused; embed allowlists
+      emptied; the stock Library trigger, tab and panel removed (its previews
+      use innerHTML with inline style); lodash's Function("return this")
+      replaced; every remaining http(s) host literal stripped from the
+      minified output. board/LICENSES.txt carries a notice per bundled
+      package (vendored MIT notices where the tarball ships none; an unknown
+      licence stops the build). Budget 4 MB raw (now 1.5 MB, 435 KB gzipped);
+      `--check` names an unpinned board file, a sourcemap or an over-budget
+      chunk. Known and left for later slices: the image tool still builds
+      data: URLs (images are refused until S2); React and Excalidraw carry
+      HTML sinks (the kernel's bundle scan exempts board/* from that one
+      clause); react-style-singleton can inject a <style> for a modal
+      popover.
+    path: src/board/
+    type: module
+    tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
+    oracles: [G-DDL-06, G-WEB-06]
+    tests:
+      - test/board-patches.test.ts
+      - test/board-isolation.test.ts
+      - test/board-scan.test.ts
+      - test/board-loader.test.ts
+      - test/board-csp.test.ts
+      - test/board-preview.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
