@@ -190,6 +190,9 @@ export function readLearningLivenessRecords(rootDir: string): LearningLivenessRe
     .map(x => x.r);
 }
 
+/** Project-relative troubleshooting doc; doctor names it only when it exists. */
+const TROUBLESHOOTING_DOC = '.paradigm/docs/troubleshooting.md';
+
 export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
   const cwd = options.rootDir || process.cwd();
   const results: CheckResult[] = [];
@@ -256,7 +259,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
             name: '.paradigm/config.yaml',
             status: 'missing',
             message: 'Config file not found',
-            fix: 'paradigm init --force',
+            fix: 'paradigm shift --force',
           });
         }
 
@@ -398,7 +401,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         name: '.paradigm/',
         status: 'missing',
         message: 'Not initialized',
-        fix: 'paradigm init',
+        fix: 'paradigm shift',
       });
     }
 
@@ -455,7 +458,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         name: '.purpose',
         status: 'warn',
         message: 'Root .purpose not found',
-        fix: 'paradigm init',
+        fix: 'paradigm shift',
       });
     }
 
@@ -1468,7 +1471,15 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
 
       console.log(`${parts.join(', ')} found.\n`);
       console.log(chalk.gray('Run the suggested commands to fix issues.'));
-      console.log(chalk.gray('Troubleshooting guide: .paradigm/docs/troubleshooting.md\n'));
+      // Point only at help that exists: the troubleshooting doc is not part
+      // of a fresh project, so name it only when the file is really there.
+      if (fs.existsSync(path.join(cwd, TROUBLESHOOTING_DOC))) {
+        console.log(chalk.gray(`Troubleshooting guide: ${TROUBLESHOOTING_DOC}`));
+      }
+      if (!options.explain) {
+        console.log(chalk.gray('Explain each issue: paradigm doctor --explain'));
+      }
+      console.log('');
     }
   }
 

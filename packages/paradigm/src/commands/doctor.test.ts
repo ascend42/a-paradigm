@@ -292,3 +292,40 @@ describe('doctorCommand', () => {
     expect(doctorCalls).toHaveLength(0);
   });
 });
+
+describe('doctorCommand — what it tells a newcomer to run', () => {
+  /** Run doctor (not quiet) and return everything it printed. */
+  async function doctorOutput(rootDir: string): Promise<string> {
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { lines.push(a.join(' ')); });
+    await doctorCommand({ rootDir, homeDir: fakeHome });
+    return lines.join('\n');
+  }
+
+  it('an uninitialised directory is told to run `paradigm shift`, not `paradigm init`', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.rmSync(path.join(rootDir, '.paradigm'), { recursive: true });
+    const text = await doctorOutput(rootDir);
+    expect(text).toMatch(/Not initialized[\s\S]*?Fix: paradigm shift/);
+    expect(text).not.toMatch(/Fix: paradigm init\b/);
+  });
+
+  it('does not point at a troubleshooting guide that is not there', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.rmSync(path.join(rootDir, '.paradigm'), { recursive: true });
+    const text = await doctorOutput(rootDir);
+    expect(text).not.toContain('troubleshooting.md');
+    expect(text).toContain('paradigm doctor --explain');
+  });
+
+  it('names the troubleshooting guide when the project has one', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, '.paradigm', 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'docs', 'troubleshooting.md'), '# Troubleshooting\n', 'utf8');
+    const text = await doctorOutput(rootDir);
+    expect(text).toContain('Troubleshooting guide: .paradigm/docs/troubleshooting.md');
+  });
+});
