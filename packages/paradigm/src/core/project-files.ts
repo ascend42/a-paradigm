@@ -7,7 +7,7 @@
  * can hold tens of thousands of entries that no check wants to read.
  *
  * Inside a git work tree the list comes from `git ls-files -co --exclude-standard`
- * (tracked files plus untracked files that are not ignored). That takes
+ * (tracked files that still exist plus untracked files that are not ignored). That takes
  * milliseconds, never descends into a nested repository or worktree, and leaves
  * out gitignored files. Outside git (or when git is missing or fails) it falls
  * back to a directory walk that prunes the heavy trees by name.
@@ -70,7 +70,9 @@ function gitList(rootDir: string): string[] | null {
     if (key === 'GIT_DIR' || key === 'GIT_WORK_TREE' || key === 'GIT_INDEX_FILE' || key === 'GIT_PREFIX') delete env[key];
   }
   try {
-    const stdout = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
+    // -t tags each entry ("H " tracked, "? " untracked, "R " tracked but deleted from disk);
+    // -d adds the deleted ones, so the list holds only files that exist. One spawn.
+    const stdout = execFileSync('git', ['ls-files', '-c', '-o', '-d', '-t', '--exclude-standard', '-z'], {
       cwd: rootDir,
       encoding: 'utf-8',
       maxBuffer: 256 * 1024 * 1024,
@@ -79,13 +81,21 @@ function gitList(rootDir: string): string[] | null {
       env,
     });
     const seen = new Set<string>();
-    for (const entry of stdout.split('\0')) {
+    const deleted: string[] = [];
+    for (const tagged of stdout.split('\0')) {
+      if (tagged.length < 3) continue;
+      const entry = tagged.slice(2);
+      if (tagged[0] === 'R') {
+        deleted.push(entry);
+        continue;
+      }
       // "dir/" is an untracked nested repository: git does not list its files
-      if (!entry || entry.endsWith('/')) continue;
+      if (entry.endsWith('/')) continue;
       if (entry.startsWith(WORKTREES_PREFIX)) continue;
       seen.add(entry);
     }
-    return [...seen];
+    for (const entry of deleted) seen.delete(entry);
+    return [...seen].sort();
   } catch {
     // Not a git work tree, git missing, or git failed
     return null;
@@ -114,15 +124,15 @@ function walkList(rootDir: string): string[] {
     }
   };
   walk(rootDir, '');
-  return files;
+  return files.sort();
 }
 
 /**
  * List the project's files once. Callers filter the result (by name, extension
  * or their own skip list) instead of walking the tree again.
  *
- * In git mode a file deleted from disk but still in the index is listed, so
- * callers that read a file must tolerate it being missing.
+ * Every listed file existed when the list was taken (a tracked file deleted
+ * from disk is left out), and the list is sorted.
  */
 export function listProjectFiles(rootDir: string): ProjectFileList {
   const root = path.resolve(rootDir);

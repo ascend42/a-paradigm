@@ -14,6 +14,7 @@ import { GIT_HOOK_VERSION, outdatedGitHooks } from '../hooks/git-hook-state.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
+import { listProjectFiles, hasDirSegment, type ProjectFileList } from '../../core/project-files.js';
 import {
   computeRepeatFailureRate,
   NO_EXERCISE_WRITER_NOTICE,
@@ -209,6 +210,11 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   }
 
   const tracker = log.command('doctor').start('Running health checks');
+
+  // One file list for the whole run (#project-files): every check that needs the
+  // project's files filters this instead of walking the tree itself.
+  let projectFiles: ProjectFileList | undefined;
+  const getProjectFiles = (): ProjectFileList => (projectFiles ??= listProjectFiles(cwd));
 
   // ──────────────────────────────────────────────────────────────────────
   // Core health checks (skipped when --context is specified)
@@ -516,26 +522,10 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     const clarificationMarkerRegex = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
     let clarificationCount = 0;
 
-    function findPurposeFilesRecursive(dir: string): string[] {
-      const found: string[] = [];
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') continue;
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            found.push(...findPurposeFilesRecursive(fullPath));
-          } else if (entry.name === '.purpose') {
-            found.push(fullPath);
-          }
-        }
-      } catch {
-        // Skip directories we can't read
-      }
-      return found;
-    }
-
-    const purposeFiles = findPurposeFilesRecursive(cwd);
+    const purposeSkipDirs = new Set(['node_modules', 'dist', '.git']);
+    const purposeFiles = getProjectFiles().files
+      .filter((rel) => (rel === '.purpose' || rel.endsWith('/.purpose')) && !hasDirSegment(rel, purposeSkipDirs))
+      .map((rel) => path.join(cwd, ...rel.split('/')));
     for (const pf of purposeFiles) {
       try {
         const content = fs.readFileSync(pf, 'utf8');
@@ -599,7 +589,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (fs.existsSync(portalPath)) {
       try {
         const { checkPortalCompliance, getComplianceSummary } = await import('../../core/portal-compliance.js');
-        const complianceReport = await checkPortalCompliance(cwd);
+        const complianceReport = await checkPortalCompliance(cwd, { projectFiles: getProjectFiles() });
         const summary = getComplianceSummary(complianceReport);
         results.push({
           name: 'Portal compliance',
@@ -1284,7 +1274,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     try {
       const { hookHealthChecks } = await import('./hook-health.js');
       const os = await import('os');
-      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: options.homeDir ?? os.homedir() }));
+      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: options.homeDir ?? os.homedir(), projectFiles: getProjectFiles() }));
     } catch {
       // hook health is advisory
     }
@@ -1390,7 +1380,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // ──────────────────────────────────────────────────────────────────────
 
   const { runContextAudit } = await import('./context-audit.js');
-  const contextResults = await runContextAudit(cwd, { quiet, homeDir: options.homeDir });
+  const contextResults = await runContextAudit(cwd, { quiet, homeDir: options.homeDir, projectFiles: getProjectFiles() });
 
   let contextErrorCount = 0;
   let contextWarnCount = 0;

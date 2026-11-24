@@ -389,7 +389,7 @@ function extractUniqueGates(references: GateReference[]): string[] {
  * @param rootDir - Project root directory
  * @returns Compliance report
  */
-export async function checkPortalCompliance(rootDir: string): Promise<ComplianceReport> {
+export async function checkPortalCompliance(rootDir: string, options: { projectFiles?: ProjectFileList } = {}): Promise<ComplianceReport> {
   const loadResult = loadPortalConfig(rootDir);
 
   // FAIL-CLOSED: portal.yaml exists but cannot be parsed.
@@ -427,7 +427,7 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
 
   // If no portal.yaml exists, check if any gate references exist in code
   if (loadResult.status === 'missing') {
-    const references = findGateReferences(rootDir);
+    const references = findGateReferences(rootDir, listGateFiles(rootDir, options.projectFiles));
     const usedGates = extractUniqueGates(references);
 
     if (usedGates.length === 0) {
@@ -467,7 +467,7 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
   const declaredGates = extractDeclaredGates(config);
   const routeAttachedGates = extractRouteAttachedGates(config);
   // One file list per run, shared by the reference scan and the nested-declaration scan
-  const gateFiles = listGateFiles(rootDir);
+  const gateFiles = listGateFiles(rootDir, options.projectFiles);
   const references = findGateReferences(rootDir, gateFiles);
   const usedGates = extractUniqueGates(references);
 

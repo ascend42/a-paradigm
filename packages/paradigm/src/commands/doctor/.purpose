@@ -8,6 +8,17 @@ features:
     components:
       - '#context-audit'
 components:
+  doctor-shared-file-list:
+    description: "One #project-files list per `paradigm doctor` run (doctorCommand's getProjectFiles, taken on first use), shared by every check that used to walk the tree itself: the clarification-marker count (index.ts), Portal compliance (passed to checkPortalCompliance), the hook-health .purpose and anchor counts (hook-health.ts repoTraits), and the context audit's purpose-coverage, stale-portal and purpose-file-health (runContextAudit options.projectFiles; it takes its own list when called without one). Each check keeps its own skip list, applied to path segments with hasDirSegment. Inside git the list is tracked plus untracked-not-ignored files, so gitignored files are not counted; in both modes .claude/worktrees/ (agent worktree copies), .warpline, .build and .loom are left out. That fixed purpose-file-health and purpose-coverage counting worktree copies. repoTraits still walks (to depth 4) because its job is finding nested repositories, which git does not list; that walk now prunes node_modules, .warpline, .build and .loom and still sees .claude/worktrees."
+    type: utility
+    files:
+      - index.ts
+      - context-audit.ts
+      - hook-health.ts
+    components:
+      - '#project-files'
+    tests:
+      - packages/paradigm/src/commands/doctor/shared-file-list.test.ts
   doctor-fix-commands:
     description: "The commands doctor tells a user to run must exist and be the documented ones. Not initialized (.paradigm/ missing) and a missing root .purpose say 'Fix: paradigm shift' (the documented entry point, not paradigm init); a missing config.yaml says 'paradigm shift --force'. A missing or stale scan-index.json says 'paradigm reindex' (the CLI form of paradigm_reindex), and the orphaned-symbols advisory says 'run paradigm reindex first' (bare `paradigm scan` only prints usage). The closing lines name .paradigm/docs/troubleshooting.md only when that file exists, and otherwise point at `paradigm doctor --explain`."
     type: handler

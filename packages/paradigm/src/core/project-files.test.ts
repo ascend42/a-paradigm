@@ -112,11 +112,13 @@ describe('listProjectFiles / listGateFiles', () => {
     expect(relGateFiles(root)).toEqual(EXPECTED);
   });
 
-  it('inside git: a tracked file deleted from disk does not break the compliance check', async () => {
+  it('inside git: a tracked file deleted from disk is not listed and does not break the compliance check', async () => {
     seed(root);
     write(root, '.gitignore', 'node_modules/\ndist/\n');
     initRepo();
     fs.rmSync(path.join(root, 'packages', 'api', 'portal.yaml'));
+    expect(listProjectFiles(root).files).not.toContain('packages/api/portal.yaml');
+    expect(listProjectFiles(root).files).toContain('packages/api/.purpose');
     const report = await checkPortalCompliance(root);
     // ^root-gate is declared at the root and referenced from .purpose; ^api-gate is declared in a .purpose
     expect(report.properlyDeclared).toContain('root-gate');

@@ -25,6 +25,7 @@ import { log } from '../../utils/logger.js';
 import { filterGitIgnored, resolvePurposeCoverage } from '@a-company/purpose-core';
 import { measureAlwaysOn, ALWAYS_ON_CAP_KEY, type AlwaysOnEntry } from '../../core/always-on-budget.js';
 import { detectWarpline, scanWarplineBlocks } from '../../core/warpline-detect.js';
+import { listProjectFiles, hasDirSegment, type ProjectFileList } from '../../core/project-files.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,8 +71,8 @@ function loadInstructionFiles(rootDir: string): { name: string; content: string;
  * output such as packages/gnomon/release/Gnomon.app is never source). Outside
  * a git work tree, release/ is skipped by name.
  */
-function findSourceDirs(dir: string, extensions: string[]): Set<string> {
-  const found = walkSourceDirs(dir, extensions);
+function findSourceDirs(dir: string, extensions: string[], projectFiles: ProjectFileList): Set<string> {
+  const found = sourceDirsFromList(dir, extensions, projectFiles);
   // Trailing separator so directory-only patterns ("release/") match.
   const ignored = filterGitIgnored(dir, Array.from(found, (d) => d + path.sep));
   if (ignored) {
@@ -84,36 +85,16 @@ function findSourceDirs(dir: string, extensions: string[]): Set<string> {
   return found;
 }
 
-function walkSourceDirs(dir: string, extensions: string[]): Set<string> {
+/** Directories holding at least one source file, from the shared #project-files list (no walk). */
+function sourceDirsFromList(dir: string, extensions: string[], projectFiles: ProjectFileList): Set<string> {
   const dirs = new Set<string>();
   const skipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build', '__pycache__', 'target', '.next', '.nuxt']);
-
-  function walk(current: string): void {
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    let hasSource = false;
-    for (const entry of entries) {
-      if (skipDirs.has(entry.name)) continue;
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name);
-        if (extensions.includes(ext)) {
-          hasSource = true;
-        }
-      }
-    }
-    if (hasSource) {
-      dirs.add(current);
-    }
+  for (const rel of projectFiles.files) {
+    if (!extensions.includes(path.extname(rel))) continue;
+    if (hasDirSegment(rel, skipDirs)) continue;
+    const slash = rel.lastIndexOf('/');
+    dirs.add(slash === -1 ? dir : path.join(dir, ...rel.slice(0, slash).split('/')));
   }
-
-  walk(dir);
   return dirs;
 }
 
@@ -416,10 +397,10 @@ async function checkUndocumentedStack(rootDir: string): Promise<ContextAuditResu
 // Check 4: Purpose Coverage
 // ---------------------------------------------------------------------------
 
-async function checkPurposeCoverage(rootDir: string): Promise<ContextAuditResult[]> {
+async function checkPurposeCoverage(rootDir: string, projectFiles: ProjectFileList): Promise<ContextAuditResult[]> {
   const results: ContextAuditResult[] = [];
   const sourceExtensions = ['.ts', '.js', '.py', '.rs', '.go', '.tsx', '.jsx'];
-  const sourceDirs = findSourceDirs(rootDir, sourceExtensions);
+  const sourceDirs = findSourceDirs(rootDir, sourceExtensions, projectFiles);
 
   if (sourceDirs.size === 0) {
     results.push({
@@ -568,7 +549,7 @@ async function checkOrphanedSymbols(rootDir: string): Promise<ContextAuditResult
 // Check 6: Stale Portal
 // ---------------------------------------------------------------------------
 
-async function checkStalePortal(rootDir: string): Promise<ContextAuditResult[]> {
+async function checkStalePortal(rootDir: string, projectFiles: ProjectFileList): Promise<ContextAuditResult[]> {
   const results: ContextAuditResult[] = [];
   const portalPath = path.join(rootDir, 'portal.yaml');
 
@@ -611,27 +592,12 @@ async function checkStalePortal(rootDir: string): Promise<ContextAuditResult[]> 
   const sourceExtensions = ['.ts', '.js', '.py', '.rs', '.go'];
   const allSourceFiles: string[] = [];
 
-  function collectSourceFiles(dir: string): void {
-    const skipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build', 'target']);
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (skipDirs.has(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          collectSourceFiles(full);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name);
-          if (sourceExtensions.includes(ext)) {
-            allSourceFiles.push(full);
-          }
-        }
-      }
-    } catch {
-      // skip
-    }
+  const sourceSkipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build', 'target']);
+  for (const rel of projectFiles.files) {
+    if (!sourceExtensions.includes(path.extname(rel))) continue;
+    if (hasDirSegment(rel, sourceSkipDirs)) continue;
+    allSourceFiles.push(path.join(rootDir, ...rel.split('/')));
   }
-  collectSourceFiles(rootDir);
 
   // Get all filenames and paths lowercased for matching
   const filenameLower = allSourceFiles.map(f => ({
@@ -813,29 +779,17 @@ async function checkConfigSchema(rootDir: string): Promise<ContextAuditResult[]>
 // Check 9: Purpose File Health
 // ---------------------------------------------------------------------------
 
-async function checkPurposeFileHealth(rootDir: string): Promise<ContextAuditResult[]> {
+async function checkPurposeFileHealth(rootDir: string, projectFiles: ProjectFileList): Promise<ContextAuditResult[]> {
   const results: ContextAuditResult[] = [];
 
   // Find all .purpose files
   const purposeFiles: string[] = [];
-  function findPurpose(dir: string): void {
-    const skipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build']);
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (skipDirs.has(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          findPurpose(full);
-        } else if (entry.name === '.purpose') {
-          purposeFiles.push(full);
-        }
-      }
-    } catch {
-      // Skip unreadable dirs
-    }
+  const purposeSkipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build']);
+  for (const rel of projectFiles.files) {
+    if (rel !== '.purpose' && !rel.endsWith('/.purpose')) continue;
+    if (hasDirSegment(rel, purposeSkipDirs)) continue;
+    purposeFiles.push(path.join(rootDir, ...rel.split('/')));
   }
-  findPurpose(rootDir);
 
   if (purposeFiles.length === 0) {
     results.push({
@@ -994,19 +948,24 @@ async function checkWarplineGuidance(rootDir: string): Promise<ContextAuditResul
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string }): Promise<ContextAuditResult[]> {
+/**
+ * options.projectFiles: the run's shared #project-files list (doctor passes its own); taken here when absent.
+ */
+export async function runContextAudit(rootDir: string, options?: { quiet?: boolean; homeDir?: string; projectFiles?: ProjectFileList }): Promise<ContextAuditResult[]> {
   const tracker = log.command('doctor:context-audit').start('Running context audit checks');
   const results: ContextAuditResult[] = [];
+  // One file list for every check that used to walk the tree itself
+  const projectFiles = options?.projectFiles ?? listProjectFiles(rootDir);
 
   results.push(...await checkStaleReferences(rootDir));
   results.push(...await checkConventionContradictions(rootDir));
   results.push(...await checkUndocumentedStack(rootDir));
-  results.push(...await checkPurposeCoverage(rootDir));
+  results.push(...await checkPurposeCoverage(rootDir, projectFiles));
   results.push(...await checkOrphanedSymbols(rootDir));
-  results.push(...await checkStalePortal(rootDir));
+  results.push(...await checkStalePortal(rootDir, projectFiles));
   results.push(...await checkInstructionVagueness(rootDir));
   results.push(...await checkConfigSchema(rootDir));
-  results.push(...await checkPurposeFileHealth(rootDir));
+  results.push(...await checkPurposeFileHealth(rootDir, projectFiles));
   results.push(...await checkAlwaysOnBudget(rootDir, options?.homeDir));
   results.push(...await checkWarplineGuidance(rootDir));
 

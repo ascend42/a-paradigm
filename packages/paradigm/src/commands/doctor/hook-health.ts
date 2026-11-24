@@ -25,6 +25,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { pathFor } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 import { gitHookState, readGitHook } from '../hooks/git-hook-state.js';
+import { WALK_PRUNE_DIRS, type ProjectFileList } from '../../core/project-files.js';
 
 export interface HookHealthCheck {
   name: string;
@@ -163,6 +164,8 @@ export interface RepoTraits {
   untrackedCount: number;
 }
 
+const TRAIT_WALK_PRUNE: ReadonlySet<string> = new Set(WALK_PRUNE_DIRS);
+
 function gitLines(rootDir: string, args: string[]): string[] | null {
   try {
     return execFileSync('git', args, { cwd: rootDir, encoding: 'utf8', timeout: 10_000, maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
@@ -183,7 +186,7 @@ export function countAnchorLines(text: string): number {
   return n;
 }
 
-export function repoTraits(rootDir: string, maxDepth = 4): RepoTraits {
+export function repoTraits(rootDir: string, maxDepth = 4, projectFiles?: ProjectFileList): RepoTraits {
   const nestedRepos: string[] = [];
   let visited = 0;
   const walk = (dir: string, depth: number): void => {
@@ -196,7 +199,9 @@ export function repoTraits(rootDir: string, maxDepth = 4): RepoTraits {
     }
     for (const e of entries) {
       visited++;
-      if (e.name === 'node_modules') continue;
+      // node_modules, plus generated state trees (.warpline, .build, .loom): large, and not where a
+      // nested repo that slows hooks lives. .git is handled below; .claude/worktrees must stay visible.
+      if (e.name !== '.git' && TRAIT_WALK_PRUNE.has(e.name)) continue;
       const full = path.join(dir, e.name);
       if (e.name === '.git') {
         if (dir !== rootDir) nestedRepos.push(path.relative(rootDir, dir));
@@ -206,7 +211,10 @@ export function repoTraits(rootDir: string, maxDepth = 4): RepoTraits {
     }
   };
   walk(rootDir, 0);
-  const files = gitLines(rootDir, ['ls-files', '-co', '--exclude-standard']) ?? [];
+  // The run's shared list when doctor has one and it came from git (outside git this trait stays 0, as before)
+  const files = projectFiles
+    ? (projectFiles.source === 'git' ? projectFiles.files : [])
+    : gitLines(rootDir, ['ls-files', '-co', '--exclude-standard']) ?? [];
   const purposes = files.filter((f) => f === '.purpose' || f.endsWith('/.purpose'));
   let anchorLines = 0;
   for (const p of purposes) {
@@ -417,13 +425,13 @@ export function learnPathSkipChecks(rootDir: string): HookHealthCheck[] {
   }];
 }
 
-export function hookHealthChecks(opts: { rootDir: string; homeDir: string; nowMs?: number }): HookHealthCheck[] {
+export function hookHealthChecks(opts: { rootDir: string; homeDir: string; nowMs?: number; projectFiles?: ProjectFileList }): HookHealthCheck[] {
   const events = hookRingDir(opts.rootDir);
   const nowMs = opts.nowMs ?? Date.now();
   return [
     ...hookTimingChecks(summarizeHookRing(readHookRing(path.join(events, 'hook-timings.jsonl')), nowMs)),
     ...stopSectionChecks(readStopTiming(path.join(events, 'stop-timing.jsonl'))),
-    ...repoTraitChecks(repoTraits(opts.rootDir)),
+    ...repoTraitChecks(repoTraits(opts.rootDir, 4, opts.projectFiles)),
     ...pluginCacheChecks(opts.rootDir, opts.homeDir),
     ...staleSessionHookChecks(opts.rootDir, nowMs),
     ...learningGuardChecks(opts.rootDir),
