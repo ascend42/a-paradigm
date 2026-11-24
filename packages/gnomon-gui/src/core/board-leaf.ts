@@ -83,7 +83,8 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'out-of-date') return INERT_COPY['out-of-date'];
   if (n.code === 'closing') return 'The board is folding · that change wasn’t made';
   if (n.code === 'not-saved') return n.lost > 1 ? `${n.lost} changes weren’t saved before the link came back` : 'One change wasn’t saved before the link came back';
-  if (n.code === 'not-undoable') return n.why === 'delete' ? 'Nothing was deleted · a delete takes 64 marks at most' : 'Nothing was changed · that is too much for one change';
+  // (Aegis N1: the limit is said only to a person who went over it; 50 shapes with 20 tied arrows did not)
+  if (n.code === 'not-undoable') return n.why !== 'delete' ? 'Nothing was changed · that is too much for one change' : n.lost > 64 ? 'Nothing was deleted · a delete takes 64 marks at most' : 'Nothing was deleted · select fewer marks and try again';
   if (n.about === 'undo') return 'That was too much to undo · it stays as it is';
   if (n.about === 'open') return 'The dimension didn’t open · try again';
   // (a fold is sent only after what was pending has settled: what was drawn is in the log)
@@ -92,13 +93,14 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'too-large' || n.code === 'row-too-large') return 'That is too much for one change · do it in smaller parts';
   if (n.code === 'busy') return 'Too many changes are waiting · try again in a moment';
   if (n.code === 'not-sent' || n.code === 'gesture-refused') return 'That change wasn’t sent · do it again';
-  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes weren’t saved · do them again` : 'That change wasn’t saved · do it again';
+  // (a command that left and was never answered may have been written: the line does not say it was not)
+  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes may not have been saved · look first` : 'That change may not have been saved · look before redoing';
   return n.lost > 1 ? `${n.lost} changes weren’t kept · the board is as it was` : 'That change wasn’t kept · the board is as it was';
 }
 
 /** What the leaf shows, for as long as it lasts, while the board is held still (the link is down; the fold is out of date). */
 export const INERT_COPY = {
-  'link-down': 'Not saved · reconnecting',
+  'link-down': 'Reconnecting',
   'out-of-date': 'This board is out of date · fold it and open it again',
 } as const;
 export type LeafInert = keyof typeof INERT_COPY;
@@ -107,11 +109,44 @@ export type LeafInert = keyof typeof INERT_COPY;
  * The keep line's state of the live loop, from `DimSession.status()`: null while everything is saved (the leaf then
  * shows its usual keep line). Minimal words, in the keep line's own slot; the final words are the next pass's.
  */
-export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number }): string | null {
-  if (s.link === 'down') return INERT_COPY['link-down'];
+export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number }): string | null {
+  if (s.link === 'down') return linkDownLine(s);
+  if (s.phase === 'opening') return 'Opening…';
+  if (s.phase === 'closing') return 'Folding…';
   if (s.keep === 'saving') return 'Saving…';
   if (s.keep === 'not-saved') return 'Not saved';
+  if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
+  if (s.partial) return KEEP_COPY.partial;
   return null;
+}
+/** Minimal words of the keep line's own states (boards S1.3 P4b-1; Luna rules them in the next pass). */
+export const KEEP_COPY = {
+  notSavedDown: 'Not saved · reconnecting',
+  dropped: 'Part of this board could not be held · marks are missing',
+  partial: 'Earlier marks are not shown · this is part of the board',
+  wordsHeld: 'Reconnecting · your words are held, not saved',
+  wordsWait: 'Reconnected · press T and click: your words come back',
+  wordsBack: 'Your words are back · click away to save them',
+  wordsGone: 'The words you were typing were not saved',
+  reconnected: 'Reconnected',
+  copyDown: 'Nothing was copied · copy it again once reconnected',
+  foldedDown: 'Folded while reconnecting · unsaved changes were dropped',
+  reopens: 'That dimension had ended · opening it starts it again',
+  noSession: 'Open a session first · a board belongs to one',
+  noBoard: 'This session has no board yet',
+} as const;
+/** The held-still line while the link is down: `Reconnecting` alone unless something of the person's is not saved. */
+export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pending: number }): string {
+  return s.pending > 0 || s.keep === 'not-saved' ? KEEP_COPY.notSavedDown : INERT_COPY['link-down'];
+}
+/**
+ * The check display (Aegis, final): what the fold was compared with, in plain words. Never a bare "verified": the
+ * mod vouches for a POINT, so the line reads "checked up to" it; `verified: null` is unchecked.
+ */
+export function checkLine(s: { verified: boolean | null; checkedSeq: number | null; seq: number }): string {
+  if (s.verified === null || s.checkedSeq === null) return 'Not checked yet';
+  if (s.verified === false) return `Did not match at change ${s.checkedSeq} · fold it and open it again`;
+  return s.checkedSeq < s.seq ? `Checked up to change ${s.checkedSeq} of ${s.seq}` : `Checked up to change ${s.checkedSeq}`;
 }
 /** A save shows as `Saving…` only when it has lasted this long (a quick save never flickers the line). */
 export const KEEP_SLOW_MS = 600;

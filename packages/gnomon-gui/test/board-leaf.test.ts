@@ -90,10 +90,11 @@ describe('#gui-board G-DDL-08 (the parts that exist before the S1.3 leaf)', () =
 
 describe('#gui-board fences', () => {
   const bundle = embeddedBundle() as Map<string, Buffer>;
-  it('nothing the kernel serves can load the host layer yet: app.js has none of it', () => {
-    const app = bundle.get('app.js')!.toString('utf8');
-    for (const marker of ['mountBoardLeaf', 'bd-rail', 'bd-leaf', 'railKeyAction', 'sealOf', 'A card has the keys', 'loadBoard(']) expect(app, marker).not.toContain(marker);
-    for (const entry of ['src/main.ts', 'src/ui/app.ts']) expect(src(entry), entry).not.toMatch(/board-leaf|board-rail|board-tray|board-overlay|board-seal|core\/board\.js/);
+  it('the app mounts the leaf through the dock only (S1.3 P4b-1): app.ts imports the loader, the opening rules and the dock, never the leaf or its parts', () => {
+    expect(src('src/main.ts')).not.toMatch(/board-leaf|board-rail|board-tray|board-overlay|board-seal|board-dock|core\/board\.js/);
+    const app = src('src/ui/app.ts');
+    expect([...app.matchAll(/from '([^']*board[^']*)'/g)].map((m) => m[1]).sort()).toEqual(['../core/board-open.js', '../core/board.js', './board-dock.js']);
+    expect(app).toContain('load: () => loadBoard(),');
   });
   it('only the dev preview imports the leaf', () => {
     expect(src('src/preview/main.ts')).toMatch(/from '\.\.\/ui\/board-leaf\.js'/);
@@ -136,10 +137,23 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     ].flatMap((n) => [noticeLine({ ...n, lost: 1 }), noticeLine({ ...n, lost: 64 })]);
     const { INERT_COPY, keepStateLine } = await import('../src/core/board-leaf.js');
     expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 65 })).toBe('Nothing was deleted · a delete takes 64 marks at most');
-    expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Not saved · reconnecting', '2 changes weren’t saved · do them again']);
+    // Aegis N1: 50 shapes with 20 tied arrows is under the limit the line used to state: no number is said
+    expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 50 })).toBe('Nothing was deleted · select fewer marks and try again');
+    expect(noticeLine({ about: 'edit', code: 'timeout', why: 'no-ack', lost: 1 })).toBe('That change may not have been saved · look before redoing');
+    const { KEEP_COPY, checkLine, linkDownLine } = await import('../src/core/board-leaf.js');
+    // "Reconnecting" alone when nothing is pending; "Not saved" only when something is
+    expect([linkDownLine({ keep: 'saved', pending: 0 }), linkDownLine({ keep: 'saving', pending: 2 }), linkDownLine({ keep: 'not-saved', pending: 0 })]).toEqual(['Reconnecting', 'Not saved · reconnecting', 'Not saved · reconnecting']);
+    // the check display: never a bare "verified"; null is unchecked; behind the head it reads "checked up to"
+    expect([checkLine({ verified: null, checkedSeq: null, seq: 9 }), checkLine({ verified: true, checkedSeq: 4, seq: 9 }), checkLine({ verified: true, checkedSeq: 9, seq: 9 })]).toEqual(['Not checked yet', 'Checked up to change 4 of 9', 'Checked up to change 9']);
+    expect(checkLine({ verified: false, checkedSeq: 4, seq: 9 })).toMatch(/^Did not match at change 4/);
+    for (const s of [checkLine({ verified: true, checkedSeq: 9, seq: 9 }), checkLine({ verified: null, checkedSeq: null, seq: 1 })]) expect(s).not.toMatch(/verified/i);
+    notices.push(...Object.values(KEEP_COPY));
+    expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Reconnecting', '2 changes may not have been saved · look first']);
     expect(noticeLine({ about: 'undo', code: 'undo-too-many-ops', lost: 0 })).toBe('That was too much to undo · it stays as it is');
     expect(noticeLine({ about: 'close', code: 'close-failed', lost: 0 })).toBe('Your marks are saved · the board didn’t fold · try again');
-    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'Saving…', 'Not saved · reconnecting', 'Not saved · reconnecting']);
+    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'Saving…', 'Not saved · reconnecting', 'Reconnecting']);
+    // the keep line's own states: opening, folding, not saved (its own state), partly held, rows dropped
+    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0, phase: 'opening' }), keepStateLine({ keep: 'not-saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, partial: true }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, dropped: 2 })]).toEqual(['Opening…', 'Not saved', KEEP_COPY.partial, KEEP_COPY.dropped]);
     for (const line of [...lines, ...notices, ...Object.values(INERT_COPY)]) {
       expect(line.length, line).toBeLessThanOrEqual(59);
       // plain words: never a code, a field name or a kernel word

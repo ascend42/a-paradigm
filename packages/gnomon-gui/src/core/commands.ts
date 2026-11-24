@@ -51,6 +51,9 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
   // #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui): the Loops leaf and the kill switch
   { id: 'loops.open', title: 'Loops… (the Loops view: list, graph, keys)' },
+  // #gui-board-dock (boards S1.3): the focused session's board, and this project's dimensions
+  { id: 'board.open', title: 'Open board (this session’s last dimension, or a new one)', keys: '/board · ⌥B' },
+  { id: 'dimensions.list', title: 'Dimensions: list (this project’s boards)', keys: '/boards' },
   { id: 'loops.pause-all', title: 'Loops: pause all (no presence; resuming needs it)' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: Day (papercraft)' },

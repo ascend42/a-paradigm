@@ -1386,6 +1386,13 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .lst .hd strong { font-weight: 600; }
 .lt-wrap .lt-fold { margin: 0 auto 8px; display: block; max-width: 96ch; }
 .lp-tab-on .feed > .toast-anchor { right: 48px; }
+/* #gui-board-dock: where the board leaf sits in the centre column (the chat header and the chat; its height is set
+   from the feed's bottom, so it stops above the pinned cards and the composer). The board's edge tab is the Loops
+   one; toasts step in beside it and, while a board is open, sit under its head and keep line (clear of its keys). */
+.bd-host { position: absolute; left: 0; right: 0; top: 0; z-index: 12; }
+.bd-host[hidden] { display: none; }
+.bd-tab-on .feed > .toast-anchor { right: 48px; }
+.bd-open .feed > .toast-anchor { top: 44px; }
 .loops-word .lw-narrow { display: none; }
 @media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
 @media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }

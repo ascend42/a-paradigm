@@ -6,9 +6,8 @@
  * pins, seals and stubs laid over the engine's marks, the hands foot, and the loading, failed, too-short, yielded
  * and empty states. The engine is touched ONLY through the handle of core/board.ts.
  *
- * NOT reachable from the shipped app: nothing in src/main.ts or ui/app.ts imports this file (test/board-leaf.test.ts
- * and the isolation test hold that), so it is in no served bundle until the S1.3 leaf opens it. Today the dev
- * preview fixtures mount it.
+ * Mounted in the shipped app by the dock (ui/board-dock.ts, boards S1.3 P4b-1) and by the dev preview fixtures. The
+ * engine is never in the app bundle: it arrives through the lazy loader the leaf is handed (the isolation test).
  *
  * No inline style attribute is written: sizes and positions go through CSSOM properties, classes do the rest.
  */
@@ -16,7 +15,7 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveCo
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -90,6 +89,24 @@ export interface BoardLeaf {
   setInert(why: LeafInert | null): void;
   /** The live loop's keep state in the keep line's place (`Saving…`, `Not saved`), or null for the usual keep line. A save is shown only once it is slow. */
   setKeep(line: string | null): void;
+  /** The dimension's title once the fold holds it (the head, its title= and the region's names). */
+  setTitle(title: string): void;
+  /** The check display's line (core/board-leaf.ts `checkLine`): the head glyph's title= and a hidden description. */
+  setCheck(line: string): void;
+  /** Other words for the held-still line while it lasts (`Not saved · reconnecting` when something is pending), or null for its own. */
+  setInertLine(line: string | null): void;
+  /**
+   * The words of a text being typed on the board now, or null when none is open. Read through the paste sanitizer
+   * and cut to the text limit: page memory only (Aegis, option b). Nothing is committed and the engine is not told.
+   */
+  typed(): string | null;
+  /**
+   * Put held words back into a text the PERSON has just opened and not typed in: true when they went in. Never
+   * opens an edit and never commits one: the person's next trusted press or key does that.
+   */
+  putTyped(words: string): boolean;
+  /** Be told when the person opens a text on the board (the field took focus). Returns the unsubscribe. */
+  onTextOpen(listener: () => void): () => void;
   destroy(): void;
 }
 
@@ -231,6 +248,18 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   /** under the least height a board can be drawn on, whatever the state: the body and the foot are not drawn */
   const short = (): boolean => boardHeight() < BOARD_MIN_HEIGHT;
   let inert: LeafInert | null = null;
+  let inertLine: string | null = null;
+  let inertSaid: string | null = null;
+  let inertSaidTimer: ReturnType<typeof setTimeout> | undefined;
+  const inertWords = (): string => (inert ? (inertSaid ?? inertLine ?? INERT_COPY[inert]) : '');
+  /** One line said while the board is held still (in the held-still line's place, for a few seconds, and announced). */
+  const sayHeld = (text: string): void => {
+    inertSaid = text;
+    saidLine.textContent = text;
+    clearTimeout(inertSaidTimer);
+    inertSaidTimer = setTimeout(() => ((inertSaid = null), draw()), 4000);
+    draw();
+  };
   let keepLine: string | null = null;
   let keepShown: string | null = null;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
@@ -249,8 +278,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     keep.replaceChildren();
     // held still: its line stays for as long as it lasts, over anything else the keep line would say
     if (inert && state !== 'failed' && state !== 'loading') {
-      keep.title = INERT_COPY[inert];
-      return void keep.append(INERT_COPY[inert]);
+      keep.title = inertWords();
+      return void keep.append(inertWords());
     }
     // what the board refused is said in the keep line's place (as the yielded line is), so nothing below moves
     if (said && state !== 'failed' && state !== 'loading') {
@@ -742,13 +771,44 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // and nothing else reaches the engine while yielded (review S4): a double-click, a wheel, a drop, a context menu
   const onHeld = (e: Event): void => {
     if (!yielded() && performance.now() >= wakeUntil) return;
+    if (e.type === 'wheel' && inert !== null && !o.cardFocused()) return; // held still: the wheel still pans and zooms
     e.preventDefault();
     e.stopPropagation();
   };
   // (touchmove, touchend and touchcancel too: the engine handles touches on its canvas. Its keyup and Safari
   // gesture listeners are on the DOCUMENT and cannot be stopped from here: recorded for S1.3)
   for (const type of ['pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'dragover', 'drop', 'paste', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) stage.addEventListener(type, onHeld, true);
+  // held still (the link is down, the fold is out of date) the person may still LOOK AROUND: the wheel pans and
+  // zooms (never an edit); while a card has the keys it does not
   stage.addEventListener('wheel', onHeld, { capture: true, passive: false });
+  // A text being typed when the link goes down (Mika, final; Aegis option b): its commit is REFUSED while down and
+  // the field stays open with its words. Esc, Cmd/Ctrl+Enter and Tab would end the edit; a blur would commit it.
+  const boardField = (): HTMLTextAreaElement | null => boardHost.querySelector('textarea');
+  const guardTypedKey = (e: KeyboardEvent): void => {
+    if (inert !== 'link-down' || e.target !== boardField()) return;
+    if (e.key !== 'Escape' && e.key !== 'Tab' && !(e.key === 'Enter' && (e.metaKey || e.ctrlKey))) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    sayHeld(KEEP_COPY.wordsHeld);
+  };
+  // a copy or a cut while held still takes nothing (the register was forgotten with the link): said, never silent
+  const heldCopy = (e: Event): void => {
+    if (inert === null || e.target === boardField()) return;
+    sayHeld(inert === 'link-down' ? KEEP_COPY.copyDown : INERT_COPY['out-of-date']);
+  };
+  el.addEventListener('copy', heldCopy, true);
+  el.addEventListener('cut', heldCopy, true);
+  const guardTypedBlur = (e: Event): void => {
+    if (inert !== 'link-down' || e.target !== boardField()) return;
+    e.stopImmediatePropagation();
+  };
+  window.addEventListener('keydown', guardTypedKey, true);
+  el.addEventListener('blur', guardTypedBlur, true);
+  el.addEventListener('focusout', guardTypedBlur, true);
+  const textOpen = new Set<() => void>();
+  el.addEventListener('focusin', (e) => {
+    if (e.target instanceof HTMLTextAreaElement && boardHost.contains(e.target)) for (const fn of [...textOpen]) fn();
+  }, true);
   headKey.addEventListener('click', () => load === 'failed' && start());
   escKey.addEventListener('click', (e) => o.onFold?.(e));
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
@@ -775,12 +835,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     setInert(why) {
       if (why === inert) return;
       inert = why;
+      if (!why) inertLine = inertSaid = null;
       el.dataset.inert = why ?? '';
       if (why) {
         // one line, announced once; whatever was being said gives way to it
         said = '';
         clearTimeout(saidTimer);
-        saidLine.textContent = INERT_COPY[why];
+        saidLine.textContent = inertWords();
         trayOpen = false;
         menu = null;
       } else saidLine.textContent = '';
@@ -801,7 +862,41 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         draw();
       }, KEEP_SLOW_MS);
     },
+    setTitle(title) {
+      if (!title || title === titleEl.textContent) return;
+      titleEl.textContent = title;
+      titleEl.title = title;
+      boardHost.setAttribute('aria-label', `Board: ${title}`);
+      el.setAttribute('aria-label', `Dimension: ${title}`);
+    },
+    setCheck(line) {
+      head.querySelector('.bd-g')?.setAttribute('title', line);
+      el.dataset.check = line;
+    },
+    setInertLine(line) {
+      if (line === inertLine) return;
+      inertLine = line;
+      if (inert) draw();
+    },
+    typed() {
+      const f = boardField();
+      if (!f) return null;
+      return dimPastedWords(f.value).slice(0, DIM_LIMITS.text);
+    },
+    putTyped(words) {
+      const f = boardField();
+      if (!f || f.value !== '' || inert !== null) return false;
+      f.value = dimPastedWords(words).slice(0, DIM_LIMITS.text);
+      f.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    },
+    onTextOpen(listener) {
+      textOpen.add(listener);
+      return () => void textOpen.delete(listener);
+    },
     destroy() {
+      window.removeEventListener('keydown', guardTypedKey, true);
+      clearTimeout(inertSaidTimer);
       generation++;
       clearTimeout(saidTimer);
       clearTimeout(keepTimer);

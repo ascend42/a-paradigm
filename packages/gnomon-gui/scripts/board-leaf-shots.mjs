@@ -114,7 +114,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         await call('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...v, commands: ['paste'] });
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...v });
       } else if (a.drop) {
-        const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+        const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage, .bd-host .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
         const at = { x: box.x + a.at[0], y: box.y + a.at[1] };
         const data = { items: a.drop.items ?? [], files: a.drop.files ?? [], dragOperationsMask: 1 };
         for (const type of ['dragEnter', 'dragOver', 'drop']) {
@@ -139,7 +139,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2 });
       } else {
         if (a.drag || a.hold || a.release) {
-          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage, .bd-host .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
           const pts = (a.drag ?? a.hold ?? [a.release]).map(([x, y]) => ({ x: box.x + x, y: box.y + y }));
           if (!a.release) {
             const mods = a.alt ? { modifiers: 1 } : {};
@@ -161,8 +161,8 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         }
         let p = null;
         if (a.at) {
-          const stage = await centre('#preview-board .bd-stage');
-          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+          const stage = await centre('#preview-board .bd-stage, .bd-host .bd-stage');
+          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage, .bd-host .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
           p = stage ? { x: box.x + a.at[0], y: box.y + a.at[1] } : null;
         } else p = await centre(a.press ?? a.dbl ?? a.wheel ?? a.move);
         if (!p) throw new Error(`no element for ${JSON.stringify(a)}`);

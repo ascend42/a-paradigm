@@ -9,8 +9,8 @@
  *     ─▶ sendModCommand(client, stamp, 'gnomon.dimension', 'dim.op', {dim, ops, focus: {hsid}}) ─▶ DimLive.ack
  *   handle.onUndoKey ─▶ DimLive.undo(stamp)          one timer from DimLive.nextDeadline() ─▶ DimLive.timeout()
  *
- * No DOM is touched here but through the board handle and the leaf it is handed. NOT imported by ui/app.ts in this
- * pass (test/board-isolation.test.ts): mounting it in the app is the next pass.
+ * No DOM is touched here but through the board handle and the leaf it is handed. Since pass P4b-1 ui/app.ts makes
+ * the page's one `DimSessions` and the dock (ui/board-dock.ts) mounts each session's leaf.
  *
  * RULES.
  *  - ONE SENDER. Every command goes through `sendModCommand` with the `GnomonClient` object itself and no `now`

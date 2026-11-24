@@ -129,6 +129,8 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = Object.freeze([
   { id: 'mcp.open', name: 'mcp', why: 'MCP servers: trust and turn on' },
   { id: 'settings.open', name: 'settings', why: 'every setting' },
   { id: 'session.new', name: 'new', why: 'a new session, fresh context' },
+  { id: 'board.open', name: 'board', why: 'this session’s board' },
+  { id: 'dimensions.list', name: 'boards', why: 'this project’s dimensions' },
 ]);
 
 export interface SlashItem {
