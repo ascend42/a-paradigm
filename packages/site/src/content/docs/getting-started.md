@@ -12,12 +12,6 @@ Install Paradigm globally via npm:
 npm install -g @a-company/paradigm
 ```
 
-Or add it to your project as a dev dependency:
-
-```bash
-npm install -D @a-company/paradigm
-```
-
 ## Initialize a Project
 
 Run `paradigm shift` in your project root. This creates the `.paradigm/` directory and scans your source tree:
@@ -35,10 +29,11 @@ This creates:
 
 ## Connect to Claude Code
 
-Paradigm works as a Claude Code plugin. Install it from the marketplace:
+If you use Claude Code, also install the plugin. In Claude Code:
 
-```bash
-/install-plugin ascend42/a-paradigm
+```
+/plugin marketplace add ascend42/a-paradigm
+/plugin install paradigm@a-paradigm
 ```
 
 This gives your AI agents access to 32 grouped MCP tools (more on demand) for navigating, querying, and modifying your symbol graph.
@@ -83,12 +78,24 @@ directory:
 5. Note cross-cutting aspects (~) — logging, rate limiting, audit trails
 
 Create a .purpose file in each directory with what you find.
-Then run `paradigm scan` to build the index.
+Then run `paradigm reindex` to build the index.
 ```
 
 The agent will walk your source tree, read the code, and create `.purpose` files that describe what already exists. This typically takes a few minutes for a medium-sized project.
 
 **Tip:** After the initial mapping, run `paradigm doctor` to check for inconsistencies and missing coverage.
+
+---
+
+## Your First Prompt
+
+After `paradigm shift`, open your agent in the project and say:
+
+```
+Map this codebase with Paradigm: draft .purpose files for the main directories, then tell me what would be affected if I changed <a module you know>.
+```
+
+Compliance checks are off on a new project. Turn them on with `paradigm enforcement set <level>` (`minimal`, `balanced` or `strict`).
 
 ---
 

@@ -134,8 +134,8 @@ cd packages/paradigm && npm link
 
 # Test in any project
 cd /path/to/your/project
-paradigm init
-paradigm visualize
+paradigm shift
+paradigm status
 ```
 
 ## Package Dependencies
