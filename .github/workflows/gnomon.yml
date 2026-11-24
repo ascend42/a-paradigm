@@ -124,6 +124,14 @@ jobs:
         shell: bash
         run: node packages/gnomon/probes/run.mjs p-harness --out-dir "$RUNNER_TEMP/probe-results"
 
+      # P12 runs two pages: the pinned board bytes (zero deps) and a probe
+      # build made in memory for its edit checks, which needs the workspace
+      # dependencies (esbuild and the board engine). The harness self-test
+      # above stays zero-deps; this install is for P12's probe build only.
+      - name: Install workspace dependencies (P12 probe build)
+        shell: bash
+        run: npm ci
+
       # P09 + P12 on hosted runners (mechanics only; the runner's Chrome).
       # Exit 2 (partial: a missing optional engine, or a non-darwin host) is
       # accepted; a fail (exit 1) or a harness error fails the step. On macOS
