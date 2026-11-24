@@ -33,10 +33,9 @@ const ENGINE_DIST = [...ENGINE.name.split('/'), 'dist', 'prod'];
 /** `<pkg>/dist/prod/<rest>` → `<rest>` for a file of the engine's dist/prod, else null. */
 function engineFile(abs) {
   const s = segs(abs);
-  for (let i = s.lastIndexOf('node_modules'); i >= 0 && i + ENGINE_DIST.length < s.length; ) {
-    return ENGINE_DIST.every((x, j) => s[i + 1 + j] === x) ? s.slice(i + 1 + ENGINE_DIST.length).join('/') : null;
-  }
-  return null;
+  const i = s.lastIndexOf('node_modules');
+  if (i < 0 || i + ENGINE_DIST.length >= s.length - 1) return null;
+  return ENGINE_DIST.every((x, j) => s[i + 1 + j] === x) ? s.slice(i + 1 + ENGINE_DIST.length).join('/') : null;
 }
 
 /** The patch key of a module path: an engine dist/prod file's relative name, else `<package>/<path>`; null outside node_modules. */

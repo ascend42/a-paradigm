@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs build scripts (no types)
-import { applyPatch, applyPatches, CSS_ASSETS, ENGINE, ENGINE_FILES, extractCssAssets, NAMESPACE_URLS, PATCHED_FILES, PATCHES, PatchError, sha256, STRIPPED_HOST, stripHosts, STUBS } from '../scripts/board-patches.mjs';
+import { applyPatch, applyPatches, countMatches, CSS_ASSETS, ENGINE, ENGINE_FILES, extractCssAssets, NAMESPACE_URLS, PATCHED_FILES, PATCHES, PatchError, sha256, STRIPPED_HOST, stripHosts, STUBS } from '../scripts/board-patches.mjs';
 // @ts-expect-error plain .mjs build scripts (no types)
 import { buildBoard, engineRoot, LICENSE_ALLOW, patchKeyPath, vendoredNotice } from '../scripts/board-build.mjs';
 
@@ -40,8 +40,22 @@ describe('#gui-board patches: one test per patch, loud on a version bump', () =>
     for (const f of PATCHED_FILES as string[]) Object.assign(counts, (applyPatches(f, installed(f).toString('utf8')) as { counts: Record<string, number> }).counts);
   });
 
+  it('applyPatches reports MEASURED counts (a count read back from `expect` would prove nothing)', () => {
+    const p = (PATCHES as Patch[]).find((x) => x.id === 'no-fetch-ui')!;
+    expect(countMatches(p, 'a=fetch(u);b=fetch(v);c=x.fetch(w);fetch(z)')).toBe(3);
+    expect(countMatches({ find: 'ab' }, 'abab-ab')).toBe(3);
+    expect(countMatches({ find: /x/ }, 'xxx')).toBe(3);
+  });
+
   it.each((PATCHES as Patch[]).map((p) => [p.id, p] as const))('%s matches the installed engine exactly as often as written', (_id, p) => {
     expect(counts[p.id], `${p.id} (${p.why})`).toBe(p.expect);
+    // measured a second way, on the text this patch sees: the file with only the EARLIER patches applied
+    let text = installed(p.file).toString('utf8');
+    for (const q of (PATCHES as Patch[]).filter((x) => x.file === p.file)) {
+      if (q.id === p.id) break;
+      text = applyPatch(q, text) as string;
+    }
+    expect(countMatches(p, text), p.id).toBe(p.expect);
     expect(p.why.length).toBeGreaterThan(10);
   });
 

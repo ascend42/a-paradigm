@@ -55,6 +55,6 @@ describe('#gui-preview board fixture', () => {
     const text = await (await fetch(`${p.url}/diag`)).text();
     expect(text.split('\n')[0]).toBe('3 diag row(s), 1 CSP row(s)');
     expect(text).toContain('csp img-src blocked=data source=x:1 [31m fixture=board');
-    expect(p.diag[2]!.row.length).toBeLessThanOrEqual(4096);
+    expect(p.diag[2]!.row).toBe('x'.repeat(4096)); // an over-long row is truncated, not dropped
   });
 });

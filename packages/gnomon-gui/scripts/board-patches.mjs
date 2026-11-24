@@ -256,6 +256,12 @@ export class PatchError extends Error {
   }
 }
 
+/** How many times a patch's `find` matches `text`, MEASURED (never read from `expect`). */
+export function countMatches(p, text) {
+  if (typeof p.find === 'string') return text.split(p.find).length - 1;
+  return [...text.matchAll(new RegExp(p.find.source, p.find.flags.includes('g') ? p.find.flags : `${p.find.flags}g`))].length;
+}
+
 /** Apply ONE patch to `text`; throws PatchError unless it matches exactly `expect` times. Returns the new text. */
 export function applyPatch(p, text) {
   let n = 0;
@@ -281,8 +287,8 @@ export function applyPatches(file, text) {
   let out = text;
   for (const p of PATCHES) {
     if (p.file !== file) continue;
+    counts[p.id] = countMatches(p, out); // measured on the text this patch sees, before it edits it
     out = applyPatch(p, out);
-    counts[p.id] = p.expect;
     if (p.prepend) prepend.add(p.prepend);
   }
   return { text: [...prepend].join('') + out, counts };

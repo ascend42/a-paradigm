@@ -80,9 +80,9 @@ export async function startPreview({ port = 8790 } = {}) {
         const chunks = [];
         let size = 0;
         for await (const c of req) {
+          // keep the head of an over-long row (truncated), never drop it whole
+          if (size < DIAG_MAX_BYTES) chunks.push(c.subarray(0, DIAG_MAX_BYTES - size));
           size += c.length;
-          if (size > DIAG_MAX_BYTES) break;
-          chunks.push(c);
         }
         if (diag.length < DIAG_MAX_ROWS) diag.push({ at: new Date().toISOString(), row: Buffer.concat(chunks).toString('utf8').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, DIAG_MAX_BYTES) });
         return send(204, 'text/plain', '');
