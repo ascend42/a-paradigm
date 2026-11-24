@@ -101,6 +101,8 @@ export interface DimLiveBatch {
   id: number;
   ops: DimOp[];
   gesture: Gesture;
+  /** more rows of the same action follow on this stamp: the caller lets no other stamp be sent on the connection until the last one has gone */
+  more: boolean;
 }
 
 export interface DimLiveDeps {
@@ -264,7 +266,7 @@ export class DimLive {
     this.#lastSentAt = now;
     this.#flight = next;
     this.#seen = [];
-    this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture });
+    this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture, more: !next.last });
   }
 
   /** Queue the rows of ONE action (already packed). All or nothing: false when they do not all fit the pending bound. */

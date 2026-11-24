@@ -23,6 +23,9 @@
  *    rebuilt after a reconnect is RESUMED: no command is sent; the store resumes from its cursor and the fold is
  *    checked against the hash the mod last answered (`status().verified`). `dim.attach` is sent before `dim.open`,
  *    on the same stamp, when the store shows the session is not attached to a known dimension.
+ *  - ONE STAMP AT A TIME. A stamp's number may not go backwards on a connection (core/gesture.ts), so while one
+ *    stamp still has commands to come (the rows of a multi-row action, `dim.attach` then `dim.open`), no command
+ *    on another stamp is sent by any session: it waits its turn at the gate.
  *  - ONE LIMITER. The host lets a mod append `DIM_SEND_LIMITS.hostPerSecond` rows a second, whatever dimension
  *    they are for. Every command of every session takes a slot from one `DimSendLimiter`.
  *  - LINK DOWN. `linkDown()`: nothing is sent, a new edit is refused with a notice, pending batches roll back at
@@ -157,6 +160,30 @@ interface Internals {
   verifiedAt(dim: string): { seq: number; hash: string } | null;
   setVerified(dim: string, v: { seq: number; hash: string }): void;
   gone(s: DimSession, why: DimSessionEnd): void;
+  gate: StampGate;
+}
+
+/** Lets one stamp finish its commands before another stamp is first sent on the connection. */
+class StampGate {
+  #holder: Gesture | null = null;
+  #waiters: Array<() => void> = [];
+
+  /**
+   * Resolves when no OTHER stamp holds the gate. The gate is taken (`more`: another command follows on `g`) or let
+   * go (the last one) in the same step as the check, so two stamps cannot both pass.
+   */
+  enter(g: Gesture | null, more: boolean): Promise<void> {
+    if (this.#holder !== null && this.#holder !== g) return new Promise<void>((resolve) => void this.#waiters.push(resolve)).then(() => this.enter(g, more));
+    if (g && more) this.#holder = g;
+    else this.release(g);
+    return Promise.resolve();
+  }
+
+  release(g: Gesture | null): void {
+    if (g === null || this.#holder !== g) return;
+    this.#holder = null;
+    for (const fn of this.#waiters.splice(0)) fn();
+  }
 }
 
 /** The mod's own answer out of the relay's result (`{result: <answer>}` on the wire; the bare answer from a stand-in). */
@@ -179,6 +206,8 @@ export class DimSession {
   #offs: Array<() => void> = [];
   #timer: unknown = null;
   #dead = false;
+  /** the stamp this session holds the gate for */
+  #held: Gesture | null = null;
   #verified: boolean | null = null;
   #listeners = new Set<(c: DimSessionChange) => void>();
   #last: DimSessionNotice | null = null;
@@ -212,9 +241,15 @@ export class DimSession {
     }
   }
 
-  /** One command through the one sender, in its turn at the shared limiter. Never retried. */
-  #command(g: Gesture | null, commandId: string, args: Record<string, unknown>): Promise<unknown> {
+  /**
+   * One command through the one sender, in its turn at the stamp gate and the shared limiter. Never retried.
+   * `more`: another command follows on this stamp, so the gate is held for it until that one goes.
+   */
+  async #command(g: Gesture | null, commandId: string, args: Record<string, unknown>, more = false): Promise<unknown> {
     const d = this.#x.deps;
+    await this.#x.gate.enter(g, more);
+    if (g && more) this.#held = g;
+    else if (this.#held === g) this.#held = null;
     const now = d.now();
     const at = d.limiter.reserve(now);
     return new Promise<unknown>((resolve, reject) => {
@@ -226,6 +261,12 @@ export class DimSession {
       if (at <= now) void Promise.resolve().then(go);
       else d.setTimer(go, at - now);
     });
+  }
+
+  /** Let the next stamp through (the action on `g` has sent its last command, or will send no more). */
+  #release(g: Gesture | null): void {
+    this.#x.gate.release(g);
+    if (this.#held === g) this.#held = null;
   }
 
   #failure(err: unknown): { code: string; why: string | null } {
@@ -242,8 +283,8 @@ export class DimSession {
     if (!g) return fail('not-sent', 'gesture-missing');
     try {
       if (attach) {
-        const a = await this.#command(g, 'dim.attach', {});
-        if (!isPlainObject(a) || a.ok !== true) return fail('open-failed', refusalCodeOf(a));
+        const a = await this.#command(g, 'dim.attach', {}, true);
+        if (!isPlainObject(a) || a.ok !== true) return this.#release(g), fail('open-failed', refusalCodeOf(a));
       }
       const r = await this.#command(g, 'dim.open', args);
       if (this.#dead) return false;
@@ -254,6 +295,7 @@ export class DimSession {
       this.#emit(null);
       return true;
     } catch (err) {
+      this.#release(g);
       const f = this.#failure(err);
       return fail(f.code, f.why);
     }
@@ -271,12 +313,14 @@ export class DimSession {
 
   #sendBatch(batch: DimLiveBatch): void {
     const settle = (ack: DimAck): void => {
+      // a row that failed takes the rest of its action with it: nothing more comes on that stamp
+      if (!ack.ok) this.#release(batch.gesture);
       if (!this.#dead) this.#after(this.#live.ack(batch.id, ack), 'edit');
     };
     void this.#opened
       .then((ok) => {
         if (!ok) return settle({ ok: false, code: 'not-open', why: null });
-        return this.#command(batch.gesture, 'dim.op', { ops: batch.ops }).then((r) => settle(dimAckOf(r)));
+        return this.#command(batch.gesture, 'dim.op', { ops: batch.ops }, batch.more).then((r) => settle(dimAckOf(r)));
       })
       .catch((err: unknown) => {
         const f = this.#failure(err);
@@ -304,6 +348,8 @@ export class DimSession {
 
   #after(r: DimLiveResult, about: DimSessionNotice['about']): void {
     if (this.#dead) return;
+    // nothing of mine is waiting: whatever stamp I held the gate for has no more to send (a timeout dropped its rows)
+    if (this.#held && this.#live.status().pending === 0) this.#release(this.#held);
     if (r.changed || r.resync) this.#render();
     if (r.changed || r.resync || r.notice) this.#emit(r.notice ? { ...r.notice, about } : null);
     this.#arm();
@@ -409,6 +455,7 @@ export class DimSession {
   linkDown(): void {
     if (this.#dead) return;
     this.#leaf?.forget?.();
+    this.#release(this.#held);
     const r = this.#live.link(false);
     this.#after(r, 'link');
     if (r.changed) this.#emit({ about: 'link', code: 'link-down', field: 'ops', why: null, lost: 0 });
@@ -464,6 +511,7 @@ export class DimSession {
   destroy(why: DimSessionEnd = 'switch'): void {
     if (this.#dead) return;
     this.#dead = true;
+    this.#release(this.#held);
     if (this.#phase !== 'closed' && this.#phase !== 'failed') this.#phase = 'closed';
     if (this.#timer !== null) this.#x.deps.clearTimer(this.#timer);
     this.#timer = null;
@@ -503,6 +551,7 @@ export class DimSessions {
       link: () => this.#link,
       verifiedAt: (dim) => this.#verified.get(dim) ?? null,
       setVerified: (dim, v) => void this.#verified.set(dim, v),
+      gate: new StampGate(),
       gone: (s, why) => {
         if (this.#sessions.get(s.dim) === s) this.#sessions.delete(s.dim);
         this.#tell({ type: 'destroyed', session: s, why });

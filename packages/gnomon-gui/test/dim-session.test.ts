@@ -477,6 +477,59 @@ describe('#gui-dim-session link and lifecycle', () => {
   });
 });
 
+describe('#gui-dim-session one stamp at a time on the connection', () => {
+  it('two dimensions each send a multi-row action at once: the rows of one stamp all go before the other stamp is first sent, so no number goes backwards', async () => {
+    const w = world({ auto: true });
+    const a = await opened(w, DIM);
+    const b = await opened(w, DIM2);
+    a.h.edit(Array.from({ length: 9 }, (_, i) => text(10 + i, 3900)), press('paste'));
+    b.h.edit(Array.from({ length: 9 }, (_, i) => text(40 + i, 3900)), press('paste'));
+    await flush(2000);
+    expect([a.n, b.n]).toEqual([[], []]);
+    expect(a.s.view().nodes.size + b.s.view().nodes.size).toBe(18);
+    const order = w.ops().map((c) => [c.args.dim, (c.args.gesture as { n: number }).n]);
+    expect(order).toHaveLength(6);
+    const numbers = order.map((o) => o[1] as number);
+    expect(numbers).toEqual([...numbers].sort((x, y) => x - y)); // never backwards
+    expect(order.slice(0, 3).every((o) => o[0] === DIM)).toBe(true);
+    expect(order.slice(3).every((o) => o[0] === DIM2)).toBe(true);
+  });
+
+  it('a multi-row action that fails or times out lets the next stamp through', async () => {
+    const w = world();
+    const a = await opened(w, DIM);
+    const b = await opened(w, DIM2);
+    a.h.edit(Array.from({ length: 9 }, (_, i) => text(10 + i, 3900)), press('paste'));
+    await flush(DIM_SEND_LIMITS.gapMs);
+    b.h.edit([rect(1)], press());
+    await flush(DIM_SEND_LIMITS.gapMs * 4);
+    expect(w.ops().map((c) => c.args.dim)).toEqual([DIM]); // B waits behind A's stamp
+    w.ops()[0]!.resolve({ result: { ok: false, code: 'append-failed', fix: 'x' } });
+    await flush(DIM_SEND_LIMITS.gapMs * 4);
+    expect(w.ops().map((c) => c.args.dim)).toEqual([DIM, DIM2]);
+    expect(a.n).toHaveLength(1);
+    expect(a.n[0]).toMatchObject({ code: 'append-failed', lost: 9 });
+    // and by the timeout: A's next action gets no answer at all
+    a.h.edit(Array.from({ length: 9 }, (_, i) => text(60 + i, 3900)), press('paste'));
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    b.h.edit([rect(2)], press());
+    w.answer(w.ops()[1]!);
+    await flush(DIM_LIVE_TIMEOUT_MS + 500);
+    expect(a.n[1]).toMatchObject({ code: 'timeout', lost: 9 });
+    expect(w.ops().map((c) => c.args.dim)).toEqual([DIM, DIM2, DIM, DIM2]);
+    // a session that goes while holding lets the others through too
+    a.h.edit(Array.from({ length: 9 }, (_, i) => text(80 + i, 3900)), press('paste'));
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    w.answer(w.ops()[3]!);
+    b.h.edit([rect(3)], press());
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    expect(w.ops()).toHaveLength(5);
+    a.s.destroy();
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    expect(w.ops().map((c) => c.args.dim)).toEqual([DIM, DIM2, DIM, DIM2, DIM, DIM2]);
+  });
+});
+
 describe('#gui-dim-session the shared send limiter', () => {
   it('the limiter alone: never two slots closer than the gap, never more than perWindow in any window, under the host limit', () => {
     expect(DIM_SEND_LIMITS.perWindow).toBeLessThan(DIM_SEND_LIMITS.hostPerSecond);
