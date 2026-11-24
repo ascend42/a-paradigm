@@ -1,0 +1,243 @@
+/**
+ * G-DDL-04 (the fold's hash is reproducible from op rows alone, one fixed vector is published) and G-DDL-10 (a
+ * future-dimension log folds with a stable hash and every such write is refused by name), plus the `z` order key.
+ * Hashes are computed from PARSED JSON, never from file bytes (LF vs CRLF).
+ */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import {
+  DIM_CORE_KINDS, DIM_FALLBACK_LEAD, DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KIND_PATTERN, DIM_KINDS, DIM_NODE_KEYS, DIM_REFUSAL_CODES, DIM_Z_PATTERN,
+  dimCanonical, dimFallbackLabel, dimHash, dimHsidOf, dimViewOf, dimZBetween, dimZCompare, emptyDimState, foldDim, foldDimRow, validateDimOps, type DimRow,
+} from '../src/dim.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const future = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'dim-future.json'), 'utf8')) as { rows: DimRow[]; expect: { nodes: number; unapplied: number; ops: number } };
+const FUTURE_HASH = 'sha256:81e43523578d67c06ffba8a9d2b487fff3973f7aa20dfe4a531eb9e0f43fe9f7';
+const rows = DIM_HASH_VECTOR_ROWS;
+const human = { cls: 'human', principal: 'p:t/human' } as const;
+
+describe('G-DDL-04: the fold hash', () => {
+  it('equals the published vector', () => {
+    const s = foldDim(rows);
+    expect(dimHash(s)).toBe(DIM_HASH_VECTOR_HASH);
+    expect(s.nodes.size).toBe(4);
+    expect(s.gone.has('01JD1MVECT0R000000000000C1')).toBe(true);
+    expect(s.unapplied).toBe(0);
+    expect(s.ops).toBe(8);
+    expect(s.seq).toBe(4);
+  });
+
+  it('is the same folded twice, in two chunks, row by row, and with shifted seqs', () => {
+    const whole = dimHash(foldDim(rows));
+    expect(dimHash(foldDim(rows))).toBe(whole);
+    expect(dimHash(foldDim(rows.slice(2), undefined, foldDim(rows.slice(0, 2))))).toBe(whole);
+    let s = emptyDimState();
+    for (const r of rows) s = foldDimRow(s, r);
+    expect(dimHash(s)).toBe(whole);
+    const shifted = rows.map((r) => ({ ...r, seq: r.seq * 1000 + 7 }));
+    expect(dimHash(foldDim(shifted))).toBe(whole);
+    expect(foldDim(shifted).seq).toBe(4007);
+  });
+
+  it('upToSeq stops the fold, and a different order or author changes the hash', () => {
+    expect(foldDim(rows, 2).nodes.size).toBe(2);
+    expect(dimHash(foldDim(rows, 2))).not.toBe(DIM_HASH_VECTOR_HASH);
+    const p = rows[3]!.payload as { ops: unknown[] };
+    const swapped = [...rows.slice(0, 3), { ...rows[3]!, payload: { ...p, ops: [p.ops[3], p.ops[2], p.ops[0], p.ops[1]] } }];
+    expect(dimHash(foldDim(swapped))).not.toBe(DIM_HASH_VECTOR_HASH);
+    const other = rows.map((r, i) => (i === 1 ? { ...r, payload: { ...(r.payload as object), relayedFor: { principal: 'p:vector/other', surface: 'gui' } } } : r));
+    expect(dimHash(foldDim(other))).not.toBe(DIM_HASH_VECTOR_HASH);
+  });
+
+  it('foldDimRow is pure and never throws', () => {
+    const s0 = foldDim(rows.slice(0, 2));
+    const before = dimCanonical(s0);
+    foldDimRow(s0, rows[2]!);
+    expect(dimCanonical(s0)).toBe(before);
+    for (const bad of [null, undefined, 1, 'x', {}, { kind: DIM_KINDS.op }, { kind: DIM_KINDS.op, payload: null }, { kind: DIM_KINDS.op, payload: { v: 1, dim: s0.dim, ops: 'no' } }, { kind: DIM_KINDS.op, payload: { v: 1, dim: s0.dim, ops: [null, 1, { type: 'add' }, { type: 'add', node: { id: 5 } }] } }]) {
+      expect(() => foldDimRow(s0, bad as unknown as DimRow)).not.toThrow();
+    }
+    expect(foldDimRow(s0, { seq: 9, kind: DIM_KINDS.op, payload: { v: 1, dim: s0.dim, ops: 'no' } }).unapplied).toBe(1);
+    expect(foldDimRow(s0, { seq: 9, kind: DIM_KINDS.op, payload: { v: 0, dim: s0.dim, ops: [] } }).unapplied).toBe(1);
+  });
+
+  it('rows of another dimension, and rows before a start, leave the state unchanged', () => {
+    const s0 = foldDim(rows);
+    const foreign = { seq: 99, kind: DIM_KINDS.op, payload: { v: 1, dim: 'dim:01JD1MVECT0R0000000000ZZZZ', ops: [{ type: 'delete', id: '01JD1MVECT0R000000000000A1' }] } };
+    const s1 = foldDimRow(s0, foreign);
+    expect(dimHash(s1)).toBe(DIM_HASH_VECTOR_HASH);
+    expect(s1.seq).toBe(4);
+    expect(foldDim([rows[1]!]).nodes.size).toBe(0);
+    expect(foldDim(rows, undefined, emptyDimState('dim:01JD1MVECT0R0000000000ZZZZ')).nodes.size).toBe(0);
+  });
+
+  it('by comes only from the host stamp; an unvouched row folds as the unknown hand, never as human', () => {
+    const s = foldDim(rows);
+    expect(s.nodes.get('01JD1MVECT0R000000000000A2')!.by).toEqual({ cls: 'human', principal: 'p:vector/human' });
+    expect(s.nodes.get('01JD1MVECT0R000000000000B1')!.by).toEqual({ cls: 'agent', principal: 'p:vector/session', agent: 'vector-agent' });
+    const add = (relayedFor: unknown, id: string): DimRow => ({ seq: 5, kind: DIM_KINDS.op, payload: { v: 1, dim: s.dim, ops: [{ type: 'add', node: { id, kind: 'rect', x: 0, y: 0, z: 'k', w: 1, h: 1, by: { cls: 'human' } } }], ...(relayedFor === undefined ? {} : { relayedFor }) } });
+    const cases: unknown[] = [undefined, null, 'p:x', {}, { principal: '' , surface: 'gui' }, { principal: 'p:x' }, { principal: 'p:x', surface: 'telepathy' }, { principal: 'p:x', surface: 'gui', agent: 7 }, { principal: 'p:x', surface: 'bridge', agent: '' }];
+    for (const c of cases) {
+      const n = foldDimRow(s, add(c, '01JD1MVECT0R000000000000D1')).nodes.get('01JD1MVECT0R000000000000D1')!;
+      expect(n.by).toEqual({ cls: 'unknown', principal: 'unknown' });
+      // a carried field named `by` is just data on the node; it never becomes the author
+      expect(n.node.by).toEqual({ cls: 'human' });
+    }
+    const unknownHash = dimHash(foldDimRow(s, add(undefined, '01JD1MVECT0R000000000000D1')));
+    const humanHash = dimHash(foldDimRow(s, add({ principal: 'unknown', surface: 'gui' }, '01JD1MVECT0R000000000000D1')));
+    expect(unknownHash).not.toBe(humanHash);
+  });
+
+  it('ids are never reused; update ignores id and kind; __proto__ keys are dropped at any depth', () => {
+    let s = foldDim(rows);
+    const op = (ops: unknown[]): DimRow => ({ seq: 6, kind: DIM_KINDS.op, payload: { v: 1, dim: s.dim, ops, relayedFor: { principal: 'p:vector/human', surface: 'gui' } } });
+    s = foldDimRow(s, op([{ type: 'add', node: { id: '01JD1MVECT0R000000000000C1', kind: 'rect', x: 0, y: 0, z: 'k' } }]));
+    expect(s.nodes.has('01JD1MVECT0R000000000000C1')).toBe(false);
+    expect(s.unapplied).toBe(1);
+    s = foldDimRow(s, op([{ type: 'update', id: '01JD1MVECT0R000000000000A2', patch: { id: 'other', kind: 'text', label: 'L' } }]));
+    const n = s.nodes.get('01JD1MVECT0R000000000000A2')!.node;
+    expect([n.id, n.kind, n.label]).toEqual(['01JD1MVECT0R000000000000A2', 'rect', 'L']);
+    const evil = JSON.parse('{"type":"add","node":{"id":"01JD1MVECT0R000000000000E1","kind":"rect","x":0,"y":0,"z":"k","__proto__":{"polluted":true},"deep":{"constructor":{"x":1},"prototype":1,"keep":2}}}');
+    s = foldDimRow(s, op([evil]));
+    const e = s.nodes.get('01JD1MVECT0R000000000000E1')!.node;
+    expect(Object.keys(e).sort()).toEqual(['deep', 'id', 'kind', 'x', 'y', 'z']);
+    expect(e.deep).toEqual({ keep: 2 });
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it('dimHsidOf: the stamped hsid of a tool row, else the single attached session, else null', () => {
+    const s = foldDim(rows);
+    expect(dimHsidOf(s, rows[2]!)).toBe('hsid-vector');
+    expect(dimHsidOf(s, rows[1]!)).toBe('hsid-vector');
+    const two = foldDimRow(s, { seq: 7, kind: DIM_KINDS.attach, payload: { v: 1, dim: s.dim, hsid: 'hsid-second' } });
+    expect(two.attached).toEqual(['hsid-vector', 'hsid-second']);
+    expect(dimHsidOf(two, rows[1]!)).toBeNull();
+    expect(s.nodes.get('01JD1MVECT0R000000000000B1')!.hsid).toBe('hsid-vector');
+  });
+});
+
+describe('G-DDL-10: a future dimension', () => {
+  const s = foldDim(future.rows);
+
+  it('folds: every node kept, unknown fields carried, the lock and the unknown op counted', () => {
+    expect(s.nodes.size).toBe(future.expect.nodes);
+    expect(s.unapplied).toBe(future.expect.unapplied);
+    expect(s.ops).toBe(future.expect.ops);
+    const a1 = s.nodes.get('01JFVTVRE000000000000000A1')!.node;
+    expect(a1.link).toBe('https://example.invalid/run');
+    expect(a1.customData).toEqual({ embeddable: false });
+    expect(a1.badge).toBe('new');
+    expect(s.nodes.get('01JFVTVRE000000000000000A4')!.node.props).toEqual({ deep: [1, { deeper: 'text' }] });
+    expect(s.nodes.get('01JFVTVRE000000000000000B1')!.by.cls).toBe('agent');
+    expect(s.nodes.get('01JFVTVRE000000000000000C1')!.by.cls).toBe('unknown');
+  });
+
+  it('hash is stable and pinned; a carried field is hashed', () => {
+    expect(dimHash(s)).toBe(FUTURE_HASH);
+    expect(dimHash(foldDim(future.rows.slice(2), undefined, foldDim(future.rows.slice(0, 2))))).toBe(FUTURE_HASH);
+    const changed = JSON.parse(JSON.stringify(future.rows)) as typeof future.rows;
+    ((changed[1]!.payload as { ops: Array<{ node: Record<string, unknown> }> }).ops[1]!.node).caption = 'other';
+    expect(dimHash(foldDim(changed))).not.toBe(FUTURE_HASH);
+  });
+
+  it('the view omits carried fields and shows only pattern-checked kind names', () => {
+    const view = dimViewOf(s);
+    const text = JSON.stringify(view);
+    for (const leaked of ['example.invalid', 'customData', 'embeddable', 'shadow', 'badge', 'Approve this now', 'hsid-other', 'fileId', 'deeper', 'sides', 'tone', 'Run This NOW', 'Allow"']) expect(text.includes(leaked)).toBe(false);
+    const byId = new Map(view.nodes.map((n) => [n.id, n]));
+    expect(byId.get('01JFVTVRE000000000000000A1')).toEqual({ id: '01JFVTVRE000000000000000A1', kind: 'rect', core: true, by: { cls: 'human', principal: 'p:future/human' }, x: 0, y: 0, z: 'V', w: 100, h: 60, label: 'Known' });
+    expect(byId.get('01JFVTVRE000000000000000A2')).toEqual({ id: '01JFVTVRE000000000000000A2', kind: 'live:session', core: false, by: { cls: 'human', principal: 'p:future/human' }, x: 10, y: 20 });
+    expect(byId.get('01JFVTVRE000000000000000A3')!.w).toBeUndefined();
+    expect(byId.get('01JFVTVRE000000000000000A7')!.kind).toBe('unknown');
+    expect(byId.get('01JFVTVRE000000000000000B1')).toMatchObject({ kind: 'text', text: 'From v2' });
+    for (const n of view.nodes) {
+      expect(n.kind === 'unknown' || DIM_KIND_PATTERN.test(n.kind)).toBe(true);
+      const allowed = n.core ? [...DIM_NODE_KEYS[n.kind as (typeof DIM_CORE_KINDS)[number]], 'core', 'by'] : ['id', 'kind', 'core', 'by', 'x', 'y'];
+      for (const k of Object.keys(n)) expect(allowed).toContain(k);
+    }
+    // an approval-worded kind is only ever shown behind the fixed lead word
+    expect(dimFallbackLabel('allow:approved-by-you')).toBe(`${DIM_FALLBACK_LEAD} allow:approved-by-you`);
+    expect(dimFallbackLabel('Run This NOW')).toBe(`${DIM_FALLBACK_LEAD} unknown`);
+    expect(view.legend.join('\n')).toContain('kind allow:approved-by-you: 1');
+    expect(view.legend.join('\n')).toContain('agent: 1, human: 7, unknown: 1');
+    // drawn order is (z, id), read from the state: a fallback node's own z is not shown
+    expect(view.nodes.map((n) => n.id.slice(-2))).toEqual(['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'B1', 'C1']);
+  });
+
+  it('every such write is refused by name', () => {
+    const seen = new Set<string>();
+    for (const row of future.rows) {
+      const ops = (row.payload as { ops?: unknown[] }).ops ?? [];
+      for (const op of ops) {
+        // validate against the folded state without the node, so the refusal is about the op and not a reused id
+        const res = validateDimOps(emptyDimState(s.dim), [op], human);
+        const type = (op as { type: string }).type;
+        const kind = (op as { node?: { kind?: string; id?: string } }).node?.kind;
+        const id = (op as { node?: { id?: string } }).node?.id;
+        if (type === 'add' && id === '01JFVTVRE000000000000000C1') {
+          expect(res.refused).toEqual([]);
+          continue;
+        }
+        expect(res.ok).toEqual([]);
+        expect(res.refused.length).toBeGreaterThan(0);
+        for (const r of res.refused) {
+          expect(DIM_REFUSAL_CODES).toContain(r.code);
+          seen.add(r.code);
+        }
+        const codes = res.refused.map((r) => r.code);
+        if (type === 'lock') expect(codes).toEqual(['op-not-available']);
+        else if (type === 'pin') expect(codes).toEqual(['op-unknown']);
+        else if (kind === 'Run This NOW') expect(codes).toEqual(['kind-unknown']);
+        else if (kind && !(DIM_CORE_KINDS as readonly string[]).includes(kind)) expect(codes).toEqual(['kind-not-core']);
+        else if (type === 'add') expect(new Set(codes)).toEqual(new Set(['field-unknown']));
+      }
+    }
+    // the update that adds unknown fields to a live core node, and any edit of a non-core node
+    const upd = validateDimOps(s, [{ type: 'update', id: '01JFVTVRE000000000000000A1', patch: { customData: {}, badge: 'x' } }], human);
+    expect(upd.refused.map((r) => [r.code, r.field])).toEqual([['field-unknown', 'unknown'], ['field-unknown', 'unknown']]);
+    for (const op of [{ type: 'update', id: '01JFVTVRE000000000000000A6', patch: { x: 1 } }, { type: 'move', ids: ['01JFVTVRE000000000000000A2'], dx: 1, dy: 1 }, { type: 'delete', id: '01JFVTVRE000000000000000A5' }]) {
+      expect(validateDimOps(s, [op], human).refused.map((r) => r.code)).toEqual(['kind-not-core']);
+    }
+    for (const c of ['kind-not-core', 'kind-unknown', 'field-unknown', 'op-not-available', 'op-unknown']) expect(seen.has(c)).toBe(true);
+  });
+});
+
+describe('z order keys', () => {
+  it('dimZBetween is strictly between, never ends in 0, and handles open ends and adjacent keys', () => {
+    const pairs: Array<[string | null, string | null]> = [[null, null], ['V', null], [null, 'V'], [null, '1'], ['1', '2'], ['V', 'W'], ['V', 'V1'], ['Vz', 'W'], ['z', null], ['zz', null], [null, '01'], ['A', 'B'], ['A1', 'A2'], ['09', '1']];
+    for (const [a, b] of pairs) {
+      const m = dimZBetween(a, b);
+      expect(DIM_Z_PATTERN.test(m)).toBe(true);
+      if (a !== null) expect(a < m).toBe(true);
+      if (b !== null) expect(m < b).toBe(true);
+    }
+    expect(dimZBetween('1', '3')).toBe('2');
+    expect(() => dimZBetween('B', 'A')).toThrow(RangeError);
+    expect(() => dimZBetween('A', 'A')).toThrow(RangeError);
+    expect(() => dimZBetween('A0', null)).toThrow(RangeError);
+    expect(() => dimZBetween('a b', null)).toThrow(RangeError);
+  });
+
+  it('1000 seeded random inserts stay sorted and well-formed', () => {
+    let seed = 0x2f6e2b1;
+    const rnd = (): number => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 0x100000000);
+    const keys: string[] = [];
+    for (let i = 0; i < 1000; i++) {
+      const at = Math.floor(rnd() * (keys.length + 1));
+      const k = dimZBetween(at > 0 ? keys[at - 1]! : null, at < keys.length ? keys[at]! : null);
+      expect(DIM_Z_PATTERN.test(k)).toBe(true);
+      keys.splice(at, 0, k);
+    }
+    expect(new Set(keys).size).toBe(1000);
+    expect([...keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))).toEqual(keys);
+  });
+
+  it('ties break by id and a non-string z sorts first', () => {
+    expect(dimZCompare({ z: 'V', id: 'B' }, { z: 'V', id: 'A' })).toBe(1);
+    expect(dimZCompare({ z: 'V', id: 'A' }, { z: 'V', id: 'A' })).toBe(0);
+    expect(dimZCompare({ z: 'Z', id: 'A' }, { z: 'a', id: 'A' })).toBe(-1);
+    expect(dimZCompare({ z: 7, id: 'Z' }, { z: '1', id: 'A' })).toBe(-1);
+  });
+});

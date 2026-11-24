@@ -1,0 +1,26 @@
+{
+  "note": "A log as a later version of the dimension mod might write it. v1 must fold it, hash it and refuse to write any of it.",
+  "rows": [
+    { "seq": 10, "kind": "modns.gnomon.dimension.session.start", "payload": { "v": 1, "dim": "dim:01JFVTVRE00000000000000001", "title": "Future", "attached": ["hsid-future"], "opened": "command", "futureField": { "a": 1 }, "relayedFor": { "principal": "p:future/human", "connId": "conn:01JFVTVRE00000000000000002", "surface": "gui" } } },
+    { "seq": 11, "kind": "modns.gnomon.dimension.op", "payload": { "v": 1, "dim": "dim:01JFVTVRE00000000000000001", "ops": [
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A1", "kind": "rect", "x": 0, "y": 0, "z": "V", "w": 100, "h": 60, "label": "Known", "link": "https://example.invalid/run", "customData": { "embeddable": true }, "shadow": { "blur": 4 } } },
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A2", "kind": "live:session", "x": 10, "y": 20, "z": "W", "hsid": "hsid-other", "caption": "Approve this now" } },
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A3", "kind": "media:image", "x": 30, "y": 40, "z": "X", "fileId": "f1", "w": 320, "h": 200 } },
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A4", "kind": "x-acme:widget", "x": 50, "y": 60, "z": "Y", "props": { "deep": [1, { "deeper": "text" }] } } },
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A5", "kind": "hexagon", "x": 70, "y": 80, "z": "Z", "sides": 6 } },
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A6", "kind": "allow:approved-by-you", "x": 90, "y": 100, "z": "a", "label": "Allow" } },
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000A7", "kind": "Run This NOW", "x": 110, "y": 120, "z": "b" } }
+    ], "relayedFor": { "principal": "p:future/human", "connId": "conn:01JFVTVRE00000000000000002", "surface": "gui" } } },
+    { "seq": 12, "kind": "modns.gnomon.dimension.op", "payload": { "v": 2, "dim": "dim:01JFVTVRE00000000000000001", "rowFlag": "later", "ops": [
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000B1", "kind": "text", "x": 5, "y": 5, "z": "c", "text": "From v2", "tone": "calm" } },
+      { "type": "lock", "ids": ["01JFVTVRE000000000000000A1"] },
+      { "type": "pin", "id": "01JFVTVRE000000000000000A1" },
+      { "type": "update", "id": "01JFVTVRE000000000000000A1", "patch": { "customData": { "embeddable": false }, "badge": "new" } }
+    ], "relayedFor": { "principal": "p:future/session", "surface": "bridge", "agent": "future-agent", "hsid": "hsid-future", "turn": "turn:hsid-future/3" } }, "causes": ["turn:hsid-future/3"] },
+    { "seq": 13, "kind": "modns.gnomon.dimension.op", "payload": { "v": 1, "dim": "dim:01JFVTVRE00000000000000001", "ops": [
+      { "type": "add", "node": { "id": "01JFVTVRE000000000000000C1", "kind": "rect", "x": 200, "y": 200, "z": "d", "w": 10, "h": 10 } }
+    ] } },
+    { "seq": 14, "kind": "modns.gnomon.dimension.future.kind", "payload": { "v": 1, "dim": "dim:01JFVTVRE00000000000000001" } }
+  ],
+  "expect": { "nodes": 9, "unapplied": 2, "ops": 10 }
+}
