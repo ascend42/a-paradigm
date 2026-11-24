@@ -193,4 +193,24 @@ components:
       children; mutation-checked): log.read-only mods get no usage kind and
       turn.result exactly {hsid}; a mod without paradigm.read:summary never
       receives the slice (relayed, forged, or via the feed).
+      Dimensions S1.2 (C1, C2; G-MOD-12, G-MOD-13; modAbiId moved 7aaf92f4 ->
+      cc5625da, kitId and clientApiId unchanged): relayedFor is built by the
+      contracts pickRelayedFor with fields fixed per method. view.render gets
+      {principal, connId}; command.run adds surface (gui | cli, derived by the
+      socket dispatcher from the connection credential, never from params);
+      tool.call gets {principal, surface bridge | voice, agent} from the
+      host-known toolRelayedFor option of callTool and, only when
+      #identityAllowed (publisher gnomon, or the log.read capability), hsid and
+      turn. A tool stamp lacking principal, surface or agent is neither sent nor
+      stamped (fail closed). The same object rides the bound call context as
+      CallStamp (effects.ts) and the bridge's clampModAppend applies it to every
+      log.append made inside that call: a mod-supplied payload.relayedFor is
+      always removed, the host's is written when there is a stamp, an idle, view
+      or host-initiated append has no relayedFor key, the 16 KiB cap is measured
+      after stamping, and row causes come only from the stamp (the turn of an
+      entitled tool call; a mod-supplied causes is never read). No caller passes
+      toolRelayedFor yet: the MCP bridge that knows the calling session's agent
+      and turn is S1.4, so until then tool-call rows are unstamped and a
+      dimension fold reads them as the unknown hand. Tests:
+      test/mod-stamp.test.ts.
     tags: [kernel, mods, sandbox, M1.11]

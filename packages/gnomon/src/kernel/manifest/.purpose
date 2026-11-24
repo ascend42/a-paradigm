@@ -146,6 +146,23 @@ components:
       Events: §9.1 kinds only (manifest.*, mod.*); the spec declares no
       signals. Refusals are refusal:v1 with data.manifestCode (not
       data.reason, which would move clientApiId).
+      Dimensions S1.2: (a) C7, G-DSK-09: an offer whose reach is not mcp is
+      refused SCHEMA with the field and the reach in the detail, at every tier,
+      at install and at load; reach canvas is published in offer-spec:v1 and
+      stays inert until boards raised by an offer ship (S1.5). (b) Seven more
+      reserved first-party names from the contracts list (dimension, dimensions,
+      dim, dims, board, boards, doodle): refused as a publisher and, for any
+      publisher but gnomon, as a mod name, a prefix of one or a skeleton of
+      either, so dimmer and boardgame under another publisher are refused
+      (recorded in test/s0b-mod-ids.test.ts for ruling O3). (c)
+      FIRST_PARTY_PACKAGE_HASHES re-pinned for workshop 1.1.1, ledger 1.1.1 and
+      paradigm-context 1.1.2 (the modAbiId move changes the three trees that
+      echo the id); the previous format-2 pins stay as
+      SUPERSEDED_FIRST_PARTY_PINS so an existing install keeps its tier, and
+      they are never an alias source. An installed snapshot of an earlier
+      version is NOT refreshed by the kernel: it is refused ABI at init until
+      the human approves the Update card the Mods panel offers (or runs gnomon
+      mod install on the shipped folder).
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]
