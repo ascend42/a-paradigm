@@ -6,7 +6,9 @@
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_KINDS, DIM_SURFACES, RELAYED_FOR_FIELDS, canonicalJson, foldDim } from '@a-company/gnomon-contracts';
-import { clampModAppend, createModKernelCall, MOD_APPEND_FIELDS, MOD_APPEND_MAX_BYTES, type ModAppendRow } from '../src/kernel/modhost/index.js';
+import { clampModAppend, createModKernelCall, createModRelayPort, MOD_APPEND_FIELDS, MOD_APPEND_MAX_BYTES, type ModAppendRow } from '../src/kernel/modhost/index.js';
+import { relaySurfaceOf } from '../src/kernel/socket/dispatch.js';
+import { MATRIX_CLASSES } from '../src/kernel/socket/methods.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { appendGrantRow } from '../src/kernel/manifest/index.js';
 import { host, install, probeManifest, rig, writeModFolder } from './mod-helpers.js';
@@ -125,6 +127,36 @@ describe('G-MOD-12: a mod-supplied relayedFor or causes on an append is replaced
       { cls: 'agent', principal: 'p:abcdefgh/s-01', agent: 'kit' },
       { cls: 'unknown', principal: 'unknown' },
     ]);
+  });
+});
+
+describe('A1 (Aegis S1.2 review): only a human-class caller earns a surface', () => {
+  it('relaySurfaceOf: human gets gui or cli; agent, session, mod, voice, read token and peer get none, on any credential', () => {
+    expect(MATRIX_CLASSES).toEqual(['human', 'agent', 'session', 'mod', 'voice', 'readToken', 'peer']);
+    for (const cls of MATRIX_CLASSES) {
+      for (const cred of ['gui', 'device', 'token', 'session', 'read-token', null, undefined]) {
+        const want = cls !== 'human' ? undefined : cred === 'gui' ? 'gui' : 'cli';
+        expect([cls, cred, relaySurfaceOf(cred, cls)]).toEqual([cls, cred, want]);
+      }
+    }
+  });
+
+  it('per caller class, through the relay port and the host: a non-human command row has no surface and folds as the unknown hand', async () => {
+    const { h, rows } = await started();
+    const port = createModRelayPort(h);
+    const classes = ['human', 'agent', 'session', 'mod', 'voice'] as const;
+    for (const cls of classes) {
+      const surface = relaySurfaceOf('device', cls);
+      await port.command({ principal: `p:abcdefgh/${cls}-1`, connId: 'conn-7', principalClass: cls, ...(surface ? { surface } : {}) }, { name: 'acme.probe', commandId: 'probe.who', args: { op: 'append.forged' } });
+    }
+    const dim = 'dim:01JVA1D0000000000000000001';
+    const node = (n: number): Record<string, unknown> => ({ id: `01JVA1D000000000000000002${n}`, kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 });
+    const state = foldDim([
+      { seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim, title: 't', attached: ['hs-1'], opened: 'command' } },
+      ...rows.map((r, i) => ({ seq: 2 + i, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [{ type: 'add', node: node(i) }], relayedFor: r.payload.relayedFor } })),
+    ]);
+    expect(rows.map((r) => (r.payload.relayedFor as Record<string, string>).surface)).toEqual(['cli', undefined, undefined, undefined, undefined]);
+    expect(classes.map((_c, i) => state.nodes.get(node(i).id as string)!.by.cls)).toEqual(['human', 'unknown', 'unknown', 'unknown', 'unknown']);
   });
 });
 

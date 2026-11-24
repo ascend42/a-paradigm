@@ -224,6 +224,17 @@ export function matrixClassOf(s: Pick<ConnAuthState, 'credential' | 'principalKi
 }
 
 /**
+ * The `surface` a relayed command is stamped with (S1.2 C2, Aegis S1.2 review A1). ONLY a human-class caller gets
+ * one: `gui` for the GUI credential, `cli` for any other. Every other class (agent, session, mod, voice, read token,
+ * peer) gets none, so `pickRelayedFor` drops the field and a row the mod appends in that call folds as the unknown
+ * hand. A dimension fold reads `cli` with no `agent` as a human mark, so an agent's shell must never earn `cli`.
+ */
+export function relaySurfaceOf(credential: string | null | undefined, cls: MatrixClass): 'gui' | 'cli' | undefined {
+  if (cls !== 'human') return undefined;
+  return credential === 'gui' ? 'gui' : 'cli';
+}
+
+/**
  * Access of a method (verb or relay) for a class, from the method registry
  * (methods.ts): relays are `caller principal` except for peers and read
  * tokens (§5). Fails CLOSED: an unknown method or an undefined tier is `false`.
@@ -544,7 +555,7 @@ export const HUMAN_DEVICE_VERB_MILESTONES: Readonly<Record<string, string>> = Ob
 export interface ModRelayPort {
   /** relayedFor.principalClass (Aegis M1): the caller's §5 class, for the host's K3 focus join; never forwarded to the mod */
   view(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; viewId: string; input: unknown }): Promise<unknown>;
-  command(relayedFor: { principal: string; connId: string; principalClass: string; surface: 'gui' | 'cli' }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  command(relayedFor: { principal: string; connId: string; principalClass: string; surface?: 'gui' | 'cli' }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
   /** full for the human class; counts only otherwise (F4) */
   status(full: boolean): Record<string, unknown>;
 }
@@ -914,8 +925,9 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       }
       const q = p as Record<string, unknown>;
       // Aegis M1: the class rides with the principal, so the host joins a focus only for a caller entitled to it
-      // S1.2 C2: the surface is derived HERE from the connection's credential, never from params
-      const relayedFor = { principal: s.principal!, connId: s.connId, principalClass: cls, surface: s.credential === 'gui' ? ('gui' as const) : ('cli' as const) };
+      // S1.2 C2 / A1: the surface is derived HERE from the connection's credential AND class, never from params
+      const surface = relaySurfaceOf(s.credential, cls);
+      const relayedFor = { principal: s.principal!, connId: s.connId, principalClass: cls, ...(surface ? { surface } : {}) };
       try {
         return await (m === 'mod.view' ? o.mods.view(relayedFor, { name: String(q.name), viewId: String(q.viewId), input: q.input ?? null }) : o.mods.command(relayedFor, { name: String(q.name), commandId: String(q.commandId), args: q.args ?? null }));
       } catch (err) {

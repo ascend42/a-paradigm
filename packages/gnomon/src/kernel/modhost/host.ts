@@ -840,8 +840,9 @@ export class ModHost {
   }
 
   /** The `mod.command` client relay (a GUI caller additionally needs a user gesture — the endpoint's rule, slice 2). */
-  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; surface: 'gui' | 'cli'; principalClass?: string }): Promise<unknown> {
-    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId, surface: req.surface } });
+  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; surface?: 'gui' | 'cli'; principalClass?: string }): Promise<unknown> {
+    // A1: no surface (a non-human caller) stays absent; the row then folds as the unknown hand
+    return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId, ...(req.surface ? { surface: req.surface } : {}) } });
   }
 
   /** `tool.call` — effects in force = that tool's declared effects (∩ the dev cap). */

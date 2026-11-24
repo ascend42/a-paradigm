@@ -151,7 +151,7 @@ export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => n
 /** What the dispatcher needs from the mod host (socket/dispatch.ts ModRelayPort). */
 export interface ModRelays {
   view(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; viewId: string; input: unknown }): Promise<RenderResult>;
-  command(relayedFor: { principal: string; connId: string; principalClass: string; surface: 'gui' | 'cli' }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  command(relayedFor: { principal: string; connId: string; principalClass: string; surface?: 'gui' | 'cli' }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
   /** full for the human class; counts only for every other caller (F4) */
   status(full: boolean): Record<string, unknown>;
 }
@@ -165,7 +165,7 @@ export function createModRelayPort(host: ModHost): ModRelays {
     },
     command: async (rf, req) => {
       await ensure(req.name);
-      return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId, surface: rf.surface }) };
+      return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId, ...(rf.surface ? { surface: rf.surface } : {}) }) };
     },
     status: (full) => {
       const st = host.status() as { modAbiId: string; running: unknown[]; paused: unknown[] };
