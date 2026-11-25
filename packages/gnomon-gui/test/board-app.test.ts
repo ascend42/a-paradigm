@@ -913,7 +913,9 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const a = await real([
       ...typeBoard, ...drawRect, { press: '.bd-host [data-key="tool:select"]' }, facts('before'), ...steps,
       // a text being typed on the board: a programmatic card focus does not run
-      { at: [200, 330], press: true }, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('ab'),
+      // (the press that wakes the board is one whole gesture: for 500ms after it nothing more reaches the engine. The
+      // page now paints at full speed in the harness, so the next press must wait that out, as a person's does)
+      { at: [200, 330], press: true }, { wait: 650 }, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('ab'),
       { read: `(() => { const id = document.querySelector('#stack .card')?.dataset.cardId ?? document.querySelector('#stack [data-card-id]')?.dataset.cardId ?? null; if (id) ${A}.board.focusCard(id); return { id, tag: document.activeElement.tagName, card: !!document.activeElement.closest('.card'), editing: ${A}.board.dock.editingText(), toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent) }; })()`, as: 'midword' },
     ]);
     const f = (k: string): Facts => a[k] as Facts;
@@ -998,7 +1000,10 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
         visible: document.visibilityState, focus: document.hasFocus(),
         layout: JSON.parse(localStorage.getItem('gnomon.gui.layout') || '{}').name ?? null, state: c ? c.leaf.state() : null, room: c ? c.leaf.room() : null,
         rail: rail && keys.length ? { over: rail.scrollHeight - rail.clientHeight, keys: keys.length, gap: Math.round(foot.getBoundingClientRect().top - Math.max(...keys.map((k) => k.bottom))) } : null,
-        outside: leafEl ? [...leafEl.querySelectorAll('*')].filter((e) => { const b = e.getBoundingClientRect(); const l = leafEl.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden]') && !e.closest('.bd-board') && (b.bottom > l.bottom + 1 || b.right > l.right + 1 || b.top < l.top - 1 || b.left < l.left - 1); }).map((e) => e.className).slice(0, 5) : null }; })()`;
+        outside: leafEl ? [...leafEl.querySelectorAll('*')].filter((e) => { const b = e.getBoundingClientRect(); const l = leafEl.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden]') && !e.closest('.bd-board') && (b.bottom > l.bottom + 1 || b.right > l.right + 1 || b.top < l.top - 1 || b.left < l.left - 1)
+          // …and is really PAINTED there (the leaf clips what runs past it: a too-short leaf cuts its one line, it does not draw over the strip)
+          && [[Math.min(b.right - 1, innerWidth - 1), Math.min(b.bottom - 1, innerHeight - 1)], [Math.max(b.left + 1, 0), Math.min(b.bottom - 1, innerHeight - 1)], [Math.min(b.right - 1, innerWidth - 1), Math.max(b.top + 1, 0)]].some(([x, y]) => (x > l.right || y > l.bottom || x < l.left || y < l.top) && e.contains(document.elementFromPoint(x, y))); }).map((e) => e.className).slice(0, 5) : null,
+        leafH: leafEl ? Math.round(leafEl.getBoundingClientRect().height) : null, keepCut: (() => { const k = leafEl && leafEl.querySelector('.bd-keep'); return k ? Math.round(k.getBoundingClientRect().bottom - leafEl.getBoundingClientRect().bottom) : null; })() }; })()`;
     // a card that can take focus under this preset (Focus hides the stack: the pinned cards are the ones left)
     const focusCard = { read: `(() => { for (const c of document.querySelectorAll('#pinned .card [data-decision], #stack .card [data-decision], #pinned .card button, #stack .card button')) { c.focus(); if (document.activeElement === c) return true; } return false; })()`, as: 'focused' };
     const KEYS: Array<Record<string, unknown>> = [{ key: 'a' }, { key: 'd' }, { key: 'n' }, { key: 'r' }, { key: 't' }, { key: 'v' }, { key: '1' }, { key: 'Delete' }, { key: 'Backspace' }, { key: 'z', meta: true }, { key: 'a', meta: true }, { key: 'v', meta: true, commands: ['paste'] }, { key: 'b', alt: true }, { key: 'Escape' }];
@@ -1019,7 +1024,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(String(a.row)).toContain(title);
     type R = { x: number; y: number; r: number; b: number } | null;
     const r = a.rects as { leaf: R; turn: R; pane: R; stack: R; status: R; pinned: R; composer: R; sessions: R; workshop: R; layout: string | null; state: string | null; room: number | null; rail: { over: number; keys: number; gap: number } | null; outside: string[] | null; visible: string };
-    if (process.env.GNOMON_MEASURE) appendFileSync(process.env.GNOMON_MEASURE, `G-DDL-08 ${preset} ${width}x${height}${deny ? ` deny${deny}` : ''}${idle ? ' idle' : ''}${slow ? ` slow${slow}` : ''}: state=${r.state} room=${r.room} strip=${r.turn ? Math.round(r.turn.b - r.turn.y) : null} rail=${JSON.stringify(r.rail)} pane=${Math.round(r.pane!.r - r.pane!.x)}\n`);
+    if (process.env.GNOMON_MEASURE) appendFileSync(process.env.GNOMON_MEASURE, `G-DDL-08 ${preset} ${width}x${height}${deny ? ` deny${deny}` : ''}${idle ? ' idle' : ''}${slow ? ` slow${slow}` : ''}: leafH=${(r as unknown as { leafH: number }).leafH} keepCut=${(r as unknown as { keepCut: number }).keepCut} state=${r.state} room=${r.room} strip=${r.turn ? Math.round(r.turn.b - r.turn.y) : null} rail=${JSON.stringify(r.rail)} pane=${Math.round(r.pane!.r - r.pane!.x)}\n`);
     expect(r.layout).toBe(preset);
     // the page PAINTS while it is measured (Probe: it went hidden when the palette closed, and every rect below was of a frozen page)
     expect(r.visible).toBe('visible');
