@@ -687,6 +687,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const onKey = (e: KeyboardEvent): void => {
     const active = document.activeElement;
     const s = st();
+    // held still (the link is down, the fold is out of date) Esc folds the leaf at once: there is no tool to leave
+    // and the held-still line tells the person to fold (a text being typed while down keeps its field: guardTypedKey)
+    if (e.key === 'Escape' && inert !== null && !o.cardFocused() && el.contains(active) && !(isField(active) && boardHost.contains(active))) return void o.onFold?.(e);
     // a field of the engine's own (a text being typed, a frame title being renamed) keeps every key
     if (isField(active) && boardHost.contains(active)) return;
     if (e.key === 'Escape' && !o.cardFocused() && el.contains(active) && !s?.editingText && (!s || s.tool === 'select')) {
@@ -798,8 +801,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   };
   el.addEventListener('copy', heldCopy, true);
   el.addEventListener('cut', heldCopy, true);
+  let going = false;
   const guardTypedBlur = (e: Event): void => {
-    if (inert !== 'link-down' || e.target !== boardField()) return;
+    if (going || inert !== 'link-down' || e.target !== boardField()) return;
     e.stopImmediatePropagation();
   };
   window.addEventListener('keydown', guardTypedKey, true);
@@ -897,6 +901,15 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     destroy() {
       window.removeEventListener('keydown', guardTypedKey, true);
       clearTimeout(inertSaidTimer);
+      // A text still open when the leaf goes: its field is ended first, so the engine takes its own window listeners
+      // down with it (left up, the next press on ANY board ran the dead editor's submit and threw in a frame).
+      // Nothing is sent: whoever destroys a leaf has already stopped listening to its handle.
+      going = true;
+      try {
+        boardField()?.dispatchEvent(new FocusEvent('blur'));
+      } catch {
+        /* the engine is going anyway */
+      }
       generation++;
       clearTimeout(saidTimer);
       clearTimeout(keepTimer);

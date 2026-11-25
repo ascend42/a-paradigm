@@ -11,7 +11,7 @@
  */
 import { PREVIEW } from './env.js'; // FIRST: stubs matchMedia and the surface before app.ts evaluates
 import { PIN_KEY } from '../core/launch.js';
-import { devArmOfferOnce, devRulesState, main } from '../ui/app.js';
+import { devArmOfferOnce, devBoard, devRulesState, main } from '../ui/app.js';
 import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey } from './fake-kernel.js';
 import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
 import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
@@ -240,7 +240,7 @@ async function boot(): Promise<void> {
     if (dimMod && kernel) return kernel.reopen(), kernel;
     kernel = new FakeKernel(fx, rows, key, url);
     kernel.dim = dimMod;
-    if (dimMod) (globalThis as { gnomonPreviewApp?: unknown }).gnomonPreviewApp = { kernel, mod: dimMod, down: (): void => kernel!.close() };
+    if (dimMod) (globalThis as { gnomonPreviewApp?: unknown }).gnomonPreviewApp = { kernel, mod: dimMod, board: devBoard(), down: (): void => kernel!.close() };
     return kernel;
   });
   if (fx.open === 'offer-armed') devArmOfferOnce(); // #gui-offer-slip DEV ONLY: the slip as a first trusted press leaves it

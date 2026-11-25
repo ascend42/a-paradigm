@@ -587,7 +587,17 @@ export class DimSession {
       return this.#emit({ about: 'edit', code: refused, field: 'ops', why: null, lost: ops.length });
     }
     const g = cause ? gestureOf(cause, Date.now()) : null;
-    this.#after(this.#live.local(ops, g), 'edit');
+    const r = this.#live.local(ops, g);
+    this.#after(r, 'edit');
+    // a REFUSED delete keeps its selection (Mika, final): the marks are put back and are still the ones in hand, so
+    // the person can take fewer of them without selecting again. Selecting is never an edit.
+    if (r.notice && r.resync && !this.#dead && ops.every((op) => op.type === 'delete')) {
+      try {
+        this.#handle?.select(ops.map((op) => (op as { id: string }).id));
+      } catch {
+        /* a handle that cannot select keeps the board as it was put back */
+      }
+    }
   }
 
   /** Cmd/Ctrl+Z in the board, with its own keydown. */

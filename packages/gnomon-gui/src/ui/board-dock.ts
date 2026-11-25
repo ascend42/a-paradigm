@@ -66,6 +66,8 @@ export interface BoardDock {
   /** true when the focused session has a board to reopen or one open */
   hasBoard(): boolean;
   isOpen(): boolean;
+  /** true while a text is being typed on the open board (no programmatic card focus runs then, G-DDL-08) */
+  editingText(): boolean;
   setTheme(theme: BoardTheme): void;
   /** the open leaf and its session (tests and the app's layout checks) */
   current(): { leaf: BoardLeaf; session: DimSession } | null;
@@ -306,6 +308,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     command: (arg, event) => carry(planBoardCommand(ask(), arg), event),
     menu: (event) => carry(planBoardMenu(ask()), event),
     key(event) {
+      // G-DDL-08: while a card has the keys, ⌥B changes nothing on an open board (no fold, nothing sent)
+      if (cur && d.cardFocused()) return false;
       if (cur) return void fold(event), true;
       const plan = planBoardKey(ask());
       // ⌥B does nothing when the session has no board (no toast: the menu row says so)
@@ -349,6 +353,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     repaint: paintTab,
     hasBoard: () => !!cur || !!ask().last,
     isOpen: () => !!cur,
+    editingText() {
+      const hd = cur?.leaf.handle();
+      return !!hd && hd.isAlive() && hd.state().editingText;
+    },
     setTheme: (theme) => cur?.leaf.setTheme(theme),
     current: () => (cur ? { leaf: cur.leaf, session: cur.session } : null),
   };

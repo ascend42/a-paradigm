@@ -2331,6 +2331,9 @@ const cardInPile = (cardId: string): Element | null => cardIn($('stack'), cardId
  * clears when it arrives (checkCardWait).
  */
 function focusCard(cardId: string, what: CardLabel = 'card'): void {
+  // G-DDL-08 (Aegis ruling 7): no programmatic card focus while a text is being typed on the board, so a card
+  // arriving mid-word cannot take the next keystroke. The card stays where it is, in the stack.
+  if (boardDock.editingText()) return;
   uncoverStack(stackCovers);
   const el = cardInPile(cardId);
   if (!el) {
@@ -2347,6 +2350,7 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
  * so a second Enter cannot allow it.
  */
 function focusCardGroup(cardId: string, what: CardLabel = 'grant card'): void {
+  if (boardDock.editingText()) return; // G-DDL-08: as focusCard
   uncoverStack(stackCovers);
   const el = cardInPile(cardId) as HTMLElement | null;
   if (!el) {
@@ -4575,6 +4579,11 @@ function wire(): void {
  * already call the kernel client directly, so this widens nothing (the send still needs a trusted press). */
 export function devArmOfferOnce(): void {
   if (__GNOMON_PREVIEW__) devArmOffer = true; // L1: false in scripts/build.mjs, so the served bundle drops it
+}
+
+/** DEV ONLY (#gui-preview `?dim=1`): the dock, the sessions and the programmatic card focus, for the real-engine tests of the mounted board. */
+export function devBoard(): { dock: typeof boardDock; sessions: DimSessions; focusCard: (cardId: string) => void } | null {
+  return __GNOMON_PREVIEW__ ? { dock: boardDock, sessions: dimSessions, focusCard: (cardId) => focusCard(cardId) } : null; // false in scripts/build.mjs: the served bundle drops it
 }
 
 /** DEV ONLY (#gui-preview rules-*): open Settings › Rules in a staged state for the reference shots (presses need trust). */
