@@ -195,7 +195,9 @@ export interface ModKernelCall {
 }
 
 export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => number } = {}): ModKernelCall {
-  const now = opts.now ?? Date.now;
+  // the budget windows are AGES, so the default clock is monotonic: a wall-clock step back can neither hold rows in
+  // the window past their second nor stretch `retryAfterMs` (an injected clock is still clamped below)
+  const now = opts.now ?? (() => performance.now());
   const rows = new Map<string, Array<{ t: number; tool: boolean }>>(); // name → appends in the last second, each with its share
   const bytes = new Map<string, number>(); // `${name}|${callKey}` → payload bytes appended
   const fn = async (req: KernelCallRequest): Promise<unknown> => {
@@ -206,7 +208,8 @@ export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => n
       // S1.4 A4: only a bound command is outside the tool share. It fails closed: a tool call, an idle request and a
       // request whose kind is missing or unknown all count against it, so nothing but a command can use the reserve.
       const tool = req.callKind !== 'command';
-      const wait = (xs: Array<{ t: number }>): number => Math.max(1, MOD_APPEND_WINDOW_MS - (t - xs[0]!.t));
+      // whole milliseconds, never under 1 and never over the window, whatever the clock did
+      const wait = (xs: Array<{ t: number }>): number => Math.min(MOD_APPEND_WINDOW_MS, Math.max(1, Math.ceil(MOD_APPEND_WINDOW_MS - (t - xs[0]!.t))));
       if (tool) {
         const toolRows = recent.filter((x) => x.tool);
         if (toolRows.length >= MOD_APPEND_TOOL_ROWS_PER_SEC) throw budgetRefusal(req.name, 'tool-rows', `${req.name} exceeded ${MOD_APPEND_TOOL_ROWS_PER_SEC} tool-call appends per second`, wait(toolRows));

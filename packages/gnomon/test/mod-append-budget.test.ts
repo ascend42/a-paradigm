@@ -3,7 +3,7 @@
  * platform-independent half of test/mod-daemon.test.ts: Aegis C2 clamp, the
  * F2 per-mod append budget and per-call byte budgets. Runs on every platform.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { clampModAppend, createModKernelCall, MOD_APPEND_BUDGETS, MOD_APPEND_BYTES_PER_CALL, MOD_APPEND_MAX_BYTES, MOD_APPEND_ROWS_PER_SEC, MOD_APPEND_TOOL_ROWS_PER_SEC, MOD_APPEND_WINDOW_MS, ModRefusal, type ModCallKind } from '../src/kernel/modhost/index.js';
 import { MOD_REFUSAL_CODES } from '../src/kernel/modhost/refusal.js';
 
@@ -136,6 +136,43 @@ describe('G-MOD-21: the human reserve in the append budget', () => {
     await append('tool', 'after-wait');
     await expect(append('tool', 'over-again')).rejects.toMatchObject({ detail: { budget: 'tool-rows' } });
     expect(landed.map((p) => p.tag)).toEqual(['tool-0', 'tool-1', 'tool-2', 'tool-3', 'tool-4', 'other-0', 'after-wait']);
+  });
+
+  it('retryAfterMs is whole milliseconds inside the window, whatever the injected clock does (it steps back, it is fractional)', async () => {
+    const { clock, append } = rig();
+    for (let i = 0; i < MOD_APPEND_TOOL_ROWS_PER_SEC; i++) await append('tool', `tool-${i}`);
+    clock.t -= 3_600_000; // the clock steps back an hour
+    const back = (await append('tool', 'over').catch((e: unknown) => e)) as ModRefusal;
+    expect(back.detail).toMatchObject({ budget: 'tool-rows', written: false, retryAfterMs: MOD_APPEND_WINDOW_MS });
+    clock.t += 3_600_000 + 0.25;
+    const frac = (await append('tool', 'over').catch((e: unknown) => e)) as ModRefusal;
+    expect(frac.detail.retryAfterMs).toBe(MOD_APPEND_WINDOW_MS);
+    clock.t += 999.5; // 0.25 ms of the window left
+    expect(((await append('tool', 'over').catch((e: unknown) => e)) as ModRefusal).detail.retryAfterMs).toBe(1);
+    // the row total answers the same way
+    for (let i = 0; i < MOD_APPEND_ROWS_PER_SEC; i++) await append('command', `c-${i}`, 'other');
+    clock.t -= 10_000;
+    expect(((await append('command', 'over', 'other').catch((e: unknown) => e)) as ModRefusal).detail).toMatchObject({ budget: 'rows', retryAfterMs: MOD_APPEND_WINDOW_MS });
+  });
+
+  it('the default clock is monotonic: a wall clock that jumps does not empty or hold the window', async () => {
+    const wall = vi.spyOn(Date, 'now');
+    try {
+      const call = createModKernelCall({ callAs: async () => null, append: async () => ({ seq: 1 }) });
+      const tool = () => call({ name: 'probe', principal: 'p:x/mod-probe', verb: 'log.append', params: { kind: 'modns.probe.x', payload: {} }, callKind: 'tool' });
+      const real = Date.now();
+      wall.mockReturnValue(real);
+      for (let i = 0; i < MOD_APPEND_TOOL_ROWS_PER_SEC; i++) await tool();
+      // the wall clock jumps a minute ahead: on a wall clock the five rows would have left the window
+      wall.mockReturnValue(real + 60_000);
+      const refused = (await tool().catch((e: unknown) => e)) as ModRefusal;
+      expect(refused).toBeInstanceOf(ModRefusal);
+      expect(refused.detail.budget).toBe('tool-rows');
+      expect(refused.detail.retryAfterMs).toBeGreaterThanOrEqual(1);
+      expect(refused.detail.retryAfterMs).toBeLessThanOrEqual(MOD_APPEND_WINDOW_MS);
+    } finally {
+      wall.mockRestore();
+    }
   });
 
   it('fails closed: only a command is outside the tool share; an idle, missing or unknown call kind counts against it', async () => {
