@@ -455,6 +455,18 @@ components:
       kept inside the board's own area and scrolls inside itself when taller.
       The leaf's room() is the body it draws (the foot is 32px; it was counted
       as 29), and no row or tick of the rail shrinks.
+      Boards S1.3 pass P4b-3 (the keep line and the check; conditions P4 and
+      after-P4a): core/board-leaf.ts keepStateLine reads both keep and link
+      and never answers a bare 'Not saved' (it is said only with the link
+      down, as 'Not saved · reconnecting' or 'Not saved · not connected');
+      partial and dropped have their lines while no passing state is said.
+      checkLine reads 'Checked up to change N[ of M]', 'Not checked yet' for
+      verified null, 'Did not match at change N'; BoardLeaf.setCheck(line,
+      tone) draws it whole at the right end of the foot (.bd-check; the hands
+      give way to it; tone bad in the failed colour). It was a hover title on
+      the head's glyph. The words of KEEP_COPY and CHECK_COPY are not in the
+      design record: they are the plainest that fit the 424px leaf, for Luna
+      to rule.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]

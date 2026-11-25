@@ -1945,4 +1945,7 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-note .bd-en-t { font-size: var(--fs-reading); font-weight: 600; color: var(--ink); }
 .bd-said-line { color: var(--ink); }
 .bd-foot .bd-more-hands { white-space: nowrap; }
+/* the check (boards S1.3 P4b-3): what this page's copy of the board was compared with, whole, at the foot's right end */
+.bd-foot .bd-check { flex: none; margin-left: auto; white-space: nowrap; }
+.bd-foot .bd-check.bad { color: var(--fail); }
 .bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }

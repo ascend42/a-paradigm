@@ -114,21 +114,34 @@ export const INERT_COPY = {
 export type LeafInert = keyof typeof INERT_COPY;
 
 /**
- * The keep line's state of the live loop, from `DimSession.status()`: null while everything is saved (the leaf then
- * shows its usual keep line). Minimal words, in the keep line's own slot; the final words are the next pass's.
+ * The keep line's state of the live loop, from `DimSession.status()`: null while everything is saved and whole (the
+ * leaf then shows the design's keep line: project, session, how it was opened, when). It reads BOTH `keep` and
+ * `link`: the link down is said first, and "saved with the link down" is `Reconnecting` alone.
+ *
+ * "Not saved" is NEVER a state of its own here (Mika, final): a change is not saved only while the link is down, and
+ * then the line says so with what is happening (`Not saved · reconnecting`). With the link up a pending change is
+ * `Saving…`, and one that failed is said once as a notice. A board this page holds only in part (`partial`), or
+ * whose rows it could not keep (`dropped`), says so whenever no passing state (opening, saving, the link down) has the line.
  */
 export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number }): string | null {
-  if (s.link === 'down') return linkDownLine(s);
-  if (s.phase === 'opening') return 'Opening…';
-  if (s.phase === 'closing') return 'Folding…';
-  if (s.keep === 'saving') return 'Saving…';
-  if (s.keep === 'not-saved') return 'Not saved';
+  // (`not-saved` is the live loop's word for "pending while the link is down": it is never said without that)
+  if (s.link === 'down' || s.keep === 'not-saved') return linkDownLine(s);
+  if (s.phase === 'opening') return KEEP_COPY.opening;
+  if (s.phase === 'closing') return KEEP_COPY.folding;
+  if (s.keep === 'saving') return KEEP_COPY.saving;
   if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
   if (s.partial) return KEEP_COPY.partial;
   return null;
 }
-/** Minimal words of the keep line's own states (boards S1.3 P4b-1; Luna rules them in the next pass). */
+/**
+ * The words of the keep line's own states (boards S1.3 P4b-3: the words this pass ships). The design record gives the
+ * keep line itself and the yielded and too-short lines; it is silent on every line here, so each is the plainest
+ * wording that fits the leaf at a 1024 window (about 59 characters), FOR LUNA to rule.
+ */
 export const KEEP_COPY = {
+  opening: 'Opening…',
+  folding: 'Folding…',
+  saving: 'Saving…',
   notSavedDown: 'Not saved · reconnecting',
   dropped: 'Part of this board could not be held · marks are missing',
   partial: 'Earlier marks are not shown · this is part of the board',
@@ -164,10 +177,18 @@ export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pendin
  * mod vouches for a POINT, so the line reads "checked up to" it; `verified: null` is unchecked.
  */
 export function checkLine(s: { verified: boolean | null; checkedSeq: number | null; seq: number }): string {
-  if (s.verified === null || s.checkedSeq === null) return 'Not checked yet';
-  if (s.verified === false) return `Did not match at change ${s.checkedSeq} · fold it and open it again`;
+  if (s.verified === null || s.checkedSeq === null) return CHECK_COPY.unchecked;
+  // (what to do about it is the held-still line's, in the keep line's place: `INERT_COPY['out-of-date']`)
+  if (s.verified === false) return `Did not match at change ${s.checkedSeq}`;
   return s.checkedSeq < s.seq ? `Checked up to change ${s.checkedSeq} of ${s.seq}` : `Checked up to change ${s.checkedSeq}`;
 }
+/**
+ * Where the check shows (boards S1.3 P4b-3; not in the design record, FOR LUNA): the right end of the leaf's foot,
+ * in the foot's own style, always whole (the hands give way to it). It was a hover title on the head's glyph.
+ */
+export const CHECK_COPY = { unchecked: 'Not checked yet' } as const;
+/** How the check reads: `bad` when the fold did not match (drawn in the failed colour), `none` while unchecked. */
+export const checkTone = (s: { verified: boolean | null; checkedSeq: number | null }): 'ok' | 'none' | 'bad' => (s.verified === null || s.checkedSeq === null ? 'none' : s.verified ? 'ok' : 'bad');
 /** A save shows as `Saving…` only when it has lasted this long (a quick save never flickers the line). */
 export const KEEP_SLOW_MS = 600;
 

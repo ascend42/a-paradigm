@@ -31,6 +31,8 @@ const FACTS = `(() => { try {
     phase: st && st.phase, keep: st && st.keep, link: st && st.link, pending: st && st.pending, nodes: c ? c.session.view().nodes.size : null, texts: c ? [...c.session.view().nodes.values()].filter((n) => n.node.kind === 'text').map((n) => n.node.text) : null,
     sameAsMod: c ? c.session.hash() === ${A}.mod.hash(c.session.dim) : null, marks: hd && hd.isAlive() ? hd.count() : null, drift: hd && hd.isAlive() ? hd.drift().length : null, tool: hd && hd.isAlive() ? hd.state().tool : null,
     field: field ? field.value : null, toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent), reconnect: !document.getElementById('reconnect').hidden,
+    chk: (() => { const foot = l ? l.querySelector('.bd-foot') : null; const c = foot ? foot.querySelector('.bd-check') : null; if (!c) return null; const b = c.getBoundingClientRect(); const fb = foot.getBoundingClientRect(); const hands = [...foot.querySelectorAll('.bd-hand')].map((x) => x.getBoundingClientRect().right);
+      return { text: c.textContent, bad: c.classList.contains('bad'), whole: b.width > 0 && b.height > 0 && b.left >= fb.left && b.right <= fb.right + 0.5 && c.scrollWidth <= c.clientWidth + 1 && hands.every((r) => r <= b.left), title: l.querySelector('.bd-g').getAttribute('title') }; })(),
     active: document.activeElement ? (document.activeElement.id || document.activeElement.tagName + '.' + document.activeElement.className) : null, card: !!(document.activeElement && document.activeElement.closest('.card')), errs: (globalThis.__errs || []).length};
 } catch (e) { return { threw: String(e && e.stack).slice(0, 500) }; } })()`;
 const facts = (as: string) => ({ read: FACTS, as });
@@ -41,7 +43,7 @@ const keepShot = (name: string, png: Buffer): void => {
   writeFileSync(path.join(SHOTS, `s14b-${name}.png`), png);
 };
 const fa = (a: Record<string, unknown>, k: string): Facts => a[k] as Facts;
-type Facts = { open: boolean; title: string | null; line: string | null; inert: string | null; check: string | null; tab: string | null; rows: string[]; frames: number; phase: string | null; keep: string | null; link: string | null; pending: number | null; nodes: number | null; texts: string[] | null; sameAsMod: boolean | null; marks: number | null; drift: number | null; tool: string | null; field: string | null; toasts: string[]; reconnect: boolean; active: string | null; card: boolean };
+type Facts = { chk: { text: string; bad: boolean; whole: boolean; title: string | null } | null; open: boolean; title: string | null; line: string | null; inert: string | null; check: string | null; tab: string | null; rows: string[]; frames: number; phase: string | null; keep: string | null; link: string | null; pending: number | null; nodes: number | null; texts: string[] | null; sameAsMod: boolean | null; marks: number | null; drift: number | null; tool: string | null; field: string | null; toasts: string[]; reconnect: boolean; active: string | null; card: boolean };
 const type = (s: string): unknown[] => [...s].map((k) => ({ key: k, settle: 25 }));
 const typeBoard = [{ press: '#composer-text' }, ...type('/board'), { key: 'Enter' }, { wait: 2500 }];
 const drawRect = [{ press: '.bd-host [data-key="tool:rect"]' }, { drag: [[250, 200], [290, 225], [330, 250]] }, { wait: 500 }];
@@ -101,6 +103,12 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('drawn')).toMatchObject({ rows: ['session.start:command', 'op:add'], frames: 2, nodes: 1, marks: 1, pending: 0, keep: 'saved', sameAsMod: true, drift: 0 });
     // the check does not vouch for the row after its point
     expect(f('drawn').check).toMatch(/^Checked up to change \d+ of \d+$/);
+    // P4b-3: the check is READ ON THE LEAF, whole, at the foot's right end (it was a hover title on the head's 8px glyph)
+    expect(f('opened').chk).toMatchObject({ text: f('opened').check, bad: false, whole: true, title: null });
+    expect(f('drawn').chk).toMatchObject({ text: f('drawn').check, bad: false, whole: true });
+    expect(f('drawn').chk!.text).toMatch(/^Checked up to change \d+ of \d+$/);
+    expect(f('reopened').chk).toMatchObject({ bad: false, whole: true });
+    expect(f('reopened').chk!.text).toMatch(/^Checked up to change \d+$/);
     // Esc folds: dim.close, the leaf goes, the edge tab `<title> · board` shows, focus returns
     expect(f('folded')).toMatchObject({ open: false, rows: ['session.start:command', 'op:add', 'session.end'], frames: 3 });
     expect(f('folded').tab).toMatch(/^Totals are off by a cen… · board$/);
@@ -645,7 +653,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     expect(f('opened')).toMatchObject({ open: true, inert: 'out-of-date', line: 'This board is out of date · fold it and open it again' });
-    expect(f('opened').check).toMatch(/^Did not match at change \d+/);
+    expect(f('opened').check).toMatch(/^Did not match at change \d+$/);
+    // the foot says it in the failed colour, whole; what to do about it is the line under the head
+    expect(f('opened').chk).toMatchObject({ text: f('opened').check, bad: true, whole: true });
     // real input on the held-still board: no mark, no row, no command left the page
     expect(f('poked')).toMatchObject({ open: true, inert: 'out-of-date', nodes: 0, marks: 0, rows: ['session.start:command'], frames: f('opened').frames, field: null });
     // the line tells the person to fold, and the fold works
@@ -691,8 +701,13 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     const first = pinned === 'two' ? [] : [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); return idle ? idle.dataset.hsid : null; })()`, as: 'idle' }];
     // 0 pinned: an idle session of the fixture is focused; 2 pinned: one of the fixture's three is decided by a real press
     const zero = pinned === 'two' ? [{ press: '#pinned .card [data-decision="deny"]' }, { wait: 900 }] : [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); if (idle) idle.click(); return !!idle; })()`, as: 'switched' }, { wait: 400 }];
-    const a = await real([...first, ...zero, ...typeBoard, { read: RECTS, as: 'rects' }], { fixture, theme, width, height, shot: `app-board-${width}-${theme}-${pinned === 'two' ? 'pinned2' : 'pinned0'}` });
+    const a = await real([...first, ...zero, ...typeBoard, { read: RECTS, as: 'rects' }, facts('f'), { read: `(() => { const c = ${CUR}; return c ? c.leaf.state() : null; })()`, as: 'state' }], { fixture, theme, width, height, shot: `app-board-${width}-${theme}-${pinned === 'two' ? 'pinned2' : 'pinned0'}` });
     expect(a.errors).toEqual([]);
+    // P4b-3: wherever the leaf draws its foot, the check stands whole in it beside the hands (the 424px leaf included)
+    if (a.state !== 'too-short') {
+      expect(fa(a, 'f').chk, `the check at ${width}×${height}`).toMatchObject({ bad: false, whole: true });
+      expect(fa(a, 'f').chk!.text).toMatch(/^Checked up to change \d+/);
+    }
     type R = { x: number; y: number; r: number; b: number } | null;
     const r = a.rects as { leaf: R; turn: R; turnRows: number; roomWithout: number | null; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };
     expect(r.cards).toBe(pinned === 'two' ? 2 : 0);

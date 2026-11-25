@@ -91,12 +91,12 @@ export interface BoardLeaf {
    * the keep line's place and is announced once.
    */
   setInert(why: LeafInert | null): void;
-  /** The live loop's keep state in the keep line's place (`Saving…`, `Not saved`), or null for the usual keep line. A save is shown only once it is slow. */
+  /** The live loop's keep state in the keep line's place (core/board-leaf.ts `keepStateLine`: `Saving…`, a board held in part), or null for the usual keep line. A save is shown only once it is slow. */
   setKeep(line: string | null): void;
   /** The dimension's title once the fold holds it (the head, its title= and the region's names). */
   setTitle(title: string): void;
-  /** The check display's line (core/board-leaf.ts `checkLine`): the head glyph's title= and a hidden description. */
-  setCheck(line: string): void;
+  /** The check display's line (core/board-leaf.ts `checkLine`), shown whole at the right end of the foot; `bad` when the fold did not match. */
+  setCheck(line: string, tone?: 'ok' | 'none' | 'bad'): void;
   /** Other words for the held-still line while it lasts (`Not saved · reconnecting` when something is pending), or null for its own. */
   setInertLine(line: string | null): void;
   /**
@@ -300,7 +300,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
     if (state === 'too-short') return void keep.append(LEAF_COPY.tooShort);
     if (state === 'yielded') return void keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`);
-    // the live loop's own state (a slow save, not saved) takes the keep line's place while it lasts
+    // the live loop's own state (a slow save, a board held in part) takes the keep line's place while it lasts
     if (keepShown) {
       keep.title = keepShown;
       return void keep.append(keepShown);
@@ -575,15 +575,19 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.name), ' ', name, ` ${f.n}`));
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
-    foot.replaceChildren(...kids);
+    // the check (what this page's fold was compared with) is at the foot's right end and is never cut
+    const check = checkWords ? [h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, {}, checkWords)] : [];
+    foot.replaceChildren(...kids, ...check);
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
     while (foot.scrollWidth > foot.clientWidth && kids.length - cut > 1) {
       cut++;
-      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`));
+      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`), ...check);
     }
   }
+  let checkWords = '';
+  let checkTone: 'ok' | 'none' | 'bad' = 'none';
   let saidAt = 0;
   function say(text: string): void {
     // the same line while it is still showing is not announced a second time (a drag from the rail onto the board
@@ -881,7 +885,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       if (line === keepLine) return;
       keepLine = line;
       clearTimeout(keepTimer);
-      if (line === null || line !== 'Saving…') {
+      if (line === null || line !== KEEP_COPY.saving) {
         keepShown = line;
         return draw();
       }
@@ -898,9 +902,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       boardHost.setAttribute('aria-label', `Board: ${title}`);
       el.setAttribute('aria-label', `Dimension: ${title}`);
     },
-    setCheck(line) {
-      head.querySelector('.bd-g')?.setAttribute('title', line);
+    setCheck(line, tone = 'ok') {
+      if (line === checkWords && tone === checkTone) return;
+      checkWords = line;
+      checkTone = tone;
       el.dataset.check = line;
+      drawFoot();
     },
     setInertLine(line) {
       if (line === inertLine) return;

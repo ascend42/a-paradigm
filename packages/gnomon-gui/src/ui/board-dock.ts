@@ -19,7 +19,7 @@
  *  - No sizes in markup: the host's height and the tab's top are CSSOM properties.
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
-import { checkLine, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
+import { checkLine, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf } from './board-leaf.js';
@@ -177,7 +177,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     leaf.setTitle(s.title);
     // words that are waiting are said for AS LONG AS they are held (a six-second line was gone before it was read)
     leaf.setKeep(words && s.link === 'up' ? KEEP_COPY.wordsWait : keepStateLine(s));
-    leaf.setCheck(checkLine(s));
+    leaf.setCheck(checkLine(s), checkTone(s));
     leaf.el.dataset.words = words ? 'held' : '';
     if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
   }

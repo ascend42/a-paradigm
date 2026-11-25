@@ -190,7 +190,7 @@ async function openLiveBoard(host: HTMLElement, key: PreviewKey, load: () => Pro
       session.bindLeaf(leaf);
       session.onChange((c) => {
         if (!session.alive) return;
-        // the keep line's place shows the loop's own state while it lasts (a slow save, not saved)
+        // the keep line's place shows the loop's own state while it lasts (a slow save, a board held in part)
         leaf.setKeep(keepStateLine(c.status));
         if (!c.notice) return;
         live.notices.push(c.notice);
