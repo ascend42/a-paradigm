@@ -670,7 +670,7 @@ const inRange = (v: unknown, lo: number, hi: number): boolean => Number.isSafeIn
 type Problem = { field: string; code: DimRefusalCode; swatch?: string };
 
 /** Check one node field value against the running state. `self` is the node's own id. */
-function checkField(d: Draft, kind: DimCoreKind, self: string, key: string, v: unknown): Problem[] {
+function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kind: DimCoreKind, self: string, key: string, v: unknown): Problem[] {
   const bad = (code: DimRefusalCode, extra: Partial<Problem> = {}): Problem[] => [{ field: key, code, ...extra }];
   const int = (lo: number, hi: number): Problem[] => (typeof v !== 'number' || !Number.isSafeInteger(v) ? bad('field-type') : inRange(v, lo, hi) ? [] : bad('field-range'));
   const str = (max: number, min = 0): Problem[] => (typeof v !== 'string' ? bad('field-type') : v.length < min || v.length > max ? bad('field-range') : []);
@@ -973,7 +973,13 @@ export function dimFallbackLabel(kind: unknown): string {
   return `${DIM_FALLBACK_LEAD} ${dimKindName(kind)}`;
 }
 
+/**
+ * One node of a view. `core: true` does NOT mean the node is whole: a stored field that fails today's write check
+ * is left out, a REQUIRED one included (a core node may come without `x`, `z`, `text`, `points`, `w` or `h`).
+ * A reader must tolerate every field but `id`, `kind`, `core` and `by` being absent.
+ */
 export interface DimViewNode {
+  /** always DIM_NODE_ID_PATTERN: a node stored under any other id is not in the view */
   id: string;
   kind: string;
   /** false: a kind this version does not know; only id, kind, x, y and by are shown */
@@ -983,7 +989,9 @@ export interface DimViewNode {
 }
 export interface DimView {
   v: 1;
+  /** the stored id when it matches DIM_ID_PATTERN, else null */
   dim: string | null;
+  /** the stored title when a title could be written so today (length, no invisible character), else '' */
   title: string;
   seq: number;
   nodes: DimViewNode[];
@@ -993,12 +1001,21 @@ export interface DimView {
 /** The stored node id, when it is one a write could have minted; else undefined (the field is left out). */
 const viewId = (v: unknown): string | undefined => (typeof v === 'string' && DIM_NODE_ID_PATTERN.test(v) ? v : undefined);
 
+/** Code points no title may hold: the ones a reader cannot see. */
+const VIEW_INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+
 /**
  * One stored field of a core node as the view may show it, or undefined to leave it out. The fold carries
- * anything (a row is permanent, and a hostile or later-version row is still a row), so nothing stored is shown
- * on trust: the value must pass TODAY's write check for its field (Aegis S1.2 nit 5).
+ * anything (a row is permanent, and a hostile or later-version row is still a row), so no stored STRING reaches
+ * the view unchecked: a field value must pass TODAY's write check for its field (Aegis S1.2 nit 5), and the
+ * node id, the dimension id and the title are checked in `dimViewOf`. Two limits on that claim:
+ *  - the view does NOT re-run the secret scan. A text that was stored before a rule existed, or by a row no
+ *    validator read, is shown as stored;
+ *  - `by` is shown as the fold derived it from the host stamp; its strings are the host's, not checked here.
+ * Per field:
  *  - `refs`: each ref is checked by itself; one that fails `validateDimRef` is left out, a repeat is shown once,
- *    and at most DIM_LIMITS.refs are shown.
+ *    and at most DIM_LIMITS.refs are shown. A stored empty list is shown as `[]`; a list whose every ref failed
+ *    is left out.
  *  - `color`, `fill`: the current palette check; a token that fails it is left out (the renderer then draws ink
  *    or no fill, as `resolveContentColour` does).
  *  - `text`, `label`, `title`, `rel`, `head`, `z`, every number and `points`: the type, length, range and pattern
@@ -1016,10 +1033,10 @@ function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, 
       if (refs.length >= DIM_LIMITS.refs) break;
       if (validateDimRef(r) === null && !refs.includes(r as string)) refs.push(r as string);
     }
-    return refs.length > 0 ? refs : undefined;
+    return refs.length > 0 || v.length === 0 ? refs : undefined;
   }
-  // checkField reads the state only for the three link fields answered above
-  if (checkField(state as unknown as Draft, kind, id, key, v).length > 0) return undefined;
+  // checkField reads the state's nodes only for the three link fields answered above
+  if (checkField(state, kind, id, key, v).length > 0) return undefined;
   return Array.isArray(v) ? [...v] : v;
 }
 
@@ -1028,6 +1045,12 @@ function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, 
  * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
  * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
  * classes only.
+ *
+ * Three more stored strings are checked here, because the fold accepts any string for each:
+ *  - a node whose id is not DIM_NODE_ID_PATTERN is left out whole, core or not, and is not counted in the legend;
+ *  - `title` is shown only when it is at most DIM_LIMITS.title long and holds no control, format, line-separator
+ *    or paragraph-separator code point, else `''`;
+ *  - `dim` is shown only when it matches DIM_ID_PATTERN, else `null`.
  */
 export function dimViewOf(state: DimState): DimView {
   const entries = [...state.nodes.entries()].sort((a, b) => dimZCompare({ z: a[1].node.z, id: a[0] }, { z: b[1].node.z, id: b[0] }));
@@ -1035,6 +1058,7 @@ export function dimViewOf(state: DimState): DimView {
   const hands = new Map<string, number>();
   const nodes: DimViewNode[] = [];
   for (const [id, n] of entries) {
+    if (!DIM_NODE_ID_PATTERN.test(id)) continue;
     const by: DimBy = { cls: n.by.cls, principal: n.by.principal, ...(n.by.agent !== undefined ? { agent: n.by.agent } : {}) };
     const core = isCoreKind(n.node.kind);
     const out: DimViewNode = { id, kind: dimKindName(n.node.kind), core, by };
@@ -1053,7 +1077,9 @@ export function dimViewOf(state: DimState): DimView {
   const legend: string[] = [];
   if (kinds.size > 0) legend.push(`marks by kind: ${line(kinds)}`);
   if (hands.size > 0) legend.push(`marks by hand: ${line(hands)}`);
-  return { v: 1, dim: state.dim, title: state.title, seq: state.seq, nodes, legend };
+  const dim = typeof state.dim === 'string' && DIM_ID_PATTERN.test(state.dim) ? state.dim : null;
+  const title = typeof state.title === 'string' && state.title.length <= DIM_LIMITS.title && !VIEW_INVISIBLE.test(state.title) ? state.title : '';
+  return { v: 1, dim, title, seq: state.seq, nodes, legend };
 }
 
 /* ── auxiliary kinds and the write-grant fold (S1.4; NOT in the client API descriptor) ── */
