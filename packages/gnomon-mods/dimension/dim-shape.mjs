@@ -1292,6 +1292,20 @@ function dimKindName(kind) {
 function dimFallbackLabel(kind) {
   return `${DIM_FALLBACK_LEAD} ${dimKindName(kind)}`;
 }
+var DIM_VIEW_PRINCIPAL_PATTERN = /^p:[a-z0-9]{1,16}\/[a-z0-9][a-z0-9._-]{0,63}(@[0-9a-f]{8})?$/;
+var DIM_AGENT_LABEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+function dimViewBy(by) {
+  try {
+    if (!isPlainObject(by)) return { ...UNKNOWN_BY };
+    const cls = own(by, "cls");
+    const principal = own(by, "principal");
+    const agent = own(by, "agent");
+    if (cls === "human" && typeof principal === "string" && DIM_VIEW_PRINCIPAL_PATTERN.test(principal) && agent === void 0) return { cls: "human", principal };
+    if (cls === "agent" && typeof principal === "string" && DIM_VIEW_PRINCIPAL_PATTERN.test(principal) && typeof agent === "string" && DIM_AGENT_LABEL_PATTERN.test(agent)) return { cls: "agent", principal, agent };
+  } catch {
+  }
+  return { ...UNKNOWN_BY };
+}
 var viewId = (v) => typeof v === "string" && DIM_NODE_ID_PATTERN.test(v) ? v : void 0;
 var VIEW_INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 function viewField(state, kind, id, key, v) {
@@ -1316,7 +1330,7 @@ function dimViewOf(state) {
   const nodes = [];
   for (const [id, n] of entries) {
     if (!DIM_NODE_ID_PATTERN.test(id)) continue;
-    const by = { cls: n.by.cls, principal: n.by.principal, ...n.by.agent !== void 0 ? { agent: n.by.agent } : {} };
+    const by = dimViewBy(n.by);
     const core = isCoreKind(n.node.kind);
     const out = { id, kind: dimKindName(n.node.kind), core, by };
     const keys = core ? DIM_NODE_KEYS[n.node.kind] : ["x", "y"];
@@ -1459,6 +1473,7 @@ var DIM_HASH_VECTOR_ROWS = deepFreeze([
 ]);
 var DIM_HASH_VECTOR_HASH = "sha256:d8b171c96fbdc391befc39a0553896a842f503ac8cc094ad4581f003fed4b596";
 export {
+  DIM_AGENT_LABEL_PATTERN,
   DIM_AUX_KINDS,
   DIM_BY_CLASSES,
   DIM_CORE_KINDS,
@@ -1486,6 +1501,7 @@ export {
   DIM_SCAN_LIMITS,
   DIM_SHAPE_V1,
   DIM_SURFACES,
+  DIM_VIEW_PRINCIPAL_PATTERN,
   DIM_WRITABLE_OP_TYPES,
   DIM_Z_PATTERN,
   dimCanonical,
@@ -1496,6 +1512,7 @@ export {
   dimKindName,
   dimMayDraw,
   dimTextForScan,
+  dimViewBy,
   dimViewOf,
   dimZBetween,
   dimZCompare,

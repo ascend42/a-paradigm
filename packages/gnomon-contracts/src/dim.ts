@@ -1034,6 +1034,40 @@ export interface DimView {
   legend: string[];
 }
 
+/**
+ * What a `by.principal` may look like in a view: `p:<ns>/<name>` with an optional `@<rootKeyId8>`, lowercase letters,
+ * digits and `. _ -` only, at most 92 characters. Every principal id the kernel mints matches (it is wider than
+ * `ANY_PRINCIPAL_PATTERN` only in the length of the namespace; a test holds that), and no string with a space, an
+ * upper-case letter, a control or a format character does.
+ */
+export const DIM_VIEW_PRINCIPAL_PATTERN = /^p:[a-z0-9]{1,16}\/[a-z0-9][a-z0-9._-]{0,63}(@[0-9a-f]{8})?$/;
+/** What an agent label may look like in a view, and the label a tool stamp must carry: 1 to 64 of letters, digits and `. _ -`, starting with a letter or digit. */
+export const DIM_AGENT_LABEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * `by` as a view may show it (Aegis S1.4 P0 re-review). The fold derives `by` from the host stamp of a row, and a
+ * row is permanent: a hostile or later-version row can carry any string as `principal` or `agent`, and a view is
+ * read by a model. So the strings are checked HERE, and a `by` that fails is shown as the unknown hand, whole:
+ *  - `cls` must be one of DIM_BY_CLASSES;
+ *  - `principal` must match DIM_VIEW_PRINCIPAL_PATTERN (the unknown hand's fixed `unknown` is kept as it is);
+ *  - an agent hand must carry an `agent` that matches DIM_AGENT_LABEL_PATTERN; a human hand carries none.
+ * Nothing of a failed `by` is shown: not its class, not a cut-down principal. The fold and the hash are unchanged
+ * (they keep what the row said); only what is SHOWN is bounded. Never throws.
+ */
+export function dimViewBy(by: unknown): DimBy {
+  try {
+    if (!isPlainObject(by)) return { ...UNKNOWN_BY };
+    const cls = own(by, 'cls');
+    const principal = own(by, 'principal');
+    const agent = own(by, 'agent');
+    if (cls === 'human' && typeof principal === 'string' && DIM_VIEW_PRINCIPAL_PATTERN.test(principal) && agent === undefined) return { cls: 'human', principal };
+    if (cls === 'agent' && typeof principal === 'string' && DIM_VIEW_PRINCIPAL_PATTERN.test(principal) && typeof agent === 'string' && DIM_AGENT_LABEL_PATTERN.test(agent)) return { cls: 'agent', principal, agent };
+  } catch {
+    // a `by` that cannot be read vouches for nobody
+  }
+  return { ...UNKNOWN_BY };
+}
+
 /** The stored node id, when it is one a write could have minted; else undefined (the field is left out). */
 const viewId = (v: unknown): string | undefined => (typeof v === 'string' && DIM_NODE_ID_PATTERN.test(v) ? v : undefined);
 
@@ -1047,7 +1081,7 @@ const VIEW_INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
  * node id, the dimension id and the title are checked in `dimViewOf`. Two limits on that claim:
  *  - the view does NOT re-run the secret scan. A text that was stored before a rule existed, or by a row no
  *    validator read, is shown as stored;
- *  - `by` is shown as the fold derived it from the host stamp; its strings are the host's, not checked here.
+ *  - `by` is bounded by `dimViewBy`: a principal or an agent label outside its pattern is shown as the unknown hand.
  * Per field:
  *  - `refs`: each ref is checked by itself; one that fails `validateDimRef` is left out, a repeat is shown once,
  *    and at most DIM_LIMITS.refs are shown. A stored empty list is shown as `[]`; a list whose every ref failed
@@ -1080,7 +1114,7 @@ function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, 
  * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`, each field only when its stored
  * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
  * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
- * classes only.
+ * classes only. `by` is the BOUNDED one (`dimViewBy`): the legend counts the hand that is shown.
  *
  * Three more stored strings are checked here, because the fold accepts any string for each:
  *  - a node whose id is not DIM_NODE_ID_PATTERN is left out whole, core or not, and is not counted in the legend;
@@ -1095,7 +1129,7 @@ export function dimViewOf(state: DimState): DimView {
   const nodes: DimViewNode[] = [];
   for (const [id, n] of entries) {
     if (!DIM_NODE_ID_PATTERN.test(id)) continue;
-    const by: DimBy = { cls: n.by.cls, principal: n.by.principal, ...(n.by.agent !== undefined ? { agent: n.by.agent } : {}) };
+    const by = dimViewBy(n.by);
     const core = isCoreKind(n.node.kind);
     const out: DimViewNode = { id, kind: dimKindName(n.node.kind), core, by };
     const keys = core ? DIM_NODE_KEYS[n.node.kind as DimCoreKind] : ['x', 'y'];
