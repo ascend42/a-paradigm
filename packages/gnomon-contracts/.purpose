@@ -341,11 +341,36 @@ components:
       copies; no behaviour or hash change). DEFERRED,
       tracked here: to S1.3, the engine mapping (gnomon-gui src/board/dim-map.ts
       and its goldens) and the check that nothing in contracts or mods imports
-      the board; to S1.4, the secret-check residuals (combining marks and
-      default-ignorable code points inside a credential, a split over three or
-      more strings, encoded secrets, the dimension title on the session.start
-      row, which no validator here reads) and dimViewOf re-validating the stored
-      fields of a core node before a tool reads them.
+      the board.
+      S1.4 P0 (write-side tightening; no contract id moves, the fold and the hash
+      vector are unchanged): DIM_SCAN_LIMITS { freeStringsPerNode 16,
+      stringsPerBatch 4096 }, outside DIM_LIMITS and the descriptor. A node over
+      16 free strings (a valid core node has at most 10) is read as its join
+      only, on refused ops and stored nodes alike; a batch over 4,096 strings,
+      the op type not counted, is refused whole as field-range on ops before a
+      string is read (the largest valid batch, 64 moves of 64 ids, is exactly at
+      the cap). dimTextForScan is NFKD, strip, NFC and also drops Mn, Me and
+      Default_Ignorable_Code_Point, so a mark that NFKC would fuse into a
+      precomposed letter is removed too and an accented letter is scanned as its
+      base letter; the residuals of the secret check are listed in the comment at
+      that function (visible separators, look-alikes, encodings, three or more
+      strings, over-cap nodes, two nodes, numbers, the title, keys, earlier
+      rows). dimViewOf shows a field of a core node only when its stored value
+      passes today's write check: a failing ref is left out by itself, a failing
+      colour, an over-long string or a wrong type is left out, and parent, from
+      and to are shown on the id pattern alone. DIM_AUX_KINDS
+      (modns.gnomon.dimension.grant, modns.gnomon.dimension.draw.refused): fixed
+      names, not in DIM_KINDS, not hashed, ignored by the fold; no writer yet.
+      The ONE write-grant fold (Aegis S1.4 M4, M9), shared by the mod and the
+      page through dim-shape.mjs: foldDimGrants(rows, dim, from),
+      dimGrantDefault(state, hsid) (first attached on, later attached off) and
+      dimMayDraw(state, grants, hsid) (the last honoured row, else the default;
+      never for a session that is not attached). A grant row is honoured only
+      when its host-written relayedFor folds as the human hand with surface gui
+      and no agent; bridge, voice, cli and unstamped rows change nothing.
+      DEFERRED, tracked here: the spec text for the scan residuals (a later S1.4
+      pass); the grant map is not bounded by this fold (the mod refuses a grant
+      for a session that is not attached).
     path: src/dim.ts
     type: module
     tags: [gnomon, contracts, dimension, paradigm-8]
@@ -354,6 +379,7 @@ components:
       - test/dim-fold-cost.test.ts
       - test/dim-validate.test.ts
       - test/dim-move.test.ts
+      - test/dim-grants.test.ts
   contract-content-palette:
     description: >-
       content-palette:v1 (Dimensions S1.2; Luna's S1.1 design in
@@ -382,9 +408,14 @@ components:
       validates the tables; contrastRatio is the WCAG 2 ratio from the same table.
       Pure, no DOM, no node:*.
       DEFERRED, tracked here: to S1.3, running the vectors and the swatch night
-      table in Chrome and WKWebView (they run in Node only today); to S1.4, a
-      contrast floor for a custom LINE colour against the ground (a custom line
-      passes on distance alone today).
+      table in Chrome and WKWebView (they run in Node only today). NOT BUILT in
+      S1.4 P0, waiting for a design ruling (Aegis S1.2 nit 6): a contrast floor
+      for a custom LINE colour (custom:#F8F5EE passes as a line today and is 1.00
+      on the day sheet) and enforcement of CONTENT_EDGE_ON_FILL_MIN_RATIO (a
+      constant only; custom:#404040 passes as a fill and ink on it is 1.76 by
+      day). Open: the ratio and the surface for the line floor (the nit says the
+      sheet, the design record measures on the ground), and where and for whom
+      the edge-on-fill rule is enforced.
     path: src/content-palette.ts
     type: module
     tags: [gnomon, contracts, dimension, colour, paradigm-8]

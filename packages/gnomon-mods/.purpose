@@ -183,7 +183,12 @@ components:
       validator reads them. dim-shape.mjs is GENERATED from
       #contract-dim-shape by packages/gnomon/scripts/build-dimension-mod.mjs
       and compared with a fresh build by a test. Tier first-party
-      (packageHash pinned). Tested in test/dimension-mod.test.ts (rules,
+      (packageHash pinned). 1.0.1 (S1.4 P0): dim-shape.mjs rebuilt from the
+      tightened contract (scan cap, wider strip set, view re-validation,
+      DIM_AUX_KINDS, the write-grant fold) and grantDefault now reads the
+      published dimGrantDefault; no command, tool, kind or state key changes.
+      The 1.0.0 pin is replaced, not superseded: an installed 1.0.0 is no
+      longer first-party and waits for its Update card. Tested in test/dimension-mod.test.ts (rules,
       caps, keyframes, isolation) and test/dimension-relay.test.ts (the
       relay table per caller class over real connections, a mod's own
       log.read, first-party identity).

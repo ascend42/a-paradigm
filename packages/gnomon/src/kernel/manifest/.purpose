@@ -165,7 +165,11 @@ components:
       (it echoes the current modAbiId). An installed snapshot of an earlier
       version is NOT refreshed by the kernel: it is refused ABI at init until
       the human approves the Update card the Mods panel offers (or runs gnomon
-      mod install on the shipped folder).
+      mod install on the shipped folder). S1.4 P0 replaces that pin with
+      dimension 1.0.1 (dim-shape.mjs rebuilt from the tightened contract); the
+      1.0.0 hash is not kept as a superseded pin (the table is for a prior
+      modAbiId and never for a tree with tools), so deriveTier answers local
+      for it and an installed 1.0.0 waits for its Update card.
       S1.2 review fix (J5, Aegis 9a): rollback protection. stageInstall refuses
       TIER (why superseded) a NEW stage of a tree in
       SUPERSEDED_FIRST_PARTY_PINS; only an install already pinned at that hash
