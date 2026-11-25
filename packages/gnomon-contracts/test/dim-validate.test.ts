@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   DIM_CORE_KINDS, DIM_FIELDS, DIM_KINDS, DIM_LIMITS, DIM_NODE_KEYS, DIM_NODE_REQUIRED, DIM_REF_PATTERN, DIM_REF_SCHEMES, DIM_REFUSAL_CODES, DIM_REFUSAL_FIXES, DIM_SCAN_LIMITS,
-  dimHash, dimTextForScan, emptyDimState, foldDim, validateDimOps, validateDimRef, type DimActor, type DimRow, type DimState,
+  dimHash, dimTextForScan, dimTextForScanS12, emptyDimState, foldDim, validateDimOps, validateDimRef, type DimActor, type DimRow, type DimState,
 } from '../src/dim.js';
 import { validateRefV1 } from '../src/ref.js';
 import { CONTENT_SWATCH_NAMES } from '../src/content-palette.js';
@@ -308,19 +308,19 @@ describe('C4: the secret check', () => {
   it('combining marks and default-ignorable code points inside the key (Aegis S1.2 nit 4)', () => {
     const cut = (sep: string): string => `${KEY.slice(0, 9)}${sep}${KEY.slice(9, 20)}${sep}${KEY.slice(20)}`;
     const seps: Array<[string, string]> = [
-      ['a combining acute (Mn; composes with the letter before it)', '́'],
-      ['a combining diaeresis and a cedilla, stacked', '̧̈'],
-      ['a combining enclosing circle (Me)', '⃝'],
-      ['a Cyrillic enclosing mark (Me)', '҈'],
-      ['variation selector 16', '️'],
+      ['a combining acute (Mn; composes with the letter before it)', '\u0301'],
+      ['a combining diaeresis and a cedilla, stacked', '\u0308\u0327'],
+      ['a combining enclosing circle (Me)', '\u20dd'],
+      ['a Cyrillic enclosing mark (Me)', '\u0488'],
+      ['variation selector 16', '\ufe0f'],
       ['variation selector 17 (supplementary)', '\u{e0100}'],
-      ['the combining grapheme joiner', '͏'],
-      ['the Hangul filler', 'ㅤ'],
-      ['the Hangul choseong and jungseong fillers', 'ᅟᅠ'],
-      ['the halfwidth Hangul filler', 'ﾠ'],
-      ['the Mongolian vowel separator', '᠎'],
-      ['Khmer inherent vowels', '឴឵'],
-      ['an unassigned default-ignorable', '⁥'],
+      ['the combining grapheme joiner', '\u034f'],
+      ['the Hangul filler', '\u3164'],
+      ['the Hangul choseong and jungseong fillers', '\u115f\u1160'],
+      ['the halfwidth Hangul filler', '\uffa0'],
+      ['the Mongolian vowel separator', '\u180e'],
+      ['Khmer inherent vowels', '\u17b4\u17b5'],
+      ['an unassigned default-ignorable', '\u2065'],
     ];
     for (const [name, sep] of seps) {
       expect(cut(sep), name).not.toBe(KEY);
@@ -328,21 +328,38 @@ describe('C4: the secret check', () => {
       expectSecret([text(cut(sep))], state, 'anthropic-key');
     }
     // decomposed FIRST: a mark that NFKC would fuse into one precomposed letter is still removed
-    const fused = `sḱ${KEY.slice(2)}`;
+    const fused = `s\u1e31${KEY.slice(2)}`;
     expect(fused.normalize('NFKC')).toBe(fused);
     expect(dimTextForScan(fused)).toBe(KEY);
     expectSecret([text(fused)], state, 'anthropic-key');
-    expectSecret([text(`ÅKIA${AWS.slice(4)}`)], state, 'aws-access-key');
+    expectSecret([text(`A\u030aKIA${AWS.slice(4)}`)], state, 'aws-access-key');
     // split over two fields of one node AND by marks
-    expectSecret(add({ id: id(24), kind: 'arrow', x: 0, y: 0, z: 'M', points: [0, 0, 1, 1], rel: KEY.slice(0, 14).toLowerCase(), label: `️${KEY.slice(14, 20)}͏${KEY.slice(20)}ㅤ` }));
+    expectSecret(add({ id: id(24), kind: 'arrow', x: 0, y: 0, z: 'M', points: [0, 0, 1, 1], rel: KEY.slice(0, 14).toLowerCase(), label: `\ufe0f${KEY.slice(14, 20)}\u034f${KEY.slice(20)}\u3164` }));
     // without a stripped code point the scan text is exactly NFKC, and ordinary accented or marked writing is no secret
-    for (const plain of ['Ship it on Friday', 'ＡＢ ﬁn', '한글 board', '日本語']) expect(dimTextForScan(plain)).toBe(plain.normalize('NFKC'));
-    for (const prose of ['Café résumé, naïve Zürich — déjà vu', 'हिन्दी में एक नोट', 'ภาษาไทย บนกระดาน', 'ok 👍️ 👩‍💻']) {
+    for (const plain of ['Ship it on Friday', '\uff21\uff22 \ufb01n', '\ud55c\uae00 board', '\u65e5\u672c\u8a9e']) expect(dimTextForScan(plain)).toBe(plain.normalize('NFKC'));
+    for (const prose of ['Caf\u00e9 r\u00e9sum\u00e9, na\u00efve Z\u00fcrich \u2014 d\u00e9j\u00e0 vu', '\u0939\u093f\u0928\u094d\u0926\u0940 \u092e\u0947\u0902 \u090f\u0915 \u0928\u094b\u091f', '\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22 \u0e1a\u0e19\u0e01\u0e23\u0e30\u0e14\u0e32\u0e19', 'ok \u{1f44d}\ufe0f \u{1f469}\u200d\u{1f4bb}']) {
       expect(validateDimOps(state, [text(prose)], human)).toMatchObject({ secret: false, refused: [] });
     }
     // stated residual: an ordinary space, or a spacing mark (Mc), is not rejoined
     expect(validateDimOps(state, [text(cut(' '))], human).secret).toBe(false);
-    expect(validateDimOps(state, [text(cut('ा'))], human).secret).toBe(false);
+    expect(validateDimOps(state, [text(cut('\u093e'))], human).secret).toBe(false);
+  });
+
+  it('the S1.2 scan text is still read: an accented letter before a cut key keeps its word boundary', () => {
+    const cut = `${KEY.slice(0, 9)}\u200b${KEY.slice(9)}`;
+    const glued = `\u00e9${cut}`;
+    // the new form turns the accented letter into a plain one, so no word boundary is left before the key
+    expect(dimTextForScan(glued)).toBe(`e${KEY}`);
+    expect(dimTextForScanS12(glued)).toBe(`\u00e9${KEY}`);
+    expectSecret([text(glued)], state, 'anthropic-key');
+    expectSecret([text(`caf\u00e9${AWS.slice(0, 6)}\u00ad${AWS.slice(6)}`)], state, 'aws-access-key');
+    // the three forms are read, and equal forms once
+    const seen: string[] = [];
+    validateDimOps(state, [text(glued)], human, { scan: (t) => (seen.push(t), []) });
+    expect(seen.filter((t) => t.endsWith(KEY) || t === glued).sort()).toEqual([glued, `e${KEY}`, `\u00e9${KEY}`].sort());
+    seen.length = 0;
+    validateDimOps(state, [text('plain words')], human, { scan: (t) => (seen.push(t), []) });
+    expect(seen.filter((t) => t === 'plain words')).toHaveLength(1);
   });
 
   it('fullwidth forms (NFKC)', () => {
@@ -480,6 +497,32 @@ describe('S1.4 P0: the scan cap (DIM_SCAN_LIMITS)', () => {
     const moves = validateDimOps(board, Array.from({ length: 64 }, () => ({ type: 'move', ids, dx: 1, dy: 1 })), human);
     expect(moves.refused).toEqual([]);
     expect(moves.ok).toHaveLength(64);
+  });
+
+  it('the count walks from the root the scan walks: strings at the deepest level the scan reads are counted', () => {
+    const KEY = ['sk', 'ant', 'api03', 'Zq8'.repeat(8)].join('-');
+    // a list 31 levels under the node (or the patch) holds its strings at level 32: the last level the scan reads,
+    // and one past what a walk from the op itself reaches
+    const nest = (leaf: unknown, wrappers = 30): unknown => {
+      let v: unknown = leaf;
+      for (let i = 0; i < wrappers; i++) v = { d: v };
+      return v;
+    };
+    // the scan does read there: a credential at that level is refused
+    expect(validateDimOps(state, [{ type: 'add', node: { ...rect(43), later: nest([KEY]) } }], human).secret).toBe(true);
+    expect(validateDimOps(state, [{ type: 'update', id: id(1), patch: { later: nest([KEY]) } }], human).secret).toBe(true);
+    // so 4,097 strings there are over the cap, in a node and in a patch, and nothing is scanned
+    const many = Array.from({ length: 4097 }, () => 'x');
+    for (const op of [{ type: 'add', node: { x: 0, later: nest(many) } }, { type: 'update', id: id(1), patch: { later: nest(many) } }]) {
+      let scans = 0;
+      const res = validateDimOps(state, [op], human, { scan: () => (scans++, []) });
+      expect(res.refused).toEqual([{ index: -1, field: 'ops', code: 'field-range', fix: DIM_REFUSAL_FIXES['field-range'] }]);
+      expect(scans).toBe(0);
+    }
+    // one level deeper the scan does not read, and the count does not count: both stop at the same place
+    let scans = 0;
+    expect(validateDimOps(state, [{ type: 'add', node: { x: 0, later: nest(many, 31) } }], human, { scan: () => (scans++, []) }).refused.some((r) => r.field === 'ops')).toBe(false);
+    expect(scans).toBe(0);
   });
 
   it('a stored node of 2,000 strings is updated without the pair scan', () => {

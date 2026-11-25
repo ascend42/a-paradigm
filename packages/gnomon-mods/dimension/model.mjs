@@ -126,8 +126,9 @@ const PROBE_ID = '00000000000000000000000000';
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 /**
  * `null` when the string may be a dimension title, else the refusal code. The secret check is the validator's own
- * (NFKC text with invisible characters removed, and the raw text), reached by validating a frame that carries the
- * title, so a title and a mark are scanned by one rule set.
+ * (three texts: NFKD with invisible characters, combining marks and default-ignorables removed then NFC, the
+ * S1.2 form NFKC with invisible characters removed, and the raw text), reached by validating a frame that
+ * carries the title, so a title and a mark are scanned by one rule set.
  */
 export function titleProblem(title) {
   if (title === undefined || title === null) return 'title-missing';

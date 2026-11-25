@@ -69,9 +69,14 @@ export const DIM_LIMITS = Object.freeze({
  *    read is skipped. A valid core node has at most 10 free strings (an arrow: `label`, `rel` and 8 `refs`), so
  *    only a node with unknown fields or too many refs is over it: an add or update that makes one is refused by
  *    the field checks, and a stored one (a hostile or later-version row) is read once, not pair by pair.
- *  - `stringsPerBatch`: the strings one batch may carry at any depth, the `type` of each op aside. The largest
- *    valid batch (64 moves of 64 ids each) holds exactly this many; a batch over it is refused whole, `field-range`
- *    on `ops`, before anything is scanned.
+ *  - `stringsPerBatch`: the strings one batch may carry, counted from the same roots and to the same depth as the
+ *    scan reads them (an add's `node`, an update's `patch`, else the op itself with its `type` left out). The
+ *    largest valid batch (64 moves of 64 ids each) holds exactly this many; a batch over it is refused whole,
+ *    `field-range` on `ops`, before anything is scanned.
+ * Both bound the NUMBER of strings and of reads. Neither bounds a string's LENGTH: this contract has no byte bound
+ * on an op or a batch (a `text` is refused over DIM_LIMITS.text only after it was scanned, and an unknown field
+ * has no limit at all), so one call still costs time linear in the bytes it is given. The byte bound lives in the
+ * caller: the dimension mod refuses ops over 16 KiB, 4,096 values or depth 32 before it calls the validator.
  */
 export const DIM_SCAN_LIMITS = Object.freeze({ freeStringsPerNode: 16, stringsPerBatch: 4096 });
 
@@ -630,6 +635,8 @@ export interface DimValidation {
 
 /** What the scan drops before it reads: controls, formats, line and paragraph separators, non-spacing and enclosing marks, and every default-ignorable code point. */
 const SCAN_STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Mn}\p{Me}\p{Default_Ignorable_Code_Point}]/gu;
+/** The S1.2 strip set, kept for the second scan text (`dimTextForScanS12`). */
+const SCAN_STRIP_S12 = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
 /**
  * The text the secret scan reads: compatibility-decomposed (NFKD), stripped of `SCAN_STRIP`, then recomposed
@@ -639,28 +646,49 @@ const SCAN_STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Mn}\p{Me}\p{Default_Ignorable_Co
  * selectors, the combining grapheme joiner, Hangul fillers or any combining accent reads as the credential, and an
  * accented letter reads as its base letter. Only the scan reads this text; what is stored is what was sent.
  *
- * RESIDUALS of the secret check (Aegis S1.2 nit 4): what `validateDimOps` does NOT find. Stated here so no caller
- * takes the check for a guarantee; the spec text follows in a later pass.
- *  - Visible separators: a credential broken by ordinary spaces, punctuation, a line of its own per part, or
- *    spacing combining marks (`Mc`) is not rejoined.
- *  - Look-alikes: only NFKC forms are folded (fullwidth, ligatures, styled letters). A Cyrillic or Greek letter
- *    standing in for a Latin one is not.
- *  - Encodings: base64, hex, URL-encoded, reversed or otherwise transformed secrets, and secrets with no known
- *    format (a bare password) match no rule.
- *  - Three or more strings: the strings of one node are read each by itself, all joined in sorted key order, and
- *    as ordered pairs. A credential split over three or more strings in an order that is not the join order (for
- *    example three refs out of order) is missed.
+ * The validator scans THREE texts of every string and reports the union: this one, `dimTextForScanS12` (the
+ * S1.2 form) and the raw string. The S1.2 form is kept because this one can lose a word boundary the rules lean
+ * on: an accented letter directly before a credential becomes a plain letter, and `\b` no longer sits between
+ * them. Nothing the S1.2 scan caught is lost.
+ *
+ * RESIDUALS of the secret check (Aegis S1.2 nit 4, restated after the S1.4 P0 review): what `validateDimOps` does
+ * NOT find. Stated here so no caller takes the check for a guarantee.
+ *  - Visible separators. A credential broken by an ordinary space, by punctuation or by a spacing combining mark
+ *    (`Mc`) is not rejoined. Every non-ASCII space (`Zs`: no-break, en, em, thin, ideographic) is folded to U+0020
+ *    by the normalisation and stays, so it separates like a space. LF, CR and TAB are controls: they ARE stripped,
+ *    so parts on lines of their own inside ONE string are rejoined and found.
+ *  - Blank letters. U+2800 (braille pattern blank) and any other visible-as-nothing code point that is neither
+ *    a mark, a format, a control nor default-ignorable is not stripped.
+ *  - Look-alikes. Only compatibility forms are folded (fullwidth, ligatures, styled letters, accents). A Cyrillic
+ *    or Greek letter standing in for a Latin one is not.
+ *  - Encodings. Base64, hex, URL-encoded, reversed or otherwise transformed secrets, and secrets with no known
+ *    format (a bare password), match no rule.
+ *  - Structural strings. `id`, `kind`, `z`, `parent`, `from`, `to`, `color`, `fill` and `head` are each read alone
+ *    but are never part of a join or a pair, so a credential split between one of them and a free string, or
+ *    between two of them, is missed (each is pattern-checked, which leaves little room).
+ *  - Three or more strings. The free strings of one node are read each by itself, all joined in sorted key
+ *    order, and as ordered pairs. A credential split over three or more strings in an order that is not the join
+ *    order (for example three refs out of order) is missed.
  *  - A node over `DIM_SCAN_LIMITS.freeStringsPerNode` free strings (never a valid one) is read as the join only,
  *    so a pair that is not adjacent in the join is missed there. A batch over `stringsPerBatch` is refused unread.
- *  - Two nodes: a credential split across nodes, or across dimensions, is never joined.
- *  - Numbers: `points` and every other integer can carry bytes; no number is read.
+ *  - A node that already matches. What a touched node matched BEFORE an op, by its join or a pair, is not held
+ *    against the op (an old row never blocks a clean edit). The cost: once a node matches a rule that way, a NEW
+ *    split credential of the SAME rule written onto that node passes. A whole credential in one string is still
+ *    refused, because each string is also read alone.
+ *  - Two nodes. A credential split across nodes, or across dimensions, is never joined.
+ *  - Numbers. `points` and every other integer can carry bytes; no number is read.
+ *  - Field names. Only string VALUES are read, never keys (an unknown key is refused by name, not scanned).
  *  - The dimension `title` on the session.start row is outside this validator; the dimension mod checks it.
- *  - Field names: only string VALUES are read, never keys (an unknown key is refused by name, not scanned).
- *  - Earlier rows: a node that already matches by itself is not a reason to refuse a clean edit of it, and a row
- *    written before a rule existed is not re-read.
+ *  - Reads. `dimViewOf` does not re-run the scan, and a row written before a rule existed is not re-read: what was
+ *    stored is shown.
  */
 export function dimTextForScan(s: string): string {
   return s.normalize('NFKD').replace(SCAN_STRIP, '').normalize('NFC');
+}
+
+/** The S1.2 scan text: NFKC, then controls, formats and line and paragraph separators removed. Still scanned. */
+export function dimTextForScanS12(s: string): string {
+  return s.normalize('NFKC').replace(SCAN_STRIP_S12, '');
 }
 
 const fieldName = (k: string): string => (DIM_FIELDS.includes(k) ? k : 'unknown');
@@ -862,6 +890,9 @@ function countStrings(v: unknown, limit: number, n = 0, depth = 0): number {
   return n;
 }
 
+/** The value whose strings the scan reads for one op: an add's node, an update's patch, else the op itself. */
+const scanRoot = (op: unknown): unknown => (isPlainObject(op) ? (op.type === 'add' ? op.node : op.type === 'update' ? op.patch : op) : op);
+
 /** Node fields whose values are fixed patterns, not free text: left out of the joined scan. */
 const STRUCTURAL_KEYS = new Set(['id', 'kind', 'z', 'parent', 'from', 'to', 'color', 'fill', 'head']);
 
@@ -888,17 +919,22 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-type' })], secret: false };
   if (ops.length > DIM_LIMITS.opsPerRow) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'too-many-ops' })], secret: false };
-  // the batch cap of the scan, before any string is read: an op's own `type` is not counted (see DIM_SCAN_LIMITS)
+  // the batch cap of the scan, before any string is read. Counted from scanRoot, the root the scan itself walks,
+  // so a string the scan would read at its deepest level is counted; an op's own `type` is not (DIM_SCAN_LIMITS)
   let strings = 0;
   for (const op of ops) {
-    strings = countStrings(op, DIM_SCAN_LIMITS.stringsPerBatch + 1, strings) - (isPlainObject(op) && typeof op.type === 'string' ? 1 : 0);
+    const root = scanRoot(op);
+    strings = countStrings(root, DIM_SCAN_LIMITS.stringsPerBatch + 1, strings) - (root === op && isPlainObject(op) && typeof op.type === 'string' ? 1 : 0);
     if (strings > DIM_SCAN_LIMITS.stringsPerBatch) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-range' })], secret: false };
   }
   const scan = opts.scan ?? secretKindsIn;
+  /** The rules matched by one text in any of its three forms (see dimTextForScan); equal forms are read once. */
   const hits = (text: string): readonly string[] => {
-    const norm = dimTextForScan(text);
-    const a = scan(norm);
-    return norm === text ? a : [...new Set([...a, ...scan(text)])];
+    const forms = new Set([dimTextForScan(text), dimTextForScanS12(text), text]);
+    if (forms.size === 1) return scan(text);
+    const out = new Set<string>();
+    for (const f of forms) for (const r of scan(f)) out.add(r);
+    return [...out];
   };
   /**
    * The rules matched by a node's free-text strings read together: all of them joined, and each ordered pair.
@@ -932,7 +968,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
       }
     };
     const own: Array<{ field: string; text: string }> = [];
-    stringsOf(isPlainObject(op) ? (op.type === 'add' ? op.node : op.type === 'update' ? op.patch : op) : op, 'unknown', own);
+    stringsOf(scanRoot(op), 'unknown', own);
     for (const s of own) note(s.field, s.text);
     const { problems, touched } = checkOp(d, op, actor);
     // what each touched node already matches by itself: an old row is never a reason to refuse a clean edit
