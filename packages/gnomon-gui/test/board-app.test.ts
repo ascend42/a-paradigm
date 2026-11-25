@@ -5,7 +5,9 @@
  * is the shipped path: the app's own GnomonClient, followLog into both stores, DimSessions, the one sender with
  * stamps minted from the person's events, the dock, the leaf and the engine chunk through the lazy loader.
  * The real kernel and mod are driven by packages/gnomon/test/dimension-dogfood.test.ts.
- * Runs where a Chrome is installed, never on CI; run it ALONE (a loaded machine times it out).
+ * Runs where a Chrome is installed; run it ALONE (a loaded machine times it out). On CI it runs only on the leg
+ * that asks for it (GNOMON_BROWSER_TESTS=1: the `board-browser` job of .github/workflows/gnomon.yml, macos-15), and
+ * there a missing Chrome FAILS the run, it never skips. Every other CI leg skips it, as before.
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -94,7 +96,12 @@ describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the ker
 });
 
 const chrome = findChrome() as string | null;
-describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a real engine: open, draw, fold, reopen, list, link, G-DDL-08', () => {
+/** asked for by name (the CI leg that runs it): then nothing about the host may skip it */
+const ASKED = process.env.GNOMON_BROWSER_TESTS === '1';
+describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the real app on a real engine: open, draw, fold, reopen, list, link, G-DDL-08', () => {
+  it('a Chrome is installed where this suite is asked for', () => {
+    expect(chrome, 'GNOMON_BROWSER_TESTS=1 and no Chrome on this host (set GNOMON_CHROME to its path)').not.toBeNull();
+  });
   let p: { url: string; close: () => Promise<void> };
   beforeAll(async () => {
     p = await startPreview({ port: 0 });
