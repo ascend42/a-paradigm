@@ -62,6 +62,19 @@ export const DIM_LIMITS = Object.freeze({
   z: 64,
 });
 
+/**
+ * Bounds on the work of the write validator's secret scan. NOT part of `DIM_LIMITS` and not an input of the client
+ * API descriptor: they bound what one call may cost, they do not change what a valid row may hold.
+ *  - `freeStringsPerNode`: a node with more free strings than this is read as ONE joined text; the ordered-pair
+ *    read is skipped. A valid core node has at most 10 free strings (an arrow: `label`, `rel` and 8 `refs`), so
+ *    only a node with unknown fields or too many refs is over it: an add or update that makes one is refused by
+ *    the field checks, and a stored one (a hostile or later-version row) is read once, not pair by pair.
+ *  - `stringsPerBatch`: the strings one batch may carry at any depth, the `type` of each op aside. The largest
+ *    valid batch (64 moves of 64 ids each) holds exactly this many; a batch over it is refused whole, `field-range`
+ *    on `ops`, before anything is scanned.
+ */
+export const DIM_SCAN_LIMITS = Object.freeze({ freeStringsPerNode: 16, stringsPerBatch: 4096 });
+
 interface DimNodeBase {
   /** DIM_NODE_ID_PATTERN */
   id: string;
@@ -798,6 +811,27 @@ function stringsOf(v: unknown, field: string, out: Array<{ field: string; text: 
   else if (isPlainObject(v)) for (const k of Object.keys(v)) stringsOf(v[k], depth === 0 ? fieldName(k) : field, out, depth + 1);
 }
 
+/**
+ * How many strings a value holds at any depth, counted only as far as `limit + 1`: the walk stops there, so the
+ * cost of asking is bounded by the limit and not by the caller's input.
+ */
+function countStrings(v: unknown, limit: number, n = 0, depth = 0): number {
+  if (typeof v === 'string') return n + 1;
+  if (depth >= COPY_DEPTH) return n;
+  if (Array.isArray(v)) {
+    for (const x of v) {
+      n = countStrings(x, limit, n, depth + 1);
+      if (n > limit) return n;
+    }
+  } else if (isPlainObject(v)) {
+    for (const k of Object.keys(v)) {
+      n = countStrings(v[k], limit, n, depth + 1);
+      if (n > limit) return n;
+    }
+  }
+  return n;
+}
+
 /** Node fields whose values are fixed patterns, not free text: left out of the joined scan. */
 const STRUCTURAL_KEYS = new Set(['id', 'kind', 'z', 'parent', 'from', 'to', 'color', 'fill', 'head']);
 
@@ -808,8 +842,10 @@ const STRUCTURAL_KEYS = new Set(['id', 'kind', 'z', 'parent', 'from', 'to', 'col
  *
  * The secret check reads every string at any depth of every op, and for each node an op touches every string of
  * the node as it would stand, their concatenation and each ordered pair of them, so a credential split over two
- * updates or two fields of one node is found. Stated residual: a credential split across two NODES, or broken
- * by ordinary spaces, is not found.
+ * updates or two fields of one node is found. What the check does not find is listed at `dimTextForScan`.
+ *
+ * The work is bounded by `DIM_SCAN_LIMITS`: a batch over `stringsPerBatch` strings is refused whole (`field-range`
+ * on `ops`) before a string is read, and a node over `freeStringsPerNode` free strings is read as its join only.
  */
 export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, opts: { scan?: (text: string) => readonly string[] } = {}): DimValidation {
   const refuse = (index: number, p: Problem, extra: Partial<DimRefusal> = {}): DimRefusal => ({
@@ -822,13 +858,23 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-type' })], secret: false };
   if (ops.length > DIM_LIMITS.opsPerRow) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'too-many-ops' })], secret: false };
+  // the batch cap of the scan, before any string is read: an op's own `type` is not counted (see DIM_SCAN_LIMITS)
+  let strings = 0;
+  for (const op of ops) {
+    strings = countStrings(op, DIM_SCAN_LIMITS.stringsPerBatch + 1, strings) - (isPlainObject(op) && typeof op.type === 'string' ? 1 : 0);
+    if (strings > DIM_SCAN_LIMITS.stringsPerBatch) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-range' })], secret: false };
+  }
   const scan = opts.scan ?? secretKindsIn;
   const hits = (text: string): readonly string[] => {
     const norm = dimTextForScan(text);
     const a = scan(norm);
     return norm === text ? a : [...new Set([...a, ...scan(text)])];
   };
-  /** The rules matched by a node's free-text strings read together: all of them joined, and each ordered pair. */
+  /**
+   * The rules matched by a node's free-text strings read together: all of them joined, and each ordered pair.
+   * Over DIM_SCAN_LIMITS.freeStringsPerNode strings only the join is read: the pair read is quadratic, and it runs
+   * on refused ops and on stored nodes too, so it is never given a node no valid write can make.
+   */
   const joined = (node: Record<string, unknown> | undefined): Set<string> => {
     const out = new Set<string>();
     if (!node) return out;
@@ -836,6 +882,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     for (const k of Object.keys(node).sort()) if (!STRUCTURAL_KEYS.has(k)) stringsOf(node[k], fieldName(k), free, 1);
     if (free.length < 2) return out;
     for (const r of hits(free.map((s) => s.text).join(''))) out.add(r);
+    if (free.length > DIM_SCAN_LIMITS.freeStringsPerNode) return out;
     for (const x of free) for (const y of free) if (x !== y) for (const r of hits(x.text + y.text)) out.add(r);
     return out;
   };
