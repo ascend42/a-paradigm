@@ -44,12 +44,32 @@
  * words, so `by: human` is never a trusted instruction. A result that cannot be serialised, or is over 256 KiB after
  * escaping, is replaced by a fixed error. A mod refusal (paused, down, timeout, …) is a fixed sentence per
  * ModRefusal code, never the mod's text. EXACTLY ONE answer is returned on every path, a throw included.
+ *
+ * THE RECEIPT (Aegis A2; G-MOD-22: no mod-originated tool result reaches a model without its receipt). Before the
+ * answer is returned (so before the supervisor writes the control response) `inject.receipt` is appended in-process
+ * as a USERLAND row under the reserved principal `p:<ns>/mods-mcp`, with `session: hsid` and `causes: [turn]`. A
+ * control_request line is logged by hash only, so the receipt is the only record of what was handed over. It carries
+ * EXACTLY `hsid, turn, requester, owner, tool, refs, shas, bytes, outcome` (MOD_BRIDGE_RECEIPT_KEYS): no tool input,
+ * no mod string, no model string. `owner` and `tool` come from the list rule; `shas` is the sha256 of the exact text
+ * handed over; `refs` is `dim:<ulid>@<seq>` only when the result's OWN `dim` and `seq` pass their patterns.
+ *  - `outcome: 'ok'`: the fenced result was handed over. One receipt per result.
+ *  - `outcome: 'error'`: the mod answered but its result could not be handed over (`bytes: 0`, no sha).
+ *  - A failed receipt append hands the model the fixed sentence and nothing else. A session no longer running at
+ *    answer time gets neither a receipt nor a result.
+ *  - KERNEL-COMPOSED refusals (unknown tool, manual mode, loop, no turn, arguments, the caps, a mod-host refusal)
+ *    hand over no mod bytes. They are FOLDED: one counter row per session per 10 s window (`outcome: 'refused'`,
+ *    `coalesced: true`, `count`, `byWhy` over MOD_BRIDGE_REFUSALS), so a refused agent cannot write unbounded rows.
+ * The socket append gate refuses `inject.receipt` for every caller class, and no device, agent, mod or session name
+ * can yield the reserved principal (tests). Readers accept a receipt only under that principal and a kernel key.
  */
-import { canonicalJson } from '@a-company/gnomon-contracts';
+import { createHash } from 'node:crypto';
+import { canonicalJson, type ToolRelayedFor } from '@a-company/gnomon-contracts';
 import { HISTORICAL_FIRST_PARTY_PINS } from '../manifest/grants.js';
 import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../manifest/install.js';
 import { GNOMON_VERSION } from '../../version.js';
 import { walkPayloadKeys } from './bridge.js';
+import { RowFold } from './fold.js';
+import type { ModHost } from './host.js';
 import { isModRefusal, type ModRefusalCode } from './refusal.js';
 
 export const MOD_BRIDGE_SERVER = 'gnomon-mods';
@@ -175,6 +195,39 @@ export interface BridgeSession {
 export const MOD_BRIDGE_REFUSALS = Object.freeze(['unknown-tool', 'manual', 'loop', 'no-turn', 'arguments', 'rate', 'in-flight', 'mod-busy', 'mod-refused', 'mod-failed'] as const);
 export type BridgeRefusal = (typeof MOD_BRIDGE_REFUSALS)[number];
 
+/** The reserved principal name of the bridge's rows: `p:<ns>/mods-mcp` (spec §9; no enrolment can yield it). */
+export const MOD_BRIDGE_PRINCIPAL_NAME = 'mods-mcp';
+export const modBridgePrincipal = (ns: string): string => `p:${ns}/${MOD_BRIDGE_PRINCIPAL_NAME}`;
+export const MOD_BRIDGE_RECEIPT_KIND = 'inject.receipt' as const;
+/** Aegis A2: the receipt's payload keys, exactly. */
+export const MOD_BRIDGE_RECEIPT_KEYS = Object.freeze(['hsid', 'turn', 'requester', 'owner', 'tool', 'refs', 'shas', 'bytes', 'outcome'] as const);
+export const MOD_BRIDGE_OUTCOMES = Object.freeze(['ok', 'refused', 'error'] as const);
+
+/** What the answerer knows of one handed-over (or failed) mod result; the port composes the row from it. */
+export interface BridgeReceipt {
+  hsid: string;
+  turn: string | null;
+  /** the session principal */
+  requester: string;
+  /** from the list rule, never from the message */
+  mod: string;
+  tool: string;
+  refs: string[];
+  shas: string[];
+  bytes: number;
+  outcome: 'ok' | 'error';
+}
+
+const DIM_REF = /^dim:[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+/** `dim:<ulid>@<seq>` when the result's OWN `dim` and `seq` pass their patterns, else nothing. No other key is read. */
+export function bridgeRefs(result: unknown): string[] {
+  if (!isObj(result)) return [];
+  const dim = own(result, 'dim');
+  const seq = own(result, 'seq');
+  if (typeof dim !== 'string' || !DIM_REF.test(dim) || typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return [];
+  return [`${dim}@${seq}`];
+}
+
 export interface BridgePorts {
   /** the list rule, derived NOW */
   tools(): BridgeTool[];
@@ -182,6 +235,8 @@ export interface BridgePorts {
   call(mod: string, tool: string, input: unknown, s: BridgeSession): Promise<unknown>;
   /** one kernel-composed refusal, folded into the session's counter row */
   refused(s: Pick<BridgeSession, 'hsid' | 'principal'>, why: BridgeRefusal): void;
+  /** append the receipt and resolve only once it is in the log; a rejection means nothing may be handed over */
+  receipt(r: BridgeReceipt): Promise<void>;
   now(): number;
 }
 
@@ -190,6 +245,7 @@ export const MOD_BRIDGE_SENTENCES = Object.freeze({
   notRunning: 'The session is not running.',
   result: 'The tool ran, but its result could not be handed over.',
   failed: 'The tool call failed.',
+  receipt: 'The result could not be recorded, so it was not handed over.',
   arguments: 'Refused: the arguments are not an object, or are too large, too deep or hold a reserved key.',
 });
 
@@ -286,7 +342,19 @@ async function runCall(id: string | number, tool: BridgeTool, params: Record<str
     return text(id, refusal ? MOD_BRIDGE_MOD_SENTENCES[err.modCode] : MOD_BRIDGE_SENTENCES.failed, true);
   }
   const fenced = fenceBridgeResult(tool.mod, tool.name, result);
-  if (fenced === null) return text(id, MOD_BRIDGE_SENTENCES.result, true);
+  // a session that stopped while the mod worked gets neither a receipt nor a result (the supervisor writes nothing)
+  if (!s.running()) return text(id, MOD_BRIDGE_SENTENCES.notRunning, true);
+  const base = { hsid: s.hsid, turn: s.turn, requester: s.principal, mod: tool.mod, tool: tool.name };
+  if (fenced === null) {
+    await ports.receipt({ ...base, refs: [], shas: [], bytes: 0, outcome: 'error' }).catch(() => undefined);
+    return text(id, MOD_BRIDGE_SENTENCES.result, true);
+  }
+  try {
+    // receipt BEFORE result: this await ends before the answer exists
+    await ports.receipt({ ...base, refs: bridgeRefs(result), shas: [`sha256:${createHash('sha256').update(fenced, 'utf8').digest('hex')}`], bytes: Buffer.byteLength(fenced, 'utf8'), outcome: 'ok' });
+  } catch {
+    return text(id, MOD_BRIDGE_SENTENCES.receipt, true);
+  }
   return text(id, fenced, false);
 }
 
@@ -337,4 +405,92 @@ export async function modBridgeAnswer(message: unknown, ports: BridgePorts, sess
     // exactly one answer on every path: a throw (a port, a getter in a hostile value) is this, never silence
     return { jsonrpc: '2.0', id, error: { code: -32603, message: 'internal error' } };
   }
+}
+
+/** One row the bridge appends in-process (the daemon: log.append `as: 'userland'`). */
+export interface BridgeRow {
+  kind: typeof MOD_BRIDGE_RECEIPT_KIND;
+  principal: string;
+  session: string;
+  causes?: string[];
+  payload: Record<string, unknown>;
+}
+
+export interface ModBridgeOptions {
+  /** installed, verified, granted, unpaused mods, read now (the daemon: DeskMods.list()) */
+  mods(): readonly BridgeMod[];
+  host: Pick<ModHost, 'admit' | 'callTool'>;
+  /** append one row and resolve once it is in the log */
+  append(row: BridgeRow): Promise<unknown>;
+  /** the identity namespace; null (no root identity yet) ⇒ no receipt can be written, so no result is handed over */
+  ns(): string | null;
+  /** TESTS ONLY: production passes none and gets MOD_BRIDGE_TOOLS, which is empty until P5 (Aegis M1) */
+  allow?: Readonly<Record<string, readonly string[]>>;
+  /** TESTS ONLY: production passes none and gets isCurrentFirstPartyPin */
+  currentPin?: (packageHash: string) => boolean;
+  now?: () => number;
+  foldWindowMs?: number;
+}
+
+export interface ModBridge extends BridgePorts {
+  /** write this session's counter row now and forget the session (the supervisor: at session exit) */
+  closeSession(hsid: string): void;
+  /** write every pending counter row now (shutdown, tests) */
+  flush(): void;
+}
+
+/** Sessions with a live refusal fold; beyond it the oldest is flushed and dropped. */
+export const MOD_BRIDGE_FOLD_SESSIONS = 256;
+
+/** The ports over a mod host and the log. The ONE production caller of the mod host's tool call is `call` below (G-MOD-19). */
+export function createModBridge(o: ModBridgeOptions): ModBridge {
+  const now = o.now ?? (() => performance.now());
+  const folds = new Map<string, RowFold>();
+  const foldFor = (s: Pick<BridgeSession, 'hsid' | 'principal'>): RowFold | null => {
+    const hit = folds.get(s.hsid);
+    if (hit) return hit;
+    const ns = o.ns();
+    if (ns === null) return null;
+    if (folds.size >= MOD_BRIDGE_FOLD_SESSIONS) {
+      const oldest = folds.keys().next().value!;
+      folds.get(oldest)!.close();
+      folds.delete(oldest);
+    }
+    const f = new RowFold({
+      perWindow: 0, // never an individual row: every refusal of the window is counted into the one row
+      windowMs: o.foldWindowMs ?? MOD_BRIDGE_LIMITS.foldWindowMs,
+      now,
+      field: 'byWhy',
+      base: { hsid: s.hsid, turn: null, requester: s.principal, owner: null, tool: null, refs: [], shas: [], bytes: 0, outcome: 'refused' },
+      write: (payload) => void o.append({ kind: MOD_BRIDGE_RECEIPT_KIND, principal: modBridgePrincipal(ns), session: s.hsid, payload }).catch(() => undefined),
+    });
+    folds.set(s.hsid, f);
+    return f;
+  };
+  return {
+    tools: () => modBridgeTools(o.mods(), o.allow ?? MOD_BRIDGE_TOOLS, o.currentPin ?? isCurrentFirstPartyPin),
+    now,
+    async call(mod, tool, input, s) {
+      // the WHOLE host-known value, or none: a label outside the pattern vouches for nobody (rows then fold unknown)
+      const rf: ToolRelayedFor | null = MOD_BRIDGE_LIMITS.agentLabel.test(s.agent) && s.turn !== null ? { principal: s.principal, surface: s.surface, agent: s.agent, hsid: s.hsid, turn: s.turn } : null;
+      await o.host.admit(mod); // an admit counts against the restart cap; a paused, down or missing mod is refused here
+      return o.host.callTool(mod, tool, input, { hsid: s.hsid, ...(rf ? { toolRelayedFor: rf } : {}) });
+    },
+    refused(s, why) {
+      foldFor(s)?.hit(why, {});
+    },
+    async receipt(r) {
+      const ns = o.ns();
+      if (ns === null) throw new Error('no identity namespace: a receipt cannot be written');
+      const payload = { hsid: r.hsid, turn: r.turn, requester: r.requester, owner: `p:${ns}/mod-${r.mod}`, tool: r.tool, refs: [...r.refs], shas: [...r.shas], bytes: r.bytes, outcome: r.outcome };
+      await o.append({ kind: MOD_BRIDGE_RECEIPT_KIND, principal: modBridgePrincipal(ns), session: r.hsid, ...(r.turn !== null ? { causes: [r.turn] } : {}), payload });
+    },
+    closeSession(hsid) {
+      folds.get(hsid)?.close();
+      folds.delete(hsid);
+    },
+    flush() {
+      for (const f of folds.values()) f.flush();
+    },
+  };
 }
