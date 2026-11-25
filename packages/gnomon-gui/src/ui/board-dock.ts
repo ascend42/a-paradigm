@@ -20,7 +20,7 @@
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { checkLine, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
-import { dimensionRows, listRepoOf, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
+import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf } from './board-leaf.js';
 
@@ -36,7 +36,7 @@ export interface BoardDockDeps {
   /** the focused session, or null */
   focused: () => string | null;
   /** how the leaf names a session: its name, its project and the project's hue class */
-  sessionInfo: (hsid: string) => { name: string; project: string; hue: string; repo: string | null };
+  sessionInfo: (hsid: string) => { name: string; fullName: string; project: string; hue: string; repo: string | null };
   /** the connection's principal now, or null while the link is down */
   principal: () => string | null;
   /** a line away from the leaf (the app's toast) */
@@ -72,6 +72,8 @@ export interface BoardDock {
   /** true when the focused session has a board to reopen or one open */
   hasBoard(): boolean;
   isOpen(): boolean;
+  /** True while a text is being typed on the board, and then SAYS that a card waits: the caller's programmatic card focus does not run (G-DDL-08; Aegis L5: never silently). */
+  cardBlocked(): boolean;
   /** true while a text is being typed on the open board (no programmatic card focus runs then, G-DDL-08) */
   editingText(): boolean;
   setTheme(theme: BoardTheme): void;
@@ -90,7 +92,13 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   tab.type = 'button';
   tab.className = 'lp-edgetab bd-edgetab';
   tab.hidden = true;
-  d.pane.append(host, tab);
+  // BEFORE the pinned cards and the composer in the document, so in the focus order (it is placed by CSS)
+  d.feed.after(host, tab);
+  /** what lies UNDER an open leaf (the chat header's keys, the conversation): out of the focus order while it is open */
+  const under = (): HTMLElement[] => [...d.pane.querySelectorAll<HTMLElement>(':scope > .pane-head, :scope > .feed > .viewport, :scope > .feed > .empty, :scope > .feed > .jump')];
+  const cover = (on: boolean): void => {
+    for (const e of under()) e.inert = on;
+  };
 
   let cur: { session: DimSession; leaf: BoardLeaf; off: Array<() => void>; how: BoardOpenedHow } | null = null;
   let opener: HTMLElement | null = null;
@@ -116,7 +124,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   const ask = (): BoardAsk => {
     const hsid = d.focused();
     const lastDim = hsid ? store.lastDimOf(hsid) : null;
-    return { hsid, lastDim, last: listingOf(lastDim), sessionName: hsid ? d.sessionInfo(hsid).name : '', mintDim: () => `dim:${mintDimNodeId()}` };
+    return { hsid, lastDim, last: listingOf(lastDim), sessionName: hsid ? d.sessionInfo(hsid).fullName : '', mintDim: () => `dim:${mintDimNodeId()}` };
   };
 
   function placeTab(): void {
@@ -131,6 +139,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     tab.hidden = !show;
     d.pane.classList.toggle('bd-tab-on', show);
     d.pane.classList.toggle('bd-open', !!cur);
+    cover(!!cur);
     if (show) {
       const title = a.last!.title || 'Untitled';
       tab.textContent = `${tabTitle(title)} · board`;
@@ -165,6 +174,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       const principal = heldPrincipal;
       held = words && principal ? { dim: session.dim, principal, words } : null;
       return paint(session, leaf, session.status());
+    }
+    if (n.about === 'open') {
+      // a failed open closes its leaf (it showed a title the log never took) and says why, once, as a toast
+      d.say(noticeLine(n), 'fail');
+      asked.delete(session.dim);
+      return drop();
     }
     if (n.code === 'hash-mismatch') dropWords();
     const mine = held && held.dim === session.dim;
@@ -348,9 +363,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     rows() {
       const hsid = d.focused();
-      const all = store.list();
-      const repo = listRepoOf(all, hsid, hsid ? d.sessionInfo(hsid).repo : null);
-      return dimensionRows(repo ? store.list(repo) : all, hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
+      return dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
     },
     choose(dim, event) {
       const l = listingOf(dim);
@@ -386,6 +399,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     repaint: paintTab,
     hasBoard: () => !!cur || !!ask().last,
     isOpen: () => !!cur,
+    cardBlocked() {
+      const hd = cur?.leaf.handle();
+      if (!hd || !hd.isAlive() || !hd.state().editingText) return false;
+      d.say(KEEP_COPY.cardWaits, 'info');
+      return true;
+    },
     editingText() {
       const hd = cur?.leaf.handle();
       return !!hd && hd.isAlive() && hd.state().editingText;

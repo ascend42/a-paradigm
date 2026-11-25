@@ -132,7 +132,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     // with a board to reopen: a synthetic Enter, ⌥B, menu click and tab click still open nothing and send nothing
     expect(f('untrusted-with-board')).toMatchObject({ open: false, frames: 2, rows: f('folded').rows });
     expect(f('titled')).toMatchObject({ open: true, phase: 'open', title: 'plan B', frames: 3 });
-    expect((a.titles as unknown[][]).map((t) => t[0])).toEqual([expect.stringMatching(/^Totals are off/), 'plan B']);
+    expect((a.titles as unknown[][]).map((t) => t[0])).toEqual(['Totals are off by a cent on 3-line orders. Find out why.', 'plan B']);
   }, 180_000);
 
   it('the link goes while a text is being typed: the field stays open, Esc does not lose the words, the fold is not said saved; back up, the words return only into a text the person opens, and their own press commits them', async () => {
@@ -170,11 +170,13 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
 
   it('held still, the leaf still folds (Esc and the esc key) and a fold while down is not a close; with nothing pending the line is "Reconnecting" alone', async () => {
     const a = await real(
-      [...typeBoard, ...drawRect, { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'), { key: 'Escape' }, { wait: 500 }, facts('folded')],
+      [...typeBoard, ...drawRect, { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'), { read: `(document.querySelector('.bd-host .bd-head .key:last-child').click(), document.querySelector('.bd-host .bd-leaf').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })), 1)`, as: 'synthetic' }, { wait: 400 }, facts('untrusted'), { key: 'Escape' }, { wait: 500 }, facts('folded')],
     );
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     expect(f('down')).toMatchObject({ open: true, inert: 'link-down', line: 'Not connected', frames: 2 });
+    // an untrusted esc click and Esc key fold nothing, held still or not (Aegis L2)
+    expect(f('untrusted')).toMatchObject({ open: true, inert: 'link-down' });
     expect(f('folded')).toMatchObject({ open: false, frames: 2 });
     expect(f('folded').tab).toMatch(/· board$/);
   }, 120_000);
@@ -254,6 +256,54 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('folded').toasts.join(' | ')).toContain(KEEP_COPY.wordsGone);
   }, 120_000);
 
+  it('ordinary use: /board sent with the SEND key opens a board and is never a message; the stored title is the whole name; an emoji title is cleaned and accepted; a refused title says why and leaves no leaf', async () => {
+    const SENT = `${A}.kernel.__sent ?? (() => { const k = ${A}.kernel; k.__sent = []; const send = k.send.bind(k); k.send = (s) => { try { const m = JSON.parse(s); if (m.method === 'session.send' || m.method === 'session.open') k.__sent.push(m.method); } catch {} return send(s); }; return k.__sent; })()`;
+    const titles = { read: `${A}.kernel.rows.filter((r) => String(r.event.kind).endsWith('session.start')).map((r) => r.event.payload.title)`, as: 'titles' };
+    const a = await real([
+      { read: `(${SENT}, 1)`, as: 'watching' },
+      { press: '#composer-text' }, ...type('/board'), { press: '#composer-send' }, { wait: 2500 }, facts('sent'), { read: `({ sent: ${A}.kernel.__sent, composer: document.getElementById('composer-text').value })`, as: 'afterSend' },
+      ...foldByEsc,
+      { press: '#composer-text' }, ...type('/board '), { read: `(() => { const t = document.getElementById('composer-text'); t.value = '/board 👩‍👩‍👧 plan'; return t.value.length; })()`, as: 'emoji' }, { key: 'Enter' }, { wait: 2500 }, facts('emojiOpen'),
+      ...foldByEsc,
+      { press: '#composer-text' }, ...type('/board ghp_abcdefghijklmnopqrstuvwxyz0123456789'), { key: 'Enter' }, { wait: 2500 }, facts('refused'), titles,
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    // the send key's own click opened it (a pointer entry), nothing went to the agent, the composer is empty
+    expect(f('sent')).toMatchObject({ open: true, phase: 'open', rows: ['session.start:menu'] });
+    expect(a.afterSend).toEqual({ sent: [], composer: '' });
+    // the log holds the session's whole name, not the display cut with its …
+    expect((a.titles as string[])[0]).toBe('Totals are off by a cent on 3-line orders. Find out why.');
+    // a title with a zero-width joiner is cleaned page-side and accepted
+    expect(f('emojiOpen')).toMatchObject({ open: true, phase: 'open', title: '👩👩👧 plan' });
+    // a title the mod refuses: no leaf is left up, the line says what is wrong with the TITLE, no row was written
+    expect(f('refused').open).toBe(false);
+    expect(f('refused').toasts.join(' | ')).toContain('That title looks like a credential · use another');
+    expect(a.titles as string[]).toHaveLength(2);
+  }, 180_000);
+
+  it('with a board open nothing under the leaf takes focus: the chat header keys and the conversation are inert, and the leaf comes before the composer', async () => {
+    const STATE = `(() => { const p = document.getElementById('pane-transcript'); const host = p.querySelector('.bd-host'); return { head: p.querySelector(':scope > .pane-head').inert, viewport: document.getElementById('viewport').inert, before: !!(host.compareDocumentPosition(document.getElementById('composer')) & Node.DOCUMENT_POSITION_FOLLOWING), pinnedAfter: !!(host.compareDocumentPosition(document.getElementById('pinned')) & Node.DOCUMENT_POSITION_FOLLOWING) }; })()`;
+    const WHERE = `(() => { const e = document.activeElement; return e ? (e.closest('.bd-host') ? 'leaf' : e.closest('#pane-transcript > .pane-head') ? 'UNDER:head' : e.closest('#viewport') ? 'UNDER:viewport' : e.closest('#pinned') ? 'pinned' : e.closest('#composer') ? 'composer' : e.closest('#pane-transcript') ? 'pane:' + (e.id || e.className) : 'elsewhere') : 'none'; })()`;
+    const walk = Array.from({ length: 14 }, (_, i) => [{ key: 'Tab', shift: true, settle: 60 }, { read: WHERE, as: `t${i}` }]).flat();
+    const forward = Array.from({ length: 16 }, (_, i) => [{ key: 'Tab', settle: 60 }, { read: WHERE, as: `f${i}` }]).flat();
+    const a = await real([{ read: STATE, as: 'closed' }, ...typeBoard, { read: STATE, as: 'open' }, { press: '.bd-host .bd-head .spacer' }, ...forward, { press: '#composer-text' }, ...walk, ...foldByEsc, facts('folded'), { read: STATE, as: 'after' }]);
+    expect(a.errors).toEqual([]);
+    expect(a.closed).toMatchObject({ head: false, viewport: false, before: true, pinnedAfter: true });
+    expect(a.open).toMatchObject({ head: true, viewport: true });
+    const stops = Array.from({ length: 14 }, (_, i) => a[`t${i}`] as string);
+    // Shift+Tab back from the composer: through the pinned cards into the leaf, never onto something under it
+    expect(stops.filter((s) => s.startsWith('UNDER'))).toEqual([]);
+    // Tab forward from the leaf's head: the leaf's own stops, then the pinned cards or the composer, never under it
+    const fwd = Array.from({ length: 16 }, (_, i) => a[`f${i}`] as string);
+    expect(fwd.filter((s) => s.startsWith('UNDER'))).toEqual([]);
+    expect(fwd[0]).toBe('leaf');
+    const left = fwd.find((s) => s !== 'leaf');
+    expect(['pinned', 'composer'], `after the leaf comes ${String(left)}: ${fwd.join(' ')}`).toContain(left);
+    expect((a.folded as Facts).open).toBe(false);
+    expect(a.after).toMatchObject({ head: false, viewport: false });
+  }, 120_000);
+
   it('G-DDL-08 core: with a card focused no key reaches the board (no op, no frame, no engine change), ⌥B included; no card focus runs during a board text edit', async () => {
     const KEYS: Array<Record<string, unknown>> = [{ key: 'a' }, { key: 'd' }, { key: 'y' }, { key: 'n' }, { key: '1' }, { key: '2' }, { key: 'o', meta: true }, { key: 's', meta: true }, { key: 'e', meta: true, shift: true }, { key: 'z', meta: true }, { key: 'v', meta: true, commands: ['paste'] }, { key: 'b', alt: true }, { key: 'Escape' }, { key: 'Enter' }];
     const focusCard = { read: `(() => { const c = document.querySelector('#stack .card [data-decision], #pinned .card [data-decision], #stack .card button, #pinned .card button'); if (c) c.focus(); return !!(document.activeElement && document.activeElement.closest('.card')); })()`, as: 'focused' };
@@ -262,7 +312,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
       ...typeBoard, ...drawRect, { press: '.bd-host [data-key="tool:select"]' }, facts('before'), ...steps,
       // a text being typed on the board: a programmatic card focus does not run
       { at: [200, 330], press: true }, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('ab'),
-      { read: `(() => { const id = document.querySelector('#stack .card')?.dataset.cardId ?? document.querySelector('#stack [data-card-id]')?.dataset.cardId ?? null; if (id) ${A}.board.focusCard(id); return { id, tag: document.activeElement.tagName, card: !!document.activeElement.closest('.card'), editing: ${A}.board.dock.editingText() }; })()`, as: 'midword' },
+      { read: `(() => { const id = document.querySelector('#stack .card')?.dataset.cardId ?? document.querySelector('#stack [data-card-id]')?.dataset.cardId ?? null; if (id) ${A}.board.focusCard(id); return { id, tag: document.activeElement.tagName, card: !!document.activeElement.closest('.card'), editing: ${A}.board.dock.editingText(), toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent) }; })()`, as: 'midword' },
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
@@ -274,6 +324,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
       expect(f(`k${i}`), name).toMatchObject({ open: true, frames: before.frames, rows: before.rows, nodes: before.nodes, marks: before.marks, drift: 0, tool: before.tool, pending: 0 });
     });
     expect(a.midword).toMatchObject({ tag: 'TEXTAREA', card: false, editing: true });
+    // and it is SAID (Aegis L5): the card waits, it is not silently skipped
+    expect((a.midword as { toasts: string[] }).toasts.join(' | ')).toContain(KEEP_COPY.cardWaits);
     expect((a.midword as { id: string | null }).id).not.toBeNull();
   }, 240_000);
 

@@ -86,7 +86,15 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   // (Aegis N1: the limit is said only to a person who went over it; 50 shapes with 20 tied arrows did not)
   if (n.code === 'not-undoable') return n.why !== 'delete' ? 'Nothing was changed · that is too much for one change' : n.lost > 64 ? 'Nothing was deleted · a delete takes 64 marks at most' : 'Nothing was deleted · select fewer marks and try again';
   if (n.about === 'undo') return 'That was too much to undo · it stays as it is';
-  if (n.about === 'open') return 'The dimension didn’t open · try again';
+  if (n.about === 'open') {
+    // why the mod refused, in plain words: retrying the same thing fails the same way, so the line says what to change
+    if (n.why === 'title-bad' || n.why === 'title-missing') return 'That title can’t be used · try plain words';
+    if (n.why === 'title-secret') return 'That title looks like a credential · use another';
+    if (n.why === 'repo-mismatch') return 'That board belongs to another project';
+    if (n.why === 'not-attached') return 'This session isn’t attached to that board';
+    if (n.why === 'dim-cap') return 'There are too many boards here · no more can be made';
+    return 'The board didn’t open · try again';
+  }
   // (a fold is sent only after what was pending has settled: what was drawn is in the log)
   if (n.about === 'close') return 'Your marks are saved · the board didn’t fold · try again';
   if (n.code === 'hash-mismatch') return 'This board may be out of date · fold it and open it again';

@@ -395,10 +395,10 @@ describe('a toast key focuses its own card or none (ui/card-focus.ts, Mika #1)',
     const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
     // (the window is wider since boards S1.3 P4b-1: each function first declines while a board text is being typed, G-DDL-08)
     const fc = app.slice(app.indexOf('function focusCard('), app.indexOf('function focusCard(') + 420);
-    expect(fc).toContain('if (boardDock.editingText()) return;');
+    expect(fc).toContain('if (boardDock.cardBlocked()) return;');
     expect(fc).toContain('uncoverStack(stackCovers)');
     const fg = app.slice(app.indexOf('function focusCardGroup('), app.indexOf('function focusCardGroup(') + 220);
-    expect(fg).toContain('if (boardDock.editingText()) return;');
+    expect(fg).toContain('if (boardDock.cardBlocked()) return;');
     expect(fg).toContain('uncoverStack(stackCovers)');
     expect(app).toMatch(/const stackCovers: CoveringSheet\[\] = \[\{ open: \(\) => !\$\('new-session-dialog'\)\.hidden, close: \(\) => closeNewSessionSheet\(\) \}\]/);
   });

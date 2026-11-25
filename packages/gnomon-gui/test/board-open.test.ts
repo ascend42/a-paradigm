@@ -3,9 +3,12 @@
  * store `followLog` is handed, which feeds both the GUI store and the dimension sessions and resets both.
  */
 import { describe, expect, it } from 'vitest';
-import { boardTitleOf, dimensionRows, followBoth, listRepoOf, listTime, openedHowOf, parseBoardCommand, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk } from '../src/core/board-open.js';
+import { boardTitleOf, dimensionRows, followBoth, listingsFor, listRepoOf, listTime, openedHowOf, parseBoardCommand, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk } from '../src/core/board-open.js';
 import { followLog, RpcError } from '../src/core/client.js';
-import type { DimListing } from '../src/core/dim-store.js';
+import { DimStore, type DimListing } from '../src/core/dim-store.js';
+import { DimSessions } from '../src/core/dim-session.js';
+import { GuiStore } from '../src/core/store.js';
+import { DIM_KINDS } from '@a-company/gnomon-contracts';
 
 const DIM = 'dim:01JF1XTVRE000000000000000D';
 const listing = (o: Partial<DimListing> = {}): DimListing => ({ dim: DIM, title: 'auth handoff', repo: 'repo:aa', firstSeq: 3, lastSeq: 9, rows: 4, nodes: 2, ended: false, attached: ['hs-1'], firstAt: '2026-11-24T14:02:00.000Z', lastAt: '2026-11-24T14:09:00.000Z', partial: false, ...o });
@@ -64,6 +67,24 @@ describe('#gui-board-open: the Dimensions list', () => {
     expect(listRepoOf([listing({ attached: [] })], 'hs-1', 'repo:aa')).toBe('repo:aa');
     expect(listRepoOf([listing({ attached: [] })], 'hs-1', '/Users/x/billing')).toBeNull();
   });
+  it('an unknown repo lists NONE of other sessions’ dimensions: only those this session is attached to (Probe D3)', () => {
+    const mine = listing();
+    const other = listing({ dim: 'dim:01OTHER000000000000000000B', repo: 'repo:bb', attached: ['hs-other'] });
+    const sameRepo = listing({ dim: 'dim:01SAME0000000000000000000C', attached: ['hs-other'] });
+    // the repo can be told (the session is attached to one of its dimensions): that repo's, and no other's
+    expect(listingsFor([mine, other, sameRepo], 'hs-1', null).map((l) => l.dim)).toEqual([mine.dim, sameRepo.dim]);
+    // it cannot (a path-form repo, attached to nothing): nothing of anyone else's is listed
+    expect(listingsFor([other, sameRepo], 'hs-1', '/Users/x/billing')).toEqual([]);
+    expect(listingsFor([mine, other], null, null)).toEqual([]);
+  });
+  it('a title is cleaned before it is sent: no invisible or direction character reaches the mod or a listed row (Aegis L3, Probe D4)', () => {
+    expect(boardTitleOf('👩\u200D👩\u200D👧 plan')).toBe('👩👩👧 plan');
+    expect(boardTitleOf('a\u202Eb')).not.toMatch(/[\u202A-\u202E\u2066-\u2069\u200B-\u200F]/);
+    expect(boardTitleOf('x\u200By')).toBe('xy');
+    // cut at the limit by code units, never through a pair
+    expect(boardTitleOf('😀'.repeat(100)).length).toBeLessThanOrEqual(120);
+    expect(boardTitleOf('😀'.repeat(100))).toBe('😀'.repeat(60));
+  });
 });
 
 describe('#gui-board-open: followBoth, the one store followLog is handed', () => {
@@ -82,6 +103,28 @@ describe('#gui-board-open: followBoth, the one store followLog is handed', () =>
     both.reset();
     expect(calls).toEqual(['gui.apply 2', 'dims.apply 2', 'gui.adopt L', 'gui.advance 2', 'gui.reset', 'dims.reset']);
     expect(both.cursor()).toBeNull();
+  });
+  it('with the REAL stores: adopting another log id resets the dimension store and destroys the sessions (Aegis L1)', () => {
+    const gui = new GuiStore();
+    const dims = new DimStore();
+    const sessions = new DimSessions({ store: dims });
+    const both = followBoth(gui, sessions);
+    const start = (seq: number) => ({ seq, view: 'full', event: { schemaVersion: 'event:v1', log: 'L1', seq, at: '2026-11-24T14:02:00.000Z', principal: 'p:x/mod', kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, title: 'kept', attached: ['hs-1'], opened: 'command' }, scope: { repo: 'repo:aa' } } });
+    both.adopt('L1');
+    both.apply([start(1)]);
+    both.advance(1);
+    const s = sessions.resume({ dim: DIM, hsid: 'hs-1' });
+    expect(dims.list().map((l) => l.title)).toEqual(['kept']);
+    expect(s.alive).toBe(true);
+    // the same log again: nothing is thrown away
+    both.adopt('L1');
+    expect(dims.list()).toHaveLength(1);
+    expect(s.alive).toBe(true);
+    // another log: the GUI store cleared itself, and the dimension side goes with it
+    both.adopt('L2');
+    expect(dims.list()).toEqual([]);
+    expect(s.alive).toBe(false);
+    expect(sessions.list()).toEqual([]);
   });
   it('through the real followLog: each backlog page reaches both, and a cursor-epoch refusal resets both before the re-read', async () => {
     const { calls, both } = make();

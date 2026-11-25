@@ -7,7 +7,7 @@
  *
  * `lastDim` and the listings are DISPLAY HINTS (core/dim-store.ts): the mod decides what a caller may open.
  */
-import { DIM_LIMITS } from '@a-company/gnomon-contracts';
+import { DIM_LIMITS, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { DimListing } from './dim-store.js';
 
 /** `command`: a typed command. `menu`: every pointer entry and ⌥B. (The enum is hashed: no other value.) */
@@ -23,9 +23,21 @@ export type BoardPlan =
   /** `dim.open` of a NEW dimension with this title */
   | { type: 'new'; dim: string; title: string; titleFrom: 'session' | 'user' };
 
-/** A dimension title as it is sent: one line, trimmed, cut at the title limit. */
+/**
+ * A dimension title as it is sent: cleaned by the contracts' display sanitizer (a bidi control becomes a visible
+ * mark, a zero-width joiner goes: the mod refuses invisible characters, so an emoji family or a pasted title would
+ * be refused whole, and a listed title could reorder its row), one line, trimmed, cut at the title limit.
+ */
 export function boardTitleOf(text: string): string {
-  return [...text.replace(/\s+/g, ' ').trim()].slice(0, DIM_LIMITS.title).join('');
+  const cut = (t: string): string => {
+    let out = '';
+    for (const ch of t) {
+      if (out.length + ch.length > DIM_LIMITS.title) break;
+      out += ch;
+    }
+    return out;
+  };
+  return cut(sanitizeDisplayText(text).text.replace(/\s+/g, ' ').trim()).trim();
 }
 
 /** `/board` and `/boards` as typed in the composer: the command and its argument, or null for anything else. */
@@ -112,6 +124,18 @@ export function dimensionRows(listings: readonly DimListing[], hsid: string | nu
   return [...pending, ...rows];
 }
 
+/**
+ * The listings the Dimensions list shows for a session. When the session's repo can be told, that repo's; when it
+ * cannot (the GUI store holds the session's repo as a path and a listing's as the host's `repo:<hex>` scope, and
+ * nothing the page reads joins the two), ONLY the dimensions this session is attached to: never another
+ * session's, which may be another project's (choosing one was refused by the mod, over the wrong session).
+ */
+export function listingsFor(listings: readonly DimListing[], hsid: string | null, sessionRepo: string | null): DimListing[] {
+  const repo = listRepoOf(listings, hsid, sessionRepo);
+  if (repo) return listings.filter((l) => l.repo === repo);
+  return hsid ? listings.filter((l) => l.attached.includes(hsid)) : [];
+}
+
 /** The repo whose dimensions the list shows for a session: the repo of a dimension it is attached to, else the session's own. */
 export function listRepoOf(listings: readonly DimListing[], hsid: string | null, sessionRepo: string | null): string | null {
   const mine = hsid ? listings.find((l) => l.attached.includes(hsid) && l.repo) : undefined;
@@ -133,15 +157,23 @@ export interface FollowStore {
  * also goes to the dimension sessions, and a `cursor-epoch` reset resets both. The cursor is the GUI store's.
  */
 export function followBoth<S extends FollowStore>(gui: S, dims: { apply(rows: readonly unknown[]): void; reset(): void }): S {
+  // the log the dimension side was folded from. The GUI store clears itself when it adopts ANOTHER log id; the
+  // dimension store, the sessions and the vouched hashes must go with it (Aegis L1): rows of two logs never mix.
+  let log: string | null = null;
   return {
     cursor: () => gui.cursor(),
-    adopt: (id: string) => gui.adopt(id),
+    adopt: (id: string) => {
+      if (log !== null && log !== id) dims.reset();
+      log = id;
+      gui.adopt(id);
+    },
     apply: (rows: unknown[]) => {
       gui.apply(rows);
       dims.apply(rows);
     },
     advance: (n: number) => gui.advance(n),
     reset: () => {
+      log = null;
       gui.reset();
       dims.reset();
     },

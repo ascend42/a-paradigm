@@ -1919,7 +1919,7 @@ const boardDock = mountBoardDock({
   sessionInfo: (hsid) => {
     const s = store.sessions.get(hsid);
     const p = projectOfCard({ repo: null, hsid });
-    return { name: s ? sessionTitle(s) : hsid.slice(-10), project: p?.name ?? 'this project', hue: `h${p?.hue ?? 0}`, repo: s?.repo ?? null };
+    return { name: s ? sessionTitle(s) : hsid.slice(-10), fullName: s ? sessionFullTitle(s) || sessionTitle(s) : '', project: p?.name ?? 'this project', hue: `h${p?.hue ?? 0}`, repo: s?.repo ?? null };
   },
   principal: () => session?.principal ?? null,
   say: (text, kind) => notice(text, kind, { source: 'board' }),
@@ -2329,7 +2329,7 @@ const cardInPile = (cardId: string): Element | null => cardIn($('stack'), cardId
 function focusCard(cardId: string, what: CardLabel = 'card'): void {
   // G-DDL-08 (Aegis ruling 7): no programmatic card focus while a text is being typed on the board, so a card
   // arriving mid-word cannot take the next keystroke. The card stays where it is, in the stack.
-  if (boardDock.editingText()) return;
+  if (boardDock.cardBlocked()) return; // (it says a line: the card waits, the text is finished first)
   uncoverStack(stackCovers);
   const el = cardInPile(cardId);
   if (!el) {
@@ -2346,7 +2346,7 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
  * so a second Enter cannot allow it.
  */
 function focusCardGroup(cardId: string, what: CardLabel = 'grant card'): void {
-  if (boardDock.editingText()) return; // G-DDL-08: as focusCard
+  if (boardDock.cardBlocked()) return; // G-DDL-08: as focusCard
   uncoverStack(stackCovers);
   const el = cardInPile(cardId) as HTMLElement | null;
   if (!el) {
@@ -4262,9 +4262,24 @@ function wire(): void {
   }
   $('stack-scope').addEventListener('click', (e) => run('stack.scope.toggle', e.isTrusted));
   $('loops-word').addEventListener('click', () => loopsView.open());
+  // #gui-board-dock: `/board` sent with the SEND key runs on that key's own click (a submit event mints no stamp;
+  // the text used to go to the agent as a message and cost a turn)
+  $('composer-send').addEventListener('click', (e) => {
+    const ta = $<HTMLTextAreaElement>('composer-text');
+    const bc = parseBoardCommand(ta.value);
+    if (!bc) return;
+    e.preventDefault(); // no submit: the command is not a message
+    if (!e.isTrusted) return;
+    ta.value = '';
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    if (bc.cmd === 'board') boardDock.command(bc.arg, e);
+    else openDimensions();
+  });
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const t = $<HTMLTextAreaElement>('composer-text');
+    // a board command never goes to the agent as text, whatever submitted the form
+    if (parseBoardCommand(t.value)) return notice('Press Enter or send to run that command', 'info', { source: 'board' });
     // Aegis M3: a dictated draft stays shown until the kernel took it (the reducer then sets what remains)
     const viaDictation = dictationOn() && dict.focusedHere && dict.parts.length > 0 && hasDraft(dict);
     // L2: a chip pick is marked picked only once the kernel took it; the composer clears only when the message went out
