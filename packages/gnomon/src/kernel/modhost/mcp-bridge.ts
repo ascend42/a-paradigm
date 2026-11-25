@@ -64,6 +64,12 @@
  * `tools/call` is refused with a fixed sentence when the session's effective mode is manual with no approved plan,
  * when the session has a loop origin, and when no turn is outstanding. Nothing reaches the mod and no mod row lands.
  *
+ * THE CAPS (Aegis M7). After the gates and the argument bounds: 4 calls a second and one in flight per session
+ * (state on the supervisor's Session), and at most 2 bridge calls queued or running per mod across ALL sessions (the
+ * mod host serialises a mod's calls, so N sessions could otherwise queue N tool calls ahead of a person's edit).
+ * Beyond a cap the answer is the fixed "one board call at a time" and nothing reaches the mod. `host.admit` runs
+ * before the tool call, and counts against the mod's restart cap.
+ *
  * The socket append gate refuses `inject.receipt` for every caller class, and no device, agent, mod or session name
  * can yield the reserved principal (tests). Readers accept a receipt only under that principal and a kernel key.
  */
@@ -242,6 +248,9 @@ export interface BridgePorts {
   call(mod: string, tool: string, input: unknown, s: BridgeSession): Promise<unknown>;
   /** one kernel-composed refusal, folded into the session's counter row */
   refused(s: Pick<BridgeSession, 'hsid' | 'principal'>, why: BridgeRefusal): void;
+  /** Aegis M7: take one of the mod's call slots (queued or running, across ALL sessions); false ⇒ none is free */
+  enter(mod: string): boolean;
+  leave(mod: string): void;
   /** append the receipt and resolve only once it is in the log; a rejection means nothing may be handed over */
   receipt(r: BridgeReceipt): Promise<void>;
   now(): number;
@@ -256,6 +265,7 @@ export const MOD_BRIDGE_SENTENCES = Object.freeze({
   manual: 'Refused: this session is in manual mode. Mod tools wait on an approved plan.',
   loop: 'Refused: loop sessions never call mod tools.',
   noTurn: 'Refused: no turn is open for this call.',
+  busy: 'One board call at a time: wait for the last call to answer, then try again.',
   arguments: 'Refused: the arguments are not an object, or are too large, too deep or hold a reserved key.',
 });
 
@@ -352,6 +362,16 @@ async function runCall(id: string | number, tool: BridgeTool, params: Record<str
     ports.refused(s, 'arguments');
     return text(id, MOD_BRIDGE_SENTENCES.arguments, true);
   }
+  // the caps: 4 calls a second and one in flight per session; 2 queued or running per mod across all sessions (M7)
+  const t = ports.now();
+  s.rate.calls = s.rate.calls.filter((at) => t >= at && t - at < 1_000);
+  const cap = s.rate.calls.length >= MOD_BRIDGE_LIMITS.callsPerSecond ? 'rate' : s.rate.inFlight >= MOD_BRIDGE_LIMITS.inFlightPerSession ? 'in-flight' : !ports.enter(tool.mod) ? 'mod-busy' : null;
+  if (cap !== null) {
+    ports.refused(s, cap);
+    return text(id, MOD_BRIDGE_SENTENCES.busy, true);
+  }
+  s.rate.calls.push(t);
+  s.rate.inFlight++;
   let result: unknown;
   try {
     result = await ports.call(tool.mod, tool.name, input, s);
@@ -360,6 +380,9 @@ async function runCall(id: string | number, tool: BridgeTool, params: Record<str
     const refusal = isModRefusal(err) && Object.hasOwn(MOD_BRIDGE_MOD_SENTENCES, err.modCode);
     ports.refused(s, refusal ? 'mod-refused' : 'mod-failed');
     return text(id, refusal ? MOD_BRIDGE_MOD_SENTENCES[err.modCode] : MOD_BRIDGE_SENTENCES.failed, true);
+  } finally {
+    s.rate.inFlight--;
+    ports.leave(tool.mod);
   }
   const fenced = fenceBridgeResult(tool.mod, tool.name, result);
   // a session that stopped while the mod worked gets neither a receipt nor a result (the supervisor writes nothing)
@@ -467,6 +490,7 @@ export const MOD_BRIDGE_FOLD_SESSIONS = 256;
 export function createModBridge(o: ModBridgeOptions): ModBridge {
   const now = o.now ?? (() => performance.now());
   const folds = new Map<string, RowFold>();
+  const slots = new Map<string, number>();
   const foldFor = (s: Pick<BridgeSession, 'hsid' | 'principal'>): RowFold | null => {
     const hit = folds.get(s.hsid);
     if (hit) return hit;
@@ -498,6 +522,17 @@ export function createModBridge(o: ModBridgeOptions): ModBridge {
       if (host === null) throw new ModRefusal('NOT_RUNNING', 'the mod host is not up', { name: mod });
       await host.admit(mod); // an admit counts against the restart cap; a paused, down or missing mod is refused here
       return host.callTool(mod, tool, input, { hsid: s.hsid, ...(rf ? { toolRelayedFor: rf } : {}) });
+    },
+    enter(mod) {
+      const n = slots.get(mod) ?? 0;
+      if (n >= MOD_BRIDGE_LIMITS.perMod) return false;
+      slots.set(mod, n + 1);
+      return true;
+    },
+    leave(mod) {
+      const n = (slots.get(mod) ?? 0) - 1;
+      if (n > 0) slots.set(mod, n);
+      else slots.delete(mod);
     },
     refused(s, why) {
       foldFor(s)?.hit(why, {});
