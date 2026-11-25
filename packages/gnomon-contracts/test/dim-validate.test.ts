@@ -305,6 +305,46 @@ describe('C4: the secret check', () => {
     }
   });
 
+  it('combining marks and default-ignorable code points inside the key (Aegis S1.2 nit 4)', () => {
+    const cut = (sep: string): string => `${KEY.slice(0, 9)}${sep}${KEY.slice(9, 20)}${sep}${KEY.slice(20)}`;
+    const seps: Array<[string, string]> = [
+      ['a combining acute (Mn; composes with the letter before it)', '́'],
+      ['a combining diaeresis and a cedilla, stacked', '̧̈'],
+      ['a combining enclosing circle (Me)', '⃝'],
+      ['a Cyrillic enclosing mark (Me)', '҈'],
+      ['variation selector 16', '️'],
+      ['variation selector 17 (supplementary)', '\u{e0100}'],
+      ['the combining grapheme joiner', '͏'],
+      ['the Hangul filler', 'ㅤ'],
+      ['the Hangul choseong and jungseong fillers', 'ᅟᅠ'],
+      ['the halfwidth Hangul filler', 'ﾠ'],
+      ['the Mongolian vowel separator', '᠎'],
+      ['Khmer inherent vowels', '឴឵'],
+      ['an unassigned default-ignorable', '⁥'],
+    ];
+    for (const [name, sep] of seps) {
+      expect(cut(sep), name).not.toBe(KEY);
+      expect(dimTextForScan(cut(sep)), name).toBe(KEY);
+      expectSecret([text(cut(sep))], state, 'anthropic-key');
+    }
+    // decomposed FIRST: a mark that NFKC would fuse into one precomposed letter is still removed
+    const fused = `sḱ${KEY.slice(2)}`;
+    expect(fused.normalize('NFKC')).toBe(fused);
+    expect(dimTextForScan(fused)).toBe(KEY);
+    expectSecret([text(fused)], state, 'anthropic-key');
+    expectSecret([text(`ÅKIA${AWS.slice(4)}`)], state, 'aws-access-key');
+    // split over two fields of one node AND by marks
+    expectSecret(add({ id: id(24), kind: 'arrow', x: 0, y: 0, z: 'M', points: [0, 0, 1, 1], rel: KEY.slice(0, 14).toLowerCase(), label: `️${KEY.slice(14, 20)}͏${KEY.slice(20)}ㅤ` }));
+    // without a stripped code point the scan text is exactly NFKC, and ordinary accented or marked writing is no secret
+    for (const plain of ['Ship it on Friday', 'ＡＢ ﬁn', '한글 board', '日本語']) expect(dimTextForScan(plain)).toBe(plain.normalize('NFKC'));
+    for (const prose of ['Café résumé, naïve Zürich — déjà vu', 'हिन्दी में एक नोट', 'ภาษาไทย บนกระดาน', 'ok 👍️ 👩‍💻']) {
+      expect(validateDimOps(state, [text(prose)], human)).toMatchObject({ secret: false, refused: [] });
+    }
+    // stated residual: an ordinary space, or a spacing mark (Mc), is not rejoined
+    expect(validateDimOps(state, [text(cut(' '))], human).secret).toBe(false);
+    expect(validateDimOps(state, [text(cut('ा'))], human).secret).toBe(false);
+  });
+
   it('fullwidth forms (NFKC)', () => {
     const wide = [...KEY].map((c) => (c >= '!' && c <= '~' ? String.fromCodePoint(c.codePointAt(0)! + 0xfee0) : c)).join('');
     expect(wide).not.toBe(KEY);
@@ -381,7 +421,8 @@ describe('C4: the secret check', () => {
     const seen: string[] = [];
     const res = validateDimOps(state, [text('caf\u00e9 \uff21\u200bB')], human, { scan: (t) => (seen.push(t), []) });
     expect(res.secret).toBe(false);
-    expect(seen).toContain('caf\u00e9 AB');
+    // NFKD, strip, NFC: the fullwidth letter is folded, the zero-width space is dropped, and an accent is a combining mark (S1.4 P0)
+    expect(seen).toContain('cafe AB');
     expect(validateDimOps(state, [text('Ship the board on Friday; ask Luna about the token colours.')], human)).toMatchObject({ secret: false, refused: [] });
     const flagged = validateDimOps(state, [text('anything')], human, { scan: () => ['custom-rule'] });
     expect(flagged.secret).toBe(true);

@@ -628,9 +628,39 @@ export interface DimValidation {
   secret: boolean;
 }
 
-/** NFKC, then every control, format, line-separator and paragraph-separator code point removed. */
+/** What the scan drops before it reads: controls, formats, line and paragraph separators, non-spacing and enclosing marks, and every default-ignorable code point. */
+const SCAN_STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Mn}\p{Me}\p{Default_Ignorable_Code_Point}]/gu;
+
+/**
+ * The text the secret scan reads: compatibility-decomposed (NFKD), stripped of `SCAN_STRIP`, then recomposed
+ * (NFC). Without a stripped code point the result is exactly NFKC. Decomposing FIRST matters: a combining mark
+ * that composes with the letter before it (an acute on `k`) would otherwise become one precomposed letter and
+ * survive the strip. So a credential cut by zero-width characters, bidi marks, a soft hyphen, variation
+ * selectors, the combining grapheme joiner, Hangul fillers or any combining accent reads as the credential, and an
+ * accented letter reads as its base letter. Only the scan reads this text; what is stored is what was sent.
+ *
+ * RESIDUALS of the secret check (Aegis S1.2 nit 4): what `validateDimOps` does NOT find. Stated here so no caller
+ * takes the check for a guarantee; the spec text follows in a later pass.
+ *  - Visible separators: a credential broken by ordinary spaces, punctuation, a line of its own per part, or
+ *    spacing combining marks (`Mc`) is not rejoined.
+ *  - Look-alikes: only NFKC forms are folded (fullwidth, ligatures, styled letters). A Cyrillic or Greek letter
+ *    standing in for a Latin one is not.
+ *  - Encodings: base64, hex, URL-encoded, reversed or otherwise transformed secrets, and secrets with no known
+ *    format (a bare password) match no rule.
+ *  - Three or more strings: the strings of one node are read each by itself, all joined in sorted key order, and
+ *    as ordered pairs. A credential split over three or more strings in an order that is not the join order (for
+ *    example three refs out of order) is missed.
+ *  - A node over `DIM_SCAN_LIMITS.freeStringsPerNode` free strings (never a valid one) is read as the join only,
+ *    so a pair that is not adjacent in the join is missed there. A batch over `stringsPerBatch` is refused unread.
+ *  - Two nodes: a credential split across nodes, or across dimensions, is never joined.
+ *  - Numbers: `points` and every other integer can carry bytes; no number is read.
+ *  - The dimension `title` on the session.start row is outside this validator; the dimension mod checks it.
+ *  - Field names: only string VALUES are read, never keys (an unknown key is refused by name, not scanned).
+ *  - Earlier rows: a node that already matches by itself is not a reason to refuse a clean edit of it, and a row
+ *    written before a rule existed is not re-read.
+ */
 export function dimTextForScan(s: string): string {
-  return s.normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '');
+  return s.normalize('NFKD').replace(SCAN_STRIP, '').normalize('NFC');
 }
 
 const fieldName = (k: string): string => (DIM_FIELDS.includes(k) ? k : 'unknown');
