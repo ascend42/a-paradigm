@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   DIM_CORE_KINDS, DIM_FIELDS, DIM_KINDS, DIM_LIMITS, DIM_NODE_KEYS, DIM_NODE_REQUIRED, DIM_REF_PATTERN, DIM_REF_SCHEMES, DIM_REFUSAL_CODES, DIM_REFUSAL_FIXES, DIM_SCAN_LIMITS,
-  dimHash, dimTextForScan, dimTextForScanS12, emptyDimState, foldDim, validateDimOps, validateDimRef, type DimActor, type DimRow, type DimState,
+  dimHash, dimTextForScan, emptyDimState, foldDim, validateDimOps, validateDimRef, type DimActor, type DimRow, type DimState,
 } from '../src/dim.js';
 import { validateRefV1 } from '../src/ref.js';
 import { CONTENT_SWATCH_NAMES } from '../src/content-palette.js';
@@ -350,7 +350,7 @@ describe('C4: the secret check', () => {
     const glued = `\u00e9${cut}`;
     // the new form turns the accented letter into a plain one, so no word boundary is left before the key
     expect(dimTextForScan(glued)).toBe(`e${KEY}`);
-    expect(dimTextForScanS12(glued)).toBe(`\u00e9${KEY}`);
+    // the S1.2 form (NFKC, then the old strip) keeps the accent and so the boundary; it is private, seen through the scan seam below
     expectSecret([text(glued)], state, 'anthropic-key');
     expectSecret([text(`caf\u00e9${AWS.slice(0, 6)}\u00ad${AWS.slice(6)}`)], state, 'aws-access-key');
     // the three forms are read, and equal forms once
@@ -479,6 +479,22 @@ describe('S1.4 P0: the scan cap (DIM_SCAN_LIMITS)', () => {
     expect(res).toMatchObject({ ok: [], secret: false });
     expect(res.refused.map((r) => `${r.code}@${r.field}`)).toEqual(['ref-count@refs']);
     expect(ms, `validateDimOps on a 4,096-string op took ${ms.toFixed(1)} ms`).toBeLessThan(BOUND_MS);
+  });
+
+  it(`the same op with NON-ASCII strings is read in three texts each and still returns inside ${BOUND_MS} ms`, () => {
+    // every free string differs in all three forms: an accent (dropped by the new form only) and a zero-width space (kept by the raw text only)
+    const op = { type: 'add', node: { id: id(40), kind: 'text', x: 0, y: 0, z: 'M', text: 'caf\u00e9\u200b note', refs: Array.from({ length: 4092 }, (_, i) => `sym:caf\u00e9\u200b${i}`) } };
+    let scans = 0;
+    validateDimOps(state, [op], human, { scan: () => (scans++, []) });
+    // three reads per free string and of the join, one for each ASCII structural string
+    expect(scans).toBeGreaterThan(3 * 4093);
+    expect(scans).toBeLessThanOrEqual(3 * 4096 + 6);
+    const t0 = performance.now();
+    const res = validateDimOps(state, [op], human);
+    const ms = performance.now() - t0;
+    expect(res).toMatchObject({ ok: [], secret: false });
+    // measured 2026-11-25, darwin arm64, real scanner, 9 runs: 5.5 to 8.1 ms (the ASCII op above: 2.0 to 5.4 ms)
+    expect(ms, `validateDimOps on a 4,096-string non-ASCII op took ${ms.toFixed(1)} ms`).toBeLessThan(BOUND_MS);
   });
 
   it('a batch over 4,096 strings is refused whole, field-range on ops, and nothing is scanned', () => {
