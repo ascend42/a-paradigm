@@ -57,6 +57,8 @@ export interface Row {
   turn?: string;
   /** review M1: this page's composer echo whose send was refused or failed on the network: it is not a turn */
   unsent?: boolean;
+  /** #gui-board-turn: this page's send.refused line as the turn strip says it (refusal.message, never the code) */
+  brief?: string;
 }
 
 export interface StackCard {
@@ -737,6 +739,8 @@ export interface ChatItem {
   runKey?: string;
   /** #gui-slash-runs: a "/" run from the kernel's tool.brokered{author:'human'} row (history: no result kept) */
   runRow?: RunWords;
+  /** #gui-board-turn: a refused send's line as the turn strip says it (this page's send.refused row only) */
+  brief?: string;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -1375,7 +1379,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       } else {
         // a refused send stays with the message it refused
         const last = waiting[waiting.length - 1];
-        push(r, 0, { role: 'error', text: String(r.payload ?? '') }, 'tail');
+        const it = push(r, 0, { role: 'error', text: String(r.payload ?? '') }, 'tail');
+        if (r.kind === 'send.refused' && typeof r.brief === 'string') it.brief = r.brief;
         if (last && last.idx[last.idx.length - 1] === items.length - 2) last.idx.push(items.length - 1);
       }
       continue;

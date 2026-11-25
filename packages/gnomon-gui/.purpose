@@ -751,9 +751,16 @@ components:
       folds; a board folded on an earlier page reopens with "That board
       was folded · opening it starts it again"; command(arg, event,
       typed) records the send key's click on a typed /board as command.
-      Not built here (P4b-2): the Dimensions list surface (/boards is the
-      palette pattern for now), the keep line's final words, the working
-      line under the leaf, G-DDL-08 across layout presets.
+      P4b-2 item 1: showChat(event, then) folds like Esc on a trusted
+      press only (the trust check comes first) and runs `then` once the
+      leaf is gone; on a held board with words or unsaved changes it does
+      not fold and says the held line (kept() gives the strip's title).
+      escape() checks isTrusted BEFORE the held line. A fold returns
+      focus to its opener only when the fold took the focus (it was in
+      the leaf). The Loops edge tab is inert while a board is open.
+      Not built here: the Dimensions list surface (/boards is the palette
+      pattern for now), the keep line's final words, G-DDL-08 across
+      layout presets.
     path: src/ui/board-dock.ts
     type: module
     tags: [gnomon, gui, dimension, board]
@@ -762,6 +769,38 @@ components:
       - test/board-app.test.ts
       - test/board-isolation.test.ts
       - ../gnomon/test/dimension-board-browser.test.ts
+  gui-board-turn:
+    description: >-
+      #gui-board-turn (boards S1.3 pass P4b-2 item 1; design component
+      board-leaf.turn_strip, a turn-strip variant of transcript-row;
+      Luna's rulings of 2026-11-24) - the latest turn under an open board,
+      in at most two one-line rows between the leaf's tab and the pinned
+      cards (#board-turn). The you row: 'you · <message> · hh:mm', or
+      'waiting' while it is queued. The turn row: the working key while
+      the turn runs (no caret, no aria-expanded, named '<what> · show its
+      steps in the chat'), then '<Claude|local model> · <reply>' with the
+      result line's own end words (STOP_LABEL / CLAUDE_RESULT_LABEL) and
+      ' · needs you' or ' · more in the chat'; a refused send's
+      refusal.message (never the code) alone; 'nothing sent yet' before
+      the first send. Two rows at 300px of board room measured without
+      the strip, else the turn row alone. A tight row drops the reply,
+      the name, then 'more'. Never a stale reply; live choices, slips and
+      run rows are never copied. Text nodes only through h(), dir=auto on
+      the words, no title= on them, no live region. show chat and the
+      working key fold through the dock (trusted only) and put focus in
+      the chat at its latest row (the working key: its steps unfolded and
+      focus on that key). Esc in the composer folds an open board and
+      leaves focus there (after the slash menu, dictation grace and
+      stop-speaking; never on repeat, IME, a taken Esc, a modifier or a
+      focused card). The strip reads the chat's own items even in the raw
+      view. No palette or block-safe command.
+    path: src/ui/board-turn.ts
+    type: module
+    tags: [gnomon, gui, dimension, board]
+    related: ["#gui-board-dock", "#gui-board-leaf", "#gui-turn-steps", "#gui"]
+    tests:
+      - test/board-turn.test.ts
+      - test/board-app.test.ts
   gui-board-open:
     description: >-
       #gui-board-open (boards S1.3 pass P4b-1) - how a board is opened, as

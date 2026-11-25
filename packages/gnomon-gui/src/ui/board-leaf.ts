@@ -81,6 +81,8 @@ export interface BoardLeaf {
   say(line: string): void;
   /** Held still: say the held line again (an Esc from outside the leaf that must not fold it). Nothing when not held. */
   sayHeld(): void;
+  /** The height the board has now (the leaf less its head, keep line and foot): #gui-board-turn's room. */
+  room(): number;
   /** Forget the copy register (the kernel link went down). */
   forget(): void;
   /**
@@ -837,6 +839,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     },
     retry: start,
     say,
+    room: () => boardHeight(),
     sayHeld() {
       if (inert) sayHeld(inertLine ?? INERT_COPY[inert]);
     },

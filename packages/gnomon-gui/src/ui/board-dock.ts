@@ -49,6 +49,8 @@ export interface BoardDockDeps {
   reconnecting?: () => boolean;
   /** where focus goes when the leaf folds and what opened it is gone (the composer) */
   fallbackFocus: () => HTMLElement | null;
+  /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
+  turn?: () => void;
   now?: () => number;
 }
 
@@ -65,6 +67,14 @@ export interface BoardDock {
   choose(dim: string, event: Event): void;
   /** Esc from outside the leaf: folds an open board, or says the held line of one it must not fold. True when one was open. */
   escape(event: Event): boolean;
+  /**
+   * #gui-board-turn: show chat (and the strip's working key). A trusted press folds the board as Esc does, then runs
+   * `then` once the leaf is gone (the page puts focus in the chat). On a board held still with words or unsaved
+   * changes it does not fold: the leaf says its held line again. Untrusted: nothing, said or done.
+   */
+  showChat(event: Event, then: () => void): void;
+  /** true while the open board is held still with words or unsaved changes (show chat's title says it is kept open) */
+  kept(): boolean;
   /** the app focused another session (or none) */
   sessionChanged(): void;
   /** rows were applied, the link changed: the tab and the menu row are drawn again */
@@ -94,14 +104,19 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   tab.hidden = true;
   // BEFORE the pinned cards and the composer in the document, so in the focus order (it is placed by CSS)
   d.feed.after(host, tab);
-  /** what lies UNDER an open leaf (the chat header's keys, the conversation): out of the focus order while it is open */
-  const under = (): HTMLElement[] => [...d.pane.querySelectorAll<HTMLElement>(':scope > .pane-head, :scope > .feed > .viewport, :scope > .feed > .empty, :scope > .feed > .jump')];
+  /**
+   * what lies UNDER an open leaf (the chat header's keys, the conversation, the Loops edge tab: it sits over the leaf's
+   * edge and comes after the composer in the document): out of the focus order while it is open
+   */
+  const under = (): HTMLElement[] => [...d.pane.querySelectorAll<HTMLElement>(':scope > .pane-head, :scope > .feed > .viewport, :scope > .feed > .empty, :scope > .feed > .jump, :scope > .lp-edgetab:not(.bd-edgetab)')];
   const cover = (on: boolean): void => {
     for (const e of under()) e.inert = on;
   };
 
   let cur: { session: DimSession; leaf: BoardLeaf; off: Array<() => void>; how: BoardOpenedHow } | null = null;
   let opener: HTMLElement | null = null;
+  /** #gui-board-turn: what show chat does once its fold has taken the leaf away (focus into the chat) */
+  let afterShow: (() => void) | null = null;
   /** words being typed when the link went (page memory only) */
   let held: { dim: string; principal: string; words: string } | null = null;
   /** dimensions this page asked to open that were still opening when the link went: the list shows them */
@@ -115,7 +130,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     if (host.hidden) return;
     host.style.height = `${Math.max(0, Math.round(d.feed.getBoundingClientRect().bottom - d.pane.getBoundingClientRect().top))}px`;
   };
-  const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => (fit(), placeTab()));
+  const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => (fit(), placeTab(), d.turn?.()));
   ro?.observe(d.pane);
   ro?.observe(d.feed);
 
@@ -140,6 +155,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     d.pane.classList.toggle('bd-tab-on', show);
     d.pane.classList.toggle('bd-open', !!cur);
     cover(!!cur);
+    d.turn?.();
     if (show) {
       const title = a.last!.title || 'Untitled';
       tab.textContent = `${tabTitle(title)} · board`;
@@ -157,6 +173,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     leaf.setCheck(checkLine(s));
     leaf.el.dataset.words = words ? 'held' : '';
     if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
+  }
+  /** held still (link down, out of date) with words or unsaved changes: Esc from outside and show chat never fold it */
+  function keptOpen(): boolean {
+    if (!cur) return false;
+    const s = cur.session.status();
+    return (s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0);
   }
   /** Held words are dropped: the person is told, once, wherever it happens (never a silent loss). */
   function dropWords(say = true): boolean {
@@ -314,9 +336,16 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     }
     if (cur && cur.session === e.session && e.why !== 'link') {
       const back = opener;
+      const then = afterShow;
       opener = null;
+      afterShow = null;
       drop();
-      if (e.why === 'fold') (back && back.isConnected ? back : d.fallbackFocus())?.focus();
+      if (e.why !== 'fold') return;
+      if (then) return then();
+      // focus goes back to what opened the leaf ONLY when the fold took it (it was in the leaf): an Esc from the
+      // composer or a press in the turn strip leaves focus where the person has it
+      const a = document.activeElement;
+      if (!a || a === document.body || !a.isConnected || host.contains(a)) (back && back.isConnected ? back : d.fallbackFocus())?.focus();
     } else if (cur && cur.session === e.session && !e.session.openedOk) drop();
   });
 
@@ -374,14 +403,26 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     escape(event) {
       if (!cur || cur.leaf.el.contains(document.activeElement)) return false;
+      // an untrusted Esc folds nothing and is told nothing (Aegis N2): checked BEFORE the held line is said
+      if (event.isTrusted !== true) return true;
       // Esc from OUTSIDE the leaf never folds a board held still that is holding words or has unsaved changes: a
       // press on the Reconnect scrim takes focus out of the field, and the next Esc must not throw the words away
-      const s = cur.session.status();
       // (Mika 1: nor is it met with silence: the leaf says its held line again, as an Esc inside it does)
-      if ((s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0)) return cur.leaf.sayHeld(), true;
+      if (keptOpen()) return cur.leaf.sayHeld(), true;
       void fold(event);
       return true;
     },
+    showChat(event, then) {
+      // trusted first: a synthetic press neither folds nor says the held line (G-GUI-04, Aegis N2)
+      if (event.isTrusted !== true || !cur) return;
+      if (keptOpen()) return cur.leaf.sayHeld();
+      afterShow = then;
+      void fold(event).finally(() => {
+        // the fold did not take the leaf (a refused close): nothing waits to run on a later fold
+        if (afterShow === then) afterShow = null;
+      });
+    },
+    kept: keptOpen,
     sessionChanged() {
       const c = cur;
       if (c && c.session.hsid !== d.focused()) {
