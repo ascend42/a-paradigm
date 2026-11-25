@@ -986,6 +986,9 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
   if (!isModId(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod id', { name: String(name) });
   const rec = readStaged(home, name, cardId);
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
+  // a card an earlier kernel staged for a build retired since: said plainly, BEFORE the snapshot is re-read (its tier
+  // no longer derives first-party, so the re-read would refuse with a reason that hides the real one)
+  if (RETIRED_FIRST_PARTY_PINS.has(rec.detail.packageHash)) refuseRetired(name, rec.detail.packageHash, 'decide', noEvents);
   const dir = pinnedDir(home, name, rec.detail.packageHash);
   if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
   const { read, tier } = snapshotRead(home, name, rec.detail.packageHash, rec.detail.source);
@@ -1054,6 +1057,19 @@ export interface PrepareOptions {
   now?: Date;
   /** Aegis C1b: the card's detail.rootRows; the built rows (createdAt dropped) must deep-equal them, in order */
   expectedRootRows?: readonly unknown[];
+}
+
+/**
+ * Close a PENDING staged card whose tree is a retired first-party build: the record is rewritten `expired`, with no
+ * decision (nobody decided it), so the pickup never lists it again and no approvable file for a retired build stays
+ * on disk. Returns whether it closed one. Anything else (no record, already decided, not retired) is left alone.
+ */
+export function expireRetiredStaged(home: string, name: string, cardId: string): boolean {
+  if (typeof cardId !== 'string' || !CARD_ID.test(cardId) || !isModId(name)) return false;
+  const rec = readStaged(home, name, cardId);
+  if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name || rec.card.state !== 'pending' || !RETIRED_FIRST_PARTY_PINS.has(rec.detail.packageHash)) return false;
+  writeStaged(home, { ...rec, card: { ...rec.card, state: 'expired' } });
+  return true;
 }
 
 /**

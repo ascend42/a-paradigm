@@ -49,7 +49,7 @@ import type { RootAuthority } from '../identity/root-authority.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { raiseInstallCard } from '../broker/install-card.js';
 import type { ManifestEventSink } from '../manifest/refusal.js';
-import { STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js';
+import { expireRetiredStaged, STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js';
 import { appendSignedGrantRows, buildGrantRow, effectiveInstall, readGrants, type GrantRow, type ResolvedGrants } from '../manifest/grants.js';
 import { beginRootDecision } from '../manifest/grant-lock.js';
 import { intentOf } from '../identity/decision-batch.js';
@@ -496,6 +496,14 @@ export class StagedCardPickup {
         if (this.#refused.size >= MAX_PICKUP_REFUSED) this.#refused.delete(this.#refused.keys().next().value!);
         this.#refused.set(p.cardId, p.stamp);
         const code = err instanceof ManifestRefusal ? err.manifestCode : 'REFUSED';
+        // a card for a RETIRED first-party build can never be approved: close its staged record, so none stays pending
+        if (err instanceof ManifestRefusal && err.detail.why === 'retired') {
+          try {
+            expireRetiredStaged(home, p.name, p.cardId);
+          } catch {
+            // the refusal stands either way; a record that cannot be rewritten is skipped by its stamp
+          }
+        }
         this.#refuseFold.hit(`${p.name}|${code}`, { name: p.name, cardId: p.cardId, code, via: 'pickup', reason: (err as Error)?.message?.slice(0, 200) ?? 'refused' });
       }
     }
