@@ -87,6 +87,12 @@ export type ToolEffect = (typeof TOOL_EFFECTS)[number];
  */
 export const COMMAND_EFFECTS = ['read', 'write'] as const satisfies readonly ToolEffect[];
 export type CommandEffect = (typeof COMMAND_EFFECTS)[number];
+/**
+ * The widening key of a command that declares NO `effects` (`cmd:<id>:*default`; `*` is in no effect name). It
+ * stands for "the union of the mod's tool effects", today's meaning of the absent field. S1.4 P3 makes absent mean
+ * `read` and removes this key with that change: from then on dropping the field only narrows.
+ */
+export const COMMAND_DEFAULT_EFFECTS_KEY = '*default';
 
 /** §12.2 reserved decision keys (and the digits): never bindable by a mod (`G-MOD-06`). */
 export const RESERVED_DECISION_KEYS = Object.freeze(['y', 'n', 'a', 'd', 'enter', 'esc', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
@@ -843,8 +849,13 @@ function surface(m: ManifestV2 | null): Record<WideningField, Set<string>> {
   return {
     // S1.4 (Aegis A7): a command's DECLARED effects are part of the surface as `cmd:<id>:<effect>`, so a tree that
     // adds `write` to a command raises an Update card that shows it. A tool key has one colon and a command key two
-    // (neither a tool name nor a command id can hold one), so the two never collide.
-    effects: new Set([...(p.tools ?? []).flatMap((t) => t.effects.map((e) => `${t.name}:${e}`)), ...(p.commands ?? []).flatMap((c) => (c.effects ?? []).map((e) => `cmd:${c.id}:${e}`))]),
+    // (neither a tool name nor a command id can hold one), so the two never collide. A command with NO `effects`
+    // field is keyed COMMAND_DEFAULT_EFFECTS_KEY: while absent means the union of the tool effects, a tree that
+    // REMOVES the field widens the command, and this key makes that removal an addition the card shows.
+    effects: new Set([
+      ...(p.tools ?? []).flatMap((t) => t.effects.map((e) => `${t.name}:${e}`)),
+      ...(p.commands ?? []).flatMap((c) => (Object.hasOwn(c, 'effects') && Array.isArray(c.effects) ? c.effects.map((e) => `cmd:${c.id}:${e}`) : [`cmd:${c.id}:${COMMAND_DEFAULT_EFFECTS_KEY}`])),
+    ]),
     egress: new Set(Array.isArray(eg) ? eg.map((e) => checkEgressHost(e.host).host) : []),
     capabilities: new Set(m?.requires?.capabilities ?? []),
     events: new Set(p.events ?? []),
