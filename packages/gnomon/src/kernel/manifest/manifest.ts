@@ -841,7 +841,10 @@ function surface(m: ManifestV2 | null): Record<WideningField, Set<string>> {
   const p = m?.provides ?? {};
   const eg = m?.requires?.egress;
   return {
-    effects: new Set((p.tools ?? []).flatMap((t) => t.effects.map((e) => `${t.name}:${e}`))),
+    // S1.4 (Aegis A7): a command's DECLARED effects are part of the surface as `cmd:<id>:<effect>`, so a tree that
+    // adds `write` to a command raises an Update card that shows it. A tool key has one colon and a command key two
+    // (neither a tool name nor a command id can hold one), so the two never collide.
+    effects: new Set([...(p.tools ?? []).flatMap((t) => t.effects.map((e) => `${t.name}:${e}`)), ...(p.commands ?? []).flatMap((c) => (c.effects ?? []).map((e) => `cmd:${c.id}:${e}`))]),
     egress: new Set(Array.isArray(eg) ? eg.map((e) => checkEgressHost(e.host).host) : []),
     capabilities: new Set(m?.requires?.capabilities ?? []),
     events: new Set(p.events ?? []),

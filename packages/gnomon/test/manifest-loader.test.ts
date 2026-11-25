@@ -945,6 +945,56 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     expect(rec.detail.mcp).toEqual(['gm_acme_diff-lens: node srv.js']); // S0b: the kernel derives the server name
   });
 
+  it('S1.4 (Aegis A7): a tree that adds write to a command raises an Update card that shows cmd:<id>:write', () => {
+    const home = tmp();
+    const auth = root();
+    const declared = (effects: Array<'read' | 'write'>): ManifestV2 => {
+      const m = baseManifest();
+      m.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects }];
+      return m;
+    };
+    const src = writeMod(path.join(tmp(), 'diff-lens'), declared(['read']));
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).state).toBe('ready');
+    // the ONLY change is the command's effects: no tool, command id or capability is added
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(declared(['read', 'write']), null, 2));
+    const ev = events();
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
+    if (paused.state !== 'paused') throw new Error('expected paused');
+    expect(ev.kinds()).toEqual(['mod.paused', 'manifest.widened', 'manifest.staged']);
+    expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['effects']);
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
+    expect(rec.detail.widened).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
+    const texts = (rec.card.block.children as Array<{ text: string }>).map((c) => c.text);
+    // the long card, never the short "nothing widens" one
+    expect(texts.some((t) => t.includes('nothing widens'))).toBe(false);
+    expect(texts.find((t) => t.startsWith('WIDENED'))).toBe('WIDENED: effects +cmd:lens.toggle:write');
+    // the card's effects line names write as well, though no tool declares it
+    expect(texts.find((t) => t.startsWith('effects:'))).toMatch(/^effects: read, write · /);
+  });
+
+  it('S1.4: detectWidening keys a command effect as cmd:<id>:<effect>; a removal, and a command with no effects field, add nothing', () => {
+    const a = baseManifest();
+    const cmd = (effects?: Array<'read' | 'write'>): ManifestV2 => {
+      const m = baseManifest();
+      m.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', ...(effects ? { effects } : {}) }];
+      return m;
+    };
+    expect(detectWidening(a, cmd())).toEqual([]);
+    expect(detectWidening(a, cmd(['read']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:read'] }]);
+    expect(detectWidening(cmd(['read']), cmd(['read', 'write']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
+    expect(detectWidening(cmd(['read', 'write']), cmd(['read']))).toEqual([]);
+    expect(detectWidening(cmd(['read', 'write']), cmd())).toEqual([]);
+    // a first install lists the command entries beside the tool entries
+    expect(detectWidening(null, cmd(['read', 'write'])).find((w) => w.field === 'effects')!.added).toEqual(['cmd:lens.toggle:read', 'cmd:lens.toggle:write', 'lens.diff:read']);
+    // a tool named `cmd` keeps its own one-colon key and never reads as a command entry
+    const t = baseManifest();
+    t.provides!.tools!.push({ name: 'cmd', effects: ['write'] });
+    expect(detectWidening(a, t).find((w) => w.field === 'effects')!.added).toEqual(['cmd:write']);
+  });
+
   it('detectWidening reports additions by field and ignores removals', () => {
     const a = baseManifest();
     const b = baseManifest({ requires: { capabilities: ['log.append:modns.acme.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
