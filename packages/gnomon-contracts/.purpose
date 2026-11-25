@@ -389,7 +389,13 @@ components:
       row at or below the seq already folded for its hsid changes nothing, and a
       row with no integer seq is skipped; dimMayDraw does not read ended (the
       caller does); the map is never carried through a plain object keyed by
-      hsid. DEFERRED, tracked here: the grant map is not bounded by this fold
+      hsid. Last review round (Aegis N-b, N-c, N-d): foldDimGrants never
+      throws on a from that is no Map (it answers with an empty map) or on rows
+      that cannot be iterated; dimMayDraw reads a present but malformed entry,
+      and a grants value that is no Map, as may not draw; dimTextForScanS12 is
+      module-private; the 500 ms bound is also held for a 4,096-string op of
+      non-ASCII strings read in three texts each (measured 5.5 to 8.1 ms).
+      DEFERRED, tracked here: the grant map is not bounded by this fold
       (the mod refuses a grant for a session that is not attached).
     path: src/dim.ts
     type: module
