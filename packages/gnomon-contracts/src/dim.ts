@@ -686,8 +686,8 @@ export function dimTextForScan(s: string): string {
   return s.normalize('NFKD').replace(SCAN_STRIP, '').normalize('NFC');
 }
 
-/** The S1.2 scan text: NFKC, then controls, formats and line and paragraph separators removed. Still scanned. */
-export function dimTextForScanS12(s: string): string {
+/** The S1.2 scan text: NFKC, then controls, formats and line and paragraph separators removed. Still scanned. Module-private. */
+function dimTextForScanS12(s: string): string {
   return s.normalize('NFKC').replace(SCAN_STRIP_S12, '');
 }
 
@@ -1188,25 +1188,37 @@ function honouredGrant(row: DimRow, dim: string): { hsid: string; write: boolean
 /**
  * Fold grant rows of one dimension; `from` continues an earlier fold. The ONE grant fold: the dimension mod and
  * the page both call it, so what the page shows is what the mod enforces. Pure and tolerant: the input map is not
- * changed, rows of any other kind or dimension are skipped, and it never throws.
+ * changed, rows of any other kind or dimension are skipped, and it never throws: not on a malformed row, not on
+ * rows that cannot be iterated, and not on a `from` that is no Map, which is answered with an empty map.
  *  - `dim` must match DIM_ID_PATTERN; for any other value nothing is folded and a copy of `from` is returned.
  *  - The honoured row with the HIGHEST seq wins for an hsid. A row at or below the seq already folded for that
  *    hsid changes nothing, so a redelivered or re-read older row (a follow that reconnects, a page read twice)
  *    can never bring back a grant a later row revoked. A row with no integer seq is skipped.
  */
 export function foldDimGrants(rows: Iterable<DimRow>, dim: string, from: DimGrants = emptyDimGrants()): DimGrants {
-  const out = new Map(from);
+  let out: Map<string, DimGrant>;
+  try {
+    // a `from` that is not a Map of entries (a value rebuilt wrongly from a keyframe, null, a plain object) is
+    // not continued: the fold starts from nothing, and every session is back on its default until rows say more
+    out = from instanceof Map ? new Map(from) : new Map();
+  } catch {
+    out = new Map();
+  }
   if (typeof dim !== 'string' || !DIM_ID_PATTERN.test(dim)) return out;
-  for (const row of rows) {
-    try {
-      const g = honouredGrant(row, dim);
-      if (!g) continue;
-      const cur = out.get(g.hsid);
-      if (cur && g.seq <= cur.seq) continue;
-      out.set(g.hsid, { write: g.write, seq: g.seq });
-    } catch {
-      // a malformed row grants nothing
+  try {
+    for (const row of rows) {
+      try {
+        const g = honouredGrant(row, dim);
+        if (!g) continue;
+        const cur: unknown = out.get(g.hsid);
+        if (isPlainObject(cur) && Number.isSafeInteger(cur.seq) && g.seq <= (cur.seq as number)) continue;
+        out.set(g.hsid, { write: g.write, seq: g.seq });
+      } catch {
+        // a malformed row grants nothing
+      }
     }
+  } catch {
+    // `rows` that cannot be iterated fold nothing more
   }
   return out;
 }
@@ -1226,8 +1238,11 @@ export function dimGrantDefault(state: DimState, hsid: string): boolean {
  */
 export function dimMayDraw(state: DimState, grants: DimGrants, hsid: string): boolean {
   if (!NON_EMPTY(hsid) || !state.attached.includes(hsid)) return false;
-  const g = grants.get(hsid);
-  return g ? g.write === true : dimGrantDefault(state, hsid);
+  // a `grants` that is not a Map vouches for nothing, and an entry that is present but malformed (not an object, or
+  // a `write` that is not exactly true) means "may not draw": only a missing entry falls back to the default
+  if (!(grants instanceof Map)) return false;
+  const g: unknown = grants.get(hsid);
+  return g !== undefined ? isPlainObject(g) && g.write === true : dimGrantDefault(state, hsid);
 }
 
 /* ── the published hash vector ────────────────────────────────────────────── */

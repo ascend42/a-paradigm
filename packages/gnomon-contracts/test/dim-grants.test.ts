@@ -188,4 +188,34 @@ describe('the write-grant fold', () => {
     expect([...both].sort()).toEqual([...foldDimGrants(rows, DIM)].sort());
     expect(flat(both)).toEqual([[A, true], [B, true]]);
   });
+
+  it('a malformed from is not continued and never throws: the fold starts from an empty map', () => {
+    const rows = [grant(B, true)];
+    const bads: unknown[] = [null, 7, 'grants', {}, { 'hsid-a': { write: false, seq: 1 } }, [[A, { write: false, seq: 1 }]], new Set([A]), Object.create(null)];
+    for (const [n, bad] of bads.entries()) {
+      const label = `from #${n}`;
+      let out: unknown;
+      expect(() => (out = foldDimGrants(rows, DIM, bad as never)), label).not.toThrow();
+      expect(out).toBeInstanceOf(Map);
+      expect([...(out as Map<string, unknown>).keys()], label).toEqual([B]);
+      expect((foldDimGrants([], DIM, bad as never) as Map<string, unknown>).size, label).toBe(0);
+    }
+    // rows that cannot be iterated fold nothing and do not throw
+    for (const badRows of [null, 7, {}]) expect(foldDimGrants(badRows as never, DIM).size).toBe(0);
+    // a Map holding a malformed entry is continued, and a real row replaces that entry
+    const odd = new Map<string, unknown>([[B, 'yes'], [A, null]]) as never;
+    expect(foldDimGrants([grant(B, true)], DIM, odd).get(B)).toMatchObject({ write: true });
+  });
+
+  it('a present but malformed entry means may not draw; only a missing entry falls back to the default', () => {
+    // A is the first attached session: its default is on, so a malformed entry must turn it OFF, not leave the default
+    for (const bad of [null, 0, '', 'true', true, 1, [], { write: 'true' }, { write: 1 }, { seq: 5 }, [true]]) {
+      expect(dimMayDraw(state, new Map([[A, bad]]) as never, A), JSON.stringify(bad)).toBe(false);
+      expect(dimMayDraw(state, new Map([[B, bad]]) as never, B), JSON.stringify(bad)).toBe(false);
+    }
+    expect(dimMayDraw(state, new Map([[A, undefined]]) as never, A)).toBe(true);
+    expect(dimMayDraw(state, new Map([[B, { write: true, seq: 1 }]]), B)).toBe(true);
+    // a grants value that is not a Map vouches for nothing
+    for (const bad of [null, undefined, {}, { [A]: { write: true, seq: 1 } }, 'x']) expect(dimMayDraw(state, bad as never, A), String(bad)).toBe(false);
+  });
 });
