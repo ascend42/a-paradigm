@@ -137,15 +137,26 @@ jobs:
       # accepted; a fail (exit 1) or a harness error fails the step. On macOS
       # P12 itself fails when it has no WKWebView row (the wrapper's engine),
       # and the step checks the written result for that row as well.
-      - name: Probes P09, P12 (browser engines under the §11.2 CSP)
+      - name: Probe P09 (Ed25519 in browser engines under the §11.2 CSP)
         shell: bash
         run: |
+          code=0
+          node packages/gnomon/probes/run.mjs p09-ed25519-matrix --timeout 900000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then exit 1; fi
+
+      # P12's own budget (T-2026-11-25-002): 3 runs x 2 pages in each of 4
+      # engines took 11 to 14 min on macos-15, against the 15 min it shared
+      # with P09. A page that misses its report is retried once per engine,
+      # which can add up to ~2 min an engine; 30 min covers that with room,
+      # and the run count and every check stay as they are.
+      - name: Probe P12 (the board under the §11.2 CSP)
+        shell: bash
+        timeout-minutes: 35
+        run: |
           status=0
-          for id in p09-ed25519-matrix p12-excalidraw-csp; do
-            code=0
-            node packages/gnomon/probes/run.mjs "$id" --timeout 900000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
-            if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then status=1; fi
-          done
+          code=0
+          node packages/gnomon/probes/run.mjs p12-excalidraw-csp --timeout 1800000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then status=1; fi
           if [ "$RUNNER_OS" = "macOS" ]; then
             node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const w=r.evidence&&r.evidence.engines&&r.evidence.engines.wkwebview;if(!w||!w.clean||w.mountedRuns!==w.runs){console.error("P12: no clean WKWebView row on macOS");process.exit(1)}' "$RUNNER_TEMP/probe-results/p12-excalidraw-csp.darwin.json" || status=1
           fi
