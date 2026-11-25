@@ -23,11 +23,18 @@
  *  - the tool carries a manifest `schema` of type `object` whose `description` is a string of at most 1,024
  *    characters with no control or format character, and whose canonical JSON is at most 8 KiB (Aegis M6);
  *  - the tool name is declared by one listed mod only (a name two mods declare is listed for neither).
+ *
+ * ARGUMENTS (Aegis A1; checkBridgeArguments). Of `params` only the OWN keys `name` and `arguments` are read.
+ * `arguments` is refused BEFORE the mod is reached when it is not a plain object, nests deeper than 32, holds more
+ * than 8,192 keys and elements, holds an own `__proto__`, `constructor` or `prototype` key at any depth, or is over
+ * 128 KiB as canonical JSON (the session line cap is 4 MiB, so this cap is the one that binds). The walk is the
+ * mod host's own (bridge.ts walkPayloadKeys): iterative, own keys only, bounded before anything is copied.
  */
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { HISTORICAL_FIRST_PARTY_PINS } from '../manifest/grants.js';
 import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../manifest/install.js';
 import { GNOMON_VERSION } from '../../version.js';
+import { walkPayloadKeys } from './bridge.js';
 
 export const MOD_BRIDGE_SERVER = 'gnomon-mods';
 /** The session mcp.json entry of the bridge. Nothing else is ever written for it: no env, no path, no token. */
@@ -166,7 +173,25 @@ export interface BridgePorts {
 export const MOD_BRIDGE_SENTENCES = Object.freeze({
   notRunning: 'The session is not running.',
   notBuilt: 'Refused: this tool is not available yet.',
+  arguments: 'Refused: the arguments are not an object, or are too large, too deep or hold a reserved key.',
 });
+
+/**
+ * Aegis A1: may this `arguments` value reach a mod? Absent ⇒ `{}`. The walk runs first (bounded whatever the model
+ * sent), the canonical size after it. Returns the value to send, or null (refused; nothing of it is echoed).
+ */
+export function checkBridgeArguments(params: Record<string, unknown>): Record<string, unknown> | null {
+  const args = Object.hasOwn(params, 'arguments') ? params.arguments : {};
+  if (args === undefined || args === null) return {};
+  if (!isObj(args)) return null;
+  if (walkPayloadKeys(args, { maxDepth: MOD_BRIDGE_LIMITS.argumentDepth, maxVisited: MOD_BRIDGE_LIMITS.argumentVisited }) !== null) return null;
+  try {
+    if (Buffer.byteLength(canonicalJson(args), 'utf8') > MOD_BRIDGE_LIMITS.argumentBytes) return null;
+  } catch {
+    return null;
+  }
+  return args;
+}
 
 type Answer = Record<string, unknown>;
 const text = (id: string | number, t: string, isError: boolean): Answer => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: t }], isError } });
@@ -174,7 +199,11 @@ const text = (id: string | number, t: string, isError: boolean): Answer => ({ js
 /** One `tools/call` for a listed tool, from a running session. Every path returns exactly one answer. */
 async function runCall(id: string | number, tool: BridgeTool, params: Record<string, unknown>, ports: BridgePorts, s: BridgeSession): Promise<Answer> {
   void tool;
-  void params;
+  const input = checkBridgeArguments(params);
+  if (input === null) {
+    ports.refused(s, 'arguments');
+    return text(id, MOD_BRIDGE_SENTENCES.arguments, true);
+  }
   ports.refused(s, 'not-built');
   return text(id, MOD_BRIDGE_SENTENCES.notBuilt, true);
 }
