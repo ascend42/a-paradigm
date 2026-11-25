@@ -124,7 +124,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
-    expect(f('untrusted-first')).toMatchObject({ open: false, rows: [], frames: 0 });
+    // Aegis N2: an untrusted press says nothing either (the hidden edge tab's synthetic click on a session with no
+    // board used to raise "This session has no board yet" before the trust check)
+    expect(f('untrusted-first')).toMatchObject({ open: false, rows: [], frames: 0, toasts: [] });
     expect(a.row).toMatchObject({ disabled: null, text: 'Open board' });
     expect(f('menu')).toMatchObject({ open: true, phase: 'open', rows: ['session.start:menu'], frames: 1 });
     expect(f('menu').line).toMatch(/opened here · \d\d:\d\d$/);
@@ -181,6 +183,32 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('folded').tab).toMatch(/· board$/);
   }, 120_000);
 
+  it('Aegis N1: after a Reconnect run from the palette (the old socket still open) the old socket feeds nothing: no row, no toast, no second follow', async () => {
+    // the first socket's own delivery, kept before the Reconnect gives the kernel a new connection; and every log.read
+    const KEEP = `(() => { const k = ${A}.kernel; k.__oldMsg = k.onMessage; k.__reads = 0; const send = k.send.bind(k); k.send = (s) => { if (String(s).includes('"log.read"')) k.__reads++; return send(s); }; return typeof k.__oldMsg; })()`;
+    // a kernel-written row the page would toast (a standing grant used), and the end of a follow page
+    const frame = (via: string, seq: string): string => `(() => { const k = ${A}.kernel; const base = k.rows.find((r) => r.view === 'full' && /\\/kernel$/.test(String(r.event.principal))); const seq = k.rows[k.rows.length - 1].seq + ${seq}; const event = { ...base.event, seq, at: new Date().toISOString(), kind: 'grant.standing.used', payload: { grantId: 'grant:probe-' + seq, tuple: 'voice-arm:allow', decision: 'allow' } }; delete event.session; delete event.scope; const say = ${via}; k.__readsBefore = k.__reads; say(JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'event', params: { row: { seq, view: 'full', event } } })); if (${seq} === 1) say(JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'event', params: { end: { since: seq } } })); return seq; })()`;
+    const said = { read: `({ toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent).filter((t) => /today.s grant/.test(t)), reads: ${A}.kernel.__reads - ${A}.kernel.__readsBefore, reconnect: !document.getElementById('reconnect').hidden })`, as: '' };
+    const a = await real([
+      { read: KEEP, as: 'kept' },
+      { key: 'k', meta: true }, { wait: 200 }, ...type('reconnect'), { wait: 200 }, { key: 'Enter' }, { wait: 2500 },
+      { read: `({ reads: ${A}.kernel.__reads, reconnect: !document.getElementById('reconnect').hidden, live: ${A}.kernel.onMessage !== ${A}.kernel.__oldMsg })`, as: 'back' },
+      { read: frame(`k.__oldMsg`, '1'), as: 'oldSeq' }, { wait: 900 }, { ...said, as: 'old' },
+      // the control: the same kind of row on the LIVE socket is applied and toasted
+      { read: frame(`k.onMessage`, '2'), as: 'liveSeq' }, { wait: 900 }, { ...said, as: 'live' },
+    ]);
+    if (process.env.GNOMON_DEBUG) console.log(JSON.stringify(a, null, 1));
+    expect(a.errors).toEqual([]);
+    expect(a.kept).toBe('function');
+    // the Reconnect made a second connection live and read the log on it (its page, then the follow)
+    expect(a.back).toMatchObject({ reconnect: false, live: true });
+    expect((a.back as { reads: number }).reads).toBeGreaterThan(0);
+    // the old socket's row and its end of page: nothing applied, nothing said, no second follow over it
+    expect(a.old).toEqual({ toasts: [], reads: 0, reconnect: false });
+    expect(a.live).toMatchObject({ reconnect: false });
+    expect((a.live as { toasts: string[] }).toasts).toHaveLength(1);
+  }, 120_000);
+
   it('Aegis H1: a block button naming board.open or dimensions.list does nothing and sends nothing on a real press', async () => {
     const plant = (cmd: string): string => `(() => { const b = document.createElement('button'); b.type = 'button'; b.id = 'planted-' + ${JSON.stringify(cmd)}.replace('.', '-'); b.className = 'blk blk-button'; b.dataset.command = ${JSON.stringify(cmd)}; b.textContent = 'Allow'; document.getElementById('pinned').prepend(b); return b.id; })()`;
     const a = await real([
@@ -204,7 +232,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
         ...typeBoard, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('held'),
         { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'),
         { read: `(() => { const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; return { card: r(document.querySelector('#reconnect .sheet-card')), field: r(document.querySelector('.bd-host .bd-board textarea')), line: r(document.querySelector('.bd-host .bd-keep')), stage: r(document.querySelector('.bd-host .bd-stage')) }; })()`, as: 'rects' },
-        { press: '#status-line' }, { wait: 200 }, facts('pressed'), { key: 'Escape' }, { wait: 500 }, facts('esc'),
+        { press: '#status-line' }, { wait: 200 }, facts('pressed'), { read: `(document.querySelector('.bd-host .bd-leaf [role="status"]').textContent = '', 1)`, as: 'hushed' },
+        { key: 'Escape' }, { wait: 500 }, facts('esc'), { read: `document.querySelector('.bd-host .bd-leaf [role="status"]').textContent`, as: 'said' },
       ],
       { shot: 'app-link-down' },
     );
@@ -215,6 +244,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('pressed').active).not.toMatch(/TEXTAREA/);
     // Esc from outside the leaf: the board stays, the words stay, nothing is said lost because nothing was
     expect(f('esc')).toMatchObject({ open: true, field: 'held', line: KEEP_COPY.wordsHeld, toasts: [] });
+    // Mika 1: and the Esc is not met with silence: the leaf says its held line again (as an Esc inside it does)
+    expect(a.said).toBe(KEEP_COPY.wordsHeld);
     type R = { x: number; y: number; r: number; b: number };
     const r = a.rects as { card: R; field: R; line: R; stage: R };
     const meets = (p: R, q: R): boolean => p.x < q.r && q.x < p.r && p.y < q.b && q.y < p.b;
@@ -276,13 +307,16 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
-    // the send key's own click opened it (a pointer entry), nothing went to the agent, the composer is empty
-    expect(f('sent')).toMatchObject({ open: true, phase: 'open', rows: ['session.start:menu'] });
+    // the send key's own click opened it, recorded as typed (`command`, as Enter is: the person typed /board);
+    // nothing went to the agent, the composer is empty
+    expect(f('sent')).toMatchObject({ open: true, phase: 'open', rows: ['session.start:command'] });
     expect(a.afterSend).toEqual({ sent: [], composer: '' });
     // the log holds the session's whole name, not the display cut with its …
     expect((a.titles as string[])[0]).toBe('Totals are off by a cent on 3-line orders. Find out why.');
     // a title with a zero-width joiner is cleaned page-side and accepted
     expect(f('emojiOpen')).toMatchObject({ open: true, phase: 'open', title: '👩👩👧 plan' });
+    // and it is SENT cleaned: the log holds the title the leaf shows
+    expect((a.titles as string[])[1]).toBe('👩👩👧 plan');
     // a title the mod refuses: no leaf is left up, the line says what is wrong with the TITLE, no row was written
     expect(f('refused').open).toBe(false);
     expect(f('refused').toasts.join(' | ')).toContain('That title looks like a credential · use another');
@@ -292,15 +326,21 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
   it('with a board open nothing under the leaf takes focus: the chat header keys and the conversation are inert, and the leaf comes before the composer', async () => {
     const STATE = `(() => { const p = document.getElementById('pane-transcript'); const host = p.querySelector('.bd-host'); return { head: p.querySelector(':scope > .pane-head').inert, viewport: document.getElementById('viewport').inert, before: !!(host.compareDocumentPosition(document.getElementById('composer')) & Node.DOCUMENT_POSITION_FOLLOWING), pinnedAfter: !!(host.compareDocumentPosition(document.getElementById('pinned')) & Node.DOCUMENT_POSITION_FOLLOWING) }; })()`;
     const WHERE = `(() => { const e = document.activeElement; return e ? (e.closest('.bd-host') ? 'leaf' : e.closest('#pane-transcript > .pane-head') ? 'UNDER:head' : e.closest('#viewport') ? 'UNDER:viewport' : e.closest('#pinned') ? 'pinned' : e.closest('#composer') ? 'composer' : e.closest('#pane-transcript') ? 'pane:' + (e.id || e.className) : 'elsewhere') : 'none'; })()`;
+    // the backward walk starts on the first stop after the leaf (a pinned card's key): from the composer's field it
+    // could not start, as Shift+Tab there cycles the run mode (§11.5) and never moves focus
+    const FROM_PINNED = `(() => { const e = document.querySelector('#pinned .card button:not([disabled]), #pinned .card [tabindex="0"]'); if (!e) return null; e.focus(); return document.activeElement === e ? (e.dataset.decision || e.id || e.className) : null; })()`;
     const walk = Array.from({ length: 14 }, (_, i) => [{ key: 'Tab', shift: true, settle: 60 }, { read: WHERE, as: `t${i}` }]).flat();
     const forward = Array.from({ length: 16 }, (_, i) => [{ key: 'Tab', settle: 60 }, { read: WHERE, as: `f${i}` }]).flat();
-    const a = await real([{ read: STATE, as: 'closed' }, ...typeBoard, { read: STATE, as: 'open' }, { press: '.bd-host .bd-head .spacer' }, ...forward, { press: '#composer-text' }, ...walk, ...foldByEsc, facts('folded'), { read: STATE, as: 'after' }]);
+    const a = await real([{ read: STATE, as: 'closed' }, ...typeBoard, { read: STATE, as: 'open' }, { press: '.bd-host .bd-head .spacer' }, ...forward, { read: FROM_PINNED, as: 'from' }, ...walk, ...foldByEsc, facts('folded'), { read: STATE, as: 'after' }]);
     expect(a.errors).toEqual([]);
     expect(a.closed).toMatchObject({ head: false, viewport: false, before: true, pinnedAfter: true });
     expect(a.open).toMatchObject({ head: true, viewport: true });
     const stops = Array.from({ length: 14 }, (_, i) => a[`t${i}`] as string);
-    // Shift+Tab back from the composer: through the pinned cards into the leaf, never onto something under it
+    // Shift+Tab back from the pinned card: into the leaf, never onto something under it
+    expect(a.from, 'a pinned card key to start the backward walk from').not.toBeNull();
+    expect(stops[0]).toBe('leaf');
     expect(stops.filter((s) => s.startsWith('UNDER'))).toEqual([]);
+    expect(stops, `the backward walk: ${stops.join(' ')}`).toContain('leaf');
     // Tab forward from the leaf's head: the leaf's own stops, then the pinned cards or the composer, never under it
     const fwd = Array.from({ length: 16 }, (_, i) => a[`f${i}`] as string);
     expect(fwd.filter((s) => s.startsWith('UNDER'))).toEqual([]);
@@ -343,15 +383,18 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
 
   it('Probe: a synthetic click or Enter on the palette row "Open board" and on a /boards row opens nothing; a row of another session attaches then opens on ONE stamp', async () => {
     const synth = `(() => { const i = document.getElementById('palette-input'); const row = document.querySelector('#palette-list .pal-row.sel') || document.querySelector('#palette-list .pal-row'); const text = row ? row.textContent : null; if (row) row.click(); i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })); return text; })()`;
-    const other = `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); idle.click(); return idle.dataset.hsid; })()`;
+    const tagIdle = `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); idle.dataset.probeIdle = '1'; return idle.dataset.hsid; })()`;
     const a = await real([
       // the palette's own row, untrusted
       { key: 'k', meta: true }, { wait: 200 }, ...type('open board'), { wait: 200 }, { read: synth, as: 'palRow' }, { wait: 600 }, facts('palette'), { key: 'Escape' }, { key: 'Escape' },
       // a dimension of this session, folded; then its /boards row, untrusted
       ...typeBoard, ...foldByEsc, { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { wait: 400 },
       { read: `document.getElementById('palette-input').placeholder`, as: 'placeholder' }, { read: synth, as: 'listRow' }, { wait: 600 }, facts('list'), { key: 'Escape' }, { key: 'Escape' }, { wait: 200 },
-      // another session: its own board (so its repo is known), folded; then the FIRST session's row from /boards
-      { read: other, as: 'hsid2' }, { wait: 400 }, ...typeBoard, ...foldByEsc, facts('second'),
+      // another session, by a real press on its row: with no board yet its repo is not known, so /boards lists nothing
+      { read: tagIdle, as: 'hsid2' }, { press: '#session-list [data-probe-idle]' }, { wait: 400 },
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { wait: 400 }, { read: `({ head: document.querySelector('#palette-list .menu-h')?.textContent ?? null, open: !document.getElementById('palette').hidden, rows: [...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent) })`, as: 'unknownRows' }, { key: 'Escape' }, { key: 'Escape' }, { wait: 200 },
+      // its own board (so its repo is known), folded; then the FIRST session's row from /boards
+      ...typeBoard, ...foldByEsc, facts('second'),
       { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { wait: 400 }, { read: `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent)`, as: 'rows' },
       ...type('Totals'), { wait: 200 }, { read: `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent)`, as: 'filtered' }, { key: 'Enter' }, { wait: 2500 }, facts('attached'),
       { read: `${A}.kernel.__g`, as: 'stamps' },
@@ -363,6 +406,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(a.placeholder).toBe('find a dimension');
     expect(String(a.listRow)).toMatch(/^Totals are off/);
     expect(f('list')).toMatchObject({ open: false, frames: 2 });
+    // the second session, before it has a board of its own: its repo is unknown, and no other repo's board is listed
+    expect(a.unknownRows).toMatchObject({ open: true, head: 'Dimensions' });
+    expect((a.unknownRows as { rows: string[] }).rows).toEqual([]);
     // the second session lists both dimensions of the repo; the first session's says it is not this session's yet
     expect(a.rows as string[]).toHaveLength(2);
     expect((a.filtered as string[])[0]).toMatch(/^Totals are off.*not this session’s yet$/);

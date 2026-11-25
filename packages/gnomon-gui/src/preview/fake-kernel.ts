@@ -303,8 +303,11 @@ export function fakeWebSocketClass(make: (url: string) => FakeKernel): new (url:
     onclose: ((e: { code: number }) => void) | null = null;
     onerror: (() => void) | null = null;
     readonly #k: FakeKernel;
+    /** the kernel's connection this socket is (a reconnect gives the SAME kernel a new one) */
+    readonly #conn: string;
     constructor(url: string) {
       this.#k = make(url);
+      this.#conn = this.#k.connId;
       this.#k.onMessage = (data) => this.onmessage?.({ data });
       this.#k.onClose = (code) => {
         this.readyState = 3;
@@ -319,6 +322,12 @@ export function fakeWebSocketClass(make: (url: string) => FakeKernel): new (url:
       this.#k.send(s);
     }
     close(): void {
+      // a socket a reconnect replaced closes by itself: the kernel's live connection is another one (Aegis N1)
+      if (this.#conn !== this.#k.connId) {
+        if (this.readyState === 3) return;
+        this.readyState = 3;
+        return void setTimeout(() => this.onclose?.({ code: 1000 }), 0);
+      }
       this.#k.close();
     }
   };

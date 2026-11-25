@@ -53,8 +53,8 @@ export interface BoardDockDeps {
 }
 
 export interface BoardDock {
-  /** `/board` and `/board <title>`, on the key that ran it */
-  command(arg: string, event: Event): void;
+  /** `/board` and `/board <title>`, on the key that ran it (`typed`: the send key's click on a typed command) */
+  command(arg: string, event: Event, typed?: boolean): void;
   /** the ⋯ menu's "Open board" row and the edge tab */
   menu(event: Event): void;
   /** ⌥B: folds the open board, or reopens the one this session has. True when it did either. */
@@ -63,7 +63,7 @@ export interface BoardDock {
   rows(): DimensionRow[];
   /** a press on a row of the Dimensions list */
   choose(dim: string, event: Event): void;
-  /** Esc from outside the leaf: folds an open board. True when one was open. */
+  /** Esc from outside the leaf: folds an open board, or says the held line of one it must not fold. True when one was open. */
   escape(event: Event): boolean;
   /** the app focused another session (or none) */
   sessionChanged(): void;
@@ -320,9 +320,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     } else if (cur && cur.session === e.session && !e.session.openedOk) drop();
   });
 
-  function carry(plan: BoardPlan, event: Event, altB = false): void {
+  function carry(plan: BoardPlan, event: Event, altB = false, typed = false): void {
+    if (event.isTrusted !== true) return; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
     if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info');
-    if (event.isTrusted !== true) return; // G-GUI-04: a board opens only on a person's own event
     const hsid = d.focused();
     if (!hsid) return;
     if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn');
@@ -334,7 +334,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       drop();
       if (pending > 0) d.say(pending > 1 ? `${pending} changes on the other board weren’t saved` : 'One change on the other board wasn’t saved', 'warn');
     }
-    const how = openedHowOf(event, altB);
+    const how = openedHowOf(event, altB, typed);
     const pend = opening.get(plan.dim);
     const fresh = plan.type === 'new' ? { title: plan.title, titleFrom: plan.titleFrom } : pend && pend.title && !store.has(plan.dim) ? { title: pend.title, titleFrom: pend.titleFrom ?? ('session' as const) } : null;
     opening.delete(plan.dim);
@@ -349,7 +349,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   tab.addEventListener('click', (e) => carry(planBoardKey(ask()), e));
 
   return {
-    command: (arg, event) => carry(planBoardCommand(ask(), arg), event),
+    command: (arg, event, typed = false) => carry(planBoardCommand(ask(), arg), event, false, typed),
     menu: (event) => carry(planBoardMenu(ask()), event),
     key(event) {
       // G-DDL-08: while a card has the keys, ⌥B changes nothing on an open board (no fold, nothing sent)
@@ -377,7 +377,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       // Esc from OUTSIDE the leaf never folds a board held still that is holding words or has unsaved changes: a
       // press on the Reconnect scrim takes focus out of the field, and the next Esc must not throw the words away
       const s = cur.session.status();
-      if ((s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0)) return false;
+      // (Mika 1: nor is it met with silence: the leaf says its held line again, as an Esc inside it does)
+      if ((s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0)) return cur.leaf.sayHeld(), true;
       void fold(event);
       return true;
     },

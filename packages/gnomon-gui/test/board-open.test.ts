@@ -38,6 +38,8 @@ describe('#gui-board-open: how a board is opened', () => {
   });
   it('opened is `command` for a typed command and `menu` for a pointer entry and for ⌥B (no other value: the enum is hashed)', () => {
     expect([openedHowOf({ type: 'keydown' }), openedHowOf({ type: 'click' }), openedHowOf({ type: 'keydown' }, true), openedHowOf({ type: 'pointerup' })]).toEqual(['command', 'menu', 'menu', 'menu']);
+    // Mika 3: a typed `/board` sent with the send key's click is typed too (`command`, as its Enter is)
+    expect(openedHowOf({ type: 'click' }, false, true)).toBe('command');
   });
   it('the composer text: /board, /board <title>, /boards; nothing else', () => {
     expect(parseBoardCommand('/board')).toEqual({ cmd: 'board', arg: '' });

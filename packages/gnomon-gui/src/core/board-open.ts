@@ -12,8 +12,11 @@ import type { DimListing } from './dim-store.js';
 
 /** `command`: a typed command. `menu`: every pointer entry and ⌥B. (The enum is hashed: no other value.) */
 export type BoardOpenedHow = 'command' | 'menu';
-/** A press is `command` only when it is a key that typed or chose a command; a click, and ⌥B, are `menu`. */
-export const openedHowOf = (event: { type: string }, altB = false): BoardOpenedHow => (event.type === 'keydown' && !altB ? 'command' : 'menu');
+/**
+ * A press is `command` when it is a key that typed or chose a command, or the send key's click on a command the
+ * person typed (`typed`); any other click, and ⌥B, are `menu`.
+ */
+export const openedHowOf = (event: { type: string }, altB = false, typed = false): BoardOpenedHow => (typed || (event.type === 'keydown' && !altB) ? 'command' : 'menu');
 
 export type BoardPlan =
   /** nothing is sent: the line says why */

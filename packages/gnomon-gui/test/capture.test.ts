@@ -141,6 +141,10 @@ describe('V3: the status poll cadence and its lifecycle', () => {
     const stop = APP.slice(APP.indexOf('function stopStatusPolls('), APP.indexOf('function stopStatusPolls(') + 600);
     for (const t of ['clearInterval(speakPoll)', 'clearInterval(clientPoll)', 'clearInterval(enrolPoll)', 'clearTimeout(captureFlash)']) expect(stop).toContain(t);
   });
+  it('Aegis N1 (review of PR #119): only the live socket feeds the page, and a gui.reconnect closes the one it replaced (real engine: test/board-app.test.ts)', () => {
+    expect(APP).toMatch(/c\.onNotification\(\(method, params\) => \{\s*(\/\/[^\n]*\n\s*)*if \(client !== c\) return;\s*if \(method === 'gui\.resume'\)/);
+    expect(APP).toMatch(/const previous = client;\s*client = c;\s*if \(previous && previous !== c\) previous\.close\(\);/);
+  });
 });
 
 describe('the page', () => {

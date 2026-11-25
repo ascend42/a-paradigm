@@ -2008,7 +2008,12 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   }
   const previousPin = localStorage.getItem(PIN_KEY);
   if (pin.store) localStorage.setItem(PIN_KEY, pin.store);
+  // Aegis N1 (review of PR #119): a `gui.reconnect` attaches while the previous socket may still be open. Once this
+  // one is live the previous one is closed: it can feed nothing more. (Its close does not end the link: the onClose
+  // guard below is for the socket that is live.)
+  const previous = client;
   client = c;
+  if (previous && previous !== c) previous.close();
   session = out.session;
   if (verifyKey !== pin.verifyWith) verified.clear(); // I4: decisions verified under another key are not reused
   verifyKey = pin.verifyWith;
@@ -2037,6 +2042,8 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   // connection are in its title=, the Gnomon menu's who line and Settings → About (Kernel connection)
   setLink('connected', { principal: out.session.principal, connId: out.session.connId });
   c.onNotification((method, params) => {
+    // Aegis N1: only the LIVE socket feeds the page (no row into the stores, no follow restarted over an old socket)
+    if (client !== c) return;
     if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
     const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
@@ -4274,7 +4281,7 @@ function wire(): void {
     if (!e.isTrusted) return;
     ta.value = '';
     ta.dispatchEvent(new Event('input', { bubbles: true }));
-    if (bc.cmd === 'board') boardDock.command(bc.arg, e);
+    if (bc.cmd === 'board') boardDock.command(bc.arg, e, true); // typed, as with Enter (`command`)
     else openDimensions();
   });
   $('composer').addEventListener('submit', (e) => {

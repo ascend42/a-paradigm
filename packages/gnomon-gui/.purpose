@@ -744,6 +744,13 @@ components:
       Reconnect dialog sits at the foot of the window while a board is
       open (styles.css). No ambient event: every opener is handed the
       event of its own press (run(id, trusted, event)).
+      After the low items of that review: an untrusted press is told
+      nothing (the trust check comes before the no session / no board
+      line); an Esc from outside the leaf on a held-still board it must
+      not fold says the leaf's held line again (leaf.sayHeld), never
+      folds; a board folded on an earlier page reopens with "That board
+      was folded · opening it starts it again"; command(arg, event,
+      typed) records the send key's click on a typed /board as command.
       Not built here (P4b-2): the Dimensions list surface (/boards is the
       palette pattern for now), the keep line's final words, the working
       line under the leaf, G-DDL-08 across layout presets.
@@ -763,7 +770,8 @@ components:
       (a new one, titleFrom user), the menu row, ⌥B (reopens only), a row
       of the Dimensions list (attach then open when the session is not
       attached; an ended dimension says it reopens); opened is command for
-      a typed command and menu for a pointer or ⌥B entry. Also the
+      a typed command (the send key's click on a typed /board included)
+      and menu for a pointer or ⌥B entry. Also the
       Dimensions list rows (time from lastAt, ended, partly held, a
       dimension still opening at link loss) and followBoth, the ONE store
       followLog is handed: every row the GUI store takes also goes to the
@@ -1647,7 +1655,9 @@ components:
       filter); core/virtual.ts is the Fenwick-tree virtualized transcript
       with per-width height caches; core/commands.ts the palette, layout
       presets and theme/motion resolution. ui/app.ts wires the page: launch,
-      Reconnect, backlog paging + follow subscription, sessions sidebar with
+      Reconnect (only the LIVE socket feeds the page and ends the link; a
+      gui.reconnect closes the socket it replaced once the new one is live,
+      Aegis M2/N1 of PR #119), backlog paging + follow subscription, sessions sidebar with
       new session (session.open), composer (session.send), decision stack
       (approve on trusted gestures; an ask-user card with a verified
       `answer` key gets a picker built ONLY from askDetailOf: the card block's

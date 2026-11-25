@@ -143,7 +143,7 @@ export const KEEP_COPY = {
   reconnected: 'Reconnected',
   copyDown: 'Nothing was copied · copy it again once reconnected',
   foldedDown: 'Folded while reconnecting · unsaved changes were dropped',
-  reopens: 'That dimension had ended · opening it starts it again',
+  reopens: 'That board was folded · opening it starts it again',
   noSession: 'Open a session first',
   wordsAndChangesGone: (n: number): string => `Your typed words and ${n === 1 ? 'one change' : `${n} changes`} were not saved`,
   changesGone: (n: number): string => (n === 1 ? 'One change on the board was not saved' : `${n} changes on the board were not saved`),

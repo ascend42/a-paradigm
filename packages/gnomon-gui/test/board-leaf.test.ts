@@ -148,6 +148,8 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     expect(checkLine({ verified: false, checkedSeq: 4, seq: 9 })).toMatch(/^Did not match at change 4/);
     for (const s of [checkLine({ verified: true, checkedSeq: 9, seq: 9 }), checkLine({ verified: null, checkedSeq: null, seq: 1 })]) expect(s).not.toMatch(/verified/i);
     notices.push(...Object.values(KEEP_COPY).map((v) => (typeof v === 'function' ? v(64) : v)));
+    // Mika 2: a board folded on an earlier page is "folded", as the Dimensions list calls it (never an ended dimension)
+    expect(KEEP_COPY.reopens).toBe('That board was folded · opening it starts it again');
     // nothing coming by itself (the kernel stopped): the line says not connected, never reconnecting
     expect([linkDownLine({ keep: 'saved', pending: 0 }, { coming: false }), linkDownLine({ keep: 'saved', pending: 0 }, { coming: false, unsaved: 1 }), linkDownLine({ keep: 'saved', pending: 0 }, { coming: false, words: true }), linkDownLine({ keep: 'saved', pending: 0 }, { words: true })]).toEqual(['Not connected', 'Not saved · not connected', 'Not connected · your words are kept on this page only', 'Reconnecting · your words are kept on this page only']);
     expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Reconnecting', '2 changes may not be saved · fold and reopen to check']);

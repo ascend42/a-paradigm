@@ -79,6 +79,8 @@ export interface BoardLeaf {
   retry(): void;
   /** Say one line in the keep line's place and to a screen reader (a notice of the live loop, in the leaf's own words). */
   say(line: string): void;
+  /** Held still: say the held line again (an Esc from outside the leaf that must not fold it). Nothing when not held. */
+  sayHeld(): void;
   /** Forget the copy register (the kernel link went down). */
   forget(): void;
   /**
@@ -835,6 +837,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     },
     retry: start,
     say,
+    sayHeld() {
+      if (inert) sayHeld(inertLine ?? INERT_COPY[inert]);
+    },
     forget,
     setInert(why) {
       if (why === inert) return;
