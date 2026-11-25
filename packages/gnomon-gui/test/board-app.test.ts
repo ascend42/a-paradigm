@@ -196,6 +196,37 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('committed').rows.slice(-1)).toEqual(['op:add']);
   }, 180_000);
 
+  it('a principal change drops held words (Aegis, option b): the link goes mid-text, the page comes back as SOMEONE ELSE, and the words are gone, said once, never waiting and never put into a text that person opens', async () => {
+    const WHO = `(() => { const k = ${A}.kernel; return k.principal; })()`;
+    const a = await real([
+      ...typeBoard, { read: WHO, as: 'me' },
+      { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('secret'), facts('typing'),
+      { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'),
+      // the next connection authenticates as another principal (the preview kernel's test hook)
+      { read: `(() => { const k = ${A}.kernel; k.principal = k.principal.replace(/[^/]*$/, 'someone-else'); return k.principal; })()`, as: 'other' },
+      { press: '#reconnect-btn' }, { wait: 3000 }, facts('back'),
+      { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 700 }, facts('text-opened'),
+      { at: [200, 330], press: true }, { wait: 900 }, facts('after'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(a.other).not.toBe(a.me);
+    expect(String(a.other)).toMatch(/someone-else$/);
+    expect(f('typing')).toMatchObject({ field: 'secret', frames: 1 });
+    // down: the words are held, as for anyone
+    expect(f('down')).toMatchObject({ open: true, link: 'down', field: 'secret', line: KEEP_COPY.wordsHeld });
+    // back as someone else: the board is there, the words are NOT waiting, and their loss is said (once)
+    expect(f('back')).toMatchObject({ open: true, link: 'up', inert: '', field: null, texts: [] });
+    expect(f('back').line).not.toBe(KEEP_COPY.wordsWait);
+    expect(f('back').toasts.filter((t) => t.includes(KEEP_COPY.wordsGone))).toHaveLength(1);
+    // a text that person opens is empty: nothing of the first person's words reaches it, the board or the log
+    expect(f('text-opened')).toMatchObject({ field: '' });
+    expect(f('text-opened').line).not.toBe(KEEP_COPY.wordsBack);
+    expect(f('after').texts).toEqual([]);
+    expect(f('after').rows.filter((r) => r.startsWith('op'))).toEqual([]);
+    expect(f('after').toasts.filter((t) => t.includes(KEEP_COPY.wordsGone)).length).toBeLessThanOrEqual(1);
+  }, 120_000);
+
   it('held still, the leaf still folds (Esc and the esc key) and a fold while down is not a close; with nothing pending the line is "Reconnecting" alone', async () => {
     const a = await real(
       [...typeBoard, ...drawRect, { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'), { read: `(document.querySelector('.bd-host .bd-head .key:last-child').click(), document.querySelector('.bd-host .bd-leaf').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })), 1)`, as: 'synthetic' }, { wait: 400 }, facts('untrusted'), { key: 'Escape' }, { wait: 500 }, facts('folded')],
