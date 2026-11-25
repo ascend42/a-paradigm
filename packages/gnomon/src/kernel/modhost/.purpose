@@ -39,6 +39,74 @@ components:
       - test/mods-admin.test.ts
       - test/socket-abi.test.ts
       - test/app-bundle.test.ts
+  mod-tool-bridge:
+    description: >-
+      #mod-tool-bridge (Dimensions S1.4-P2; spec 3.8, 12.3; G-MOD-19,
+      G-MOD-22). A SPEC NODE: it carries falsifiers. src/kernel/modhost/
+      mcp-bridge.ts: the kernel's second SDK-type MCP server for a Claude Code
+      session, named gnomon-mods, answered in-process on the session's control
+      channel. No process, socket, profile or credential: the caller is the
+      session the kernel spawned.
+      modBridgeAnswer(message, ports, session) is the pure answerer (shaped
+      like kernelMcpAnswer): of the message only method, id,
+      params.protocolVersion and the OWN keys params.name and params.arguments
+      are read; it never throws, so exactly one answer exists on every path.
+      THE LIST RULE (modBridgeTools), re-derived on every tools/call: the mod
+      is in the desk set (installed, verified, granted, unpaused), on the
+      closed allowlist with the tool, first-party (publisher gnomon, tier
+      first-party), at a CURRENT pin (isCurrentFirstPartyPin: in
+      FIRST_PARTY_PACKAGE_HASHES and neither superseded nor historical); the
+      tool declares no network or spend effect and carries a schema of type
+      object whose description is at most 1,024 chars with no Cc/Cf/Zl/Zp and
+      whose canonical JSON is at most 8 KiB; a name two listed mods declare is
+      listed for neither. MOD_BRIDGE_TOOLS, the PRODUCTION allowlist, is EMPTY
+      until S1.4-P5 (Aegis M1): a real kernel lists nothing and no mcp.json
+      gets the entry. Tests pass an allowlist through ModBridgeOptions
+      (DaemonSeams.modBridge).
+      A CALL, in order: unknown tool (-32602); session not running; held
+      (Aegis M2: effective mode manual with no approved plan, or a loop
+      origin; the bridge refuses itself because an allow rule or a hook can
+      skip can_use_tool); no outstanding turn (no-turn); checkBridgeArguments
+      (A1: a plain object, at most 128 KiB canonical, depth 32, 8,192 keys
+      and elements, no own __proto__/constructor/prototype key at any depth,
+      over bridge.ts walkPayloadKeys); the caps (4 calls a second and one in
+      flight per session on BridgeRate, 2 queued or running per mod across
+      sessions, M7); then the call port: host.admit, then the ONE production
+      caller of ModHost's tool call, with a host-built toolRelayedFor
+      {principal, surface, agent, hsid, turn} or none when the agent label
+      fails its pattern.
+      THE RESULT: serialised in a try; escapeBridgeJson writes every Cc, Cf,
+      Zl, Zp code point and every < as a \u escape (M5); fenceBridgeResult
+      wraps it once in <gnomon-mod-result mod tool trust="T3"> with
+      MOD_BRIDGE_FENCE_SENTENCE (data whatever its by, a person's marks
+      included); over 256 KiB after escaping, or unserialisable, is a fixed
+      error. A ModRefusal is MOD_BRIDGE_MOD_SENTENCES[code], never its text.
+      THE RECEIPT (A2): inject.receipt appended through the append port
+      BEFORE the answer is returned, as a userland row under
+      p:<ns>/mods-mcp (session hsid, causes [turn]) with exactly hsid, turn,
+      requester, owner, tool, refs, shas, bytes, outcome. outcome ok = the
+      fenced text was handed over (sha256 of the exact text; refs
+      dim:<ulid>@<seq> only from the result's own dim and seq against their
+      patterns); error = the mod answered but nothing could be handed over. A
+      failed append hands the fixed sentence and nothing else; a session that
+      stopped meanwhile gets neither. Kernel-composed refusals are FOLDED
+      (RowFold, perWindow 0): one counter row per session per 10 s window,
+      outcome refused, coalesced, count, byWhy over MOD_BRIDGE_REFUSALS;
+      closeSession(hsid) writes it at session exit.
+      createModBridge(o) builds the ports over the mod host (read at call
+      time) and the log. The kernel imports nothing from gnomon-mods or the
+      mod SDK. Known limit: a sub-agent arrives on the same channel and is
+      stamped as the session's agent. Not served: local sessions.
+      The supervisor half (the stamp, the mcp.json entry, the permission
+      pass, the detector) is under #supervisor.
+    path: src/kernel/modhost/mcp-bridge.ts
+    tags: [kernel, mods, mcp, security, S1.4]
+    signals: []
+    tests:
+      - test/mods-bridge.test.ts
+      - test/mods-bridge-session.test.ts
+      - test/dimension-relay.test.ts
+    oracles: [G-MOD-19, G-MOD-22]
   mod-host:
     description: >-
       Stage cleanup (security triage): control.ts modNames no longer truncates
