@@ -148,7 +148,7 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { GIT_VERB_TOOLS, GIT_VERBS_GUIDANCE, KERNEL_MCP_SERVER, kernelToolName, kernelWorktreeDirs } from '../git/verbs.js';
 import { sessionSystemPrompt } from './host-guidance.js';
 import { KERNEL_MCP_ENTRY, kernelMcpAnswer } from './kernel-mcp.js';
-import { bridgeHeld, MOD_BRIDGE_ENTRY, MOD_BRIDGE_SERVER, modBridgeAnswer, newBridgeRate, type BridgeRate, type BridgeSession, type ModBridge } from '../modhost/mcp-bridge.js';
+import { bridgeHeld, MOD_BRIDGE_ENTRY, MOD_BRIDGE_LIMITS, MOD_BRIDGE_SERVER, modBridgeAnswer, newBridgeRate, type BridgeRate, type BridgeSession, type ModBridge } from '../modhost/mcp-bridge.js';
 import { RowFold } from '../modhost/fold.js';
 import { childNodePath } from '../lifecycle/sea.js';
 
@@ -355,6 +355,8 @@ export interface SupervisorOptions {
    * so a real kernel writes no entry in this pass.
    */
   modBridge?: ModBridge;
+  /** TEST RIG ONLY: the clock of the bridge detector's suspect fold (default performance.now) */
+  bridgeNow?: () => number;
   /** TEST RIG ONLY: the session scratch base (default the identity's DARWIN_USER_TEMP_DIR) */
   scratchBase?: string;
 }
@@ -491,6 +493,8 @@ interface Session {
   bridgeAllowed: Set<string>;
   /** #mod-tool-bridge detector: the fold of this session's suspect rows (one row per window, with a count) */
   bridgeSuspect?: RowFold;
+  /** #mod-tool-bridge detector: suspect appends in flight (awaited, bounded, when the fold is closed) */
+  bridgeSuspectPending?: Set<Promise<unknown>>;
 }
 
 /** A turn's origin as `turn.sent` records it. */
@@ -1383,8 +1387,8 @@ export class SessionSupervisor {
     s.turnOrigins = [];
     s.consumedTurns = 0;
     // #mod-tool-bridge: the session's folded rows are written now; its rate state dies with it
-    s.bridgeSuspect?.close();
-    this.#o.modBridge?.closeSession(s.hsid);
+    await this.#closeBridgeSuspect(s);
+    await this.#o.modBridge?.closeSession(s.hsid).catch(() => undefined);
     await this.#dropUncertain(s, 'session-exited'); // Aegis M1: a timed-out switch's held permit ends with the session
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
@@ -1610,6 +1614,25 @@ export class SessionSupervisor {
     };
   }
 
+  /** #mod-tool-bridge: write this session's suspect row now and wait (bounded) for it to be in the log. */
+  async #closeBridgeSuspect(s: Session): Promise<void> {
+    s.bridgeSuspect?.flush();
+    const set = s.bridgeSuspectPending;
+    if (!set || set.size === 0) return;
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([Promise.all([...set]), new Promise((res) => (timer = setTimeout(res, MOD_BRIDGE_LIMITS.receiptWaitMs)))]);
+    clearTimeout(timer);
+  }
+
+  /**
+   * #mod-tool-bridge: at daemon stop, BEFORE the children are stopped and the log closes: every live session's
+   * suspect row and the bridge's counter rows are written and awaited (bounded), so a shutdown loses none.
+   */
+  async flushBridge(): Promise<void> {
+    for (const s of this.#sessions.values()) await this.#closeBridgeSuspect(s).catch(() => undefined);
+    await this.#o.modBridge?.flush().catch(() => undefined);
+  }
+
   /**
    * #mod-tool-bridge detector (the ungated-tool detector, extended): a bridge `tools/call` whose
    * `_meta["claudecode/toolUseId"]` matches no can_use_tool request the kernel allowed is SUSPECT (an allow rule in a
@@ -1619,7 +1642,7 @@ export class SessionSupervisor {
    */
   #bridgeDetect(s: Session, message: unknown): void {
     const obj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-    if (!obj(message) || message.method !== 'tools/call') return;
+    if (s.state !== 'running' || !obj(message) || message.method !== 'tools/call') return; // a dead session gets no fold
     const params = Object.hasOwn(message, 'params') && obj(message.params) ? message.params : {};
     const meta = Object.hasOwn(params, '_meta') && obj(params._meta) ? params._meta : null;
     const raw: unknown = meta !== null && Object.hasOwn(meta, BRIDGE_TOOL_USE_ID_KEY) ? meta[BRIDGE_TOOL_USE_ID_KEY] : undefined;
@@ -1630,10 +1653,15 @@ export class SessionSupervisor {
     s.bridgeSuspect ??= new RowFold({
       perWindow: 0, // never an individual row: one counted row per window
       windowMs: BRIDGE_SUSPECT_WINDOW_MS,
-      now: () => performance.now(),
+      now: this.#o.bridgeNow ?? (() => performance.now()),
       field: 'byWhy',
       base: { hsid: s.hsid, server: MOD_BRIDGE_SERVER },
-      write: (payload) => void this.#o.broker?.suspect?.('ungated-tool-use', payload, s.hsid).catch(() => undefined),
+      write: (payload) => {
+        const p = (this.#o.broker?.suspect?.('ungated-tool-use', payload, s.hsid) ?? Promise.resolve()).catch(() => undefined);
+        const set = (s.bridgeSuspectPending ??= new Set());
+        set.add(p);
+        void p.finally(() => set.delete(p));
+      },
     });
     s.bridgeSuspect.hit(id !== null ? 'unmatched' : raw === undefined ? 'missing' : 'malformed', {});
   }

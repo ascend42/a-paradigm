@@ -75,6 +75,7 @@ function world(callTimeoutMs = 1_500): World {
       rows.push(JSON.parse(JSON.stringify(row)) as BridgeRow);
     },
     now: () => t,
+    receiptWaitMs: 400,
     allow: ALLOW,
     currentPin: () => true,
   });
@@ -300,7 +301,7 @@ describe('#mod-tool-bridge: the answerer under attack', () => {
       let all: Ans[] = [];
       if (how === 'burst') all = await Promise.all(Array.from({ length: 100 }, (_, i) => one(i)));
       else for (let i = 0; i < 100; i++) { if (how === 'spread') w.setNow(base + i * 10); all.push(await one(i)); }
-      w.bridge.closeSession(s.hsid);
+      await w.bridge.closeSession(s.hsid);
       const fresh = w.rows.slice(rows0);
       const rec = { label, answers, served: all.filter((a) => a.result?.isError === false).length, reachedMod: w.reached() - reached0, receipts: fresh.filter((x) => x.payload.outcome === 'ok').length, counterRows: fresh.filter((x) => x.payload.outcome === 'refused').length, counters: fresh.filter((x) => x.payload.outcome === 'refused').map((x) => `count=${x.payload.count} ${JSON.stringify(x.payload.byWhy)}`) };
       obs.push(rec);
@@ -341,12 +342,14 @@ describe('#mod-tool-bridge: the answerer under attack', () => {
     const s = w.session();
     const hung = await shoot(w, 'receipt append never settles (waited 2 s)', call('bridge-echo', {}), s, w.bridge, 2_000);
     obs.push({ label: '  ↳ after the hung append', inFlight: s.rate.inFlight, answers: hung.rec.answers });
-    // FINDING (low): no answer is ever given while the receipt append is pending; nothing bounds the wait
-    expect(hung.rec.answers).toBe(0);
+    // the wait is bounded (receiptWaitMs): a receipt append that never settles is the fixed receipt sentence, nothing handed over
+    expect(hung.rec.answers).toBe(1);
+    expect([hung.a!.result!.isError, textOf(hung.a!)]).toEqual([true, MOD_BRIDGE_SENTENCES.receipt]);
+    expect(s.rate.inFlight).toBe(0);
     w.append.mode = 'ok';
   }, 30_000);
 
-  it('a refusal that lands AFTER closeSession (the mod times out once the session is gone) opens a new fold for the dead session', async () => {
+  it('a refusal that lands AFTER closeSession (the mod times out once the session is gone) opens NO fold for the dead session', async () => {
     const r = w.r;
     const late: BridgeRow[] = [];
     // the same home and mod host are not reachable from here, so a second bridge over a stub host: the call rejects 300 ms in
@@ -364,13 +367,18 @@ describe('#mod-tool-bridge: the answerer under attack', () => {
     const p = modBridgeAnswer(call('bridge-echo', {}), bridge, () => s);
     await new Promise((res) => setTimeout(res, 50));
     running = false;
-    bridge.closeSession(s.hsid); // the supervisor's session-exit path
+    await bridge.closeSession(s.hsid); // the supervisor's session-exit path
     const atClose = late.length;
     const a = (await p) as Ans;
     await new Promise((res) => setTimeout(res, 300)); // past the fold window: the timer writes the row
     obs.push({ label: 'a refusal after closeSession', got: sentenceName(textOf(a)), rowsAtClose: atClose, rowsAfter: late.length, row: late[0]?.payload });
     expect(atClose).toBe(0);
-    // FINDING (low): one counter row for a session that already exited, written a window later; the fold stays in the map
-    expect(late.map((x) => [x.session, x.payload.outcome, x.payload.byWhy])).toEqual([[s.hsid, 'refused', { 'mod-failed': 1 }]]);
+    // no fold for a dead session: nothing is written a window later
+    expect(late).toEqual([]);
+    // a session that is still alive is counted as before
+    const alive = w.session({ hsid: `${s.hsid.slice(0, -1)}9` });
+    await modBridgeAnswer(call('bridge-echo', [1]), bridge, () => alive);
+    await bridge.flush();
+    expect(late.map((x) => [x.session, x.payload.byWhy])).toEqual([[alive.hsid, { arguments: 1 }]]);
   }, 30_000);
 });

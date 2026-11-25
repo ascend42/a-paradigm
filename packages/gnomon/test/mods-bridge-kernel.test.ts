@@ -81,7 +81,7 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge: effective manual by a stri
     expect(answers(w)[2]!.mcp!.result!.content![0]!.text).toBe(MOD_BRIDGE_SENTENCES.manual);
   }, 120_000);
 
-  it('a kernel that shuts down with a live session and a pending refusal counter: is the counter row in the log afterwards?', async () => {
+  it('a kernel that shuts down with a live session and a pending refusal counter: the counter row is in the log afterwards', async () => {
     const w = sessionWorld();
     cleanups.push(() => w.cleanup());
     const t = tempHome('pd-');
@@ -103,6 +103,8 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge: effective manual by a stri
     cleanups.push(() => k2.stop());
     const refused = [...k2.handle.log.read({ reader: { class: 'human' }, kinds: ['inject.receipt'] })].map((v) => (v as unknown as { event: { session?: string; payload: Record<string, unknown> } }).event).filter((e) => e.payload.outcome === 'refused');
     if (process.env.PROBE_OBS) fs.writeFileSync(`${process.env.PROBE_OBS}.shutdown.json`, JSON.stringify({ counterRowsAfterShutdown: refused.length, rows: refused }, null, 1));
-    expect(refused.length).toBeLessThanOrEqual(1);
+    // daemon stop flushes the bridge and awaits the counter append before the log closes
+    expect(refused.length).toBe(1);
+    expect(refused[0]!.payload).toMatchObject({ outcome: 'refused', count: 1, byWhy: { 'unknown-tool': 1 } });
   }, 120_000);
 });

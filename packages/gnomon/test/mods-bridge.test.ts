@@ -20,7 +20,7 @@ import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/
 import { writePause } from '../src/kernel/modhost/control.js';
 import {
   bridgeHeld, bridgeRefs, checkBridgeArguments, createModBridge, escapeBridgeJson, fenceBridgeResult, isCurrentFirstPartyPin, MOD_BRIDGE_ENTRY, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_FENCE_SENTENCE,
-  MOD_BRIDGE_LIMITS, MOD_BRIDGE_MOD_SENTENCES, MOD_BRIDGE_PRINCIPAL_NAME, MOD_BRIDGE_RECEIPT_KEYS, MOD_BRIDGE_SENTENCES, MOD_BRIDGE_SERVER, MOD_BRIDGE_TOOLS, modBridgeAnswer, modBridgePrincipal,
+  MOD_BRIDGE_COUNTER_KEYS, MOD_BRIDGE_LIMITS, MOD_BRIDGE_MOD_SENTENCES, MOD_BRIDGE_PRINCIPAL_NAME, MOD_BRIDGE_RECEIPT_KEYS, MOD_BRIDGE_SENTENCES, MOD_BRIDGE_SERVER, MOD_BRIDGE_TOOLS, modBridgeAnswer, modBridgePrincipal,
   modBridgeTools, newBridgeRate, type BridgeMod, type BridgePorts, type BridgeRow, type BridgeSession, type ModBridge,
 } from '../src/kernel/modhost/mcp-bridge.js';
 import { MOD_REFUSAL_CODES, ModRefusal } from '../src/kernel/modhost/refusal.js';
@@ -447,7 +447,7 @@ describe('#mod-tool-bridge: the receipt (Aegis A2; G-MOD-22)', () => {
     expect(w.reached()).toBe(4);
     expect(receipts(w)).toHaveLength(4);
     expect(counters(w)).toEqual([]); // nothing until the window ends
-    w.bridge.closeSession(HSID);
+    await w.bridge.closeSession(HSID);
     expect(counters(w)).toHaveLength(1);
     expect(counters(w)[0]).toMatchObject({ kind: 'inject.receipt', principal: `p:${w.r.auth.ns}/mods-mcp`, session: HSID });
     expect(counters(w)[0]!.payload).toEqual({ hsid: HSID, turn: null, requester: s.principal, owner: null, tool: null, refs: [], shas: [], bytes: 0, outcome: 'refused', coalesced: true, count: 96, byWhy: { rate: 96 }, otherWhys: 0, distinct: 1 });
@@ -473,7 +473,7 @@ describe('#mod-tool-bridge: the gates it enforces itself (Aegis M2) and the caps
     expect(w.reached()).toBe(0);
     expect(w.modRows()).toEqual([]);
     expect(w.rows).toEqual([]);
-    w.bridge.closeSession(HSID);
+    await w.bridge.closeSession(HSID);
     expect(w.rows).toHaveLength(1);
     expect(w.rows[0]!.payload).toMatchObject({ outcome: 'refused', count: 3, byWhy: { manual: 1, loop: 1, 'no-turn': 1 } });
     // the same call from a session that is not held writes the mod's row
@@ -525,6 +525,40 @@ describe('#mod-tool-bridge: the gates it enforces itself (Aegis M2) and the caps
     const paused = (await modBridgeAnswer(call('bridge-echo', {}), { ...w.bridge, tools: () => stale }, () => w.session())) as Ans;
     expect([paused.result!.isError, textOf(paused)]).toEqual([true, MOD_BRIDGE_MOD_SENTENCES.PAUSED]);
     expect(receipts(w)).toEqual([]);
+  });
+});
+
+describe('#mod-tool-bridge: rows at the edges (review fixes: bounded receipt wait, awaited flush, no fold for a dead session)', () => {
+  const stub = (append: (row: BridgeRow) => Promise<unknown>, over: Record<string, unknown> = {}) =>
+    createModBridge({ mods: () => [{ name: PROBE, manifest: { publisher: 'gnomon', provides: { tools: [{ name: 't', effects: ['read'], schema: SCHEMA }] } }, packageHash: 'sha256:x', tier: 'first-party' }], host: () => ({ admit: async () => undefined, callTool: async () => ({ ok: true }) }) as never, ns: () => 'abcdefgh', append, allow: { [PROBE]: ['t'] }, currentPin: () => true, ...over });
+  const sess = (o: Partial<BridgeSession> = {}): BridgeSession => ({ hsid: HSID, principal: 'p:abcdefgh/s-01hzzzzz', agent: 'claude', turn: `turn:${HSID}/1`, surface: 'bridge', held: null, rate: newBridgeRate(), running: () => true, ...o });
+
+  it('a receipt append that never settles: ONE answer, the fixed receipt sentence, inside the bound', async () => {
+    const bridge = stub(() => new Promise(() => undefined), { receiptWaitMs: 150 });
+    const t0 = Date.now();
+    const a = (await modBridgeAnswer(call('t', {}), bridge, () => sess())) as Ans;
+    expect([a.result!.isError, textOf(a)]).toEqual([true, MOD_BRIDGE_SENTENCES.receipt]);
+    expect(Date.now() - t0).toBeLessThan(3_000);
+    expect(MOD_BRIDGE_LIMITS.receiptWaitMs).toBe(5_000);
+  });
+
+  it('closeSession and flush resolve only once the counter append is in the log; a counter row carries exactly MOD_BRIDGE_COUNTER_KEYS', async () => {
+    const rows: BridgeRow[] = [];
+    const slow = (row: BridgeRow): Promise<void> => new Promise((res) => setTimeout(() => (rows.push(row), res()), 120));
+    const bridge = stub(slow);
+    await modBridgeAnswer(call('t', [1]), bridge, () => sess());
+    await bridge.closeSession(HSID);
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]!.payload).sort()).toEqual([...MOD_BRIDGE_COUNTER_KEYS].sort());
+    const other = sess({ hsid: OTHER });
+    await modBridgeAnswer(call('t', [1]), bridge, () => other);
+    await bridge.flush();
+    expect(rows.map((r) => r.session)).toEqual([HSID, OTHER]);
+    // a refusal for the session that ended opens no fold: nothing more is ever written for it
+    await modBridgeAnswer(call('t', [1]), bridge, () => sess());
+    await bridge.flush();
+    await bridge.closeSession(HSID);
+    expect(rows.map((r) => r.session)).toEqual([HSID, OTHER]);
   });
 });
 

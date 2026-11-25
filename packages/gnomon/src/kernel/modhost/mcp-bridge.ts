@@ -71,7 +71,11 @@
  * before the tool call, and counts against the mod's restart cap.
  *
  * The socket append gate refuses `inject.receipt` for every caller class, and no device, agent, mod or session name
- * can yield the reserved principal (tests). Readers accept a receipt only under that principal and a kernel key.
+ * can yield the reserved principal (tests). OWED BY P5: the readers (`dim stats`, replay, the G-MOD-22 checker) must
+ * accept a receipt only under that principal and a kernel key; no reader exists in this pass.
+ * A receipt append is awaited for at most MOD_BRIDGE_LIMITS.receiptWaitMs: one that never settles is the fixed receipt
+ * sentence, like one that fails. At session exit and at daemon stop the pending counter appends are awaited (bounded)
+ * before the log closes, and a refusal that lands after a session ended opens no new fold for it.
  */
 import { createHash } from 'node:crypto';
 import { canonicalJson, type ToolRelayedFor } from '@a-company/gnomon-contracts';
@@ -111,6 +115,8 @@ export const MOD_BRIDGE_LIMITS = Object.freeze({
   schemaBytes: 8 * 1024,
   /** the window kernel-composed refusals are folded in (one counter row per session per window) */
   foldWindowMs: 10_000,
+  /** how long a receipt append may take before the call is answered with the fixed receipt sentence (nothing handed over) */
+  receiptWaitMs: 5_000,
   agentLabel: /^[a-z][a-z0-9-]{0,31}$/,
 });
 
@@ -222,8 +228,14 @@ export const MOD_BRIDGE_PRINCIPAL_NAME = 'mods-mcp';
 if (!RESERVED_PRINCIPAL_NAMES.includes(MOD_BRIDGE_PRINCIPAL_NAME)) throw new Error('#mod-tool-bridge: its principal name is not reserved in the registry');
 export const modBridgePrincipal = (ns: string): string => `p:${ns}/${MOD_BRIDGE_PRINCIPAL_NAME}`;
 export const MOD_BRIDGE_RECEIPT_KIND = 'inject.receipt' as const;
-/** Aegis A2: the receipt's payload keys, exactly. */
+/** Aegis A2: the payload keys of a RECEIPT (`outcome: ok | error`), exactly these nine. A counter row carries MOD_BRIDGE_COUNTER_KEYS. */
 export const MOD_BRIDGE_RECEIPT_KEYS = Object.freeze(['hsid', 'turn', 'requester', 'owner', 'tool', 'refs', 'shas', 'bytes', 'outcome'] as const);
+/**
+ * The payload keys of the folded COUNTER row (`outcome: 'refused'`): the nine receipt keys (`turn`, `owner` and `tool`
+ * null, `refs` and `shas` empty, `bytes` 0) plus the fold's `coalesced: true`, `count`, `byWhy` (MOD_BRIDGE_REFUSALS →
+ * count), `otherWhys` and `distinct`. No tool input, mod string or model string.
+ */
+export const MOD_BRIDGE_COUNTER_KEYS = Object.freeze([...MOD_BRIDGE_RECEIPT_KEYS, 'coalesced', 'count', 'byWhy', 'otherWhys', 'distinct'] as const);
 export const MOD_BRIDGE_OUTCOMES = Object.freeze(['ok', 'refused', 'error'] as const);
 
 /** What the answerer knows of one handed-over (or failed) mod result; the port composes the row from it. */
@@ -263,6 +275,8 @@ export interface BridgePorts {
   leave(mod: string): void;
   /** append the receipt and resolve only once it is in the log; a rejection means nothing may be handed over */
   receipt(r: BridgeReceipt): Promise<void>;
+  /** how long `receipt` may take (default MOD_BRIDGE_LIMITS.receiptWaitMs) */
+  receiptWaitMs?: number;
   now(): number;
 }
 
@@ -353,6 +367,18 @@ export function fenceBridgeResult(mod: string, tool: string, result: unknown): s
 }
 
 type Answer = Record<string, unknown>;
+
+/** `p`, or a rejection after `ms`: a receipt append that never settles must not leave a call unanswered. */
+function within<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), ms);
+    timer.unref?.();
+    p.then(
+      (v) => (clearTimeout(timer), resolve(v)),
+      (e: unknown) => (clearTimeout(timer), reject(e instanceof Error ? e : new Error('failed'))),
+    );
+  });
+}
 const text = (id: string | number, t: string, isError: boolean): Answer => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: t }], isError } });
 
 /** One `tools/call` for a listed tool, from a running session. Every path returns exactly one answer. */
@@ -398,13 +424,15 @@ async function runCall(id: string | number, tool: BridgeTool, params: Record<str
   // a session that stopped while the mod worked gets neither a receipt nor a result (the supervisor writes nothing)
   if (!s.running()) return text(id, MOD_BRIDGE_SENTENCES.notRunning, true);
   const base = { hsid: s.hsid, turn: s.turn, requester: s.principal, mod: tool.mod, tool: tool.name };
+  // bounded: a failed OR a never-settling append is the fixed sentence, so there is one answer on this path too
+  const wait = ports.receiptWaitMs ?? MOD_BRIDGE_LIMITS.receiptWaitMs;
   if (fenced === null) {
-    await ports.receipt({ ...base, refs: [], shas: [], bytes: 0, outcome: 'error' }).catch(() => undefined);
+    await within(ports.receipt({ ...base, refs: [], shas: [], bytes: 0, outcome: 'error' }), wait).catch(() => undefined);
     return text(id, MOD_BRIDGE_SENTENCES.result, true);
   }
   try {
     // receipt BEFORE result: this await ends before the answer exists
-    await ports.receipt({ ...base, refs: bridgeRefs(result), shas: [`sha256:${createHash('sha256').update(fenced, 'utf8').digest('hex')}`], bytes: Buffer.byteLength(fenced, 'utf8'), outcome: 'ok' });
+    await within(ports.receipt({ ...base, refs: bridgeRefs(result), shas: [`sha256:${createHash('sha256').update(fenced, 'utf8').digest('hex')}`], bytes: Buffer.byteLength(fenced, 'utf8'), outcome: 'ok' }), wait);
   } catch {
     return text(id, MOD_BRIDGE_SENTENCES.receipt, true);
   }
@@ -484,26 +512,41 @@ export interface ModBridgeOptions {
   currentPin?: (packageHash: string) => boolean;
   now?: () => number;
   foldWindowMs?: number;
+  receiptWaitMs?: number;
 }
 
 export interface ModBridge extends BridgePorts {
-  /** write this session's counter row now and forget the session (the supervisor: at session exit) */
-  closeSession(hsid: string): void;
-  /** write every pending counter row now (shutdown, tests) */
-  flush(): void;
+  /**
+   * Write this session's counter row now, forget the session, and resolve once the pending counter appends have
+   * settled (bounded). A refusal that lands AFTER this creates nothing: a dead session gets no new fold.
+   */
+  closeSession(hsid: string): Promise<void>;
+  /** write every pending counter row now and resolve once the appends have settled (bounded): the daemon awaits it before the log closes */
+  flush(): Promise<void>;
 }
 
 /** Sessions with a live refusal fold; beyond it the oldest is flushed and dropped. */
 export const MOD_BRIDGE_FOLD_SESSIONS = 256;
+/** Ended sessions remembered so a late refusal opens no fold for them. */
+export const MOD_BRIDGE_CLOSED_SESSIONS = 1024;
 
 /** The ports over a mod host and the log. The ONE production caller of the mod host's tool call is `call` below (G-MOD-19). */
 export function createModBridge(o: ModBridgeOptions): ModBridge {
   const now = o.now ?? (() => performance.now());
   const folds = new Map<string, RowFold>();
+  /** sessions that ended (bounded, oldest forgotten): a late refusal for one opens no fold */
+  const closed = new Set<string>();
+  /** counter appends in flight */
+  const pending = new Set<Promise<unknown>>();
+  const settled = async (): Promise<void> => {
+    if (pending.size === 0) return;
+    await within(Promise.all([...pending]), o.receiptWaitMs ?? MOD_BRIDGE_LIMITS.receiptWaitMs).catch(() => undefined);
+  };
   const slots = new Map<string, number>();
   const foldFor = (s: Pick<BridgeSession, 'hsid' | 'principal'>): RowFold | null => {
     const hit = folds.get(s.hsid);
     if (hit) return hit;
+    if (closed.has(s.hsid)) return null;
     const ns = o.ns();
     if (ns === null) return null;
     if (folds.size >= MOD_BRIDGE_FOLD_SESSIONS) {
@@ -517,12 +560,17 @@ export function createModBridge(o: ModBridgeOptions): ModBridge {
       now,
       field: 'byWhy',
       base: { hsid: s.hsid, turn: null, requester: s.principal, owner: null, tool: null, refs: [], shas: [], bytes: 0, outcome: 'refused' },
-      write: (payload) => void o.append({ kind: MOD_BRIDGE_RECEIPT_KIND, principal: modBridgePrincipal(ns), session: s.hsid, payload }).catch(() => undefined),
+      write: (payload) => {
+        const p = o.append({ kind: MOD_BRIDGE_RECEIPT_KIND, principal: modBridgePrincipal(ns), session: s.hsid, payload }).catch(() => undefined);
+        pending.add(p);
+        void p.finally(() => pending.delete(p));
+      },
     });
     folds.set(s.hsid, f);
     return f;
   };
   return {
+    ...(o.receiptWaitMs !== undefined ? { receiptWaitMs: o.receiptWaitMs } : {}),
     tools: () => modBridgeTools(o.mods(), o.allow ?? MOD_BRIDGE_TOOLS, o.currentPin ?? isCurrentFirstPartyPin),
     now,
     async call(mod, tool, input, s) {
@@ -553,12 +601,16 @@ export function createModBridge(o: ModBridgeOptions): ModBridge {
       const payload = { hsid: r.hsid, turn: r.turn, requester: r.requester, owner: `p:${ns}/mod-${r.mod}`, tool: r.tool, refs: [...r.refs], shas: [...r.shas], bytes: r.bytes, outcome: r.outcome };
       await o.append({ kind: MOD_BRIDGE_RECEIPT_KIND, principal: modBridgePrincipal(ns), session: r.hsid, ...(r.turn !== null ? { causes: [r.turn] } : {}), payload });
     },
-    closeSession(hsid) {
+    async closeSession(hsid) {
       folds.get(hsid)?.close();
       folds.delete(hsid);
+      closed.add(hsid);
+      while (closed.size > MOD_BRIDGE_CLOSED_SESSIONS) closed.delete(closed.values().next().value!);
+      await settled();
     },
-    flush() {
+    async flush() {
       for (const f of folds.values()) f.flush();
+      await settled();
     },
   };
 }
