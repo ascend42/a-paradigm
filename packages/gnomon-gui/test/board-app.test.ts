@@ -81,6 +81,19 @@ describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the ker
     expect(shipped.length).toBeGreaterThan(50);
     for (const f of shipped) for (const t of TOKENS) expect(readFileSync(f, 'utf8').includes(t), `${path.relative(ROOT, f)} names ${t}`).toBe(false);
     expect(readFileSync(path.join(ROOT, 'src', 'preview', 'dim-mod.ts'), 'utf8')).toContain('wrongHashNext');
+    // and none IMPORTS anything of the preview (an import would bring the hook in without ever naming it)
+    const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"`]([^'"`]+)['"`]/g;
+    let imports = 0;
+    for (const f of shipped) {
+      for (const m of readFileSync(f, 'utf8').matchAll(IMPORT)) {
+        imports++;
+        expect(/(^|\/)preview(\/|$)|preview\.(m?js|ts)$/.test(m[1]!), `${path.relative(ROOT, f)} imports ${m[1]}`).toBe(false);
+      }
+    }
+    expect(imports).toBeGreaterThan(200); // the scan really read import lines
+    // (the scan can see such an import: the preview's own entry has them, of shipped code)
+    expect([...readFileSync(path.join(ROOT, 'src', 'preview', 'main.ts'), 'utf8').matchAll(IMPORT)].length).toBeGreaterThan(5);
+    expect(/(^|\/)preview(\/|$)/.test('../preview/dim-mod.js')).toBe(true);
     // the check itself: one comparison, no flag, no environment, no option that could skip it
     const check = readFileSync(path.join(ROOT, 'src', 'core', 'dim-session.ts'), 'utf8');
     expect(check).toContain('const same = dimHash(store.stateAt(this.dim, v.seq)) === v.hash;');
@@ -89,11 +102,20 @@ describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the ker
   it('the pinned bundle (what the kernel serves) holds neither the hook nor the preview mod', () => {
     const bundle = embeddedBundle() as Map<string, Buffer>;
     expect(bundle.size).toBeGreaterThan(3);
-    for (const [name, bytes] of bundle) {
+    const has = (name: string, token: string): boolean => bundle.get(name)!.toString('utf8').includes(token);
+    // POSITIVE CONTROL: the same scan finds a string that IS shipped, in the app and in the board chunk, so a "no"
+    // below is a real no (the files are there, decoded, and searchable)
+    expect([...bundle.keys()]).toEqual(expect.arrayContaining(['app.js', 'board/board.js']));
+    expect(has('app.js', 'Not checked yet')).toBe(true);
+    expect(has('app.js', 'Dimensions in this project (/boards)')).toBe(true);
+    expect(has('board/board.js', 'excalidraw')).toBe(true);
+    let scanned = 0;
+    for (const name of bundle.keys()) {
       if (!/\.(js|css|html)$/.test(name)) continue;
-      const text = bytes.toString('utf8');
-      for (const t of [...TOKENS, 'PreviewDimMod', 'refuseNext']) expect(text.includes(t), `${name} holds ${t}`).toBe(false);
+      scanned++;
+      for (const t of [...TOKENS, 'PreviewDimMod', 'refuseNext', 'FakeKernel', 'preview-gui-token']) expect(has(name, t), `${name} holds ${t}`).toBe(false);
     }
+    expect(scanned).toBeGreaterThanOrEqual(4);
   });
 });
 
