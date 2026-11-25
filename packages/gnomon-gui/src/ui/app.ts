@@ -4168,14 +4168,30 @@ function wire(): void {
     if (SCROLL_KEYS.has(k)) intent.mark(performance.now(), INTENT_MS.key);
     if (k === 'ArrowUp' || k === 'PageUp' || k === 'Home') releaseUp();
   });
-  new ResizeObserver(() => {
-    const w = $('viewport').clientWidth;
+  /**
+   * The width the chat's rows are laid out at: the viewport less the edge-tab inset (#gui-board-dock P4b-2 item 4:
+   * while a board or Loops edge tab shows, the rows step in from it; styles.css --edge-tab-inset). Heights are kept
+   * per row width, so a tab coming or going re-measures the rows (the viewport itself does not change size).
+   */
+  const rowWidth = (): number => $('viewport').clientWidth - (parseFloat(getComputedStyle($('pane-transcript')).getPropertyValue('--edge-tab-inset')) || 0);
+  const relayout = (): void => {
+    const w = rowWidth();
     if (w !== width) {
       if (width) widths.save(transcriptId(), width, heights);
       width = w;
       paintTranscript(true);
     } else paintTranscript();
-  }).observe($('viewport'));
+  };
+  new ResizeObserver(relayout).observe($('viewport'));
+  // the tab classes are toggled by the dock and the Loops view: a change re-lays the rows (no size change to observe)
+  let tabsOn = '';
+  new MutationObserver(() => {
+    const p = $('pane-transcript').classList;
+    const on = `${p.contains('lp-tab-on')}${p.contains('bd-tab-on')}`;
+    if (on === tabsOn) return;
+    tabsOn = on;
+    relayout();
+  }).observe($('pane-transcript'), { attributes: true, attributeFilter: ['class'] });
   $('status-line').addEventListener('click', (e) => run('view.kernel-feed', e.isTrusted)); // S5.4: the readout links to the kernel feed
   $('jump-latest').addEventListener('click', () => {
     follow.jump();

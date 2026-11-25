@@ -458,6 +458,21 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(fa(a, 'pasted').rows.slice(before.rows.length)).toEqual(['op:add']);
   }, 120_000);
 
+  it.each(['desk', 'loops'])('edge-tab clearance (%s): with the board tab (and the Loops tab) folded at the chat’s edge, no message meets a tab; the rows step back out when no tab shows', async (fixture) => {
+    const MEET = `(() => { const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, r: b.right, y: b.y, b: b.bottom }; }; const tabs = [...document.querySelectorAll('#pane-transcript > .lp-edgetab')].filter((t) => !t.hidden).map(r); const rows = [...document.querySelectorAll('#viewport > .trow')]; const bodies = [...document.querySelectorAll('#viewport > .trow .body')].map(r);
+      return { tabs: tabs.length, bodies: bodies.length, over: bodies.filter((b) => tabs.some((t) => b.r > t.x - 0.5 && b.x < t.r && b.b > t.y && b.y < t.b)).length, gap: Math.min(...bodies.map((b) => Math.min(...tabs.map((t) => t.x - b.r)))), rowRight: rows.length ? Math.round(document.getElementById('viewport').getBoundingClientRect().right - rows[0].getBoundingClientRect().right) : null }; })()`;
+    const a = await real([{ read: MEET, as: 'before' }, ...typeBoard, ...foldByEsc, { wait: 300 }, { read: MEET, as: 'folded' }], { fixture, width: 1024, height: 768 });
+    expect(a.errors).toEqual([]);
+    const m = a.folded as { tabs: number; bodies: number; over: number; gap: number; rowRight: number };
+    expect(m.tabs).toBe(fixture === 'loops' ? 2 : 1);
+    expect(m.bodies).toBeGreaterThan(0);
+    expect(m.over).toBe(0);
+    expect(m.gap).toBeGreaterThanOrEqual(8);
+    expect(m.rowRight).toBe(14);
+    // no tab yet on the desk (no board, no loops): the rows keep the whole width
+    if (fixture === 'desk') expect(a.before).toMatchObject({ tabs: 0, rowRight: 0 });
+  }, 120_000);
+
   it.each(['desk', 'loops'])('with a board open nothing under the leaf takes focus (%s): the chat header keys, the conversation and the Loops tab are inert; the leaf, then the turn strip, come before the pinned cards and the composer', async (fixture) => {
     const STATE = `(() => { const p = document.getElementById('pane-transcript'); const host = p.querySelector('.bd-host'); return { head: p.querySelector(':scope > .pane-head').inert, viewport: document.getElementById('viewport').inert, before: !!(host.compareDocumentPosition(document.getElementById('composer')) & Node.DOCUMENT_POSITION_FOLLOWING), pinnedAfter: !!(host.compareDocumentPosition(document.getElementById('pinned')) & Node.DOCUMENT_POSITION_FOLLOWING) }; })()`;
     const WHERE = `(() => { const e = document.activeElement; return e ? (e.closest('.bd-host') ? 'leaf' : e.closest('#board-turn') ? 'turn' : e.closest('#pane-transcript > .pane-head') ? 'UNDER:head' : e.closest('#viewport') ? 'UNDER:viewport' : e.matches('.lp-edgetab:not(.bd-edgetab)') ? 'UNDER:loops-tab' : e.closest('#pinned') ? 'pinned' : e.closest('#composer') ? 'composer' : e.closest('#pane-transcript') ? 'pane:' + (e.id || e.className) : 'elsewhere') : 'none'; })()`;

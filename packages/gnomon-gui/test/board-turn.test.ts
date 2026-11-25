@@ -348,4 +348,11 @@ describe('#gui-board-turn Esc from the composer and the trust checks (source fen
     expect(rules).toHaveLength(5);
     for (const r of rules) expect(r, r).not.toMatch(/overflow:\s*hidden/);
   });
+
+  it('P4b-2 item 4: rows under an edge tab take the inset, and a tab class change re-lays the rows at the new row width', () => {
+    expect(CSS).toMatch(/\.lp-tab-on, \.bd-tab-on \{ --edge-tab-inset: 14px; \}/);
+    expect(CSS).toMatch(/\.lp-tab-on \.viewport > \.trow, \.bd-tab-on \.viewport > \.trow \{ right: var\(--edge-tab-inset\); \}/);
+    expect(APP).toMatch(/new MutationObserver\(\(\) => \{[\s\S]{0,200}contains\('lp-tab-on'\)[\s\S]{0,80}contains\('bd-tab-on'\)[\s\S]{0,120}relayout\(\);/);
+    expect(APP).toMatch(/const relayout = \(\): void => \{\s*const w = rowWidth\(\);[\s\S]{0,160}paintTranscript\(true\);/);
+  });
 });

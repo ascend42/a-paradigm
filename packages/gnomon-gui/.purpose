@@ -758,6 +758,12 @@ components:
       escape() checks isTrusted BEFORE the held line. A fold returns
       focus to its opener only when the fold took the focus (it was in
       the leaf). The Loops edge tab is inert while a board is open.
+      P4b-2 item 4: while the board's or the Loops edge tab shows, the
+      chat's rows take a 14px right inset (styles.css --edge-tab-inset;
+      the rows are absolutely placed, so viewport padding never moved
+      them) and clear the tab by 8px; app.ts lays the rows out at the
+      viewport width less the inset and re-lays them when a tab class
+      changes.
       Not built here: the Dimensions list surface (/boards is the palette
       pattern for now), the keep line's final words, G-DDL-08 across
       layout presets.
