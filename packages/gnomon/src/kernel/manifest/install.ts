@@ -440,7 +440,8 @@ function surfaceOf(m: ManifestV2): Surface {
     ...(p.offers?.length ? { offers: p.offers.map((o) => `${o.kind} (${o.phase}) → ${o.handoffTool}: ${o.title} · takes: ${o.contextIn.join(', ') || 'nothing'}`).sort() } : {}),
     hooks: (p.hooks ?? []).map((h) => `${h.event}: ${h.command}`).sort(),
     opaque,
-    effects: [...new Set((p.tools ?? []).flatMap((t) => t.effects))].sort(),
+    // S1.4: the effects a command declares count too, so a mod whose only `write` is on a command says so on its card
+    effects: [...new Set([...(p.tools ?? []).flatMap((t) => t.effects), ...(p.commands ?? []).flatMap((c) => c.effects ?? [])])].sort(),
     egress: Array.isArray(eg) ? eg.map((e) => e.host).sort() : [],
     capabilities: [...(m.requires?.capabilities ?? [])].sort(),
     events: [...(p.events ?? [])].sort(),

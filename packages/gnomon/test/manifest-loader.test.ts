@@ -29,6 +29,7 @@ import {
   collectGitInputs,
   collectLayerInputs,
   detectWidening,
+  COMMAND_DEFAULT_EFFECTS_KEY,
   digestInputs,
   generateRepo,
   gitHash,
@@ -218,6 +219,38 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
     ]) {
       expect(refusalOf(() => validateManifest(baseManifest({ provides }), { tier: 'local' })).manifestCode).toBe('SCHEMA');
     }
+  });
+
+  it('S1.4 (Aegis A7): a command may declare effects, read and write only; network or spend on a command is refused at load', () => {
+    const p = baseManifest().provides!;
+    const withEffects = (effects: unknown): Partial<ManifestV2> => ({ provides: { ...p, commands: [{ id: 'lens.toggle', title: 'Toggle diff lens', effects }] } }) as unknown as Partial<ManifestV2>;
+    // present: kept exactly as declared; absent: no field is invented
+    for (const effects of [['read'], ['write'], ['read', 'write'], ['write', 'read']]) {
+      expect(validateManifest(baseManifest(withEffects(effects)), { tier: 'local' }).provides!.commands![0]!.effects).toEqual(effects);
+    }
+    expect(Object.hasOwn(validateManifest(baseManifest(), { tier: 'local' }).provides!.commands![0]!, 'effects')).toBe(false);
+    const fpOk = fpManifest();
+    fpOk.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects: ['read', 'write'] }];
+    expect(validateManifest(fpOk, { tier: 'first-party' }).provides!.commands![0]!.effects).toEqual(['read', 'write']);
+    // refused at load, for every tier, first-party included: the tool-only effects, an unknown value, an empty list,
+    // a repeat, and anything that is not a list
+    const bad: unknown[] = [['network'], ['spend'], ['read', 'network'], ['read', 'write', 'spend'], ['exec'], [], ['read', 'read'], 'write', { write: true }, [['write']], [null], null];
+    for (const effects of bad) {
+      const r = refusalOf(() => validateManifest(baseManifest(withEffects(effects)), { tier: 'local' }));
+      expect([JSON.stringify(effects), r.manifestCode]).toEqual([JSON.stringify(effects), 'SCHEMA']);
+      const fpm = fpManifest();
+      fpm.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects } as unknown as NonNullable<NonNullable<ManifestV2['provides']>['commands']>[number]];
+      const fp = refusalOf(() => validateManifest(fpm, { tier: 'first-party' }));
+      expect([JSON.stringify(effects), fp.manifestCode]).toEqual([JSON.stringify(effects), 'SCHEMA']);
+    }
+    // the same refusal through the real entry (raw bytes in): nothing is staged for such a tree
+    const home = tmp();
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(withEffects(['read', 'spend'])));
+    expect(refusalOf(() => stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: root() })).manifestCode).toBe('SCHEMA');
+    // a tool keeps all four
+    expect(validateManifest(baseManifest({ provides: { ...p, tools: [{ name: 'lens.diff', effects: ['read', 'write', 'network', 'spend'] }] } }), { tier: 'local' })).toBeTruthy();
+    // the command entry stays closed: one more key is still refused
+    expect(refusalOf(() => validateManifest(baseManifest({ provides: { ...p, commands: [{ id: 'lens.toggle', title: 't', effects: ['read'], network: true }] } } as unknown as Partial<ManifestV2>), { tier: 'local' })).manifestCode).toBe('SCHEMA');
   });
 
   it('mod fields: effects, append-only card/status slots, modns events, reserved keys, command-bound keybindings', () => {
@@ -911,6 +944,84 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     expect(texts.find((t) => t.startsWith('WIDENED'))).toMatch(/hooks \+.*PreToolUse.*steal\.js/);
     expect(texts.some((t) => t.includes('hooks: PreToolUse: node steal.js'))).toBe(true);
     expect(rec.detail.mcp).toEqual(['gm_acme_diff-lens: node srv.js']); // S0b: the kernel derives the server name
+  });
+
+  it('S1.4 (Aegis A7): a tree that adds write to a command raises an Update card that shows cmd:<id>:write', () => {
+    const home = tmp();
+    const auth = root();
+    const declared = (effects: Array<'read' | 'write'>): ManifestV2 => {
+      const m = baseManifest();
+      m.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects }];
+      return m;
+    };
+    const src = writeMod(path.join(tmp(), 'diff-lens'), declared(['read']));
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).state).toBe('ready');
+    // the ONLY change is the command's effects: no tool, command id or capability is added
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(declared(['read', 'write']), null, 2));
+    const ev = events();
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
+    if (paused.state !== 'paused') throw new Error('expected paused');
+    expect(ev.kinds()).toEqual(['mod.paused', 'manifest.widened', 'manifest.staged']);
+    expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['effects']);
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
+    expect(rec.detail.widened).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
+    const texts = (rec.card.block.children as Array<{ text: string }>).map((c) => c.text);
+    // the long card, never the short "nothing widens" one
+    expect(texts.some((t) => t.includes('nothing widens'))).toBe(false);
+    expect(texts.find((t) => t.startsWith('WIDENED'))).toBe('WIDENED: effects +cmd:lens.toggle:write');
+    // the card's effects line names write as well, though no tool declares it
+    expect(texts.find((t) => t.startsWith('effects:'))).toMatch(/^effects: read, write · /);
+  });
+
+  it('S1.4: a tree that REMOVES effects from a command raises an Update card too: absent still means the tool union', () => {
+    const home = tmp();
+    const auth = root();
+    const m = (effects?: Array<'read' | 'write'>): ManifestV2 => {
+      const b = baseManifest();
+      b.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', ...(effects ? { effects } : {}) }];
+      return b;
+    };
+    const src = writeMod(path.join(tmp(), 'diff-lens'), m(['read']));
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(m(), null, 2));
+    const ev = events();
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
+    if (paused.state !== 'paused') throw new Error('expected paused');
+    expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['effects']);
+    const texts = (readStaged(home, 'acme.diff-lens', paused.cardId!)!.card.block.children as Array<{ text: string }>).map((c) => c.text);
+    expect(texts.some((t) => t.includes('nothing widens'))).toBe(false);
+    expect(texts.find((t) => t.startsWith('WIDENED'))).toBe('WIDENED: effects +cmd:lens.toggle:*default');
+  });
+
+  it('S1.4: detectWidening keys a command effect as cmd:<id>:<effect> and an absent field as cmd:<id>:*default; narrowing a declared set adds nothing', () => {
+    const a = baseManifest();
+    const cmd = (effects?: Array<'read' | 'write'>): ManifestV2 => {
+      const m = baseManifest();
+      m.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', ...(effects ? { effects } : {}) }];
+      return m;
+    };
+    expect(detectWidening(a, cmd())).toEqual([]);
+    expect(detectWidening(a, cmd(['read']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:read'] }]);
+    expect(detectWidening(cmd(['read']), cmd(['read', 'write']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
+    expect(detectWidening(cmd(['read', 'write']), cmd(['read']))).toEqual([]);
+    // dropping the field is NOT a narrowing while absent means the union of the tool effects: it is keyed and shown
+    expect(detectWidening(cmd(['read', 'write']), cmd())).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:*default'] }]);
+    expect(detectWidening(cmd(['read']), cmd())).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:*default'] }]);
+    // two trees that both leave the field out differ in nothing, and a first install lists the default key
+    expect(detectWidening(cmd(), cmd())).toEqual([]);
+    expect(detectWidening(null, a).find((w) => w.field === 'effects')!.added).toEqual(['cmd:lens.toggle:*default', 'lens.diff:read']);
+    expect(COMMAND_DEFAULT_EFFECTS_KEY).toBe('*default');
+    // a first install lists the command entries beside the tool entries
+    expect(detectWidening(null, cmd(['read', 'write'])).find((w) => w.field === 'effects')!.added).toEqual(['cmd:lens.toggle:read', 'cmd:lens.toggle:write', 'lens.diff:read']);
+    // a tool named `cmd` keeps its own one-colon key and never reads as a command entry
+    const t = baseManifest();
+    t.provides!.tools!.push({ name: 'cmd', effects: ['write'] });
+    expect(detectWidening(a, t).find((w) => w.field === 'effects')!.added).toEqual(['cmd:write']);
   });
 
   it('detectWidening reports additions by field and ignores removals', () => {
