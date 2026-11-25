@@ -57,7 +57,7 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
   // the leaf covers the chat header and the chat and stops above the pinned cards and the composer
   const fit = (): void => {
     const full = feed.getBoundingClientRect().bottom - pane.getBoundingClientRect().top;
-    host.style.height = `${variant === 'short' ? Math.min(full, 304 + 96) : variant === 'tiny' ? Math.min(full, 200) : full}px`;
+    host.style.height = `${variant === 'short' ? Math.min(full, 304 + 103) : variant === 'tiny' ? Math.min(full, 200) : full}px`;
   };
   fit();
   new ResizeObserver(fit).observe(pane);

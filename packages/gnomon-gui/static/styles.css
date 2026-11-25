@@ -223,6 +223,15 @@ html, body {
 .desk.stack-wide { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(320px, 460px); }
 .desk.stack-wide.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(320px, 460px); }
 .desk.no-sessions > .sessions, .desk.no-stack > .stack { display: none; }
+/* Each pane keeps ITS column (boards S1.3 P4b-3, found by G-DDL-08 under the Focus preset): a hidden pane leaves the
+   grid, and the chat then fell into the sessions column, which is 0 wide, so "Layout: Focus (the chat only)" and a
+   hidden sessions pane showed an empty desk at every width over 900px. Desktop widths only: under 900px the panes
+   are one column and two drawers (below). */
+@media (min-width: 901px) {
+  .desk > .sessions { grid-column: 1; grid-row: 1; }
+  .desk > .transcript { grid-column: 2; grid-row: 1; }
+  .desk > .stack { grid-column: 3; grid-row: 1; }
+}
 
 .pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; overflow: hidden; border-right: 1px solid var(--rule); }
 .pane-head, #session-search-wrap, .composer, .pinned { flex: 0 0 auto; }
@@ -1924,6 +1933,13 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-menu .bd-mi kbd { margin-left: auto; font: inherit; font-size: var(--fs-label); color: var(--sec); }
 .bd-rail.yielded { background: var(--sheet); }
 .bd-rail.yielded kbd { visibility: hidden; }
+/* T-2026-11-25-004: the shortest rail (core/board-rail.ts `tight`) is its keys alone: no graduations, ticks or spacer */
+.bd-rail.tight { background: var(--sheet); }
+/* Nothing in the rail gives way: a row or a tick that shrank was how a rail 1 to 4px short of its room lost its ticks
+   unseen. The spacer's least is 4px, so the rail needs what the design measured (472 whole, 408 without + and −). */
+.bd-row, .bd-brk { flex: none; }
+.bd-grow { min-height: 4px; }
+.bd-menu { overflow-y: auto; overscroll-behavior: contain; }
 .bd-note { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(300px, calc(100% - 32px)); transform: translate(-50%, -50%); box-sizing: border-box; padding: 16px 16px 12px; pointer-events: none; }
 .bd-note p { margin: 0 0 4px; color: var(--sec); }
 .bd-note .bd-en-t { font-size: var(--fs-reading); font-weight: 600; color: var(--ink); }

@@ -115,8 +115,8 @@ export interface BoardLeaf {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-/** the foot's min-height plus its dashed rule (styles.css .bd-foot) */
-const FOOT_HEIGHT = 29;
+/** the foot's height, its dashed rule included (styles.css .bd-foot: 32px, border-box) */
+const FOOT_HEIGHT = 32;
 type Attrs = Record<string, string | number | boolean | undefined>;
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', attrs: Attrs = {}, ...kids: Array<Node | string>): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -354,8 +354,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   function drawRail(state: LeafState): void {
     const s = st();
     const off = (state !== 'open' && state !== 'empty') || inert !== null;
-    rail.className = `bd-rail${off ? ' yielded' : ''}`;
     const lay = railLayout(boardHeight() || 9999, s?.tool ?? 'select');
+    rail.className = `bd-rail${off ? ' yielded' : ''}${lay.tight ? ' tight' : ''}`;
     const style = s?.style ?? { line: CONTENT_DEFAULTS.line, fill: null, weight: 'fine' as BoardWeight };
     // the rail is rebuilt only when what it shows has changed: a rebuild under a pointer press loses the press, and a
     // rebuild on a focus move sent focus round in a loop (review B1)
@@ -367,7 +367,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     for (const group of RAIL_GROUPS) {
       const all = group.filter((t) => lay.visible.includes(t));
       if (all.length === 0) continue;
-      if (!first) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
+      if (!first && !lay.tight) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
       first = false;
       for (const t of all) kids.push(row(off ? '' : railTool(t).letter, toolKey(railTool(t), s, off)));
     }
@@ -376,14 +376,15 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       const more = quietKey('bd-tool bd-more', '⋯', `More tools: ${names}`, off, () => void ((menu = menu === 'more' ? null : 'more'), draw()), { 'aria-haspopup': 'menu', 'aria-label': 'More tools', 'aria-expanded': menu === 'more' ? 'true' : 'false', 'data-key': 'more' });
       kids.push(row('', more, ...(menu === 'more' && !off ? [menuOf(lay.folded.map((t) => ({ label: railTool(t).name, letter: railTool(t).letter, glyph: glyph(railTool(t)), run: () => chooseTool(t) })))] : [])));
     }
-    kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
+    if (!lay.tight) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
     const ink = quietKey('bd-tool bd-ink', '', 'Line and fill', off, () => void ((trayOpen = !trayOpen), draw()), { 'aria-label': `Line ${wellName(style.line)}, fill ${wellName(style.fill)}`, 'aria-expanded': trayOpen ? 'true' : 'false', 'data-key': 'ink' });
     const wl = h('span', 'bd-well line');
     wl.style.setProperty('--wl', colour(style.line, 'line'));
     const wf = h('span', `bd-well fill${style.fill === null ? ' c-none' : ''}`);
     if (style.fill !== null) wf.style.setProperty('--wf', colour(style.fill, 'fill'));
     ink.append(wl, wf);
-    kids.push(row('', ink), h('span', 'bd-grow'));
+    kids.push(row('', ink));
+    if (!lay.tight) kids.push(h('span', 'bd-grow'));
     if (lay.hand) kids.push(row(off ? '' : 'H', toolKey(railTool('hand'), s, off)));
     if (lay.zoomKeys) kids.push(row('', quietKey('bd-tool', '+', 'Zoom in (⌘ +)', off, () => handle?.zoomIn(), { 'aria-label': 'Zoom in', 'data-key': 'zoom-in' })));
     const pct = quietKey('bd-zoom', zoomPercent(s?.zoom ?? 1), lay.zoomKeys ? 'Fit everything (⌘ 0)' : 'Zoom', off, () => (lay.zoomKeys ? handle?.zoomToFit() : void ((menu = menu === 'zoom' ? null : 'zoom'), draw())), lay.zoomKeys ? { 'data-key': 'percent' } : { 'aria-haspopup': 'menu', 'aria-expanded': menu === 'zoom' ? 'true' : 'false', 'data-key': 'percent' });
@@ -393,6 +394,22 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     rail.replaceChildren(...kids);
     // focus goes back to the same key (every rail key has a data-key), or to the chosen tool when that key is gone
     if (focused) (rail.querySelector<HTMLElement>(`[data-key="${focused}"]`) ?? rail.querySelector<HTMLElement>('[tabindex="0"]'))?.focus();
+    placeMenu();
+  }
+  /**
+   * An open rail menu stays inside the board's own area (T-2026-11-25-004): it hangs up from its key, and on a short
+   * board that ran it over the head and out of the leaf's top, where its first rows could not be reached. It is moved
+   * down to fit and, when it is taller than the board, scrolls inside itself. Sizes are CSSOM properties.
+   */
+  function placeMenu(): void {
+    const m = rail.querySelector<HTMLElement>('.bd-menu');
+    if (!m) return;
+    const room = stage.getBoundingClientRect();
+    const edge = 4;
+    m.style.maxHeight = `${Math.max(0, Math.floor(room.height - 2 * edge))}px`;
+    const box = m.getBoundingClientRect();
+    const over = room.top + edge - box.top;
+    if (over > 0) m.style.bottom = `${-Math.ceil(over)}px`;
   }
 
   // ── the tray ─────────────────────────────────────────────────────────────

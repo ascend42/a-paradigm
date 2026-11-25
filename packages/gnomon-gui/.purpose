@@ -440,6 +440,21 @@ components:
       stays for as long as it lasts) and setKeep(line) (the live loop's
       keep state in the keep line's place; a save shows only once slow).
       core/board-leaf.ts keepStateLine and INERT_COPY are stand-in words.
+      Boards S1.3 pass P4b-3 (T-2026-11-25-004, G-DDL-08): the rail is never
+      taller than its room. core/board-rail.ts railLayout draws the fullest of
+      its steps whose railNeed (rows, ticks, gaps and padding from
+      RAIL_METRICS, held to the real paint by test/board-leaf-golden.test.ts)
+      fits the board: whole (472), + and − in the percent key's menu (408),
+      then tools into ⋯ from the bottom of the list down to the design's
+      always-visible Select, Sticky and Text (230). Below that, which the
+      design record does not rule and a board may reach (148 is the least a
+      leaf draws), the same fold goes on: Text, then Sticky, then the
+      graduations, ticks and spacer (the tight rail: Select or the chosen
+      tool, ⋯, line-and-fill, the percent; 140). A folded tool that is chosen
+      takes the last visible slot and never adds a row. An open rail menu is
+      kept inside the board's own area and scrolls inside itself when taller.
+      The leaf's room() is the body it draws (the foot is 32px; it was counted
+      as 29), and no row or tick of the rail shrinks.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]

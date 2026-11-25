@@ -719,4 +719,86 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     const meetsTurn = (o: R): boolean => !!o && o.r > o.x && o.b > o.y && turn.x < o.r - 0.5 && o.x < turn.r - 0.5 && turn.y < o.b - 0.5 && o.y < turn.b - 0.5;
     for (const [name, zone] of [['pinned zone', r.pinned], ['composer', r.composer], ['stack', r.stack]] as const) expect(meetsTurn(zone), `the strip meets the ${name}`).toBe(false);
   }, 120_000);
+
+  // G-DDL-08 in full (boards S1.3 P4b-3): "the board leaf covers the centre column only and no board key is handled
+  // while a card is focused, under every layout preset". Each preset is chosen from the palette by real keys; the
+  // fixture holds three pinned cards, so the board is at its shortest. The last two rows are the windows of
+  // T-2026-11-25-004 (about 190px of board), where the rail's last key used to lie over the foot.
+  it.each([
+    ...['desk', 'focus', 'decide'].flatMap((preset) => [{ preset, width: 1024, height: 768 }, { preset, width: 1280, height: 800 }, { preset, width: 640, height: 400 }]),
+    { preset: 'desk', width: 1280, height: 640, deny: 2 },
+    { preset: 'desk', width: 1024, height: 520, idle: true },
+  ] as Array<{ preset: string; width: number; height: number; deny?: number; idle?: boolean }>)('G-DDL-08 under the $preset preset at $width×$height: the leaf and the strip meet no other zone, the rail stays clear of the foot, and with a card focused no key reaches the board', async ({ preset, width, height, deny = 0, idle = false }) => {
+    const title = { desk: 'Layout: Desk', focus: 'Layout: Focus', decide: 'Layout: Decide' }[preset]!;
+    const RECTS = `(() => { const r = (q) => { const e = document.querySelector(q); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; };
+      const rail = document.querySelector('.bd-host .bd-rail'); const foot = document.querySelector('.bd-host .bd-foot'); const keys = rail ? [...rail.querySelectorAll('button')].map((k) => k.getBoundingClientRect()).filter((k) => k.height > 0) : [];
+      const c = ${CUR}; const leafEl = document.querySelector('.bd-host .bd-leaf');
+      return { leaf: r('.bd-host .bd-leaf'), turn: r('#board-turn'), pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), sessions: r('#pane-sessions'), workshop: r('#workshop'), header: r('#app-header, header'),
+        layout: JSON.parse(localStorage.getItem('gnomon.gui.layout') || '{}').name ?? null, state: c ? c.leaf.state() : null, room: c ? c.leaf.room() : null,
+        rail: rail && keys.length ? { over: rail.scrollHeight - rail.clientHeight, keys: keys.length, gap: Math.round(foot.getBoundingClientRect().top - Math.max(...keys.map((k) => k.bottom))) } : null,
+        outside: leafEl ? [...leafEl.querySelectorAll('*')].filter((e) => { const b = e.getBoundingClientRect(); const l = leafEl.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden]') && !e.closest('.bd-board') && (b.bottom > l.bottom + 1 || b.right > l.right + 1 || b.top < l.top - 1 || b.left < l.left - 1); }).map((e) => e.className).slice(0, 5) : null }; })()`;
+    // a card that can take focus under this preset (Focus hides the stack: the pinned cards are the ones left)
+    const focusCard = { read: `(() => { for (const c of document.querySelectorAll('#pinned .card [data-decision], #stack .card [data-decision], #pinned .card button, #stack .card button')) { c.focus(); if (document.activeElement === c) return true; } return false; })()`, as: 'focused' };
+    const KEYS: Array<Record<string, unknown>> = [{ key: 'a' }, { key: 'd' }, { key: 'n' }, { key: 'r' }, { key: 't' }, { key: 'v' }, { key: '1' }, { key: 'Delete' }, { key: 'Backspace' }, { key: 'z', meta: true }, { key: 'a', meta: true }, { key: 'v', meta: true, commands: ['paste'] }, { key: 'b', alt: true }, { key: 'Escape' }];
+    const steps = KEYS.flatMap((k, i) => [{ ...focusCard, as: `card${i}` }, { ...k, settle: 100 }, facts(`k${i}`)]);
+    const a = await real(
+      [
+        { key: 'k', meta: true }, { wait: 200 }, ...type(title), { wait: 200 }, { read: `(document.querySelector('#palette-list .pal-row.sel') || {}).textContent ?? null`, as: 'row' }, { key: 'Enter' }, { wait: 500 },
+        // the reported windows: pinned cards are decided by real presses until the board has the room the report names
+        ...Array.from({ length: deny }, () => [{ press: '#pinned .card [data-decision="deny"]' }, { wait: 900 }]).flat(),
+        // (or a session with no pinned card at all: the stack's cards are then the ones a key could reach)
+        ...(idle ? toIdle : []),
+        ...typeBoard, { read: RECTS, as: 'rects' },
+        facts('before'), ...steps,
+      ],
+      { fixture: idle ? 'desk' : 'always-scopes', width, height, shot: `app-ddl08-${preset}-${width}x${height}` },
+    );
+    expect(a.errors).toEqual([]);
+    expect(String(a.row)).toContain(title);
+    type R = { x: number; y: number; r: number; b: number } | null;
+    const r = a.rects as { leaf: R; turn: R; pane: R; stack: R; status: R; pinned: R; composer: R; sessions: R; workshop: R; layout: string | null; state: string | null; room: number | null; rail: { over: number; keys: number; gap: number } | null; outside: string[] | null };
+    expect(r.layout).toBe(preset);
+    expect(r.leaf, 'the board opened').not.toBeNull();
+    const leaf = r.leaf!;
+    const pane = r.pane!;
+    // inside the centre column
+    expect(leaf.x).toBeGreaterThanOrEqual(pane.x - 0.5);
+    expect(leaf.r).toBeLessThanOrEqual(pane.r + 0.5);
+    expect(leaf.y).toBeGreaterThanOrEqual(pane.y - 0.5);
+    expect(leaf.b).toBeLessThanOrEqual(pane.b + 0.5);
+    const meets = (o: R, w: NonNullable<R>): boolean => !!o && o.r > o.x && o.b > o.y && w.x < o.r - 0.5 && o.x < w.r - 0.5 && w.y < o.b - 0.5 && o.y < w.b - 0.5;
+    // the stack, the status strip, the pinned cards and the composer (and the sessions rail and the Workshop where the preset shows them)
+    for (const [name, zone] of [['stack', r.stack], ['status strip', r.status], ['pinned zone', r.pinned], ['composer', r.composer], ['sessions rail', r.sessions], ['Workshop', r.workshop]] as const) {
+      expect(meets(zone, leaf), `the leaf meets the ${name}`).toBe(false);
+      if (r.turn) expect(meets(zone, r.turn), `the turn strip meets the ${name}`).toBe(false);
+    }
+    // the zones the preset keeps are really on the page (so "meets none" is not a hidden zone passing)
+    expect(r.composer && r.composer.b > r.composer.y, 'the composer shows').toBe(true);
+    if (!idle) expect(!!r.pinned && r.pinned.b > r.pinned.y, 'the pinned zone shows').toBe(true);
+    // (under 900px the stack is a drawer in every preset; over it, Focus is the chat alone and takes the whole desk)
+    if (width > 900) {
+      expect(!!r.stack && r.stack.r > r.stack.x && r.stack.b > r.stack.y, 'the stack').toBe(preset !== 'focus');
+      expect(!!r.sessions && r.sessions.r > r.sessions.x && r.sessions.b > r.sessions.y, 'the sessions rail').toBe(preset !== 'focus');
+      expect(pane.r - pane.x, 'the centre column').toBeGreaterThanOrEqual(preset === 'focus' ? width - 1 : 300);
+    }
+    // nothing of the leaf is drawn outside it, and the rail (when the board is tall enough to have one) is clear of the foot
+    expect(r.outside).toEqual([]);
+    // the two reported windows have a short board that CAN be drawn on, under the height the always-visible rail needs
+    if (deny > 0 || idle) expect(r.room, `the board's room (${r.state})`).toSatisfy((n: number) => n >= 148 && n < 230);
+    if (r.state === 'too-short') expect(r.rail).toBeNull();
+    else {
+      expect(r.rail, `a rail at ${r.room}px of board`).not.toBeNull();
+      expect(r.rail!.over, `the rail is taller than its room (${r.room}px of board)`).toBeLessThanOrEqual(0);
+      expect(r.rail!.gap, `the last rail key is ${r.rail!.gap}px from the foot (${r.room}px of board)`).toBeGreaterThanOrEqual(4);
+    }
+    // with a card focused: no op, no frame, no row, no fold, no tool change, whatever the key
+    const f = (k: string): Facts => a[k] as Facts;
+    const before = f('before');
+    expect(before).toMatchObject({ open: true, rows: ['session.start:command'], frames: 1 });
+    KEYS.forEach((k, i) => {
+      const name = `${k.meta ? 'Cmd+' : ''}${k.alt ? 'Alt+' : ''}${String(k.key)}`;
+      expect(a[`card${i}`], `a card had focus for ${name}`).toBe(true);
+      expect(f(`k${i}`), name).toMatchObject({ open: true, frames: before.frames, rows: before.rows, nodes: before.nodes, marks: before.marks, tool: before.tool, pending: 0, card: true });
+    });
+  }, 180_000);
 });
