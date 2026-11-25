@@ -236,7 +236,7 @@ describe('#gui-host-hints slip DOM', () => {
     expect(APP).toMatch(/function onHostCopy\(ref: string, e: Event\): void \{\n  if \(!e\.isTrusted\) return;/);
     expect(APP).toMatch(/const cmd = hint \? copyTextOf\(hint\) : null;/);
     expect(APP).toMatch(/navigator\.clipboard\.writeText\(cmd\)/);
-    expect(APP).toMatch(/wireHostSlips\(\$\('viewport'\), \{ copy: onHostCopy, open: \(id, e\) => run\(id, e\.isTrusted\) \}\);/);
+    expect(APP).toMatch(/wireHostSlips\(\$\('viewport'\), \{ copy: onHostCopy, open: \(id, e\) => run\(id, e\.isTrusted, e\) \}\);/); // (the press's own event is handed on since the review of PR #119)
     expect(SLIP_UI).not.toMatch(/\.innerHTML\s*=|log\.append|client\.call/);
   });
   it('the CSS: the offer-slip paper, flat; the command mono and wrapping', () => {

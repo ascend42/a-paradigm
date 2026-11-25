@@ -212,9 +212,9 @@ describe('#gui-settings Aegis fixes (M1, M2, L1, L2/L3)', () => {
   it('L2/L3: the theme switch checks isTrusted and run() takes the gesture trust (never hard-coded true for palette paths)', () => {
     // board header-5b: the theme row lives in the Gnomon menu, whose click handler takes only the human's own press
     expect(app).toMatch(/\$\('wordmark-menu'\)\.addEventListener\('click', \(e\) => \{\s*if \(!e\.isTrusted\) return;/);
-    expect(app).toMatch(/function run\(id: string, trusted: boolean\)/);
-    expect(app).toMatch(/return run\(palItems\[palSel\]!\.id, e\.isTrusted\)/);
-    expect(app).toMatch(/if \(r\) run\(r\.dataset\.id!, e\.isTrusted\)/);
+    expect(app).toMatch(/function run\(id: string, trusted: boolean, event\?: Event\)/);
+    expect(app).toMatch(/return run\(palItems\[palSel\]!\.id, e\.isTrusted, e\)/);
+    expect(app).toMatch(/if \(r\) run\(r\.dataset\.id!, e\.isTrusted, e\)/);
     expect(app).not.toMatch(/setMode\([^)]*'(repo|session)', true\)|voiceClientOp\('(start|stop)', true\)/);
   });
   it('M2: the standing feed sits under overlays, hides while a dialog is open, its offer is a toast, the pile reserves room', () => {
