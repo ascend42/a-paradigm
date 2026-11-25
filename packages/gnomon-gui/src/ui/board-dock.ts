@@ -130,7 +130,14 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     if (host.hidden) return;
     host.style.height = `${Math.max(0, Math.round(d.feed.getBoundingClientRect().bottom - d.pane.getBoundingClientRect().top))}px`;
   };
-  const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => (fit(), placeTab(), d.turn?.()));
+  /** the turn strip is painted in the next frame, never inside the observer: its height changes the observed feed */
+  let turnQueued = false;
+  const turnSoon = (): void => {
+    if (turnQueued || !d.turn) return;
+    turnQueued = true;
+    requestAnimationFrame(() => ((turnQueued = false), d.turn?.()));
+  };
+  const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => (fit(), placeTab(), turnSoon()));
   ro?.observe(d.pane);
   ro?.observe(d.feed);
 

@@ -93,7 +93,7 @@ describe('#gui-board fences', () => {
   it('the app mounts the leaf through the dock only (S1.3 P4b-1): app.ts imports the loader, the opening rules and the dock, never the leaf or its parts', () => {
     expect(src('src/main.ts')).not.toMatch(/board-leaf|board-rail|board-tray|board-overlay|board-seal|board-dock|core\/board\.js/);
     const app = src('src/ui/app.ts');
-    expect([...app.matchAll(/from '([^']*board[^']*)'/g)].map((m) => m[1]).sort()).toEqual(['../core/board-open.js', '../core/board.js', './board-dock.js']);
+    expect([...app.matchAll(/from '([^']*board[^']*)'/g)].map((m) => m[1]).sort()).toEqual(['../core/board-open.js', '../core/board-turn.js', '../core/board.js', './board-dock.js', './board-turn.js']);
     expect(app).toContain('load: () => loadBoard(),');
   });
   it('only the dev preview imports the leaf', () => {

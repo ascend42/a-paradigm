@@ -181,7 +181,7 @@ describe('T-2026-10-21-007 the page wiring', () => {
   it('the page passes the session liveness to chatItems, syncs one ticker per paint and rewrites only the clock spans', () => {
     const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
     expect(app).toMatch(/chatItems\(rows, \{ raw, live \}\)/);
-    expect(app).toMatch(/liveTicker\.sync\(hasLive\(items\)\)/);
+    expect(app).toMatch(/liveTicker\.sync\(hasLive\(items\) \|\| !!turnStrip\?\.live\(\)\)/);
     expect(app).toMatch(/querySelector\('\.live-clock'\)/);
     expect(app).not.toMatch(/setInterval\(\(\) => paintTranscript/);
     const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');

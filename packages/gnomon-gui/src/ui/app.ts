@@ -843,6 +843,17 @@ const NO_TURN = latestTurn([]);
  * an offer slip, a host slip, a run row) is said as ` · needs you` or ` · more in the chat`.
  */
 function paintBoardTurn(): void {
+  // in the next frame, once per frame: the strip's height moves the feed, and a paint run from a ResizeObserver
+  // (the viewport's, the dock's) must not change what that observer watches inside its own delivery
+  if (turnPaintQueued || !turnStrip) return;
+  turnPaintQueued = true;
+  requestAnimationFrame(() => {
+    turnPaintQueued = false;
+    paintBoardTurnNow();
+  });
+}
+let turnPaintQueued = false;
+function paintBoardTurnNow(): void {
   const strip = turnStrip;
   if (!strip) return;
   if (!focused || !boardDock.isOpen()) return strip.paint({ open: false, turn: NO_TURN, agent: 'Claude', room: () => 0, kept: false });
@@ -859,6 +870,8 @@ function paintBoardTurn(): void {
     room: () => (boardDock.current()?.leaf.room() ?? 0) + $('board-turn').offsetHeight,
     kept: boardDock.kept(),
   });
+  // (deferred: the ticker also runs while only the strip shows a running turn, the raw view's case)
+  liveTicker.sync(hasLive(items) || strip.live());
 }
 /**
  * Show chat (and the strip's working key) after the board folded: the chat at its latest row with focus in it, the
@@ -2250,8 +2263,8 @@ function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = e
   // founder report 2026-10-23: a refused voice SEND reads in plain words (core/capture.ts voiceRefusalText). Mika
   // 2026-10-23: only here, on the send path; in refusalText every voice-* refusal (an attach, an input change) read
   // "not sent by voice · … next: press Enter to send it"
+  const why = err instanceof RpcError ? (voiceRefusalText(err.refusal) ?? refusalText(err.refusal)) : 'may not have been sent: the connection to the kernel failed';
   const voice = err instanceof RpcError ? voiceRefusalText(err.refusal) : null;
-  const why = err instanceof RpcError ? (voice ?? refusalText(err.refusal)) : 'may not have been sent: the connection to the kernel failed';
   // #gui-board-turn: the strip says the refusal's message (never its code), or the chat's own not-sent words
   const brief = refusalBrief({ voice, message: err instanceof RpcError ? err.refusal.message : null });
   if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why, brief });
@@ -4179,7 +4192,11 @@ function wire(): void {
     if (w !== width) {
       if (width) widths.save(transcriptId(), width, heights);
       width = w;
+      // the re-measure remounts every row: a key that had focus (show chat's working key) gets it back
+      const had = (document.activeElement as HTMLElement | null)?.closest?.('#viewport [data-act]') as HTMLElement | null;
+      const act = had?.dataset.act ?? null;
       paintTranscript(true);
+      if (act !== null) $('viewport').querySelector<HTMLElement>(`[data-act="${CSS.escape(act)}"]`)?.focus({ preventScroll: true });
     } else paintTranscript();
   };
   new ResizeObserver(relayout).observe($('viewport'));
@@ -4190,7 +4207,9 @@ function wire(): void {
     const on = `${p.contains('lp-tab-on')}${p.contains('bd-tab-on')}`;
     if (on === tabsOn) return;
     tabsOn = on;
-    relayout();
+    // next frame: a tab and the strip change with the same fold, and the sizes they change settle first (a relayout
+    // inside that layout pass left a ResizeObserver loop undelivered)
+    requestAnimationFrame(relayout);
   }).observe($('pane-transcript'), { attributes: true, attributeFilter: ['class'] });
   $('status-line').addEventListener('click', (e) => run('view.kernel-feed', e.isTrusted)); // S5.4: the readout links to the kernel feed
   $('jump-latest').addEventListener('click', () => {
