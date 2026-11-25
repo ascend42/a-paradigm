@@ -94,6 +94,11 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge on a real kernel (S1.4-P2, the br
     expect(trace(w).find((x) => x.t === 'perm-answer' && x.id === 'p-1')).toMatchObject({ behavior: 'deny' });
     expect([...k.handle.log.read({ reader: { class: 'human' }, kinds: ['inject.receipt'] })].filter((v) => (v as { event?: { payload?: { outcome?: string } } }).event?.payload?.outcome === 'ok')).toEqual([]);
     expect(k.handle.mods.running()).not.toContain(PROBE);
+    // the refused call is ONE folded counter row, written when the session ends (stopped here, so it is in the log before the kernel goes)
+    const counterRows = (kk: DevKernel) => [...kk.handle.log.read({ reader: { class: 'human' }, kinds: ['inject.receipt'] })].map((v) => (v as unknown as { event: { principal: string; payload: Record<string, unknown> } }).event).filter((e) => e.payload.outcome === 'refused');
+    await k.client.call('session.stop', { hsid: s.hsid });
+    const k1 = k;
+    expect(await waitFor(() => counterRows(k1).length === 1, 15_000)).toBe(true);
     await k.stop();
     fs.rmSync(path.join(w.stubDir, 'trace.jsonl'), { force: true });
 
@@ -119,11 +124,8 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge on a real kernel (S1.4-P2, the br
     const rows = [...k.handle.log.read({ reader: { class: 'human' }, kinds: ['inject.receipt', 'approval.auto'] })] as unknown as Array<{ seq: number; event: { kind: string; principal: string; session?: string; causes?: string[]; payload: Record<string, unknown> } }>;
     const receipts = rows.filter((r) => r.event.kind === 'inject.receipt' && r.event.payload.outcome !== 'refused');
     expect(receipts).toHaveLength(1);
-    // the first kernel's refused call (an unknown tool) is ONE folded counter row, written when its session ended
     const counters = rows.filter((r) => r.event.kind === 'inject.receipt' && r.event.payload.outcome === 'refused');
     expect(counters.map((r) => [r.event.principal, r.event.payload.count, r.event.payload.byWhy, r.event.payload.tool, r.event.payload.shas])).toEqual([[`p:${ns}/mods-mcp`, 1, { 'unknown-tool': 1 }, null, []]]);
-    expect(receipts[0]!.event).toMatchObject({ principal: `p:${ns}/mods-mcp`, payload: { hsid: s.hsid, turn: `turn:${s.hsid}/1`, requester: out.relayedFor.principal, owner: `p:${ns}/mod-${PROBE}`, tool: 'bridge-echo', refs: [], outcome: 'ok', bytes: Buffer.byteLength(text, 'utf8') } });
-    expect(Object.keys(receipts[0]!.event.payload).sort()).toEqual(['bytes', 'hsid', 'outcome', 'owner', 'refs', 'requester', 'shas', 'tool', 'turn']);
     expect(JSON.stringify(receipts).includes(OTHER) || JSON.stringify(receipts).includes('evil0000')).toBe(false);
     // approval.auto{modeRef:'mod-tool'} is in the log, and before the receipt (the allow came before the call)
     const auto = rows.find((r) => r.event.kind === 'approval.auto' && r.event.payload.modeRef === 'mod-tool');

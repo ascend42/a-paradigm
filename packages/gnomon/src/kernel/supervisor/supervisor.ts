@@ -355,11 +355,6 @@ export interface SupervisorOptions {
    * so a real kernel writes no entry in this pass.
    */
   modBridge?: ModBridge;
-  /**
-   * TEST RIG ONLY: the loop origin a new session opens with. No supervisor (Claude) session is a loop session in 8.0
-   * (^loop-origin-clamp), so this is the only way to exercise the clamp on this lane. Never set by the daemon.
-   */
-  loopOriginFor?: (hsid: string) => { loopId: string; runId: string; authoredBy: string; trustCard?: string } | undefined;
   /** TEST RIG ONLY: the session scratch base (default the identity's DARWIN_USER_TEMP_DIR) */
   scratchBase?: string;
 }
@@ -1235,8 +1230,6 @@ export class SessionSupervisor {
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
         ...(repoCtx ? { skills: { dir: repoCtx.pluginDir, ctx: { skills: repoCtx.skills, refused: repoCtx.refused } } } : {}), binary: { exec: priv.exec, sha256: priv.sha256 },
       };
-      const loopOrigin = this.#o.loopOriginFor?.(hsid);
-      if (loopOrigin) s.loopOrigin = loopOrigin;
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path

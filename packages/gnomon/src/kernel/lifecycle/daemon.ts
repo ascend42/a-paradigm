@@ -382,7 +382,7 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
  * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
  */
 export interface DaemonSeams {
-  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; loopOriginFor?: (hsid: string) => { loopId: string; runId: string; authoredBy: string; trustCard?: string } | undefined };
+  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
   /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
   modBridge?: Pick<ModBridgeOptions, 'allow' | 'currentPin' | 'foldWindowMs'>;
   billing?: BillingScanSource;
