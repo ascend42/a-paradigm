@@ -393,8 +393,9 @@ components:
       throws on a from that is no Map (it answers with an empty map) or on rows
       that cannot be iterated; dimMayDraw reads a present but malformed entry,
       and a grants value that is no Map, as may not draw; dimTextForScanS12 is
-      module-private; the 500 ms bound is also held for a 4,096-string op of
-      non-ASCII strings read in three texts each (measured 5.5 to 8.1 ms).
+      module-private; the stated time bound of the scan-cap test is also held
+      for a 4,096-string op of non-ASCII strings read in three texts each (the
+      measured figures, with method and machine, are in the test comment).
       DEFERRED, tracked here: the grant map is not bounded by this fold
       (the mod refuses a grant for a session that is not attached).
     path: src/dim.ts
