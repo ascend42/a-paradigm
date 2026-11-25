@@ -103,6 +103,22 @@ afterEach(() => {
 });
 
 describe('#gui-dim-session open, edit, confirm', () => {
+  it('a REFUSED delete keeps its selection: the marks are put back and selected again; a refused add selects nothing (Mika, final)', async () => {
+    const w = world();
+    const { s, h } = await opened(w);
+    const select = vi.fn();
+    (h.handle as unknown as { select: typeof select }).select = select;
+    s.attachHandle(h.handle);
+    h.edit([rect(1)], press());
+    await flush();
+    w.sessions.linkDown();
+    h.edit([rect(2)], press());
+    expect(select).not.toHaveBeenCalled();
+    h.edit([{ type: 'delete', id: ULID(1) } as DimOp], press('keydown'));
+    expect(select.mock.calls).toEqual([[[ULID(1)]]]);
+    // unit only: the paths that refuse a delete before it leaves (the undo bound, a link that is down) are not
+    // reachable with real input in the preview (the Reconnect scrim covers the board; the bound needs 65 marks)
+  });
   it('dim.open goes ONCE, on the stamp of the press; ops wait for it; an edit is sent with the session focus and a stamp, and is saved when its row arrives', async () => {
     const w = world();
     const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));

@@ -225,7 +225,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const titleEl = h('span', 'title', { title: o.title }, o.title);
   const headKey = h('button', 'key quiet', { type: 'button' });
   const escKey = h('button', 'key quiet', { type: 'button', title: 'Fold to the edge tab (Esc)' }, 'esc');
-  const head = h('div', 'lp-head bd-head', {}, h('span', 'bd-g', { 'aria-hidden': 'true' }, '◰'), titleEl, h('span', 'bd-medium', {}, LEAF_COPY.medium), h('button', 'key quiet rename-btn', { type: 'button', 'aria-label': 'Rename dimension', 'aria-disabled': 'true', title: 'Rename arrives with the live board' }, '✎'), h('span', 'spacer'), headKey, escKey);
+  const head = h('div', 'lp-head bd-head', {}, h('span', 'bd-g', { 'aria-hidden': 'true' }, '◰'), titleEl, h('span', 'bd-medium', {}, LEAF_COPY.medium), h('button', 'key quiet rename-btn', { type: 'button', 'aria-label': 'Rename dimension', 'aria-disabled': 'true', title: 'Rename is not built yet' }, '✎'), h('span', 'spacer'), headKey, escKey);
   const keep = h('div', 'lp-keep bd-keep');
   const rail = h('div', 'bd-rail', { role: 'radiogroup', 'aria-label': 'Board tools', 'aria-orientation': 'vertical' });
   // the drawing surface is one region with a name; its description is the empty note's hint (design `tab_order`)
@@ -271,7 +271,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   function drawHead(state: LeafState): void {
     const failed = state === 'failed';
     headKey.textContent = failed ? LEAF_COPY.tryAgain : 'Dimensions ▾';
-    headKey.title = failed ? '' : 'Dimensions in this project (/boards)';
+    headKey.title = failed ? '' : 'Not built yet · type /boards for this project’s dimensions';
     if (failed) headKey.removeAttribute('aria-disabled');
     else headKey.setAttribute('aria-disabled', 'true'); // the list is S1.3's
     keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert ? ' bd-said-line' : ''}`;

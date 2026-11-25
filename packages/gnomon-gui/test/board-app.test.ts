@@ -20,7 +20,7 @@ const A = 'globalThis.gnomonPreviewApp';
 const CUR = `${A}.board.dock.current()`;
 const ERRORS = { read: "(globalThis.__errs = [], addEventListener('error', (e) => globalThis.__errs.push(String(e.message) + ' ' + String(e.error && e.error.stack).slice(0, 600))), 1)", as: 'listening' };
 /** count every `mod.command` frame the page sends from here on */
-const COUNT = { read: `(() => { const k = ${A}.kernel; if (!k.__n) { k.__n = { n: 0 }; const send = k.send.bind(k); k.send = (s) => { if (String(s).includes('"mod.command"')) k.__n.n++; return send(s); }; } return 1; })()`, as: 'counting' };
+const COUNT = { read: `(() => { const k = ${A}.kernel; if (!k.__n) { k.__n = { n: 0 }; const send = k.send.bind(k); k.__g = []; k.__approve = { n: 0 }; k.send = (s) => { if (String(s).includes('"mod.command"')) { k.__n.n++; try { const m = JSON.parse(s); k.__g.push([m.params.commandId, m.params.args.gesture ? m.params.args.gesture.n : null]); } catch {} } if (String(s).includes('"method":"approve"')) k.__approve.n++; return send(s); }; } return 1; })()`, as: 'counting' };
 const FACTS = `(() => { try {
   const c = ${CUR}; const k = ${A}.kernel; const l = document.querySelector('.bd-host .bd-leaf'); const st = c ? c.session.status() : null; const hd = c ? c.leaf.handle() : null;
   const rows = k.rows.filter((r) => String(r.event.kind).startsWith('modns.gnomon.dimension.')).map((r) => String(r.event.kind).slice('modns.gnomon.dimension.'.length) + (r.event.payload.opened ? ':' + r.event.payload.opened : '') + (Array.isArray(r.event.payload.ops) ? ':' + r.event.payload.ops.map((o) => o.type).join('+') : ''));
@@ -243,10 +243,17 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
       [
         ...typeBoard, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('held'),
         { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, { press: '#reconnect-btn' }, { wait: 3000 }, facts('back'), { wait: 7000 }, facts('later'),
-        { press: '.bd-host .bd-head .spacer' }, { key: 'Escape' }, { wait: 900 }, facts('folded'),
+        { read: `(() => { globalThis.__shot = 1; return 1; })()`, as: 'mark' },
       ],
       { shot: 'app-link-back' },
     );
+    const b = await real([
+      ...typeBoard, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('held'),
+      { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, { press: '#reconnect-btn' }, { wait: 3000 },
+      { press: '.bd-host .bd-head .spacer' }, { key: 'Escape' }, { wait: 900 }, facts('folded'),
+    ]);
+    a.folded = b.folded;
+    expect(b.errors).toEqual([]);
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     expect(f('back')).toMatchObject({ open: true, link: 'up', line: KEEP_COPY.wordsWait });
@@ -304,6 +311,88 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(a.after).toMatchObject({ head: false, viewport: false });
   }, 120_000);
 
+  it('Probe: a card decides the same with and without a board open (a real Space and a real Enter on its key), and card letters typed on a focused board decide nothing', async () => {
+    const focus = (label: string): string => `(() => { const all = [...document.querySelectorAll('#stack [data-decision]')]; const b = all.find((x) => x.textContent.trim().toLowerCase() === ${JSON.stringify(label)}.toLowerCase()); if (!b) return { missing: all.map((x) => x.textContent.trim() + '/' + x.tagName).slice(0, 12), stack: document.getElementById('stack').children.length }; b.focus(); return { id: b.dataset.cardId, decision: b.dataset.decision }; })()`;
+    const state = `({ approve: ${A}.kernel.__approve.n, cards: document.querySelectorAll('#stack .card').length, frames: ${A}.kernel.__n.n })`;
+    const acts = [
+      { read: focus('Allow'), as: 'fAllow' }, { key: ' ', settle: 500 }, { read: state, as: 'sAllow' },
+      { read: focus('Accept'), as: 'fAccept' }, { key: 'Enter', text: '\r', settle: 500 }, { read: state, as: 'sAccept' },
+      { read: focus('Resolve'), as: 'fResolve' }, { key: ' ', settle: 500 }, { read: state, as: 'sResolve' },
+    ];
+    const without = await real([{ read: state, as: 's0' }, ...acts]);
+    const withBoard = await real([...typeBoard, ...drawRect, facts('before'), { read: state, as: 's0' }, ...acts, facts('after')]);
+    if (process.env.GNOMON_DEBUG) console.log('CARD', JSON.stringify(without));
+    expect(without.errors).toEqual([]);
+    expect(withBoard.errors).toEqual([]);
+    type S = { approve: number; cards: number; frames: number };
+    const d = (r: Record<string, unknown>, k: string): number => (r[k] as S).approve - (r.s0 as S).approve;
+    // the real activation reaches the kernel as a decision (the test's own check that Space and Enter activate)
+    expect(d(without, 'sAllow')).toBe(1);
+    for (const k of ['sAllow', 'sAccept', 'sResolve']) expect(d(withBoard, k), `${k} with a board open`).toBe(d(without, k));
+    for (const k of ['fAllow', 'fAccept', 'fResolve']) expect(withBoard[k], k).toEqual(without[k]);
+    // and the board took none of it
+    const before = withBoard.before as Facts;
+    expect(withBoard.after).toMatchObject({ open: true, frames: before.frames, rows: before.rows, nodes: before.nodes, marks: before.marks, drift: 0 });
+    // the other way: letters a card would read, typed with the BOARD focused, decide nothing
+    const typed = await real([...typeBoard, { read: state, as: 's0' }, { press: '.bd-host [data-key="tool:select"]' }, { at: [200, 330], press: true }, ...type('adyn12'), { key: ' ' }, { wait: 300 }, { read: state, as: 's1' }, facts('f')]);
+    expect(typed.errors).toEqual([]);
+    expect((typed.s1 as S).approve).toBe((typed.s0 as S).approve);
+    expect((typed.s1 as S).cards).toBe((typed.s0 as S).cards);
+    expect(typed.f).toMatchObject({ open: true, nodes: 0, rows: ['session.start:command'] });
+  }, 300_000);
+
+  it('Probe: a synthetic click or Enter on the palette row "Open board" and on a /boards row opens nothing; a row of another session attaches then opens on ONE stamp', async () => {
+    const synth = `(() => { const i = document.getElementById('palette-input'); const row = document.querySelector('#palette-list .pal-row.sel') || document.querySelector('#palette-list .pal-row'); const text = row ? row.textContent : null; if (row) row.click(); i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })); return text; })()`;
+    const other = `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); idle.click(); return idle.dataset.hsid; })()`;
+    const a = await real([
+      // the palette's own row, untrusted
+      { key: 'k', meta: true }, { wait: 200 }, ...type('open board'), { wait: 200 }, { read: synth, as: 'palRow' }, { wait: 600 }, facts('palette'), { key: 'Escape' }, { key: 'Escape' },
+      // a dimension of this session, folded; then its /boards row, untrusted
+      ...typeBoard, ...foldByEsc, { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { wait: 400 },
+      { read: `document.getElementById('palette-input').placeholder`, as: 'placeholder' }, { read: synth, as: 'listRow' }, { wait: 600 }, facts('list'), { key: 'Escape' }, { key: 'Escape' }, { wait: 200 },
+      // another session: its own board (so its repo is known), folded; then the FIRST session's row from /boards
+      { read: other, as: 'hsid2' }, { wait: 400 }, ...typeBoard, ...foldByEsc, facts('second'),
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { wait: 400 }, { read: `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent)`, as: 'rows' },
+      ...type('Totals'), { wait: 200 }, { read: `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent)`, as: 'filtered' }, { key: 'Enter' }, { wait: 2500 }, facts('attached'),
+      { read: `${A}.kernel.__g`, as: 'stamps' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(String(a.palRow)).toMatch(/^Open board/);
+    expect(f('palette')).toMatchObject({ open: false, rows: [], frames: 0 });
+    expect(a.placeholder).toBe('find a dimension');
+    expect(String(a.listRow)).toMatch(/^Totals are off/);
+    expect(f('list')).toMatchObject({ open: false, frames: 2 });
+    // the second session lists both dimensions of the repo; the first session's says it is not this session's yet
+    expect(a.rows as string[]).toHaveLength(2);
+    expect((a.filtered as string[])[0]).toMatch(/^Totals are off.*not this session’s yet$/);
+    // ONE press: dim.attach then dim.open, both on the same stamp
+    expect(f('attached')).toMatchObject({ open: true, phase: 'open' });
+    expect(f('attached').rows.slice(-2)).toEqual(['attach', 'session.start:command']);
+    const stamps = a.stamps as Array<[string, number | null]>;
+    expect(stamps.slice(-2).map((s) => s[0])).toEqual(['dim.attach', 'dim.open']);
+    expect(stamps[stamps.length - 1]![1]).toBe(stamps[stamps.length - 2]![1]);
+    expect(stamps[stamps.length - 1]![1]).not.toBeNull();
+  }, 240_000);
+
+  it('Probe: a board that is out of date (a driven hash mismatch) is held still: a real drag and real keys add nothing and send nothing, and Esc still folds it', async () => {
+    const lie = `(() => { const m = ${A}.mod; const run = m.run.bind(m); m.run = (...x) => { const r = run(...x); if (x[0] === 'dim.open' && r && r.ok) r.hash = 'sha256:' + '0'.repeat(64); return r; }; return 1; })()`;
+    const a = await real([
+      { read: lie, as: 'lie' }, ...typeBoard, facts('opened'),
+      { read: `(() => { const k = ${A}.kernel; k.__before = k.__n.n; return 1; })()`, as: 'm' },
+      { press: '.bd-host [data-key="tool:rect"]' }, { drag: [[250, 200], [290, 225], [330, 250]] }, { wait: 400 }, ...type('nt'), { at: [200, 330], press: true }, ...type('zz'), { key: 'Delete' }, { wait: 400 }, facts('poked'),
+      { key: 'Escape' }, { wait: 900 }, facts('folded'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('opened')).toMatchObject({ open: true, inert: 'out-of-date', line: 'This board is out of date · fold it and open it again' });
+    expect(f('opened').check).toMatch(/^Did not match at change \d+/);
+    // real input on the held-still board: no mark, no row, no command left the page
+    expect(f('poked')).toMatchObject({ open: true, inert: 'out-of-date', nodes: 0, marks: 0, rows: ['session.start:command'], frames: f('opened').frames, field: null });
+    // the line tells the person to fold, and the fold works
+    expect(f('folded').open).toBe(false);
+  }, 120_000);
+
   it('G-DDL-08 core: with a card focused no key reaches the board (no op, no frame, no engine change), ⌥B included; no card focus runs during a board text edit', async () => {
     const KEYS: Array<Record<string, unknown>> = [{ key: 'a' }, { key: 'd' }, { key: 'y' }, { key: 'n' }, { key: '1' }, { key: '2' }, { key: 'o', meta: true }, { key: 's', meta: true }, { key: 'e', meta: true, shift: true }, { key: 'z', meta: true }, { key: 'v', meta: true, commands: ['paste'] }, { key: 'b', alt: true }, { key: 'Escape' }, { key: 'Enter' }];
     const focusCard = { read: `(() => { const c = document.querySelector('#stack .card [data-decision], #pinned .card [data-decision], #stack .card button, #pinned .card button'); if (c) c.focus(); return !!(document.activeElement && document.activeElement.closest('.card')); })()`, as: 'focused' };
@@ -334,6 +423,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     { width: 1024, height: 768, fixture: 'desk', theme: 'night', pinned: 'own' },
     { width: 1440, height: 900, fixture: 'always-scopes', theme: 'night', pinned: 'two' },
     { width: 1024, height: 768, fixture: 'always-scopes', theme: 'day', pinned: 'two' },
+    { width: 1280, height: 800, fixture: 'desk', theme: 'day', pinned: 'own' },
+    { width: 1280, height: 800, fixture: 'always-scopes', theme: 'day', pinned: 'two' },
+    { width: 640, height: 400, fixture: 'desk', theme: 'day', pinned: 'own' },
   ])('G-DDL-08 layout at $width×$height ($fixture): the leaf lies inside the centre column and meets none of the stack, the status strip, the pinned zone or the composer', async ({ width, height, fixture, theme, pinned }) => {
     const RECTS = `(() => { const r = (q) => { const e = typeof q === 'string' ? document.querySelector(q) : q; if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; };
       return { leaf: r('.bd-host .bd-leaf'), pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), cards: document.querySelectorAll('#pinned .card').length, head: r('.bd-host .bd-head'), toast: r('#toasts'), line: (() => { const k = document.querySelector('.bd-host .bd-keep'); return k ? k.scrollWidth <= k.clientWidth + 1 : null; })() }; })()`;

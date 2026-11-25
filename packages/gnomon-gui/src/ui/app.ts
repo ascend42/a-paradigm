@@ -3271,7 +3271,7 @@ function openMoreMenu(): void {
   const bo = $('board-open');
   if (focused) bo.removeAttribute('aria-disabled');
   else bo.setAttribute('aria-disabled', 'true');
-  bo.title = focused ? 'Open this session’s board (/board)' : 'This session has no board yet';
+  bo.title = focused ? 'Open this session’s board (/board)' : 'Open a session first';
   $('more-menu').hidden = false;
   $('more-btn').setAttribute('aria-expanded', 'true');
 }
@@ -3877,7 +3877,8 @@ let palOpener: HTMLElement | null = null;
 function openPalette(prefix = '', dims = false): void {
   closeAppMenu();
   palDims = dims ? [] : null;
-  $<HTMLInputElement>('palette-input').setAttribute('aria-label', dims ? 'Dimensions' : 'command palette');
+  $<HTMLInputElement>('palette-input').setAttribute('aria-label', dims ? 'Dimensions' : 'command');
+  $<HTMLInputElement>('palette-input').placeholder = dims ? 'find a dimension' : 'command or verb';
   if ($('palette').hidden) palOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   $('palette').hidden = false;
   const i = $<HTMLInputElement>('palette-input');
@@ -3904,7 +3905,8 @@ function paintPalette(): void {
     clear(list);
     list.appendChild(h(doc, 'div', { class: 'menu-h', role: 'presentation' }, 'Dimensions') as unknown as HTMLElement);
     palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim }, h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: 'pal-kbd' }, [r.time, ...r.notes].filter(Boolean).join(' · '))) as unknown as HTMLElement));
-    if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, 'No dimensions in this project yet · /board opens one')) as unknown as HTMLElement);
+    // none at all, or none that match what was typed: two different things, said as what they are
+    if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? 'This session has no dimensions yet · /board opens one' : 'Open a session first')) as unknown as HTMLElement);
     return;
   }
   palItems = filterCommands(paletteEntries(status as never), $<HTMLInputElement>('palette-input').value);

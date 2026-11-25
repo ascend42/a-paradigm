@@ -732,6 +732,18 @@ components:
       dropped on reset, switch, fold, hash mismatch or principal change.
       With a card focused ⌥B leaves an open board alone, and app.ts runs
       no programmatic card focus during a board text edit (G-DDL-08).
+      After the review of PR #119: Esc from OUTSIDE the leaf never folds a
+      held-still board that holds words or unsaved changes; a fold from the
+      leaf reads the words and session.unsaved BEFORE the destroy and says
+      them; held words dropped anywhere are said once; the waiting cue is
+      the keep line for as long as words are held; the held-still line
+      says Not connected unless the page reconnects by itself; a fold
+      needs a trusted event; a failed open says why as a toast and closes
+      its leaf; what lies under an open leaf is inert and the leaf comes
+      before the pinned cards and the composer in the focus order; the
+      Reconnect dialog sits at the foot of the window while a board is
+      open (styles.css). No ambient event: every opener is handed the
+      event of its own press (run(id, trusted, event)).
       Not built here (P4b-2): the Dimensions list surface (/boards is the
       palette pattern for now), the keep line's final words, the working
       line under the leaf, G-DDL-08 across layout presets.
@@ -757,6 +769,13 @@ components:
       followLog is handed: every row the GUI store takes also goes to the
       dimension sessions, and a cursor-epoch reset resets both. lastDim
       and the listings are display hints, never access decisions.
+      After the review of PR #119: listingsFor shows a repo's dimensions
+      only when the repo can be told from a dimension the session is
+      attached to, else ONLY the session's own; boardTitleOf cleans a
+      title with the contracts' display sanitizer before it is sent;
+      followBoth resets the dimension side when another log id is adopted.
+      board.* and dimensions.* are not block-safe (core/commands.ts
+      BLOCK_SAFE_COMMANDS is an allowlist).
     path: src/core/board-open.ts
     type: module
     tags: [gnomon, gui, dimension, board]
