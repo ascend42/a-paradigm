@@ -14,12 +14,12 @@ import { readDeskMods } from '../src/kernel/desk/mcp-passthrough.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
-import { createModBridge, MOD_BRIDGE_SENTENCES, type BridgeRow } from '../src/kernel/modhost/mcp-bridge.js';
+import { MOD_BRIDGE_SENTENCES, type BridgeRow } from '../src/kernel/modhost/mcp-bridge.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { fakeLog } from './dimension-helpers.js';
-import { firstPartyProbeManifest, host, installFirstParty, rig } from './mod-helpers.js';
+import { firstPartyProbeManifest, host, installFirstParty, rig, testModBridge } from './mod-helpers.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -72,7 +72,7 @@ function boot(o: { mode?: string; allow?: Record<string, string[]> | null } = {}
   const events: Boot['events'] = [];
   const bridgeRows: BridgeRow[] = [];
   let reached = 0;
-  const modBridge = createModBridge({
+  const modBridge = testModBridge({
     mods: () => readDeskMods(r.home, r.auth),
     host: () => ({ admit: (n) => h.admit(n), callTool: (...a) => (reached++, h.callTool(...a)) }),
     ns: () => 'abcdefgh',

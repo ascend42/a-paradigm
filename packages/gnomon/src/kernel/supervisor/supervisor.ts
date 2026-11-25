@@ -1573,7 +1573,9 @@ export class SessionSupervisor {
       try {
         // the caller, captured NOW: synchronously, before the first await, from the Session object ONLY. A `result`
         // line may splice turnIds while the call waits; nothing in ev.message ever reaches the stamp.
-        const caller = this.#bridgeSession(s);
+        // Only a tools/call has a caller: initialize, tools/list and the rest read nothing of the session.
+        const m = ev.message as { method?: unknown } | null;
+        const caller = m !== null && typeof m === 'object' && m.method === 'tools/call' ? this.#bridgeSession(s) : null;
         this.#bridgeDetect(s, ev.message);
         line = drv.mcpResponseLine(ev.requestId, await modBridgeAnswer(ev.message, bridge, () => (s.state === 'running' ? caller : null)));
       } catch {

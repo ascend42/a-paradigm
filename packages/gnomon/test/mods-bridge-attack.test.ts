@@ -9,12 +9,12 @@ import * as fs from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { readDeskMods } from '../src/kernel/desk/mcp-passthrough.js';
 import {
-  checkBridgeArguments, createModBridge, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_LIMITS, MOD_BRIDGE_MOD_SENTENCES, MOD_BRIDGE_SENTENCES, modBridgeAnswer, newBridgeRate,
+  checkBridgeArguments,  MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_LIMITS, MOD_BRIDGE_MOD_SENTENCES, MOD_BRIDGE_SENTENCES, modBridgeAnswer, newBridgeRate,
   type BridgePorts, type BridgeRow, type BridgeSession, type ModBridge,
 } from '../src/kernel/modhost/mcp-bridge.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { fakeLog } from './dimension-helpers.js';
-import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig } from './mod-helpers.js';
+import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig, testModBridge } from './mod-helpers.js';
 
 const PROBE = 'gnomon.probe';
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -65,7 +65,7 @@ function world(callTimeoutMs = 1_500): World {
   let reached = 0;
   const append = { mode: 'ok' as 'ok' | 'fail' | 'hang' };
   let t = 1_000;
-  const bridge = createModBridge({
+  const bridge = testModBridge({
     mods: () => readDeskMods(r.home, r.auth),
     host: () => ({ admit: (n) => h.admit(n), callTool: (...a) => (reached++, h.callTool(...a)) }),
     ns: () => r.auth.ns,
@@ -353,7 +353,7 @@ describe('#mod-tool-bridge: the answerer under attack', () => {
     const r = w.r;
     const late: BridgeRow[] = [];
     // the same home and mod host are not reachable from here, so a second bridge over a stub host: the call rejects 300 ms in
-    const bridge = createModBridge({
+    const bridge = testModBridge({
       mods: () => readDeskMods(r.home, r.auth),
       host: () => ({ admit: async () => undefined as never, callTool: () => new Promise((_res, rej) => setTimeout(() => rej(new Error('late failure')), 300)) }),
       ns: () => r.auth.ns,

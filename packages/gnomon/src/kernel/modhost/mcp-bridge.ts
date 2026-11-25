@@ -79,13 +79,12 @@
  */
 import { createHash } from 'node:crypto';
 import { canonicalJson, type ToolRelayedFor } from '@a-company/gnomon-contracts';
-import { RESERVED_PRINCIPAL_NAMES } from '../identity/registry.js';
 import { HISTORICAL_FIRST_PARTY_PINS } from '../manifest/grants.js';
 import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../manifest/install.js';
 import { GNOMON_VERSION } from '../../version.js';
 import { walkPayloadKeys } from './bridge.js';
 import { RowFold } from './fold.js';
-import type { ModHost } from './host.js';
+import { MOD_PIN_CHANGED, type ModHost } from './host.js';
 import { isModRefusal, ModRefusal, type ModRefusalCode } from './refusal.js';
 
 export const MOD_BRIDGE_SERVER = 'gnomon-mods';
@@ -138,6 +137,8 @@ export interface BridgeMod {
 
 export interface BridgeTool {
   mod: string;
+  /** the package hash the tool was LISTED at: the call is bound to it (a child running another package is refused) */
+  packageHash: string;
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
@@ -157,13 +158,14 @@ export function modBridgeTools(mods: readonly BridgeMod[], allow: Readonly<Recor
   const out: BridgeTool[] = [];
   const seen = new Map<string, number>();
   for (const m of [...mods].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    if (!Object.hasOwn(allow, m.name)) continue;
+    if (!Object.hasOwn(allow, m.name) || !FENCE_ID.test(m.name)) continue;
     if (m.tier !== 'first-party' || m.manifest.publisher !== 'gnomon') continue;
     if (typeof m.packageHash !== 'string' || !currentPin(m.packageHash)) continue;
     const declared = m.manifest.provides?.tools ?? [];
     for (const name of allow[m.name] ?? []) {
       const t = declared.find((x) => x.name === name);
-      if (!t || !Array.isArray(t.effects) || t.effects.includes('network') || t.effects.includes('spend')) continue;
+      // a name the fence could not carry is never listed (it would run and then could not be handed over)
+      if (!t || !FENCE_ID.test(name) || !Array.isArray(t.effects) || t.effects.includes('network') || t.effects.includes('spend')) continue;
       const schema = t.schema;
       if (!isObj(schema) || own(schema, 'type') !== 'object') continue;
       const description = own(schema, 'description');
@@ -174,7 +176,7 @@ export function modBridgeTools(mods: readonly BridgeMod[], allow: Readonly<Recor
         continue; // a schema that cannot be canonicalised is not listed
       }
       seen.set(name, (seen.get(name) ?? 0) + 1);
-      out.push({ mod: m.name, name, description, inputSchema: schema });
+      out.push({ mod: m.name, name, description, inputSchema: schema, packageHash: m.packageHash });
     }
   }
   return out.filter((t) => seen.get(t.name) === 1);
@@ -225,7 +227,6 @@ export type BridgeRefusal = (typeof MOD_BRIDGE_REFUSALS)[number];
 
 /** The reserved principal name of the bridge's rows: `p:<ns>/mods-mcp` (spec §9; no enrolment can yield it). */
 export const MOD_BRIDGE_PRINCIPAL_NAME = 'mods-mcp';
-if (!RESERVED_PRINCIPAL_NAMES.includes(MOD_BRIDGE_PRINCIPAL_NAME)) throw new Error('#mod-tool-bridge: its principal name is not reserved in the registry');
 export const modBridgePrincipal = (ns: string): string => `p:${ns}/${MOD_BRIDGE_PRINCIPAL_NAME}`;
 export const MOD_BRIDGE_RECEIPT_KIND = 'inject.receipt' as const;
 /** Aegis A2: the payload keys of a RECEIPT (`outcome: ok | error`), exactly these nine. A counter row carries MOD_BRIDGE_COUNTER_KEYS. */
@@ -267,7 +268,7 @@ export interface BridgePorts {
   /** the list rule, derived NOW */
   tools(): BridgeTool[];
   /** host.admit(mod), then the mod host's tool call with the whole host-known value */
-  call(mod: string, tool: string, input: unknown, s: BridgeSession): Promise<unknown>;
+  call(mod: string, tool: string, input: unknown, s: BridgeSession, packageHash: string): Promise<unknown>;
   /** one kernel-composed refusal, folded into the session's counter row */
   refused(s: Pick<BridgeSession, 'hsid' | 'principal'>, why: BridgeRefusal): void;
   /** Aegis M7: take one of the mod's call slots (queued or running, across ALL sessions); false ⇒ none is free */
@@ -286,6 +287,7 @@ export const MOD_BRIDGE_SENTENCES = Object.freeze({
   result: 'The tool ran, but its result could not be handed over.',
   failed: 'The tool call failed.',
   receipt: 'The result could not be recorded, so it was not handed over.',
+  pinChanged: 'This mod changed since its tools were listed. Nothing was run.',
   manual: 'Refused: this session is in manual mode. Mod tools wait on an approved plan.',
   loop: 'Refused: loop sessions never call mod tools.',
   noTurn: 'Refused: no turn is open for this call.',
@@ -410,11 +412,13 @@ async function runCall(id: string | number, tool: BridgeTool, params: Record<str
   s.rate.inFlight++;
   let result: unknown;
   try {
-    result = await ports.call(tool.mod, tool.name, input, s);
+    result = await ports.call(tool.mod, tool.name, input, s, tool.packageHash);
   } catch (err) {
     // a fixed sentence per code; the refusal's own message (it may quote a mod) never reaches the model
     const refusal = isModRefusal(err) && Object.hasOwn(MOD_BRIDGE_MOD_SENTENCES, err.modCode);
     ports.refused(s, refusal ? 'mod-refused' : 'mod-failed');
+    // the child runs another package than the one the tool was listed at (an update landed in between)
+    if (refusal && err.detail.why === MOD_PIN_CHANGED) return text(id, MOD_BRIDGE_SENTENCES.pinChanged, true);
     return text(id, refusal ? MOD_BRIDGE_MOD_SENTENCES[err.modCode] : MOD_BRIDGE_SENTENCES.failed, true);
   } finally {
     s.rate.inFlight--;
@@ -506,13 +510,17 @@ export interface ModBridgeOptions {
   append(row: BridgeRow): Promise<unknown>;
   /** the identity namespace; null (no root identity yet) ⇒ no receipt can be written, so no result is handed over */
   ns(): string | null;
-  /** TESTS ONLY: production passes none and gets MOD_BRIDGE_TOOLS, which is empty until P5 (Aegis M1) */
-  allow?: Readonly<Record<string, readonly string[]>>;
-  /** TESTS ONLY: production passes none and gets isCurrentFirstPartyPin */
-  currentPin?: (packageHash: string) => boolean;
   now?: () => number;
   foldWindowMs?: number;
   receiptWaitMs?: number;
+}
+
+/** TEST SEAMS ONLY (never on ModBridgeOptions; the daemon passes them only from DaemonSeams, as the mod host's seams are). */
+export interface ModBridgeSeams {
+  /** production: MOD_BRIDGE_TOOLS, which is empty until P5 (Aegis M1) */
+  allow?: Readonly<Record<string, readonly string[]>>;
+  /** production: isCurrentFirstPartyPin */
+  currentPin?: (packageHash: string) => boolean;
 }
 
 export interface ModBridge extends BridgePorts {
@@ -531,7 +539,7 @@ export const MOD_BRIDGE_FOLD_SESSIONS = 256;
 export const MOD_BRIDGE_CLOSED_SESSIONS = 1024;
 
 /** The ports over a mod host and the log. The ONE production caller of the mod host's tool call is `call` below (G-MOD-19). */
-export function createModBridge(o: ModBridgeOptions): ModBridge {
+export function createModBridge(o: ModBridgeOptions, seams: ModBridgeSeams = {}): ModBridge {
   const now = o.now ?? (() => performance.now());
   const folds = new Map<string, RowFold>();
   /** sessions that ended (bounded, oldest forgotten): a late refusal for one opens no fold */
@@ -571,15 +579,15 @@ export function createModBridge(o: ModBridgeOptions): ModBridge {
   };
   return {
     ...(o.receiptWaitMs !== undefined ? { receiptWaitMs: o.receiptWaitMs } : {}),
-    tools: () => modBridgeTools(o.mods(), o.allow ?? MOD_BRIDGE_TOOLS, o.currentPin ?? isCurrentFirstPartyPin),
+    tools: () => modBridgeTools(o.mods(), seams.allow ?? MOD_BRIDGE_TOOLS, seams.currentPin ?? isCurrentFirstPartyPin),
     now,
-    async call(mod, tool, input, s) {
+    async call(mod, tool, input, s, packageHash) {
       // the WHOLE host-known value, or none: a label outside the pattern vouches for nobody (rows then fold unknown)
       const rf: ToolRelayedFor | null = MOD_BRIDGE_LIMITS.agentLabel.test(s.agent) && s.turn !== null ? { principal: s.principal, surface: s.surface, agent: s.agent, hsid: s.hsid, turn: s.turn } : null;
       const host = o.host();
       if (host === null) throw new ModRefusal('NOT_RUNNING', 'the mod host is not up', { name: mod });
       await host.admit(mod); // an admit counts against the restart cap; a paused, down or missing mod is refused here
-      return host.callTool(mod, tool, input, { hsid: s.hsid, ...(rf ? { toolRelayedFor: rf } : {}) });
+      return host.callTool(mod, tool, input, { hsid: s.hsid, expectPackageHash: packageHash, ...(rf ? { toolRelayedFor: rf } : {}) });
     },
     enter(mod) {
       const n = slots.get(mod) ?? 0;

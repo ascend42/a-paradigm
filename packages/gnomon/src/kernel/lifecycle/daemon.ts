@@ -143,7 +143,7 @@ import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { StagedCardPickup } from '../modhost/control.js';
 import { FeedBacklog, FEED_BACKLOG_KINDS, type FeedSourceRow } from '../modhost/feed.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
-import { createModBridge, type ModBridgeOptions } from '../modhost/mcp-bridge.js';
+import { createModBridge, type ModBridgeOptions, type ModBridgeSeams } from '../modhost/mcp-bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 import { VoiceControl } from '../voice/voice-control.js';
@@ -384,7 +384,7 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
 export interface DaemonSeams {
   supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
   /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
-  modBridge?: Pick<ModBridgeOptions, 'allow' | 'currentPin' | 'foldWindowMs'>;
+  modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
   billing?: BillingScanSource;
   /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
   drainDeadlineMs?: number;
@@ -1192,8 +1192,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     host: () => mods,
     ns: () => authority.ns,
     append: (row) => log.append({ kind: row.kind, principal: row.principal, payload: row.payload, session: row.session, as: 'userland', ...(row.causes ? { causes: row.causes } : {}) }),
-    ...(seams.modBridge ?? {}),
-  });
+    ...(seams.modBridge?.foldWindowMs !== undefined ? { foldWindowMs: seams.modBridge.foldWindowMs } : {}),
+  }, { ...(seams.modBridge?.allow ? { allow: seams.modBridge.allow } : {}), ...(seams.modBridge?.currentPin ? { currentPin: seams.modBridge.currentPin } : {}) });
   const supervisor: SessionSupervisor = new SessionSupervisor({
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // TD-2026-10-27-833 slice C2': local sessions reach the same servers (first-party Paradigm + the enabled ones)

@@ -19,7 +19,7 @@ import { HISTORICAL_FIRST_PARTY_PINS } from '../src/kernel/manifest/grants.js';
 import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
 import { writePause } from '../src/kernel/modhost/control.js';
 import {
-  bridgeHeld, bridgeRefs, checkBridgeArguments, createModBridge, escapeBridgeJson, fenceBridgeResult, isCurrentFirstPartyPin, MOD_BRIDGE_ENTRY, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_FENCE_SENTENCE,
+  bridgeHeld, bridgeRefs, checkBridgeArguments,  escapeBridgeJson, fenceBridgeResult, isCurrentFirstPartyPin, MOD_BRIDGE_ENTRY, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_FENCE_SENTENCE,
   MOD_BRIDGE_COUNTER_KEYS, MOD_BRIDGE_LIMITS, MOD_BRIDGE_MOD_SENTENCES, MOD_BRIDGE_PRINCIPAL_NAME, MOD_BRIDGE_RECEIPT_KEYS, MOD_BRIDGE_SENTENCES, MOD_BRIDGE_SERVER, MOD_BRIDGE_TOOLS, modBridgeAnswer, modBridgePrincipal,
   modBridgeTools, newBridgeRate, type BridgeMod, type BridgePorts, type BridgeRow, type BridgeSession, type ModBridge,
 } from '../src/kernel/modhost/mcp-bridge.js';
@@ -29,7 +29,7 @@ import { loopClampAllows } from '../src/kernel/supervisor/loop-clamp.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { fakeLog } from './dimension-helpers.js';
 import { PKG_ROOT } from './helpers.js';
-import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig } from './mod-helpers.js';
+import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig, testModBridge } from './mod-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -96,7 +96,7 @@ function world(over: { allow?: Record<string, string[]> | null; currentPin?: ((h
   const hostCalls: World['hostCalls'] = [];
   let fail = false;
   let t = 1_000;
-  const bridge = createModBridge({
+  const bridge = testModBridge({
     mods: () => readDeskMods(r.home, r.auth),
     host: () => ({ admit: (n) => (hostCalls.push({ method: 'admit', args: [n] }), h.admit(n)), callTool: (...a) => (reached++, hostCalls.push({ method: 'callTool', args: JSON.parse(JSON.stringify(a)) as unknown[] }), h.callTool(...a)) }),
     ns: () => r.auth.ns,
@@ -162,6 +162,12 @@ describe('#mod-tool-bridge: the list rule and the empty production allowlist (Ae
     expect(listed([mod({ tools: [{ name: 't', effects: ['read'], schema: { type: 'object', description: 'ok', pad: 'x'.repeat(8 * 1024) } }] })])).toEqual([]); // over 8 KiB
     expect(listed([mod({ tools: [{ name: 't', effects: ['network'], schema: SCHEMA }] })])).toEqual([]);
     expect(listed([mod({ tools: [{ name: 't', effects: ['read', 'spend'], schema: SCHEMA }] })])).toEqual([]);
+    // a mod or tool name the fence could not carry is never listed (it would run and then could not be handed over)
+    expect(listed([mod({ tools: [{ name: 'bad"tool', effects: ['read'], schema: SCHEMA }] })], { [PROBE]: ['bad"tool'] })).toEqual([]);
+    expect(listed([mod({ tools: [{ name: 't<x>', effects: ['read'], schema: SCHEMA }] })], { [PROBE]: ['t<x>'] })).toEqual([]);
+    expect(listed([mod({ name: 'gnomon.bad mod' })], { 'gnomon.bad mod': ['t'] })).toEqual([]);
+    // every listed tool carries the pin it was listed at
+    expect(modBridgeTools([mod()], { [PROBE]: ['t'] }, () => true)[0]!.packageHash).toBe('sha256:current');
     // a name two listed mods declare is listed for neither
     expect(listed([mod(), mod({ name: 'gnomon.twin' })], { [PROBE]: ['t'], 'gnomon.twin': ['t'] })).toEqual([]);
   });
@@ -240,6 +246,26 @@ describe('#mod-tool-bridge: a call is stamped from the session only (G-MOD-19)',
     // a refused call (held) makes no host call at all, not even an admit
     await ask(w, w.session({ held: 'manual' }), call('bridge-echo', {}));
     expect(w.hostCalls).toHaveLength(2);
+  });
+
+  it('the call is bound to the pin the tool was listed at: a child still running pin A while the grants say pin B is refused, and the mod is not reached (Aegis I3)', async () => {
+    const w = world();
+    await w.h.admit(PROBE); // the child runs the first package (pin A)
+    const pinA = w.bridge.tools()[0]!.packageHash;
+    // an update lands: a new snapshot and a new grant.install (pin B). The running child is still pin A.
+    installFirstParty(w.r, MANIFEST, `${SOURCE}\n// a second build\n`);
+    const pinB = w.bridge.tools()[0]!.packageHash;
+    expect(pinB).not.toBe(pinA);
+    expect(w.h.running()).toContain(PROBE);
+    const a = await ask(w, w.session(), call('bridge-write', {}));
+    expect([a.result!.isError, textOf(a)]).toEqual([true, MOD_BRIDGE_SENTENCES.pinChanged]);
+    expect(w.hostCalls.at(-1)!.args[3]).toMatchObject({ expectPackageHash: pinB });
+    expect(w.modRows()).toEqual([]); // the write tool never ran
+    expect(receipts(w)).toEqual([]);
+    // the host itself refuses in the tick of the dispatch, whoever calls; the pin the child runs is still served
+    await expect(w.h.callTool(PROBE, 'bridge-write', {}, { expectPackageHash: pinB })).rejects.toMatchObject({ modCode: 'NOT_RUNNING', detail: { why: 'pin-changed' } });
+    expect(w.modRows()).toEqual([]);
+    await expect(w.h.callTool(PROBE, 'bridge-echo', {}, { expectPackageHash: pinA })).resolves.toBeTruthy();
   });
 
   it('an agent label outside the pattern vouches for nobody: the mod is sent no relayedFor at all', async () => {
@@ -418,7 +444,7 @@ describe('#mod-tool-bridge: the receipt (Aegis A2; G-MOD-22)', () => {
     expect(JSON.stringify(a).includes('gnomon-mod-result')).toBe(false);
     w.failAppends(false);
     // no identity namespace: no principal to write under, so nothing is handed over either
-    const noNs = createModBridge({ mods: () => readDeskMods(w.r.home, w.r.auth), host: () => w.h, ns: () => null, append: async (row) => void w.rows.push(row), allow: ALLOW, currentPin: () => true });
+    const noNs = testModBridge({ mods: () => readDeskMods(w.r.home, w.r.auth), host: () => w.h, ns: () => null, append: async (row) => void w.rows.push(row), allow: ALLOW, currentPin: () => true });
     const b = (await modBridgeAnswer(call('bridge-echo', { raw: { secret: 'MARKER-9431' } }), noNs, () => w.session())) as Ans;
     expect(textOf(b)).toBe(MOD_BRIDGE_SENTENCES.receipt);
     // the session stops while the mod works: neither a receipt nor a result
@@ -532,7 +558,7 @@ describe('#mod-tool-bridge: the gates it enforces itself (Aegis M2) and the caps
 
 describe('#mod-tool-bridge: rows at the edges (review fixes: bounded receipt wait, awaited flush, no fold for a dead session)', () => {
   const stub = (append: (row: BridgeRow) => Promise<unknown>, over: Record<string, unknown> = {}) =>
-    createModBridge({ mods: () => [{ name: PROBE, manifest: { publisher: 'gnomon', provides: { tools: [{ name: 't', effects: ['read'], schema: SCHEMA }] } }, packageHash: 'sha256:x', tier: 'first-party' }], host: () => ({ admit: async () => undefined, callTool: async () => ({ ok: true }) }) as never, ns: () => 'abcdefgh', append, allow: { [PROBE]: ['t'] }, currentPin: () => true, ...over });
+    testModBridge({ mods: () => [{ name: PROBE, manifest: { publisher: 'gnomon', provides: { tools: [{ name: 't', effects: ['read'], schema: SCHEMA }] } }, packageHash: 'sha256:x', tier: 'first-party' }], host: () => ({ admit: async () => undefined, callTool: async () => ({ ok: true }) }) as never, ns: () => 'abcdefgh', append, allow: { [PROBE]: ['t'] }, currentPin: () => true, ...over });
   const sess = (o: Partial<BridgeSession> = {}): BridgeSession => ({ hsid: HSID, principal: 'p:abcdefgh/s-01hzzzzz', agent: 'claude', turn: `turn:${HSID}/1`, surface: 'bridge', held: null, rate: newBridgeRate(), running: () => true, ...o });
 
   it('a receipt append that never settles: ONE answer, the fixed receipt sentence, inside the bound', async () => {
