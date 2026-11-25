@@ -182,7 +182,16 @@ export interface KernelCallRequest {
   callId?: string;
   /** S1.2 C1: the host's stamp of the bound command or tool call (absent ⇒ idle, view or host-initiated); never mod input */
   stamp?: CallStamp;
+  /**
+   * S1.4 (Aegis A4): the kind of the bound host → mod call, from the host's own call context (`tool.call` ⇒ `tool`,
+   * `command.run` ⇒ `command`, a view render or no call ⇒ `idle`). HOST-INTERNAL: the bridge's tool-row share reads
+   * it, it is never read from a mod request, never sent to a mod and in no ABI descriptor.
+   */
+  callKind: ModCallKind;
 }
+
+/** The kinds of bound call the append budget tells apart (host-internal; see KernelCallRequest.callKind). */
+export type ModCallKind = 'tool' | 'command' | 'idle';
 
 export interface ModHostOptions {
   home: string;
@@ -937,7 +946,7 @@ export class ModHost {
     // S1.3 A4: the args are host-composed for every mod; a joined focus also scopes the rows of this call
     const composed = this.#composeRelayedArgs(r, args, rf, opts.relayedClass ?? null);
     const stamp: CallStamp | null = rf ? { relayedFor: rf, ...(composed.scope ? { scope: composed.scope } : {}) } : null;
-    const out = (await this.#call(name, 'command.run', { commandId, args: composed.args, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
+    const out = (await this.#call(name, 'command.run', { commandId, args: composed.args, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', commandId, ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 
@@ -1087,7 +1096,13 @@ export class ModHost {
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
         const callId = typeof params.callId === 'string' ? params.callId : undefined;
         const stamp = (ctx.kind === 'command' || ctx.kind === 'tool') && ctx.stamp ? ctx.stamp : undefined;
-        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}) }) };
+        // S1.4 A4: from the bound context alone (the mod's request has no say); a view render counts as idle.
+        // THE HUMAN RESERVE RESTS ON THE COMMAND READ CAP: `command` here means "a person on the GUI" only because
+        // effectsFor (above) already refused every write of a command whose stamp is not `surface: gui` from a
+        // gnomon-published mod (commandCap, G-MOD-17). A command context that could write for any other caller
+        // would hand that caller the 15 reserved rows (test/command-effects.test.ts pins the two together).
+        const callKind: ModCallKind = ctx.kind === 'tool' ? 'tool' : ctx.kind === 'command' ? 'command' : 'idle';
+        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}), callKind }) };
       }
     } catch (err) {
       if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {

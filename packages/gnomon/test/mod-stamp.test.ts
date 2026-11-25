@@ -31,7 +31,10 @@ async function started(caps: string[] = []) {
   const { manifestHash } = install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), m));
   if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash, capabilities: caps });
   const rows: ModAppendRow[] = [];
-  const kernelCall = createModKernelCall({ callAs: async () => ({}), append: async (row) => (rows.push(row), { seq: rows.length }) });
+  // S1.4 (G-MOD-21): these tests are about stamps, not the append budget, and some append more than 5 tool rows in
+  // one real second. The bridge's clock steps a full window per append here, so no row of theirs meets a budget.
+  let clock = 1_000_000;
+  const kernelCall = createModKernelCall({ callAs: async () => ({}), append: async (row) => (rows.push(row), { seq: rows.length }) }, { now: () => (clock += 1_000) });
   const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall });
   cleanups.push(() => h.stopAll());
   await h.start('acme.probe');
@@ -394,7 +397,8 @@ describe('G-MOD-17: a command\'s args are host-composed; hsid and repo come from
 describe('G-MOD-17: the command read cap: a command writes only for a human on the GUI and a gnomon-published mod', () => {
   type Out = { relayedFor: Record<string, string> | null; out: { ok: boolean; v?: string; code?: unknown } };
   const M = (publisher: string): ManifestV2 => ({ ...probeManifest(), publisher });
-  const cmd = (rf?: Record<string, string>): Extract<CallContext, { kind: 'command' }> => ({ kind: 'command', ...(rf ? { stamp: { relayedFor: rf } } : {}) });
+  // S1.4: the context names the command, as host.ts runCommand does (a context with no id is read-only)
+  const cmd = (rf?: Record<string, string>): Extract<CallContext, { kind: 'command' }> => ({ kind: 'command', commandId: 'probe.who', ...(rf ? { stamp: { relayedFor: rf } } : {}) });
 
   it('the pure rule: full effects need an own surface: gui on the stamp AND publisher gnomon; every other command context is read', () => {
     const full = ['read', 'write', 'network', 'spend'];
@@ -418,7 +422,7 @@ describe('G-MOD-17: the command read cap: a command writes only for a human on t
     expect(commandCap(M('gnomon'), cmd(inherited))).toBe('read');
     // the dev cap still applies on top, and the cap never widens a mod that declared no read
     expect([...effectsFor(M('gnomon'), cmd({ surface: 'gui' }), true)]).toEqual(['read']);
-    expect([...effectsFor({ ...M('acme'), provides: { tools: [{ name: 'probe.write', effects: ['write'] }] } }, cmd({ surface: 'gui' }), false)]).toEqual([]);
+    expect([...effectsFor({ ...M('acme'), provides: { tools: [{ name: 'probe.write', effects: ['write'] }], commands: probeManifest().provides!.commands! } }, cmd({ surface: 'gui' }), false)]).toEqual([]);
     // tools, views and idle are untouched by the command cap
     expect([...effectsFor(M('acme'), { kind: 'tool', tool: 'probe.write' }, false)]).toEqual(['read', 'write']);
     expect([...effectsFor(M('gnomon'), { kind: 'view' }, false)]).toEqual(['read']);
