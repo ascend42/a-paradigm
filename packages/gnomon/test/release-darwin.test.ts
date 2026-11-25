@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as rel from '../scripts/release-darwin.mjs';
 import { appBundleOf } from '../src/kernel/lifecycle/app-bundle.js';
 import { findFirstPartyRoot } from '../src/kernel/modhost/mods-admin.js';
-import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { firstPartyPins, isFirstPartyPin } from '../src/kernel/manifest/install.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 // @ts-expect-error -- a plain .mjs script, no declarations
 import * as bump from '../scripts/bump-bundled-node.mjs';
@@ -190,7 +190,7 @@ describe('#release-darwin --dry-run --unsigned', () => {
     expect(fs.readdirSync(mods!).sort()).toEqual(expect.arrayContaining(shipped));
     for (const n of shipped) {
       const m = JSON.parse(readFileSync(path.join(mods!, n, 'gnomon-manifest.json'), 'utf8')) as { name: string };
-      expect([...FIRST_PARTY_PACKAGE_HASHES]).toContain(hashSourceTree(path.join(mods!, n), m.name, () => undefined).packageHash);
+      expect(firstPartyPins()).toContain(hashSourceTree(path.join(mods!, n), m.name, () => undefined).packageHash);
     }
   }, 120_000);
 

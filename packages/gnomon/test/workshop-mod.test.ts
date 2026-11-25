@@ -22,7 +22,7 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { effectiveInstall, readGrants, removeTree } from '../src/kernel/manifest/index.js';
-import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { firstPartyPins, isFirstPartyPin } from '../src/kernel/manifest/install.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { pendingStaged, StagedCardPickup } from '../src/kernel/modhost/control.js';
 import { FEED_BACKLOG_KINDS, FEED_KINDS, FeedBacklog, feedBacklog, projectFeedEvent } from '../src/kernel/modhost/feed.js';
@@ -98,7 +98,7 @@ describe('#workshop-mod', () => {
   it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
     const h = hashSourceTree(WORKSHOP, 'gnomon.workshop', () => undefined).packageHash;
     // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
-    expect([...FIRST_PARTY_PACKAGE_HASHES], `the Workshop tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
+    expect(firstPartyPins(), `the Workshop tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
   });
 
   it('S5: every golden cap is the closed contracts shape (6 hues) and keeps its accessible text', () => {

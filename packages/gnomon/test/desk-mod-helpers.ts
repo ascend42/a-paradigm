@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CONTEXT_SOURCES, mcpServerName, OFFER_PHASES, OFFERS_PER_MOD_MAX, validateOfferSpecV1, type OfferSpecV1 } from '@a-company/gnomon-contracts';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { firstPartyPins, isFirstPartyPin } from '../src/kernel/manifest/install.js';
 import { ManifestRefusal } from '../src/kernel/manifest/refusal.js';
 import { FIRST_PARTY_MOD_NAMES, RESERVED_MOD_NAMES, resolveMcpLaunch, validateManifest, validateMcpUserConfig, type ManifestV2 } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
@@ -160,7 +160,7 @@ export function deskModSuite(spec: DeskModSpec): void {
     it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
       const h = hashSourceTree(DIR, spec.name, () => undefined).packageHash;
       if (process.env.GNOMON_PRINT_PINS) process.stdout.write(`PIN ${spec.dir} ${h}\n`);
-      expect([...FIRST_PARTY_PACKAGE_HASHES], `the ${spec.name} tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
+      expect(firstPartyPins(), `the ${spec.name} tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
     });
 
     it('stages as tier first-party with its MCP server and offers on the install card', async () => {

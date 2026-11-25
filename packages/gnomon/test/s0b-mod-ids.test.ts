@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MANIFEST_FORMAT } from '@a-company/gnomon-contracts';
-import { aliasOf, checkGrantRow, FORMAT_1_SUPPORTED, HISTORICAL_FIRST_PARTY_PINS, LEGACY_ALIASES, ownsModKind, type ResolvedGrants } from '../src/kernel/manifest/grants.js';
+import { aliasOf, checkGrantRow, FORMAT_1_SUPPORTED, historicalFirstPartyPins, isHistoricalFirstPartyPin, LEGACY_ALIASES, ownsModKind, type ResolvedGrants } from '../src/kernel/manifest/grants.js';
 import { blockFor, checkPublisherSource, checkServerCollision, publisherDisplay, type InstallCardDetail } from '../src/kernel/manifest/install.js';
 import { canonicalManifestHash, enginesAdmit, manifestHash, readManifest, upgradeManifestV1, validateManifest, type ManifestV2 } from '../src/kernel/manifest/manifest.js';
 import { ManifestRefusal } from '../src/kernel/manifest/refusal.js';
@@ -67,7 +67,7 @@ describe('S0b formats', () => {
   });
 
   it('a legacy name maps to gnomon.N only for an alias, at the first-party tier, from a historical pin; else local.N', () => {
-    const pin = [...HISTORICAL_FIRST_PARTY_PINS][0]!;
+    const pin = historicalFirstPartyPins()[0]!;
     expect(aliasOf('workshop', 'first-party', pin)).toBe('gnomon.workshop');
     expect(aliasOf('workshop', 'local', pin)).toBe('local.workshop');
     expect(aliasOf('workshop', 'first-party', `sha256:${'0'.repeat(64)}`)).toBe('local.workshop');

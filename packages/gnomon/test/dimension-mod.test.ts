@@ -10,7 +10,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_KINDS, DIM_REFUSAL_CODES, MOD_ABI_ID, dimHash, emptyDimState, foldDim, validateDimOps, type DimState } from '@a-company/gnomon-contracts';
-import { compatModAbiId, deriveTier, FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
+import { compatModAbiId, deriveTier, firstPartyPins, isFirstPartyPin, isSupersededPin, supersededPins, supersededPriorModAbiId } from '../src/kernel/manifest/install.js';
 import { readManifest } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { hostDir } from '../src/kernel/modhost/state.js';
@@ -60,14 +60,14 @@ async function dimRig(opts: { seed?: (stateFile: string) => void } = {}) {
 describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §12.7)', () => {
   it('its packageHash is a pinned first-party hash, it is not a superseded pin, and it speaks the current modAbiId', () => {
     const h = hashSourceTree(DIMENSION_TREE, DIMENSION, () => undefined).packageHash;
-    expect([...FIRST_PARTY_PACKAGE_HASHES], `the dimension tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
-    expect(SUPERSEDED_FIRST_PARTY_PINS.has(h)).toBe(false);
+    expect(firstPartyPins(), `the dimension tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
+    expect(isSupersededPin(h)).toBe(false);
     // S1.4 P0 replaced the S1.3 pin: a NEW install of the 1.0.0 tree no longer derives first-party (an install already
     // pinned at it keeps its signed tier until its Update: test/retired-pins.test.ts), and it is not a superseded pin
     const S1_3_PIN = 'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9';
     expect(h).not.toBe(S1_3_PIN);
-    expect(FIRST_PARTY_PACKAGE_HASHES.has(S1_3_PIN)).toBe(false);
-    expect(SUPERSEDED_FIRST_PARTY_PINS.has(S1_3_PIN)).toBe(false);
+    expect(isFirstPartyPin(S1_3_PIN)).toBe(false);
+    expect(isSupersededPin(S1_3_PIN)).toBe(false);
     expect(deriveTier(S1_3_PIN)).toBe('local');
     expect(fs.readFileSync(path.join(DIMENSION_TREE, 'index.mjs'), 'utf8')).toContain(`'${MOD_ABI_ID}'`);
     // install.ts compatModAbiId: a tree that declares tools never earns a prior modAbiId. This tree declares two and needs none.
@@ -734,7 +734,7 @@ describe('#dimension-mod: the log is the truth, the index a hint (Aegis S1.3 M1,
     fs.cpSync(DIMENSION_TREE, copy, { recursive: true });
     fs.appendFileSync(path.join(copy, 'model.mjs'), ' ');
     expect(hashSourceTree(copy, DIMENSION, () => undefined).packageHash).not.toBe(hashSourceTree(DIMENSION_TREE, DIMENSION, () => undefined).packageHash);
-    expect(FIRST_PARTY_PACKAGE_HASHES.has(hashSourceTree(copy, DIMENSION, () => undefined).packageHash)).toBe(false);
+    expect(isFirstPartyPin(hashSourceTree(copy, DIMENSION, () => undefined).packageHash)).toBe(false);
     expect(() => stageInstall({ home: r.home, source: copy, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth })).toThrow(/publisher gnomon is first-party only/);
     // the untouched tree stages (and is first-party by its pin)
     const ok = stageInstall({ home: r.home, source: DIMENSION_TREE, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth });

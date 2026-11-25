@@ -37,7 +37,7 @@
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import './log/kernel-log.js'; // registers the 'log' seams (class static block)
 import './manifest/install.js'; // registers the 'manifest' seams (class static block)
-import type { DecideOptions, StagedRecord } from './manifest/install.js';
+import type { DecideOptions, PinTables, StagedRecord } from './manifest/install.js';
 import type { GrantInstallRow } from './manifest/grants.js';
 import './log/quarantine.js'; // registers the 'quarantine' seam
 import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
@@ -98,6 +98,14 @@ export function decideInstallCard(home: string, name: string, cardId: string, de
 /** The human rollback to a previously approved snapshot (`gnomon mod rollback`, human-only). */
 export function rollbackModSnapshot(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
   return seamsOf('manifest').rollbackMod(home, name, toPackageHash, opts);
+}
+
+/**
+ * Run `fn` as a kernel whose first-party pin tables differ (an earlier release that still shipped a tree, say). The
+ * ONLY way to change the tables: install.ts exports no collection. They are restored when `fn` returns or throws.
+ */
+export function withPinTablesForTest<T>(edit: (tables: PinTables) => void, fn: () => T): T {
+  return seamsOf('manifest').withPinTables(edit, fn);
 }
 
 /** `quarantineLog` with a hook after each crash point; throw from `onStep` to inject a crash there. */

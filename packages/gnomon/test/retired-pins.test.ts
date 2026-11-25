@@ -8,17 +8,18 @@
  * The 1.0.0 tree is kept as DATA in test/fixtures/first-party-retired/dimension-1.0.0.json (one JSON file, written
  * into a temp folder here and HASHED against the retired pin, so the fixture cannot drift).
  * "The earlier kernel" is this kernel with the one hash moved back from the retired set to the first-party set
- * for the length of a call: exactly the difference between the two releases for this mod.
+ * for the length of a call: exactly the difference between the two releases for this mod. The tables are private
+ * to install.ts; the move goes through the internal test seam (withPinTablesForTest), which restores them.
  */
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { HISTORICAL_FIRST_PARTY_PINS } from '../src/kernel/manifest/grants.js';
+import { isHistoricalFirstPartyPin } from '../src/kernel/manifest/grants.js';
 import { effectiveInstall, loadMod, readGrants } from '../src/kernel/manifest/index.js';
-import { deriveTier, FIRST_PARTY_PACKAGE_HASHES, installPresenceBinding, readStaged, RETIRED_FIRST_PARTY_PINS, rollbackPresenceBinding, stageInstall, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
+import { deriveTier, installPresenceBinding, isFirstPartyPin, isRetiredPin, isSupersededPin, readStaged, retiredPins, rollbackPresenceBinding, stageInstall } from '../src/kernel/manifest/install.js';
 import { ManifestRefusal, noEvents } from '../src/kernel/manifest/refusal.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
-import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
+import { decideInstallCard, mintTestPresence, rollbackModSnapshot, withPinTablesForTest } from '../src/kernel/testing.js';
 import { DIMENSION, DIMENSION_TREE, installTree } from './dimension-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 import { rig, type Rig } from './mod-helpers.js';
@@ -46,19 +47,12 @@ function oldTree(r: Rig): string {
   return dir;
 }
 
-/** Run `fn` as the kernel that shipped 1.0.0: the hash is first-party and not retired. Restored in every case. */
+/** Run `fn` as the kernel that shipped 1.0.0: the hash is first-party and not retired. Restored by the seam in every case. */
 function asEarlierKernel<T>(fn: () => T): T {
-  const firstParty = FIRST_PARTY_PACKAGE_HASHES as Set<string>;
-  const retired = RETIRED_FIRST_PARTY_PINS as Map<string, string>;
-  const why = retired.get(OLD)!;
-  firstParty.add(OLD);
-  retired.delete(OLD);
-  try {
-    return fn();
-  } finally {
-    firstParty.delete(OLD);
-    retired.set(OLD, why);
-  }
+  return withPinTablesForTest((t) => {
+    t.firstParty.add(OLD);
+    t.retired.delete(OLD);
+  }, fn);
 }
 
 function refusal(fn: () => unknown): ManifestRefusal {
@@ -81,20 +75,24 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
     const r = newRig();
     expect(hashSourceTree(oldTree(r), DIMENSION, noEvents).packageHash).toBe(OLD);
     expect(JSON.parse(fs.readFileSync(FIXTURE, 'utf8')).packageHash).toBe(OLD);
-    expect([...RETIRED_FIRST_PARTY_PINS.keys()]).toEqual([OLD]);
-    for (const [h, why] of RETIRED_FIRST_PARTY_PINS) {
+    expect(retiredPins().map(([h]) => h)).toEqual([OLD]);
+    for (const [h, why] of retiredPins()) {
       expect(why.length).toBeGreaterThan(0);
-      expect(FIRST_PARTY_PACKAGE_HASHES.has(h)).toBe(false);
-      expect(SUPERSEDED_FIRST_PARTY_PINS.has(h)).toBe(false);
-      expect(HISTORICAL_FIRST_PARTY_PINS.has(h)).toBe(false);
+      expect(isRetiredPin(h)).toBe(true);
+      expect(isFirstPartyPin(h)).toBe(false);
+      expect(isSupersededPin(h)).toBe(false);
+      expect(isHistoricalFirstPartyPin(h)).toBe(false);
       expect(deriveTier(h)).toBe('local');
     }
     // the shipped tree is not retired
-    expect(RETIRED_FIRST_PARTY_PINS.has(hashSourceTree(DIMENSION_TREE, DIMENSION, noEvents).packageHash)).toBe(false);
+    expect(isRetiredPin(hashSourceTree(DIMENSION_TREE, DIMENSION, noEvents).packageHash)).toBe(false);
     // the earlier-kernel seam restores both sets
     asEarlierKernel(() => expect(deriveTier(OLD)).toBe('first-party'));
     expect(deriveTier(OLD)).toBe('local');
-    expect(RETIRED_FIRST_PARTY_PINS.has(OLD)).toBe(true);
+    expect(isRetiredPin(OLD)).toBe(true);
+    // also when the call throws
+    expect(() => asEarlierKernel(() => { throw new Error('boom'); })).toThrow('boom');
+    expect([deriveTier(OLD), isRetiredPin(OLD), isFirstPartyPin(OLD)]).toEqual(['local', true, false]);
   });
 
   it('a fresh stage of the 1.0.0 tree is refused TIER (why retired), as a package and as a linked folder, and no snapshot is kept', () => {
@@ -142,7 +140,7 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
     // the Update card for the shipped tree is an update, and approving it pins 1.0.1
     const now = installTree(r, DIMENSION_TREE, DIMENSION).packageHash;
     expect(now).not.toBe(OLD);
-    expect(FIRST_PARTY_PACKAGE_HASHES.has(now)).toBe(true);
+    expect(isFirstPartyPin(now)).toBe(true);
     expect(pinned(r)).toBe(now);
     const rows = readGrants(r.home, r.auth).installs.length;
     for (const to of [undefined, OLD]) {
