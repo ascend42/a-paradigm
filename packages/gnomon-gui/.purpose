@@ -764,6 +764,10 @@ components:
       them) and clear the tab by 8px; app.ts lays the rows out at the
       viewport width less the inset and re-lays them when a tab class
       changes.
+      Review of PR #120: a second show chat while the first fold is on its
+      way keeps the first one's focus move; the leaf's board stage is
+      observed while mounted, so the strip's row count follows a size
+      change inside the leaf.
       Not built here: the Dimensions list surface (/boards is the palette
       pattern for now), the keep line's final words, G-DDL-08 across
       layout presets.
@@ -800,6 +804,12 @@ components:
       stop-speaking; never on repeat, IME, a taken Esc, a modifier or a
       focused card). The strip reads the chat's own items even in the raw
       view. No palette or block-safe command.
+      Review of PR #120: the repaint signature (stripSig) includes the
+      working step's label and since, so a new step names itself at once;
+      the strip paints only in the next frame; show chat keeps its focus
+      across a repaint; an end reason the labels do not know is dir=auto;
+      the you row and the chat rows say local time (hhmm); between a send
+      and turn.sent the turn row says 'waiting'.
     path: src/ui/board-turn.ts
     type: module
     tags: [gnomon, gui, dimension, board]
@@ -807,6 +817,18 @@ components:
     tests:
       - test/board-turn.test.ts
       - test/board-app.test.ts
+  gui-wire-row:
+    description: >-
+      wireRowOf (core/store.ts; Aegis L1, review of PR #120) - a row read
+      off the wire never carries the fields only this page sets on its own
+      lines (brief, unsent, mark, turn, connId 'local'). GuiStore.apply,
+      DimSessions.apply and the live event notification read through it.
+    path: src/core/store.ts
+    type: function
+    tags: [gnomon, gui, security]
+    related: ["#gui-board-turn", "#gui-dim-session", "#gui"]
+    tests:
+      - test/board-turn.test.ts
   gui-board-open:
     description: >-
       #gui-board-open (boards S1.3 pass P4b-1) - how a board is opened, as

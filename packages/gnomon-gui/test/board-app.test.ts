@@ -357,7 +357,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(s('before').keyTitle).toBe(TURN_COPY.showChatTitle);
     // sent with the board open: the board stays, the message is on the you row (a message, never a board op)
     expect(s('sent').rows[0]).toMatch(/^you · Why are totals off by a cent · \d\d:\d\d$/);
-    expect(s('sent').rows[1]).toBe('show chat');
+    expect(s('sent').rows[1]).toBe('waiting show chat');
     expect(s('running').work).toMatchObject({ expanded: false, caret: false, label: 'working… · show its steps in the chat' });
     expect(s('ticked').work!.clock).not.toBe(s('running').work!.clock);
     expect(s('ended').work).toBeNull();
@@ -472,6 +472,18 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     ]);
     expect(a.errors).toEqual([]);
     expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
+  }, 120_000);
+
+  it('#gui-board-turn (Mika 3): a size change inside the leaf alone (the pane and the feed keep theirs) re-reads the room: under 300px the strip goes to one row', async () => {
+    const ROWS = `(() => { const c = ${CUR}; return { rows: document.querySelectorAll('#board-turn .bd-turn-r').length, room: c.leaf.room() + document.getElementById('board-turn').offsetHeight }; })()`;
+    const a = await real([
+      ...toIdle, ...typeBoard, { read: ROWS, as: 'open' },
+      { read: `(document.querySelector('.bd-host .bd-head').style.paddingBottom = (${CUR}.leaf.room() - 200) + 'px', 1)`, as: 'grown' }, { wait: 600 }, { read: ROWS, as: 'shrunk' },
+    ], { width: 1440, height: 900 });
+    expect(a.errors).toEqual([]);
+    expect(a.open).toMatchObject({ rows: 2 });
+    expect((a.shrunk as { room: number }).room).toBeLessThan(300);
+    expect(a.shrunk).toMatchObject({ rows: 1 });
   }, 120_000);
 
   it('#gui-board-turn: a real press on the strip’s working key folds the board, leaves its steps unfolded in the chat and puts focus on that key there; a synthetic one does nothing', async () => {
@@ -675,14 +687,14 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     { width: 640, height: 400, fixture: 'desk', theme: 'day', pinned: 'own' },
   ])('G-DDL-08 layout at $width×$height ($fixture): the leaf lies inside the centre column and meets none of the stack, the status strip, the pinned zone or the composer', async ({ width, height, fixture, theme, pinned }) => {
     const RECTS = `(() => { const r = (q) => { const e = typeof q === 'string' ? document.querySelector(q) : q; if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; };
-      return { leaf: r('.bd-host .bd-leaf'), turn: r('#board-turn'), turnRows: document.querySelectorAll('#board-turn .bd-turn-r').length, pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), cards: document.querySelectorAll('#pinned .card').length, head: r('.bd-host .bd-head'), toast: r('#toasts'), line: (() => { const k = document.querySelector('.bd-host .bd-keep'); return k ? k.scrollWidth <= k.clientWidth + 1 : null; })() }; })()`;
+      return { leaf: r('.bd-host .bd-leaf'), turn: r('#board-turn'), turnRows: document.querySelectorAll('#board-turn .bd-turn-r').length, roomWithout: (() => { const c = globalThis.gnomonPreviewApp.board.dock.current(); return c ? c.leaf.room() + document.getElementById('board-turn').offsetHeight : null; })(), pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), cards: document.querySelectorAll('#pinned .card').length, head: r('.bd-host .bd-head'), toast: r('#toasts'), line: (() => { const k = document.querySelector('.bd-host .bd-keep'); return k ? k.scrollWidth <= k.clientWidth + 1 : null; })() }; })()`;
     const first = pinned === 'two' ? [] : [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); return idle ? idle.dataset.hsid : null; })()`, as: 'idle' }];
     // 0 pinned: an idle session of the fixture is focused; 2 pinned: one of the fixture's three is decided by a real press
     const zero = pinned === 'two' ? [{ press: '#pinned .card [data-decision="deny"]' }, { wait: 900 }] : [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); if (idle) idle.click(); return !!idle; })()`, as: 'switched' }, { wait: 400 }];
     const a = await real([...first, ...zero, ...typeBoard, { read: RECTS, as: 'rects' }], { fixture, theme, width, height, shot: `app-board-${width}-${theme}-${pinned === 'two' ? 'pinned2' : 'pinned0'}` });
     expect(a.errors).toEqual([]);
     type R = { x: number; y: number; r: number; b: number } | null;
-    const r = a.rects as { leaf: R; turn: R; turnRows: number; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };
+    const r = a.rects as { leaf: R; turn: R; turnRows: number; roomWithout: number | null; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };
     expect(r.cards).toBe(pinned === 'two' ? 2 : 0);
     expect(r.leaf).not.toBeNull();
     const leaf = r.leaf!;
@@ -699,6 +711,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     const turn = r.turn!;
     expect(turn.b - turn.y).toBeGreaterThan(20);
     expect(r.turnRows).toBeGreaterThanOrEqual(1);
+    // Mika 3: the row count follows the room the board has NOW (measured without the strip), not the room at open
+    expect(r.turnRows, `room without the strip ${r.roomWithout}`).toBe((r.roomWithout ?? 0) >= 300 ? 2 : 1);
     expect(turn.y).toBeGreaterThanOrEqual(leaf.b - 0.5);
     expect(turn.x).toBeGreaterThanOrEqual(pane.x - 0.5);
     expect(turn.r).toBeLessThanOrEqual(pane.r + 0.5);

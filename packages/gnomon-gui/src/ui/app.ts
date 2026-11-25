@@ -80,7 +80,7 @@ import { mountBoardDock } from './board-dock.js';
 import { mountBoardTurn, type BoardTurnStrip } from './board-turn.js';
 import { escFoldsFromComposer, latestTurn, refusalBrief } from '../core/board-turn.js';
 import { cardHasFocus } from './card-focus.js';
-import { loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
+import { hhmm, loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -598,7 +598,7 @@ function itemEl(it: FoldedItem): HTMLElement {
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
-  const at = it.at ? it.at.slice(11, 16) : '';
+  const at = hhmm(it.at); // Mika 1 (review of PR #120): local time, never the UTC slice; the turn strip says the same
   // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (the plain origin; TD-2026-10-23-939)
   const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: 'sent-by' }, `${spoken ? spoken.sent : it.sentLabel}`) : null;
   const body = label

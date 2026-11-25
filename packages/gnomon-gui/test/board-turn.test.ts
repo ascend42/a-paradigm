@@ -4,6 +4,8 @@
  * a fake document), and source fences on the Esc branch, the dock's trust checks and the strip's place in the page.
  * The real-input behaviour (a real Esc, a real press, the focus walk) is driven in test/board-app.test.ts (local Chrome).
  */
+// the fixtures' times are UTC; the strip says local time (Mika 1): this file reads them in UTC unless a test says otherwise
+process.env.TZ = 'UTC';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +65,9 @@ describe('#gui-board-turn latestTurn: the latest turn from the chat’s own item
   it('sent: the message, one line, with its hh:mm; nothing back yet', () => {
     const t = turnOf([echo(10.5, '14:05:00', 'line one\n\n  line two')]);
     expect(t).toMatchObject({ none: false, you: { text: 'line one line two', at: '14:05', waiting: false }, working: null, reply: null, ended: null });
+    // Mika 2: between the send and turn.sent the turn row says waiting, quiet, beside show chat
+    expect(turnStripRows(t, 'Claude', 485).map((r) => rowText(r.parts))).toEqual(['you · line one line two · 14:05', 'waiting']);
+    expect(turnStripRows(t, 'Claude', 485)[1]!.parts).toEqual([{ cls: 'none', text: 'waiting' }]);
   });
 
   it('running: the working item, and a reply that arrived mid-turn is kept but the turn has not ended', () => {
@@ -104,8 +109,8 @@ describe('#gui-board-turn latestTurn: the latest turn from the chat’s own item
   it('no stale reply: after a new message the turn row never shows the turn before it', () => {
     const t = turnOf([...firstTurn(), echo(20.5, '14:07:00', 'and the refunds?')], { live: false });
     expect(t).toMatchObject({ you: { text: 'and the refunds?' }, reply: null, ended: null, working: null });
-    // sent, nothing back: the turn row holds show chat only
-    expect(turnStripRows(t, 'Claude', 485)[1]!.parts).toEqual([]);
+    // sent, nothing back: the turn row says waiting (Mika 2), never the turn before
+    expect(turnStripRows(t, 'Claude', 485)[1]!.parts).toEqual([{ cls: 'none', text: 'waiting' }]);
   });
 
   it('every end word, from the result line’s own labels, in its tone; tokens and cost never', () => {
@@ -414,5 +419,25 @@ describe('#gui-board-turn Esc from the composer and the trust checks (source fen
     expect(trust).toBeGreaterThan(0);
     expect(guard).toBeGreaterThan(trust);
     expect(guard).toBeLessThan(show.indexOf('afterShow = then;'));
+  });
+
+  it('Mika 1: the you row and the chat rows say LOCAL time (hhmm), never the UTC slice', () => {
+    const was = process.env.TZ;
+    try {
+      process.env.TZ = 'America/Los_Angeles';
+      const t = turnOf([echo(10.5, '14:05:00', 'hello')]);
+      expect(t.you?.at).toBe('06:05');
+      process.env.TZ = 'Asia/Kolkata';
+      expect(turnOf([echo(10.5, '14:05:00', 'hello')]).you?.at).toBe('19:35');
+    } finally {
+      process.env.TZ = was;
+    }
+    expect(APP).toMatch(/const at = hhmm\(it\.at\);/);
+    expect(APP).not.toMatch(/const at = it\.at \? it\.at\.slice\(11, 16\)/);
+  });
+
+  it('Mika 4: the working key (the strip’s and the chat’s) pads 4px inside so its focus ring clears the spinner and the clock', () => {
+    expect(CSS).toMatch(/^\.bd-turn \.work-key \{ padding: 0 4px; margin-left: -4px; \}$/m);
+    expect(CSS).toMatch(/^\.trow\.role-working \.work-key \{[^}]*padding: 0 4px; margin-left: -4px; \}/m);
   });
 });

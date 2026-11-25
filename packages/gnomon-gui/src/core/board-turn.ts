@@ -20,6 +20,7 @@
  *    end words and ` · needs you` are never dropped (the UI measures; this module orders).
  */
 import { replyChoices } from './choices.js';
+import { hhmm } from './loops.js';
 import { CLAUDE_RESULT_LABEL, STOP_LABEL, type ChatItem, type FoldedItem } from './store.js';
 
 /** Every word the strip says (one wording per fact: the chat's, the Workshop's, KEEP_COPY's). */
@@ -115,7 +116,8 @@ export function latestTurn(items: readonly FoldedItem[], o: { liveChoice?: strin
   // a refused send is no turn: the refusal is the strip's one row (review M1: its line follows its echo)
   const ref = after.find((x) => x.role === 'error' && x.brief !== undefined);
   if (ref) return { ...out, working: null, refused: ref.brief! };
-  out.you = { text: oneLine(msg.text), at: msg.at ? msg.at.slice(11, 16) : '', waiting: working !== null && w < u };
+  // Mika 1 (review of PR #120): local time, as the chat rows say it (never the UTC slice)
+  out.you = { text: oneLine(msg.text), at: hhmm(msg.at), waiting: working !== null && w < u };
   if (out.you.waiting) return out;
   let reply: FoldedItem | null = null;
   let result: FoldedItem | null = null;
@@ -172,8 +174,9 @@ export function turnStripRows(t: LatestTurn, agent: 'Claude' | 'local model', ro
   }
   if (t.none) return [...rows, { kind: 'turn', parts: [{ cls: 'none', text: C.nothingYet }] }];
   if (t.working) return [...rows, { kind: 'turn', parts: [], working: t.working }];
-  // sent and nothing back yet (the turn has not started): the row holds show chat only
-  if (!t.ended && t.reply === null) return [...rows, { kind: 'turn', parts: [] }];
+  // sent and nothing back yet (the turn has not started): 'waiting' (Mika 2, review of PR #120: Luna's word for a
+  // message with no answer yet; her confirmation is pending), quiet, left of show chat
+  if (!t.ended && t.reply === null) return [...rows, { kind: 'turn', parts: [{ cls: 'none', text: C.waiting }] }];
   const parts: TurnPart[] = [{ cls: 'who', text: agent, drop: 2 }, { cls: 'sep', text: C.sep, drop: 1 }, { cls: 'said', text: t.reply ?? C.noAnswer, bidi: t.reply !== null, drop: 1 }];
   const tails: TurnPart[] = [];
   if (t.ended?.words) tails.push({ cls: 'tail', text: t.ended.words, tone: t.ended.tone, ...(knownEnd(t.ended.words) ? {} : { bidi: true }) });

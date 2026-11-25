@@ -278,6 +278,14 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     };
     leaf.el.addEventListener('input', onInput, true);
     off.push(() => leaf.el.removeEventListener('input', onInput, true));
+    // Mika 3 (review of PR #120): the board's own area changes size inside the leaf (its head and keep line settle,
+    // the engine mounts) while the pane and the feed do not: watched too, so the strip's row count is never read
+    // from a height that was stale when the board opened
+    const stage = leaf.el.querySelector<HTMLElement>('.bd-stage');
+    if (stage && ro) {
+      ro.observe(stage);
+      off.push(() => ro.unobserve(stage));
+    }
     cur = { session, leaf, off, how: o.how };
     paint(session, leaf, session.status());
     // what the session was told before the leaf existed (what a reconnect lost, or that it is back)

@@ -1026,7 +1026,7 @@ html, body {
 .trow.role-working { flex-direction: column; align-items: stretch; gap: 2px; }
 /* Mika: the words ellipsize, the clock never does (it is the one thing that says the turn is alive); 24px tall
    at least (WCAG 2.5.8: the key and the step rows are stacked targets) */
-.trow.role-working .work-key { display: flex; align-items: center; gap: 0; min-height: 24px; cursor: pointer; white-space: nowrap; min-width: 0; max-width: calc(80ch + 22px); }
+.trow.role-working .work-key { display: flex; align-items: center; gap: 0; min-height: 24px; cursor: pointer; white-space: nowrap; min-width: 0; max-width: calc(80ch + 22px); padding: 0 4px; margin-left: -4px; } /* Mika 4 (review of PR 120): the inset focus ring clears the spinner and the clock */
 .trow.role-working .work-key .spin { margin-right: 8px; }
 .trow.role-working .caret { flex: none; white-space: pre; }
 .trow.role-working .caret.blank { visibility: hidden; }
@@ -1426,6 +1426,7 @@ body:has(.transcript.bd-open) #reconnect { align-items: flex-end; padding-top: 0
 .bd-turn-key { flex: none; margin-left: auto; }
 /* the working key as it is in the chat; only the row around it loses the chat's absolute place, indent and padding */
 .bd-turn .trow.role-working { position: static; margin: 0; padding: 0; max-width: none; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
+.bd-turn .work-key { padding: 0 4px; margin-left: -4px; }
 .loops-word .lw-narrow { display: none; }
 @media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
 @media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }
