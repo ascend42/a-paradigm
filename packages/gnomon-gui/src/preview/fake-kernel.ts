@@ -198,6 +198,9 @@ export class FakeKernel implements Transport {
     if (focus && typeof focus.hsid === 'string') Object.assign(composed, { hsid: focus.hsid, repo: PREVIEW_DIM_REPO });
     const relayedFor = { principal: this.principal, connId: this.connId, surface: 'gui' };
     if (mod.silent && p.commandId === 'dim.op') return new Promise(() => undefined);
+    const runIt = (): unknown => ({ result: mod.run(String(p.commandId), composed, relayedFor, (kind, payload) => this.append(kind, { ...payload, relayedFor }, undefined, { principal: `${HUMAN_PRINCIPAL.replace(/\/[^/]*$/, '')}/mod-gnomon.dimension`, scope: { repo: PREVIEW_DIM_REPO } })) });
+    // DEV (P4b-3): held until the test releases it, then answered in the order it came
+    if (mod.holding && p.commandId === 'dim.op') return new Promise((res) => void mod.waiting.push(() => res(runIt())));
     const result = mod.run(String(p.commandId), composed, relayedFor, (kind, payload) => this.append(kind, { ...payload, relayedFor }, undefined, { principal: `${HUMAN_PRINCIPAL.replace(/\/[^/]*$/, '')}/mod-gnomon.dimension`, scope: { repo: PREVIEW_DIM_REPO } }));
     return { result };
   }

@@ -121,6 +121,27 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('again')).toMatchObject({ nodes: 64, marks: 64, rows: f('undone').rows });
   }, 120_000);
 
+  it('a paste made while a drawn mark is not yet stored (Judge; Mika: never dropped): the pasted words are shown at once, wait their turn behind the drawn mark, and both are stored in order once the mod answers', async () => {
+    const a = await real([
+      facts('start'), { read: `(${L}.mod.holding = true, 1)`, as: 'holding' },
+      ...drawRect, facts('drawn'), { read: `${B}.state().selected`, as: 'selected' },
+      // words pasted now are one text mark, behind the drawn one
+      { at: [640, 420], press: true }, { paste: 'pasted while unstored' }, { wait: 500 }, facts('pasted'), { read: `${L}.mod.waiting.length`, as: 'waiting' },
+      { read: `${L}.mod.release()`, as: 'released' }, { wait: 1500 }, facts('landed'),
+      { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows.slice(-2).map((r) => r.payload.ops.map((o) => [o.type, o.node && o.node.kind, o.node && o.node.text])); })()`, as: 'tail' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('drawn')).toMatchObject({ keep: 'saving', pending: 1, nodes: f('start').nodes + 1, rows: f('start').rows, notices: [] });
+    expect(a.selected).toBe(1);
+    // not dropped: the words are on the board (shown at once) and waiting behind the drawn mark; nothing reached the log yet
+    expect(f('pasted')).toMatchObject({ keep: 'saving', pending: 2, nodes: f('start').nodes + 2, rows: f('start').rows, notices: [] });
+    expect(a.waiting).toBe(1); // one command in flight at a time: the paste has not left
+    // the mod answers: the drawn mark, then the pasted words, each a row, and the fold is the mod's
+    expect(f('landed')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes + 2, rows: f('start').rows + 2, sameAsMod: true, drift: 0, notices: [] });
+    expect(a.tail).toEqual([[['add', 'rect', undefined ?? null]], [['add', 'text', 'pasted while unstored']]]);
+  }, 120_000);
+
   it('review leftovers in the engine: words selected in the chrome are copied as themselves (N3); a paste that is too long only AFTER cleaning is refused with its line (N1); pastes step and the step starts again', async () => {
     const long = `${'a'.repeat(3990)}${'\u202e'.repeat(8)}`;
     const a = await real([
