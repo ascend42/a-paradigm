@@ -7,9 +7,12 @@
  * The real kernel and mod are driven by packages/gnomon/test/dimension-dogfood.test.ts.
  * Runs where a Chrome is installed, never on CI; run it ALONE (a loaded machine times it out).
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+// @ts-expect-error plain .mjs (the zero-dependency probe harness)
+import { embeddedBundle } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
 import { findChrome, shootLeaf } from '../scripts/board-leaf-shots.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
@@ -64,6 +67,31 @@ const STRIP = `(() => { const s = document.getElementById('board-turn'); const k
     atEnd: vp.scrollTop + vp.clientHeight >= vp.scrollHeight - 2, chatWork: (() => { const k = vp.querySelector('.work-key'); return k ? { expanded: k.getAttribute('aria-expanded'), focused: document.activeElement === k, steps: !!vp.querySelector('ol.steps') } : null; })() }; })()`;
 type Strip = { shown: boolean; rows: string[]; kinds: string[]; keyTitle: string | null; work: { label: string; expanded: boolean; caret: boolean; clock: string } | null; live: boolean; said: string | null; atEnd: boolean; chatWork: { expanded: string | null; focused: boolean; steps: boolean } | null };
 const strip = (as: string) => ({ read: STRIP, as });
+
+describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the kernel serves (a test switch on a security rule is never a runtime option)', () => {
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const TOKENS = ['wrongHashNext'];
+  it('no shipped source names it: only src/preview does, and the page\'s own check (core/dim-session.ts) has no switch', () => {
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+    const shipped = walk(path.join(ROOT, 'src')).filter((f) => !f.split(path.sep).includes('preview') && /\.(ts|css|js)$/.test(f));
+    expect(shipped.length).toBeGreaterThan(50);
+    for (const f of shipped) for (const t of TOKENS) expect(readFileSync(f, 'utf8').includes(t), `${path.relative(ROOT, f)} names ${t}`).toBe(false);
+    expect(readFileSync(path.join(ROOT, 'src', 'preview', 'dim-mod.ts'), 'utf8')).toContain('wrongHashNext');
+    // the check itself: one comparison, no flag, no environment, no option that could skip it
+    const check = readFileSync(path.join(ROOT, 'src', 'core', 'dim-session.ts'), 'utf8');
+    expect(check).toContain('const same = dimHash(store.stateAt(this.dim, v.seq)) === v.hash;');
+    expect(check).not.toMatch(/__GNOMON_PREVIEW__|process\.env|skipCheck|noVerify/);
+  });
+  it('the pinned bundle (what the kernel serves) holds neither the hook nor the preview mod', () => {
+    const bundle = embeddedBundle() as Map<string, Buffer>;
+    expect(bundle.size).toBeGreaterThan(3);
+    for (const [name, bytes] of bundle) {
+      if (!/\.(js|css|html)$/.test(name)) continue;
+      const text = bytes.toString('utf8');
+      for (const t of [...TOKENS, 'PreviewDimMod', 'refuseNext']) expect(text.includes(t), `${name} holds ${t}`).toBe(false);
+    }
+  });
+});
 
 const chrome = findChrome() as string | null;
 describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a real engine: open, draw, fold, reopen, list, link, G-DDL-08', () => {
@@ -228,7 +256,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
   }, 120_000);
 
   it.each(['link-down', 'out-of-date'] as const)('keys at the engine\'s DOCUMENT listeners while the leaf is held still (%s): with a mark on the board, real Cmd+A, Delete, Backspace, arrows, tool letters and digits, Cmd+A, Cmd+D, Cmd+Z and Cmd+V change nothing in the engine and send nothing, with focus on the board and off it', async (why) => {
-    const lie = `(() => { const m = ${A}.mod; const run = m.run.bind(m); m.run = (...x) => { const r = run(...x); if (x[0] === 'dim.open' && r && r.ok) r.hash = 'sha256:' + '0'.repeat(64); return r; }; return 1; })()`;
+    // the preview mod's own hook: its next dim.open answers a hash that is not its fold's, once (src/preview/dim-mod.ts)
+    const lie = `(${A}.mod.wrongHashNext = true, 1)`;
     // what the ENGINE holds (not the fold): every mark's place and size, the selection, the tool, the view
     const ENGINE = `(() => { const c = ${CUR}; const hd = c && c.leaf.handle(); if (!hd || !hd.isAlive()) return null; const st = hd.state(); const v = hd.view(); return JSON.stringify({ marks: hd.marks().map((m) => [m.id ?? null, Math.round(m.x ?? m.left ?? 0), Math.round(m.y ?? m.top ?? 0), Math.round(m.width ?? m.w ?? 0), Math.round(m.height ?? m.h ?? 0)]), count: hd.count(), drift: hd.drift().length, tool: st.tool, selected: st.selected, editing: st.editingText, zoom: v.zoom, sx: Math.round(v.scrollX), sy: Math.round(v.scrollY) }); })()`;
     const KEYS: Array<Record<string, unknown>> = [{ key: 'a', meta: true }, { key: 'Delete' }, { key: 'Backspace' }, { key: 'ArrowRight' }, { key: 'ArrowDown' }, { key: 'r' }, { key: 'o' }, { key: 't' }, { key: 'n' }, { key: '2' }, { key: '7' }, { key: 'd', meta: true }, { key: 'z', meta: true }, { key: 'z', meta: true, shift: true }, { key: 'v', meta: true, commands: ['paste'] }, { key: 'x', meta: true, commands: ['cut'] }, { key: 'Enter' }, { key: ' ' }];
@@ -747,7 +776,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
   }, 120_000);
 
   it('Probe: a board that is out of date (a driven hash mismatch) is held still: a real drag and real keys add nothing and send nothing, and Esc still folds it', async () => {
-    const lie = `(() => { const m = ${A}.mod; const run = m.run.bind(m); m.run = (...x) => { const r = run(...x); if (x[0] === 'dim.open' && r && r.ok) r.hash = 'sha256:' + '0'.repeat(64); return r; }; return 1; })()`;
+    // the preview mod's own hook: its next dim.open answers a hash that is not its fold's, once (src/preview/dim-mod.ts)
+    const lie = `(${A}.mod.wrongHashNext = true, 1)`;
     const a = await real([
       { read: lie, as: 'lie' }, ...typeBoard, facts('opened'),
       { read: `(() => { const k = ${A}.kernel; k.__before = k.__n.n; return 1; })()`, as: 'm' },
