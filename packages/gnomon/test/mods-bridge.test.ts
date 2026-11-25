@@ -505,7 +505,9 @@ describe('#mod-tool-bridge: the gates it enforces itself (Aegis M2) and the caps
     expect(w.reached()).toBe(2);
     expect(answers.filter((a) => a.result!.isError === false)).toHaveLength(2);
     expect(answers.filter((a) => a.result!.isError).map(textOf)).toEqual(Array.from({ length: 6 }, () => MOD_BRIDGE_SENTENCES.busy));
-    expect(done.slice(0, done.indexOf('human')).filter((x) => x === 'tool:ok').length).toBeLessThanOrEqual(2);
+    // the person's command was answered, and the six refused calls were answered before any call ran to its end
+    expect(done).toContain('human');
+    expect(done.slice(0, 6)).toEqual(Array.from({ length: 6 }, () => 'tool:busy'));
     // the slots are given back
     expect((await ask(w, w.session(), call('bridge-echo', {}))).result!.isError).toBe(false);
   });
@@ -594,6 +596,44 @@ describe('#mod-tool-bridge: the receipt principal is reserved (Aegis A2)', () =>
     expect(/^s-/.test(MOD_BRIDGE_PRINCIPAL_NAME) || /^mod-/.test(MOD_BRIDGE_PRINCIPAL_NAME)).toBe(false);
     for (const cls of ['human', 'agent', 'mod', 'voice'] as const) {
       expect(() => refuseAppend(cls, cls === 'mod' ? `p:${ns}/mod-gnomon.probe` : `p:${ns}/x`, { kind: 'inject.receipt', payload: {} })).toThrow();
+    }
+  });
+});
+
+describe('#mod-tool-bridge: source facts that hold on every platform (G-MOD-19; Aegis A6)', () => {
+  const SRC = path.join(PKG_ROOT, 'src');
+  const files = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : /\.(ts|mts|mjs|js)$/.test(e.name) ? [path.join(dir, e.name)] : []));
+  const code = (f: string): string => fs.readFileSync(f, 'utf8').replace(/\/\*[^]*?\*\/|\/\/.*$/gm, '');
+  const rel = (f: string): string => path.relative(SRC, f).split(path.sep).join('/');
+
+  it('exactly ONE production caller of ModHost.callTool exists, the bridge\'s call port: every callTool token outside comments is counted, and none is spelled as a string', () => {
+    const counts: Record<string, number> = {};
+    const asString: string[] = [];
+    for (const f of files(SRC)) {
+      const c = code(f);
+      const n = (c.match(/\bcallTool\b/g) ?? []).length;
+      if (n > 0) counts[rel(f)] = n;
+      // a computed access (host['callTool'], "callTool") would call the method without the token the count sees
+      if (/['"`]callTool['"`]/.test(c.replace(/Pick<ModHost, 'admit' \| 'callTool'>/g, ''))) asString.push(rel(f));
+    }
+    // host.ts: the definition. mcp-client.ts: the local MCP client's OWN method and its one call of it (no modhost import).
+    // mcp-bridge.ts: the Pick<ModHost, …> type of the port's host, and the one call inside createModBridge's `call`.
+    expect(counts).toEqual({ 'kernel/local/mcp-client.ts': 2, 'kernel/modhost/host.ts': 1, 'kernel/modhost/mcp-bridge.ts': 2 });
+    expect(asString).toEqual([]);
+    expect(/import[^;]*modhost/.test(code(path.join(SRC, 'kernel', 'local', 'mcp-client.ts')))).toBe(false);
+    const bridge = code(path.join(SRC, 'kernel', 'modhost', 'mcp-bridge.ts'));
+    expect(bridge.match(/\bcallTool\s*\(/g)).toHaveLength(1);
+    // the answerer never reads `_meta`, `server_name` or any identity key of the message
+    expect(/_meta|server_name|serverName/.test(bridge)).toBe(false);
+  });
+
+  it('only the Claude Code spawn path can carry the entry: the supervisor writes it in one place, inside #spawnClaude, and the local lane names neither the bridge nor its server', () => {
+    const sup = fs.readFileSync(path.join(SRC, 'kernel', 'supervisor', 'supervisor.ts'), 'utf8');
+    expect(sup.match(/MOD_BRIDGE_ENTRY \}/g)).toHaveLength(1);
+    const spawn = sup.slice(sup.indexOf('async #spawnClaude('), sup.indexOf('async #onLine('));
+    expect(spawn).toContain('[MOD_BRIDGE_SERVER]: { ...MOD_BRIDGE_ENTRY }');
+    for (const f of [...files(path.join(SRC, 'kernel', 'local')), path.join(SRC, 'kernel', 'supervisor', 'local-session.ts')]) {
+      expect([rel(f), /mcp-bridge|MOD_BRIDGE|gnomon-mods/.test(fs.readFileSync(f, 'utf8'))]).toEqual([rel(f), false]);
     }
   });
 });

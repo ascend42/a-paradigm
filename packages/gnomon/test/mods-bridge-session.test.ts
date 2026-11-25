@@ -54,6 +54,8 @@ interface Boot {
   bridgeRows: BridgeRow[];
   modRows: () => Array<{ kind: string }>;
   reached: () => number;
+  /** the bridge's and the detector's clock (ms); a test moves it */
+  clock: { t: number };
 }
 
 function boot(o: { mode?: string; allow?: Record<string, string[]> | null } = {}): Boot {
@@ -65,6 +67,8 @@ function boot(o: { mode?: string; allow?: Record<string, string[]> | null } = {}
   const mlog = fakeLog();
   const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: mlog.kernelCall, callTimeoutMs: 5_000 });
   live.push(() => h.stopAll());
+  // a FIXED clock for the bridge's caps and for the supervisor's suspect fold: no test here depends on the real one
+  const clock = { t: 1_000 };
   const events: Boot['events'] = [];
   const bridgeRows: BridgeRow[] = [];
   let reached = 0;
@@ -76,6 +80,7 @@ function boot(o: { mode?: string; allow?: Record<string, string[]> | null } = {}
       bridgeRows.push(JSON.parse(JSON.stringify(row)) as BridgeRow);
       events.push({ kind: row.kind, payload: row.payload });
     },
+    now: () => clock.t,
     ...(o.allow === null ? {} : { allow: o.allow ?? ALLOW, currentPin: () => true }),
   });
   const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void events.push({ kind, payload });
@@ -94,9 +99,10 @@ function boot(o: { mode?: string; allow?: Record<string, string[]> | null } = {}
     env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true,
     runMode: () => ({ effective: (o.mode ?? 'auto-edits') as never, ceiling: 'auto-edits' as never }),
     modBridge,
+    bridgeNow: () => clock.t,
   });
   live.push(() => children.stopAll('test-end'));
-  return { w, sup, events, bridgeRows, modRows: () => mlog.rows as never, reached: () => reached };
+  return { w, sup, events, bridgeRows, modRows: () => mlog.rows as never, reached: () => reached, clock };
 }
 
 const line = (id: string, message: unknown, server = 'gnomon-mods') => ({ line: { type: 'control_request', request_id: id, request: { subtype: 'mcp_message', server_name: server, message } } });
@@ -252,11 +258,43 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge through a Claude Code sessi
     expect(bodyOf(answers(w)[0]!).relayedFor).toMatchObject({ surface: 'voice', turn: `turn:${s.hsid}/2`, hsid: s.hsid });
     // Aegis A5: voice-unverified stamps `voice` too, and the call was served exactly as a bridge call is
     expect(answers(w)[0]!.mcp!.result!.isError).toBe(false);
-    await new Promise((r) => setTimeout(r, 1_100)); // past the one-second call window
+    b.clock.t += 1_100; // past the one-second call window
     await sup.send(HUMAN, { hsid: s.hsid, text: 'typed again' });
     await sup.send(HUMAN, { hsid: s.hsid, text: 'and again' });
     expect(await waitFor(() => answers(w).length >= 2, 20_000)).toBe(true);
     expect(bodyOf(answers(w)[1]!).relayedFor).toMatchObject({ surface: 'bridge', turn: `turn:${s.hsid}/4`, hsid: s.hsid });
+  }, 60_000);
+
+  it('the rate cap through a session: six calls one after the other on a clock that does not move, four served and two refused as rate', async () => {
+    const b = boot();
+    const { w, sup } = b;
+    setMode(w, { permissionAsk: { hold: true, steps: [toolCall('m-call', 'bridge-echo')] } });
+    const s = await sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd });
+    for (let i = 1; i <= 6; i++) {
+      await sup.send(HUMAN, { hsid: s.hsid, text: `call ${i}` }); // each message makes the fake emit the one call
+      expect(await waitFor(() => answers(w).length >= i, 20_000)).toBe(true);
+    }
+    expect(answers(w).map((a) => a.mcp!.result!.isError)).toEqual([false, false, false, false, true, true]);
+    expect(answers(w).slice(4).map(textOf)).toEqual([MOD_BRIDGE_SENTENCES.busy, MOD_BRIDGE_SENTENCES.busy]);
+    expect(b.reached()).toBe(4);
+    await sup.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => b.bridgeRows.some((x) => x.payload.outcome === 'refused'), 10_000)).toBe(true);
+    expect(b.bridgeRows.filter((x) => x.payload.outcome === 'refused').map((x) => x.payload.byWhy)).toEqual([{ rate: 2 }]);
+    // the window is the clock's: a second later the session is served again (a new session here, the first has ended)
+  }, 60_000);
+
+  it('a call AFTER a turn\'s result (a background sub-agent finishing late) is refused no-turn, though the call inside the turn was served', async () => {
+    const b = boot();
+    const { w, sup } = b;
+    setMode(w, { permissionAsk: { steps: [toolCall('m-in', 'bridge-echo')], afterResult: [toolCall('m-late', 'bridge-write').line] } });
+    const s = await sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd });
+    await sup.send(HUMAN, { hsid: s.hsid, text: 'one turn' });
+    expect(await waitFor(() => !!answer(w, 'm-in') && !!answer(w, 'm-late'), 20_000)).toBe(true);
+    expect(answer(w, 'm-in').mcp!.result!.isError).toBe(false);
+    expect([answer(w, 'm-late').mcp!.result!.isError, textOf(answer(w, 'm-late'))]).toEqual([true, MOD_BRIDGE_SENTENCES.noTurn]);
+    expect(b.events.some((e) => e.kind === 'turn.result')).toBe(true);
+    expect(b.modRows()).toEqual([]); // the late call was a write tool: no mod row
+    expect(b.reached()).toBe(1);
   }, 60_000);
 
   it('the production allowlist: no entry is written, tools/list is EMPTY and a call names an unknown tool', async () => {
@@ -273,19 +311,4 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge through a Claude Code sessi
     expect(b.reached()).toBe(0);
     expect(b.bridgeRows.filter((x) => x.payload.outcome !== 'refused')).toEqual([]);
   }, 60_000);
-});
-
-describe('#mod-tool-bridge: only the Claude Code spawn path can carry the entry (Aegis A6)', () => {
-  it('the supervisor writes the entry in one place, inside #spawnClaude; the local lane names neither the bridge nor its server', () => {
-    const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'src', 'kernel');
-    const sup = fs.readFileSync(path.join(root, 'supervisor', 'supervisor.ts'), 'utf8');
-    expect(sup.match(/MOD_BRIDGE_ENTRY \}/g)).toHaveLength(1);
-    const spawn = sup.slice(sup.indexOf('async #spawnClaude('), sup.indexOf('async #onLine('));
-    expect(spawn).toContain('[MOD_BRIDGE_SERVER]: { ...MOD_BRIDGE_ENTRY }');
-    const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
-    for (const f of [...walk(path.join(root, 'local')), path.join(root, 'supervisor', 'local-session.ts')].filter((x) => x.endsWith('.ts'))) {
-      const src = fs.readFileSync(f, 'utf8');
-      expect([f, /mcp-bridge|MOD_BRIDGE|gnomon-mods/.test(src)]).toEqual([f, false]);
-    }
-  });
 });

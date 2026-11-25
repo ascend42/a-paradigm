@@ -8,7 +8,7 @@
  *    principal and a mod on the unix socket.
  *  - A mod's own `log.read`, through the real daemon: `payload.relayedFor` comes back unredacted, so a cold open
  *    folds the same authorship the log holds.
- *  - First-party identity on `tool.call`, and that exactly one production caller of `callTool` exists (the S1.4 bridge).
+ *  - First-party identity on `tool.call` (the one-caller scan of `callTool` is in test/mods-bridge.test.ts, on every OS).
  *
  * POSIX-only (unix socket, device keys under an owner-only keys/); the mod's own rules run everywhere in
  * test/dimension-mod.test.ts.
@@ -311,32 +311,4 @@ describe('#dimension-mod first-party identity on tool.call (S1.2 C2; Aegis A3)',
     },
     SOCKET_MS,
   );
-
-  it('exactly ONE production caller of ModHost.callTool exists: #mod-tool-bridge (S1.4-P2, G-MOD-19)', () => {
-    const hits: string[] = [];
-    const walk = (dir: string): void => {
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, e.name);
-        if (e.isDirectory()) walk(p);
-        else if (/\.(ts|mts|mjs|js)$/.test(e.name)) {
-          const lines = fs.readFileSync(p, 'utf8').split('\n');
-          lines.forEach((line, i) => {
-            if (/\bcallTool\s*\(/.test(line)) hits.push(`${path.relative(path.join(PKG_ROOT, 'src'), p).split(path.sep).join('/')}:${i + 1}`);
-          });
-        }
-      }
-    };
-    walk(path.join(PKG_ROOT, 'src'));
-    // the two definitions (the mod host's and the local MCP client's own method), the MCP client calling ITS method,
-    // and the ONE caller of the mod host's: the bridge's `call` port in modhost/mcp-bridge.ts (createModBridge). The
-    // daemon and the supervisor hand the bridge a host and a session; neither calls the tool method itself.
-    const src = (f: string): string => fs.readFileSync(path.join(PKG_ROOT, 'src', f), 'utf8');
-    expect(hits.map((x) => x.replace(/:\d+$/, '')).sort()).toEqual(['kernel/local/mcp-client.ts', 'kernel/local/mcp-client.ts', 'kernel/modhost/host.ts', 'kernel/modhost/mcp-bridge.ts']);
-    expect(src('kernel/modhost/host.ts').match(/\bcallTool\s*\(/g)).toHaveLength(1); // the definition
-    const bridge = src('kernel/modhost/mcp-bridge.ts');
-    expect(bridge.match(/\bcallTool\s*\(/g)).toHaveLength(1);
-    // the answerer never reads `_meta`, `server_name` or any identity key of the message
-    expect(/_meta|server_name|serverName/.test(bridge.replace(/\/\*[^]*?\*\/|\/\/.*$/gm, ''))).toBe(false);
-    expect(/import[^;]*modhost/.test(src('kernel/local/mcp-client.ts'))).toBe(false); // that file's callTool is its own class's
-  });
 });
