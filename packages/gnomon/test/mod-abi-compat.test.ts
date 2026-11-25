@@ -9,8 +9,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
 import { appendGrantRow, effectiveInstall, readGrants } from '../src/kernel/manifest/index.js';
-import { HISTORICAL_FIRST_PARTY_PINS } from '../src/kernel/manifest/grants.js';
-import { compatModAbiId, SUPERSEDED_FIRST_PARTY_PINS, SUPERSEDED_PINS_WRITTEN_FOR } from '../src/kernel/manifest/install.js';
+import { historicalFirstPartyPins, isHistoricalFirstPartyPin } from '../src/kernel/manifest/grants.js';
+import { compatModAbiId, isSupersededPin, supersededPins, supersededPriorModAbiId, SUPERSEDED_PINS_WRITTEN_FOR } from '../src/kernel/manifest/install.js';
 import { MANIFEST_FILE, readManifest } from '../src/kernel/manifest/manifest.js';
 import { noEvents } from '../src/kernel/manifest/refusal.js';
 import { snapshotFolder } from '../src/kernel/manifest/snapshot.js';
@@ -64,33 +64,33 @@ function started(r: Rig) {
 
 describe('G-MOD-15: the compatibility table', () => {
   it('lists exact hashes, each with ONE prior id that is not the current one; no format-1 pin is listed', () => {
-    expect(SUPERSEDED_FIRST_PARTY_PINS.size).toBe(3);
-    for (const [hash, prior] of SUPERSEDED_FIRST_PARTY_PINS) {
+    expect(supersededPins().length).toBe(3);
+    for (const [hash, prior] of supersededPins()) {
       expect(hash).toMatch(/^sha256:[0-9a-f]{64}$/);
       expect(prior).toBe(PRIOR);
       expect(prior).not.toBe(MOD_ABI_ID);
-      expect(HISTORICAL_FIRST_PARTY_PINS.has(hash)).toBe(false);
+      expect(isHistoricalFirstPartyPin(hash)).toBe(false);
     }
   });
 
   it('EXPIRY: the table was written for the modAbiId this kernel speaks; when the id next moves it must be emptied or re-justified', () => {
     // If this fails, modAbiId moved. Do NOT just update the literal: empty SUPERSEDED_FIRST_PARTY_PINS, or show again
     // that every listed tree is unaffected by the new change and that no prior id chains to another prior id.
-    if (SUPERSEDED_FIRST_PARTY_PINS.size > 0) expect(SUPERSEDED_PINS_WRITTEN_FOR).toBe(MOD_ABI_ID);
+    if (supersededPins().length > 0) expect(SUPERSEDED_PINS_WRITTEN_FOR).toBe(MOD_ABI_ID);
     // no chains: with any other current id, nothing is accepted
-    const ok = { packageHash: [...SUPERSEDED_FIRST_PARTY_PINS.keys()][0]!, tier: 'first-party', source: 'package', manifest: { publisher: 'gnomon' } };
+    const ok = { packageHash: supersededPins().map(([h]) => h)[0]!, tier: 'first-party', source: 'package', manifest: { publisher: 'gnomon' } };
     expect(compatModAbiId(ok, MOD_ABI_ID)).toBe(PRIOR);
     expect(compatModAbiId(ok, PRIOR)).toBeNull();
     expect(compatModAbiId(ok, `sha256:${'0'.repeat(64)}`)).toBeNull();
   });
 
   it('every condition is required: the exact hash, first-party tier, package source, publisher gnomon, no tools', () => {
-    const hash = [...SUPERSEDED_FIRST_PARTY_PINS.keys()][0]!;
+    const hash = supersededPins().map(([h]) => h)[0]!;
     const ok = { packageHash: hash, tier: 'first-party', source: 'package', manifest: { publisher: 'gnomon', provides: { tools: [] as unknown[] } } };
     expect(compatModAbiId(ok, MOD_ABI_ID)).toBe(PRIOR);
     const not: Array<Record<string, unknown>> = [
       { packageHash: `sha256:${'1'.repeat(64)}` },
-      { packageHash: [...HISTORICAL_FIRST_PARTY_PINS][0]! },
+      { packageHash: historicalFirstPartyPins()[0]! },
       { tier: 'local' },
       { tier: undefined },
       { source: 'linked:/somewhere' },
@@ -118,7 +118,7 @@ describe('G-MOD-15: an upgraded machine, one test per pinned mod', () => {
       const r = rig();
       cleanups.push(r.cleanup);
       const { name, packageHash } = installedBefore(r, mod);
-      expect(SUPERSEDED_FIRST_PARTY_PINS.get(packageHash)).toBe(PRIOR);
+      expect(supersededPriorModAbiId(packageHash)).toBe(PRIOR);
       const { h } = started(r);
       // 1. starts under the prior id; one health row says so; nothing is granted, re-tiered or marked for update
       const before = JSON.stringify(readGrants(r.home, r.auth).installs);
@@ -180,7 +180,7 @@ describe('G-MOD-15: the same prior id from anything else is refused ABI', () => 
 
   it('a first-party tree at a superseded pin echoing ANOTHER id than the one listed for it', async () => {
     // the listed tree itself is fixed by its hash, so this is the predicate: only the listed id is compared
-    const hash = [...SUPERSEDED_FIRST_PARTY_PINS.keys()][0]!;
+    const hash = supersededPins().map(([h]) => h)[0]!;
     const prior = compatModAbiId({ packageHash: hash, tier: 'first-party', source: 'package', manifest: { publisher: 'gnomon' } }, MOD_ABI_ID);
     expect(prior).toBe(PRIOR);
     expect(prior).not.toBe(`sha256:${'2'.repeat(64)}`);

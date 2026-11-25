@@ -165,7 +165,46 @@ components:
       (it echoes the current modAbiId). An installed snapshot of an earlier
       version is NOT refreshed by the kernel: it is refused ABI at init until
       the human approves the Update card the Mods panel offers (or runs gnomon
-      mod install on the shipped folder).
+      mod install on the shipped folder). S1.4 P0 replaces that pin with
+      dimension 1.0.1 (dim-shape.mjs rebuilt from the tightened contract) and
+      adds RETIRED_FIRST_PARTY_PINS: an exact hash of a first-party tree this
+      kernel no longer ships, with the reason (the dimension 1.0.0 hash is the
+      first). The rule for a first-party refresh that is NOT an ABI move (the
+      refresh path of .paradigm/research/gnomon-canvas/first-party-mod-refresh.md
+      stays: no kernel-side refresh, the person approves an Update card): the
+      old hash leaves FIRST_PARTY_PACKAGE_HASHES and enters the retired set. It
+      is not a superseded pin (that table only lets a tree echoing a PRIOR
+      modAbiId keep starting, and never lists a tree with tools). deriveTier
+      answers local for a retired hash, but an install ALREADY pinned at it
+      keeps loading first-party, because loadMod takes the tier from that
+      install's root-signed grant.trust row and never from deriveTier, until
+      the Update card is approved. A retired hash is refused TIER (why retired)
+      as a fresh stage (stageInstall, package or linked; its snapshot is not
+      kept), as the approval of a card an earlier kernel staged (prepareInstall;
+      the card can still be denied) and as a rollback target (rollbackMod), so
+      an update cannot be undone into the retired build, which would load
+      first-party again from its old trust row. The 1.0.0 tree is kept as data
+      in test/fixtures/first-party-retired/dimension-1.0.0.json and hashed
+      against the retired pin by test/retired-pins.test.ts.
+      Last review round of S1.4 P0 (Aegis F1, F2, N-a). The pin tables are
+      MODULE-PRIVATE: FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS,
+      RETIRED_FIRST_PARTY_PINS and TRUSTED_MANIFEST_KEYS in install.ts and
+      HISTORICAL_FIRST_PARTY_PINS in grants.ts are not exported. Readers ask
+      isFirstPartyPin, isSupersededPin, isRetiredPin, isHistoricalFirstPartyPin,
+      supersededPriorModAbiId or retiredPinReason, or take a fresh frozen copy
+      (firstPartyPins, supersededPins, retiredPins, historicalFirstPartyPins).
+      The only way to change a table is the internal seam withPinTables
+      (registerSeams manifest; withPinTablesForTest in testing.ts), which
+      restores all three after the call; test/pin-tables.test.ts holds that
+      the two modules export no Set, Map or unfrozen array. rollbackMod takes
+      "the tree pinned now" from effectiveInstall, which honours
+      grant.uninstall, for the superseded and the retired check alike: after an
+      uninstall no hash is exempt. rederiveInstallDetail refuses a retired
+      hash before it re-reads the snapshot, and expireRetiredStaged closes the
+      pending staged record (state expired, no decision); the staged-card
+      pickup in modhost/control.ts calls it, so a card an earlier kernel staged
+      for a retired build is neither raised nor left pending
+      (test/mods-admin.test.ts).
       S1.2 review fix (J5, Aegis 9a): rollback protection. stageInstall refuses
       TIER (why superseded) a NEW stage of a tree in
       SUPERSEDED_FIRST_PARTY_PINS; only an install already pinned at that hash
@@ -231,5 +270,7 @@ components:
     tests:
       - test/manifest-offers.test.ts
       - test/manifest-loader.test.ts
+      - test/retired-pins.test.ts
+      - test/pin-tables.test.ts
       - test/seams-fence.test.ts
     oracles: [G-MAN-01, G-MAN-02, G-MAN-03, G-HON-04, G-LAW-04, G-WIN-04]

@@ -52,12 +52,23 @@ const V2_KINDS: readonly string[] = Object.freeze(['grant.install', 'grant.unins
 const LEGACY_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 
 export { LEGACY_ALIASES, ownsModKind } from './mod-kind.js';
-/** packageHashes of the historical (format-1) first-party pins: an alias resolves to gnomon.<N> only from one of these. */
-export const HISTORICAL_FIRST_PARTY_PINS: ReadonlySet<string> = new Set<string>([
+/**
+ * packageHashes of the historical (format-1) first-party pins: an alias resolves to gnomon.<N> only from one of these.
+ * Module-private (S1.4 P0 review, Aegis F2): read through `isHistoricalFirstPartyPin` and `historicalFirstPartyPins`.
+ */
+const HISTORICAL_FIRST_PARTY_PINS: ReadonlySet<string> = new Set<string>([
   'sha256:3c09d9cb5d22c3e75773baf547456bc4b2a2b0bebdaff9d67baaad159ff06e1d', // workshop 1.0.0
   'sha256:e840fb3902df137f280313d768e1cb1087a80eccfa78e0289ebacf52c1c43e83', // ledger 1.0.0
   'sha256:be0cce015b2db126206973adddd899060b6a3e6ff28fd7e53d5d0842530cfd71', // paradigm-context 1.0.0
 ]);
+/** Is this the package hash of a historical (format-1) first-party pin? */
+export function isHistoricalFirstPartyPin(packageHash: string): boolean {
+  return HISTORICAL_FIRST_PARTY_PINS.has(packageHash);
+}
+/** The historical pins, as a fresh frozen list on every call (changing it changes nothing here). */
+export function historicalFirstPartyPins(): readonly string[] {
+  return Object.freeze([...HISTORICAL_FIRST_PARTY_PINS]);
+}
 /** Is format 1 still loadable (MANIFEST_FORMAT.accepted)? The alias table is only meaningful while it is. */
 export const FORMAT_1_SUPPORTED: boolean = MANIFEST_FORMAT.accepted.includes(1);
 

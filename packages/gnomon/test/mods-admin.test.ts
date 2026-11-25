@@ -15,7 +15,8 @@ import { isUserPaused, StagedCardPickup, uninstallRequested } from '../src/kerne
 import { findFirstPartyRoot, ModsAdmin, MOD_ADMIN_REQUESTS } from '../src/kernel/modhost/mods-admin.js';
 import { DeskTally, foldDeskStats, type DeskRow } from '../src/kernel/desk/desk-stats.js';
 import { foldDeskStats as cliFold } from '../src/cli/desk-cli.js';
-import { mintTestPresence } from '../src/kernel/testing.js';
+import { readStaged, stageInstall } from '../src/kernel/manifest/install.js';
+import { mintTestPresence, withPinTablesForTest } from '../src/kernel/testing.js';
 import { privateTmpRoot } from './daemon-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 
@@ -61,7 +62,7 @@ function rig() {
     const sig = cryptoSign('sha256', signaturePreimage('approve', approveMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: HUMAN })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
     return broker.approve({ ...GUI, surface: 'browser' }, { cardId, decision, decisionSig: sig });
   };
-  return { root, home, auth, broker, admin, rows, running, decide, configScans: () => configScans };
+  return { root, home, auth, broker, admin, rows, running, decide, scan: () => pickup.scan(), raised: () => pickup.raised(), configScans: () => configScans };
 }
 
 describe('#mods-admin requests mirror `gnomon mod`', () => {
@@ -195,5 +196,43 @@ describe('#desk-stats DeskTally', () => {
     expect(tally.of('gnomon.ledger')).toEqual({ shown: 0, suppressed: 0, kept: 0, open: 0, notNow: 0, stopHere: 0 });
     tally.close();
     expect(listener).toBeNull();
+  });
+});
+
+describe('the pickup and a retired first-party build (S1.4 P0 review, Aegis N-a)', () => {
+  it('a card an earlier kernel staged for dimension 1.0.0 is not raised, is refused as retired (not INTEGRITY), and its staged record is expired', async () => {
+    const OLD = 'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9';
+    const t = rig();
+    const fx = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'test', 'fixtures', 'first-party-retired', 'dimension-1.0.0.json'), 'utf8')) as { files: Record<string, string> };
+    const src = path.join(t.root, 'old', 'dimension');
+    fs.mkdirSync(src, { recursive: true });
+    for (const [name, text] of Object.entries(fx.files)) fs.writeFileSync(path.join(src, name), text);
+    // the earlier kernel (1.0.0 first-party, not retired) stages the card; nobody decides it before the upgrade
+    const st = withPinTablesForTest(
+      (tables) => {
+        tables.firstParty.add(OLD);
+        tables.retired.delete(OLD);
+      },
+      () => stageInstall({ home: t.home, source: src, via: 'package', requestedBy: HUMAN, trust: t.auth }),
+    );
+    if (st.state !== 'staged') throw new Error(`expected staged, got ${st.state}`);
+    expect(readStaged(t.home, 'gnomon.dimension', st.cardId)!.card.state).toBe('pending');
+    // this kernel's pickup
+    await t.scan();
+    expect(t.broker.card(st.cardId)).toBeUndefined();
+    expect(t.raised()).not.toContain(st.cardId);
+    const after = readStaged(t.home, 'gnomon.dimension', st.cardId)!;
+    expect(after.card.state).toBe('expired');
+    expect(after.decision).toBeUndefined();
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'gnomon.dimension')).toBeUndefined();
+    // a second scan finds nothing pending and changes nothing
+    await t.scan();
+    expect(t.broker.card(st.cardId)).toBeUndefined();
+    expect(readStaged(t.home, 'gnomon.dimension', st.cardId)!.card.state).toBe('expired');
+    // a card for the shipped tree is still raised in the same home
+    const ok = stageInstall({ home: t.home, source: path.join(MODS, 'dimension'), via: 'package', requestedBy: HUMAN, trust: t.auth });
+    if (ok.state !== 'staged') throw new Error(`expected staged, got ${ok.state}`);
+    await t.scan();
+    expect(t.broker.card(ok.cardId)?.state).toBe('pending');
   });
 });
