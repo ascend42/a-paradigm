@@ -45,7 +45,8 @@ const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], Ar
  * from outside the page dropped on the stage; {ime: composing, commit: text} drives an IME composition into the
  * focused field; {drag: …, alt: true} holds Alt; {await: expression} awaits a promise and records its value.
  */
-export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [] }) {
+/** `ready`: the page-side expression that is true once the page can be driven (default: the preview's own mark; the kernel-served app has none). */
+export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [], ready = 'document.documentElement.dataset.preview === "ready"' }) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'gnomon-leaf-'));
   const proc = spawn(chrome, ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${width},${height}`, '--hide-scrollbars', '--force-device-scale-factor=1', '--remote-debugging-port=0', url], { stdio: 'ignore' });
   let ws = null;
@@ -83,8 +84,8 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     const evaluate = async (expression) => (await call('Runtime.evaluate', { expression, returnByValue: true })).result?.value;
     await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     const until = Date.now() + timeoutMs;
-    while (Date.now() < until && (await evaluate('document.documentElement.dataset.preview === "ready"')) !== true) await sleep(100);
-    if ((await evaluate('document.documentElement.dataset.preview === "ready"')) !== true) throw new Error('the fixture never set data-preview="ready"');
+    while (Date.now() < until && (await evaluate(ready)) !== true) await sleep(100);
+    if ((await evaluate(ready)) !== true) throw new Error('the page was never ready (the fixture never set data-preview="ready")');
     await sleep(300);
     const acted = {};
     const centre = async (selector) => JSON.parse(await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return 'null'; const b = e.getBoundingClientRect(); return JSON.stringify({ x: b.x + b.width / 2, y: b.y + b.height / 2 }); })()`));
@@ -114,7 +115,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         await call('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...v, commands: ['paste'] });
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...v });
       } else if (a.drop) {
-        const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+        const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage, .bd-host .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
         const at = { x: box.x + a.at[0], y: box.y + a.at[1] };
         const data = { items: a.drop.items ?? [], files: a.drop.files ?? [], dragOperationsMask: 1 };
         for (const type of ['dragEnter', 'dragOver', 'drop']) {
@@ -130,7 +131,9 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         const [key, code] = KEYS[a.key] ?? [a.key, a.key.toUpperCase().charCodeAt(0)];
         const modifiers = (a.shift ? 8 : 0) | (a.meta ? 4 : 0) | (a.ctrl ? 2 : 0) | (a.alt ? 1 : 0);
         const base = { key, code: KEYS[a.key] ? key : `Key${a.key.toUpperCase()}`, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers };
-        await call('Input.dispatchKeyEvent', { type: KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(KEYS[a.key] || modifiers ? {} : { text: a.key }), ...(a.commands ? { commands: a.commands } : {}) });
+        // `text`: a named key that ACTIVATES as a person's does (Enter with its carriage return presses a focused button; a raw key-down alone does not)
+        const typed = a.text !== undefined;
+        await call('Input.dispatchKeyEvent', { type: typed ? 'keyDown' : KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(typed ? { text: a.text } : KEYS[a.key] || modifiers ? {} : { text: a.key }), ...(a.commands ? { commands: a.commands } : {}) });
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
       } else if (a.paste !== undefined) {
         await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
@@ -139,7 +142,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, modifiers: process.platform === 'darwin' ? 4 : 2 });
       } else {
         if (a.drag || a.hold || a.release) {
-          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage, .bd-host .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
           const pts = (a.drag ?? a.hold ?? [a.release]).map(([x, y]) => ({ x: box.x + x, y: box.y + y }));
           if (!a.release) {
             const mods = a.alt ? { modifiers: 1 } : {};
@@ -161,8 +164,8 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         }
         let p = null;
         if (a.at) {
-          const stage = await centre('#preview-board .bd-stage');
-          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
+          const stage = await centre('#preview-board .bd-stage, .bd-host .bd-stage');
+          const box = JSON.parse(await evaluate(`(() => { const b = document.querySelector('#preview-board .bd-stage, .bd-host .bd-stage').getBoundingClientRect(); return JSON.stringify({ x: b.x, y: b.y }); })()`));
           p = stage ? { x: box.x + a.at[0], y: box.y + a.at[1] } : null;
         } else p = await centre(a.press ?? a.dbl ?? a.wheel ?? a.move);
         if (!p) throw new Error(`no element for ${JSON.stringify(a)}`);

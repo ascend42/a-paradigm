@@ -133,9 +133,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     const f = (k: string): Facts => down[k] as Facts;
     expect(down.errors).toEqual([]);
     expect(down.held).toEqual({ inert: 'link-down', rail: 'bd-rail yielded', off: true });
-    expect(f('down')).toMatchObject({ link: 'down', notices: ['link:link-down'], line: 'Not saved · reconnecting' });
+    expect(f('down')).toMatchObject({ link: 'down', notices: ['link:link-down'], line: 'Reconnecting' });
     // nothing was shown and then taken away: no mark, no row, no further notice, the same line
-    expect(f('after')).toMatchObject({ link: 'down', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, selected: 0, notices: ['link:link-down'], line: 'Not saved · reconnecting' });
+    expect(f('after')).toMatchObject({ link: 'down', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, selected: 0, notices: ['link:link-down'], line: 'Reconnecting' });
     expect(down.leafStays).toBe(true);
   }, 120_000);
 
@@ -171,7 +171,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(a.errors).toEqual([]);
     expect(f('slow')).toMatchObject({ keep: 'saving', pending: 1, nodes: f('start').nodes + 1, line: 'Saving…', notices: [] });
     expect(f('two')).toMatchObject({ keep: 'saving', pending: 2, nodes: f('start').nodes + 2, line: 'Saving…' });
-    expect(f('gone')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['edit:timeout'], line: '2 changes weren’t saved · do them again' });
+    expect(f('gone')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['edit:timeout'], line: '2 changes may not be saved · fold and reopen to check' });
   }, 120_000);
 
   it('C2: a paste with the keyboard in the composer or on a card reaches no board listener; any control of the chrome keeps its own paste (N2); select() skips a fallback stub', async () => {

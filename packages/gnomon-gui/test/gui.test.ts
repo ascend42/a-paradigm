@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
 import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, PRESENCE_CALL_TIMEOUT_MS, PRESENCE_METHODS, refusalFromError, RpcError } from '../src/core/client.js';
-import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, BLOCK_UNSAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, shownPrefixWords, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
@@ -659,6 +659,15 @@ describe('block buttons and the client (C6, I5)', () => {
       expect(el.all().some((e) => e.attrs.has('data-command')), cmd).toBe(false);
     }
     expect(BLOCK_SAFE_COMMANDS.has('diag.send') || BLOCK_SAFE_COMMANDS.has('gui.reconnect')).toBe(false);
+  });
+  it('BLOCK_SAFE_COMMANDS is an allowlist: exactly these, and every GUI command has an explicit block-safe decision', () => {
+    // exactly what a block could name before boards (the denylist's result then), nothing more
+    expect([...BLOCK_SAFE_COMMANDS].sort()).toEqual(['composer.focus', 'layout.decide', 'layout.desk', 'layout.focus', 'mcp.open', 'motion.reduce', 'motion.system', 'palette.open', 'rules.open', 'session.new', 'slash.open', 'stack.scope.toggle', 'theme.auto', 'theme.day', 'theme.night', 'view.kernel-feed']);
+    const ids = new Set(GUI_COMMANDS.map((c) => c.id));
+    for (const id of BLOCK_SAFE_COMMANDS) expect(ids.has(id), `${id} is a GUI command`).toBe(true);
+    const unsafe = (id: string): boolean => BLOCK_UNSAFE_COMMANDS.some((u) => (u.endsWith('.') ? id.startsWith(u) : id === u));
+    // a NEW command id fails here until someone decides: allowed to a block, or not
+    for (const id of ids) expect(Number(BLOCK_SAFE_COMMANDS.has(id)) + Number(unsafe(id)), `${id} needs exactly one block-safe decision`).toBe(1);
   });
   it('an id:null error frame reaches onProtocolError; an unanswered call times out', async () => {
     const t = { send: () => undefined, close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };

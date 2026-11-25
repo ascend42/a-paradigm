@@ -245,6 +245,13 @@ describe('#gui-mods-panel actions: one request each', () => {
     expect(GUI_COMMANDS.find((c) => c.id === 'mods.open')?.title).toContain('Mods');
     expect(BLOCK_SAFE_COMMANDS.has('mods.open')).toBe(false);
   });
+
+  it('a block may not open a board or the Dimensions list (Aegis H1, review of PR #119)', () => {
+    expect(GUI_COMMANDS.find((c) => c.id === 'board.open')).toBeDefined();
+    expect(GUI_COMMANDS.find((c) => c.id === 'dimensions.list')).toBeDefined();
+    for (const id of ['board.open', 'dimensions.list']) expect(BLOCK_SAFE_COMMANDS.has(id), id).toBe(false);
+    for (const id of BLOCK_SAFE_COMMANDS) expect(id).not.toMatch(/^(board|dimensions)\./);
+  });
 });
 
 describe('Install Workshop regression (founder dogfood 2026-10-21: the key did nothing)', () => {

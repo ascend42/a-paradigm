@@ -334,7 +334,9 @@ describe('#gui-capability-browser: the wiring', () => {
     expect(tier).toMatch(/'data-open-tools': '' \}, TOOLS_COPY\.open\)/);
     expect(app).toContain("else if (id === 'tools.open') openTools(trusted);");
     expect(cmds).toContain("{ id: 'tools.open', title: 'Tools and memory…");
-    expect(cmds).toContain("!id.startsWith('tools.')"); // a block's button can never open it
+    // a block's button can never open it: the block-safe set is an allowlist since the review of PR #119, and tools.* has its explicit "no"
+    expect(cmds).toMatch(/BLOCK_UNSAFE_COMMANDS[^\n]*'tools\.'/);
+    expect(cmds.slice(cmds.indexOf('export const BLOCK_SAFE_COMMANDS'), cmds.indexOf('export const BLOCK_UNSAFE_COMMANDS'))).not.toMatch(/'tools\./);
   });
   it('the toast "<server> stopped: <cause>" with "see Tools", from the kernel only; the header meta is plain text', () => {
     expect(app).toMatch(/function mcpFailRow[^]*isKernelPrincipal\(r\.principal, kernelPrincipalOf\(session\?\.principal\)\)[^]*toolsSessionOf\(t\.hsid\)\?\.access !== 'owner'[^]*MCP_FAIL_TOAST\.key[^]*e\.isTrusted && toolsDrawer\?\.openServer/);

@@ -11,7 +11,7 @@
  */
 import { PREVIEW } from './env.js'; // FIRST: stubs matchMedia and the surface before app.ts evaluates
 import { PIN_KEY } from '../core/launch.js';
-import { devArmOfferOnce, devRulesState, main } from '../ui/app.js';
+import { devArmOfferOnce, devBoard, devRulesState, main } from '../ui/app.js';
 import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey } from './fake-kernel.js';
 import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
 import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
@@ -232,7 +232,17 @@ async function boot(): Promise<void> {
   const key = await previewKey(crypto.subtle);
   const rows = await signRows(fx.rows, key);
   let kernel: FakeKernel | null = null;
-  (globalThis as { WebSocket: unknown }).WebSocket = fakeWebSocketClass((url) => (kernel = new FakeKernel(fx, rows, key, url)));
+  // `?dim=1` (boards S1.3 P4b-1): the APP's own fake kernel answers the dimension mod's commands (dim-mod.ts), and
+  // a second socket is the SAME kernel on a new connection, so the app's Reconnect reads the log it left. Test hooks
+  // on `gnomonPreviewApp`: the kernel, the mod (`refuseNext`, `silent`) and `down()` to close the link.
+  const dimMod = new URLSearchParams(location.search).get('dim') === '1' ? new PreviewDimMod() : null;
+  (globalThis as { WebSocket: unknown }).WebSocket = fakeWebSocketClass((url) => {
+    if (dimMod && kernel) return kernel.reopen(), kernel;
+    kernel = new FakeKernel(fx, rows, key, url);
+    kernel.dim = dimMod;
+    if (dimMod) (globalThis as { gnomonPreviewApp?: unknown }).gnomonPreviewApp = { kernel, mod: dimMod, board: devBoard(), down: (): void => kernel!.close() };
+    return kernel;
+  });
   if (fx.open === 'offer-armed') devArmOfferOnce(); // #gui-offer-slip DEV ONLY: the slip as a first trusted press leaves it
   main(`#launch=cHJldmlldy1sYXVuY2g&k=${key.spki}`);
   for (let i = 0; i < 200 && !kernel; i++) await frames(1);

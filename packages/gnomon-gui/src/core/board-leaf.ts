@@ -83,22 +83,32 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'out-of-date') return INERT_COPY['out-of-date'];
   if (n.code === 'closing') return 'The board is folding · that change wasn’t made';
   if (n.code === 'not-saved') return n.lost > 1 ? `${n.lost} changes weren’t saved before the link came back` : 'One change wasn’t saved before the link came back';
-  if (n.code === 'not-undoable') return n.why === 'delete' ? 'Nothing was deleted · a delete takes 64 marks at most' : 'Nothing was changed · that is too much for one change';
+  // (Aegis N1: the limit is said only to a person who went over it; 50 shapes with 20 tied arrows did not)
+  if (n.code === 'not-undoable') return n.why !== 'delete' ? 'Nothing was changed · that is too much for one change' : n.lost > 64 ? 'Nothing was deleted · a delete takes 64 marks at most' : 'Nothing was deleted · select fewer marks and try again';
   if (n.about === 'undo') return 'That was too much to undo · it stays as it is';
-  if (n.about === 'open') return 'The dimension didn’t open · try again';
+  if (n.about === 'open') {
+    // why the mod refused, in plain words: retrying the same thing fails the same way, so the line says what to change
+    if (n.why === 'title-bad' || n.why === 'title-missing') return 'That title can’t be used · try plain words';
+    if (n.why === 'title-secret') return 'That title looks like a credential · use another';
+    if (n.why === 'repo-mismatch') return 'That board belongs to another project';
+    if (n.why === 'not-attached') return 'This session isn’t attached to that board';
+    if (n.why === 'dim-cap') return 'There are too many boards here · no more can be made';
+    return 'The board didn’t open · try again';
+  }
   // (a fold is sent only after what was pending has settled: what was drawn is in the log)
   if (n.about === 'close') return 'Your marks are saved · the board didn’t fold · try again';
   if (n.code === 'hash-mismatch') return 'This board may be out of date · fold it and open it again';
   if (n.code === 'too-large' || n.code === 'row-too-large') return 'That is too much for one change · do it in smaller parts';
   if (n.code === 'busy') return 'Too many changes are waiting · try again in a moment';
   if (n.code === 'not-sent' || n.code === 'gesture-refused') return 'That change wasn’t sent · do it again';
-  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes weren’t saved · do them again` : 'That change wasn’t saved · do it again';
+  // (a command that left and was never answered may have been written: the line does not say it was not)
+  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes may not be saved · fold and reopen to check` : 'That change may not be saved · fold and reopen to check';
   return n.lost > 1 ? `${n.lost} changes weren’t kept · the board is as it was` : 'That change wasn’t kept · the board is as it was';
 }
 
 /** What the leaf shows, for as long as it lasts, while the board is held still (the link is down; the fold is out of date). */
 export const INERT_COPY = {
-  'link-down': 'Not saved · reconnecting',
+  'link-down': 'Reconnecting',
   'out-of-date': 'This board is out of date · fold it and open it again',
 } as const;
 export type LeafInert = keyof typeof INERT_COPY;
@@ -107,22 +117,67 @@ export type LeafInert = keyof typeof INERT_COPY;
  * The keep line's state of the live loop, from `DimSession.status()`: null while everything is saved (the leaf then
  * shows its usual keep line). Minimal words, in the keep line's own slot; the final words are the next pass's.
  */
-export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number }): string | null {
-  if (s.link === 'down') return INERT_COPY['link-down'];
+export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number }): string | null {
+  if (s.link === 'down') return linkDownLine(s);
+  if (s.phase === 'opening') return 'Opening…';
+  if (s.phase === 'closing') return 'Folding…';
   if (s.keep === 'saving') return 'Saving…';
   if (s.keep === 'not-saved') return 'Not saved';
+  if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
+  if (s.partial) return KEEP_COPY.partial;
   return null;
+}
+/** Minimal words of the keep line's own states (boards S1.3 P4b-1; Luna rules them in the next pass). */
+export const KEEP_COPY = {
+  notSavedDown: 'Not saved · reconnecting',
+  dropped: 'Part of this board could not be held · marks are missing',
+  partial: 'Earlier marks are not shown · this is part of the board',
+  wordsHeld: 'Not connected · your words are kept on this page only',
+  wordsHeldBack: 'Reconnecting · your words are kept on this page only',
+  notConnected: 'Not connected',
+  notSavedOff: 'Not saved · not connected',
+  // (kept up for as long as the words are held; Mika's wording cut to fit the leaf at a 1024 window)
+  wordsWait: 'Your words are waiting · T, then click, gets them back',
+  wordsBack: 'Your words are back · click away to save them',
+  wordsGone: 'The words you were typing were not saved',
+  reconnected: 'Reconnected',
+  copyDown: 'Nothing was copied · copy it again once reconnected',
+  foldedDown: 'Folded while reconnecting · unsaved changes were dropped',
+  reopens: 'That board was folded · opening it starts it again',
+  noSession: 'Open a session first',
+  wordsAndChangesGone: (n: number): string => `Your typed words and ${n === 1 ? 'one change' : `${n} changes`} were not saved`,
+  changesGone: (n: number): string => (n === 1 ? 'One change on the board was not saved' : `${n} changes on the board were not saved`),
+  cardWaits: 'A card needs you · finish the text on the board first',
+  noBoard: 'This session has no board yet',
+} as const;
+/** The held-still line while the link is down: `Reconnecting` alone unless something of the person's is not saved. */
+export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pending: number }, o: { unsaved?: number; words?: boolean; coming?: boolean } = {}): string {
+  // `coming`: the page is reconnecting by itself (a restart it is waiting for). Otherwise nothing is: the kernel
+  // stopped or the session ended, and the line must not promise what the Reconnect dialog does not.
+  const coming = o.coming !== false;
+  if (o.words) return coming ? KEEP_COPY.wordsHeldBack : KEEP_COPY.wordsHeld;
+  if (s.pending > 0 || s.keep === 'not-saved' || (o.unsaved ?? 0) > 0) return coming ? KEEP_COPY.notSavedDown : KEEP_COPY.notSavedOff;
+  return coming ? INERT_COPY['link-down'] : KEEP_COPY.notConnected;
+}
+/**
+ * The check display (Aegis, final): what the fold was compared with, in plain words. Never a bare "verified": the
+ * mod vouches for a POINT, so the line reads "checked up to" it; `verified: null` is unchecked.
+ */
+export function checkLine(s: { verified: boolean | null; checkedSeq: number | null; seq: number }): string {
+  if (s.verified === null || s.checkedSeq === null) return 'Not checked yet';
+  if (s.verified === false) return `Did not match at change ${s.checkedSeq} · fold it and open it again`;
+  return s.checkedSeq < s.seq ? `Checked up to change ${s.checkedSeq} of ${s.seq}` : `Checked up to change ${s.checkedSeq}`;
 }
 /** A save shows as `Saving…` only when it has lasted this long (a quick save never flickers the line). */
 export const KEEP_SLOW_MS = 600;
 
 export type OpenedHow = 'command' | 'menu' | 'offer';
 /** '<how>' of the keep line: '/board', 'the ⋯ menu', '<agent>’s offer'. */
-export const openedFrom = (how: OpenedHow, agent?: string): string => (how === 'command' ? '/board' : how === 'menu' ? 'the ⋯ menu' : `${agent ?? 'an agent'}’s offer`);
+export const openedFrom = (how: OpenedHow, agent?: string): string => (how === 'command' ? 'from /board' : how === 'menu' ? 'here' : `from ${agent ?? 'an agent'}’s offer`);
 
 /** The keep line's parts, in order; the leaf joins them with ' · ' and puts the project swatch before the project. */
 export function keepParts(k: { project: string; session: string; more?: number; how: OpenedHow; agent?: string; time: string }): { project: string; session: string; opened: string; time: string } {
-  return { project: k.project, session: `${k.session}${k.more ? ` +${k.more}` : ''}`, opened: `opened from ${openedFrom(k.how, k.agent)}`, time: k.time };
+  return { project: k.project, session: `${k.session}${k.more ? ` +${k.more}` : ''}`, opened: `opened ${openedFrom(k.how, k.agent)}`, time: k.time };
 }
 
 /** Why the board did not open, in plain words. No code and no engine text: those go to the raw view. */

@@ -110,6 +110,7 @@ components:
       - test/home-resolution.test.ts
       - test/idle-exit.test.ts
       - test/reexec-env.test.ts
+      - test/p12-run-accounting.test.ts  # #gnomon-probes: P12 run accounting (both pages mounted, misses listed, a miss never clean, bounded visible retry)
     oracles: [G-KRN-02, G-SEC-01, G-WIN-05, G-DMN-01, G-DMN-02]
 
 flows:

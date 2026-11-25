@@ -86,7 +86,11 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
       const inputs = Object.keys(r.metafile.inputs);
       // nor the board's host layer: the leaf, the rail, the tray, the overlay, the seal (review S5). core/board.ts,
       // the loader, is an input only in the second pass, where this test puts it in the graph itself
-      expect(inputs.map((i) => i.slice(i.lastIndexOf('src/') + 4)).filter((i) => /^(core|ui)\/board[-.]/.test(i))).toEqual(stdin ? ['core/board.ts'] : []);
+      // since S1.3 P4b-1 the app mounts the leaf: the loader and the board's HOST layer are in the app bundle (they
+      // draw round the engine and hold no engine code); the engine itself stays in the lazy chunk (next assertion)
+      expect(inputs.map((i) => i.slice(i.lastIndexOf('src/') + 4)).filter((i) => /^(core|ui)\/board[-.]/.test(i)).sort()).toEqual(['core/board-leaf.ts', 'core/board-open.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'core/board.ts', 'ui/board-dock.ts', 'ui/board-leaf.ts']);
+      // the loader is a native dynamic import of a computed URL in BOTH passes now (nothing for esbuild to inline)
+      expect(r.outputFiles[0]!.text).toMatch(/import\(\s*(\/\*[^*]*\*\/\s*)?url\s*\)/);
       expect(inputs.filter((i) => /(^|\/)node_modules\/(react|react-dom|scheduler|@excalidraw)\//.test(i) || /(^|\/)src\/board\//.test(i))).toEqual([]);
       expect(inputs.some((i) => i.endsWith('src/main.ts'))).toBe(true);
       // the loader stays a native dynamic import of a computed URL (nothing for esbuild to inline)
@@ -100,9 +104,20 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     expect(app).not.toMatch(/react-dom|__SECRET_INTERNALS|__CLIENT_INTERNALS_DO_NOT_USE|createRoot|excalidraw|EXCALIDRAW_ASSET_PATH/i);
   });
 
-  // The board bytes are in the pinned tree and the kernel serves them, but until the S1.1 reskin and the S1.3 board
-  // leaf NOTHING the kernel-served page runs may reach them: the stock-looking engine must not be openable.
-  it.each(['app.js', 'index.html', 'boot.js', 'styles.css'])('the SHIPPED %s neither references the board chunk nor can load it', (name) => {
+  // Since S1.3 P4b-1 the app opens the board: app.js names the chunk and loads it, lazily, through the loader's ONE
+  // dynamic import of a computed URL. Nothing else the kernel-served page runs references or can load it.
+  it('the SHIPPED app.js reaches the board chunk only through the loader: one dynamic import, of a computed URL, and the engine is not in it', () => {
+    const app = shipped('app.js');
+    expect(app).toMatch(/board\/board\.js/);
+    expect(app.match(/\bimport\s*\(/g)).toHaveLength(1);
+    expect(app).toMatch(/import\(\s*(\/\*[^*]*\*\/\s*)?[A-Za-z_$][\w$]*\s*\)/);
+    // the engine is megabytes: the app bundle did not grow by it
+    // the engine is 1.3 MB on its own: the app bundle grew by the board's host layer (about 165 kB), not by the engine
+    expect(shipped('board/board.js').length).toBeGreaterThan(1_200_000);
+    expect(app.length).toBeLessThan(1_400_000);
+  });
+
+  it.each(['index.html', 'boot.js', 'styles.css'])('the SHIPPED %s neither references the board chunk nor can load it', (name) => {
     const text = shipped(name);
     expect(text.length).toBeGreaterThan(100);
     expect(text).not.toMatch(/board\/board\.(js|css)|board\/asset-|loadBoard|mountBoard|gnomonBoard|BOARD_SCRIPT|BOARD_STYLES/);
@@ -110,22 +125,42 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
   });
 
   /** The board's host layer (boards S1.1 pass B): it draws round the engine and is handed the loader, never imports it. */
-  /** With it since S1.3 P4a: the dimension session (core/dim-session.ts), which is handed a board handle. app.ts imports none of them until the leaf is mounted in the app (P4b). */
-  const HOST_LAYER = ['core/board-leaf.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'core/dim-session.ts', 'ui/board-leaf.ts'];
+  /** With it since S1.3 P4a: the dimension session (core/dim-session.ts), which is handed a board handle. Since P4b-1 the dock (ui/board-dock.ts) mounts the leaf in the app. */
+  const HOST_LAYER = ['core/board-leaf.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'core/dim-session.ts', 'ui/board-leaf.ts', 'ui/board-dock.ts'];
+  /** The ONE product caller of the loader: the app hands `loadBoard` to the dock as its `load` option. */
+  const APP = 'ui/app.ts';
 
-  it('in src, only the dev preview, the loader itself and the host layer name the loader module; only the preview CALLS it', () => {
+  it('in src, only the dev preview, the loader itself, the host layer and the app name the loader module; only the preview and the app CALL it', () => {
     const users = walk(SRC)
       .filter((f) => /loadBoard|core\/board\.js|\.\/board\.js/.test(readFileSync(f, 'utf8')))
       .map(rel)
       .filter((f) => f !== 'core/board.ts' && !f.startsWith('board/'));
-    expect(users.every((f) => f.startsWith('preview/') || HOST_LAYER.includes(f)), users.join(', ')).toBe(true);
+    expect(users.every((f) => f.startsWith('preview/') || HOST_LAYER.includes(f) || f === APP), users.join(', ')).toBe(true);
     // the host layer takes types (and three constants) from core/board.ts; the loader is passed to it as an option
     for (const f of HOST_LAYER) expect(readFileSync(path.join(SRC, ...f.split('/')), 'utf8'), f).not.toMatch(/\bloadBoard\b|\bimport\s*\(/);
     const callers = walk(SRC).filter((f) => /\bloadBoard\s*\(/.test(readFileSync(f, 'utf8'))).map(rel).filter((f) => f !== 'core/board.ts');
-    expect(callers.every((f) => f.startsWith('preview/')), callers.join(', ')).toBe(true);
+    expect(callers.every((f) => f.startsWith('preview/') || f === APP), callers.join(', ')).toBe(true);
+    expect(callers).toContain(APP);
   });
 
-  it('nothing the app entry imports, at any depth, reaches the host layer or the loader (no product code path opens a board yet)', () => {
+  it('no module-level "current event" exists: a board command is handed the event of its own press (Aegis M1, review of PR #119)', () => {
+    for (const f of ['ui/app.ts', 'ui/board-dock.ts', 'ui/slash-menu.ts', 'core/board-open.ts']) {
+      const src = readFileSync(path.join(SRC, ...f.split('/')), 'utf8');
+      // no top-level variable holds an Event, and the deprecated ambient event is never read
+      expect(src.match(/^(let|var|const) \w+: (Event|KeyboardEvent|MouseEvent|PointerEvent)\b[^\n]*$/gm), f).toBeNull();
+      expect(src, f).not.toMatch(/\bpressEvent\b|\bwindow\.event\b|\bglobalThis\.event\b/);
+    }
+    const app = readFileSync(path.join(SRC, 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/function run\(id: string, trusted: boolean, event\?: Event\): void \{/);
+    expect(app).toContain("if (trusted && event?.isTrusted) boardDock.command('', event);");
+  });
+
+  it("'mod.command' is named only by the one sender and the preview's fake kernel", () => {
+    const users = walk(SRC).filter((f) => /['"`]mod\.command['"`]/.test(readFileSync(f, 'utf8'))).map(rel);
+    expect(users.sort()).toEqual(['core/mod-command.ts', 'preview/fake-kernel.ts']);
+  });
+
+  it('the app entry reaches the loader, the leaf and the session (it mounts the board since P4b-1), and at no depth src/board or src/preview', () => {
     const seen = new Set<string>();
     const visit = (abs: string): void => {
       if (seen.has(abs)) return;
@@ -140,8 +175,11 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     const reached = [...seen].map(rel);
     expect(reached.length).toBeGreaterThan(20);
     expect(reached).toContain('ui/app.ts');
-    expect(reached.filter((f) => HOST_LAYER.includes(f) || f === 'core/board.ts' || f.startsWith('board/') || f.startsWith('preview/'))).toEqual([]);
-    // nor the live loop's own modules: the app follows the log and sends no dimension command until P4b mounts the session
-    expect(reached.filter((f) => /^core\/dim-(session|rows|live|undo|clipboard)\.ts$/.test(f))).toEqual([]);
+    expect(reached.filter((f) => f.startsWith('board/') || f.startsWith('preview/'))).toEqual([]);
+    for (const f of ['core/board.ts', 'ui/board-leaf.ts', 'core/dim-session.ts', 'ui/board-dock.ts', 'core/board-open.ts']) expect(reached, f).toContain(f);
+    // app.ts itself names no file under src/board or src/preview
+    const app = specifiers(readFileSync(path.join(SRC, 'ui', 'app.ts'), 'utf8')).filter((x) => x.startsWith('.')).map((x) => rel(path.resolve(SRC, 'ui', x)));
+    expect(app.filter((f) => f.startsWith('board/') || f.startsWith('preview/'))).toEqual([]);
+    expect(app).toEqual(expect.arrayContaining(['core/board.js', 'core/dim-session.js', 'ui/board-dock.js']));
   });
 });

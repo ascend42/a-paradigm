@@ -9,8 +9,8 @@
  *     ─▶ sendModCommand(client, stamp, 'gnomon.dimension', 'dim.op', {dim, ops, focus: {hsid}}) ─▶ DimLive.ack
  *   handle.onUndoKey ─▶ DimLive.undo(stamp)          one timer from DimLive.nextDeadline() ─▶ DimLive.timeout()
  *
- * No DOM is touched here but through the board handle and the leaf it is handed. NOT imported by ui/app.ts in this
- * pass (test/board-isolation.test.ts): mounting it in the app is the next pass.
+ * No DOM is touched here but through the board handle and the leaf it is handed. Since pass P4b-1 ui/app.ts makes
+ * the page's one `DimSessions` and the dock (ui/board-dock.ts) mounts each session's leaf.
  *
  * RULES.
  *  - ONE SENDER. Every command goes through `sendModCommand` with the `GnomonClient` object itself and no `now`
@@ -511,6 +511,15 @@ export class DimSession {
     return this.#lost;
   }
 
+  /**
+   * How many of the person's ops are NOT saved now: what is pending, plus what fell while the link was down (a
+   * mark in flight at link loss is no longer pending once it has rolled back, and is still lost). After the session
+   * is destroyed, `lost`.
+   */
+  get unsaved(): number {
+    return this.#dead ? this.#lost : this.#live.pendingOps() + this.#downLost;
+  }
+
   /** Where this session's board was looking when the session went (null: it had no board). */
   get lastView(): Pick<BoardView, 'scrollX' | 'scrollY' | 'zoom'> | null {
     return this.#lastView;
@@ -587,7 +596,17 @@ export class DimSession {
       return this.#emit({ about: 'edit', code: refused, field: 'ops', why: null, lost: ops.length });
     }
     const g = cause ? gestureOf(cause, Date.now()) : null;
-    this.#after(this.#live.local(ops, g), 'edit');
+    const r = this.#live.local(ops, g);
+    this.#after(r, 'edit');
+    // a REFUSED delete keeps its selection (Mika, final): the marks are put back and are still the ones in hand, so
+    // the person can take fewer of them without selecting again. Selecting is never an edit.
+    if (r.notice && r.resync && !this.#dead && ops.every((op) => op.type === 'delete')) {
+      try {
+        this.#handle?.select(ops.map((op) => (op as { id: string }).id));
+      } catch {
+        /* a handle that cannot select keeps the board as it was put back */
+      }
+    }
   }
 
   /** Cmd/Ctrl+Z in the board, with its own keydown. */
