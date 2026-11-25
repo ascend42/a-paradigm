@@ -49,7 +49,7 @@ export interface CallStamp {
 /**
  * `commandId` (S1.4): the id of the command the host is running, set by the host from the id it checked against the
  * manifest (host.ts runCommand). HOST-INTERNAL: it picks the command's declared effects and is never mod input.
- * A command context without it (no production caller builds one) gets the default set.
+ * A command context without it (no production caller builds one) is read-only.
  */
 export type CallContext = { kind: 'tool'; tool: string; hsid?: string; stamp?: CallStamp } | { kind: 'command'; commandId?: string; stamp?: CallStamp } | { kind: 'view' } | { kind: 'idle' };
 
@@ -78,12 +78,17 @@ export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
 /**
  * The set a command runs with BEFORE the caps (S1.4, Aegis A7). A command whose manifest entry has an own `effects`
  * list gets exactly that list, cut to COMMAND_EFFECTS again here (the loader already refuses anything else, so the
- * cut only matters for a manifest object that did not come through the loader). A command without the field, an
- * unknown id and a context with no id keep the union of the mod's tool effects.
+ * cut only matters for a manifest object that did not come through the loader). A DECLARED command without the field
+ * keeps the union of the mod's tool effects (until S1.4 P3). A context with no command id, and an id the manifest
+ * does not declare, get `read` only: it fails closed, and no production caller builds either (host.ts runCommand
+ * checks the id against the manifest first).
  */
 export function commandEffects(m: ManifestV2, commandId: string | undefined): Set<ToolEffect> {
   const c = commandId === undefined ? undefined : m.provides?.commands?.find((x) => x.id === commandId);
-  if (c && Object.hasOwn(c, 'effects') && Array.isArray(c.effects)) return new Set<ToolEffect>(c.effects.filter((e) => (COMMAND_EFFECTS as readonly string[]).includes(e)));
+  if (!c) return new Set<ToolEffect>(['read']);
+  if (Object.hasOwn(c, 'effects') && Array.isArray(c.effects)) {
+    return new Set<ToolEffect>(c.effects.filter((e) => (COMMAND_EFFECTS as readonly string[]).includes(e)));
+  }
   return toolEffects(m);
 }
 

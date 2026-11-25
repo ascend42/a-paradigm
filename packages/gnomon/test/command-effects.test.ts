@@ -66,13 +66,22 @@ describe('S1.4 command effects, the pure rule (effects.ts)', () => {
     const m = M('gnomon');
     expect([...effectsFor(m, cmd('probe.who', gui), false)].sort()).toEqual(['network', 'read', 'spend', 'write']);
     expect([...commandEffects(m, 'probe.who')].sort()).toEqual([...toolEffects(m)].sort());
-    // a context with no command id, and an id the manifest does not hold, get the same default
-    expect([...effectsFor(m, cmd(undefined, gui), false)].sort()).toEqual(['network', 'read', 'spend', 'write']);
-    expect([...commandEffects(m, 'probe.nope')].sort()).toEqual(['network', 'read', 'spend', 'write']);
     // the default is the TOOL union only: another command's declared write does not leak into it
     const readOnlyTools = M('gnomon', [{ name: 'probe.read', effects: ['read'] }]);
     expect([...effectsFor(readOnlyTools, cmd('probe.who', gui), false)]).toEqual(['read']);
     expect([...toolEffects(readOnlyTools)]).toEqual(['read']);
+  });
+
+  it('UNKNOWN: a context with no command id, and an id the manifest does not declare, are read-only (fail closed)', () => {
+    const gui = { principal: 'p', connId: 'c', surface: 'gui' };
+    const m = M('gnomon'); // the tools declare read, write, network and spend, and this caller is not capped
+    expect(commandCap(m, cmd(undefined, gui))).toBeNull();
+    for (const id of [undefined, 'probe.nope', '', 'probe.WHO', 'toString', '__proto__']) {
+      expect([String(id), [...effectsFor(m, cmd(id, gui), false)]]).toEqual([String(id), ['read']]);
+      expect([String(id), [...commandEffects(m, id)]]).toEqual([String(id), ['read']]);
+    }
+    // a mod with no commands at all
+    expect([...commandEffects({ ...m, provides: { tools: m.provides!.tools! } }, 'probe.who')]).toEqual(['read']);
   });
 
   it('the launch plan counts a command\'s declared effects for a gnomon-published mod only', () => {
