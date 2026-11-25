@@ -15,6 +15,7 @@ import { findChrome, shootLeaf } from '../scripts/board-leaf-shots.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
 import { fixtureUrl, startPreview } from '../scripts/preview.mjs';
 import { KEEP_COPY } from '../src/core/board-leaf.js';
+import { TURN_COPY } from '../src/core/board-turn.js';
 
 const A = 'globalThis.gnomonPreviewApp';
 const CUR = `${A}.board.dock.current()`;
@@ -39,11 +40,28 @@ const keepShot = (name: string, png: Buffer): void => {
   mkdirSync(SHOTS, { recursive: true });
   writeFileSync(path.join(SHOTS, `s14b-${name}.png`), png);
 };
+const fa = (a: Record<string, unknown>, k: string): Facts => a[k] as Facts;
 type Facts = { open: boolean; title: string | null; line: string | null; inert: string | null; check: string | null; tab: string | null; rows: string[]; frames: number; phase: string | null; keep: string | null; link: string | null; pending: number | null; nodes: number | null; texts: string[] | null; sameAsMod: boolean | null; marks: number | null; drift: number | null; tool: string | null; field: string | null; toasts: string[]; reconnect: boolean; active: string | null; card: boolean };
 const type = (s: string): unknown[] => [...s].map((k) => ({ key: k, settle: 25 }));
 const typeBoard = [{ press: '#composer-text' }, ...type('/board'), { key: 'Enter' }, { wait: 2500 }];
 const drawRect = [{ press: '.bd-host [data-key="tool:rect"]' }, { drag: [[250, 200], [290, 225], [330, 250]] }, { wait: 500 }];
 const foldByEsc = [{ press: '.bd-host .bd-head .spacer' }, { key: 'Escape' }, { wait: 900 }];
+/* #gui-board-turn: the focused session, turns driven as the kernel would write them, and what the strip shows */
+const HS = `document.querySelector('#session-list .session-row.active').dataset.hsid`;
+const append = (kind: string, payload: Record<string, unknown>): { read: string; as: string } => ({ read: `${A}.kernel.append(${JSON.stringify(kind)}, Object.assign({ hsid: ${HS} }, ${JSON.stringify(payload)}), ${HS})`, as: `appended-${kind}-${JSON.stringify(payload).length}` });
+const replyRow = (text: string) => append('turn.event', { type: 'assistant', line: JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } }) });
+const toolRow = (command: string) => append('turn.event', { type: 'assistant', line: JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command } }] } }) });
+/** the preview reads the fixtures' afternoon (Date.now shifted); rows appended here carry the real time: the clocks need the real one */
+const realClock = { read: `(Date.now = () => new Date().getTime(), 1)`, as: 'realClock' };
+const toIdle = [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); if (idle) idle.click(); return !!idle; })()`, as: 'idle' }, { wait: 400 }];
+const sendTyped = (t: string) => [{ press: '#composer-text' }, ...type(t), { key: 'Enter' }, { wait: 500 }];
+const STRIP = `(() => { const s = document.getElementById('board-turn'); const key = s.querySelector('.bd-turn-key'); const wk = s.querySelector('[data-strip-work]'); const vp = document.getElementById('viewport');
+  return { shown: !s.hidden && s.getBoundingClientRect().height > 0, rows: [...s.querySelectorAll('.bd-turn-r')].map((r) => r.innerText.replace(/\\s+/g, ' ').trim()), kinds: [...s.querySelectorAll('.bd-turn-r')].map((r) => r.className),
+    keyTitle: key ? key.title : null, work: wk ? { label: wk.getAttribute('aria-label'), expanded: wk.hasAttribute('aria-expanded'), caret: !!wk.querySelector('.caret'), clock: wk.querySelector('.live-clock').textContent } : null,
+    live: !!s.querySelector('[aria-live]') || s.hasAttribute('aria-live'), said: (document.querySelector('.bd-host .bd-leaf [role="status"]') || {}).textContent ?? null,
+    atEnd: vp.scrollTop + vp.clientHeight >= vp.scrollHeight - 2, chatWork: (() => { const k = vp.querySelector('.work-key'); return k ? { expanded: k.getAttribute('aria-expanded'), focused: document.activeElement === k, steps: !!vp.querySelector('ol.steps') } : null; })() }; })()`;
+type Strip = { shown: boolean; rows: string[]; kinds: string[]; keyTitle: string | null; work: { label: string; expanded: boolean; caret: boolean; clock: string } | null; live: boolean; said: string | null; atEnd: boolean; chatWork: { expanded: string | null; focused: boolean; steps: boolean } | null };
+const strip = (as: string) => ({ read: STRIP, as });
 
 const chrome = findChrome() as string | null;
 describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a real engine: open, draw, fold, reopen, list, link, G-DDL-08', () => {
@@ -323,22 +341,215 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(a.titles as string[]).toHaveLength(2);
   }, 180_000);
 
-  it('with a board open nothing under the leaf takes focus: the chat header keys and the conversation are inert, and the leaf comes before the composer', async () => {
+  it('#gui-board-turn: with the board open the latest turn shows under it: the message sent, the working key ticking (no caret, named for the chat), then the reply and how it ended; never a live region', async () => {
+    const a = await real([
+      realClock, ...toIdle, ...typeBoard, strip('before'), facts('opened'),
+      ...sendTyped('Why are totals off by a cent'), strip('sent'),
+      append('turn.sent', { turn: 'turn:p4b2/1' }), { wait: 400 }, strip('running'), { wait: 2300 }, strip('ticked'),
+      replyRow('I traced it to lineTotal() rounding each line, but ran out of turns before the fix.'), append('turn.result', { subtype: 'error_max_turns', is_error: true, turn: 'turn:p4b2/1' }), { wait: 500 }, strip('ended'), facts('after'),
+    ], { width: 1440, height: 900 });
+    const s = (k: string): Strip => a[k] as Strip;
+    expect(a.errors).toEqual([]);
+    // the idle session's last turn, before anything is sent from here
+    expect(s('before').shown).toBe(true);
+    expect(s('before').rows[0]).toMatch(/^you · .+ · \d\d:\d\d$/);
+    expect(s('before').rows[1]).toMatch(/^Claude · .+ show chat$/);
+    expect(s('before').keyTitle).toBe(TURN_COPY.showChatTitle);
+    // sent with the board open: the board stays, the message is on the you row (a message, never a board op)
+    expect(s('sent').rows[0]).toMatch(/^you · Why are totals off by a cent · \d\d:\d\d$/);
+    expect(s('sent').rows[1]).toBe('waiting show chat');
+    expect(s('running').work).toMatchObject({ expanded: false, caret: false, label: 'working… · show its steps in the chat' });
+    expect(s('ticked').work!.clock).not.toBe(s('running').work!.clock);
+    expect(s('ended').work).toBeNull();
+    expect(s('ended').rows[1]).toBe('Claude · I traced it to lineTotal() rounding each line, but ran out of turns before the fix. · stopped: turn limit show chat');
+    for (const k of ['before', 'sent', 'running', 'ended']) expect(s(k).live, k).toBe(false);
+    expect(fa(a, 'after')).toMatchObject({ open: true, frames: fa(a, 'opened').frames, rows: fa(a, 'opened').rows });
+  }, 120_000);
+
+  it('#gui-board-turn: Esc in the composer folds the board and focus stays in the composer; a synthetic Esc there folds nothing and says nothing; on a held board it says the held line', async () => {
+    const synthEsc = `(() => { const t = document.getElementById('composer-text'); t.focus(); t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })); return document.activeElement.id; })()`;
+    const a = await real([
+      ...typeBoard, { press: '#composer-text' }, { read: `(document.querySelector('.bd-host .bd-leaf [role="status"]').textContent = '', 1)`, as: 'hush' }, { read: synthEsc, as: 'synth' }, { wait: 500 }, facts('synthetic'), strip('synthetic-strip'),
+      { key: 'Escape' }, { wait: 900 }, facts('folded'),
+      { key: 'b', alt: true }, { wait: 2200 }, facts('reopened'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'synthetic')).toMatchObject({ open: true, toasts: [], active: 'composer-text' });
+    expect((a['synthetic-strip'] as Strip).said).toBe('');
+    // a real Esc: dim.close, the leaf folds to its edge tab, the composer keeps the focus (and its words)
+    expect(fa(a, 'folded')).toMatchObject({ open: false, active: 'composer-text' });
+    expect(fa(a, 'folded').rows.slice(-1)).toEqual(['session.end']);
+    expect(fa(a, 'folded').tab).toMatch(/· board$/);
+    expect(fa(a, 'reopened')).toMatchObject({ open: true, sameAsMod: true });
+    // held still with typed words: Esc from the composer does not fold, and the leaf says its held line again
+    const b = await real([
+      ...typeBoard, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('held'),
+      { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, { read: `(document.getElementById('composer-text').focus(), document.querySelector('.bd-host .bd-leaf [role="status"]').textContent = '', document.activeElement.id)`, as: 'inComposer' },
+      { key: 'Escape' }, { wait: 500 }, facts('esc'), strip('esc-strip'),
+    ]);
+    expect(b.errors).toEqual([]);
+    expect(b.inComposer).toBe('composer-text');
+    expect(fa(b, 'esc')).toMatchObject({ open: true, field: 'held', toasts: [] });
+    expect((b['esc-strip'] as Strip).said).toBe(KEEP_COPY.wordsHeld);
+    expect((b['esc-strip'] as Strip).keyTitle).toBe(TURN_COPY.keptTitle);
+  }, 180_000);
+
+  it('#gui-board-turn: show chat: a synthetic press does nothing and says nothing; a real press folds, focus in the chat at its latest row; ⌥B reopens the same board; held still it does not fold and says why', async () => {
+    const synth = `(() => { document.querySelector('.bd-host .bd-leaf [role="status"]').textContent = ''; document.querySelector('#board-turn .bd-turn-key').click(); document.querySelector('#board-turn .bd-turn-key').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return 1; })()`;
+    const a = await real([
+      ...typeBoard, ...drawRect, { read: `(globalThis.__hash = ${CUR}.session.hash(), 1)`, as: 'h' },
+      { read: synth, as: 's' }, { wait: 500 }, facts('synthetic'), strip('synthetic-strip'),
+      { press: '#board-turn .bd-turn-key' }, { wait: 900 }, facts('shown'), strip('shown-strip'),
+      { key: 'b', alt: true }, { wait: 2200 }, facts('reopened'), { read: `${CUR}.session.hash() === globalThis.__hash`, as: 'sameHash' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'synthetic')).toMatchObject({ open: true, toasts: [], frames: 2 });
+    expect((a['synthetic-strip'] as Strip).said).toBe('');
+    expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
+    expect(fa(a, 'shown').rows.slice(-1)).toEqual(['session.end']);
+    const shown = a['shown-strip'] as Strip;
+    expect(shown.shown).toBe(false);
+    expect(shown.atEnd).toBe(true);
+    expect(fa(a, 'reopened')).toMatchObject({ open: true, marks: 1, sameAsMod: true });
+    expect(a.sameHash).toBe(true);
+    // held still with a change not saved: the key's title says it is kept open; a real press keeps the board and says the held line
+    const b = await real([
+      ...typeBoard, { read: `(${A}.mod.silent = true, 1)`, as: 'silent' }, ...drawRect,
+      { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 800 }, strip('down'),
+      // an untrusted Esc from outside the leaf on the held board: told nothing (the trust check comes before the held line)
+      { read: `(document.querySelector('.bd-host .bd-leaf [role="status"]').textContent = '', document.querySelector('#board-turn .bd-turn-key').focus(), document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })), 1)`, as: 'synthEsc' }, { wait: 400 }, strip('synth-esc'),
+      { read: `(document.querySelector('.bd-host .bd-leaf [role="status"]').textContent = '', document.querySelector('#board-turn .bd-turn-key').focus(), document.activeElement.className)`, as: 'focused' },
+      { key: 'Enter', text: '\r' }, { wait: 500 }, facts('pressed'), strip('pressed-strip'),
+    ]);
+    expect(b.errors).toEqual([]);
+    expect((b.down as Strip).keyTitle).toBe(TURN_COPY.keptTitle);
+    expect((b['synth-esc'] as Strip).said).toBe('');
+    expect(b.focused).toMatch(/bd-turn-key/);
+    expect(fa(b, 'pressed')).toMatchObject({ open: true, toasts: [] });
+    expect((b['pressed-strip'] as Strip).said).toBe(KEEP_COPY.notSavedOff);
+  }, 180_000);
+
+  it('#gui-board-turn (Probe D): reopened from the edge tab, then Esc in the composer folds it and focus stays in the composer (never back to the tab that opened it)', async () => {
+    const a = await real([
+      ...typeBoard, ...foldByEsc, facts('folded1'),
+      { press: '#pane-transcript > .bd-edgetab' }, { wait: 2200 }, facts('reopened'),
+      { press: '#composer-text' }, { key: 'Escape' }, { wait: 900 }, facts('folded2'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'folded1').open).toBe(false);
+    expect(fa(a, 'reopened').open).toBe(true);
+    expect(fa(a, 'folded2')).toMatchObject({ open: false, active: 'composer-text' });
+  }, 120_000);
+
+  it('#gui-board-turn (Probe E): at 1024 a long reply that stopped at the turn limit with live choices drops the reply; the end words and needs you stay and the line fits', async () => {
+    const long = `${'The totals drift because each line is rounded before the sum, and the discount is applied after rounding, so three-line orders lose a cent. '.repeat(3).slice(0, 400)}\n\nWhich rounding should totals use?\n\nA  Banker’s rounding\nB  Half up`;
+    const FIT = `(() => { const row = document.querySelector('#board-turn .bd-turn-turn'); const line = row.querySelector('.bd-turn-line'); return { cls: row.className, text: line.innerText.replace(/\\s+/g, ' ').trim(), fits: line.scrollWidth <= line.clientWidth + 1 }; })()`;
+    const a = await real([
+      realClock, ...toIdle, ...typeBoard, ...sendTyped('why are totals off'), append('turn.sent', { turn: 'turn:p4b2/e' }), replyRow(long), append('turn.result', { subtype: 'error_max_turns', is_error: true, turn: 'turn:p4b2/e' }), { wait: 700 }, { read: FIT, as: 'fit' },
+    ], { width: 1024, height: 768 });
+    expect(a.errors).toEqual([]);
+    const r = a.fit as { cls: string; text: string; fits: boolean };
+    expect(r.cls).toMatch(/\btight-[123]\b/);
+    expect(r.text.endsWith('stopped: turn limit · needs you'), r.text).toBe(true);
+    expect(r.fits).toBe(true);
+  }, 120_000);
+
+  it('#gui-board-turn (Aegis L3): show chat keeps its focus when the strip repaints under it', async () => {
+    const a = await real([
+      realClock, ...toIdle, ...typeBoard, { read: `(document.querySelector('#board-turn .bd-turn-key').focus(), document.activeElement.className)`, as: 'before' },
+      append('turn.sent', { turn: 'turn:p4b2/l3' }), { wait: 400 }, replyRow('A new reply repaints the row.'), append('turn.result', { subtype: 'success', turn: 'turn:p4b2/l3' }), { wait: 500 },
+      { read: `({ active: document.activeElement.className, row: document.querySelector('#board-turn .bd-turn-turn').innerText })`, as: 'after' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.before).toMatch(/bd-turn-key/);
+    expect((a.after as { row: string }).row).toMatch(/A new reply repaints the row/);
+    expect((a.after as { active: string }).active).toMatch(/bd-turn-key/);
+  }, 120_000);
+
+  it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
+    const a = await real([
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { wait: 900 }, facts('shown'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
+  }, 120_000);
+
+  it('#gui-board-turn (Mika 3): a size change inside the leaf alone (the pane and the feed keep theirs) re-reads the room: under 300px the strip goes to one row', async () => {
+    const ROWS = `(() => { const c = ${CUR}; return { rows: document.querySelectorAll('#board-turn .bd-turn-r').length, room: c.leaf.room() + document.getElementById('board-turn').offsetHeight }; })()`;
+    const a = await real([
+      ...toIdle, ...typeBoard, { read: ROWS, as: 'open' },
+      { read: `(document.querySelector('.bd-host .bd-head').style.paddingBottom = (${CUR}.leaf.room() - 200) + 'px', 1)`, as: 'grown' }, { wait: 600 }, { read: ROWS, as: 'shrunk' },
+    ], { width: 1440, height: 900 });
+    expect(a.errors).toEqual([]);
+    expect(a.open).toMatchObject({ rows: 2 });
+    expect((a.shrunk as { room: number }).room).toBeLessThan(300);
+    expect(a.shrunk).toMatchObject({ rows: 1 });
+  }, 120_000);
+
+  it('#gui-board-turn: a real press on the strip’s working key folds the board, leaves its steps unfolded in the chat and puts focus on that key there; a synthetic one does nothing', async () => {
+    const a = await real([
+      realClock, ...toIdle, ...typeBoard, ...sendTyped('run the totals tests'), append('turn.sent', { turn: 'turn:p4b2/2' }), toolRow('npm test -- --filter totals'), { wait: 600 }, strip('running'),
+      { read: `(document.querySelector('#board-turn [data-strip-work]').click(), 1)`, as: 'synth' }, { wait: 500 }, facts('synthetic'),
+      { press: '#board-turn [data-strip-work]' }, { wait: 900 }, facts('pressed'), strip('chat'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect((a.running as Strip).work).toMatchObject({ expanded: false, caret: false });
+    expect((a.running as Strip).work!.label).toBe('Bash · npm test -- --filter totals · show its steps in the chat');
+    expect(fa(a, 'synthetic')).toMatchObject({ open: true, toasts: [] });
+    expect(fa(a, 'pressed').open).toBe(false);
+    expect((a.chat as Strip).chatWork).toEqual({ expanded: 'true', focused: true, steps: true });
+  }, 120_000);
+
+  it('#gui-board-turn: the strip’s words never reach the board by a drag; the person’s own paste of them adds exactly one text node through the checked path', async () => {
+    const words = { read: `document.querySelector('#board-turn .bd-turn-you .said').textContent`, as: 'words' };
+    const a = await real([
+      ...toIdle, ...typeBoard, words, facts('before'),
+      { drop: { items: [{ mimeType: 'text/plain', data: 'Tighten the tells copy on the landing card.' }] }, at: [200, 200] }, { wait: 500 }, facts('dropped'),
+      { press: '.bd-host [data-key="tool:select"]' }, { at: [200, 330], press: true }, { paste: 'Tighten the tells copy on the landing card.', as: 'clip' }, { wait: 900 }, facts('pasted'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.words).toBe('Tighten the tells copy on the landing card.');
+    const before = fa(a, 'before');
+    expect(fa(a, 'dropped')).toMatchObject({ nodes: before.nodes, frames: before.frames, rows: before.rows });
+    expect(fa(a, 'pasted')).toMatchObject({ nodes: (before.nodes ?? 0) + 1, texts: ['Tighten the tells copy on the landing card.'], sameAsMod: true, pending: 0 });
+    expect(fa(a, 'pasted').rows.slice(before.rows.length)).toEqual(['op:add']);
+  }, 120_000);
+
+  it.each(['desk', 'loops'])('edge-tab clearance (%s): with the board tab (and the Loops tab) folded at the chat’s edge, no message meets a tab; the rows step back out when no tab shows', async (fixture) => {
+    const MEET = `(() => { const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, r: b.right, y: b.y, b: b.bottom }; }; const tabs = [...document.querySelectorAll('#pane-transcript > .lp-edgetab')].filter((t) => !t.hidden).map(r); const rows = [...document.querySelectorAll('#viewport > .trow')]; const bodies = [...document.querySelectorAll('#viewport > .trow .body')].map(r);
+      return { tabs: tabs.length, bodies: bodies.length, over: bodies.filter((b) => tabs.some((t) => b.r > t.x - 0.5 && b.x < t.r && b.b > t.y && b.y < t.b)).length, gap: Math.min(...bodies.map((b) => Math.min(...tabs.map((t) => t.x - b.r)))), rowRight: rows.length ? Math.round(document.getElementById('viewport').getBoundingClientRect().right - rows[0].getBoundingClientRect().right) : null }; })()`;
+    const a = await real([{ read: MEET, as: 'before' }, ...typeBoard, ...foldByEsc, { wait: 300 }, { read: MEET, as: 'folded' }], { fixture, width: 1024, height: 768 });
+    expect(a.errors).toEqual([]);
+    const m = a.folded as { tabs: number; bodies: number; over: number; gap: number; rowRight: number };
+    expect(m.tabs).toBe(fixture === 'loops' ? 2 : 1);
+    expect(m.bodies).toBeGreaterThan(0);
+    expect(m.over).toBe(0);
+    expect(m.gap).toBeGreaterThanOrEqual(8);
+    expect(m.rowRight).toBe(14);
+    // no tab yet on the desk (no board, no loops): the rows keep the whole width
+    if (fixture === 'desk') expect(a.before).toMatchObject({ tabs: 0, rowRight: 0 });
+  }, 120_000);
+
+  it.each(['desk', 'loops'])('with a board open nothing under the leaf takes focus (%s): the chat header keys, the conversation and the Loops tab are inert; the leaf, then the turn strip, come before the pinned cards and the composer', async (fixture) => {
     const STATE = `(() => { const p = document.getElementById('pane-transcript'); const host = p.querySelector('.bd-host'); return { head: p.querySelector(':scope > .pane-head').inert, viewport: document.getElementById('viewport').inert, before: !!(host.compareDocumentPosition(document.getElementById('composer')) & Node.DOCUMENT_POSITION_FOLLOWING), pinnedAfter: !!(host.compareDocumentPosition(document.getElementById('pinned')) & Node.DOCUMENT_POSITION_FOLLOWING) }; })()`;
-    const WHERE = `(() => { const e = document.activeElement; return e ? (e.closest('.bd-host') ? 'leaf' : e.closest('#pane-transcript > .pane-head') ? 'UNDER:head' : e.closest('#viewport') ? 'UNDER:viewport' : e.closest('#pinned') ? 'pinned' : e.closest('#composer') ? 'composer' : e.closest('#pane-transcript') ? 'pane:' + (e.id || e.className) : 'elsewhere') : 'none'; })()`;
+    const WHERE = `(() => { const e = document.activeElement; return e ? (e.closest('.bd-host') ? 'leaf' : e.closest('#board-turn') ? 'turn' : e.closest('#pane-transcript > .pane-head') ? 'UNDER:head' : e.closest('#viewport') ? 'UNDER:viewport' : e.matches('.lp-edgetab:not(.bd-edgetab)') ? 'UNDER:loops-tab' : e.closest('#pinned') ? 'pinned' : e.closest('#composer') ? 'composer' : e.closest('#pane-transcript') ? 'pane:' + (e.id || e.className) : 'elsewhere') : 'none'; })()`;
+    const LOOPS = `(() => { const t = document.querySelector('#pane-transcript > .lp-edgetab:not(.bd-edgetab)'); return { shown: !!t && !t.hidden, inert: !!t && t.inert }; })()`;
     // the backward walk starts on the first stop after the leaf (a pinned card's key): from the composer's field it
     // could not start, as Shift+Tab there cycles the run mode (§11.5) and never moves focus
     const FROM_PINNED = `(() => { const e = document.querySelector('#pinned .card button:not([disabled]), #pinned .card [tabindex="0"]'); if (!e) return null; e.focus(); return document.activeElement === e ? (e.dataset.decision || e.id || e.className) : null; })()`;
     const walk = Array.from({ length: 14 }, (_, i) => [{ key: 'Tab', shift: true, settle: 60 }, { read: WHERE, as: `t${i}` }]).flat();
     const forward = Array.from({ length: 16 }, (_, i) => [{ key: 'Tab', settle: 60 }, { read: WHERE, as: `f${i}` }]).flat();
-    const a = await real([{ read: STATE, as: 'closed' }, ...typeBoard, { read: STATE, as: 'open' }, { press: '.bd-host .bd-head .spacer' }, ...forward, { read: FROM_PINNED, as: 'from' }, ...walk, ...foldByEsc, facts('folded'), { read: STATE, as: 'after' }]);
+    const a = await real([{ read: STATE, as: 'closed' }, { read: LOOPS, as: 'loopsClosed' }, ...typeBoard, { read: STATE, as: 'open' }, { read: LOOPS, as: 'loopsOpen' }, { press: '.bd-host .bd-head .spacer' }, ...forward, { read: FROM_PINNED, as: 'from' }, ...walk, ...foldByEsc, facts('folded'), { read: STATE, as: 'after' }, { read: LOOPS, as: 'loopsAfter' }], { fixture });
     expect(a.errors).toEqual([]);
     expect(a.closed).toMatchObject({ head: false, viewport: false, before: true, pinnedAfter: true });
     expect(a.open).toMatchObject({ head: true, viewport: true });
     const stops = Array.from({ length: 14 }, (_, i) => a[`t${i}`] as string);
-    // Shift+Tab back from the pinned card: into the leaf, never onto something under it
+    // the Loops edge tab (the loops fixture shows it) is out of the focus order while a board is open, and back after
+    if (fixture === 'loops') expect([a.loopsClosed, a.loopsOpen, a.loopsAfter]).toEqual([{ shown: true, inert: false }, { shown: true, inert: true }, { shown: true, inert: false }]);
+    // Shift+Tab back from the pinned card: the turn strip, then into the leaf, never onto something under it
     expect(a.from, 'a pinned card key to start the backward walk from').not.toBeNull();
-    expect(stops[0]).toBe('leaf');
+    expect(stops[0], `the backward walk: ${stops.join(' ')}`).toBe('turn');
+    expect(stops.slice(stops.indexOf('turn')).find((x) => x !== 'turn')).toBe('leaf');
     expect(stops.filter((s) => s.startsWith('UNDER'))).toEqual([]);
     expect(stops, `the backward walk: ${stops.join(' ')}`).toContain('leaf');
     // Tab forward from the leaf's head: the leaf's own stops, then the pinned cards or the composer, never under it
@@ -346,7 +557,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(fwd.filter((s) => s.startsWith('UNDER'))).toEqual([]);
     expect(fwd[0]).toBe('leaf');
     const left = fwd.find((s) => s !== 'leaf');
-    expect(['pinned', 'composer'], `after the leaf comes ${String(left)}: ${fwd.join(' ')}`).toContain(left);
+    expect(left, `after the leaf comes the turn strip: ${fwd.join(' ')}`).toBe('turn');
+    const then = fwd.slice(fwd.indexOf('turn')).find((s) => s !== 'turn');
+    expect(['pinned', 'composer'], `after the strip comes ${String(then)}: ${fwd.join(' ')}`).toContain(then);
     expect((a.folded as Facts).open).toBe(false);
     expect(a.after).toMatchObject({ head: false, viewport: false });
   }, 120_000);
@@ -474,14 +687,14 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     { width: 640, height: 400, fixture: 'desk', theme: 'day', pinned: 'own' },
   ])('G-DDL-08 layout at $width×$height ($fixture): the leaf lies inside the centre column and meets none of the stack, the status strip, the pinned zone or the composer', async ({ width, height, fixture, theme, pinned }) => {
     const RECTS = `(() => { const r = (q) => { const e = typeof q === 'string' ? document.querySelector(q) : q; if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; };
-      return { leaf: r('.bd-host .bd-leaf'), pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), cards: document.querySelectorAll('#pinned .card').length, head: r('.bd-host .bd-head'), toast: r('#toasts'), line: (() => { const k = document.querySelector('.bd-host .bd-keep'); return k ? k.scrollWidth <= k.clientWidth + 1 : null; })() }; })()`;
+      return { leaf: r('.bd-host .bd-leaf'), turn: r('#board-turn'), turnRows: document.querySelectorAll('#board-turn .bd-turn-r').length, roomWithout: (() => { const c = globalThis.gnomonPreviewApp.board.dock.current(); return c ? c.leaf.room() + document.getElementById('board-turn').offsetHeight : null; })(), pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), cards: document.querySelectorAll('#pinned .card').length, head: r('.bd-host .bd-head'), toast: r('#toasts'), line: (() => { const k = document.querySelector('.bd-host .bd-keep'); return k ? k.scrollWidth <= k.clientWidth + 1 : null; })() }; })()`;
     const first = pinned === 'two' ? [] : [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); return idle ? idle.dataset.hsid : null; })()`, as: 'idle' }];
     // 0 pinned: an idle session of the fixture is focused; 2 pinned: one of the fixture's three is decided by a real press
     const zero = pinned === 'two' ? [{ press: '#pinned .card [data-decision="deny"]' }, { wait: 900 }] : [{ read: `(() => { const rows = [...document.querySelectorAll('#session-list [data-hsid]')]; const idle = rows.find((x) => /idle/.test(x.textContent)); if (idle) idle.click(); return !!idle; })()`, as: 'switched' }, { wait: 400 }];
     const a = await real([...first, ...zero, ...typeBoard, { read: RECTS, as: 'rects' }], { fixture, theme, width, height, shot: `app-board-${width}-${theme}-${pinned === 'two' ? 'pinned2' : 'pinned0'}` });
     expect(a.errors).toEqual([]);
     type R = { x: number; y: number; r: number; b: number } | null;
-    const r = a.rects as { leaf: R; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };
+    const r = a.rects as { leaf: R; turn: R; turnRows: number; roomWithout: number | null; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };
     expect(r.cards).toBe(pinned === 'two' ? 2 : 0);
     expect(r.leaf).not.toBeNull();
     const leaf = r.leaf!;
@@ -494,5 +707,16 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     for (const [name, zone] of [['stack', r.stack], ['status strip', r.status], ['pinned zone', r.pinned], ['composer', r.composer]] as const) expect(meets(zone), name).toBe(false);
     expect(r.composer).not.toBeNull();
     expect(r.stack).not.toBeNull();
+    // #gui-board-turn: the strip shows under the leaf, inside the centre column, clear of the pinned zone and the composer
+    const turn = r.turn!;
+    expect(turn.b - turn.y).toBeGreaterThan(20);
+    expect(r.turnRows).toBeGreaterThanOrEqual(1);
+    // Mika 3: the row count follows the room the board has NOW (measured without the strip), not the room at open
+    expect(r.turnRows, `room without the strip ${r.roomWithout}`).toBe((r.roomWithout ?? 0) >= 300 ? 2 : 1);
+    expect(turn.y).toBeGreaterThanOrEqual(leaf.b - 0.5);
+    expect(turn.x).toBeGreaterThanOrEqual(pane.x - 0.5);
+    expect(turn.r).toBeLessThanOrEqual(pane.r + 0.5);
+    const meetsTurn = (o: R): boolean => !!o && o.r > o.x && o.b > o.y && turn.x < o.r - 0.5 && o.x < turn.r - 0.5 && turn.y < o.b - 0.5 && o.y < turn.b - 0.5;
+    for (const [name, zone] of [['pinned zone', r.pinned], ['composer', r.composer], ['stack', r.stack]] as const) expect(meetsTurn(zone), `the strip meets the ${name}`).toBe(false);
   }, 120_000);
 });

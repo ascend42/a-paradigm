@@ -1026,7 +1026,7 @@ html, body {
 .trow.role-working { flex-direction: column; align-items: stretch; gap: 2px; }
 /* Mika: the words ellipsize, the clock never does (it is the one thing that says the turn is alive); 24px tall
    at least (WCAG 2.5.8: the key and the step rows are stacked targets) */
-.trow.role-working .work-key { display: flex; align-items: center; gap: 0; min-height: 24px; cursor: pointer; white-space: nowrap; min-width: 0; max-width: calc(80ch + 22px); }
+.trow.role-working .work-key { display: flex; align-items: center; gap: 0; min-height: 24px; cursor: pointer; white-space: nowrap; min-width: 0; max-width: calc(80ch + 22px); padding: 0 4px; margin-left: -4px; } /* Mika 4 (review of PR 120): the inset focus ring clears the spinner and the clock */
 .trow.role-working .work-key .spin { margin-right: 8px; }
 .trow.role-working .caret { flex: none; white-space: pre; }
 .trow.role-working .caret.blank { visibility: hidden; }
@@ -1392,10 +1392,41 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .bd-host { position: absolute; left: 0; right: 0; top: 0; z-index: 12; }
 .bd-host[hidden] { display: none; }
 .bd-tab-on .feed > .toast-anchor { right: 48px; }
+/* #gui-board-dock (P4b-2 item 4): an edge tab (the board's or the Loops one, 26px) sits over the chat's right edge and
+   covered 6px of a message. The rows are absolutely placed, so viewport padding does not move them: they take a right
+   inset that clears the tab by 8px (the tabs' own gap). app.ts reads the inset back for its row width. */
+.lp-tab-on, .bd-tab-on { --edge-tab-inset: 14px; }
+.lp-tab-on .viewport > .trow, .bd-tab-on .viewport > .trow { right: var(--edge-tab-inset); }
 .bd-open .feed > .toast-anchor { top: 48px; }
 /* The Reconnect dialog yields to an open board (Mika, review of PR #119): it sat at 14vh, over the text a person
    was typing when the link went. While a board is open its sheet sits at the foot of the window, clear of the leaf. */
 body:has(.transcript.bd-open) #reconnect { align-items: flex-end; padding-top: 0; padding-bottom: 24px; }
+/* #gui-board-turn (boards S1.3 P4b-2; design board-leaf.turn_strip, Mika's build values, Luna's final rulings):
+   the latest turn under an open board, a transcript-row variant (turn-strip). At most two one-line rows (you 24px,
+   the turn 28px) on --sheet with a 1px --rule top edge, no box. Never overflow:hidden: show chat's focus ring sits
+   outside the row. A tight turn row drops (.tight-N) the reply, then the name, then "more in the chat". */
+.bd-turn { flex: 0 0 auto; display: flex; flex-direction: column; padding: 0 14px; background: var(--sheet); border-top: 1px solid var(--rule); font-size: var(--fs-control); line-height: 18px; color: var(--ink2); }
+.bd-turn[hidden] { display: none; }
+.bd-turn-r { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+.bd-turn-you { height: 24px; color: var(--ink); }
+.bd-turn-turn { height: 28px; }
+.bd-turn-line { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; margin-right: 12px; }
+.bd-turn .who { flex: none; font-weight: 600; color: var(--ink); }
+.bd-turn .sep, .bd-turn .tail { flex: none; white-space: pre; }
+.bd-turn .said { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bd-turn .t { flex: none; font-size: var(--fs-label); color: var(--sec); font-variant-numeric: tabular-nums; }
+.bd-turn .none { flex: none; color: var(--sec); }
+.bd-turn .tail.warn, .bd-turn .tail.fail, .bd-turn .tail.quiet, .bd-turn .tail.needs { font-weight: 500; }
+.bd-turn .tail.warn { color: var(--warn-ink); }
+.bd-turn .tail.fail { color: var(--fail); }
+.bd-turn .tail.quiet, .bd-turn .tail.more { color: var(--sec); }
+.bd-turn .tail.needs { color: var(--ink); }
+.bd-turn-turn.refused { color: var(--fail); }
+.bd-turn-turn.tight-1 [data-drop="1"], .bd-turn-turn.tight-2 [data-drop="2"], .bd-turn-turn.tight-2 .tail.first .tsep, .bd-turn-turn.tight-3 [data-drop="3"] { display: none; }
+.bd-turn-key { flex: none; margin-left: auto; }
+/* the working key as it is in the chat; only the row around it loses the chat's absolute place, indent and padding */
+.bd-turn .trow.role-working { position: static; margin: 0; padding: 0; max-width: none; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
+.bd-turn .work-key { padding: 0 4px; margin-left: -4px; }
 .loops-word .lw-narrow { display: none; }
 @media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
 @media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }

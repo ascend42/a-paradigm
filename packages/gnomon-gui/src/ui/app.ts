@@ -38,7 +38,7 @@ import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { renderHostSlips, wireHostSlips } from './host-slip.js';
 import { copyTextOf, hostHintsOf, type HostHint } from '../core/host-hints.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
-import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
+import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, wireRowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { changedBefore, hasLive, LiveTicker, liveText, stepClockText, workParts } from '../core/live-turn.js';
 import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '../core/turn-steps.js';
@@ -77,8 +77,10 @@ import { followBoth, parseBoardCommand, type DimensionRow } from '../core/board-
 import { DimSessions } from '../core/dim-session.js';
 import { DimStore } from '../core/dim-store.js';
 import { mountBoardDock } from './board-dock.js';
+import { mountBoardTurn, type BoardTurnStrip } from './board-turn.js';
+import { escFoldsFromComposer, latestTurn, refusalBrief } from '../core/board-turn.js';
 import { cardHasFocus } from './card-focus.js';
-import { loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
+import { hhmm, loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -287,27 +289,33 @@ function dropRow(el: HTMLElement): void {
   rowsToWatch.delete(el);
 }
 let memo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
+/** #gui-board-turn: the chat's own (non-raw) items while the raw view is on: the turn strip reads the conversation */
+let chatMemo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
 
 const transcriptId = (): string => `${focused ?? (feedView ? 'feed' : 'empty')}${rawMode ? '\u0000raw' : ''}`;
 
-function currentItems(): { items: ChatItem[]; hidden: number } {
+function currentItems(rawView = rawMode): { items: ChatItem[]; hidden: number } {
   // S2.3: nothing focused and the kernel feed view not open ⇒ the quiet empty centre, no rows
   if (!focused && !feedView) return { items: [], hidden: 0 };
   const base = focused ? store.transcript(focused) : store.kernelFeed;
   const mine = local.filter((r) => (r.session ?? null) === focused);
   // T-2026-10-21-007: a running turn shows its working row only while the session is live (a kernel restart ends it)
   const live = !!focused && isLiveState(store.sessions.get(focused)?.state ?? 'seen');
-  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}.${localRev}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
-  if (memo?.key === key) return memo.out;
+  const key = `${focused ?? (feedView ? 'feed' : 'empty')}${rawView ? '\u0000raw' : ''}\u0000${base.length}\u0000${mine.length}.${localRev}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
+  // #gui-board-turn: the chat's items asked for while the raw view is on are memoized apart (never the view's memo)
+  const own = rawView === rawMode;
+  const m = own ? memo : chatMemo;
+  if (m?.key === key) return m.out;
   const rows = mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
   // the kernel feed has no conversation: it stays the raw row list
-  const raw = rawMode || !focused;
+  const raw = rawView || !focused;
   const base2 = chatItems(rows, { raw, live });
   // S2.5: tool and auto rows fold into one activity line (raw mode and the kernel feed never fold)
   // raw rows fold the same way: an expanded one shows its whole line under it
   // #gui-turn-steps: the working key's list unfolds (and a step to its rows, rowDetail: the raw fold's redaction)
   const out = raw ? { items: foldRaw(base2.items, expandedActs), hidden: base2.hidden } : { items: foldActivity(withStepFolds(base2.items, rows, expandedActs, rowDetail), expandedActs), hidden: base2.hidden };
-  memo = { key, out };
+  if (own) memo = { key, out };
+  else chatMemo = { key, out };
   return out;
 }
 
@@ -322,6 +330,7 @@ function resetTranscript(): void {
   if (focused) void slashMenu?.flow.ensureSkills(focused); // the host slips of its replies read its loaded skills
   unmountAll();
   memo = null;
+  chatMemo = null;
   items = [];
   follow.jump();
   heights = widths.restore(transcriptId(), width, 0);
@@ -589,7 +598,7 @@ function itemEl(it: FoldedItem): HTMLElement {
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
-  const at = it.at ? it.at.slice(11, 16) : '';
+  const at = hhmm(it.at); // Mika 1 (review of PR #120): local time, never the UTC slice; the turn strip says the same
   // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (the plain origin; TD-2026-10-23-939)
   const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: 'sent-by' }, `${spoken ? spoken.sent : it.sentLabel}`) : null;
   const body = label
@@ -815,6 +824,7 @@ const liveTicker = new LiveTicker(() => {
     // #gui-turn-steps: the unfolded list's live step counts too
     for (const sc of el.querySelectorAll<HTMLElement>('.step-clock[data-since]')) put(sc, stepClockText(sc.dataset.since!, now));
   }
+  turnStrip?.tick(now); // #gui-board-turn: the strip's working key ticks with the chat's
   sayWork(now);
 });
 
@@ -823,6 +833,59 @@ const liveTicker = new LiveTicker(() => {
  * where it is while heights are measured and items arrive (no jump, no reset to the top). `remeasure` (a width
  * change) rebuilds the height index from the per-width cache and keeps the same reading position.
  */
+/* ── #gui-board-turn (boards S1.3 P4b-2): the latest turn under an open board ── */
+/** set once the dock is mounted (the strip reads it); null before */
+let turnStrip: BoardTurnStrip | null = null;
+const NO_TURN = latestTurn([]);
+/**
+ * Paint the turn strip from the chat's items (the conversation's, never the raw view's): shown while a board is
+ * open, the you row and the turn row as core/board-turn.ts orders them. What the strip never copies (a live choice,
+ * an offer slip, a host slip, a run row) is said as ` · needs you` or ` · more in the chat`.
+ */
+function paintBoardTurn(): void {
+  // in the next frame, once per frame: the strip's height moves the feed, and a paint run from a ResizeObserver
+  // (the viewport's, the dock's) must not change what that observer watches inside its own delivery
+  if (turnPaintQueued || !turnStrip) return;
+  turnPaintQueued = true;
+  requestAnimationFrame(() => {
+    turnPaintQueued = false;
+    paintBoardTurnNow();
+  });
+}
+let turnPaintQueued = false;
+function paintBoardTurnNow(): void {
+  const strip = turnStrip;
+  if (!strip) return;
+  if (!focused || !boardDock.isOpen()) return strip.paint({ open: false, turn: NO_TURN, agent: 'Claude', room: () => 0, kept: false });
+  const its: FoldedItem[] = rawMode ? currentItems(false).items : items;
+  let u = its.length - 1;
+  while (u >= 0 && its[u]!.role !== 'user') u--;
+  const slipped = new Set(slipViews(store.offers(focused), its).map((v) => v.itemKey));
+  for (let i = u + 1; i < its.length; i++) if (its[i]!.role === 'assistant' && hostHintsFor(its[i]!.key, its[i]!.text).length) slipped.add(its[i]!.key);
+  strip.paint({
+    open: true,
+    turn: latestTurn(its, { liveChoice: liveChoiceKey(its), slipped }),
+    agent: agentLabel() === 'local model' ? 'local model' : 'Claude',
+    // the board's room measured WITHOUT the strip (Luna: two rows at 300px), so the switch cannot flicker
+    room: () => (boardDock.current()?.leaf.room() ?? 0) + $('board-turn').offsetHeight,
+    kept: boardDock.kept(),
+  });
+  // (deferred: the ticker also runs while only the strip shows a running turn, the raw view's case)
+  liveTicker.sync(hasLive(items) || strip.live());
+}
+/**
+ * Show chat (and the strip's working key) after the board folded: the chat at its latest row with focus in it, the
+ * #jump-latest path. The working key also leaves its turn's steps unfolded and puts focus on that key in the chat.
+ */
+function showChatAt(workKey: string | null): void {
+  if (workKey) expandedActs.add(stepsFoldKey(workKey));
+  if (workKey) remountItem(workKey);
+  follow.jump();
+  paintTranscript();
+  const key = workKey ? $('viewport').querySelector<HTMLElement>(`.work-key[data-item="${CSS.escape(workKey)}"]`) : null;
+  (key ?? $('viewport')).focus({ preventScroll: true });
+}
+
 /** The page's own scroll writes, so the scroll handler can tell them from the user's (they must not change stickiness). */
 let selfTop = -1;
 let lastTop = 0;
@@ -872,7 +935,8 @@ function paintTranscript(remeasure = false): void {
     remountItem(live);
   }
   syncSlips(items);
-  liveTicker.sync(hasLive(items));
+  paintBoardTurn(); // #gui-board-turn: the latest turn under an open board, from the items just painted
+  liveTicker.sync(hasLive(items) || !!turnStrip?.live());
   sayWork(Date.now()); // #gui-turn-steps: a turn that ended clears what was said
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
@@ -1925,7 +1989,10 @@ const boardDock = mountBoardDock({
   say: (text, kind) => notice(text, kind, { source: 'board' }),
   reconnecting: () => linkComing,
   fallbackFocus: () => $('composer-text'),
+  turn: () => paintBoardTurn(),
 });
+// #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
+turnStrip = mountBoardTurn({ el: $('board-turn'), onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)), onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)) });
 boardRepaint = () => boardDock.repaint();
 boardLook = (t) => boardDock.setTheme(t);
 const loopsView = mountLoopsView({
@@ -2049,7 +2116,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
     if (p.row) {
       logStore.apply([p.row]); // the GUI store and the dimension sessions, both
-      const r = rowOf(p.row);
+      const r = wireRowOf(p.row); // Aegis L1: never a page-only field from the wire
       if (r) {
         dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
         offerVoiceRow(r); // #gui-offer-slip L1: only a LIVE heard "not now" dismisses (never a backlog replay)
@@ -2197,7 +2264,10 @@ function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = e
   // 2026-10-23: only here, on the send path; in refusalText every voice-* refusal (an attach, an input change) read
   // "not sent by voice · … next: press Enter to send it"
   const why = err instanceof RpcError ? (voiceRefusalText(err.refusal) ?? refusalText(err.refusal)) : 'may not have been sent: the connection to the kernel failed';
-  if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why });
+  const voice = err instanceof RpcError ? voiceRefusalText(err.refusal) : null;
+  // #gui-board-turn: the strip says the refusal's message (never its code), or the chat's own not-sent words
+  const brief = refusalBrief({ voice, message: err instanceof RpcError ? err.refusal.message : null });
+  if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why, brief });
   schedule(new Set([`transcript:${hsid}`]));
 }
 
@@ -4111,14 +4181,36 @@ function wire(): void {
     if (SCROLL_KEYS.has(k)) intent.mark(performance.now(), INTENT_MS.key);
     if (k === 'ArrowUp' || k === 'PageUp' || k === 'Home') releaseUp();
   });
-  new ResizeObserver(() => {
-    const w = $('viewport').clientWidth;
+  /**
+   * The width the chat's rows are laid out at: the viewport less the edge-tab inset (#gui-board-dock P4b-2 item 4:
+   * while a board or Loops edge tab shows, the rows step in from it; styles.css --edge-tab-inset). Heights are kept
+   * per row width, so a tab coming or going re-measures the rows (the viewport itself does not change size).
+   */
+  const rowWidth = (): number => $('viewport').clientWidth - (parseFloat(getComputedStyle($('pane-transcript')).getPropertyValue('--edge-tab-inset')) || 0);
+  const relayout = (): void => {
+    const w = rowWidth();
     if (w !== width) {
       if (width) widths.save(transcriptId(), width, heights);
       width = w;
+      // the re-measure remounts every row: a key that had focus (show chat's working key) gets it back
+      const had = (document.activeElement as HTMLElement | null)?.closest?.('#viewport [data-act]') as HTMLElement | null;
+      const act = had?.dataset.act ?? null;
       paintTranscript(true);
+      if (act !== null) $('viewport').querySelector<HTMLElement>(`[data-act="${CSS.escape(act)}"]`)?.focus({ preventScroll: true });
     } else paintTranscript();
-  }).observe($('viewport'));
+  };
+  new ResizeObserver(relayout).observe($('viewport'));
+  // the tab classes are toggled by the dock and the Loops view: a change re-lays the rows (no size change to observe)
+  let tabsOn = '';
+  new MutationObserver(() => {
+    const p = $('pane-transcript').classList;
+    const on = `${p.contains('lp-tab-on')}${p.contains('bd-tab-on')}`;
+    if (on === tabsOn) return;
+    tabsOn = on;
+    // next frame: a tab and the strip change with the same fold, and the sizes they change settle first (a relayout
+    // inside that layout pass left a ResizeObserver loop undelivered)
+    requestAnimationFrame(relayout);
+  }).observe($('pane-transcript'), { attributes: true, attributeFilter: ['class'] });
   $('status-line').addEventListener('click', (e) => run('view.kernel-feed', e.isTrusted)); // S5.4: the readout links to the kernel feed
   $('jump-latest').addEventListener('click', () => {
     follow.jump();
@@ -4583,6 +4675,8 @@ function wire(): void {
     } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {
       e.preventDefault();
       void stopSpeaking(e.isTrusted);
+    } else if (escFoldsFromComposer(e, { inComposer: document.activeElement === $('composer-text'), cardFocused: cardHasFocus(document) }) && boardDock.escape(e)) {
+      e.preventDefault(); // #gui-board-turn (Luna ruling 4): Esc in the composer folds the board; focus stays in the composer
     } else if (e.key === 'Escape' && !editableFocus() && toasts().dismissNewestFail()) {
       e.preventDefault(); // #gui-toast: a fail stays until closed (its close key, or Esc)
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {

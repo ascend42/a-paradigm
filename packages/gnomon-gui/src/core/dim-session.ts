@@ -45,7 +45,7 @@ import { DIM_COMMAND_REFUSALS, DimLive, dimAckOf, type DimAck, type DimLiveBatch
 import type { DimStore } from './dim-store.js';
 import { gestureOf, type Gesture } from './gesture.js';
 import { modCommandFailure, sendModCommand } from './mod-command.js';
-import { rowOf } from './store.js';
+import { wireRowOf } from './store.js';
 
 /**
  * `hostPerSecond` is the host's own limit (kernel modhost/bridge.ts MOD_APPEND_ROWS_PER_SEC). The page stays under
@@ -805,7 +805,7 @@ export class DimSessions {
   apply(rows: readonly unknown[]): void {
     const flat: unknown[] = [];
     for (const w of rows) {
-      const r = rowOf(w);
+      const r = wireRowOf(w);
       if (r) flat.push(r);
     }
     const fresh = this.#deps.store.apply(flat);

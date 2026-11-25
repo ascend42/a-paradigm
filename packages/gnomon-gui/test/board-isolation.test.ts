@@ -88,7 +88,8 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
       // the loader, is an input only in the second pass, where this test puts it in the graph itself
       // since S1.3 P4b-1 the app mounts the leaf: the loader and the board's HOST layer are in the app bundle (they
       // draw round the engine and hold no engine code); the engine itself stays in the lazy chunk (next assertion)
-      expect(inputs.map((i) => i.slice(i.lastIndexOf('src/') + 4)).filter((i) => /^(core|ui)\/board[-.]/.test(i)).sort()).toEqual(['core/board-leaf.ts', 'core/board-open.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'core/board.ts', 'ui/board-dock.ts', 'ui/board-leaf.ts']);
+      expect(inputs.map((i) => i.slice(i.lastIndexOf('src/') + 4)).filter((i) => /^(core|ui)\/board[-.]/.test(i)).sort()).toEqual(['core/board-leaf.ts', 'core/board-open.ts', 'core/board-overlay.ts', 'core/board-rail.ts', 'core/board-seal.ts', 'core/board-tray.ts', 'core/board-turn.ts', 'core/board.ts', 'ui/board-dock.ts', 'ui/board-leaf.ts', 'ui/board-turn.ts']);
+      // (P4b-2: the turn strip, core/board-turn.ts and ui/board-turn.ts, is host DOM over the chat's own items)
       // the loader is a native dynamic import of a computed URL in BOTH passes now (nothing for esbuild to inline)
       expect(r.outputFiles[0]!.text).toMatch(/import\(\s*(\/\*[^*]*\*\/\s*)?url\s*\)/);
       expect(inputs.filter((i) => /(^|\/)node_modules\/(react|react-dom|scheduler|@excalidraw)\//.test(i) || /(^|\/)src\/board\//.test(i))).toEqual([]);
