@@ -207,6 +207,24 @@ components:
       written stageInstall checks the snapshot still exists (a concurrent stage
       of identical content may have created, failed and removed it); if not it
       takes the card back and refuses SNAPSHOT changed-during-copy.
+      Dimensions S1.4 pass P1 (Aegis A7; no contract id moved): a
+      provides.commands entry may carry effects. Its closed keys are id, title,
+      args, effects; effects is optional and, when present, a non-empty list of
+      distinct values from COMMAND_EFFECTS (read, write). network or spend on a
+      command is refused SCHEMA at load for every tier, first-party included,
+      and the refusal never echoes the manifest's value. What a command does
+      with the field is #mod-host (modhost/effects.ts). detectWidening keys a
+      command's declared effect as cmd:<id>:<effect> in the effects field,
+      beside the tool keys <tool>:<effect> (neither a tool name nor a command
+      id can hold a colon, so the keys never collide): a tree that adds write
+      to a command gets the long Update card with "WIDENED: effects
+      +cmd:<id>:write" and a manifest.widened row. A command with NO effects
+      field is keyed cmd:<id>:*default (COMMAND_DEFAULT_EFFECTS_KEY): absent
+      still means the union of the tool effects, so a tree that REMOVES the
+      field widens the command, and the key makes that removal an addition the
+      card shows. S1.4 P3 removes the key in the change that makes absent mean
+      read; from then on dropping the field only narrows. The install card's effects line counts a command's
+      declared effects with the tools'. Tests: test/manifest-loader.test.ts.
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]
