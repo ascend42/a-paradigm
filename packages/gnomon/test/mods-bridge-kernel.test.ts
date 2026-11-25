@@ -81,7 +81,7 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge: effective manual by a stri
     expect(answers(w)[2]!.mcp!.result!.content![0]!.text).toBe(MOD_BRIDGE_SENTENCES.manual);
   }, 120_000);
 
-  it('a kernel that shuts down with a live session and a pending refusal counter: the counter row is in the log afterwards', async () => {
+  it('a kernel that shuts down with a live session and pending folds: the counter and suspect rows are in the log afterwards, written before the session was stopped', async () => {
     const w = sessionWorld();
     cleanups.push(() => w.cleanup());
     const t = tempHome('pd-');
@@ -106,5 +106,18 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge: effective manual by a stri
     // daemon stop flushes the bridge and awaits the counter append before the log closes
     expect(refused.length).toBe(1);
     expect(refused[0]!.payload).toMatchObject({ outcome: 'refused', count: 1, byWhy: { 'unknown-tool': 1 } });
+    // the DAEMON's flush wrote them, before the children were stopped: both folded rows of the live session (the
+    // counter, and the suspect row of its call that had no can_use_tool) sit AHEAD of that session's session.exited.
+    // Without the daemon-stop flush the session's exit path writes them, after it.
+    const all = [...k2.handle.log.read({ reader: { class: 'human' }, kinds: ['inject.receipt', 'approval.suspect', 'session.exited'] })] as unknown as Array<{ seq: number; event: { kind: string; session?: string; payload: Record<string, unknown> } }>;
+    const mine = all.filter((r) => r.event.session === s.hsid || r.event.payload.hsid === s.hsid);
+    const seqOf = (pred: (r: (typeof all)[number]) => boolean): number => mine.find(pred)?.seq ?? -1;
+    const counterAt = seqOf((r) => r.event.kind === 'inject.receipt' && r.event.payload.outcome === 'refused');
+    const suspectAt = seqOf((r) => r.event.kind === 'approval.suspect' && r.event.payload.why === 'ungated-tool-use');
+    const exitedAt = seqOf((r) => r.event.kind === 'session.exited');
+    expect([counterAt > 0, suspectAt > 0, exitedAt > 0], JSON.stringify(mine.map((r) => [r.seq, r.event.kind]))).toEqual([true, true, true]);
+    expect(counterAt).toBeLessThan(exitedAt);
+    expect(suspectAt).toBeLessThan(exitedAt);
+    expect(mine.filter((r) => r.event.kind === 'approval.suspect')).toHaveLength(1);
   }, 120_000);
 });

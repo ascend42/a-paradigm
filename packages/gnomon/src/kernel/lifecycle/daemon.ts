@@ -716,7 +716,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           /* shutdown before the voice child existed */
         }
         // #mod-tool-bridge: the folded suspect and counter rows of live sessions are written and awaited BEFORE the
-        // children stop, and once more after the sweep (a session's exit path closes its own), so the log closes with them
+        // children stop, so they are in the log ahead of each session's `session.exited` whatever the exit path's timing.
+        // A refusal that lands after this is written by the session's own exit path (closeSession, awaited there).
         try {
           await supervisor.flushBridge();
         } catch {
@@ -724,11 +725,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         }
         await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
-        try {
-          await modBridge.flush();
-        } catch {
-          /* shutdown before the bridge existed */
-        }
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
         emit({ kind: 'daemon.exit', reason });
         hub.close();
