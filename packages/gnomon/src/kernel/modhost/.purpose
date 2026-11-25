@@ -105,6 +105,7 @@ components:
     tests:
       - test/mods-bridge.test.ts
       - test/mods-bridge-session.test.ts
+      - test/dimension-bridge-e2e.test.ts
       - test/dimension-relay.test.ts
     oracles: [G-MOD-19, G-MOD-22]
   mod-host:
