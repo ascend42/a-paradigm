@@ -38,7 +38,12 @@ export interface ViewContext extends CallContext {
 
 export interface ModApi {
   state: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> };
-  /** `kernel.call{verb, params}` (§12.3) — proxied under the mod's principal; `approve` is never proxied */
+  /**
+   * `kernel.call{verb, params}` (§12.3) — proxied under the mod's principal; `approve` is never proxied.
+   * A refusal rejects with a ModCallError whose `data` is the host's refusal object. A `log.append` over an append
+   * budget has `err.data.data.modCode === 'APPEND_BUDGET'` with `written: false`: the row was NOT written and may be
+   * sent again (after `retryAfterMs` for a row budget). Any other failed append may or may not have been written.
+   */
   kernel(verb: string, params?: Record<string, unknown>): Promise<unknown>;
   /** stderr line (the host's stderr tail); never stdout */
   log(message: string): void;

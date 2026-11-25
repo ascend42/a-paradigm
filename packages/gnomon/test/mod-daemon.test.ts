@@ -79,14 +79,14 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     const { d, ns } = await rig();
     const p = `p:${ns}/mod-acme.probe`;
     const call = createModKernelCall({ callAs: (pr, v, pa) => d.dispatcher.callAs(pr, v, pa), append: async () => ({ seq: 0 }) });
-    const st = (await call({ name: 'acme.probe', principal: p, verb: 'status', params: {} })) as Record<string, unknown>;
+    const st = (await call({ name: 'acme.probe', principal: p, verb: 'status', params: {}, callKind: 'idle' })) as Record<string, unknown>;
     expect(st).toMatchObject({ principal: p, principalKind: 'mod', modAbiId: MOD_ABI_ID });
     expect(st.daemon).toBeUndefined(); // own view only
-    const page = (await call({ name: 'acme.probe', principal: p, verb: 'log.read', params: {} })) as { projection: string };
+    const page = (await call({ name: 'acme.probe', principal: p, verb: 'log.read', params: {}, callKind: 'idle' })) as { projection: string };
     expect(page.projection).toBe('mod');
-    await expect(call({ name: 'acme.probe', principal: p, verb: 'log.read', params: { follow: true } })).rejects.toMatchObject({ refusal: { data: { reason: 'bad-follow' } } });
+    await expect(call({ name: 'acme.probe', principal: p, verb: 'log.read', params: { follow: true }, callKind: 'idle' })).rejects.toMatchObject({ refusal: { data: { reason: 'bad-follow' } } });
     await expect(d.dispatcher.callAs(p, 'log.append', { kind: 'modns.acme.probe.x' })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
-    await expect(call({ name: 'acme.probe', principal: p, verb: 'session.send', params: { hsid: 'h' }, hsid: 'h' })).rejects.toMatchObject({ refusal: { code: 'ENGINE' } });
+    await expect(call({ name: 'acme.probe', principal: p, verb: 'session.send', params: { hsid: 'h' }, hsid: 'h', callKind: 'tool' })).rejects.toMatchObject({ refusal: { code: 'ENGINE' } });
   });
 
   it('F4: status.mods goes in full to the human class only; an agent gets counts', async () => {
