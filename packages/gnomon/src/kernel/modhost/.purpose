@@ -302,4 +302,44 @@ components:
       connections per class; the real log taking the scope),
       test/relay-gesture.test.ts (a real GUI connection), test/mod-focus.test.ts.
       The gesture stamp itself is #socket (socket/gesture.ts, G-MOD-16).
+      Dimensions S1.4 pass P1 (kernel generics; Aegis A4, A7; G-MOD-21; no
+      contract id moved). (1) COMMAND EFFECTS (effects.ts commandEffects,
+      toolEffects, declaredEffects): the command call context carries a
+      host-internal commandId, set in host.ts runCommand from the id it checked
+      against the manifest. A command whose manifest entry declares effects
+      runs with exactly that set (read and write only: the loader refuses
+      network or spend on a command, and commandEffects cuts to COMMAND_EFFECTS
+      again); a command without the field keeps the union of the mod's TOOL
+      effects, which is the default before this pass. That default is NOT
+      flipped here; S1.4 P3 makes it read in the commit that ships the
+      dimension manifest with effects on every command. The dev cap and the
+      command read cap of S1.3 (1) are applied after, so commandCap stays the
+      outer cap: a third-party command declaring write is still read-only on
+      every surface. declaredEffects (the launch plan's input) now counts a
+      command's declared effects, so a mod whose only write is on a command
+      gets its write paths. (2) HUMAN RESERVE (bridge.ts
+      MOD_APPEND_TOOL_ROWS_PER_SEC = 5, inside MOD_APPEND_ROWS_PER_SEC = 20, one
+      1 s window per mod): KernelCallRequest carries a host-internal callKind
+      (tool, command or idle; a view render counts as idle) that host.ts takes
+      from the bound call context alone. An append whose callKind is not
+      command counts against the tool share and is refused once 5 such rows sit
+      in the window, so commands always keep 15 rows a second. It fails closed:
+      an idle, missing or unknown kind is in the tool share, never the reserve.
+      callKind is never read from a mod request (a mod-supplied one stays in
+      the verb's params, where the clamp drops it), never sent to the child and
+      in no ABI descriptor. (3) APPEND_BUDGET (refusal.ts): an append over the
+      row total, the tool share or the per-call byte budget is refused with
+      modCode APPEND_BUDGET (it was LOG; same route, BAD_REQUEST and usage, so
+      the socket code and the JSON-RPC number are unchanged) and detail budget
+      (rows, tool-rows or bytes), written false, and retryAfterMs for the two
+      row budgets. It is thrown before the log port is called, so it is a
+      definite "not written": the mod reads error.data.data.modCode and may
+      keep its fold. Any other failed append (an error from the log, a lost
+      reply, a timeout) still leaves the mod unable to tell. A refused append
+      takes no slot; an append the log port failed keeps the slot it took. The
+      dimension mod does not read the code yet (it drops its fold on every
+      failed append); that is S1.4 P3. Tests: test/command-effects.test.ts,
+      test/mod-append-budget.test.ts (G-MOD-21), test/mod-call-kind.test.ts (a
+      real child: the forged kind, the code the mod is given, and every line
+      the host wrote to the child's stdin).
     tags: [kernel, mods, sandbox, M1.11]
