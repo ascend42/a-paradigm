@@ -732,6 +732,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       return void o.onFold?.(e);
     }
     if (isField(active) && !boardHost.contains(active)) return;
+    // Held still: no key chooses a tool, and no key reaches the engine from the board (found by the inert-keys test:
+    // a letter still changed the tool, and Cmd+A selected every mark through the engine's own key handler, which
+    // setYielded does not cover; its document-level listeners it does). The person may still LOOK AROUND: the zoom
+    // keys pass, and Tab still leaves the board.
+    if (inert !== null) {
+      const looks = (e.metaKey || e.ctrlKey) && !e.altKey && ['+', '=', '-', '0'].includes(e.key);
+      if (!looks) {
+        if (e.key !== 'Tab' && boardHost.contains(active)) e.stopPropagation();
+        return;
+      }
+    }
     const a = railKeyAction(e, { boardFocused: el.contains(active), editingText: s?.editingText ?? false, cardFocused: o.cardFocused() });
     if (!a || !handle || !s) return;
     e.preventDefault();

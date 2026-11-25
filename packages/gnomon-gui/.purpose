@@ -467,6 +467,13 @@ components:
       the head's glyph. The words of KEEP_COPY and CHECK_COPY are not in the
       design record: they are the plainest that fit the 424px leaf, for Luna
       to rule.
+      Boards S1.3 pass P4b-3 (keys while held still): with the leaf inert
+      (link down, out of date) the leaf's capture listener lets no key from
+      the board reach the engine and no letter choose a tool; the zoom keys
+      and Tab pass. Before, a tool letter changed the tool and Cmd+A selected
+      every mark through the engine's own key handler (setYielded covers only
+      its document-level listeners). Held by test/board-app.test.ts in both
+      inert states, with focus on the board and off it.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]

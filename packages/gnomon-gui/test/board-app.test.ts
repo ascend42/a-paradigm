@@ -227,6 +227,48 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('after').toasts.filter((t) => t.includes(KEEP_COPY.wordsGone)).length).toBeLessThanOrEqual(1);
   }, 120_000);
 
+  it.each(['link-down', 'out-of-date'] as const)('keys at the engine\'s DOCUMENT listeners while the leaf is held still (%s): with a mark on the board, real Cmd+A, Delete, Backspace, arrows, tool letters and digits, Cmd+A, Cmd+D, Cmd+Z and Cmd+V change nothing in the engine and send nothing, with focus on the board and off it', async (why) => {
+    const lie = `(() => { const m = ${A}.mod; const run = m.run.bind(m); m.run = (...x) => { const r = run(...x); if (x[0] === 'dim.open' && r && r.ok) r.hash = 'sha256:' + '0'.repeat(64); return r; }; return 1; })()`;
+    // what the ENGINE holds (not the fold): every mark's place and size, the selection, the tool, the view
+    const ENGINE = `(() => { const c = ${CUR}; const hd = c && c.leaf.handle(); if (!hd || !hd.isAlive()) return null; const st = hd.state(); const v = hd.view(); return JSON.stringify({ marks: hd.marks().map((m) => [m.id ?? null, Math.round(m.x ?? m.left ?? 0), Math.round(m.y ?? m.top ?? 0), Math.round(m.width ?? m.w ?? 0), Math.round(m.height ?? m.h ?? 0)]), count: hd.count(), drift: hd.drift().length, tool: st.tool, selected: st.selected, editing: st.editingText, zoom: v.zoom, sx: Math.round(v.scrollX), sy: Math.round(v.scrollY) }); })()`;
+    const KEYS: Array<Record<string, unknown>> = [{ key: 'a', meta: true }, { key: 'Delete' }, { key: 'Backspace' }, { key: 'ArrowRight' }, { key: 'ArrowDown' }, { key: 'r' }, { key: 'o' }, { key: 't' }, { key: 'n' }, { key: '2' }, { key: '7' }, { key: 'd', meta: true }, { key: 'z', meta: true }, { key: 'z', meta: true, shift: true }, { key: 'v', meta: true, commands: ['paste'] }, { key: 'x', meta: true, commands: ['cut'] }, { key: 'Enter' }, { key: ' ' }];
+    const press = (tag: string) => KEYS.flatMap((k, i) => [{ ...k, settle: 90 }, { read: ENGINE, as: `${tag}${i}` }, facts(`${tag}f${i}`)]);
+    const hold = why === 'link-down'
+      ? [{ read: `(${A}.down(), 1)`, as: 'held' }, { wait: 500 }]
+      // a board with a mark that then opens out of date: folded, the mod made to answer a wrong hash, reopened
+      : [...foldByEsc, { read: lie, as: 'held' }, { key: 'b', alt: true }, { wait: 2500 }];
+    const a = await real([
+      ...typeBoard, ...drawRect, { press: '.bd-host [data-key="tool:select"]' }, { at: [290, 225], press: true }, { wait: 200 }, { read: ENGINE, as: 'drawn' },
+      ...hold, facts('heldFacts'), { read: ENGINE, as: 'before' },
+      // focus where the engine's own canvas is (its container keeps focus from the press before the hold, or takes this one)
+      { read: `(() => { const c = ${CUR}; c.leaf.handle().focus(); return document.activeElement ? document.activeElement.className : null; })()`, as: 'focusOn' },
+      ...press('on'),
+      // focus off the board: the page body (the document's listeners hear these too)
+      { press: '#pane-stack .pane-head h2, #pane-stack .pane-head .title, #pane-stack .pane-head' }, { read: `(() => { const e = document.activeElement; return !e || !e.closest('.bd-host'); })()`, as: 'focusOff' }, facts('offStart'),
+      ...press('off'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    const drawn = JSON.parse(String(a.drawn)) as { count: number; selected: number };
+    expect(drawn.count).toBe(1);
+    expect(f('heldFacts')).toMatchObject({ open: true, inert: why, nodes: 1, marks: 1 });
+    const before = String(a.before);
+    const frames = f('heldFacts').frames;
+    const rows = f('heldFacts').rows;
+    expect(JSON.parse(before)).toMatchObject({ count: 1, drift: 0, editing: false });
+    expect(String(a.focusOn)).toMatch(/excalidraw/);
+    expect(a.focusOff).toBe(true);
+    // (the press that took focus off the board did nothing else: the board is as it was)
+    expect(f('offStart')).toMatchObject({ open: true, inert: why, card: false });
+    for (const tag of ['on', 'off']) {
+      KEYS.forEach((k, i) => {
+        const name = `${tag} the board: ${k.meta ? 'Cmd+' : ''}${k.shift ? 'Shift+' : ''}${String(k.key)}`;
+        expect(JSON.parse(String(a[`${tag}${i}`])), name).toEqual(JSON.parse(before));
+        expect(f(`${tag}f${i}`), name).toMatchObject({ open: true, inert: why, frames, rows, nodes: 1, marks: 1, field: null, pending: 0 });
+      });
+    }
+  }, 180_000);
+
   it('held still, the leaf still folds (Esc and the esc key) and a fold while down is not a close; with nothing pending the line is "Reconnecting" alone', async () => {
     const a = await real(
       [...typeBoard, ...drawRect, { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'), { read: `(document.querySelector('.bd-host .bd-head .key:last-child').click(), document.querySelector('.bd-host .bd-leaf').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })), 1)`, as: 'synthetic' }, { wait: 400 }, facts('untrusted'), { key: 'Escape' }, { wait: 500 }, facts('folded')],
