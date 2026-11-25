@@ -61,13 +61,17 @@ export function toolEffects(m: ManifestV2): Set<ToolEffect> {
 }
 
 /**
- * Everything the mod declares: its tool effects plus the `effects` its commands declare (S1.4). The launch plan
- * reads it (a mod whose only `write` is on a command still gets its write paths). A command adds `read` or `write`
- * only (manifest COMMAND_EFFECTS), so it can never add `network` or `spend` here.
+ * What the LAUNCH PLAN reads (host.ts: the `write` flag of the `mod` profile, the egress proxy): the mod's tool
+ * effects, plus the `effects` its commands declare ONLY when the mod's publisher is `gnomon` (S1.4). A command
+ * writes only for a gnomon-published mod (commandCap), so a third-party command's declared `write` can never be in
+ * force and must not open the mod's write paths: a third-party mod with read-only tools launches without them
+ * whatever its commands declare. The install card and the widening surface still show the declaration (they read
+ * the manifest, not this). A command adds `read` or `write` only (manifest COMMAND_EFFECTS), never `network` or
+ * `spend`.
  */
 export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
   const out = toolEffects(m);
-  for (const c of m.provides?.commands ?? []) for (const e of c.effects ?? []) out.add(e);
+  if (m.publisher === 'gnomon') for (const c of m.provides?.commands ?? []) for (const e of c.effects ?? []) out.add(e);
   return out;
 }
 

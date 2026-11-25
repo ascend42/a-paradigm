@@ -73,8 +73,17 @@ describe('S1.4 command effects, the pure rule (effects.ts)', () => {
     const readOnlyTools = M('gnomon', [{ name: 'probe.read', effects: ['read'] }]);
     expect([...effectsFor(readOnlyTools, cmd('probe.who', gui), false)]).toEqual(['read']);
     expect([...toolEffects(readOnlyTools)]).toEqual(['read']);
-    // while the mod's declared set (the launch plan's input) does count the command's write
-    expect([...declaredEffects(readOnlyTools)].sort()).toEqual(['read', 'write']);
+  });
+
+  it('the launch plan counts a command\'s declared effects for a gnomon-published mod only', () => {
+    const tools: NonNullable<NonNullable<ManifestV2['provides']>['tools']> = [{ name: 'probe.read', effects: ['read'] }];
+    // first-party: a command's write opens the mod's write paths
+    expect([...declaredEffects(M('gnomon', tools))].sort()).toEqual(['read', 'write']);
+    // third-party and local: the command can never write (commandCap), so its declaration opens nothing
+    expect([...declaredEffects(M('acme', tools))]).toEqual(['read']);
+    expect([...declaredEffects(M('local', tools))]).toEqual(['read']);
+    // a tool's write counts for every publisher, as before
+    expect([...declaredEffects(M('acme'))].sort()).toEqual(['network', 'read', 'spend', 'write']);
   });
 
   it('the read cap stays the OUTER cap: a third-party command that declares write is read-only, and so is every non-GUI caller', () => {
@@ -165,6 +174,15 @@ describe('S1.4 command effects through the running host (host.ts passes the comm
     expect(launched.map((l) => l.write)).toEqual([true]);
   });
 
+  it('a third-party mod with read-only tools and a command declaring write launches WITHOUT write paths, and its command is read-only', async () => {
+    const third = probeManifest();
+    third.provides = { ...third.provides, tools: [{ name: 'probe.read', effects: ['read'] }], commands: COMMANDS };
+    const { rows, run, launched } = await started([{ firstParty: false, manifest: third }]);
+    expect(launched.map((l) => l.write)).toEqual([false]);
+    expect([await run('acme.probe', 'probe.rw', 'append'), await run('acme.probe', 'probe.rw', 'state.set'), await run('acme.probe', 'probe.rw', 'state.get')]).toEqual([false, false, true]);
+    expect(rows).toHaveLength(0);
+  });
+
   it('a third-party command declaring write is still read-only on the GUI (commandCap is the outer cap); a first-party one is read-only off the GUI', async () => {
     const third = probeManifest();
     third.provides = { ...third.provides, commands: COMMANDS };
@@ -183,4 +201,5 @@ describe('S1.4 command effects through the running host (host.ts passes the comm
     for (const who of [cli, agent]) expect([await run(FIRST_PARTY_PROBE, 'probe.rw', 'append', who), await run(FIRST_PARTY_PROBE, 'probe.rw', 'state.set', who)]).toEqual([false, false]);
     expect(rows).toHaveLength(0);
   });
+
 });
