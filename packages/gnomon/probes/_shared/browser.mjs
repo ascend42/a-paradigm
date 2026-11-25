@@ -69,7 +69,8 @@ export async function startServer({ files = new Map(), rootDir = null }) {
   let port = 0;
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1');
-    requests.push({ method: req.method, path: u.pathname, at: Date.now() });
+    // `run` is the page's own id (its URL carries ?run=); a page whose run never shows here was never loaded
+    requests.push({ method: req.method, path: u.pathname, at: Date.now(), run: u.searchParams.get('run') ?? undefined });
     const headers = {
       'Content-Security-Policy': gnomonCsp(port),
       'Cross-Origin-Opener-Policy': 'same-origin',
@@ -146,6 +147,17 @@ export async function startServer({ files = new Map(), rootDir = null }) {
           resolve(v);
         });
       });
+    },
+    /** Stop waiting for `run`: a report that still comes is kept for lateReport(). */
+    forget(run) {
+      waiters.delete(run);
+    },
+    /** A report that arrived after its waiter gave up (null when none did); taken once. */
+    lateReport(run) {
+      if (!early.has(run)) return null;
+      const v = early.get(run);
+      early.delete(run);
+      return v;
     },
     close: () => new Promise((r) => server.close(r)),
   };
@@ -352,15 +364,25 @@ export async function realPaste(cdp, origin, text, x, y, platform = process.plat
   return null;
 }
 
-/** Open `pagePath` on `server` in `engine` and wait for its report. */
-export async function runPage(server, engine, pagePath, timeoutMs = 60_000) {
+/**
+ * Open `pagePath` on `server` in `engine` and wait for its report. A page that does not report says why, so a miss
+ * is never a bare timeout: `miss` is 'exited' (the browser process ended first; `exit` has its code, signal and
+ * time), 'never-requested' (the server saw no request for this page's run id within `loadDeadlineMs`: the browser
+ * never loaded it, a launch failure), or 'no-report' (the page was requested and sent nothing in `timeoutMs`).
+ * `pageRequestedMs` is when the page itself was first asked for. A report that lands after the wait gave up is
+ * returned as `lateReport`, never as `report`: it does not count as a report, and the caller judges what it carries.
+ */
+export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { loadDeadlineMs = null } = {}) {
   const run = randomBytes(6).toString('hex');
   const sep = pagePath.includes('?') ? '&' : '?';
   const url = `${server.origin}${pagePath}${sep}run=${run}`;
   const t0 = Date.now();
+  const from = server.requests.length;
   // the WKWebView host times out a little BEFORE this wait does, so its last lines (the page's visibility and phase,
   // T-2026-11-06-003) reach the launcher tail of a run that never reported
   const proc = launch(engine, url, Math.max(5, Math.floor(timeoutMs / 1000) - 5));
+  let exit = null;
+  proc.exited.then((x) => (exit = { ...x, atMs: Date.now() - t0 }));
   // POST /paste?x=&y= with the text as its body: a real paste through DevTools in a Chromium-family browser (200),
   // or 501 where there is no such channel (WKWebView, Firefox) and the page falls back to a synthetic event
   let cdp = null;
@@ -371,11 +393,37 @@ export async function runPage(server, engine, pagePath, timeoutMs = 60_000) {
     const why = await realPaste(cdp, server.origin, text, Number(u.searchParams.get('x') ?? 0), Number(u.searchParams.get('y') ?? 0));
     return why === null ? { status: 200, body: 'pasted' } : { status: 500, body: why };
   });
-  const report = await Promise.race([server.waitReport(run, timeoutMs), proc.exited.then(() => server.waitReport(run, 1500))]);
+  const requested = () => server.requests.slice(from).find((q) => q.run === run && q.method === 'GET');
+  let neverRequested = false;
+  let poll = null;
+  const loaded = loadDeadlineMs
+    ? new Promise((resolve) => {
+        poll = setInterval(() => {
+          if (requested()) {
+            clearInterval(poll);
+            poll = null;
+          } else if (Date.now() - t0 >= loadDeadlineMs) {
+            clearInterval(poll);
+            poll = null;
+            neverRequested = true;
+            resolve(null);
+          }
+        }, 250);
+      })
+    : new Promise(() => {});
+  const report = await Promise.race([server.waitReport(run, timeoutMs), proc.exited.then(() => server.waitReport(run, 1500)), loaded]);
+  if (poll) clearInterval(poll);
+  if (!report) server.forget(run);
   server.hooks.delete('/paste');
   cdp?.close();
   const wallMs = Date.now() - t0;
   const tail = proc.output();
+  const exitedFirst = exit !== null;
   await proc.kill();
-  return { report, wallMs, launcherTail: report ? undefined : tail.slice(-800) };
+  const first = requested();
+  const pageRequestedMs = first ? first.at - t0 : null;
+  if (report) return { report, wallMs, pageRequestedMs };
+  const lateReport = server.lateReport(run);
+  const miss = exitedFirst ? 'exited' : neverRequested || !first ? 'never-requested' : 'no-report';
+  return { report: null, wallMs, launcherTail: tail.slice(-800), miss, exit: exitedFirst ? exit : null, pageRequestedMs, ...(lateReport ? { lateReport } : {}) };
 }

@@ -32,11 +32,15 @@
 // Windows parity phase).
 // History: until boards S1.0 this probe bundled the stock engine in a temp dir and recorded what the CSP refused
 // (results before 2026-11-23: 230 esm.sh font loads, eval in the font subsetter, 4 data: images, 1 inline style).
-// Launch flake (T-2026-10-31-001; T-2026-11-06-003 for WKWebView, fixed in _shared/wkwebview-load.swift): a run whose
-// browser sends NO report never loaded the page; it is retried ONCE per engine and both attempts stay in the
-// evidence. A run that reported is never retried.
+// Launch flake (T-2026-10-31-001; T-2026-11-06-003 for WKWebView, fixed in _shared/wkwebview-load.swift): a PAGE whose
+// browser sends NO report is retried, that page alone, ONCE per engine, and both attempts stay in the evidence
+// (launchRetries, with the page). Since T-2026-11-25-002 this covers the pinned page too (it used to be outside the
+// retry, and a pinned-page miss failed the probe with no launcher tail in the result), and a miss says why
+// (exited / never-requested / no-report). A page that reported is never retried, nor one whose late report carries
+// a CSP row. A run counts as mounted only if BOTH its pages mounted. The page's watchdog is set from the host's
+// wait (75 s of 90 s): at 45 s it cut off the probe build's page on a slow runner (Chrome, ~43 s there).
 import { gnomonCsp } from '../_shared/browser.mjs';
-import { exercisedChecks, NO_REPORT, pasteCarried, runBoardUnderCsp, shippedBoard, staticScan } from './harness.mjs';
+import { exercisedChecks, pasteCarried, runAccounting, runBoardUnderCsp, runMounted, shippedBoard, staticScan } from './harness.mjs';
 
 export const specRefs = ['§11.2 rule 6', '§12.7', '§19.1 M1.0 P12', 'OPEN 12', 'G-WEB-06', 'G-DDL-06', 'G-DDL-07', 'S25-M3'];
 
@@ -70,22 +74,26 @@ export default async function probe(ctx) {
 
   const engines = {};
   for (const [name, e] of Object.entries(out.engines)) {
-    const ok = e.runs.filter((r) => r.mounted);
+    // a run is mounted only if both its pages mounted; a page that sent no report is never clean (e.clean, problems)
+    const ok = e.runs.filter(runMounted);
+    const acc = runAccounting(e.runs);
     engines[name] = {
       version: e.version,
       family: e.family,
-      runs: e.runs.length,
-      mountedRuns: ok.length,
+      runs: acc.runs,
+      mountedRuns: acc.mountedRuns,
       clean: e.clean,
       problems: e.problems,
-      // both pages of every run: the pinned bytes and the probe build
-      violationCount: e.runs.reduce((a, r) => a + (r.violationCount ?? 0) + (r.pinned?.violationCount ?? 0), 0),
-      pinnedBytes: e.runs.map((r) => (r.pinned ? { stage: r.pinned.stage, mounted: r.pinned.mounted, violationCount: r.pinned.violationCount ?? null, fix: r.pinned.fix, syntheticDraw: r.pinned.syntheticDraw, png: r.pinned.png } : null)),
-      violatedDirectives: [...new Set(e.runs.flatMap((r) => (r.violations ?? []).map((v) => v.directive)))],
-      exportPng: ok.length > 0 && ok.every((r) => r.png?.ok),
+      // both pages of every run: the pinned bytes and the probe build (and any report that came after a timeout)
+      violationCount: acc.violationCount,
+      pinnedBytes: e.runs.map((r) => (r.pinned ? { stage: r.pinned.stage ?? null, mounted: r.pinned.mounted ?? false, violationCount: r.pinned.violationCount ?? null, wallMs: r.pinned.wallMs, sentAt: r.pinned.sentAt, phaseAt: r.pinned.phaseAt, ...(r.pinned.error ? { error: r.pinned.error, miss: r.pinned.miss } : {}), fix: r.pinned.fix, syntheticDraw: r.pinned.syntheticDraw, png: r.pinned.png } : null)),
+      // the probe build's page of every run: when it sent its report and when each phase began
+      probeTimings: e.runs.map((r) => ({ wallMs: r.wallMs, pageRequestedMs: r.pageRequestedMs, stage: r.stage ?? null, sentAt: r.sentAt, phaseAt: r.phaseAt })),
+      violatedDirectives: acc.violatedDirectives,
+      exportPng: ok.length > 0 && ok.every((r) => r.png?.ok && r.pinned.png?.ok),
       medianMs: { module: median(ok.map((r) => r.ms.module)), mounted: median(ok.map((r) => r.ms.mounted)) },
       firstRun: withoutCaptures(e.runs[0]),
-      nonReportingRuns: e.runs.map((r, i) => ({ run: i + 1, r })).filter(({ r }) => r.error === NO_REPORT).map(({ run, r }) => ({ run, wallMs: r.wallMs, launcherTail: r.launcherTail })),
+      nonReportingRuns: acc.nonReportingRuns,
       launchRetries: e.launchRetries,
     };
   }
@@ -100,7 +108,7 @@ export default async function probe(ctx) {
   for (const [n, r] of Object.entries(engines)) if (!r.clean) findings.push(`${n}: ${r.problems.join(' | ')}`);
   // a paste or drop check that a browser reported as unsupported did not run there: each must have run somewhere
   const exercised = {};
-  for (const [n, e] of Object.entries(out.engines)) for (const [check, ran] of Object.entries(exercisedChecks(e.runs.find((r) => r.mounted) ?? {}))) if (ran) (exercised[check] ??= []).push(n);
+  for (const [n, e] of Object.entries(out.engines)) for (const [check, ran] of Object.entries(exercisedChecks(e.runs.find(runMounted) ?? {}))) if (ran) (exercised[check] ??= []).push(n);
   const never = Object.keys(exercisedChecks({})).filter((c) => !exercised[c]);
   if (never.length && rows.length) findings.push(`paste or drop checks that ran in no engine: ${never.join(', ')}`);
   if (missingRequired.length) findings.push(`required engine(s) not on this machine: ${missingRequired.join(', ')}`);
@@ -124,10 +132,10 @@ export default async function probe(ctx) {
       requiredEngines: required,
       exercised,
       // how each engine's paste was made: `devtools` is a real paste (clipboard plus the platform's paste chord)
-      pasteVia: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, e.runs.find((r) => r.mounted)?.fix?.paste?.via ?? e.runs.find((r) => r.mounted)?.fix?.paste?.unsupported ?? null])),
+      pasteVia: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, e.runs.find(runMounted)?.fix?.paste?.via ?? e.runs.find(runMounted)?.fix?.paste?.unsupported ?? null])),
       // what each paste check's event carried in each engine (`text`, `file`, or `nothing` where the engine strips
       // script-built clipboard data): a check is judged, and counted as exercised, by this and never by the engine's name
-      pasteCarried: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, pasteCarried(e.runs.find((r) => r.mounted) ?? {})])),
+      pasteCarried: Object.fromEntries(Object.entries(out.engines).map(([n, e]) => [n, pasteCarried(e.runs.find(runMounted) ?? {})])),
       pasteModifier: process.platform === 'darwin' ? 'Meta' : 'Control',
       clean,
       findings,

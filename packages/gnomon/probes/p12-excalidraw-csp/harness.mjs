@@ -67,6 +67,12 @@ const CSS = `html, body { margin: 0; }\n#board { width: 1280px; height: 800px; }
 const DRIVER = `'use strict';
 (function () {
   var R = (window.__board = { t0: performance.now(), phase: 'boot', violations: [], errors: [], rejections: [], sent: false });
+  // when each phase began (ms since the driver ran): a report that stopped early shows where the time went
+  R.phaseAt = [['boot', 0]];
+  (function () {
+    var now = R.phase;
+    Object.defineProperty(R, 'phase', { enumerable: true, configurable: true, get: function () { return now; }, set: function (v) { now = v; R.phaseAt.push([v, Math.round(performance.now() - R.t0)]); } });
+  })();
   document.addEventListener('securitypolicyviolation', function (e) {
     R.violations.push({ directive: e.effectiveDirective || e.violatedDirective, blockedURI: e.blockedURI, sourceFile: e.sourceFile, line: e.lineNumber, sample: (e.sample || '').slice(0, 80), at: Math.round(performance.now()), phase: R.phase });
   });
@@ -76,13 +82,18 @@ const DRIVER = `'use strict';
     if (R.sent) return;
     R.sent = true;
     R.stage = stage;
+    R.sentAt = Math.round(performance.now() - R.t0);
     R.visibility = document.visibilityState;
     R.resources = performance.getEntriesByType('resource').map(function (r) { return { path: new URL(r.name).pathname, type: r.initiatorType }; });
     R.userAgent = navigator.userAgent;
     var run = new URLSearchParams(location.search).get('run') || '';
     fetch('/report?run=' + encodeURIComponent(run), { method: 'POST', body: JSON.stringify(R) });
   };
-  setTimeout(function () { R.send('watchdog'); }, 45000);
+  // the page's own deadline: it reports what it has (stage 'watchdog', never clean) before the host stops waiting.
+  // The host sets it from its wait (?watchdog=ms); 45 s when it does not.
+  var WATCHDOG = Number(new URLSearchParams(location.search).get('watchdog')) || 45000;
+  R.watchdogMs = WATCHDOG;
+  setTimeout(function () { R.send('watchdog'); }, WATCHDOG);
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   // every font string the engine gives a canvas (G-DDL-07: only the board's one face may be named)
   var FONTS_SEEN = {};
@@ -980,7 +991,13 @@ export const RGB_INK = { day: 'rgb(22, 21, 15)', night: 'rgb(232, 244, 240)' };
 
 /** Why a run is not clean ([] when it is): the G-DDL-06 predicate, one run of one engine. */
 export function runProblems(r, known) {
-  if (r.error) return [r.error];
+  if (r.error) {
+    // a page that did not report is never clean; a report that came after the wait gave up does not make it one,
+    // and any CSP row it carries is a violation like any other
+    const p = [r.miss && MISS[r.miss] ? `${r.error} (${MISS[r.miss]})` : r.error];
+    if (r.lateReport?.violationCount) p.push(`${r.lateReport.violationCount} CSP violation(s) in a report that came after the timeout: ${r.lateReport.violations.map((v) => `${v.directive} ${v.blocked} in ${v.phase} x${v.count}`).join('; ')}`);
+    return p;
+  }
   const p = [];
   if (!r.mounted) p.push(`did not mount (stage ${r.stage})`);
   if (r.violationCount) p.push(`${r.violationCount} CSP violation(s): ${r.violations.map((v) => `${v.directive} ${v.blocked} in ${v.phase} x${v.count}`).join('; ')}`);
@@ -1008,52 +1025,97 @@ export function runProblems(r, known) {
   return p;
 }
 
+/** Why a page sent no report, as runPage classifies it (_shared/browser.mjs). */
+export const MISS = { exited: 'the browser exited before the page reported', 'never-requested': 'the browser never asked for the page', 'no-report': 'the page loaded and sent nothing' };
+
+/** The row of one page that reported. `mode` is 'pinned' (/pinned.html, the pinned bytes) or 'probe' (/, the probe build). */
+export function pageRow(mode, { report, wallMs, pageRequestedMs }, requests) {
+  const v = report.violations ?? [];
+  const common = { mode, wallMs, pageRequestedMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, sentAt: report.sentAt, watchdogMs: report.watchdogMs, phaseAt: report.phaseAt, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, fix: report.fix, pasteTrouble: report.pasteTrouble, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests };
+  if (mode === 'pinned') return { ...common, syntheticDraw: report.syntheticDraw };
+  return { ...common, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, colours: report.colours, matrix: report.matrix, zoom400: report.zoom400, edits: report.edits, undoKeys: report.undoKeys, handleKeys: report.handleKeys, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, userAgent: report.userAgent };
+}
+
+/** The row of one page that sent no report: never clean (runProblems), and it says why (runPage's `miss`). */
+export function missRow(mode, { wallMs, launcherTail, miss, exit, pageRequestedMs, lateReport }, requests) {
+  const late = lateReport ? { stage: lateReport.stage, sentAt: lateReport.sentAt, phaseAt: lateReport.phaseAt, violationCount: (lateReport.violations ?? []).length, violations: aggregate(lateReport.violations ?? []) } : undefined;
+  return { mode, wallMs, error: NO_REPORT, miss, exit, pageRequestedMs, launcherTail, requests, ...(late ? { lateReport: late } : {}) };
+}
+
 /**
- * Load the shipped board under the CSP in each picked engine, `runs` times. A launch that never reports is retried
- * `launchRetries` times per engine (a browser that never loaded the page says nothing about the CSP); a run that
- * reported is never retried. Resolves {csp, engines: {name: {version, family, runs: [...], clean, problems}}, missing}.
+ * Whether a page row may be retried: only a page that sent NO report (a launch failure or a missed report), and
+ * never one whose late report carries a CSP row. A page that reported is never retried, whatever it reported.
  */
-export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRetries = 1, engines = null, board = shippedBoard(), probe = null } = {}) {
+export function retryable(row) {
+  return !!row && row.error === NO_REPORT && !(row.lateReport?.violationCount > 0);
+}
+
+/** Both pages of a run mounted (the pinned bytes and the probe build). A run with a missing page did not. */
+export const runMounted = (r) => !!r && r.mounted === true && r.pinned?.mounted === true;
+
+/** Every problem of an engine's runs, both pages of each ([] when every run is clean). */
+export function engineProblems(rows, known) {
+  return rows.flatMap((r, i) => [...(r.pinned ? runProblems(r.pinned, known).map((p) => `run ${i + 1} (pinned bytes): ${p}`) : [`run ${i + 1}: the pinned bytes were not run`]), ...runProblems(r, known).map((p) => `run ${i + 1} (probe build): ${p}`)]);
+}
+
+/**
+ * The result's accounting of an engine's runs: a run is mounted only if BOTH its pages mounted; every page that
+ * sent no report is listed (pinned or probe) with its wall time, why, and the launcher's last lines; the
+ * violations of both pages and of any late report are counted.
+ */
+export function runAccounting(rows) {
+  const pages = (r) => [r, r.pinned].filter(Boolean);
+  const late = (p) => (p.lateReport ? [p.lateReport] : []);
+  const all = rows.flatMap(pages);
+  return {
+    runs: rows.length,
+    mountedRuns: rows.filter(runMounted).length,
+    violationCount: all.reduce((a, p) => a + (p.violationCount ?? 0) + (p.lateReport?.violationCount ?? 0), 0),
+    violatedDirectives: [...new Set(all.flatMap((p) => [p, ...late(p)]).flatMap((p) => (p.violations ?? []).map((v) => v.directive)))],
+    nonReportingRuns: rows.flatMap((r, i) => pages(r).filter((p) => p.error === NO_REPORT).map((p) => ({ run: i + 1, page: p.mode === 'pinned' ? 'pinned' : 'probe', wallMs: p.wallMs, miss: p.miss ?? null, exit: p.exit ?? null, pageRequestedMs: p.pageRequestedMs ?? null, launcherTail: p.launcherTail, ...(p.lateReport ? { lateReport: { stage: p.lateReport.stage, violationCount: p.lateReport.violationCount } } : {}) }))),
+  };
+}
+
+/**
+ * Load the shipped board under the CSP in each picked engine, `runs` times; every run is two pages. A PAGE that
+ * sends no report (a launch failure or a missed report) is retried, that page alone, at most `launchRetries` times
+ * per engine; every retried attempt stays in `launchRetries` with the page it was. A page that reported is never
+ * retried, and neither is one whose late report carries a CSP row, so a violation can never be retried away.
+ * The page's own watchdog is set from `timeoutMs` (it reports before the host stops waiting), and a page the
+ * browser never asked for within `loadDeadlineMs` is a launch failure, not a wait to the full timeout.
+ * Resolves {csp, engines: {name: {version, family, runs: [...], launchRetries, clean, problems}}, missing}.
+ */
+export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRetries = 1, loadDeadlineMs = 30_000, engines = null, board = shippedBoard(), probe = null } = {}) {
   // every run is TWO pages: /pinned.html on the pinned bytes (CSP rows, containment), then / on the probe build (edits)
   const files = harnessFiles(board, probe ?? (await probeBoard()));
   const known = new Set(files.keys());
   const { pick, missing } = engines ? { pick: engines, missing: {} } : pickEngines();
   const server = await startServer({ files });
+  // the page's deadline sits inside the host's wait and inside the WKWebView host's own (timeout - 5 s)
+  const watchdogMs = Math.max(10_000, timeoutMs - 15_000);
   const out = {};
   try {
     for (const e of pick) {
       const rows = [];
       const retried = [];
-      for (let i = 0; i < runs; i++) {
-        let r;
+      const page = async (run, mode) => {
         for (;;) {
-          const before = server.requests.length;
-          // the pinned bytes first; its row rides on the probe page's row as `pinned`
-          let pinnedRow = null;
-          {
-            const b0 = server.requests.length;
-            const first = await runPage(server, e, '/pinned.html', timeoutMs);
-            const rq = server.requests.slice(b0).map((q) => ({ method: q.method, path: q.path }));
-            const pv = first.report?.violations ?? [];
-            pinnedRow = first.report
-              ? { mode: 'pinned', wallMs: first.wallMs, stage: first.report.stage, mounted: first.report.mounted === true, engine: first.report.engine, afterAdd: first.report.afterAdd, afterAddSettled: first.report.afterAddSettled, alive: first.report.alive, aliveAfterUnmount: first.report.aliveAfterUnmount, deadHandle: first.report.deadHandle, fix: first.report.fix, syntheticDraw: first.report.syntheticDraw, pasteTrouble: first.report.pasteTrouble, png: first.report.png, violationCount: pv.length, violations: aggregate(pv), errors: first.report.errors ?? [], rejections: first.report.rejections ?? [], requests: rq }
-              : { mode: 'pinned', wallMs: first.wallMs, error: NO_REPORT, launcherTail: first.launcherTail, requests: rq };
-          }
-          const beforeProbe = server.requests.length;
-          const { report, wallMs, launcherTail } = await runPage(server, e, '/', timeoutMs);
-          const requests = server.requests.slice(beforeProbe).map((q) => ({ method: q.method, path: q.path }));
-          if (report) {
-            const v = report.violations ?? [];
-            r = { wallMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, fix: report.fix, pasteTrouble: report.pasteTrouble, colours: report.colours, matrix: report.matrix, zoom400: report.zoom400, edits: report.edits, undoKeys: report.undoKeys, handleKeys: report.handleKeys, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests, userAgent: report.userAgent };
-            r.mode = 'probe';
-            r.pinned = pinnedRow;
-          } else r = { wallMs, error: NO_REPORT, launcherTail, requests, pinned: pinnedRow };
-          if (report || retried.length >= launchRetries) break;
-          retried.push({ run: i + 1, ...r });
+          const b0 = server.requests.length;
+          const got = await runPage(server, e, `${mode === 'pinned' ? '/pinned.html' : '/'}?watchdog=${watchdogMs}`, timeoutMs, { loadDeadlineMs });
+          const rq = server.requests.slice(b0).map((q) => ({ method: q.method, path: q.path }));
+          const row = got.report ? pageRow(mode, got, rq) : missRow(mode, got, rq);
+          if (!retryable(row) || retried.length >= launchRetries) return row;
+          retried.push({ run, page: mode, ...row });
         }
+      };
+      for (let i = 0; i < runs; i++) {
+        // the pinned bytes first; its row rides on the probe page's row as `pinned`
+        const pinned = await page(i + 1, 'pinned');
+        const r = await page(i + 1, 'probe');
+        r.pinned = pinned;
         rows.push(r);
       }
-      const problems = rows.flatMap((r, i) => [...(r.pinned ? runProblems(r.pinned, known).map((p) => `run ${i + 1} (pinned bytes): ${p}`) : [`run ${i + 1}: the pinned bytes were not run`]), ...runProblems(r, known).map((p) => `run ${i + 1} (probe build): ${p}`)]);
+      const problems = engineProblems(rows, known);
       out[e.name] = { version: e.version, family: e.family ?? e.kind, runs: rows, launchRetries: retried, clean: problems.length === 0, problems };
     }
   } finally {
