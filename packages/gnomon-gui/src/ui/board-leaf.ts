@@ -286,7 +286,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     else headKey.setAttribute('aria-disabled', 'true');
     if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', 'dialog');
     else headKey.removeAttribute('aria-haspopup');
-    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert ? ' bd-said-line' : ''}`;
+    // Mika R2: a line that STATES something in the keep line's place draws in ink (marks missing, part of the board,
+    // words waiting), as the refusals and the held-still lines do; opening, folding and saving pass by quietly
+    const stated = keepShown !== null && keepShown !== KEEP_COPY.opening && keepShown !== KEEP_COPY.folding && keepShown !== KEEP_COPY.saving;
+    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert || stated ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
     // held still: its line stays for as long as it lasts, over anything else the keep line would say
     if (inert && state !== 'failed' && state !== 'loading') {
@@ -584,12 +587,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
     // the check (what this page's fold was compared with) is at the foot's right end and is never cut
-    const check = checkWords ? [h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, {}, checkWords)] : [];
+    // (it gives way with an ellipsis rather than be clipped, and keeps its whole words in title=; when the fold did
+    // not match, the words stand whole and only the change number gives way)
+    const m = checkTone === 'bad' ? /^(Did not match)( .*)$/.exec(checkWords) : null;
+    const check = checkWords ? [h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, { title: checkWords }, ...(m ? [h('span', 'bd-check-w', {}, m[1]!), h('span', 'bd-check-n', {}, m[2]!)] : [checkWords]))] : [];
+    const checkCut = (): boolean => check.some((c) => c.scrollWidth > c.clientWidth + 1 || [...c.children].some((k) => k.scrollWidth > k.clientWidth + 1));
     foot.replaceChildren(...kids, ...check);
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
-    while (foot.scrollWidth > foot.clientWidth && kids.length - cut > 1) {
+    // (the other hands fold into '+k more' before the check loses a letter)
+    while ((foot.scrollWidth > foot.clientWidth || checkCut()) && kids.length - cut > 1) {
       cut++;
       foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`), ...check);
     }

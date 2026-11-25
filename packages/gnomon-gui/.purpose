@@ -474,6 +474,16 @@ components:
       every mark through the engine's own key handler (setYielded covers only
       its document-level listeners). Held by test/board-app.test.ts in both
       inert states, with focus on the board and off it.
+      Review fixes of PR #123: the check gives way with an ellipsis inside the
+      foot and carries its whole words in title= (a mismatch keeps 'Did not
+      match' whole and only its number gives way; other hands fold before the
+      check loses a letter); a keep-state line that states something (dropped,
+      partial, words waiting) draws in ink through bd-said-line while opening,
+      folding and saving stay quiet; the head and the keep line are flex none,
+      so one abrupt shrink cannot leave the rail on a layout taller than its
+      room; rail menu rows do not wrap; held still, the app's own shortcuts
+      (the palette, the board key, Settings, New session, the bare mic key)
+      pass to the page.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]

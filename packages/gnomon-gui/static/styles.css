@@ -227,7 +227,7 @@ html, body {
    grid, and the chat then fell into the sessions column, which is 0 wide, so "Layout: Focus (the chat only)" and a
    hidden sessions pane showed an empty desk at every width over 900px. Desktop widths only: under 900px the panes
    are one column and two drawers (below). */
-@media (min-width: 901px) {
+@media (min-width: 900.01px) {
   .desk > .sessions { grid-column: 1; grid-row: 1; }
   .desk > .transcript { grid-column: 2; grid-row: 1; }
   .desk > .stack { grid-column: 3; grid-row: 1; }
@@ -1928,13 +1928,16 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-refuse-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-label); }
 .bd-row { position: relative; }
 .bd-menu { position: absolute; left: 48px; bottom: 0; z-index: 4; display: flex; flex-direction: column; gap: 2px; min-width: 20ch; padding: 4px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--shadow); }
-.bd-menu .bd-mi { display: flex; align-items: center; gap: 8px; min-height: var(--key-h); padding: 0 8px; background: none; border: 0; border-radius: var(--radius); color: var(--ink); font: inherit; font-size: var(--fs-control); text-align: left; cursor: pointer; }
+.bd-menu .bd-mi { white-space: nowrap; display: flex; align-items: center; gap: 8px; min-height: var(--key-h); padding: 0 8px; background: none; border: 0; border-radius: var(--radius); color: var(--ink); font: inherit; font-size: var(--fs-control); text-align: left; cursor: pointer; }
 .bd-menu .bd-mi:hover, .bd-menu .bd-mi:focus-visible { background: var(--fold); outline: none; }
-.bd-menu .bd-mi kbd { margin-left: auto; font: inherit; font-size: var(--fs-label); color: var(--sec); }
+.bd-menu .bd-mi kbd { white-space: nowrap; margin-left: auto; font: inherit; font-size: var(--fs-label); color: var(--sec); }
 .bd-rail.yielded { background: var(--sheet); }
 .bd-rail.yielded kbd { visibility: hidden; }
 /* T-2026-11-25-004: the shortest rail (core/board-rail.ts `tight`) is its keys alone: no graduations, ticks or spacer */
 .bd-rail.tight { background: var(--sheet); }
+/* Mika R3: the head and the keep line never give way either. A board that lost height in ONE step squeezed the keep
+   line under the old, taller rail; the leaf then read its room from the squeezed line and kept a rail too tall for it. */
+.bd-leaf > .bd-head, .bd-leaf > .bd-keep { flex: none; }
 /* Nothing in the rail gives way: a row or a tick that shrank was how a rail 1 to 4px short of its room lost its ticks
    unseen. The spacer's least is 4px, so the rail needs what the design measured (472 whole, 408 without + and −). */
 .bd-row, .bd-brk { flex: none; }
@@ -1946,6 +1949,12 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-said-line { color: var(--ink); }
 .bd-foot .bd-more-hands { white-space: nowrap; }
 /* the check (boards S1.3 P4b-3): what this page's copy of the board was compared with, whole, at the foot's right end */
-.bd-foot .bd-check { flex: none; margin-left: auto; white-space: nowrap; }
+/* (Mika R1: never clipped unseen. It gives way with an ellipsis and keeps its whole words in title=; `you` never shrinks.
+   A fold that did not match keeps its WORDS whole: only the change number gives way.) */
+.bd-foot .bd-check { flex: 0 1 auto; min-width: 0; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-foot .bd-hand:first-child { flex: none; }
+.bd-foot .bd-check.bad { display: flex; }
+.bd-foot .bd-check-w { flex: none; }
+.bd-foot .bd-check-n { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .bd-foot .bd-check.bad { color: var(--fail); }
 .bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }

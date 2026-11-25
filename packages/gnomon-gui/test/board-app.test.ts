@@ -822,6 +822,47 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(a.afterSynth, 'a synthetic click on the palette row opened the Dimensions list').toMatchObject({ dims: false });
   }, 120_000);
 
+  const toDecide = [{ key: 'k', meta: true }, { wait: 200 }, ...type('Layout: Decide'), { wait: 200 }, { key: 'Enter' }, { wait: 500 }];
+  it('Mika R1: in the narrowest leaf (Decide at 1024, 303px) a check too long for the foot is never clipped: it ends in an ellipsis with its whole words in title=, `you` stays whole, and a fold that did not match keeps the words "Did not match" whole', async () => {
+    const FOOT = `(() => { const l = document.querySelector('.bd-host .bd-leaf'); const foot = l.querySelector('.bd-foot'); const c = foot.querySelector('.bd-check'); const you = foot.querySelector('.bd-hand'); const fb = foot.getBoundingClientRect(); const cb = c.getBoundingClientRect(); const w = c.querySelector('.bd-check-w'); const n = c.querySelector('.bd-check-n');
+      return { leafW: Math.round(l.getBoundingClientRect().width), overflow: foot.scrollWidth - foot.clientWidth, rightPad: Math.round(fb.right - cb.right), insideFoot: cb.right <= fb.right + 0.5 && cb.left >= fb.left, cut: c.scrollWidth > c.clientWidth + 1 || (!!n && n.scrollWidth > n.clientWidth + 1), ellipsis: getComputedStyle(n || c).textOverflow, title: c.title, text: c.textContent, youWhole: you.scrollWidth <= you.clientWidth + 1 && you.getBoundingClientRect().right <= cb.left + 0.5, youText: you.textContent.trim(),
+        words: w ? { text: w.textContent, whole: w.scrollWidth <= w.clientWidth + 1 && w.getBoundingClientRect().width > 60 && w.getBoundingClientRect().right <= fb.right } : null }; })()`;
+    const set = (line: string, tone: string) => ({ read: `(${CUR}.leaf.setCheck(${JSON.stringify(line)}, ${JSON.stringify(tone)}), 1)`, as: `set-${tone}-${line.length}` });
+    const LONG = 'Checked up to change 1234567 of 1234568';
+    const BAD = 'Did not match at change 123456789012345678';
+    const a = await real([...toDecide, ...typeBoard, { read: FOOT, as: 'real' }, set(LONG, 'ok'), { wait: 150 }, { read: FOOT, as: 'long' }, set(BAD, 'bad'), { wait: 150 }, { read: FOOT, as: 'bad' }], { fixture: 'always-scopes', width: 1024, height: 768 });
+    expect(a.errors).toEqual([]);
+    type F = { leafW: number; overflow: number; rightPad: number; insideFoot: boolean; cut: boolean; ellipsis: string; title: string; text: string; youWhole: boolean; youText: string; words: { text: string; whole: boolean } | null };
+    const r = a.real as F;
+    const long = a.long as F;
+    const bad = a.bad as F;
+    expect(r.leafW).toBeLessThanOrEqual(304);
+    // the real check of this board fits whole, and says its whole words in title= as well
+    expect(r).toMatchObject({ overflow: 0, insideFoot: true, cut: false, youWhole: true, rightPad: 14 });
+    expect(r.title).toBe(r.text);
+    // too long for the foot: it gives way with an ellipsis inside the foot; nothing runs out of it unseen
+    expect(long, 'a long check in the 303px leaf').toMatchObject({ overflow: 0, insideFoot: true, cut: true, ellipsis: 'ellipsis', title: LONG, youWhole: true, rightPad: 14 });
+    expect(long.youText).toMatch(/^you \d+$/);
+    // did not match: the words are whole and read without hover; only the number side gives way
+    expect(bad, 'a mismatch in the 303px leaf').toMatchObject({ overflow: 0, insideFoot: true, title: BAD, youWhole: true, words: { text: 'Did not match', whole: true } });
+  }, 120_000);
+
+  it('Mika R2: a line that states something in the keep line\'s place (marks missing, part of the board, words waiting) draws in ink; opening, folding and saving stay quiet', async () => {
+    const LINE = `(() => { const k = document.querySelector('.bd-host .bd-keep'); return { text: k.textContent, ink: k.classList.contains('bd-said-line'), colour: getComputedStyle(k).color }; })()`;
+    const set = (line: string | null, as: string) => [{ read: `(${CUR}.leaf.setKeep(${JSON.stringify(line)}), 1)`, as: `set-${as}` }, { wait: line === KEEP_COPY.saving ? 800 : 150 }, { read: LINE, as }];
+    const a = await real([...typeBoard, { read: LINE, as: 'usual' }, ...set(KEEP_COPY.dropped, 'dropped'), ...set(KEEP_COPY.partial, 'partial'), ...set(KEEP_COPY.wordsWait, 'wordsWait'), ...set(KEEP_COPY.saving, 'saving'), ...set(KEEP_COPY.opening, 'opening'), ...set(KEEP_COPY.folding, 'folding'), ...set(null, 'back')]);
+    expect(a.errors).toEqual([]);
+    type L = { text: string; ink: boolean; colour: string };
+    const l = (k: string): L => a[k] as L;
+    expect(l('usual')).toMatchObject({ ink: false });
+    for (const [k, words] of [['dropped', KEEP_COPY.dropped], ['partial', KEEP_COPY.partial], ['wordsWait', KEEP_COPY.wordsWait]] as const) {
+      expect(l(k), `${k} is said in ink`).toMatchObject({ text: words, ink: true });
+      expect(l(k).colour, k).not.toBe(l('usual').colour);
+    }
+    for (const [k, words] of [['saving', KEEP_COPY.saving], ['opening', KEEP_COPY.opening], ['folding', KEEP_COPY.folding]] as const) expect(l(k), `${k} stays quiet`).toMatchObject({ text: words, ink: false, colour: l('usual').colour });
+    expect(l('back')).toMatchObject({ ink: false, text: l('usual').text });
+  }, 120_000);
+
   it('Probe: a board that is out of date (a driven hash mismatch) is held still: a real drag and real keys add nothing and send nothing, and Esc still folds it', async () => {
     // the preview mod's own hook: its next dim.open answers a hash that is not its fold's, once (src/preview/dim-mod.ts)
     const lie = `(${A}.mod.wrongHashNext = true, 1)`;

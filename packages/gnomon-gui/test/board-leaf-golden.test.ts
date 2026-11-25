@@ -170,13 +170,17 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       const chosen = [];
       for (const room of [472, 408, 367, 312, 304, 271, 239, 232, 230, 229, 198, 197, 190, 161, 157, 156, 148]) { if (chrome + room > full) continue; host.style.height = (chrome + room) + 'px'; await fr();
         for (const t of ['select', 'sticky', 'text', 'rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand']) { hd.setTool(t); await fr(); const s = look(); chosen.push({ ...s, want: t, shown: s.tools.includes(t) || t === 'hand' }); } }
+      // Mika R3: ONE abrupt shrink from the whole height (a pinned card arriving), to each side of every fold step
+      hd.setTool('select'); const jumps = [];
+      for (const room of [300, 266, 226, 197, 153, 150, 148]) { host.style.height = full + 'px'; await fr(); await fr(); host.style.height = (chrome + room) + 'px'; await fr(); jumps.push({ ...look(), target: room, keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) }); }
+      host.style.height = full + 'px'; await fr(); const rest = { keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) };
       hd.setTool('select'); host.style.height = (chrome + 190) + 'px'; await fr();
-      return { full, chrome, steps, chosen, tooShortAt, at190: look() }; })()`;
+      return { full, chrome, steps, chosen, tooShortAt, jumps, rest, at190: look() }; })()`;
     const MENU = `(() => { const host = document.getElementById('preview-board'); const m = host.querySelector('.bd-menu'); const st = host.querySelector('.bd-stage').getBoundingClientRect(); const leaf = host.querySelector('.bd-leaf').getBoundingClientRect(); if (!m) return null; const b = m.getBoundingClientRect(); const items = [...m.querySelectorAll('.bd-mi')];
       return { top: Math.round(b.top - st.top), bottom: Math.round(st.bottom - b.bottom), insideLeaf: b.top >= leaf.top && b.bottom <= leaf.bottom, items: items.map((i) => i.textContent), scrolls: m.scrollHeight > m.clientHeight + 1, firstReachable: (() => { const r = items[0].getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && items[0].contains(e); })() }; })()`;
     const acted = (await real('open', [ERRORS, { await: SWEEP, as: 'sweep' }, { press: '#preview-board [data-key="more"]' }, { read: MENU, as: 'menu' }, { press: '#preview-board .bd-menu .bd-mi' }, { read: TOOL, as: 'picked' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
     type Step = { room: number; body: number; over: number; lastKey: number | null; keys: number; shortKey: boolean; natural: number; ticks: number; tight: boolean; tools: string[]; state: string };
-    const sweep = acted.sweep as { full: number; chrome: number; steps: Step[]; chosen: Array<Step & { want: string; shown: boolean }>; tooShortAt: number | null; at190: Step };
+    const sweep = acted.sweep as { full: number; chrome: number; steps: Step[]; chosen: Array<Step & { want: string; shown: boolean }>; tooShortAt: number | null; at190: Step; jumps: Array<Step & { target: number; keepH: number; headH: number }>; rest: { keepH: number; headH: number } };
     expect(acted.errors).toEqual([]);
     // the sweep really covered the short boards, down to the least the leaf draws
     expect(sweep.steps.length).toBeGreaterThan(200);
@@ -191,6 +195,19 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       // what core/board-rail.ts adds up is what is painted
       expect(s.natural, at).toBe(railNeed(railLayout(s.room, ('want' in s ? (s as { want: string }).want : 'select') as never)));
       expect(s.natural, at).toBeLessThanOrEqual(s.room);
+    }
+    // Mika R3: after ONE abrupt shrink the head and the keep line keep their height, the leaf reads its real room,
+    // and the rail is the layout of that room: 8px from the foot (24 when tight), never the taller one it had
+    expect(sweep.jumps.map((j) => j.target)).toEqual([300, 266, 226, 197, 153, 150, 148]);
+    for (const j of sweep.jumps) {
+      const at = `one step down to ${j.target}px`;
+      expect([j.headH, j.keepH], `${at}: the head or the keep line was squeezed`).toEqual([sweep.rest.headH, sweep.rest.keepH]);
+      expect(j.room, at).toBe(j.target);
+      expect(j.body, at).toBe(j.target);
+      expect(j.natural, `${at}: the rail kept a layout taller than its room`).toBe(railNeed(railLayout(j.target)));
+      expect(j.over, at).toBeLessThanOrEqual(0);
+      expect(j.lastKey, `${at}: the last key is ${j.lastKey}px from the foot`).toBeGreaterThanOrEqual(8);
+      expect(j.tight, at).toBe(j.target < 157);
     }
     // (after the rail-versus-room lines above, so a rail that overflows fails THERE and not at this count)
     expect(Math.min(...sweep.steps.map((s) => s.room))).toBe(148);
