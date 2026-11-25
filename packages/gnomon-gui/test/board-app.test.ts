@@ -284,9 +284,19 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       // focus off the board: the page body (the document's listeners hear these too)
       { press: '#pane-stack .pane-head h2, #pane-stack .pane-head .title, #pane-stack .pane-head' }, { read: `(() => { const e = document.activeElement; return !e || !e.closest('.bd-host'); })()`, as: 'focusOff' }, facts('offStart'),
       ...press('off'),
+      // the APP's own shortcuts still work with focus on the held-still board: ⌘K opens the palette, ⌥B folds the board
+      { read: `(() => { const c = ${CUR}; c.leaf.handle().focus(); return document.activeElement ? document.activeElement.className : null; })()`, as: 'focusAgain' },
+      { key: 'k', meta: true }, { wait: 300 }, { read: `!document.getElementById('palette').hidden`, as: 'palette' }, { key: 'Escape' }, { wait: 300 }, { read: `!document.getElementById('palette').hidden`, as: 'paletteClosed' }, facts('afterPalette'),
+      { read: `(() => { const c = ${CUR}; c.leaf.handle().focus(); return 1; })()`, as: 'focusThird' },
+      { key: 'b', alt: true }, { wait: 900 }, facts('afterAltB'),
     ]);
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
+    expect(String(a.focusAgain)).toMatch(/excalidraw/);
+    expect(a.palette, '⌘K with focus on the held-still board opens the palette').toBe(true);
+    expect(a.paletteClosed).toBe(false);
+    expect(f('afterPalette')).toMatchObject({ open: true, inert: why });
+    expect(f('afterAltB').open, '⌥B with focus on the held-still board folds it').toBe(false);
     const drawn = JSON.parse(String(a.drawn)) as { count: number; selected: number };
     expect(drawn.count).toBe(1);
     expect(f('heldFacts')).toMatchObject({ open: true, inert: why, nodes: 1, marks: 1 });
@@ -788,6 +798,28 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(a.chosen).toMatchObject({ open: false });
     expect(f('afterRow')).toMatchObject({ open: true, frames: 1, rows: ['session.start:command'] });
     expect(f('afterRow').active).toMatch(/excalidraw/);
+  }, 120_000);
+
+  it('a HELD Enter on the head\'s Dimensions ▾ key opens the list and chooses nothing: the repeats neither pick row 0 nor leave the open board; a synthetic click on the palette\'s "Dimensions: list" row opens nothing', async () => {
+    const LIST = `({ open: !document.getElementById('palette').hidden, dims: document.getElementById('palette-input').placeholder === 'find a dimension', rows: document.querySelectorAll('#palette-list [data-dim]').length })`;
+    const a = await real([
+      ...typeBoard, facts('before'),
+      { read: `(() => { const k = document.querySelector('.bd-host .bd-head .key[aria-haspopup="dialog"]'); k.focus(); return document.activeElement === k; })()`, as: 'onKey' },
+      // Enter pressed and HELD: the first key-down presses the key, three repeats follow before the release
+      { key: 'Enter', text: '\r', held: 3, settle: 400 }, { read: LIST, as: 'held' }, facts('afterHeld'),
+      { key: 'Escape' }, { wait: 300 },
+      // the palette's own row, by a synthetic click
+      { key: 'k', meta: true }, { wait: 200 }, ...type('Dimensions: list'), { wait: 200 },
+      { read: `(() => { const row = document.querySelector('#palette-list .pal-row.sel') || document.querySelector('#palette-list .pal-row'); const t = row ? row.textContent : null; if (row) row.click(); return t; })()`, as: 'synthRow' }, { wait: 400 }, { read: LIST, as: 'afterSynth' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(a.onKey).toBe(true);
+    // the list is open, still the Dimensions list with its row, and nothing was chosen by the repeats
+    expect(a.held, 'a held Enter chose a row (the list closed)').toMatchObject({ open: true, dims: true, rows: 1 });
+    expect(f('afterHeld')).toMatchObject({ open: true, frames: f('before').frames, rows: f('before').rows });
+    expect(String(a.synthRow)).toMatch(/^Dimensions/);
+    expect(a.afterSynth, 'a synthetic click on the palette row opened the Dimensions list').toMatchObject({ dims: false });
   }, 120_000);
 
   it('Probe: a board that is out of date (a driven hash mismatch) is held still: a real drag and real keys add nothing and send nothing, and Esc still folds it', async () => {

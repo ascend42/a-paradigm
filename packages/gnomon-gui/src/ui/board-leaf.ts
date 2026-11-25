@@ -717,6 +717,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
 
   // ── keys and presses ─────────────────────────────────────────────────────
+  /**
+   * The APP's own shortcuts (ui/app.ts: the palette, the board's ⌥B, Settings, New session, the bare mic key). None is
+   * an engine action, so a board held still lets them through to the page (Aegis, review of PR #123: the stop that
+   * keeps keys from the engine had swallowed them, and ⌥B could not fold a board that says "fold it").
+   */
+  const appShortcut = (e: KeyboardEvent): boolean => {
+    const cmd = (e.metaKey || e.ctrlKey) && !e.altKey;
+    if (cmd && !e.shiftKey && ['k', ',', 'n'].includes(e.key.toLowerCase())) return true;
+    if (e.code === 'KeyB' && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) return true;
+    return e.key === '`' && !e.metaKey && !e.ctrlKey && !e.altKey;
+  };
   const onKey = (e: KeyboardEvent): void => {
     const active = document.activeElement;
     const s = st();
@@ -739,7 +750,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (inert !== null) {
       const looks = (e.metaKey || e.ctrlKey) && !e.altKey && ['+', '=', '-', '0'].includes(e.key);
       if (!looks) {
-        if (e.key !== 'Tab' && boardHost.contains(active)) e.stopPropagation();
+        if (e.key !== 'Tab' && !appShortcut(e) && boardHost.contains(active)) e.stopPropagation();
         return;
       }
     }

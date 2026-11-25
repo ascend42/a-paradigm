@@ -380,6 +380,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
 
   function carry(plan: BoardPlan, event: Event, altB = false, typed = false): void {
     if (event.isTrusted !== true) return; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
+    // a HELD key is one press: its repeats open, leave and drop nothing (checked before the open board is left)
+    if ((event as Partial<KeyboardEvent>).repeat === true) return;
     if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info');
     const hsid = d.focused();
     if (!hsid) return;

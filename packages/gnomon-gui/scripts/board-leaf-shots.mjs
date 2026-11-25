@@ -200,6 +200,11 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         // `text`: a named key that ACTIVATES as a person's does (Enter with its carriage return presses a focused button; a raw key-down alone does not)
         const typed = a.text !== undefined;
         await call('Input.dispatchKeyEvent', { type: typed ? 'keyDown' : KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(typed ? { text: a.text } : KEYS[a.key] || modifiers ? {} : { text: a.key }), ...(a.commands ? { commands: a.commands } : {}) });
+        // `held: n`: the key is HELD: n more key-downs with autoRepeat (event.repeat true) before it is released
+        for (let i = 0; i < (a.held ?? 0); i++) {
+          await sleep(80);
+          await call('Input.dispatchKeyEvent', { type: typed ? 'keyDown' : KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(typed ? { text: a.text } : KEYS[a.key] || modifiers ? {} : { text: a.key }), autoRepeat: true });
+        }
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
       } else if (a.paste !== undefined) {
         await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
