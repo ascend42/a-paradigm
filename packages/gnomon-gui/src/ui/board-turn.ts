@@ -48,6 +48,14 @@ export function renderTurnRow(doc: MiniDoc, row: TurnStripRow, now: number): Min
   return h(doc, 'div', { class: `bd-turn-r bd-turn-turn${row.refused ? ' refused' : ''}` }, line);
 }
 
+/**
+ * What a repaint compares: the rows, and of the working key its item and what it names now (`live.now`), so a new
+ * step repaints at once (keyed on the item alone, the key named the step before for up to a tick).
+ */
+export function stripSig(rows: readonly TurnStripRow[]): string {
+  return JSON.stringify(rows.map((r) => ({ ...r, working: r.working ? { key: r.working.key, now: r.working.live?.now?.label ?? null, since: r.working.live?.now?.since ?? null } : null })));
+}
+
 export interface BoardTurnView {
   /** the board is open: the strip shows (and never hides while it is) */
   open: boolean;
@@ -117,7 +125,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       show.title = v.kept ? TURN_COPY.keptTitle : TURN_COPY.showChatTitle;
       const rows = turnStripRows(v.turn, v.agent, room);
       working = rows.find((r) => r.working)?.working ?? null;
-      const next = JSON.stringify(rows.map((r) => ({ ...r, working: r.working?.key ?? null })));
+      const next = stripSig(rows);
       if (next !== sig) {
         sig = next;
         const had = document.activeElement;

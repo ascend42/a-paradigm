@@ -12,7 +12,7 @@ import { endWordsOf, escFoldsFromComposer, latestTurn, partsAt, refusalBrief, ro
 import { liveChoiceKey } from '../src/core/choices.js';
 import { chatItems, foldActivity, type FoldedItem, type Row } from '../src/core/store.js';
 import type { MiniDoc } from '../src/core/render.js';
-import { renderTurnRow, stripWorkingEl } from '../src/ui/board-turn.js';
+import { renderTurnRow, stripSig, stripWorkingEl } from '../src/ui/board-turn.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
@@ -128,6 +128,7 @@ describe('#gui-board-turn latestTurn: the latest turn from the chat’s own item
       const text = rowText(turnStripRows(t, 'Claude', 485)[1]!.parts);
       expect(text).not.toMatch(/\$|tokens/);
       if (words) expect(text.endsWith(` · ${words}`), text).toBe(true);
+      else expect(text).toBe('Claude · Rounding ran per line before the sum. I moved it to the order total.');
     }
     expect(endWordsOf({ text: 'done · $0.0100 · 8 tokens', tone: undefined })).toEqual({ words: null, tone: 'quiet' });
   });
@@ -277,6 +278,14 @@ describe('#gui-board-turn the renderer: text nodes only, dir=auto, no title on t
     expect(you.text).toBe(`you · ${rtl} · 14:31`);
   });
 
+  it('Probe A: a new step repaints the working key at once: rows that differ only in live.now give different signatures', () => {
+    const w = (label: string, since = at('14:05:01')): FoldedItem => ({ key: 'work:9', seq: 9, role: 'working', text: 'working…', at: at('14:05:00'), live: { since: at('14:05:00'), now: { label, since, aria: label } } });
+    const rows = (it: FoldedItem) => [{ kind: 'turn' as const, parts: [], working: it }];
+    expect(stripSig(rows(w('Read · a.ts')))).not.toBe(stripSig(rows(w('Bash · npm test')))); 
+    expect(stripSig(rows(w('Bash · npm test', at('14:05:01'))))).not.toBe(stripSig(rows(w('Bash · npm test', at('14:05:09')))));
+    expect(stripSig(rows(w('Bash · npm test')))).toBe(stripSig(rows(w('Bash · npm test'))));
+  });
+
   it('the strip’s working key: no caret, no aria-expanded; named "<what> · show its steps in the chat"', () => {
     const w: FoldedItem = { key: 'work:9', seq: 9, role: 'working', text: 'working…', at: at('14:05:00'), live: { since: at('14:05:00') } };
     const el = stripWorkingEl(fdoc, w, Date.parse(at('14:05:12'))) as unknown as FEl;
@@ -354,5 +363,22 @@ describe('#gui-board-turn Esc from the composer and the trust checks (source fen
     expect(CSS).toMatch(/\.lp-tab-on \.viewport > \.trow, \.bd-tab-on \.viewport > \.trow \{ right: var\(--edge-tab-inset\); \}/);
     expect(APP).toMatch(/new MutationObserver\(\(\) => \{[\s\S]{0,200}contains\('lp-tab-on'\)[\s\S]{0,80}contains\('bd-tab-on'\)[\s\S]{0,300}requestAnimationFrame\(relayout\);/);
     expect(APP).toMatch(/const relayout = \(\): void => \{\s*const w = rowWidth\(\);[\s\S]{0,400}paintTranscript\(true\);/);
+  });
+
+  it('Probe B: a refused send carries its strip line: refusalBrief over the voice line and refusal.message, on the send.refused local row', () => {
+    expect(APP).toMatch(/const brief\s*=\s*refusalBrief\(\{\s*voice,\s*message:\s*err instanceof RpcError\s*\?\s*err\.refusal\.message\s*:\s*null\s*\}\);/);
+    expect(APP).toMatch(/local\.push\(\{[^}]*\bkind:\s*'send\.refused'[^}]*\bpayload:\s*why\b[^}]*\bbrief\b[^}]*\}\)/);
+    expect(APP).toMatch(/const voice\s*=\s*err instanceof RpcError\s*\?\s*voiceRefusalText\(err\.refusal\)\s*:\s*null;/);
+  });
+
+  it('Probe C: the strip paints only in the next frame: paintBoardTurn queues one rAF, paintBoardTurnNow runs only from it; the dock’s observer hands on through turnSoon', () => {
+    expect(APP).toMatch(/function paintBoardTurn\(\): void \{[\s\S]{0,400}?if \(turnPaintQueued \|\| !turnStrip\) return;\s*turnPaintQueued = true;\s*requestAnimationFrame\(\(\) => \{\s*turnPaintQueued = false;\s*paintBoardTurnNow\(\);\s*\}\);\s*\}/);
+    // the definition and the one call inside that rAF: nothing else paints the strip synchronously
+    expect([...APP.matchAll(/paintBoardTurnNow\(/g)]).toHaveLength(2);
+    expect(APP).toMatch(/function paintBoardTurnNow\(\): void \{/);
+    expect(DOCK).toMatch(/const turnSoon = \(\): void => \{\s*if \(turnQueued \|\| !d\.turn\) return;\s*turnQueued = true;\s*requestAnimationFrame\(\(\) => \(\(turnQueued = false\), d\.turn\?\.\(\)\)\);\s*\};/);
+    expect(DOCK).toMatch(/new ResizeObserver\(\(\) => \(fit\(\), placeTab\(\), turnSoon\(\)\)\)/);
+    // the dock never paints the strip from inside its observer
+    expect(DOCK).not.toMatch(/new ResizeObserver\([^\n]*d\.turn\?\.\(\)/);
   });
 });

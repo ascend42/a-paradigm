@@ -429,6 +429,31 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect((b['pressed-strip'] as Strip).said).toBe(KEEP_COPY.notSavedOff);
   }, 180_000);
 
+  it('#gui-board-turn (Probe D): reopened from the edge tab, then Esc in the composer folds it and focus stays in the composer (never back to the tab that opened it)', async () => {
+    const a = await real([
+      ...typeBoard, ...foldByEsc, facts('folded1'),
+      { press: '#pane-transcript > .bd-edgetab' }, { wait: 2200 }, facts('reopened'),
+      { press: '#composer-text' }, { key: 'Escape' }, { wait: 900 }, facts('folded2'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'folded1').open).toBe(false);
+    expect(fa(a, 'reopened').open).toBe(true);
+    expect(fa(a, 'folded2')).toMatchObject({ open: false, active: 'composer-text' });
+  }, 120_000);
+
+  it('#gui-board-turn (Probe E): at 1024 a long reply that stopped at the turn limit with live choices drops the reply; the end words and needs you stay and the line fits', async () => {
+    const long = `${'The totals drift because each line is rounded before the sum, and the discount is applied after rounding, so three-line orders lose a cent. '.repeat(3).slice(0, 400)}\n\nWhich rounding should totals use?\n\nA  Banker’s rounding\nB  Half up`;
+    const FIT = `(() => { const row = document.querySelector('#board-turn .bd-turn-turn'); const line = row.querySelector('.bd-turn-line'); return { cls: row.className, text: line.innerText.replace(/\\s+/g, ' ').trim(), fits: line.scrollWidth <= line.clientWidth + 1 }; })()`;
+    const a = await real([
+      realClock, ...toIdle, ...typeBoard, ...sendTyped('why are totals off'), append('turn.sent', { turn: 'turn:p4b2/e' }), replyRow(long), append('turn.result', { subtype: 'error_max_turns', is_error: true, turn: 'turn:p4b2/e' }), { wait: 700 }, { read: FIT, as: 'fit' },
+    ], { width: 1024, height: 768 });
+    expect(a.errors).toEqual([]);
+    const r = a.fit as { cls: string; text: string; fits: boolean };
+    expect(r.cls).toMatch(/\btight-[123]\b/);
+    expect(r.text.endsWith('stopped: turn limit · needs you'), r.text).toBe(true);
+    expect(r.fits).toBe(true);
+  }, 120_000);
+
   it('#gui-board-turn: a real press on the strip’s working key folds the board, leaves its steps unfolded in the chat and puts focus on that key there; a synthetic one does nothing', async () => {
     const a = await real([
       realClock, ...toIdle, ...typeBoard, ...sendTyped('run the totals tests'), append('turn.sent', { turn: 'turn:p4b2/2' }), toolRow('npm test -- --filter totals'), { wait: 600 }, strip('running'),
@@ -437,7 +462,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     ]);
     expect(a.errors).toEqual([]);
     expect((a.running as Strip).work).toMatchObject({ expanded: false, caret: false });
-    expect((a.running as Strip).work!.label).toMatch(/^\S.* · show its steps in the chat$/);
+    expect((a.running as Strip).work!.label).toBe('Bash · npm test -- --filter totals · show its steps in the chat');
     expect(fa(a, 'synthetic')).toMatchObject({ open: true, toasts: [] });
     expect(fa(a, 'pressed').open).toBe(false);
     expect((a.chat as Strip).chatWork).toEqual({ expanded: 'true', focused: true, steps: true });
