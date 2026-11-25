@@ -687,6 +687,7 @@ var DIM_LIMITS = Object.freeze({
   ref: 128,
   z: 64
 });
+var DIM_SCAN_LIMITS = Object.freeze({ freeStringsPerNode: 16, stringsPerBatch: 4096 });
 var BASE_KEYS = ["id", "kind", "x", "y", "z", "rot", "color", "weight", "parent", "refs"];
 var SHAPE_KEYS = [...BASE_KEYS, "w", "h", "fill", "label"];
 var DIM_NODE_KEYS = deepFreeze({
@@ -1017,8 +1018,9 @@ var DIM_REFUSAL_FIXES = Object.freeze({
   "parent-bad": "Set parent to the id of a frame that is on the board now; a frame cannot have a parent.",
   secret: "Remove the credential from the text; op rows are permanent, so nothing that looks like a secret is stored."
 });
+var SCAN_STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Mn}\p{Me}\p{Default_Ignorable_Code_Point}]/gu;
 function dimTextForScan(s) {
-  return s.normalize("NFKC").replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "");
+  return s.normalize("NFKD").replace(SCAN_STRIP, "").normalize("NFC");
 }
 var fieldName = (k) => DIM_FIELDS.includes(k) ? k : "unknown";
 var isCoreKind = (k) => typeof k === "string" && DIM_CORE_KINDS.includes(k);
@@ -1185,6 +1187,22 @@ function stringsOf(v, field, out, depth = 0) {
   else if (Array.isArray(v)) for (const x of v) stringsOf(x, field, out, depth + 1);
   else if (isPlainObject(v)) for (const k of Object.keys(v)) stringsOf(v[k], depth === 0 ? fieldName(k) : field, out, depth + 1);
 }
+function countStrings(v, limit, n = 0, depth = 0) {
+  if (typeof v === "string") return n + 1;
+  if (depth >= COPY_DEPTH) return n;
+  if (Array.isArray(v)) {
+    for (const x of v) {
+      n = countStrings(x, limit, n, depth + 1);
+      if (n > limit) return n;
+    }
+  } else if (isPlainObject(v)) {
+    for (const k of Object.keys(v)) {
+      n = countStrings(v[k], limit, n, depth + 1);
+      if (n > limit) return n;
+    }
+  }
+  return n;
+}
 var STRUCTURAL_KEYS = /* @__PURE__ */ new Set(["id", "kind", "z", "parent", "from", "to", "color", "fill", "head"]);
 function validateDimOps(state, ops, actor, opts = {}) {
   const refuse = (index, p, extra = {}) => ({
@@ -1197,6 +1215,11 @@ function validateDimOps(state, ops, actor, opts = {}) {
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: "ops", code: "field-type" })], secret: false };
   if (ops.length > DIM_LIMITS.opsPerRow) return { ok: [], refused: [refuse(-1, { field: "ops", code: "too-many-ops" })], secret: false };
+  let strings = 0;
+  for (const op of ops) {
+    strings = countStrings(op, DIM_SCAN_LIMITS.stringsPerBatch + 1, strings) - (isPlainObject(op) && typeof op.type === "string" ? 1 : 0);
+    if (strings > DIM_SCAN_LIMITS.stringsPerBatch) return { ok: [], refused: [refuse(-1, { field: "ops", code: "field-range" })], secret: false };
+  }
   const scan = opts.scan ?? secretKindsIn;
   const hits = (text) => {
     const norm = dimTextForScan(text);
@@ -1210,6 +1233,7 @@ function validateDimOps(state, ops, actor, opts = {}) {
     for (const k of Object.keys(node).sort()) if (!STRUCTURAL_KEYS.has(k)) stringsOf(node[k], fieldName(k), free, 1);
     if (free.length < 2) return out;
     for (const r of hits(free.map((s) => s.text).join(""))) out.add(r);
+    if (free.length > DIM_SCAN_LIMITS.freeStringsPerNode) return out;
     for (const x of free) for (const y of free) if (x !== y) for (const r of hits(x.text + y.text)) out.add(r);
     return out;
   };
@@ -1260,7 +1284,22 @@ function dimKindName(kind) {
 function dimFallbackLabel(kind) {
   return `${DIM_FALLBACK_LEAD} ${dimKindName(kind)}`;
 }
-var viewable = (v) => typeof v === "string" || typeof v === "number" && Number.isFinite(v) || Array.isArray(v) && v.every((x) => typeof x === "string" || typeof x === "number" && Number.isFinite(x));
+var viewId = (v) => typeof v === "string" && DIM_NODE_ID_PATTERN.test(v) ? v : void 0;
+function viewField(state, kind, id, key, v) {
+  if (v === void 0 || v === null) return void 0;
+  if (key === "parent" || key === "from" || key === "to") return viewId(v);
+  if (key === "refs") {
+    if (!Array.isArray(v)) return void 0;
+    const refs = [];
+    for (const r of v) {
+      if (refs.length >= DIM_LIMITS.refs) break;
+      if (validateDimRef(r) === null && !refs.includes(r)) refs.push(r);
+    }
+    return refs.length > 0 ? refs : void 0;
+  }
+  if (checkField(state, kind, id, key, v).length > 0) return void 0;
+  return Array.isArray(v) ? [...v] : v;
+}
 function dimViewOf(state) {
   const entries = [...state.nodes.entries()].sort((a, b) => dimZCompare({ z: a[1].node.z, id: a[0] }, { z: b[1].node.z, id: b[0] }));
   const kinds = /* @__PURE__ */ new Map();
@@ -1273,8 +1312,8 @@ function dimViewOf(state) {
     const keys = core ? DIM_NODE_KEYS[n.node.kind] : ["x", "y"];
     for (const k of keys) {
       if (k === "id" || k === "kind") continue;
-      const v = n.node[k];
-      if (core ? viewable(v) : typeof v === "number" && Number.isFinite(v)) out[k] = Array.isArray(v) ? [...v] : v;
+      const v = core ? viewField(state, n.node.kind, id, k, n.node[k]) : n.node[k];
+      if (core ? v !== void 0 : typeof v === "number" && Number.isFinite(v)) out[k] = v;
     }
     nodes.push(out);
     const label = core ? out.kind : dimFallbackLabel(n.node.kind);
@@ -1286,6 +1325,43 @@ function dimViewOf(state) {
   if (kinds.size > 0) legend.push(`marks by kind: ${line(kinds)}`);
   if (hands.size > 0) legend.push(`marks by hand: ${line(hands)}`);
   return { v: 1, dim: state.dim, title: state.title, seq: state.seq, nodes, legend };
+}
+var DIM_AUX_KINDS = Object.freeze({
+  grant: "modns.gnomon.dimension.grant",
+  drawRefused: "modns.gnomon.dimension.draw.refused"
+});
+function emptyDimGrants() {
+  return /* @__PURE__ */ new Map();
+}
+function honouredGrant(row, dim) {
+  if (!row || row.kind !== DIM_AUX_KINDS.grant) return null;
+  const p = row.payload;
+  if (!isPlainObject(p) || !Number.isSafeInteger(own(p, "v")) || own(p, "v") < 1 || own(p, "dim") !== dim) return null;
+  const hsid = own(p, "hsid");
+  const write = own(p, "write");
+  if (!NON_EMPTY(hsid) || typeof write !== "boolean") return null;
+  const r = own(p, "relayedFor");
+  if (!isPlainObject(r) || own(r, "surface") !== "gui" || Object.prototype.hasOwnProperty.call(r, "agent")) return null;
+  if (byOf(p).cls !== "human") return null;
+  return { hsid, write };
+}
+function foldDimGrants(rows, dim, from = emptyDimGrants()) {
+  const out = new Map(from);
+  for (const row of rows) {
+    try {
+      const g = honouredGrant(row, dim);
+      if (g) out.set(g.hsid, g.write);
+    } catch {
+    }
+  }
+  return out;
+}
+function dimGrantDefault(state, hsid) {
+  return state.attached.length > 0 && state.attached[0] === hsid;
+}
+function dimMayDraw(state, grants, hsid) {
+  if (!NON_EMPTY(hsid) || !state.attached.includes(hsid)) return false;
+  return grants.get(hsid) ?? dimGrantDefault(state, hsid);
 }
 var DIM_HASH_VECTOR_ROWS = deepFreeze([
   {
@@ -1355,6 +1431,7 @@ var DIM_HASH_VECTOR_ROWS = deepFreeze([
 ]);
 var DIM_HASH_VECTOR_HASH = "sha256:d8b171c96fbdc391befc39a0553896a842f503ac8cc094ad4581f003fed4b596";
 export {
+  DIM_AUX_KINDS,
   DIM_BY_CLASSES,
   DIM_CORE_KINDS,
   DIM_FALLBACK_LEAD,
@@ -1378,22 +1455,27 @@ export {
   DIM_REF_SCHEMES,
   DIM_REL_PATTERN,
   DIM_ROW_VERSION,
+  DIM_SCAN_LIMITS,
   DIM_SHAPE_V1,
   DIM_SURFACES,
   DIM_WRITABLE_OP_TYPES,
   DIM_Z_PATTERN,
   dimCanonical,
   dimFallbackLabel,
+  dimGrantDefault,
   dimHash,
   dimHsidOf,
   dimKindName,
+  dimMayDraw,
   dimTextForScan,
   dimViewOf,
   dimZBetween,
   dimZCompare,
   dimZPlace,
+  emptyDimGrants,
   emptyDimState,
   foldDim,
+  foldDimGrants,
   foldDimRow,
   validateDimOps,
   validateDimRef

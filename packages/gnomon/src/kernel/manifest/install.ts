@@ -116,8 +116,11 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S0b: manifest:2, publisher gnomon (no index.mjs, so no modAbiId echo: unchanged by the S1.2 move)
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
-  // S1.3: the dimension mod (the one writer of dimension rows; echoes the current modAbiId, declares two tools)
-  'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9', // packages/gnomon-mods/dimension 1.0.0 (gnomon.dimension)
+  // S1.3: the dimension mod (the one writer of dimension rows; echoes the current modAbiId, declares two tools).
+  // S1.4 P0 replaces the 1.0.0 pin (sha256:7e79c843…): dim-shape.mjs is rebuilt from the tightened contract. The old
+  // hash is NOT kept as a superseded pin (that table is for a prior modAbiId, and never for a tree with tools), so
+  // an installed 1.0.0 is no longer first-party and waits for its Update card.
+  'sha256:13b7e8fd0af3cdb3c95316e87c28162b115aa39dfb159c6c84c2e09a06082ab5', // packages/gnomon-mods/dimension 1.0.1 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),

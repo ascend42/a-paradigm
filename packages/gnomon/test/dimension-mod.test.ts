@@ -10,7 +10,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_KINDS, DIM_REFUSAL_CODES, MOD_ABI_ID, dimHash, emptyDimState, foldDim, validateDimOps, type DimState } from '@a-company/gnomon-contracts';
-import { compatModAbiId, FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
+import { compatModAbiId, deriveTier, FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
 import { readManifest } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { hostDir } from '../src/kernel/modhost/state.js';
@@ -62,6 +62,12 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     const h = hashSourceTree(DIMENSION_TREE, DIMENSION, () => undefined).packageHash;
     expect([...FIRST_PARTY_PACKAGE_HASHES], `the dimension tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
     expect(SUPERSEDED_FIRST_PARTY_PINS.has(h)).toBe(false);
+    // S1.4 P0 replaced the S1.3 pin: the 1.0.0 tree is no longer first-party by hash, and it is not a superseded pin either
+    const S1_3_PIN = 'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9';
+    expect(h).not.toBe(S1_3_PIN);
+    expect(FIRST_PARTY_PACKAGE_HASHES.has(S1_3_PIN)).toBe(false);
+    expect(SUPERSEDED_FIRST_PARTY_PINS.has(S1_3_PIN)).toBe(false);
+    expect(deriveTier(S1_3_PIN)).toBe('local');
     expect(fs.readFileSync(path.join(DIMENSION_TREE, 'index.mjs'), 'utf8')).toContain(`'${MOD_ABI_ID}'`);
     // install.ts compatModAbiId: a tree that declares tools never earns a prior modAbiId. This tree declares two and needs none.
     const m = readManifest(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json')), { tier: 'first-party' }).manifest;
