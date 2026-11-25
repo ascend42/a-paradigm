@@ -98,7 +98,7 @@ const CLASSES: Array<[PrincipalKind, string]> = [
   ['human', 'founder'],
   ['agent', 'builder'],
   ['session', 'sess-1'],
-  ['mod', 'mod-workshop'],
+  ['mod', 'mod-gnomon.workshop'],
   ['voice', 'voice'],
 ];
 
@@ -748,7 +748,7 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
         const eff = Math.max(reg, RANK[label]);
         for (const session of [HSID, OTHER_HSID]) {
           const e = { ...base, id: 'ev:1', seq: 1, kind, session, sensitivity: label, payload } as unknown as EventV1;
-          const all = [...readers, { class: 'mod', name: 'x', grantedKinds: [kind] } as const];
+          const all = [...readers, { class: 'mod', name: 'acme.x', grantedKinds: [kind] } as const];
           for (const rd of all) {
             const want = expected(rd.class, kind, eff, column, session === HSID);
             pairs++;
@@ -774,9 +774,9 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
     }
     expect(pairs).toBe(EVENT_KIND_NAMES.length * 3 * 2 * 8);
     // a mod's own modns kind (no registry entry): normal ⇒ limited view; a mod never sees another mod's kinds
-    const own = { ...base, id: 'ev:2', seq: 2, kind: 'modns.x.saved', sensitivity: 'normal', payload: {} } as unknown as EventV1;
-    expect(projectForReader(own, { class: 'mod', name: 'x' })).toMatchObject({ view: 'full' });
-    expect(projectForReader(own, { class: 'mod', name: 'y' })).toBeUndefined();
+    const own = { ...base, id: 'ev:2', seq: 2, kind: 'modns.acme.x.saved', sensitivity: 'normal', payload: {} } as unknown as EventV1;
+    expect(projectForReader(own, { class: 'mod', name: 'acme.x' })).toMatchObject({ view: 'full' });
+    expect(projectForReader(own, { class: 'mod', name: 'acme.y' })).toBeUndefined();
   });
 
   it.todo('G-ABI-05 agent row (own subtree) — Move 2; voice row (attached session, kernel voice lines) — Move 4');
