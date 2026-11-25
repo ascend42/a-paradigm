@@ -120,7 +120,7 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S1.4 P0 replaces the 1.0.0 pin (sha256:7e79c843…): dim-shape.mjs is rebuilt from the tightened contract. The old
   // hash is NOT kept as a superseded pin (that table is for a prior modAbiId, and never for a tree with tools), so
   // an installed 1.0.0 is no longer first-party and waits for its Update card.
-  'sha256:13b7e8fd0af3cdb3c95316e87c28162b115aa39dfb159c6c84c2e09a06082ab5', // packages/gnomon-mods/dimension 1.0.1 (gnomon.dimension)
+  'sha256:acfafb18eb5997d9640b5ceb74b5e9219fc1a12b482116e13b66293ff0da394f', // packages/gnomon-mods/dimension 1.0.1 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),
