@@ -990,13 +990,44 @@ export interface DimView {
   legend: string[];
 }
 
-const viewable = (v: unknown): boolean =>
-  typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v)) || (Array.isArray(v) && v.every((x) => typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x))));
+/** The stored node id, when it is one a write could have minted; else undefined (the field is left out). */
+const viewId = (v: unknown): string | undefined => (typeof v === 'string' && DIM_NODE_ID_PATTERN.test(v) ? v : undefined);
 
 /**
- * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`. Any other node shows only id, the
- * pattern-checked kind name, x, y and `by`. Carried-through fields are left out entirely, and the legend is
- * built from kind names and `by` classes only.
+ * One stored field of a core node as the view may show it, or undefined to leave it out. The fold carries
+ * anything (a row is permanent, and a hostile or later-version row is still a row), so nothing stored is shown
+ * on trust: the value must pass TODAY's write check for its field (Aegis S1.2 nit 5).
+ *  - `refs`: each ref is checked by itself; one that fails `validateDimRef` is left out, a repeat is shown once,
+ *    and at most DIM_LIMITS.refs are shown.
+ *  - `color`, `fill`: the current palette check; a token that fails it is left out (the renderer then draws ink
+ *    or no fill, as `resolveContentColour` does).
+ *  - `text`, `label`, `title`, `rel`, `head`, `z`, every number and `points`: the type, length, range and pattern
+ *    checks of the validator; an over-long string or a value of the wrong type is left out.
+ *  - `parent`, `from`, `to`: the id pattern only. Whether the node they name is still on the board is the
+ *    reader's to resolve against the same view.
+ */
+function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, v: unknown): unknown {
+  if (v === undefined || v === null) return undefined;
+  if (key === 'parent' || key === 'from' || key === 'to') return viewId(v);
+  if (key === 'refs') {
+    if (!Array.isArray(v)) return undefined;
+    const refs: string[] = [];
+    for (const r of v) {
+      if (refs.length >= DIM_LIMITS.refs) break;
+      if (validateDimRef(r) === null && !refs.includes(r as string)) refs.push(r as string);
+    }
+    return refs.length > 0 ? refs : undefined;
+  }
+  // checkField reads the state only for the three link fields answered above
+  if (checkField(state as unknown as Draft, kind, id, key, v).length > 0) return undefined;
+  return Array.isArray(v) ? [...v] : v;
+}
+
+/**
+ * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`, each field only when its stored
+ * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
+ * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
+ * classes only.
  */
 export function dimViewOf(state: DimState): DimView {
   const entries = [...state.nodes.entries()].sort((a, b) => dimZCompare({ z: a[1].node.z, id: a[0] }, { z: b[1].node.z, id: b[0] }));
@@ -1010,8 +1041,8 @@ export function dimViewOf(state: DimState): DimView {
     const keys = core ? DIM_NODE_KEYS[n.node.kind as DimCoreKind] : ['x', 'y'];
     for (const k of keys) {
       if (k === 'id' || k === 'kind') continue;
-      const v = n.node[k];
-      if (core ? viewable(v) : typeof v === 'number' && Number.isFinite(v)) out[k] = Array.isArray(v) ? [...v] : v;
+      const v = core ? viewField(state, n.node.kind as DimCoreKind, id, k, n.node[k]) : n.node[k];
+      if (core ? v !== undefined : typeof v === 'number' && Number.isFinite(v)) out[k] = v;
     }
     nodes.push(out);
     const label = core ? out.kind : dimFallbackLabel(n.node.kind);
