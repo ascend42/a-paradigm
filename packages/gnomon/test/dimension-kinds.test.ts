@@ -114,9 +114,9 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       none('a socket caller');
 
       // 2. the daemon's own bridge, as another mod: names as near the owner's as a name can be
-      // (a bare id `gnomon` would own every modns.gnomon.* kind by the whole-segment rule; it is not a mod id: an id is
-      // `<publisher>.<name>`, and this list holds only ids of that shape plus the legacy bare name)
-      const near = ['acme.probe', 'gnomon.probe', 'gnomon.dimension2', 'gnomon.dimensio', 'gnomon.dim', 'dimension', 'gnomon.dimension.x', 'evil.gnomon.dimension'];
+      // (the bare id `gnomon` is here too: `modns.gnomon.` prefixes every first-party kind, and before ownsModKind
+      // asked for a full mod id this call RESOLVED with a row written)
+      const near = ['acme.probe', 'gnomon.probe', 'gnomon.dimension2', 'gnomon.dimensio', 'gnomon.dim', 'gnomon', 'dimension', 'gnomon.dimension.x', 'evil.gnomon.dimension'];
       for (const name of near) {
         for (const kind of DIM_ROW_KINDS) {
           const call = d.modKernelCall({ name, principal: `p:${root.ns}/mod-${name}`, verb: 'log.append', params: { kind, payload: payloadOf(kind) } });
@@ -125,7 +125,7 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       }
       // and the dispatcher's mod cell for a mod principal that is not the owner
       for (const name of ['acme.probe', 'gnomon.probe']) {
-        for (const kind of DIM_ROW_KINDS) await expect(d.dispatcher.callAs(`p:${root.ns}/mod-${name}`, 'log.append', { kind, payload: payloadOf(kind) }), `callAs ${name} ${kind}`).rejects.toBeTruthy();
+        for (const kind of DIM_ROW_KINDS) await expect(d.dispatcher.callAs(`p:${root.ns}/mod-${name}`, 'log.append', { kind, payload: payloadOf(kind) }), `callAs ${name} ${kind}`).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
       }
       none('another mod at the bridge');
 
