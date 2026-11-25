@@ -93,6 +93,23 @@ components:
       (RowFold, perWindow 0): one counter row per session per 10 s window,
       outcome refused, coalesced, count, byWhy over MOD_BRIDGE_REFUSALS;
       closeSession(hsid) writes it at session exit.
+      REVIEW FIXES (S1.4-P2): bridgeHeld({loop, mode, planApproved}) is the
+      one derivation of held (loop wins over manual); the supervisor's stamp
+      and its permission pass both call it. A call is BOUND to the pin its
+      tool was listed at: BridgeTool.packageHash goes to the call port as
+      expectPackageHash and host.ts refuses NOT_RUNNING{why:'pin-changed'}
+      (MOD_PIN_CHANGED) in the tick of the dispatch when the running child is
+      another package; the model gets MOD_BRIDGE_SENTENCES.pinChanged. The
+      receipt wait is bounded (MOD_BRIDGE_LIMITS.receiptWaitMs, 5 s): an
+      append that never settles is the fixed receipt sentence.
+      closeSession and flush are async and resolve once the pending counter
+      appends settled (bounded); a refusal after closeSession opens no fold
+      (a bounded set of ended sessions). MOD_BRIDGE_COUNTER_KEYS is the
+      counter row's key list; MOD_BRIDGE_RECEIPT_KEYS (nine) is for outcome
+      ok or error. The list rule also requires the mod and tool names to
+      pass the fence's id pattern. allow and currentPin are ModBridgeSeams
+      (second argument), never on ModBridgeOptions. OWED BY P5: readers that
+      accept a receipt only under p:<ns>/mods-mcp and a kernel key.
       createModBridge(o) builds the ports over the mod host (read at call
       time) and the log. The kernel imports nothing from gnomon-mods or the
       mod SDK. Known limit: a sub-agent arrives on the same channel and is
@@ -105,6 +122,9 @@ components:
     tests:
       - test/mods-bridge.test.ts
       - test/mods-bridge-session.test.ts
+      - test/mods-bridge-attack.test.ts
+      - test/mods-bridge-stamps.test.ts
+      - test/mods-bridge-kernel.test.ts
       - test/dimension-bridge-e2e.test.ts
       - test/dimension-relay.test.ts
     oracles: [G-MOD-19, G-MOD-22]

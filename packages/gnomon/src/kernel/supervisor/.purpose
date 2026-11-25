@@ -100,7 +100,13 @@ components:
       is counted into ONE approval.suspect{why:'ungated-tool-use',
       server:'gnomon-mods', count, byWhy} row per session per 10 s (RowFold,
       flushed at exit); it never blocks. Session exit closes the bridge's
-      refusal fold (modBridge.closeSession). No Claude session is a loop
+      refusal fold (modBridge.closeSession, awaited) and its suspect fold
+      (awaited, bounded); flushBridge() does both for every live session at
+      daemon stop, before the children stop. held comes from bridgeHeld
+      (mcp-bridge.ts), also used by the permission pass. #bridgeSession runs
+      only for tools/call; the detector skips a session that is not running.
+      SupervisorOptions.bridgeNow (TEST RIG ONLY) is the suspect fold's
+      clock. No Claude session is a loop
       session in 8.0 and nothing in this file sets Session.loopOrigin (the
       guard in test/loop-model.test.ts), so the loop refusal is tested at the
       answerer (held: 'loop') and by a source test of #bridgeSession, not
