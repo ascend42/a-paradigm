@@ -59,18 +59,24 @@
  *  - KERNEL-COMPOSED refusals (unknown tool, manual mode, loop, no turn, arguments, the caps, a mod-host refusal)
  *    hand over no mod bytes. They are FOLDED: one counter row per session per 10 s window (`outcome: 'refused'`,
  *    `coalesced: true`, `count`, `byWhy` over MOD_BRIDGE_REFUSALS), so a refused agent cannot write unbounded rows.
+ * THE GATES THE BRIDGE ENFORCES ITSELF (Aegis M2 and the two-SDK-server probe). A settings allow rule or a hook can
+ * let a tool run with no can_use_tool request, so the permission pass is an audit record and these are the gate: a
+ * `tools/call` is refused with a fixed sentence when the session's effective mode is manual with no approved plan,
+ * when the session has a loop origin, and when no turn is outstanding. Nothing reaches the mod and no mod row lands.
+ *
  * The socket append gate refuses `inject.receipt` for every caller class, and no device, agent, mod or session name
  * can yield the reserved principal (tests). Readers accept a receipt only under that principal and a kernel key.
  */
 import { createHash } from 'node:crypto';
 import { canonicalJson, type ToolRelayedFor } from '@a-company/gnomon-contracts';
+import { RESERVED_PRINCIPAL_NAMES } from '../identity/registry.js';
 import { HISTORICAL_FIRST_PARTY_PINS } from '../manifest/grants.js';
 import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../manifest/install.js';
 import { GNOMON_VERSION } from '../../version.js';
 import { walkPayloadKeys } from './bridge.js';
 import { RowFold } from './fold.js';
 import type { ModHost } from './host.js';
-import { isModRefusal, type ModRefusalCode } from './refusal.js';
+import { isModRefusal, ModRefusal, type ModRefusalCode } from './refusal.js';
 
 export const MOD_BRIDGE_SERVER = 'gnomon-mods';
 /** The session mcp.json entry of the bridge. Nothing else is ever written for it: no env, no path, no token. */
@@ -197,6 +203,7 @@ export type BridgeRefusal = (typeof MOD_BRIDGE_REFUSALS)[number];
 
 /** The reserved principal name of the bridge's rows: `p:<ns>/mods-mcp` (spec §9; no enrolment can yield it). */
 export const MOD_BRIDGE_PRINCIPAL_NAME = 'mods-mcp';
+if (!RESERVED_PRINCIPAL_NAMES.includes(MOD_BRIDGE_PRINCIPAL_NAME)) throw new Error('#mod-tool-bridge: its principal name is not reserved in the registry');
 export const modBridgePrincipal = (ns: string): string => `p:${ns}/${MOD_BRIDGE_PRINCIPAL_NAME}`;
 export const MOD_BRIDGE_RECEIPT_KIND = 'inject.receipt' as const;
 /** Aegis A2: the receipt's payload keys, exactly. */
@@ -246,6 +253,9 @@ export const MOD_BRIDGE_SENTENCES = Object.freeze({
   result: 'The tool ran, but its result could not be handed over.',
   failed: 'The tool call failed.',
   receipt: 'The result could not be recorded, so it was not handed over.',
+  manual: 'Refused: this session is in manual mode. Mod tools wait on an approved plan.',
+  loop: 'Refused: loop sessions never call mod tools.',
+  noTurn: 'Refused: no turn is open for this call.',
   arguments: 'Refused: the arguments are not an object, or are too large, too deep or hold a reserved key.',
 });
 
@@ -327,6 +337,16 @@ const text = (id: string | number, t: string, isError: boolean): Answer => ({ js
 
 /** One `tools/call` for a listed tool, from a running session. Every path returns exactly one answer. */
 async function runCall(id: string | number, tool: BridgeTool, params: Record<string, unknown>, ports: BridgePorts, s: BridgeSession): Promise<Answer> {
+  // Aegis M2: the bridge's OWN gates, whether or not a can_use_tool request ever arrived
+  if (s.held !== null) {
+    ports.refused(s, s.held);
+    return text(id, s.held === 'loop' ? MOD_BRIDGE_SENTENCES.loop : MOD_BRIDGE_SENTENCES.manual, true);
+  }
+  // no outstanding turn (a background sub-agent's call after the turn's result): no budget key, nothing reaches the mod
+  if (s.turn === null) {
+    ports.refused(s, 'no-turn');
+    return text(id, MOD_BRIDGE_SENTENCES.noTurn, true);
+  }
   const input = checkBridgeArguments(params);
   if (input === null) {
     ports.refused(s, 'arguments');
@@ -419,7 +439,8 @@ export interface BridgeRow {
 export interface ModBridgeOptions {
   /** installed, verified, granted, unpaused mods, read now (the daemon: DeskMods.list()) */
   mods(): readonly BridgeMod[];
-  host: Pick<ModHost, 'admit' | 'callTool'>;
+  /** the mod host, read at call time (the daemon builds it after the supervisor); null ⇒ the call fails closed */
+  host(): Pick<ModHost, 'admit' | 'callTool'> | null;
   /** append one row and resolve once it is in the log */
   append(row: BridgeRow): Promise<unknown>;
   /** the identity namespace; null (no root identity yet) ⇒ no receipt can be written, so no result is handed over */
@@ -473,8 +494,10 @@ export function createModBridge(o: ModBridgeOptions): ModBridge {
     async call(mod, tool, input, s) {
       // the WHOLE host-known value, or none: a label outside the pattern vouches for nobody (rows then fold unknown)
       const rf: ToolRelayedFor | null = MOD_BRIDGE_LIMITS.agentLabel.test(s.agent) && s.turn !== null ? { principal: s.principal, surface: s.surface, agent: s.agent, hsid: s.hsid, turn: s.turn } : null;
-      await o.host.admit(mod); // an admit counts against the restart cap; a paused, down or missing mod is refused here
-      return o.host.callTool(mod, tool, input, { hsid: s.hsid, ...(rf ? { toolRelayedFor: rf } : {}) });
+      const host = o.host();
+      if (host === null) throw new ModRefusal('NOT_RUNNING', 'the mod host is not up', { name: mod });
+      await host.admit(mod); // an admit counts against the restart cap; a paused, down or missing mod is refused here
+      return host.callTool(mod, tool, input, { hsid: s.hsid, ...(rf ? { toolRelayedFor: rf } : {}) });
     },
     refused(s, why) {
       foldFor(s)?.hit(why, {});

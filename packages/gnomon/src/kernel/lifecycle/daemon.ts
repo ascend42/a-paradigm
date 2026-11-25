@@ -143,6 +143,7 @@ import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { StagedCardPickup } from '../modhost/control.js';
 import { FeedBacklog, FEED_BACKLOG_KINDS, type FeedSourceRow } from '../modhost/feed.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
+import { createModBridge, type ModBridgeOptions } from '../modhost/mcp-bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 import { VoiceControl } from '../voice/voice-control.js';
@@ -381,7 +382,9 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
  * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
  */
 export interface DaemonSeams {
-  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
+  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; loopOriginFor?: (hsid: string) => { loopId: string; runId: string; authoredBy: string; trustCard?: string } | undefined };
+  /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
+  modBridge?: Pick<ModBridgeOptions, 'allow' | 'currentPin' | 'foldWindowMs'>;
   billing?: BillingScanSource;
   /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
   drainDeadlineMs?: number;
@@ -1167,6 +1170,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // Aegis L3: a trusted server that is on nowhere any more is dropped again (a disabled drop row that failed to write)
   mcpServers.reconcileTrust();
+  // #mod-tool-bridge (S1.4-P2): the `gnomon-mods` SDK server's ports. The mod host is built below (it needs the
+  // supervisor), so it is read at call time. Receipts and the folded refusal counter are appended in-process as
+  // USERLAND rows under p:<ns>/mods-mcp (L7 holds as for mod rows and the kernel-speakable row: the kernel key signs
+  // them as an attestation; readers attribute by principal). Production passes no allowlist: MOD_BRIDGE_TOOLS is
+  // empty until P5, so no tool is listed and no session's mcp.json gets the entry.
+  const modBridge = createModBridge({
+    mods: () => deskMods.list(),
+    host: () => mods,
+    ns: () => authority.ns,
+    append: (row) => log.append({ kind: row.kind, principal: row.principal, payload: row.payload, session: row.session, as: 'userland', ...(row.causes ? { causes: row.causes } : {}) }),
+    ...(seams.modBridge ?? {}),
+  });
   const supervisor: SessionSupervisor = new SessionSupervisor({
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // TD-2026-10-27-833 slice C2': local sessions reach the same servers (first-party Paradigm + the enabled ones)
@@ -1225,6 +1240,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // P8-D87: the effective run mode at each permission request
     runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
     gitVerbs,
+    modBridge,
     ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
