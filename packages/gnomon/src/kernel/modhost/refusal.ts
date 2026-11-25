@@ -34,6 +34,7 @@ export const MOD_REFUSAL_CODES = [
   'NOT_INSTALLED', // a relay naming a mod with no effective grant.install (no loadMod is run for it)
   'DOWN', // the mod is out of restarts (RESTART_CAP); refused until an operator start()
   'LOG', // a log.append through kernel.call whose payload is not an object or exceeds the cap (Aegis C2)
+  'APPEND_BUDGET', // a log.append over the per-mod row budget, the tool-row share or the per-call byte budget (S1.4, Aegis A4): NOT written, and nothing was tried
 ] as const;
 export type ModRefusalCode = (typeof MOD_REFUSAL_CODES)[number];
 
@@ -55,6 +56,8 @@ const ROUTE: Record<ModRefusalCode, { code: RefusalCode; gate: RefusalGate }> = 
   NOT_IMPLEMENTED: { code: 'ENGINE', gate: 'transport' },
   CALL: { code: 'FORBIDDEN', gate: 'trust' },
   LOG: { code: 'BAD_REQUEST', gate: 'usage' },
+  // the same route as LOG, which these refusals carried before S1.4: only `data.modCode` tells them apart
+  APPEND_BUDGET: { code: 'BAD_REQUEST', gate: 'usage' },
   NOT_INSTALLED: { code: 'NOT_FOUND', gate: 'usage' },
   DOWN: { code: 'ENGINE', gate: 'transport' },
 };

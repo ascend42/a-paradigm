@@ -182,7 +182,16 @@ export interface KernelCallRequest {
   callId?: string;
   /** S1.2 C1: the host's stamp of the bound command or tool call (absent ⇒ idle, view or host-initiated); never mod input */
   stamp?: CallStamp;
+  /**
+   * S1.4 (Aegis A4): the kind of the bound host → mod call, from the host's own call context (`tool.call` ⇒ `tool`,
+   * `command.run` ⇒ `command`, a view render or no call ⇒ `idle`). HOST-INTERNAL: the bridge's tool-row share reads
+   * it, it is never read from a mod request, never sent to a mod and in no ABI descriptor.
+   */
+  callKind: ModCallKind;
 }
+
+/** The kinds of bound call the append budget tells apart (host-internal; see KernelCallRequest.callKind). */
+export type ModCallKind = 'tool' | 'command' | 'idle';
 
 export interface ModHostOptions {
   home: string;
@@ -1087,7 +1096,9 @@ export class ModHost {
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
         const callId = typeof params.callId === 'string' ? params.callId : undefined;
         const stamp = (ctx.kind === 'command' || ctx.kind === 'tool') && ctx.stamp ? ctx.stamp : undefined;
-        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}) }) };
+        // S1.4 A4: from the bound context alone (the mod's request has no say); a view render counts as idle
+        const callKind: ModCallKind = ctx.kind === 'tool' ? 'tool' : ctx.kind === 'command' ? 'command' : 'idle';
+        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}), callKind }) };
       }
     } catch (err) {
       if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {

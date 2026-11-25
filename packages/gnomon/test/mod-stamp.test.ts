@@ -31,7 +31,10 @@ async function started(caps: string[] = []) {
   const { manifestHash } = install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), m));
   if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash, capabilities: caps });
   const rows: ModAppendRow[] = [];
-  const kernelCall = createModKernelCall({ callAs: async () => ({}), append: async (row) => (rows.push(row), { seq: rows.length }) });
+  // S1.4 (G-MOD-21): these tests are about stamps, not the append budget, and some append more than 5 tool rows in
+  // one real second. The bridge's clock steps a full window per append here, so no row of theirs meets a budget.
+  let clock = 1_000_000;
+  const kernelCall = createModKernelCall({ callAs: async () => ({}), append: async (row) => (rows.push(row), { seq: rows.length }) }, { now: () => (clock += 1_000) });
   const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall });
   cleanups.push(() => h.stopAll());
   await h.start('acme.probe');

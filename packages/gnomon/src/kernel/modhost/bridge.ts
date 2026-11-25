@@ -26,9 +26,24 @@
  *
  * APPEND BUDGET (Aegis F2): per mod, at most MOD_APPEND_ROWS_PER_SEC rows in
  * any 1 s window and MOD_APPEND_BYTES_PER_CALL payload bytes per bound call
- * (the callId; requests with none share a per-second idle window); beyond
- * either ⇒ LOG (BAD_REQUEST) and no row. The host additionally caps a mod's
- * in-flight mod → host requests (host.ts MAX_MOD_HOST_INFLIGHT).
+ * (the callId; requests with none share a per-second idle window). The host
+ * additionally caps a mod's in-flight mod → host requests (host.ts
+ * MAX_MOD_HOST_INFLIGHT).
+ *
+ * HUMAN RESERVE (S1.4, Aegis A4; G-MOD-21), generic to every mod: of those
+ * rows at most MOD_APPEND_TOOL_ROWS_PER_SEC may come from a call that is not
+ * a command (`callKind`, set by the host from the bound call context, never
+ * by the mod). Tool rows and command rows share the one window and the one
+ * total, so commands always keep MOD_APPEND_ROWS_PER_SEC −
+ * MOD_APPEND_TOOL_ROWS_PER_SEC rows a second however many tool calls append.
+ *
+ * A BUDGET REFUSAL IS A DEFINITE "NOT WRITTEN" (Aegis A4): beyond any of the
+ * three budgets the append is refused APPEND_BUDGET (BAD_REQUEST, the route
+ * LOG had) with `budget` one of `rows`, `tool-rows` or `bytes`, `written:
+ * false`, and for the two row budgets `retryAfterMs`. It is decided before the
+ * log is touched, so a mod may keep its fold and try again; every other
+ * failure of a `log.append` (an error from the log, a lost reply, a timeout)
+ * leaves the mod unable to tell whether the row landed.
  *
  * SIGNER (B1): the row is appended as a USERLAND row (`as: 'userland'`, L7 —
  * modns.* is userland-owned) under the MOD's principal and is signed by the
@@ -54,6 +69,21 @@ export const MOD_APPEND_MAX_BYTES = 16 * 1024;
 /** Aegis F2: per-mod append budget. */
 export const MOD_APPEND_ROWS_PER_SEC = 20;
 export const MOD_APPEND_BYTES_PER_CALL = 64 * 1024;
+/**
+ * S1.4 (Aegis A4; G-MOD-21): the share of MOD_APPEND_ROWS_PER_SEC that calls other than commands may use, per mod
+ * and per 1 s window. The rest is the human reserve: commands keep 15 rows a second.
+ */
+export const MOD_APPEND_TOOL_ROWS_PER_SEC = 5;
+/** The window both row budgets are counted in. */
+export const MOD_APPEND_WINDOW_MS = 1_000;
+/** The `budget` values of an APPEND_BUDGET refusal. */
+export const MOD_APPEND_BUDGETS = Object.freeze(['rows', 'tool-rows', 'bytes'] as const);
+export type ModAppendBudget = (typeof MOD_APPEND_BUDGETS)[number];
+
+/** An APPEND_BUDGET refusal: `written: false` is the contract (nothing was appended and nothing was tried). */
+function budgetRefusal(name: string, budget: ModAppendBudget, message: string, retryAfterMs?: number): ModRefusal {
+  return new ModRefusal('APPEND_BUDGET', message, { name, budget, written: false, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) });
+}
 
 /** The append fields a mod may supply; every other field is dropped (Aegis C2). */
 export const MOD_APPEND_FIELDS = Object.freeze(['kind', 'payload', 'audience', 'sensitivity'] as const);
@@ -166,14 +196,22 @@ export interface ModKernelCall {
 
 export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => number } = {}): ModKernelCall {
   const now = opts.now ?? Date.now;
-  const rows = new Map<string, number[]>(); // name → append times in the last second
+  const rows = new Map<string, Array<{ t: number; tool: boolean }>>(); // name → appends in the last second, each with its share
   const bytes = new Map<string, number>(); // `${name}|${callKey}` → payload bytes appended
   const fn = async (req: KernelCallRequest): Promise<unknown> => {
     if (req.verb === 'log.append') {
       const row = clampModAppend(req.name, req.principal, req.params, req.stamp);
       const t = now();
-      const recent = (rows.get(req.name) ?? []).filter((x) => t - x < 1_000);
-      if (recent.length >= MOD_APPEND_ROWS_PER_SEC) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_ROWS_PER_SEC} appends per second`, { name: req.name, budget: 'rows' });
+      const recent = (rows.get(req.name) ?? []).filter((x) => t - x.t < MOD_APPEND_WINDOW_MS);
+      // S1.4 A4: only a bound command is outside the tool share. It fails closed: a tool call, an idle request and a
+      // request whose kind is missing or unknown all count against it, so nothing but a command can use the reserve.
+      const tool = req.callKind !== 'command';
+      const wait = (xs: Array<{ t: number }>): number => Math.max(1, MOD_APPEND_WINDOW_MS - (t - xs[0]!.t));
+      if (tool) {
+        const toolRows = recent.filter((x) => x.tool);
+        if (toolRows.length >= MOD_APPEND_TOOL_ROWS_PER_SEC) throw budgetRefusal(req.name, 'tool-rows', `${req.name} exceeded ${MOD_APPEND_TOOL_ROWS_PER_SEC} tool-call appends per second`, wait(toolRows));
+      }
+      if (recent.length >= MOD_APPEND_ROWS_PER_SEC) throw budgetRefusal(req.name, 'rows', `${req.name} exceeded ${MOD_APPEND_ROWS_PER_SEC} appends per second`, wait(recent));
       const sec = Math.floor(t / 1_000);
       // prune idle windows older than this second (never a live call's tally)
       for (const k of bytes.keys()) {
@@ -183,8 +221,8 @@ export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => n
       const key = `${req.name}|${req.callId ?? `idle:${sec}`}`;
       const size = Buffer.byteLength(canonicalJson(row.payload), 'utf8');
       const used = bytes.get(key) ?? 0;
-      if (used + size > MOD_APPEND_BYTES_PER_CALL) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_BYTES_PER_CALL} appended bytes in this call`, { name: req.name, budget: 'bytes' });
-      recent.push(t);
+      if (used + size > MOD_APPEND_BYTES_PER_CALL) throw budgetRefusal(req.name, 'bytes', `${req.name} exceeded ${MOD_APPEND_BYTES_PER_CALL} appended bytes in this call`);
+      recent.push({ t, tool });
       rows.set(req.name, recent);
       bytes.set(key, used + size);
       const r = await ports.append(row);
