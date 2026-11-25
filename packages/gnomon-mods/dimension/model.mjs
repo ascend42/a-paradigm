@@ -1,7 +1,7 @@
 // #dimension-mod model (spec §12.7): pure functions, no I/O and no platform import. Everything that decides what a
 // dimension row may hold lives here, so the stdio loop (index.mjs) is only plumbing and the rules can be tested
 // without a host. The fold and the validator are the published `dim-shape:v1` (dim-shape.mjs, generated).
-import { DIM_ID_PATTERN, DIM_KINDS, DIM_LIMITS, DIM_OPENED, DIM_ROW_VERSION, dimHash, emptyDimState, foldDimRow, validateDimOps } from './dim-shape.mjs';
+import { DIM_ID_PATTERN, DIM_KINDS, DIM_LIMITS, DIM_OPENED, DIM_ROW_VERSION, dimGrantDefault, dimHash, emptyDimState, foldDimRow, validateDimOps } from './dim-shape.mjs';
 
 /** Dimensions one home may hold (the index lives in mod state, 1 MiB in all). */
 export const DIM_CAP = 512;
@@ -144,9 +144,12 @@ export function titleFor(title, fromSession) {
   return fromSession ? { title: FALLBACK_TITLE } : { problem };
 }
 
-/** Write grant of an attached session: the first attached one is on, any later one is off (consumed in S1.4). */
+/**
+ * Write grant of an attached session with no grant row: the first attached one is on, any later one is off. The
+ * rule is the published `dimGrantDefault` (dim-shape.mjs), so the mod and the page cannot disagree (consumed in S1.4).
+ */
 export function grantDefault(state, hsid) {
-  return state.attached.length > 0 && state.attached[0] === hsid ? 'on' : 'off';
+  return dimGrantDefault(state, hsid) ? 'on' : 'off';
 }
 
 const utf8 = new TextEncoder();

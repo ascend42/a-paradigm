@@ -995,6 +995,86 @@ export function dimViewOf(state: DimState): DimView {
   return { v: 1, dim: state.dim, title: state.title, seq: state.seq, nodes, legend };
 }
 
+/* ── auxiliary kinds and the write-grant fold (S1.4; NOT in the client API descriptor) ── */
+
+/**
+ * Two more row kinds of the dimension mod. They are NOT in `DIM_KINDS`, so the fold above ignores them, they are
+ * outside `dimHash`, and they are not an input of the client API descriptor. The names are fixed: they enter
+ * `DIM_KINDS` unchanged at the next `clientApiId` move (Aegis S1.4, F1).
+ *  - `grant`: `{v, dim, hsid, write: boolean}`, whether an attached session's agent may draw.
+ *  - `drawRefused`: a count row for a draw that had refusals; closed enums and counts only.
+ */
+export const DIM_AUX_KINDS = Object.freeze({
+  grant: 'modns.gnomon.dimension.grant',
+  drawRefused: 'modns.gnomon.dimension.draw.refused',
+} as const);
+
+export interface DimGrantPayload {
+  v: 1;
+  dim: string;
+  hsid: string;
+  write: boolean;
+  relayedFor: DimRowRelayedFor;
+}
+/** hsid → write, from HONOURED grant rows only. A session with no entry has its default (`dimGrantDefault`). */
+export type DimGrants = ReadonlyMap<string, boolean>;
+
+export function emptyDimGrants(): DimGrants {
+  return new Map();
+}
+
+/**
+ * Is this a grant row of `dim` that the fold honours? Only a PERSON ON THE GNOMON WINDOW sets a grant (Aegis S1.4
+ * M4): the row's host-written `relayedFor` must fold as the human hand AND carry `surface: 'gui'` and no `agent`
+ * key. A grant row stamped `bridge`, `voice` or `cli`, one that names an agent, one with no principal and one with
+ * no stamp at all change nothing: a tool call that managed to append the kind cannot grant itself the pen.
+ */
+function honouredGrant(row: DimRow, dim: string): { hsid: string; write: boolean } | null {
+  if (!row || row.kind !== DIM_AUX_KINDS.grant) return null;
+  const p = row.payload;
+  if (!isPlainObject(p) || !Number.isSafeInteger(own(p, 'v')) || (own(p, 'v') as number) < 1 || own(p, 'dim') !== dim) return null;
+  const hsid = own(p, 'hsid');
+  const write = own(p, 'write');
+  if (!NON_EMPTY(hsid) || typeof write !== 'boolean') return null;
+  const r = own(p, 'relayedFor');
+  if (!isPlainObject(r) || own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent')) return null;
+  if (byOf(p).cls !== 'human') return null;
+  return { hsid, write };
+}
+
+/**
+ * Fold grant rows of one dimension, in log order; `from` continues an earlier fold. The ONE grant fold: the
+ * dimension mod and the page both call it, so what the page shows is what the mod enforces. Pure and tolerant:
+ * the input map is not changed, rows of any other kind or dimension are skipped, and it never throws. The last
+ * honoured row for an hsid wins.
+ */
+export function foldDimGrants(rows: Iterable<DimRow>, dim: string, from: DimGrants = emptyDimGrants()): DimGrants {
+  const out = new Map(from);
+  for (const row of rows) {
+    try {
+      const g = honouredGrant(row, dim);
+      if (g) out.set(g.hsid, g.write);
+    } catch {
+      // a malformed row grants nothing
+    }
+  }
+  return out;
+}
+
+/** The grant of a session no honoured row names: the first attached session may draw, any later one may not. */
+export function dimGrantDefault(state: DimState, hsid: string): boolean {
+  return state.attached.length > 0 && state.attached[0] === hsid;
+}
+
+/**
+ * The effective write grant: may this session's agent draw in the dimension? Its last honoured grant row, else
+ * the default. A session that is not attached may never draw, whatever a row says.
+ */
+export function dimMayDraw(state: DimState, grants: DimGrants, hsid: string): boolean {
+  if (!NON_EMPTY(hsid) || !state.attached.includes(hsid)) return false;
+  return grants.get(hsid) ?? dimGrantDefault(state, hsid);
+}
+
 /* ── the published hash vector ────────────────────────────────────────────── */
 
 /**
