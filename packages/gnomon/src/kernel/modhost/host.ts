@@ -937,7 +937,7 @@ export class ModHost {
     // S1.3 A4: the args are host-composed for every mod; a joined focus also scopes the rows of this call
     const composed = this.#composeRelayedArgs(r, args, rf, opts.relayedClass ?? null);
     const stamp: CallStamp | null = rf ? { relayedFor: rf, ...(composed.scope ? { scope: composed.scope } : {}) } : null;
-    const out = (await this.#call(name, 'command.run', { commandId, args: composed.args, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
+    const out = (await this.#call(name, 'command.run', { commandId, args: composed.args, ...(rf ? { relayedFor: rf } : {}) }, { kind: 'command', commandId, ...(stamp ? { stamp } : {}) }, opts)) as Record<string, unknown>;
     return out?.result ?? null;
   }
 

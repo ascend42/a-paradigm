@@ -12,7 +12,7 @@ export { RowFold, FOLD_MAX_KEYS, FOLD_DISTINCT_CAP, FOLD_KEY_MAX } from './fold.
 export type { ModHostOptions, ModChildrenPort, KernelCallRequest, ModStartResult, RenderResult, CallOptions } from './host.js';
 export { ModRefusal, isModRefusal, MOD_REFUSAL_CODES } from './refusal.js';
 export type { ModRefusalCode } from './refusal.js';
-export { commandCap, declaredEffects, effectsFor, verbEffect, methodEffect } from './effects.js';
+export { commandCap, commandEffects, declaredEffects, effectsFor, toolEffects, verbEffect, methodEffect } from './effects.js';
 export type { CallContext, CallStamp } from './effects.js';
 export { sanitizeModBlock } from './block.js';
 export { EgressProxy, EGRESS_PORTS, isNonPublicAddress } from './egress-proxy.js';
