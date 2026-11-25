@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { isModId, MOD_INSTALL_LIMITS, parseModId, validateKindPayload } from '@a-company/gnomon-contracts';
 import type { RowVerifier } from '../identity/registry.js';
 import { effectiveInstall, pinDirKey, readGrants } from '../manifest/grants.js';
-import { FIRST_PARTY_PACKAGE_HASHES, stageInstall } from '../manifest/install.js';
+import { isFirstPartyPin, stageInstall } from '../manifest/install.js';
 import { MANIFEST_FILE, readManifest, type ManifestV2, type TrustTier } from '../manifest/manifest.js';
 import { ManifestRefusal, noEvents } from '../manifest/refusal.js';
 import { hashSourceTree, pinnedDir } from '../manifest/snapshot.js';
@@ -246,7 +246,7 @@ export class ModsAdmin {
           packageHash = null;
         }
         const description = typeof raw.description === 'string' ? raw.description.slice(0, MAX_DESCRIPTION) : null;
-        out.push({ name, version: raw.version.slice(0, 64), description, path: dir, packageHash, tier: packageHash && FIRST_PARTY_PACKAGE_HASHES.has(packageHash) ? 'first-party' : 'local' });
+        out.push({ name, version: raw.version.slice(0, 64), description, path: dir, packageHash, tier: packageHash && isFirstPartyPin(packageHash) ? 'first-party' : 'local' });
       } catch {
         continue;
       }

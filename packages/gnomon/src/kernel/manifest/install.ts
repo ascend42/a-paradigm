@@ -61,7 +61,7 @@ import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
-import { appendGrantRow, appendSignedGrantRows, buildGrantRows, rowsOfDecision, type GrantRow, type GrantRowInput, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
+import { appendGrantRow, appendSignedGrantRows, buildGrantRows, rowsOfDecision, type GrantRow, type GrantRowInput, checkAgainstGrants, effectiveInstall, historicalFirstPartyPins, isHistoricalFirstPartyPin, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
 import { COMMAND_UNSAFE, compareVersions, detectWidening, MANIFEST_FILE, readManifest, type ManifestMcpConfig, type ManifestV2, type ReadManifestResult, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, pruneEmptyModDir, refuseSnapshot, removeTree, snapshotFolder, type SnapshotResult, type TreeDiff, type TreeFile } from './snapshot.js';
@@ -89,13 +89,41 @@ const MOD_ABI_ID_BEFORE_S1_2 = 'sha256:7aaf92f46dc35fc35141557c1f89088958f220e6b
  *  - no chains: a prior id maps only to the ABI of SUPERSEDED_PINS_WRITTEN_FOR. When `modAbiId` next moves the
  *    table must be emptied or each entry re-justified (the expiry test fails until then).
  */
-export const SUPERSEDED_FIRST_PARTY_PINS: ReadonlyMap<string, string> = new Map<string, string>([
+const SUPERSEDED_FIRST_PARTY_PINS = new Map<string, string>([
   ['sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', MOD_ABI_ID_BEFORE_S1_2], // workshop 1.1.0
   ['sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', MOD_ABI_ID_BEFORE_S1_2], // ledger 1.1.0
   ['sha256:22bab5bf24abbc01ac5594e6fe4ff72f3b562479677c93b9a483196943bce1cb', MOD_ABI_ID_BEFORE_S1_2], // paradigm-context 1.1.1
 ]);
 /** The current `modAbiId` the table above was written for. A test compares it with MOD_ABI_ID. */
 export const SUPERSEDED_PINS_WRITTEN_FOR = 'sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66';
+
+/**
+ * RETIRED first-party pins: an EXACT package hash of a first-party tree this kernel no longer ships → why it was
+ * retired. A different thing from SUPERSEDED_FIRST_PARTY_PINS, which exists only to let a tree that echoes a PRIOR
+ * `modAbiId` keep starting; a retired tree speaks the current ABI and is retired for what it does.
+ * What a retired hash means, each held by test/retired-pins.test.ts:
+ *  - it is NOT in FIRST_PARTY_PACKAGE_HASHES, so `deriveTier` answers `local` for it and nothing new can earn the
+ *    first-party tier from it;
+ *  - an install that is ALREADY pinned at it is not touched: `loadMod` takes the tier from the root-signed
+ *    `grant.trust` row of that install, never from `deriveTier`, so it keeps loading first-party until the person
+ *    approves the Update card for the shipped tree (the documented refresh path: no kernel-side refresh);
+ *  - it is never staged anew, and a card staged for it by an earlier kernel can only be denied (`stageInstall`,
+ *    `prepareInstall`: TIER, why `retired`);
+ *  - it is never a rollback target (`rollbackMod`: TIER, why `retired`). Without this, an update followed by a
+ *    rollback would re-pin the retired tree and it would load first-party again from its old trust row.
+ * An entry is never removed while a home may still hold a grant row at that hash.
+ */
+const RETIRED_FIRST_PARTY_PINS = new Map<string, string>([
+  // gnomon.dimension 1.0.0 (S1.3 P2). Retired by S1.4 P0: its bundled dim-shape reads a node's strings pair by pair
+  // with no cap, misses a credential cut by combining marks, and shows stored fields in the view unchecked.
+  ['sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9', 'dimension 1.0.0: its write checks were tightened in 1.0.1'],
+]);
+/** The one refusal for a retired pin, wherever it is met. */
+function refuseRetired(name: string, packageHash: string, what: 'stage' | 'decide' | 'rollback', emit: ManifestEventSink): never {
+  emit('manifest.refuse', { name, code: 'TIER', why: 'retired' });
+  const said = what === 'rollback' ? 'the earlier snapshot is a retired first-party build and is not re-pinned by rollback' : 'this is a retired first-party build; install the one shipped with this Gnomon';
+  throw new ManifestRefusal('TIER', `${name}: ${said}`, { name, why: 'retired', ...(what === 'rollback' ? { toPackageHash: packageHash } : {}) });
+}
 
 /**
  * The prior `modAbiId` an installed snapshot may answer `init` with, or null. Every condition must hold: the hash is
@@ -108,7 +136,7 @@ export function compatModAbiId(loaded: { packageHash: string; tier?: string | un
   if ((loaded.manifest.provides?.tools ?? []).length > 0) return null;
   return SUPERSEDED_FIRST_PARTY_PINS.get(loaded.packageHash) ?? null;
 }
-export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
+const FIRST_PARTY_PACKAGE_HASHES = new Set<string>([
   // S1.2: the modAbiId move (relayedFor on tool.call) changes the three trees that echo the id
   'sha256:a5745505b524cf5675cea5d70f0a6219a729ed78e6f6ce6adef071bdc0b1a8b1', // packages/gnomon-mods/workshop 1.1.1 (gnomon.workshop)
   'sha256:504da78f2a97ffb4b51b103025aa2f9629485ff00d089d5448c7fc8df347d217', // packages/gnomon-mods/ledger 1.1.1 (gnomon.ledger)
@@ -116,16 +144,83 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S0b: manifest:2, publisher gnomon (no index.mjs, so no modAbiId echo: unchanged by the S1.2 move)
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
-  // S1.3: the dimension mod (the one writer of dimension rows; echoes the current modAbiId, declares two tools)
-  'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9', // packages/gnomon-mods/dimension 1.0.0 (gnomon.dimension)
+  // S1.3: the dimension mod (the one writer of dimension rows; echoes the current modAbiId, declares two tools).
+  // S1.4 P0 replaces the 1.0.0 pin (sha256:7e79c843…) with 1.0.1: dim-shape.mjs is rebuilt from the tightened
+  // contract. The old hash is in RETIRED_FIRST_PARTY_PINS, not here and not in the superseded table. An install
+  // already pinned at 1.0.0 KEEPS LOADING first-party (its tier is its signed grant.trust row) until the person
+  // approves the Update card; it can no longer be staged, decided or rolled back to.
+  'sha256:95811f3f2b7fbd217c8fb696a1f7007933b17c487218df2f7ffbb7b793a8bade', // packages/gnomon-mods/dimension 1.0.1 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),
   // the format-1 1.0.0 pins of workshop, ledger and paradigm-context (grants.ts; existing installs keep loading)
-  ...HISTORICAL_FIRST_PARTY_PINS,
+  ...historicalFirstPartyPins(),
 ]);
+
+/*
+ * THE PIN TABLES ARE MODULE-PRIVATE (S1.4 P0 review, Aegis F2). FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS
+ * and RETIRED_FIRST_PARTY_PINS decide who is first-party, so no importer may hold the Set or the Maps: a holder
+ * could add a hash. Everything outside this file asks a predicate or takes a frozen copy. Tests that need "the
+ * kernel of another release" get the tables through the internal seam channel only (`withPinTables`, registered
+ * below, read by src/kernel/testing.ts); test/pin-tables.test.ts holds that this module exports no collection.
+ */
+/** Is this package hash first-party by pin: a current, a superseded or a historical one? (A retired one is not.) */
+export function isFirstPartyPin(packageHash: string): boolean {
+  return FIRST_PARTY_PACKAGE_HASHES.has(packageHash);
+}
+/** Is this a superseded format-2 pin (a tree that echoes the one prior `modAbiId` listed for it)? */
+export function isSupersededPin(packageHash: string): boolean {
+  return SUPERSEDED_FIRST_PARTY_PINS.has(packageHash);
+}
+/** Is this a retired first-party pin (never staged, approved or rolled back to)? */
+export function isRetiredPin(packageHash: string): boolean {
+  return RETIRED_FIRST_PARTY_PINS.has(packageHash);
+}
+/** The ONE prior `modAbiId` listed for a superseded pin, or null. */
+export function supersededPriorModAbiId(packageHash: string): string | null {
+  return SUPERSEDED_FIRST_PARTY_PINS.get(packageHash) ?? null;
+}
+/** Why a pin was retired, or null when it is not retired. */
+export function retiredPinReason(packageHash: string): string | null {
+  return RETIRED_FIRST_PARTY_PINS.get(packageHash) ?? null;
+}
+/** Copies for readers and tests: a fresh frozen list on every call, so changing one changes nothing here. */
+export function firstPartyPins(): readonly string[] {
+  return Object.freeze([...FIRST_PARTY_PACKAGE_HASHES]);
+}
+export function supersededPins(): ReadonlyArray<readonly [packageHash: string, priorModAbiId: string]> {
+  return Object.freeze([...SUPERSEDED_FIRST_PARTY_PINS].map((e) => Object.freeze(e)));
+}
+export function retiredPins(): ReadonlyArray<readonly [packageHash: string, why: string]> {
+  return Object.freeze([...RETIRED_FIRST_PARTY_PINS].map((e) => Object.freeze(e)));
+}
+/** What the test seam hands out: the live tables, for the length of one call. */
+export interface PinTables {
+  firstParty: Set<string>;
+  superseded: Map<string, string>;
+  retired: Map<string, string>;
+}
+/**
+ * TEST SEAM (reachable only through src/kernel/testing.ts): run `fn` with the pin tables edited, then put every
+ * table back exactly as it was, whatever `fn` or `edit` did or threw. Synchronous on purpose: the tables are never
+ * left edited across an await.
+ */
+function withPinTables<T>(edit: (tables: PinTables) => void, fn: () => T): T {
+  const saved = { firstParty: [...FIRST_PARTY_PACKAGE_HASHES], superseded: [...SUPERSEDED_FIRST_PARTY_PINS], retired: [...RETIRED_FIRST_PARTY_PINS] };
+  try {
+    edit({ firstParty: FIRST_PARTY_PACKAGE_HASHES, superseded: SUPERSEDED_FIRST_PARTY_PINS, retired: RETIRED_FIRST_PARTY_PINS });
+    return fn();
+  } finally {
+    FIRST_PARTY_PACKAGE_HASHES.clear();
+    for (const h of saved.firstParty) FIRST_PARTY_PACKAGE_HASHES.add(h);
+    SUPERSEDED_FIRST_PARTY_PINS.clear();
+    for (const [h, id] of saved.superseded) SUPERSEDED_FIRST_PARTY_PINS.set(h, id);
+    RETIRED_FIRST_PARTY_PINS.clear();
+    for (const [h, why] of saved.retired) RETIRED_FIRST_PARTY_PINS.set(h, why);
+  }
+}
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
-export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();
+const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>(); // module-private, like the pin tables (no importer may add a key)
 
 /** Derive the trust tier from provenance (never from the caller or the manifest). */
 export function deriveTier(packageHash: string, signature?: { keyId: string; sig: string }): TrustTier {
@@ -688,7 +783,7 @@ export function stageInstall(opts: StageOptions): StageResult {
     } catch {
       h = '';
     }
-    if (HISTORICAL_FIRST_PARTY_PINS.has(h) && opts.via !== 'linked') legacyPublisher = 'gnomon';
+    if (isHistoricalFirstPartyPin(h) && opts.via !== 'linked') legacyPublisher = 'gnomon';
   }
   const name0 = sourceName(opts.source, legacyPublisher);
   // a linked source path reaches the card header: refuse line separators, format and control characters (Aegis round 3)
@@ -721,6 +816,8 @@ export function stageInstall(opts: StageOptions): StageResult {
   let binding: ReturnType<typeof checkPublisherSource> = null;
   let serverName: string | undefined;
   try {
+    // a retired first-party build is never staged anew (RETIRED_FIRST_PARTY_PINS); the catch below drops its snapshot
+    if (RETIRED_FIRST_PARTY_PINS.has(snap.packageHash)) refuseRetired(name0, snap.packageHash, 'stage', emit);
     tier = opts.via === 'linked' && !opts.signature ? 'local' : deriveTier(snap.packageHash, opts.signature);
     const bytes = readManifestBytes(snap.dir, name0, emit);
     try {
@@ -845,7 +942,7 @@ function cardForSnapshot(opts: StageOptions, emit: ManifestEventSink, now: Date,
 function snapshotRead(home: string, name: string, packageHash: string, source: string): { read: ReadManifestResult; tier: TrustTier } {
   const tier: TrustTier = source.startsWith('linked:') ? 'local' : deriveTier(packageHash);
   const bytes = fs.readFileSync(path.join(pinnedDir(home, name, packageHash), MANIFEST_FILE));
-  const legacy = tier === 'first-party' && HISTORICAL_FIRST_PARTY_PINS.has(packageHash) ? { legacyPublisher: 'gnomon' as const } : {};
+  const legacy = tier === 'first-party' && isHistoricalFirstPartyPin(packageHash) ? { legacyPublisher: 'gnomon' as const } : {};
   return { read: readManifest(bytes, { tier, ...legacy }), tier };
 }
 
@@ -890,6 +987,9 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
   if (!isModId(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod id', { name: String(name) });
   const rec = readStaged(home, name, cardId);
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
+  // a card an earlier kernel staged for a build retired since: said plainly, BEFORE the snapshot is re-read (its tier
+  // no longer derives first-party, so the re-read would refuse with a reason that hides the real one)
+  if (RETIRED_FIRST_PARTY_PINS.has(rec.detail.packageHash)) refuseRetired(name, rec.detail.packageHash, 'decide', noEvents);
   const dir = pinnedDir(home, name, rec.detail.packageHash);
   if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
   const { read, tier } = snapshotRead(home, name, rec.detail.packageHash, rec.detail.source);
@@ -961,6 +1061,19 @@ export interface PrepareOptions {
 }
 
 /**
+ * Close a PENDING staged card whose tree is a retired first-party build: the record is rewritten `expired`, with no
+ * decision (nobody decided it), so the pickup never lists it again and no approvable file for a retired build stays
+ * on disk. Returns whether it closed one. Anything else (no record, already decided, not retired) is left alone.
+ */
+export function expireRetiredStaged(home: string, name: string, cardId: string): boolean {
+  if (typeof cardId !== 'string' || !CARD_ID.test(cardId) || !isModId(name)) return false;
+  const rec = readStaged(home, name, cardId);
+  if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name || rec.card.state !== 'pending' || !RETIRED_FIRST_PARTY_PINS.has(rec.detail.packageHash)) return false;
+  writeStaged(home, { ...rec, card: { ...rec.card, state: 'expired' } });
+  return true;
+}
+
+/**
  * Check an install decision and BUILD its grant rows (TD-2026-10-20-514): every check decideInstall makes (cardId,
  * contentHash, the snapshot, the re-derived surface, the publisher binding, the server collision), no presence
  * consumed, nothing signed, nothing written. Every row carries the cardId (Aegis Q1). With expectedRootRows, the rows
@@ -997,6 +1110,8 @@ export function prepareInstall(home: string, name: string, cardId: string, decis
     }
   }
   if (decision === 'install' && !already) {
+    // a card an earlier kernel staged for a build retired since then can only be denied
+    if (RETIRED_FIRST_PARTY_PINS.has(rec.detail.packageHash)) refuseRetired(name, rec.detail.packageHash, 'decide', noEvents);
     const dir = pinnedDir(home, name, rec.detail.packageHash);
     if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
     const { read, tier } = snapshotRead(home, name, rec.detail.packageHash, rec.detail.source);
@@ -1091,7 +1206,7 @@ function pick(d: Surface & { packageHash: string }): Record<string, unknown> {
 /**
  * Human-only rollback: re-pin a previous APPROVED snapshot (an earlier
  * grant.install row for the mod), never an unapproved one; keeps the link.
- * A target in SUPERSEDED_FIRST_PARTY_PINS is refused TIER (rollback protection).
+ * A target in SUPERSEDED_FIRST_PARTY_PINS or RETIRED_FIRST_PARTY_PINS is refused TIER (rollback protection).
  */
 export function rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
   const emit = opts.emit ?? noEvents;
@@ -1109,10 +1224,16 @@ export function rollbackMod(home: string, name: string, toPackageHash: string | 
   if (!target) throw new ManifestRefusal('NOT_INSTALLED', `no previously approved snapshot ${toPackageHash ?? '(previous)'} for ${name}`, { name, toPackageHash });
   // Rollback protection (Aegis S1.2 point 9a, S1.1 carry-over): an earlier approved row at a superseded first-party
   // pin is not a rollback target. Only the tree pinned now may stay at such a hash (the same rule as stageInstall).
-  if (SUPERSEDED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== current.packageHash) {
+  // "Pinned now" is the EFFECTIVE install, which honours grant.uninstall: `current` above is only the last install
+  // row, and after an uninstall nothing is pinned, so no hash is exempt (S1.4 P0 review, Aegis F1).
+  const pinnedNow = effectiveInstall(grants, name)?.packageHash;
+  if (SUPERSEDED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== pinnedNow) {
     emit('manifest.refuse', { name, code: 'TIER', why: 'superseded' });
     throw new ManifestRefusal('TIER', `${name}: the earlier snapshot is a superseded first-party build and is not re-pinned by rollback`, { name, why: 'superseded', toPackageHash: target.packageHash });
   }
+  // The same for a RETIRED first-party build: after its Update was approved, a rollback must not put it back (it
+  // would load first-party again from the trust row of its old install).
+  if (RETIRED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== pinnedNow) refuseRetired(name, target.packageHash, 'rollback', emit);
   const files = hashPinnedTree(pinnedDir(home, pinDirKey(target), target.packageHash));
   if (computePackageHash(files) !== target.packageHash) throw new ManifestRefusal('INTEGRITY', `snapshot ${target.packageHash} of ${name} is damaged`, { name });
   // a rollback to a legacy (format-1) pin keeps it as a v1 row would resolve; S0b rows carry the full id
@@ -1239,6 +1360,6 @@ export function linkedFolders(home: string, trust: RowVerifier): string[] {
 export class ManifestDecisions {
   private constructor() {}
   static {
-    registerSeams('manifest', { decideInstall, rollbackMod });
+    registerSeams('manifest', { decideInstall, rollbackMod, withPinTables });
   }
 }

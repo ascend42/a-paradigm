@@ -33,7 +33,7 @@ import type { AnchorStore } from './log/anchor.js';
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
 import type { WebEndpoint, WebEndpointOptions, WebEndpointSeams } from './web/endpoint.js';
-import type { DecideOptions, StagedRecord } from './manifest/install.js';
+import type { DecideOptions, PinTables, StagedRecord } from './manifest/install.js';
 import type { GrantInstallRow } from './manifest/grants.js';
 import type { ModHost, ModHostOptions, ModHostSeams } from './modhost/host.js';
 import type { DaemonHandle, DaemonOptions, DaemonSeams } from './lifecycle/daemon.js';
@@ -74,6 +74,8 @@ export interface WebSeams {
 export interface ManifestSeams {
   decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord;
   rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow;
+  /** Run `fn` with the first-party pin tables edited (the kernel of another release); the tables are restored after. */
+  withPinTables<T>(edit: (tables: PinTables) => void, fn: () => T): T;
 }
 
 export interface QuarantineSeams {

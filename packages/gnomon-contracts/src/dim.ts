@@ -62,6 +62,24 @@ export const DIM_LIMITS = Object.freeze({
   z: 64,
 });
 
+/**
+ * Bounds on the work of the write validator's secret scan. NOT part of `DIM_LIMITS` and not an input of the client
+ * API descriptor: they bound what one call may cost, they do not change what a valid row may hold.
+ *  - `freeStringsPerNode`: a node with more free strings than this is read as ONE joined text; the ordered-pair
+ *    read is skipped. A valid core node has at most 10 free strings (an arrow: `label`, `rel` and 8 `refs`), so
+ *    only a node with unknown fields or too many refs is over it: an add or update that makes one is refused by
+ *    the field checks, and a stored one (a hostile or later-version row) is read once, not pair by pair.
+ *  - `stringsPerBatch`: the strings one batch may carry, counted from the same roots and to the same depth as the
+ *    scan reads them (an add's `node`, an update's `patch`, else the op itself with its `type` left out). The
+ *    largest valid batch (64 moves of 64 ids each) holds exactly this many; a batch over it is refused whole,
+ *    `field-range` on `ops`, before anything is scanned.
+ * Both bound the NUMBER of strings and of reads. Neither bounds a string's LENGTH: this contract has no byte bound
+ * on an op or a batch (a `text` is refused over DIM_LIMITS.text only after it was scanned, and an unknown field
+ * has no limit at all), so one call still costs time linear in the bytes it is given. The byte bound lives in the
+ * caller: the dimension mod refuses ops over 16 KiB, 4,096 values or depth 32 before it calls the validator.
+ */
+export const DIM_SCAN_LIMITS = Object.freeze({ freeStringsPerNode: 16, stringsPerBatch: 4096 });
+
 interface DimNodeBase {
   /** DIM_NODE_ID_PATTERN */
   id: string;
@@ -615,9 +633,62 @@ export interface DimValidation {
   secret: boolean;
 }
 
-/** NFKC, then every control, format, line-separator and paragraph-separator code point removed. */
+/** What the scan drops before it reads: controls, formats, line and paragraph separators, non-spacing and enclosing marks, and every default-ignorable code point. */
+const SCAN_STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Mn}\p{Me}\p{Default_Ignorable_Code_Point}]/gu;
+/** The S1.2 strip set, kept for the second scan text (`dimTextForScanS12`). */
+const SCAN_STRIP_S12 = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+
+/**
+ * The text the secret scan reads: compatibility-decomposed (NFKD), stripped of `SCAN_STRIP`, then recomposed
+ * (NFC). Without a stripped code point the result is exactly NFKC. Decomposing FIRST matters: a combining mark
+ * that composes with the letter before it (an acute on `k`) would otherwise become one precomposed letter and
+ * survive the strip. So a credential cut by zero-width characters, bidi marks, a soft hyphen, variation
+ * selectors, the combining grapheme joiner, Hangul fillers or any combining accent reads as the credential, and an
+ * accented letter reads as its base letter. Only the scan reads this text; what is stored is what was sent.
+ *
+ * The validator scans THREE texts of every string and reports the union: this one, `dimTextForScanS12` (the
+ * S1.2 form) and the raw string. The S1.2 form is kept because this one can lose a word boundary the rules lean
+ * on: an accented letter directly before a credential becomes a plain letter, and `\b` no longer sits between
+ * them. Nothing the S1.2 scan caught is lost.
+ *
+ * RESIDUALS of the secret check (Aegis S1.2 nit 4, restated after the S1.4 P0 review): what `validateDimOps` does
+ * NOT find. Stated here so no caller takes the check for a guarantee.
+ *  - Visible separators. A credential broken by an ordinary space, by punctuation or by a spacing combining mark
+ *    (`Mc`) is not rejoined. Every non-ASCII space (`Zs`: no-break, en, em, thin, ideographic) is folded to U+0020
+ *    by the normalisation and stays, so it separates like a space. LF, CR and TAB are controls: they ARE stripped,
+ *    so parts on lines of their own inside ONE string are rejoined and found.
+ *  - Blank letters. U+2800 (braille pattern blank) and any other visible-as-nothing code point that is neither
+ *    a mark, a format, a control nor default-ignorable is not stripped.
+ *  - Look-alikes. Only compatibility forms are folded (fullwidth, ligatures, styled letters, accents). A Cyrillic
+ *    or Greek letter standing in for a Latin one is not.
+ *  - Encodings. Base64, hex, URL-encoded, reversed or otherwise transformed secrets, and secrets with no known
+ *    format (a bare password), match no rule.
+ *  - Structural strings. `id`, `kind`, `z`, `parent`, `from`, `to`, `color`, `fill` and `head` are each read alone
+ *    but are never part of a join or a pair, so a credential split between one of them and a free string, or
+ *    between two of them, is missed (each is pattern-checked, which leaves little room).
+ *  - Three or more strings. The free strings of one node are read each by itself, all joined in sorted key
+ *    order, and as ordered pairs. A credential split over three or more strings in an order that is not the join
+ *    order (for example three refs out of order) is missed.
+ *  - A node over `DIM_SCAN_LIMITS.freeStringsPerNode` free strings (never a valid one) is read as the join only,
+ *    so a pair that is not adjacent in the join is missed there. A batch over `stringsPerBatch` is refused unread.
+ *  - A node that already matches. What a touched node matched BEFORE an op, by its join or a pair, is not held
+ *    against the op (an old row never blocks a clean edit). The cost: once a node matches a rule that way, a NEW
+ *    split credential of the SAME rule written onto that node passes. A whole credential in one string is still
+ *    refused, because each string is also read alone.
+ *  - Two nodes. A credential split across nodes, or across dimensions, is never joined.
+ *  - Numbers. `points` and every other integer can carry bytes; no number is read.
+ *  - Field names. Only string VALUES are read, never keys (an unknown key is refused by name, not scanned).
+ *  - The dimension `title` on the session.start row is outside this validator; the dimension mod checks it.
+ *  - Reads. `dimViewOf` does not re-run the scan, and a row written before a rule existed is not re-read: what was
+ *    stored is shown.
+ */
 export function dimTextForScan(s: string): string {
-  return s.normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '');
+  return s.normalize('NFKD').replace(SCAN_STRIP, '').normalize('NFC');
+}
+
+/** The S1.2 scan text: NFKC, then controls, formats and line and paragraph separators removed. Still scanned. Module-private. */
+function dimTextForScanS12(s: string): string {
+  return s.normalize('NFKC').replace(SCAN_STRIP_S12, '');
 }
 
 const fieldName = (k: string): string => (DIM_FIELDS.includes(k) ? k : 'unknown');
@@ -627,7 +698,7 @@ const inRange = (v: unknown, lo: number, hi: number): boolean => Number.isSafeIn
 type Problem = { field: string; code: DimRefusalCode; swatch?: string };
 
 /** Check one node field value against the running state. `self` is the node's own id. */
-function checkField(d: Draft, kind: DimCoreKind, self: string, key: string, v: unknown): Problem[] {
+function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kind: DimCoreKind, self: string, key: string, v: unknown): Problem[] {
   const bad = (code: DimRefusalCode, extra: Partial<Problem> = {}): Problem[] => [{ field: key, code, ...extra }];
   const int = (lo: number, hi: number): Problem[] => (typeof v !== 'number' || !Number.isSafeInteger(v) ? bad('field-type') : inRange(v, lo, hi) ? [] : bad('field-range'));
   const str = (max: number, min = 0): Problem[] => (typeof v !== 'string' ? bad('field-type') : v.length < min || v.length > max ? bad('field-range') : []);
@@ -798,6 +869,30 @@ function stringsOf(v: unknown, field: string, out: Array<{ field: string; text: 
   else if (isPlainObject(v)) for (const k of Object.keys(v)) stringsOf(v[k], depth === 0 ? fieldName(k) : field, out, depth + 1);
 }
 
+/**
+ * How many strings a value holds at any depth, counted only as far as `limit + 1`: the walk stops there, so the
+ * cost of asking is bounded by the limit and not by the caller's input.
+ */
+function countStrings(v: unknown, limit: number, n = 0, depth = 0): number {
+  if (typeof v === 'string') return n + 1;
+  if (depth >= COPY_DEPTH) return n;
+  if (Array.isArray(v)) {
+    for (const x of v) {
+      n = countStrings(x, limit, n, depth + 1);
+      if (n > limit) return n;
+    }
+  } else if (isPlainObject(v)) {
+    for (const k of Object.keys(v)) {
+      n = countStrings(v[k], limit, n, depth + 1);
+      if (n > limit) return n;
+    }
+  }
+  return n;
+}
+
+/** The value whose strings the scan reads for one op: an add's node, an update's patch, else the op itself. */
+const scanRoot = (op: unknown): unknown => (isPlainObject(op) ? (op.type === 'add' ? op.node : op.type === 'update' ? op.patch : op) : op);
+
 /** Node fields whose values are fixed patterns, not free text: left out of the joined scan. */
 const STRUCTURAL_KEYS = new Set(['id', 'kind', 'z', 'parent', 'from', 'to', 'color', 'fill', 'head']);
 
@@ -808,8 +903,10 @@ const STRUCTURAL_KEYS = new Set(['id', 'kind', 'z', 'parent', 'from', 'to', 'col
  *
  * The secret check reads every string at any depth of every op, and for each node an op touches every string of
  * the node as it would stand, their concatenation and each ordered pair of them, so a credential split over two
- * updates or two fields of one node is found. Stated residual: a credential split across two NODES, or broken
- * by ordinary spaces, is not found.
+ * updates or two fields of one node is found. What the check does not find is listed at `dimTextForScan`.
+ *
+ * The work is bounded by `DIM_SCAN_LIMITS`: a batch over `stringsPerBatch` strings is refused whole (`field-range`
+ * on `ops`) before a string is read, and a node over `freeStringsPerNode` free strings is read as its join only.
  */
 export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, opts: { scan?: (text: string) => readonly string[] } = {}): DimValidation {
   const refuse = (index: number, p: Problem, extra: Partial<DimRefusal> = {}): DimRefusal => ({
@@ -822,13 +919,28 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-type' })], secret: false };
   if (ops.length > DIM_LIMITS.opsPerRow) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'too-many-ops' })], secret: false };
+  // the batch cap of the scan, before any string is read. Counted from scanRoot, the root the scan itself walks,
+  // so a string the scan would read at its deepest level is counted; an op's own `type` is not (DIM_SCAN_LIMITS)
+  let strings = 0;
+  for (const op of ops) {
+    const root = scanRoot(op);
+    strings = countStrings(root, DIM_SCAN_LIMITS.stringsPerBatch + 1, strings) - (root === op && isPlainObject(op) && typeof op.type === 'string' ? 1 : 0);
+    if (strings > DIM_SCAN_LIMITS.stringsPerBatch) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-range' })], secret: false };
+  }
   const scan = opts.scan ?? secretKindsIn;
+  /** The rules matched by one text in any of its three forms (see dimTextForScan); equal forms are read once. */
   const hits = (text: string): readonly string[] => {
-    const norm = dimTextForScan(text);
-    const a = scan(norm);
-    return norm === text ? a : [...new Set([...a, ...scan(text)])];
+    const forms = new Set([dimTextForScan(text), dimTextForScanS12(text), text]);
+    if (forms.size === 1) return scan(text);
+    const out = new Set<string>();
+    for (const f of forms) for (const r of scan(f)) out.add(r);
+    return [...out];
   };
-  /** The rules matched by a node's free-text strings read together: all of them joined, and each ordered pair. */
+  /**
+   * The rules matched by a node's free-text strings read together: all of them joined, and each ordered pair.
+   * Over DIM_SCAN_LIMITS.freeStringsPerNode strings only the join is read: the pair read is quadratic, and it runs
+   * on refused ops and on stored nodes too, so it is never given a node no valid write can make.
+   */
   const joined = (node: Record<string, unknown> | undefined): Set<string> => {
     const out = new Set<string>();
     if (!node) return out;
@@ -836,6 +948,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     for (const k of Object.keys(node).sort()) if (!STRUCTURAL_KEYS.has(k)) stringsOf(node[k], fieldName(k), free, 1);
     if (free.length < 2) return out;
     for (const r of hits(free.map((s) => s.text).join(''))) out.add(r);
+    if (free.length > DIM_SCAN_LIMITS.freeStringsPerNode) return out;
     for (const x of free) for (const y of free) if (x !== y) for (const r of hits(x.text + y.text)) out.add(r);
     return out;
   };
@@ -855,7 +968,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
       }
     };
     const own: Array<{ field: string; text: string }> = [];
-    stringsOf(isPlainObject(op) ? (op.type === 'add' ? op.node : op.type === 'update' ? op.patch : op) : op, 'unknown', own);
+    stringsOf(scanRoot(op), 'unknown', own);
     for (const s of own) note(s.field, s.text);
     const { problems, touched } = checkOp(d, op, actor);
     // what each touched node already matches by itself: an old row is never a reason to refuse a clean edit
@@ -896,7 +1009,13 @@ export function dimFallbackLabel(kind: unknown): string {
   return `${DIM_FALLBACK_LEAD} ${dimKindName(kind)}`;
 }
 
+/**
+ * One node of a view. `core: true` does NOT mean the node is whole: a stored field that fails today's write check
+ * is left out, a REQUIRED one included (a core node may come without `x`, `z`, `text`, `points`, `w` or `h`).
+ * A reader must tolerate every field but `id`, `kind`, `core` and `by` being absent.
+ */
 export interface DimViewNode {
+  /** always DIM_NODE_ID_PATTERN: a node stored under any other id is not in the view */
   id: string;
   kind: string;
   /** false: a kind this version does not know; only id, kind, x, y and by are shown */
@@ -906,20 +1025,68 @@ export interface DimViewNode {
 }
 export interface DimView {
   v: 1;
+  /** the stored id when it matches DIM_ID_PATTERN, else null */
   dim: string | null;
+  /** the stored title when a title could be written so today (length, no invisible character), else '' */
   title: string;
   seq: number;
   nodes: DimViewNode[];
   legend: string[];
 }
 
-const viewable = (v: unknown): boolean =>
-  typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v)) || (Array.isArray(v) && v.every((x) => typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x))));
+/** The stored node id, when it is one a write could have minted; else undefined (the field is left out). */
+const viewId = (v: unknown): string | undefined => (typeof v === 'string' && DIM_NODE_ID_PATTERN.test(v) ? v : undefined);
+
+/** Code points no title may hold: the ones a reader cannot see. */
+const VIEW_INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 /**
- * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`. Any other node shows only id, the
- * pattern-checked kind name, x, y and `by`. Carried-through fields are left out entirely, and the legend is
- * built from kind names and `by` classes only.
+ * One stored field of a core node as the view may show it, or undefined to leave it out. The fold carries
+ * anything (a row is permanent, and a hostile or later-version row is still a row), so no stored STRING reaches
+ * the view unchecked: a field value must pass TODAY's write check for its field (Aegis S1.2 nit 5), and the
+ * node id, the dimension id and the title are checked in `dimViewOf`. Two limits on that claim:
+ *  - the view does NOT re-run the secret scan. A text that was stored before a rule existed, or by a row no
+ *    validator read, is shown as stored;
+ *  - `by` is shown as the fold derived it from the host stamp; its strings are the host's, not checked here.
+ * Per field:
+ *  - `refs`: each ref is checked by itself; one that fails `validateDimRef` is left out, a repeat is shown once,
+ *    and at most DIM_LIMITS.refs are shown. A stored empty list is shown as `[]`; a list whose every ref failed
+ *    is left out.
+ *  - `color`, `fill`: the current palette check; a token that fails it is left out (the renderer then draws ink
+ *    or no fill, as `resolveContentColour` does).
+ *  - `text`, `label`, `title`, `rel`, `head`, `z`, every number and `points`: the type, length, range and pattern
+ *    checks of the validator; an over-long string or a value of the wrong type is left out.
+ *  - `parent`, `from`, `to`: the id pattern only. Whether the node they name is still on the board is the
+ *    reader's to resolve against the same view.
+ */
+function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, v: unknown): unknown {
+  if (v === undefined || v === null) return undefined;
+  if (key === 'parent' || key === 'from' || key === 'to') return viewId(v);
+  if (key === 'refs') {
+    if (!Array.isArray(v)) return undefined;
+    const refs: string[] = [];
+    for (const r of v) {
+      if (refs.length >= DIM_LIMITS.refs) break;
+      if (validateDimRef(r) === null && !refs.includes(r as string)) refs.push(r as string);
+    }
+    return refs.length > 0 || v.length === 0 ? refs : undefined;
+  }
+  // checkField reads the state's nodes only for the three link fields answered above
+  if (checkField(state, kind, id, key, v).length > 0) return undefined;
+  return Array.isArray(v) ? [...v] : v;
+}
+
+/**
+ * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`, each field only when its stored
+ * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
+ * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
+ * classes only.
+ *
+ * Three more stored strings are checked here, because the fold accepts any string for each:
+ *  - a node whose id is not DIM_NODE_ID_PATTERN is left out whole, core or not, and is not counted in the legend;
+ *  - `title` is shown only when it is at most DIM_LIMITS.title long and holds no control, format, line-separator
+ *    or paragraph-separator code point, else `''`;
+ *  - `dim` is shown only when it matches DIM_ID_PATTERN, else `null`.
  */
 export function dimViewOf(state: DimState): DimView {
   const entries = [...state.nodes.entries()].sort((a, b) => dimZCompare({ z: a[1].node.z, id: a[0] }, { z: b[1].node.z, id: b[0] }));
@@ -927,14 +1094,15 @@ export function dimViewOf(state: DimState): DimView {
   const hands = new Map<string, number>();
   const nodes: DimViewNode[] = [];
   for (const [id, n] of entries) {
+    if (!DIM_NODE_ID_PATTERN.test(id)) continue;
     const by: DimBy = { cls: n.by.cls, principal: n.by.principal, ...(n.by.agent !== undefined ? { agent: n.by.agent } : {}) };
     const core = isCoreKind(n.node.kind);
     const out: DimViewNode = { id, kind: dimKindName(n.node.kind), core, by };
     const keys = core ? DIM_NODE_KEYS[n.node.kind as DimCoreKind] : ['x', 'y'];
     for (const k of keys) {
       if (k === 'id' || k === 'kind') continue;
-      const v = n.node[k];
-      if (core ? viewable(v) : typeof v === 'number' && Number.isFinite(v)) out[k] = Array.isArray(v) ? [...v] : v;
+      const v = core ? viewField(state, n.node.kind as DimCoreKind, id, k, n.node[k]) : n.node[k];
+      if (core ? v !== undefined : typeof v === 'number' && Number.isFinite(v)) out[k] = v;
     }
     nodes.push(out);
     const label = core ? out.kind : dimFallbackLabel(n.node.kind);
@@ -945,7 +1113,136 @@ export function dimViewOf(state: DimState): DimView {
   const legend: string[] = [];
   if (kinds.size > 0) legend.push(`marks by kind: ${line(kinds)}`);
   if (hands.size > 0) legend.push(`marks by hand: ${line(hands)}`);
-  return { v: 1, dim: state.dim, title: state.title, seq: state.seq, nodes, legend };
+  const dim = typeof state.dim === 'string' && DIM_ID_PATTERN.test(state.dim) ? state.dim : null;
+  const title = typeof state.title === 'string' && state.title.length <= DIM_LIMITS.title && !VIEW_INVISIBLE.test(state.title) ? state.title : '';
+  return { v: 1, dim, title, seq: state.seq, nodes, legend };
+}
+
+/* ── auxiliary kinds and the write-grant fold (S1.4; NOT in the client API descriptor) ── */
+
+/**
+ * Two more row kinds of the dimension mod. They are NOT in `DIM_KINDS`, so the fold above ignores them, they are
+ * outside `dimHash`, and they are not an input of the client API descriptor. The names are fixed: they enter
+ * `DIM_KINDS` unchanged at the next `clientApiId` move (Aegis S1.4, F1).
+ *  - `grant`: `{v, dim, hsid, write: boolean}`, whether an attached session's agent may draw.
+ *  - `drawRefused`: a count row for a draw that had refusals; closed enums and counts only.
+ */
+export const DIM_AUX_KINDS = Object.freeze({
+  grant: 'modns.gnomon.dimension.grant',
+  drawRefused: 'modns.gnomon.dimension.draw.refused',
+} as const);
+
+export interface DimGrantPayload {
+  v: 1;
+  dim: string;
+  hsid: string;
+  write: boolean;
+  relayedFor: DimRowRelayedFor;
+}
+/** The standing of one session: what its newest honoured grant row said, and that row's seq. */
+export interface DimGrant {
+  write: boolean;
+  /** the seq of the row this entry came from: the high-water mark for that hsid */
+  seq: number;
+}
+/**
+ * hsid → its newest HONOURED grant row. A session with no entry has its default (`dimGrantDefault`).
+ *
+ * It is a Map on purpose. NEVER carry it through a plain object keyed by hsid (a keyframe, a state key, a tool
+ * answer, `Object.fromEntries`): an hsid is a stored string, and `__proto__`, `constructor` or `toString` as a key
+ * of a plain object either vanishes or answers with something that is not a grant. Serialise it as a list of
+ * `[hsid, write, seq]` entries and rebuild the Map entry by entry.
+ */
+export type DimGrants = ReadonlyMap<string, DimGrant>;
+
+export function emptyDimGrants(): DimGrants {
+  return new Map();
+}
+
+/**
+ * Is this a grant row of `dim` that the fold honours? Only a PERSON ON THE GNOMON WINDOW sets a grant (Aegis S1.4
+ * M4): the row's host-written `relayedFor` must fold as the human hand AND carry `surface: 'gui'` and no `agent`
+ * key. A grant row stamped `bridge`, `voice` or `cli`, one that names an agent, one with no principal and one with
+ * no stamp at all change nothing: a tool call that managed to append the kind cannot grant itself the pen.
+ *
+ * FAILS CLOSED ON VERSION: an honoured row whose `v` is not the version this file reads (missing, 0, 2, not a
+ * number) folds as `write: false` for its hsid, whatever its `write` says. This is an authorization row, not a
+ * drawing: a reader that does not know what a later version means must not read it as "may draw". (The op fold
+ * is the other way round on purpose: it reads a higher `v` by the v1 rules.)
+ */
+function honouredGrant(row: DimRow, dim: string): { hsid: string; write: boolean; seq: number } | null {
+  if (!row || row.kind !== DIM_AUX_KINDS.grant || !Number.isSafeInteger(row.seq)) return null;
+  const p = row.payload;
+  if (!isPlainObject(p) || own(p, 'dim') !== dim) return null;
+  const hsid = own(p, 'hsid');
+  if (!NON_EMPTY(hsid)) return null;
+  const r = own(p, 'relayedFor');
+  if (!isPlainObject(r) || own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent')) return null;
+  if (byOf(p).cls !== 'human') return null;
+  if (own(p, 'v') !== DIM_ROW_VERSION) return { hsid, write: false, seq: row.seq };
+  const write = own(p, 'write');
+  if (typeof write !== 'boolean') return null;
+  return { hsid, write, seq: row.seq };
+}
+
+/**
+ * Fold grant rows of one dimension; `from` continues an earlier fold. The ONE grant fold: the dimension mod and
+ * the page both call it, so what the page shows is what the mod enforces. Pure and tolerant: the input map is not
+ * changed, rows of any other kind or dimension are skipped, and it never throws: not on a malformed row, not on
+ * rows that cannot be iterated, and not on a `from` that is no Map, which is answered with an empty map.
+ *  - `dim` must match DIM_ID_PATTERN; for any other value nothing is folded and a copy of `from` is returned.
+ *  - The honoured row with the HIGHEST seq wins for an hsid. A row at or below the seq already folded for that
+ *    hsid changes nothing, so a redelivered or re-read older row (a follow that reconnects, a page read twice)
+ *    can never bring back a grant a later row revoked. A row with no integer seq is skipped.
+ */
+export function foldDimGrants(rows: Iterable<DimRow>, dim: string, from: DimGrants = emptyDimGrants()): DimGrants {
+  let out: Map<string, DimGrant>;
+  try {
+    // a `from` that is not a Map of entries (a value rebuilt wrongly from a keyframe, null, a plain object) is
+    // not continued: the fold starts from nothing, and every session is back on its default until rows say more
+    out = from instanceof Map ? new Map(from) : new Map();
+  } catch {
+    out = new Map();
+  }
+  if (typeof dim !== 'string' || !DIM_ID_PATTERN.test(dim)) return out;
+  try {
+    for (const row of rows) {
+      try {
+        const g = honouredGrant(row, dim);
+        if (!g) continue;
+        const cur: unknown = out.get(g.hsid);
+        if (isPlainObject(cur) && Number.isSafeInteger(cur.seq) && g.seq <= (cur.seq as number)) continue;
+        out.set(g.hsid, { write: g.write, seq: g.seq });
+      } catch {
+        // a malformed row grants nothing
+      }
+    }
+  } catch {
+    // `rows` that cannot be iterated fold nothing more
+  }
+  return out;
+}
+
+/** The grant of a session no honoured row names: the first attached session may draw, any later one may not. */
+export function dimGrantDefault(state: DimState, hsid: string): boolean {
+  return state.attached.length > 0 && state.attached[0] === hsid;
+}
+
+/**
+ * The effective write grant: may this session's agent draw in the dimension? Its newest honoured grant row, else
+ * the default. A session that is not attached may never draw, whatever a row says.
+ *
+ * It answers the GRANT only. It does not read `state.ended`: the caller refuses a draw in an ended dimension
+ * itself, before or after asking this (the mod's `dim-ended`), and `grants` must be the fold of the same
+ * dimension as `state`.
+ */
+export function dimMayDraw(state: DimState, grants: DimGrants, hsid: string): boolean {
+  if (!NON_EMPTY(hsid) || !state.attached.includes(hsid)) return false;
+  // a `grants` that is not a Map vouches for nothing, and an entry that is present but malformed (not an object, or
+  // a `write` that is not exactly true) means "may not draw": only a missing entry falls back to the default
+  if (!(grants instanceof Map)) return false;
+  const g: unknown = grants.get(hsid);
+  return g !== undefined ? isPlainObject(g) && g.write === true : dimGrantDefault(state, hsid);
 }
 
 /* ── the published hash vector ────────────────────────────────────────────── */
