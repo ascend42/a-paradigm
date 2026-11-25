@@ -1207,13 +1207,16 @@ export function rollbackMod(home: string, name: string, toPackageHash: string | 
   if (!target) throw new ManifestRefusal('NOT_INSTALLED', `no previously approved snapshot ${toPackageHash ?? '(previous)'} for ${name}`, { name, toPackageHash });
   // Rollback protection (Aegis S1.2 point 9a, S1.1 carry-over): an earlier approved row at a superseded first-party
   // pin is not a rollback target. Only the tree pinned now may stay at such a hash (the same rule as stageInstall).
-  if (SUPERSEDED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== current.packageHash) {
+  // "Pinned now" is the EFFECTIVE install, which honours grant.uninstall: `current` above is only the last install
+  // row, and after an uninstall nothing is pinned, so no hash is exempt (S1.4 P0 review, Aegis F1).
+  const pinnedNow = effectiveInstall(grants, name)?.packageHash;
+  if (SUPERSEDED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== pinnedNow) {
     emit('manifest.refuse', { name, code: 'TIER', why: 'superseded' });
     throw new ManifestRefusal('TIER', `${name}: the earlier snapshot is a superseded first-party build and is not re-pinned by rollback`, { name, why: 'superseded', toPackageHash: target.packageHash });
   }
   // The same for a RETIRED first-party build: after its Update was approved, a rollback must not put it back (it
   // would load first-party again from the trust row of its old install).
-  if (RETIRED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== current.packageHash) refuseRetired(name, target.packageHash, 'rollback', emit);
+  if (RETIRED_FIRST_PARTY_PINS.has(target.packageHash) && target.packageHash !== pinnedNow) refuseRetired(name, target.packageHash, 'rollback', emit);
   const files = hashPinnedTree(pinnedDir(home, pinDirKey(target), target.packageHash));
   if (computePackageHash(files) !== target.packageHash) throw new ManifestRefusal('INTEGRITY', `snapshot ${target.packageHash} of ${name} is damaged`, { name });
   // a rollback to a legacy (format-1) pin keeps it as a v1 row would resolve; S0b rows carry the full id

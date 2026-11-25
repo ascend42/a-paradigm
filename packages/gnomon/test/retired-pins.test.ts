@@ -15,7 +15,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isHistoricalFirstPartyPin } from '../src/kernel/manifest/grants.js';
-import { effectiveInstall, loadMod, readGrants } from '../src/kernel/manifest/index.js';
+import { appendGrantRow, effectiveInstall, loadMod, readGrants } from '../src/kernel/manifest/index.js';
 import { deriveTier, installPresenceBinding, isFirstPartyPin, isRetiredPin, isSupersededPin, readStaged, retiredPins, rollbackPresenceBinding, stageInstall } from '../src/kernel/manifest/install.js';
 import { ManifestRefusal, noEvents } from '../src/kernel/manifest/refusal.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
@@ -156,5 +156,32 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
     const after = loadMod({ home: r.home, name: DIMENSION, trust: r.auth });
     expect(after).toMatchObject({ state: 'ready', packageHash: now, tier: 'first-party' });
     expect(after.state === 'ready' && after.manifest.version).toBe('1.0.1');
+  });
+
+  it('F1: after an uninstall nothing is pinned, so the retired hash is not exempt as "the tree pinned now": rollback to it is refused', () => {
+    const r = newRig();
+    asEarlierKernel(() => installTree(r, oldTree(r), DIMENSION));
+    expect(pinned(r)).toBe(OLD);
+    appendGrantRow(r.home, r.auth, { kind: 'grant.uninstall', name: DIMENSION, packageHash: OLD, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZD' });
+    expect(pinned(r)).toBeUndefined();
+    const rows = readGrants(r.home, r.auth).installs.length;
+    // the explicit hash names the last install row itself; (previous) finds no other row
+    const err = refusal(() => rollbackModSnapshot(r.home, DIMENSION, OLD, { presenceToken: mintTestPresence('mod.rollback', { bind: rollbackPresenceBinding(DIMENSION, OLD) }), authority: r.auth }));
+    expect(err.manifestCode).toBe('TIER');
+    expect(err.detail).toMatchObject({ name: DIMENSION, why: 'retired', toPackageHash: OLD });
+    expect(readGrants(r.home, r.auth).installs).toHaveLength(rows);
+    expect(pinned(r)).toBeUndefined();
+    expect(refusal(() => loadMod({ home: r.home, name: DIMENSION, trust: r.auth })).manifestCode).toBe('NOT_INSTALLED');
+    // while it IS the tree pinned now (no uninstall), the exemption still holds: the refusal is not the retirement
+    const live = newRig();
+    asEarlierKernel(() => installTree(live, oldTree(live), DIMENSION));
+    let why: unknown = 'not refused';
+    try {
+      rollbackModSnapshot(live.home, DIMENSION, OLD, { presenceToken: mintTestPresence('mod.rollback', { bind: rollbackPresenceBinding(DIMENSION, OLD) }), authority: live.auth });
+    } catch (e) {
+      why = (e as ManifestRefusal).detail?.why;
+    }
+    expect(why).not.toBe('retired');
+    expect(pinned(live)).toBe(OLD);
   });
 });

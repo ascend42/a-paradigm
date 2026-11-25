@@ -104,4 +104,31 @@ describe('SUPERSEDED_FIRST_PARTY_PINS', () => {
       expect(effectiveInstall(readGrants(r.home, r.auth), name)!.packageHash).toBe(now);
     }
   });
+
+  it('F1: after an uninstall nothing is pinned, so a superseded hash is not exempt: rollback to it is refused', () => {
+    for (const m of SUPERSEDED_TREES) {
+      const r = rig();
+      cleanups.push(r.cleanup);
+      const name = `gnomon.${m}`;
+      const snap = snapshotFolder(r.home, path.join(SUPERSEDED_DIR, m), name, noEvents);
+      const read = readManifest(fs.readFileSync(path.join(snap.dir, MANIFEST_FILE)), { tier: 'first-party' });
+      const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
+      appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
+      appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
+      appendGrantRow(r.home, r.auth, { kind: 'grant.uninstall', name, packageHash: snap.packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZD' });
+      expect(effectiveInstall(readGrants(r.home, r.auth), name)).toBeUndefined();
+      const rows = readGrants(r.home, r.auth).installs.length;
+      let err: unknown;
+      try {
+        rollbackModSnapshot(r.home, name, snap.packageHash, { presenceToken: mintTestPresence('mod.rollback', { bind: rollbackPresenceBinding(name, snap.packageHash) }), authority: r.auth });
+      } catch (e) {
+        err = e;
+      }
+      expect(err, m).toBeInstanceOf(ManifestRefusal);
+      expect((err as ManifestRefusal).manifestCode).toBe('TIER');
+      expect((err as ManifestRefusal).detail).toMatchObject({ name, why: 'superseded', toPackageHash: snap.packageHash });
+      expect(readGrants(r.home, r.auth).installs).toHaveLength(rows);
+      expect(effectiveInstall(readGrants(r.home, r.auth), name)).toBeUndefined();
+    }
+  });
 });
