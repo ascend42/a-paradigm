@@ -792,7 +792,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (e.key !== 'Escape' && e.key !== 'Tab' && !(e.key === 'Enter' && (e.metaKey || e.ctrlKey))) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    sayHeld(KEEP_COPY.wordsHeld);
+    sayHeld(inertLine ?? KEEP_COPY.wordsHeld);
   };
   // a copy or a cut while held still takes nothing (the register was forgotten with the link): said, never silent
   const heldCopy = (e: Event): void => {

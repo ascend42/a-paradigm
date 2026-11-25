@@ -86,7 +86,7 @@ export interface SlashFlowDeps {
   runAdded: (v: RunView) => void;
   runChanged: (v: RunView) => void;
   /** a Gnomon command: the palette's own run(id, trusted) */
-  command: (id: string, trusted: boolean) => void;
+  command: (id: string, trusted: boolean, event?: Event) => void;
   /** "servers are off": the Tools drawer */
   openTools: (hsid: string, trusted: boolean) => void;
   /** a skill ran as the human's turn: the page posts "you ran skill /x args", stamped with the turn id */
@@ -276,7 +276,7 @@ export class SlashFlow {
   }
 
   /** A row was pressed (a click), or Enter on the active row. */
-  press(key: string | null, trusted: boolean): void {
+  press(key: string | null, trusted: boolean, event?: Event): void {
     const s = this.#s;
     if (!trusted || !s) return; // G-GUI-04
     const it = this.items().find((i) => i.key === (key ?? s.active));
@@ -289,7 +289,7 @@ export class SlashFlow {
     if (it.kind === 'command') {
       this.close();
       this.#d.done();
-      return this.#d.command(it.command!, trusted);
+      return this.#d.command(it.command!, trusted, event); // the press's own event (a board opens on its stamp)
     }
     if (it.kind === 'see-tools') {
       const hsid = s.hsid;
@@ -896,7 +896,7 @@ export function mountSlashMenu(doc: Document, d: SlashMenuDeps): SlashMenu {
   list.addEventListener('mousedown', (e) => e.preventDefault());
   list.addEventListener('click', (e) => {
     const o = (e.target as HTMLElement).closest('[data-slash-key]') as HTMLElement | null;
-    if (o) flow.press(o.dataset.slashKey!, e.isTrusted);
+    if (o) flow.press(o.dataset.slashKey!, e.isTrusted, e);
   });
   panel.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
@@ -969,7 +969,7 @@ export function mountSlashMenu(doc: Document, d: SlashMenuDeps): SlashMenu {
           return false;
         }
         e.preventDefault();
-        flow.press(null, e.isTrusted);
+        flow.press(null, e.isTrusted, e);
         return true;
       }
       return false;

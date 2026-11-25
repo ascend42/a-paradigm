@@ -94,7 +94,7 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'busy') return 'Too many changes are waiting · try again in a moment';
   if (n.code === 'not-sent' || n.code === 'gesture-refused') return 'That change wasn’t sent · do it again';
   // (a command that left and was never answered may have been written: the line does not say it was not)
-  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes may not have been saved · look first` : 'That change may not have been saved · look before redoing';
+  if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes may not be saved · fold and reopen to check` : 'That change may not be saved · fold and reopen to check';
   return n.lost > 1 ? `${n.lost} changes weren’t kept · the board is as it was` : 'That change wasn’t kept · the board is as it was';
 }
 
@@ -124,20 +124,32 @@ export const KEEP_COPY = {
   notSavedDown: 'Not saved · reconnecting',
   dropped: 'Part of this board could not be held · marks are missing',
   partial: 'Earlier marks are not shown · this is part of the board',
-  wordsHeld: 'Reconnecting · your words are held, not saved',
-  wordsWait: 'Reconnected · press T and click: your words come back',
+  wordsHeld: 'Not connected · your words are kept on this page only',
+  wordsHeldBack: 'Reconnecting · your words are kept on this page only',
+  notConnected: 'Not connected',
+  notSavedOff: 'Not saved · not connected',
+  // (kept up for as long as the words are held; Mika's wording cut to fit the leaf at a 1024 window)
+  wordsWait: 'Your words are waiting · T, then click, gets them back',
   wordsBack: 'Your words are back · click away to save them',
   wordsGone: 'The words you were typing were not saved',
   reconnected: 'Reconnected',
   copyDown: 'Nothing was copied · copy it again once reconnected',
   foldedDown: 'Folded while reconnecting · unsaved changes were dropped',
   reopens: 'That dimension had ended · opening it starts it again',
-  noSession: 'Open a session first · a board belongs to one',
+  noSession: 'Open a session first',
+  wordsAndChangesGone: (n: number): string => `Your typed words and ${n === 1 ? 'one change' : `${n} changes`} were not saved`,
+  changesGone: (n: number): string => (n === 1 ? 'One change on the board was not saved' : `${n} changes on the board were not saved`),
+  cardWaits: 'A card needs you · finish the text on the board first',
   noBoard: 'This session has no board yet',
 } as const;
 /** The held-still line while the link is down: `Reconnecting` alone unless something of the person's is not saved. */
-export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pending: number }): string {
-  return s.pending > 0 || s.keep === 'not-saved' ? KEEP_COPY.notSavedDown : INERT_COPY['link-down'];
+export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pending: number }, o: { unsaved?: number; words?: boolean; coming?: boolean } = {}): string {
+  // `coming`: the page is reconnecting by itself (a restart it is waiting for). Otherwise nothing is: the kernel
+  // stopped or the session ended, and the line must not promise what the Reconnect dialog does not.
+  const coming = o.coming !== false;
+  if (o.words) return coming ? KEEP_COPY.wordsHeldBack : KEEP_COPY.wordsHeld;
+  if (s.pending > 0 || s.keep === 'not-saved' || (o.unsaved ?? 0) > 0) return coming ? KEEP_COPY.notSavedDown : KEEP_COPY.notSavedOff;
+  return coming ? INERT_COPY['link-down'] : KEEP_COPY.notConnected;
 }
 /**
  * The check display (Aegis, final): what the fold was compared with, in plain words. Never a bare "verified": the
@@ -153,11 +165,11 @@ export const KEEP_SLOW_MS = 600;
 
 export type OpenedHow = 'command' | 'menu' | 'offer';
 /** '<how>' of the keep line: '/board', 'the ⋯ menu', '<agent>’s offer'. */
-export const openedFrom = (how: OpenedHow, agent?: string): string => (how === 'command' ? '/board' : how === 'menu' ? 'the ⋯ menu' : `${agent ?? 'an agent'}’s offer`);
+export const openedFrom = (how: OpenedHow, agent?: string): string => (how === 'command' ? 'from /board' : how === 'menu' ? 'here' : `from ${agent ?? 'an agent'}’s offer`);
 
 /** The keep line's parts, in order; the leaf joins them with ' · ' and puts the project swatch before the project. */
 export function keepParts(k: { project: string; session: string; more?: number; how: OpenedHow; agent?: string; time: string }): { project: string; session: string; opened: string; time: string } {
-  return { project: k.project, session: `${k.session}${k.more ? ` +${k.more}` : ''}`, opened: `opened from ${openedFrom(k.how, k.agent)}`, time: k.time };
+  return { project: k.project, session: `${k.session}${k.more ? ` +${k.more}` : ''}`, opened: `opened ${openedFrom(k.how, k.agent)}`, time: k.time };
 }
 
 /** Why the board did not open, in plain words. No code and no engine text: those go to the raw view. */

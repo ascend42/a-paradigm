@@ -511,6 +511,15 @@ export class DimSession {
     return this.#lost;
   }
 
+  /**
+   * How many of the person's ops are NOT saved now: what is pending, plus what fell while the link was down (a
+   * mark in flight at link loss is no longer pending once it has rolled back, and is still lost). After the session
+   * is destroyed, `lost`.
+   */
+  get unsaved(): number {
+    return this.#dead ? this.#lost : this.#live.pendingOps() + this.#downLost;
+  }
+
   /** Where this session's board was looking when the session went (null: it had no board). */
   get lastView(): Pick<BoardView, 'scrollX' | 'scrollY' | 'zoom'> | null {
     return this.#lastView;

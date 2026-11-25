@@ -143,6 +143,18 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     expect(callers).toContain(APP);
   });
 
+  it('no module-level "current event" exists: a board command is handed the event of its own press (Aegis M1, review of PR #119)', () => {
+    for (const f of ['ui/app.ts', 'ui/board-dock.ts', 'ui/slash-menu.ts', 'core/board-open.ts']) {
+      const src = readFileSync(path.join(SRC, ...f.split('/')), 'utf8');
+      // no top-level variable holds an Event, and the deprecated ambient event is never read
+      expect(src.match(/^(let|var|const) \w+: (Event|KeyboardEvent|MouseEvent|PointerEvent)\b[^\n]*$/gm), f).toBeNull();
+      expect(src, f).not.toMatch(/\bpressEvent\b|\bwindow\.event\b|\bglobalThis\.event\b/);
+    }
+    const app = readFileSync(path.join(SRC, 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/function run\(id: string, trusted: boolean, event\?: Event\): void \{/);
+    expect(app).toContain("if (trusted && event?.isTrusted) boardDock.command('', event);");
+  });
+
   it("'mod.command' is named only by the one sender and the preview's fake kernel", () => {
     const users = walk(SRC).filter((f) => /['"`]mod\.command['"`]/.test(readFileSync(f, 'utf8'))).map(rel);
     expect(users.sort()).toEqual(['core/mod-command.ts', 'preview/fake-kernel.ts']);

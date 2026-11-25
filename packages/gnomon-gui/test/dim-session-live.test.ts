@@ -171,7 +171,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(a.errors).toEqual([]);
     expect(f('slow')).toMatchObject({ keep: 'saving', pending: 1, nodes: f('start').nodes + 1, line: 'Saving…', notices: [] });
     expect(f('two')).toMatchObject({ keep: 'saving', pending: 2, nodes: f('start').nodes + 2, line: 'Saving…' });
-    expect(f('gone')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['edit:timeout'], line: '2 changes may not have been saved · look first' });
+    expect(f('gone')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes, marks: f('start').marks, rows: f('start').rows, notices: ['edit:timeout'], line: '2 changes may not be saved · fold and reopen to check' });
   }, 120_000);
 
   it('C2: a paste with the keyboard in the composer or on a card reaches no board listener; any control of the chrome keeps its own paste (N2); select() skips a fallback stub', async () => {

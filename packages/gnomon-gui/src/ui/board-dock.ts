@@ -41,6 +41,12 @@ export interface BoardDockDeps {
   principal: () => string | null;
   /** a line away from the leaf (the app's toast) */
   say: (text: string, kind: 'info' | 'warn' | 'fail') => void;
+  /**
+   * True while the page is reconnecting by itself (a restart it waits for); false when nothing is coming (the kernel
+   * stopped, the session ended: the Reconnect dialog is up). The held-still line says which, so the leaf never
+   * promises a reconnect the dialog does not.
+   */
+  reconnecting?: () => boolean;
   /** where focus goes when the leaf folds and what opened it is gone (the composer) */
   fallbackFocus: () => HTMLElement | null;
   now?: () => number;
@@ -92,6 +98,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   let held: { dim: string; principal: string; words: string } | null = null;
   /** dimensions this page asked to open that were still opening when the link went: the list shows them */
   const opening = new Map<string, { title: string; titleFrom: 'session' | 'user' | null }>();
+  /** dimensions the person folded on this page: reopening one is their own fold undone, and needs no line */
+  const foldedHere = new Set<string>();
   const asked = new Map<string, { title: string; titleFrom: 'session' | 'user' | null; how: BoardOpenedHow }>();
 
   // the leaf covers the chat header and the chat, and stops above the pinned cards and the composer
@@ -133,10 +141,20 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   }
 
   function paint(session: DimSession, leaf: BoardLeaf, s: DimSessionStatus): void {
+    const words = !!held && held.dim === session.dim;
     leaf.setTitle(s.title);
-    leaf.setKeep(keepStateLine(s));
+    // words that are waiting are said for AS LONG AS they are held (a six-second line was gone before it was read)
+    leaf.setKeep(words && s.link === 'up' ? KEEP_COPY.wordsWait : keepStateLine(s));
     leaf.setCheck(checkLine(s));
-    if (s.link === 'down') leaf.setInertLine(held && held.dim === session.dim ? KEEP_COPY.wordsHeld : linkDownLine(s));
+    leaf.el.dataset.words = words ? 'held' : '';
+    if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
+  }
+  /** Held words are dropped: the person is told, once, wherever it happens (never a silent loss). */
+  function dropWords(say = true): boolean {
+    if (!held) return false;
+    held = null;
+    if (say) d.say(KEEP_COPY.wordsGone, 'warn');
+    return true;
   }
 
   /** One notice of the session, said once, in the leaf's words. */
@@ -148,13 +166,14 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       held = words && principal ? { dim: session.dim, principal, words } : null;
       return paint(session, leaf, session.status());
     }
-    if (n.code === 'hash-mismatch') held = null;
+    if (n.code === 'hash-mismatch') dropWords();
     const mine = held && held.dim === session.dim;
-    if (n.about === 'link' && n.code === 'reconnected') return leaf.say(mine ? KEEP_COPY.wordsWait : noticeLine(n));
+    // words are waiting: the keep line says so for as long as they are (paint); never "everything here is saved"
+    if (n.about === 'link' && n.code === 'reconnected' && mine) return paint(session, leaf, session.status());
     if (n.about === 'link' && n.code === 'not-saved' && mine) {
-      // two things to say and one line: the count goes to the toast, the leaf says how the words come back
+      // two things to say and one line: the count goes to the toast, the keep line says how the words come back
       d.say(noticeLine(n), 'warn');
-      return leaf.say(KEEP_COPY.wordsWait);
+      return paint(session, leaf, session.status());
     }
     leaf.say(noticeLine(n));
   }
@@ -202,6 +221,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
           if (!held || !s || held.dim !== session.dim || held.principal !== d.principal() || s.link !== 'up' || s.readOnly) return;
           if (!leaf.putTyped(held.words)) return;
           held = null;
+          paint(session, leaf, s);
           leaf.say(KEEP_COPY.wordsBack);
         });
       }),
@@ -236,15 +256,24 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   async function fold(cause: Event): Promise<void> {
     const c = cur;
     if (!c) return;
+    // a fold is the person's own press or key, held still or not (Aegis L2)
+    if (cause.isTrusted !== true) return;
     const s = c.session.status();
     if (s.link === 'down' || !d.sessions.linked) {
-      // nothing can be sent: the leaf folds here and the dimension stays open in the log
-      const pending = c.session.pendingOps();
-      c.session.destroy('fold');
-      if (pending > 0 || held) d.say(KEEP_COPY.foldedDown, 'warn');
+      // nothing can be sent: the leaf folds here and the dimension stays open in the log. What goes with it is READ
+      // FIRST (the destroy clears it) and said: the words being typed, and every change that was not saved (a mark
+      // in flight when the link went is no longer pending, and is still lost).
+      const words = !!held && held.dim === c.session.dim;
+      const unsaved = c.session.unsaved;
       held = null;
+      foldedHere.add(c.session.dim);
+      c.session.destroy('fold');
+      if (words && unsaved > 0) d.say(KEEP_COPY.wordsAndChangesGone(unsaved), 'warn');
+      else if (words) d.say(KEEP_COPY.wordsGone, 'warn');
+      else if (unsaved > 0) d.say(KEEP_COPY.changesGone(unsaved), 'warn');
       return;
     }
+    foldedHere.add(c.session.dim);
     const closed = await c.session.fold(cause);
     // out of date and the close did not go: the person was told to fold, so the leaf folds anyway
     if (!closed && c.session.alive && c.session.status().readOnly) c.session.destroy('fold');
@@ -256,12 +285,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       const how = was?.how ?? asked.get(e.session.dim)?.how ?? 'menu';
       if (was) drop();
       // held words survive only for the same dimension and the same principal
-      if (held && (held.dim !== e.session.dim || held.principal !== d.principal())) held = null;
+      if (held && (held.dim !== e.session.dim || held.principal !== d.principal())) dropWords();
       if (e.session.hsid === d.focused()) mount(e.session, { title: e.session.status().title, how });
       return;
     }
     if (e.type !== 'destroyed') return;
-    if (e.why !== 'link' && held && held.dim === e.session.dim) held = null;
+    if (e.why !== 'link' && held && held.dim === e.session.dim) dropWords();
     if (e.why === 'link' && !e.session.openedOk) {
       // still opening when the link went: it is not resumed, though its open may have landed. The list shows it.
       const a = asked.get(e.session.dim);
@@ -299,7 +328,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     opener = active instanceof HTMLElement && active !== document.body ? active : null;
     const session = d.sessions.open({ dim: plan.dim, hsid, opened: how, ...(fresh ? { title: fresh.title, titleFrom: fresh.titleFrom } : {}) }, event);
     mount(session, { title: plan.title, how });
-    if (plan.type === 'open' && plan.reopens) cur?.leaf.say(KEEP_COPY.reopens);
+    if (plan.type === 'open' && plan.reopens && !foldedHere.has(plan.dim)) cur?.leaf.say(KEEP_COPY.reopens);
   }
 
   tab.addEventListener('click', (e) => carry(planBoardKey(ask()), e));
@@ -332,6 +361,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     escape(event) {
       if (!cur || cur.leaf.el.contains(document.activeElement)) return false;
+      // Esc from OUTSIDE the leaf never folds a board held still that is holding words or has unsaved changes: a
+      // press on the Reconnect scrim takes focus out of the field, and the next Esc must not throw the words away
+      const s = cur.session.status();
+      if ((s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0)) return false;
       void fold(event);
       return true;
     },
@@ -342,7 +375,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
         cur = null;
         for (const f of c.off.splice(0)) f();
         host.hidden = true;
-        held = null;
+        dropWords();
         void c.session.leave().then((lost) => {
           if (lost > 0) d.say(lost > 1 ? `${lost} changes on the board weren’t saved` : 'One change on the board wasn’t saved', 'warn');
           paintTab();

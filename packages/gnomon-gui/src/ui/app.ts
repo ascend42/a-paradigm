@@ -107,6 +107,8 @@ const store = new GuiStore();
  */
 const dimSessions = new DimSessions({ store: new DimStore() });
 let boardRepaint: () => void = () => undefined;
+/** true while the page waits for a restart to reconnect by itself; false when the Reconnect dialog is the only way back */
+let linkComing = false;
 const logStore = followBoth(store, {
   apply: (rows) => {
     dimSessions.apply(rows);
@@ -114,17 +116,6 @@ const logStore = followBoth(store, {
   },
   reset: () => dimSessions.reset(),
 });
-/**
- * The trusted key or click being handled NOW (cleared when its task ends): a board opens only on its own event,
- * which is the one handed to `sessions.open` for the gesture stamp. Commands reach `run(id, trusted)` from the
- * palette, the "/" menu and the Gnomon menu without their event; this is that event, never an older one.
- */
-let pressEvent: Event | null = null;
-for (const type of ['keydown', 'click'] as const)
-  document.addEventListener(type, (e) => {
-    pressEvent = e;
-    setTimeout(() => void (pressEvent === e && (pressEvent = null)), 0);
-  }, true);
 let client: GnomonClient | null = null;
 let session: Session | null = null;
 let verifyKey: string | null = null;
@@ -1704,7 +1695,7 @@ slashMenu = mountSlashMenu(document, {
     for (const it of items) if (it.runKey === v.key) remountItem(it.key);
     paintTranscript();
   },
-  command: (id, trusted) => run(id, trusted),
+  command: (id, trusted, event) => run(id, trusted, event),
   openTools: (hsid, trusted) => void toolsDrawer?.open(hsid, 'tools', trusted, $('composer-text')),
   skillRan: (hsid, name, args, turn) => {
     // a skill run posts as the human's turn: "you ran skill /name args", stamped with its turn id (pairs with turn.sent)
@@ -1932,6 +1923,7 @@ const boardDock = mountBoardDock({
   },
   principal: () => session?.principal ?? null,
   say: (text, kind) => notice(text, kind, { source: 'board' }),
+  reconnecting: () => linkComing,
   fallbackFocus: () => $('composer-text'),
 });
 boardRepaint = () => boardDock.repaint();
@@ -2070,9 +2062,13 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     } else if (p.end) void followLog(c, logStore).catch(() => undefined);
   });
   c.onClose(() => {
+    // Aegis M2: only the LIVE socket's close ends the link. After `gui.reconnect` made a second socket live, the
+    // first one closing must not null the client or hold the board still on a link that is up.
+    if (client !== c) return;
     client = null;
     session = null;
     stopStatusPolls();
+    linkComing = restarting(sessionStorage); // the board's held-still line says "Reconnecting" only when the page is
     dimSessions.linkDown(); // #gui-dim-session: an open board is held still; nothing is queued
     boardDock.repaint();
     paintCapture(voiceStatusOf(status), false);
@@ -3918,7 +3914,7 @@ function paintPalette(): void {
   palItems.forEach((c, i) => l.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}${c.verb && !c.available ? ' unavailable' : ''}`, role: 'option', 'data-id': c.id }, h(doc, 'span', { class: 'pal-title' }, c.title), h(doc, 'kbd', { class: 'pal-kbd' }, c.keys ?? c.why ?? c.id)) as unknown as Node));
 }
 /** Run a command; `trusted` is the gesture's browser trust flag (Event.isTrusted; Aegis L2/L3): a request-making command needs it. */
-function run(id: string, trusted: boolean): void {
+function run(id: string, trusted: boolean, event?: Event): void {
   // focus goes back to the opener first, so a sheet the command opens records that (not the hidden palette field) as its own opener
   closePalette();
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
@@ -3939,8 +3935,9 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
   else if (id === 'board.open') {
-    // #gui-board-dock: on the press that ran the command (its key or click), which mints the gesture stamp
-    if (trusted && pressEvent?.isTrusted) boardDock.command('', pressEvent);
+    // #gui-board-dock: on the press that ran the command (its key or click), handed in by the caller: it mints the
+    // gesture stamp. A caller with no event of its own (the settings sheet, a block button) opens nothing.
+    if (trusted && event?.isTrusted) boardDock.command('', event);
   } else if (id === 'dimensions.list') openDimensions();
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
   else if (id === 'menu.gnomon') openAppMenu('first');
@@ -4135,7 +4132,7 @@ function wire(): void {
   };
   wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
   // #gui-host-hints: Copy (the shown command to the clipboard) and open (a Gnomon screen), trusted presses only
-  wireHostSlips($('viewport'), { copy: onHostCopy, open: (id, e) => run(id, e.isTrusted) });
+  wireHostSlips($('viewport'), { copy: onHostCopy, open: (id, e) => run(id, e.isTrusted, e) });
   $('viewport').addEventListener('click', (e) => {
     const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
     if (c) return onChoice(e, c);
@@ -4205,11 +4202,11 @@ function wire(): void {
       return paintAppMenu();
     }
     if (id.startsWith('theme.') || id.startsWith('layout.') || id.startsWith('pane.') || id.startsWith('workshop.')) {
-      run(id, e.isTrusted); // presentation only: the menu stays open on its choice (applyLook / applyLayout repaint it)
+      run(id, e.isTrusted, e); // presentation only: the menu stays open on its choice (applyLook / applyLayout repaint it)
       return paintAppMenu();
     }
     closeAppMenu(true); // a sheet returns focus to the wordmark when it closes
-    run(id, e.isTrusted);
+    run(id, e.isTrusted, e);
   });
   document.addEventListener('click', (e) => {
     if (!$('wordmark-menu').hidden && !(e.target as HTMLElement).closest('.wm-wrap')) closeAppMenu();
@@ -4480,7 +4477,7 @@ function wire(): void {
       if (!row) return;
       closePalette();
       return boardDock.choose(row.dim, e);
-    } else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted);
+    } else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted, e);
     else if (e.key === 'Escape') {
       if (dict.grace) return; // "Sending… Esc keeps it" wins: the document handler keeps the draft, the palette stays
       e.stopPropagation(); // the document handler would close it a second time
@@ -4498,7 +4495,7 @@ function wire(): void {
       return boardDock.choose(dim, e);
     }
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
-    if (r) run(r.dataset.id!, e.isTrusted);
+    if (r) run(r.dataset.id!, e.isTrusted, e);
   });
   $('palette').addEventListener('click', (e) => {
     if (e.target === $('palette')) closePalette(); // a press on the scrim closes it

@@ -136,7 +136,8 @@ describe('V3: the status poll cadence and its lifecycle', () => {
   });
   it('Aegis L2: the polls stop on disconnect (refreshStatus with no client stops them; onClose stops them)', () => {
     expect(APP).toMatch(/async function refreshStatus\(\): Promise<void> \{[\s\S]{0,200}if \(!client\) return stopStatusPolls\(\);/);
-    expect(APP).toMatch(/c\.onClose\(\(\) => \{\s*client = null;\s*session = null;\s*stopStatusPolls\(\);/);
+    // (Aegis M2, review of PR #119: only the LIVE socket's close ends the link; a replaced socket closing later is ignored)
+    expect(APP).toMatch(/c\.onClose\(\(\) => \{\s*(\/\/[^\n]*\n\s*)*if \(client !== c\) return;\s*client = null;\s*session = null;\s*stopStatusPolls\(\);/);
     const stop = APP.slice(APP.indexOf('function stopStatusPolls('), APP.indexOf('function stopStatusPolls(') + 600);
     for (const t of ['clearInterval(speakPoll)', 'clearInterval(clientPoll)', 'clearInterval(enrolPoll)', 'clearTimeout(captureFlash)']) expect(stop).toContain(t);
   });

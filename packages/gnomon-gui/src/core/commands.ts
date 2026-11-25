@@ -116,16 +116,36 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
  * (changes a run mode, P8-D87) and every `voice.*` (opens or closes the mic, V2d) are excluded, so a block can never make a
  * press look like a kernel or presence action.
  */
-export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
-  // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
-  // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer); nor mods.*
-  // #gui-session-rename: nor session.rename (it opens an edit that writes request.session.rename on blur)
-  // #gui-wordmark-menu: nor menu.* (the Gnomon menu holds Settings… and the pane toggles)
-  // #gui-loops: nor loops.* (loops.pause-all is the kill switch; a block must never press it)
-  // #gui-local-model: nor local.* (it opens the root-card form of Settings)
-  // #gui-capability-browser: nor tools.* (the drawer holds Pin, Restart server and Delete memory)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.') && !id.startsWith('loops.') && !id.startsWith('local.') && !id.startsWith('tools.')),
-);
+export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set([
+  // AN ALLOWLIST (Aegis H1, review of PR #119): it was a denylist over GUI_COMMANDS, so every new command was
+  // block-safe until someone remembered to exclude it, and `board.open` shipped that way (a mod- or agent-rendered
+  // button could open a board over the chat on the person's click). A new command is NOT block-safe until it is
+  // written here, and test/gui.test.ts fails until every GUI_COMMANDS id has an explicit decision.
+  // Never here: diag.send, gui.reconnect, session.rename, mode.*, voice.*, pane.*, workshop.*, settings.*, mods.*,
+  // menu.*, loops.*, local.*, tools.* (each for the reason recorded at its command), and board.* / dimensions.*
+  // (a block must not open a board or the Dimensions list: opening sends a stamped dim.open and covers the chat).
+  'palette.open',
+  'session.new',
+  'composer.focus',
+  'rules.open',
+  'mcp.open',
+  'slash.open',
+  'view.kernel-feed',
+  'theme.day',
+  'theme.night',
+  'theme.auto',
+  'motion.reduce',
+  'motion.system',
+  'layout.desk',
+  'layout.focus',
+  'layout.decide',
+  'stack.scope.toggle',
+]);
+/**
+ * The explicit decision for every command a block may NOT name. With BLOCK_SAFE_COMMANDS it must cover every
+ * GUI_COMMANDS id (a prefix ending in `.` covers a family): a command with no decision fails the test.
+ */
+export const BLOCK_UNSAFE_COMMANDS: readonly string[] = Object.freeze(['diag.send', 'gui.reconnect', 'session.rename', 'mode.', 'voice.', 'pane.', 'workshop.', 'settings.', 'mods.', 'menu.', 'loops.', 'local.', 'tools.', 'board.', 'dimensions.']);
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';
 export const PANES: readonly Pane[] = Object.freeze(['sessions', 'transcript', 'stack', 'workshop'] as const);

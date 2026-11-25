@@ -1393,6 +1393,9 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .bd-host[hidden] { display: none; }
 .bd-tab-on .feed > .toast-anchor { right: 48px; }
 .bd-open .feed > .toast-anchor { top: 48px; }
+/* The Reconnect dialog yields to an open board (Mika, review of PR #119): it sat at 14vh, over the text a person
+   was typing when the link went. While a board is open its sheet sits at the foot of the window, clear of the leaf. */
+body:has(.transcript.bd-open) #reconnect { align-items: flex-end; padding-top: 0; padding-bottom: 24px; }
 .loops-word .lw-narrow { display: none; }
 @media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
 @media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }

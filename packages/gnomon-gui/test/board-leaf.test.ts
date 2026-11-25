@@ -46,7 +46,7 @@ describe('#gui-board copy (the design\'s words)', () => {
     expect(LEAF_COPY.unknownHand).toBe('unknown hand');
   });
   it('the keep line names how the board was opened', () => {
-    expect([openedFrom('command'), openedFrom('menu'), openedFrom('offer', 'Arky')]).toEqual(['/board', 'the ⋯ menu', 'Arky’s offer']);
+    expect([openedFrom('command'), openedFrom('menu'), openedFrom('offer', 'Arky')]).toEqual(['from /board', 'here', 'from Arky’s offer']);
     expect(keepParts({ project: 'a-paradigm', session: 'fix-auth', more: 2, how: 'offer', agent: 'Arky', time: '14:02' })).toEqual({ project: 'a-paradigm', session: 'fix-auth +2', opened: 'opened from Arky’s offer', time: '14:02' });
   });
   it('a failed board says why in plain words, never the engine\'s text or a code', () => {
@@ -139,7 +139,7 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 65 })).toBe('Nothing was deleted · a delete takes 64 marks at most');
     // Aegis N1: 50 shapes with 20 tied arrows is under the limit the line used to state: no number is said
     expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 50 })).toBe('Nothing was deleted · select fewer marks and try again');
-    expect(noticeLine({ about: 'edit', code: 'timeout', why: 'no-ack', lost: 1 })).toBe('That change may not have been saved · look before redoing');
+    expect(noticeLine({ about: 'edit', code: 'timeout', why: 'no-ack', lost: 1 })).toBe('That change may not be saved · fold and reopen to check');
     const { KEEP_COPY, checkLine, linkDownLine } = await import('../src/core/board-leaf.js');
     // "Reconnecting" alone when nothing is pending; "Not saved" only when something is
     expect([linkDownLine({ keep: 'saved', pending: 0 }), linkDownLine({ keep: 'saving', pending: 2 }), linkDownLine({ keep: 'not-saved', pending: 0 })]).toEqual(['Reconnecting', 'Not saved · reconnecting', 'Not saved · reconnecting']);
@@ -147,8 +147,10 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     expect([checkLine({ verified: null, checkedSeq: null, seq: 9 }), checkLine({ verified: true, checkedSeq: 4, seq: 9 }), checkLine({ verified: true, checkedSeq: 9, seq: 9 })]).toEqual(['Not checked yet', 'Checked up to change 4 of 9', 'Checked up to change 9']);
     expect(checkLine({ verified: false, checkedSeq: 4, seq: 9 })).toMatch(/^Did not match at change 4/);
     for (const s of [checkLine({ verified: true, checkedSeq: 9, seq: 9 }), checkLine({ verified: null, checkedSeq: null, seq: 1 })]) expect(s).not.toMatch(/verified/i);
-    notices.push(...Object.values(KEEP_COPY));
-    expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Reconnecting', '2 changes may not have been saved · look first']);
+    notices.push(...Object.values(KEEP_COPY).map((v) => (typeof v === 'function' ? v(64) : v)));
+    // nothing coming by itself (the kernel stopped): the line says not connected, never reconnecting
+    expect([linkDownLine({ keep: 'saved', pending: 0 }, { coming: false }), linkDownLine({ keep: 'saved', pending: 0 }, { coming: false, unsaved: 1 }), linkDownLine({ keep: 'saved', pending: 0 }, { coming: false, words: true }), linkDownLine({ keep: 'saved', pending: 0 }, { words: true })]).toEqual(['Not connected', 'Not saved · not connected', 'Not connected · your words are kept on this page only', 'Reconnecting · your words are kept on this page only']);
+    expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Reconnecting', '2 changes may not be saved · fold and reopen to check']);
     expect(noticeLine({ about: 'undo', code: 'undo-too-many-ops', lost: 0 })).toBe('That was too much to undo · it stays as it is');
     expect(noticeLine({ about: 'close', code: 'close-failed', lost: 0 })).toBe('Your marks are saved · the board didn’t fold · try again');
     expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'Saving…', 'Not saved · reconnecting', 'Reconnecting']);

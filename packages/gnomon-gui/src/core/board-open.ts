@@ -105,7 +105,7 @@ export function dimensionRows(listings: readonly DimListing[], hsid: string | nu
     .sort((a, b) => b.lastSeq - a.lastSeq)
     .map((l) => {
       const attached = !!hsid && l.attached.includes(hsid);
-      return { dim: l.dim, title: l.title || 'Untitled', time: listTime(l.lastAt, now), ended: l.ended, attached, notes: [...(l.ended ? ['ended · opening it starts it again'] : []), ...(l.partial ? ['partly held'] : []), ...(attached ? [] : ['not this session’s yet'])] };
+      return { dim: l.dim, title: l.title || 'Untitled', time: listTime(l.lastAt, now), ended: l.ended, attached, notes: [...(l.ended ? ['folded'] : []), ...(l.partial ? ['partly held'] : []), ...(attached ? [] : ['not this session’s yet'])] };
     });
   const have = new Set(rows.map((r) => r.dim));
   const pending = opening.filter((o) => !have.has(o.dim)).map((o) => ({ dim: o.dim, title: o.title || 'Untitled', time: '', ended: false, attached: true, notes: ['was opening when the link went'] }));

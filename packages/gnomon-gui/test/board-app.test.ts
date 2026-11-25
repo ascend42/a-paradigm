@@ -87,7 +87,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('folded')).toMatchObject({ open: false, rows: ['session.start:command', 'op:add', 'session.end'], frames: 3 });
     expect(f('folded').tab).toMatch(/^Totals are off by a cen… · board$/);
     // ⌥B (a `menu` entry) reopens the same dimension: the mark is there and the fold is the mod's
-    expect(f('reopened')).toMatchObject({ open: true, phase: 'open', nodes: 1, marks: 1, sameAsMod: true, drift: 0, frames: 4, line: KEEP_COPY.reopens });
+    expect(f('reopened')).toMatchObject({ open: true, phase: 'open', nodes: 1, marks: 1, sameAsMod: true, drift: 0, frames: 4 });
+    // their own fold undone: no line about an ended dimension
+    expect(f('reopened').line).toMatch(/opened here/);
     expect(f('reopened').rows.slice(3)).toEqual(['session.start:menu']);
     // ⌥B again folds it
     expect(f('folded2')).toMatchObject({ open: false, frames: 5 });
@@ -97,7 +99,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(list.composer).toBe('');
     expect(list.rows).toHaveLength(1);
     // the time is the kernel's `lastAt` (hh:mm today, else the date: the preview's clocks are not the same day)
-    expect(list.rows[0]).toMatch(/^Totals are off by a cent.*(\d\d:\d\d|[A-Z][a-z]{2} \d{1,2}) · ended · opening it starts it again$/);
+    expect(list.rows[0]).toMatch(/^Totals are off by a cent.*(\d\d:\d\d|[A-Z][a-z]{2} \d{1,2}) · folded$/);
     // Enter on the row opens it on that press (typed: `command`)
     expect(f('fromList')).toMatchObject({ open: true, phase: 'open', nodes: 1, marks: 1, sameAsMod: true, frames: 6 });
     expect(f('fromList').rows.slice(-1)).toEqual(['session.start:command']);
@@ -125,7 +127,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('untrusted-first')).toMatchObject({ open: false, rows: [], frames: 0 });
     expect(a.row).toMatchObject({ disabled: null, text: 'Open board' });
     expect(f('menu')).toMatchObject({ open: true, phase: 'open', rows: ['session.start:menu'], frames: 1 });
-    expect(f('menu').line).toMatch(/opened from the ⋯ menu/);
+    expect(f('menu').line).toMatch(/opened here · \d\d:\d\d$/);
     expect(f('folded')).toMatchObject({ open: false, frames: 2 });
     // with a board to reopen: a synthetic Enter, ⌥B, menu click and tab click still open nothing and send nothing
     expect(f('untrusted-with-board')).toMatchObject({ open: false, frames: 2, rows: f('folded').rows });
@@ -144,7 +146,6 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
         { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 600 }, facts('reopened-text'),
         { at: [200, 330], press: true }, { wait: 900 }, facts('committed'),
       ],
-      { shot: 'app-link-back' },
     );
     const f = (k: string): Facts => a[k] as Facts;
     if (process.env.GNOMON_DEBUG) console.log(JSON.stringify(a, null, 1));
@@ -152,6 +153,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(f('typing')).toMatchObject({ field: 'held', nodes: 1, frames: 2 });
     // down: held still, the field still open with its words, nothing sent; the line says the words are held
     expect(f('down')).toMatchObject({ open: true, inert: 'link-down', link: 'down', field: 'held', frames: 2, line: KEEP_COPY.wordsHeld });
+    // (nothing is coming by itself here: the line says "Not connected", as the Reconnect dialog does)
+    expect(KEEP_COPY.wordsHeld).toMatch(/^Not connected/);
     // Esc does not end the edit: the words are there, and the line says so
     expect(f('esc-down')).toMatchObject({ open: true, field: 'held', line: KEEP_COPY.wordsHeld, frames: 2 });
     expect(f('typed-down')).toMatchObject({ field: 'held!', frames: 2 });
@@ -168,13 +171,87 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
   it('held still, the leaf still folds (Esc and the esc key) and a fold while down is not a close; with nothing pending the line is "Reconnecting" alone', async () => {
     const a = await real(
       [...typeBoard, ...drawRect, { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'), { key: 'Escape' }, { wait: 500 }, facts('folded')],
+    );
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('down')).toMatchObject({ open: true, inert: 'link-down', line: 'Not connected', frames: 2 });
+    expect(f('folded')).toMatchObject({ open: false, frames: 2 });
+    expect(f('folded').tab).toMatch(/· board$/);
+  }, 120_000);
+
+  it('Aegis H1: a block button naming board.open or dimensions.list does nothing and sends nothing on a real press', async () => {
+    const plant = (cmd: string): string => `(() => { const b = document.createElement('button'); b.type = 'button'; b.id = 'planted-' + ${JSON.stringify(cmd)}.replace('.', '-'); b.className = 'blk blk-button'; b.dataset.command = ${JSON.stringify(cmd)}; b.textContent = 'Allow'; document.getElementById('pinned').prepend(b); return b.id; })()`;
+    const a = await real([
+      { read: plant('board.open'), as: 'p1' }, { read: plant('dimensions.list'), as: 'p2' },
+      { press: '#planted-board-open' }, { wait: 800 }, facts('board'),
+      { press: '#planted-dimensions-list' }, { wait: 500 }, facts('list'), { read: `document.getElementById('palette').hidden`, as: 'paletteHidden' },
+      // the control: a command a block MAY name does run from the same place
+      { read: plant('theme.night'), as: 'p3' }, { press: '#planted-theme-night' }, { wait: 300 }, { read: 'document.documentElement.dataset.theme', as: 'theme' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('board')).toMatchObject({ open: false, rows: [], frames: 0 });
+    expect(f('list')).toMatchObject({ open: false, rows: [], frames: 0 });
+    expect(a.paletteHidden).toBe(true);
+    expect(a.theme).toBe('night');
+  }, 120_000);
+
+  it('Mika blocker: a press on the Reconnect scrim then Esc does not fold a board holding typed words; the dialog sits clear of the field', async () => {
+    const a = await real(
+      [
+        ...typeBoard, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('held'),
+        { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, facts('down'),
+        { read: `(() => { const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; return { card: r(document.querySelector('#reconnect .sheet-card')), field: r(document.querySelector('.bd-host .bd-board textarea')), line: r(document.querySelector('.bd-host .bd-keep')), stage: r(document.querySelector('.bd-host .bd-stage')) }; })()`, as: 'rects' },
+        { press: '#status-line' }, { wait: 200 }, facts('pressed'), { key: 'Escape' }, { wait: 500 }, facts('esc'),
+      ],
       { shot: 'app-link-down' },
     );
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
-    expect(f('down')).toMatchObject({ open: true, inert: 'link-down', line: 'Reconnecting', frames: 2 });
-    expect(f('folded')).toMatchObject({ open: false, frames: 2 });
-    expect(f('folded').tab).toMatch(/· board$/);
+    expect(f('down')).toMatchObject({ open: true, inert: 'link-down', field: 'held', line: KEEP_COPY.wordsHeld, reconnect: true });
+    // the press landed on the scrim and took focus out of the field
+    expect(f('pressed').active).not.toMatch(/TEXTAREA/);
+    // Esc from outside the leaf: the board stays, the words stay, nothing is said lost because nothing was
+    expect(f('esc')).toMatchObject({ open: true, field: 'held', line: KEEP_COPY.wordsHeld, toasts: [] });
+    type R = { x: number; y: number; r: number; b: number };
+    const r = a.rects as { card: R; field: R; line: R; stage: R };
+    const meets = (p: R, q: R): boolean => p.x < q.r && q.x < p.r && p.y < q.b && q.y < p.b;
+    expect(meets(r.card, r.field)).toBe(false);
+    expect(meets(r.card, r.line)).toBe(false);
+    expect(r.card.y).toBeGreaterThanOrEqual(r.stage.b - 1);
+  }, 120_000);
+
+  it('Mika blocker: a mark in flight when the link goes, then a fold while down, is said lost', async () => {
+    const a = await real([
+      ...typeBoard, { read: `(${A}.mod.silent = true, 1)`, as: 'silent' }, ...drawRect, facts('pending'),
+      { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 800 }, facts('down'), { key: 'Escape' }, { wait: 600 }, facts('folded'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('pending').pending).toBeGreaterThan(0);
+    // not saved, and nothing is coming: the line says both
+    expect(f('down')).toMatchObject({ open: true, inert: 'link-down', line: KEEP_COPY.notSavedOff });
+    // the fold came from the leaf itself: it folds, and the loss is SAID
+    expect(f('folded').open).toBe(false);
+    expect(f('folded').toasts.join(' | ')).toContain(KEEP_COPY.changesGone(1));
+  }, 120_000);
+
+  it('Mika blocker: after the link returns the cue that words are waiting stays up; a fold before a text is opened says the words were not saved', async () => {
+    const a = await real(
+      [
+        ...typeBoard, { press: '.bd-host [data-key="tool:text"]' }, { at: [420, 120], press: true }, { wait: 300 }, ...type('held'),
+        { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 500 }, { press: '#reconnect-btn' }, { wait: 3000 }, facts('back'), { wait: 7000 }, facts('later'),
+        { press: '.bd-host .bd-head .spacer' }, { key: 'Escape' }, { wait: 900 }, facts('folded'),
+      ],
+      { shot: 'app-link-back' },
+    );
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('back')).toMatchObject({ open: true, link: 'up', line: KEEP_COPY.wordsWait });
+    // well past the six seconds a said line lasts: the cue is still up, and never "everything here is saved"
+    expect(f('later')).toMatchObject({ open: true, link: 'up', line: KEEP_COPY.wordsWait });
+    expect(f('folded').open).toBe(false);
+    expect(f('folded').toasts.join(' | ')).toContain(KEEP_COPY.wordsGone);
   }, 120_000);
 
   it('G-DDL-08 core: with a card focused no key reaches the board (no op, no frame, no engine change), ⌥B included; no card focus runs during a board text edit', async () => {

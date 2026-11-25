@@ -53,7 +53,7 @@ describe('#gui-board-open: the Dimensions list', () => {
     expect(rows.map((r) => [r.title, r.time, r.notes])).toEqual([
       ['still opening', '', ['was opening when the link went']],
       ['auth handoff', hhmm, []],
-      ['older', hhmm, ['ended · opening it starts it again', 'partly held', 'not this session’s yet']],
+      ['older', hhmm, ['folded', 'partly held', 'not this session’s yet']],
     ]);
     expect(listTime('2026-11-20T14:09:00.000Z', now)).toMatch(/^Nov (19|20|21)$/);
     expect(listTime(null, now)).toBe('');
