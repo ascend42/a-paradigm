@@ -335,9 +335,6 @@ describe('#dimension-mod first-party identity on tool.call (S1.2 C2; Aegis A3)',
     expect(src('kernel/modhost/host.ts').match(/\bcallTool\s*\(/g)).toHaveLength(1); // the definition
     const bridge = src('kernel/modhost/mcp-bridge.ts');
     expect(bridge.match(/\bcallTool\s*\(/g)).toHaveLength(1);
-    // that one call sits inside the `call` port, after host.admit, and passes a host-built relayedFor, never a message field
-    const callPort = bridge.slice(bridge.indexOf('async call(mod, tool, input, s)'), bridge.indexOf('refused(s, why)'));
-    expect(callPort).toMatch(/await host\.admit\(mod\);[^]*return host\.callTool\(mod, tool, input, \{ hsid: s\.hsid, \.\.\.\(rf \? \{ toolRelayedFor: rf \} : \{\}\) \}\);/);
     // the answerer never reads `_meta`, `server_name` or any identity key of the message
     expect(/_meta|server_name|serverName/.test(bridge.replace(/\/\*[^]*?\*\/|\/\/.*$/gm, ''))).toBe(false);
     expect(/import[^;]*modhost/.test(src('kernel/local/mcp-client.ts'))).toBe(false); // that file's callTool is its own class's

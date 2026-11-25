@@ -203,6 +203,16 @@ export interface BridgeSession {
   running(): boolean;
 }
 
+/**
+ * Aegis M2: why the bridge itself refuses a session's calls, from three facts the supervisor reads off its Session.
+ * A loop origin wins over the mode (a loop session in manual mode is `loop`); manual holds only until a plan is
+ * approved. The supervisor's stamp and its permission pass both use THIS function, so the two cannot drift.
+ */
+export function bridgeHeld(f: { loop: boolean; mode: string; planApproved: boolean }): 'loop' | 'manual' | null {
+  if (f.loop) return 'loop';
+  return f.mode === 'manual' && !f.planApproved ? 'manual' : null;
+}
+
 /** The closed reasons of a kernel-composed refusal (the counter row's `byWhy` keys). */
 export const MOD_BRIDGE_REFUSALS = Object.freeze(['unknown-tool', 'manual', 'loop', 'no-turn', 'arguments', 'rate', 'in-flight', 'mod-busy', 'mod-refused', 'mod-failed'] as const);
 export type BridgeRefusal = (typeof MOD_BRIDGE_REFUSALS)[number];

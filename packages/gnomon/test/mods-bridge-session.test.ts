@@ -16,7 +16,6 @@ import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { createModBridge, MOD_BRIDGE_SENTENCES, type BridgeRow } from '../src/kernel/modhost/mcp-bridge.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
-import { loopClampAllows } from '../src/kernel/supervisor/loop-clamp.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { fakeLog } from './dimension-helpers.js';
@@ -274,23 +273,6 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge through a Claude Code sessi
     expect(b.reached()).toBe(0);
     expect(b.bridgeRows.filter((x) => x.payload.outcome !== 'refused')).toEqual([]);
   }, 60_000);
-});
-
-describe('#mod-tool-bridge: a loop session (Aegis M2), without a live one', () => {
-  // No Claude session is a loop session in 8.0, and test/loop-model.test.ts forbids any assignment of loopOrigin in
-  // supervisor.ts, so no rig can open one. The answerer's refusal for `held: 'loop'` is in test/mods-bridge.test.ts;
-  // this pins the two places the supervisor derives it.
-  it('#bridgeSession reads the loop origin FIRST, and the permission pass sits behind the loop clamp, which never admits mod-tool', () => {
-    const src = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'src', 'kernel', 'supervisor', 'supervisor.ts'), 'utf8');
-    const stamp = src.slice(src.indexOf('  #bridgeSession(s: Session): BridgeSession {'), src.indexOf('  #bridgeDetect(s: Session'));
-    expect(stamp).toContain("held: s.loopOrigin !== undefined ? 'loop' : mode === 'manual' && !s.planApproved ? 'manual' : null,");
-    expect(stamp).toContain('const mode = this.#modeTransition(s, repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]));');
-    const pass = src.slice(src.indexOf('if (ev.toolName.startsWith(BRIDGE_TOOL_PREFIX)) {'), src.indexOf("// #kernel-mcp: the kernel's own verb tools carry their own gate"));
-    expect(pass).toContain("if (listed && mayAuto('mod-tool') && b && typeof b.auto === 'function') {");
-    expect(pass).not.toContain('updatedPermissions');
-    expect(pass).not.toContain('raise(');
-    for (const card of [undefined, '', 'card:01JAAAAAAAAAAAAAAAAAAAAAAA']) expect(loopClampAllows('mod-tool', card)).toBe(false);
-  });
 });
 
 describe('#mod-tool-bridge: only the Claude Code spawn path can carry the entry (Aegis A6)', () => {

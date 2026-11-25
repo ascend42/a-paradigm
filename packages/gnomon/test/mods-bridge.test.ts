@@ -9,6 +9,7 @@
  */
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import * as fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PRINCIPAL_KINDS } from '@a-company/gnomon-contracts';
 import { readDeskMods } from '../src/kernel/desk/mcp-passthrough.js';
@@ -18,14 +19,16 @@ import { HISTORICAL_FIRST_PARTY_PINS } from '../src/kernel/manifest/grants.js';
 import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
 import { writePause } from '../src/kernel/modhost/control.js';
 import {
-  bridgeRefs, checkBridgeArguments, createModBridge, escapeBridgeJson, fenceBridgeResult, isCurrentFirstPartyPin, MOD_BRIDGE_ENTRY, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_FENCE_SENTENCE,
+  bridgeHeld, bridgeRefs, checkBridgeArguments, createModBridge, escapeBridgeJson, fenceBridgeResult, isCurrentFirstPartyPin, MOD_BRIDGE_ENTRY, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_FENCE_SENTENCE,
   MOD_BRIDGE_LIMITS, MOD_BRIDGE_MOD_SENTENCES, MOD_BRIDGE_PRINCIPAL_NAME, MOD_BRIDGE_RECEIPT_KEYS, MOD_BRIDGE_SENTENCES, MOD_BRIDGE_SERVER, MOD_BRIDGE_TOOLS, modBridgeAnswer, modBridgePrincipal,
   modBridgeTools, newBridgeRate, type BridgeMod, type BridgePorts, type BridgeRow, type BridgeSession, type ModBridge,
 } from '../src/kernel/modhost/mcp-bridge.js';
 import { MOD_REFUSAL_CODES, ModRefusal } from '../src/kernel/modhost/refusal.js';
 import { refuseAppend } from '../src/kernel/socket/log-append.js';
+import { loopClampAllows } from '../src/kernel/supervisor/loop-clamp.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { fakeLog } from './dimension-helpers.js';
+import { PKG_ROOT } from './helpers.js';
 import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig } from './mod-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
@@ -77,6 +80,8 @@ interface World {
   setNow: (t: number) => void;
   session: (over?: Partial<BridgeSession>) => BridgeSession;
   h: ReturnType<typeof host>['h'];
+  /** every call the bridge made on the mod host, in order, with its arguments */
+  hostCalls: Array<{ method: 'admit' | 'callTool'; args: unknown[] }>;
 }
 
 function world(over: { allow?: Record<string, string[]> | null; currentPin?: ((h: string) => boolean) | null } = {}): World {
@@ -88,11 +93,12 @@ function world(over: { allow?: Record<string, string[]> | null; currentPin?: ((h
   cleanups.push(() => h.stopAll());
   const rows: BridgeRow[] = [];
   let reached = 0;
+  const hostCalls: World['hostCalls'] = [];
   let fail = false;
   let t = 1_000;
   const bridge = createModBridge({
     mods: () => readDeskMods(r.home, r.auth),
-    host: () => ({ admit: (n) => h.admit(n), callTool: (...a) => (reached++, h.callTool(...a)) }),
+    host: () => ({ admit: (n) => (hostCalls.push({ method: 'admit', args: [n] }), h.admit(n)), callTool: (...a) => (reached++, hostCalls.push({ method: 'callTool', args: JSON.parse(JSON.stringify(a)) as unknown[] }), h.callTool(...a)) }),
     ns: () => r.auth.ns,
     append: async (row) => {
       if (fail) throw new Error('append failed (test)');
@@ -103,7 +109,7 @@ function world(over: { allow?: Record<string, string[]> | null; currentPin?: ((h
     ...(over.currentPin === null ? {} : { currentPin: over.currentPin ?? (() => true) }),
   });
   const session = (o: Partial<BridgeSession> = {}): BridgeSession => ({ hsid: HSID, principal: `p:${r.auth.ns}/s-01hzzzzz`, agent: 'claude', turn: `turn:${HSID}/1`, surface: 'bridge', held: null, rate: newBridgeRate(), running: () => true, ...o });
-  return { r, bridge, rows, modRows: () => log.rows as never, reached: () => reached, failAppends: (on) => void (fail = on), setNow: (v) => void (t = v), session, h };
+  return { r, bridge, rows, modRows: () => log.rows as never, reached: () => reached, failAppends: (on) => void (fail = on), setNow: (v) => void (t = v), session, h, hostCalls };
 }
 
 type Ans = { id?: unknown; result?: { content?: Array<{ type: string; text: string }>; isError?: boolean; tools?: Array<{ name: string; description: string; inputSchema: unknown }> }; error?: { code: number; message: string } };
@@ -220,12 +226,47 @@ describe('#mod-tool-bridge: a call is stamped from the session only (G-MOD-19)',
     expect(JSON.stringify(w.rows).includes('evil000')).toBe(false);
   });
 
+  it('the call port admits first, then calls the tool once, with a relayedFor built from the session and nothing else', async () => {
+    const w = world();
+    const s = w.session({ turn: `turn:${HSID}/2` });
+    await ask(w, s, call('bridge-echo', { hsid: OTHER, relayedFor: { principal: 'p:evil000/x' } }, { _meta: { hsid: OTHER } }));
+    expect(w.hostCalls.map((c) => c.method)).toEqual(['admit', 'callTool']);
+    expect(w.hostCalls[0]!.args).toEqual([PROBE]);
+    const [modName, tool, input, opts] = w.hostCalls[1]!.args as [string, string, unknown, Record<string, unknown>];
+    expect([modName, tool]).toEqual([PROBE, 'bridge-echo']);
+    expect(input).toEqual({ hsid: OTHER, relayedFor: { principal: 'p:evil000/x' } }); // the arguments are the input, only
+    expect(opts.hsid).toBe(HSID);
+    expect(opts.toolRelayedFor).toEqual({ principal: s.principal, surface: 'bridge', agent: 'claude', hsid: HSID, turn: `turn:${HSID}/2` });
+    // a refused call (held) makes no host call at all, not even an admit
+    await ask(w, w.session({ held: 'manual' }), call('bridge-echo', {}));
+    expect(w.hostCalls).toHaveLength(2);
+  });
+
   it('an agent label outside the pattern vouches for nobody: the mod is sent no relayedFor at all', async () => {
     const w = world();
     for (const agent of ['Claude', 'claude code', '', 'x'.repeat(33)]) {
       const a = await ask(w, w.session({ agent }), call('bridge-echo', {}));
       expect((JSON.parse(bodyOf(textOf(a))) as { relayedFor: unknown }).relayedFor).toBeNull();
     }
+  });
+});
+
+describe('#mod-tool-bridge: bridgeHeld, the one derivation of the gate the bridge enforces itself (Aegis M2)', () => {
+  it('the truth table: a loop origin always holds as loop (also in manual mode); manual holds until a plan is approved; every other mode is free', () => {
+    const modes = ['manual', 'ask', 'auto-edits', 'anything-else', ''];
+    for (const mode of modes) for (const planApproved of [true, false]) expect(bridgeHeld({ loop: true, mode, planApproved })).toBe('loop');
+    expect(bridgeHeld({ loop: false, mode: 'manual', planApproved: false })).toBe('manual');
+    expect(bridgeHeld({ loop: false, mode: 'manual', planApproved: true })).toBeNull();
+    for (const mode of modes.slice(1)) for (const planApproved of [true, false]) expect(bridgeHeld({ loop: false, mode, planApproved })).toBeNull();
+    // and the permission pass's other loop gate: the loop clamp never admits the bridge's modeRef
+    for (const card of [undefined, '', 'card:01JAAAAAAAAAAAAAAAAAAAAAAA']) expect(loopClampAllows('mod-tool', card)).toBe(false);
+  });
+
+  it('the supervisor derives the stamp\'s held and the permission pass\'s denial through bridgeHeld, and nowhere else', () => {
+    const src = fs.readFileSync(path.join(PKG_ROOT, 'src', 'kernel', 'supervisor', 'supervisor.ts'), 'utf8').replace(/\/\*[^]*?\*\/|\/\/.*$/gm, '');
+    expect(src.match(/bridgeHeld\(/g)).toHaveLength(2);
+    expect(/held:\s*bridgeHeld\(/.test(src)).toBe(true);
+    expect(/held:\s*s\.loopOrigin/.test(src)).toBe(false);
   });
 });
 

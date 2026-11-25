@@ -148,7 +148,7 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { GIT_VERB_TOOLS, GIT_VERBS_GUIDANCE, KERNEL_MCP_SERVER, kernelToolName, kernelWorktreeDirs } from '../git/verbs.js';
 import { sessionSystemPrompt } from './host-guidance.js';
 import { KERNEL_MCP_ENTRY, kernelMcpAnswer } from './kernel-mcp.js';
-import { MOD_BRIDGE_ENTRY, MOD_BRIDGE_SERVER, modBridgeAnswer, newBridgeRate, type BridgeRate, type BridgeSession, type ModBridge } from '../modhost/mcp-bridge.js';
+import { bridgeHeld, MOD_BRIDGE_ENTRY, MOD_BRIDGE_SERVER, modBridgeAnswer, newBridgeRate, type BridgeRate, type BridgeSession, type ModBridge } from '../modhost/mcp-bridge.js';
 import { RowFold } from '../modhost/fold.js';
 import { childNodePath } from '../lifecycle/sea.js';
 
@@ -1604,7 +1604,7 @@ export class SessionSupervisor {
       agent: BRIDGE_AGENT_LABEL,
       turn: s.turnIds[i] ?? null,
       surface: origin === 'voice' || origin === 'voice-unverified' ? 'voice' : 'bridge',
-      held: s.loopOrigin !== undefined ? 'loop' : mode === 'manual' && !s.planApproved ? 'manual' : null,
+      held: bridgeHeld({ loop: s.loopOrigin !== undefined, mode, planApproved: s.planApproved }),
       rate: s.bridgeRate,
       running: () => s.state === 'running',
     };
@@ -1706,8 +1706,10 @@ export class SessionSupervisor {
       } catch {
         listed = false;
       }
+      // the same derivation the bridge's own gate uses (bridgeHeld): a held session never gets the audit row or the allow
+      const held = bridgeHeld({ loop: s.loopOrigin !== undefined, mode, planApproved: s.planApproved });
       let logged = false;
-      if (listed && mayAuto('mod-tool') && b && typeof b.auto === 'function') {
+      if (listed && held === null && mayAuto('mod-tool') && b && typeof b.auto === 'function') {
         try {
           await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: 'mod-tool' });
           logged = true;
@@ -1716,7 +1718,7 @@ export class SessionSupervisor {
         }
       }
       if (logged && ev.toolUseId !== null && BRIDGE_TOOL_USE_ID.test(ev.toolUseId)) boundedSet(s.bridgeAllowed, ev.toolUseId);
-      await this.#write(s, logged ? drv.allowLine(requestId, structuredClone(ev.input)) : drv.denyLine(requestId, !listed ? 'Denied: this mod tool is not available.' : loopBy !== null ? 'Denied: loop sessions never call mod tools.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'mod-tool' });
+      await this.#write(s, logged ? drv.allowLine(requestId, structuredClone(ev.input)) : drv.denyLine(requestId, !listed ? 'Denied: this mod tool is not available.' : held === 'loop' ? 'Denied: loop sessions never call mod tools.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'mod-tool' });
       return;
     }
     // #kernel-mcp: the kernel's own verb tools carry their own gate (^git-init-gate / ^git-push-gate: run mode, card,
