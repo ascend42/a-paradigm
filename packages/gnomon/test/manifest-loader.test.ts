@@ -220,6 +220,38 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
     }
   });
 
+  it('S1.4 (Aegis A7): a command may declare effects, read and write only; network or spend on a command is refused at load', () => {
+    const p = baseManifest().provides!;
+    const withEffects = (effects: unknown): Partial<ManifestV2> => ({ provides: { ...p, commands: [{ id: 'lens.toggle', title: 'Toggle diff lens', effects }] } }) as unknown as Partial<ManifestV2>;
+    // present: kept exactly as declared; absent: no field is invented
+    for (const effects of [['read'], ['write'], ['read', 'write'], ['write', 'read']]) {
+      expect(validateManifest(baseManifest(withEffects(effects)), { tier: 'local' }).provides!.commands![0]!.effects).toEqual(effects);
+    }
+    expect(Object.hasOwn(validateManifest(baseManifest(), { tier: 'local' }).provides!.commands![0]!, 'effects')).toBe(false);
+    const fpOk = fpManifest();
+    fpOk.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects: ['read', 'write'] }];
+    expect(validateManifest(fpOk, { tier: 'first-party' }).provides!.commands![0]!.effects).toEqual(['read', 'write']);
+    // refused at load, for every tier, first-party included: the tool-only effects, an unknown value, an empty list,
+    // a repeat, and anything that is not a list
+    const bad: unknown[] = [['network'], ['spend'], ['read', 'network'], ['read', 'write', 'spend'], ['exec'], [], ['read', 'read'], 'write', { write: true }, [['write']], [null], null];
+    for (const effects of bad) {
+      const r = refusalOf(() => validateManifest(baseManifest(withEffects(effects)), { tier: 'local' }));
+      expect([JSON.stringify(effects), r.manifestCode]).toEqual([JSON.stringify(effects), 'SCHEMA']);
+      const fpm = fpManifest();
+      fpm.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects } as unknown as NonNullable<NonNullable<ManifestV2['provides']>['commands']>[number]];
+      const fp = refusalOf(() => validateManifest(fpm, { tier: 'first-party' }));
+      expect([JSON.stringify(effects), fp.manifestCode]).toEqual([JSON.stringify(effects), 'SCHEMA']);
+    }
+    // the same refusal through the real entry (raw bytes in): nothing is staged for such a tree
+    const home = tmp();
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(withEffects(['read', 'spend'])));
+    expect(refusalOf(() => stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: root() })).manifestCode).toBe('SCHEMA');
+    // a tool keeps all four
+    expect(validateManifest(baseManifest({ provides: { ...p, tools: [{ name: 'lens.diff', effects: ['read', 'write', 'network', 'spend'] }] } }), { tier: 'local' })).toBeTruthy();
+    // the command entry stays closed: one more key is still refused
+    expect(refusalOf(() => validateManifest(baseManifest({ provides: { ...p, commands: [{ id: 'lens.toggle', title: 't', effects: ['read'], network: true }] } } as unknown as Partial<ManifestV2>), { tier: 'local' })).manifestCode).toBe('SCHEMA');
+  });
+
   it('mod fields: effects, append-only card/status slots, modns events, reserved keys, command-bound keybindings', () => {
     const p = baseManifest().provides!;
     const cases: Array<[unknown, string]> = [
