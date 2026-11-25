@@ -1360,17 +1360,25 @@ function honouredGrant(row, dim) {
   return { hsid, write, seq: row.seq };
 }
 function foldDimGrants(rows, dim, from = emptyDimGrants()) {
-  const out = new Map(from);
+  let out;
+  try {
+    out = from instanceof Map ? new Map(from) : /* @__PURE__ */ new Map();
+  } catch {
+    out = /* @__PURE__ */ new Map();
+  }
   if (typeof dim !== "string" || !DIM_ID_PATTERN.test(dim)) return out;
-  for (const row of rows) {
-    try {
-      const g = honouredGrant(row, dim);
-      if (!g) continue;
-      const cur = out.get(g.hsid);
-      if (cur && g.seq <= cur.seq) continue;
-      out.set(g.hsid, { write: g.write, seq: g.seq });
-    } catch {
+  try {
+    for (const row of rows) {
+      try {
+        const g = honouredGrant(row, dim);
+        if (!g) continue;
+        const cur = out.get(g.hsid);
+        if (isPlainObject(cur) && Number.isSafeInteger(cur.seq) && g.seq <= cur.seq) continue;
+        out.set(g.hsid, { write: g.write, seq: g.seq });
+      } catch {
+      }
     }
+  } catch {
   }
   return out;
 }
@@ -1379,8 +1387,9 @@ function dimGrantDefault(state, hsid) {
 }
 function dimMayDraw(state, grants, hsid) {
   if (!NON_EMPTY(hsid) || !state.attached.includes(hsid)) return false;
+  if (!(grants instanceof Map)) return false;
   const g = grants.get(hsid);
-  return g ? g.write === true : dimGrantDefault(state, hsid);
+  return g !== void 0 ? isPlainObject(g) && g.write === true : dimGrantDefault(state, hsid);
 }
 var DIM_HASH_VECTOR_ROWS = deepFreeze([
   {
@@ -1487,7 +1496,6 @@ export {
   dimKindName,
   dimMayDraw,
   dimTextForScan,
-  dimTextForScanS12,
   dimViewOf,
   dimZBetween,
   dimZCompare,
