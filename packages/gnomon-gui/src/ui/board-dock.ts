@@ -249,7 +249,15 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       load: d.load,
       cardFocused: d.cardFocused,
       onFold: (cause) => void fold(cause),
-      ...(d.dimensions ? { onDimensions: (cause: Event) => void (cause.isTrusted === true && d.dimensions?.(cause)) } : {}),
+      // the list opens only on the person's own press (written as every other trusted-event check here is: `!== true`)
+      ...(d.dimensions
+        ? {
+            onDimensions: (cause: Event): void => {
+              if (cause.isTrusted !== true) return;
+              d.dimensions?.(cause);
+            },
+          }
+        : {}),
       ...session.leafOptions(),
       onReady: (handle) => {
         session.attachHandle(handle);

@@ -180,8 +180,6 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(acted.errors).toEqual([]);
     // the sweep really covered the short boards, down to the least the leaf draws
     expect(sweep.steps.length).toBeGreaterThan(200);
-    expect(Math.min(...sweep.steps.map((s) => s.room))).toBe(148);
-    expect(sweep.tooShortAt).toBe(147);
     for (const s of [...sweep.steps, ...sweep.chosen]) {
       const at = `board ${s.room}px${'want' in s ? `, ${String((s as { want: string }).want)} chosen` : ''}`;
       // the room the leaf reports is the body it draws (it was 3px more: the foot was counted as 29px of its 32)
@@ -194,6 +192,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       expect(s.natural, at).toBe(railNeed(railLayout(s.room, ('want' in s ? (s as { want: string }).want : 'select') as never)));
       expect(s.natural, at).toBeLessThanOrEqual(s.room);
     }
+    // (after the rail-versus-room lines above, so a rail that overflows fails THERE and not at this count)
+    expect(Math.min(...sweep.steps.map((s) => s.room))).toBe(148);
+    expect(sweep.tooShortAt).toBe(147);
     for (const c of sweep.chosen) expect(c.shown, `board ${c.room}px: ${c.want} is chosen and not on the rail`).toBe(true);
     // the reported case: about 190px of board. Select, ⋯, line-and-fill and the percent, clear of the foot
     expect(sweep.at190).toMatchObject({ keys: 4, tools: ['select'], tight: false, over: 0 });

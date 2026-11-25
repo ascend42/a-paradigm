@@ -9,7 +9,7 @@
  * that asks for it (GNOMON_BROWSER_TESTS=1: the `board-browser` job of .github/workflows/gnomon.yml, macos-15), and
  * there a missing Chrome FAILS the run, it never skips. Every other CI leg skips it, as before.
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -50,7 +50,9 @@ const keepShot = (name: string, png: Buffer): void => {
 const fa = (a: Record<string, unknown>, k: string): Facts => a[k] as Facts;
 type Facts = { chk: { text: string; bad: boolean; whole: boolean; title: string | null } | null; open: boolean; title: string | null; line: string | null; inert: string | null; check: string | null; tab: string | null; rows: string[]; frames: number; phase: string | null; keep: string | null; link: string | null; pending: number | null; nodes: number | null; texts: string[] | null; sameAsMod: boolean | null; marks: number | null; drift: number | null; tool: string | null; field: string | null; toasts: string[]; reconnect: boolean; active: string | null; card: boolean };
 const type = (s: string): unknown[] => [...s].map((k) => ({ key: k, settle: 25 }));
-const typeBoard = [{ press: '#composer-text' }, ...type('/board'), { key: 'Enter' }, { wait: 2500 }];
+/** the board is OPEN: its leaf has left `loading` with a live engine handle and the session's open has been answered (never a fixed sleep: Probe saw rows fail under load) */
+const BOARD_UP = `(() => { const c = ${CUR}; if (!c) return false; const hd = c.leaf.handle(); return c.leaf.state() !== 'loading' && !!hd && hd.isAlive() && c.session.status().phase !== 'opening'; })()`;
+const typeBoard = [{ press: '#composer-text' }, ...type('/board'), { key: 'Enter' }, { until: BOARD_UP, as: 'the board open after /board', timeoutMs: 30_000 }, { wait: 300 }];
 const drawRect = [{ press: '.bd-host [data-key="tool:rect"]' }, { drag: [[250, 200], [290, 225], [330, 250]] }, { wait: 500 }];
 const foldByEsc = [{ press: '.bd-host .bd-head .spacer' }, { key: 'Escape' }, { wait: 900 }];
 /* #gui-board-turn: the focused session, turns driven as the kernel would write them, and what the strip shows */
@@ -107,8 +109,8 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     p = await startPreview({ port: 0 });
   }, 60_000);
   afterAll(() => p.close());
-  const real = async (actions: unknown[], o: { shot?: string; fixture?: string; theme?: string; width?: number; height?: number } = {}): Promise<Record<string, unknown>> => {
-    const r = (await shootLeaf({ chrome, url: `${fixtureUrl(p.url, o.fixture ?? 'desk', o.theme ?? 'day', 'off')}&dim=1`, width: o.width ?? 1440, height: o.height ?? 900, timeoutMs: 60_000, actions: [ERRORS, COUNT, ...actions, { read: 'globalThis.__errs', as: 'errors' }] })) as { png: Buffer; acted: Record<string, unknown> };
+  const real = async (actions: unknown[], o: { shot?: string; fixture?: string; theme?: string; width?: number; height?: number; cpuThrottle?: number } = {}): Promise<Record<string, unknown>> => {
+    const r = (await shootLeaf({ chrome, url: `${fixtureUrl(p.url, o.fixture ?? 'desk', o.theme ?? 'day', 'off')}&dim=1`, width: o.width ?? 1440, height: o.height ?? 900, timeoutMs: 60_000, cpuThrottle: o.cpuThrottle ?? 0, actions: [ERRORS, COUNT, ...actions, { read: 'globalThis.__errs', as: 'errors' }] })) as { png: Buffer; acted: Record<string, unknown> };
     if (o.shot) keepShot(o.shot, r.png);
     return r.acted;
   };
@@ -756,19 +758,25 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const LIST = `({ open: !document.getElementById('palette').hidden, head: document.querySelector('#palette-list .menu-h')?.textContent ?? null, placeholder: document.getElementById('palette-input').placeholder, rows: [...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent) })`;
     const a = await real([
       ...typeBoard, { read: KEY, as: 'key' },
-      // untrusted: nothing opens
-      { read: `(() => { const k = [...document.querySelectorAll('.bd-host .bd-head .key')].find((x) => /^Dimensions/.test(x.textContent)); k.click(); k.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return 1; })()`, as: 'synth' }, { wait: 300 }, { read: LIST, as: 'afterSynth' },
       // a real press
       { press: '.bd-host .bd-head .key[aria-haspopup="dialog"]' }, { wait: 400 }, { read: LIST, as: 'list' }, facts('listOpen'),
       { key: 'Escape' }, { wait: 400 }, { read: LIST, as: 'closed' }, facts('afterEsc'), { read: KEY, as: 'keyAfter' },
       // again, and Enter on its row: the board this session has open takes the keys (nothing is sent)
       { press: '.bd-host .bd-head .key[aria-haspopup="dialog"]' }, { wait: 400 }, { key: 'Enter' }, { wait: 700 }, { read: LIST, as: 'chosen' }, facts('afterRow'),
     ]);
+    // untrusted, in a run of its own (so this is the assertion that fails when the trusted rule goes, not the driver):
+    // a synthetic click and a synthetic Enter on the key open nothing
+    const s = await real([
+      ...typeBoard,
+      { read: `(() => { const k = [...document.querySelectorAll('.bd-host .bd-head .key')].find((x) => /^Dimensions/.test(x.textContent)); k.click(); k.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return 1; })()`, as: 'synth' }, { wait: 400 }, { read: LIST, as: 'afterSynth' }, facts('synthFacts'),
+    ]);
+    expect(s.synth).toBe(1);
+    expect(s.afterSynth, 'a synthetic press on Dimensions ▾ opened the list').toMatchObject({ open: false });
+    expect(s.synthFacts).toMatchObject({ open: true, frames: 1 });
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     // the specimen's key: its words, its title, a key that presses
     expect(a.key).toMatchObject({ text: 'Dimensions ▾', title: 'Dimensions in this project (/boards)', disabled: null, popup: 'dialog' });
-    expect(a.afterSynth).toMatchObject({ open: false });
     expect(a.list).toMatchObject({ open: true, head: 'Dimensions', placeholder: 'find a dimension' });
     expect((a.list as { rows: string[] }).rows).toHaveLength(1);
     expect((a.list as { rows: string[] }).rows[0]).toMatch(/^Totals are off by a cent/);
@@ -882,14 +890,17 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
   // T-2026-11-25-004 (about 190px of board), where the rail's last key used to lie over the foot.
   it.each([
     ...['desk', 'focus', 'decide'].flatMap((preset) => [{ preset, width: 1024, height: 768 }, { preset, width: 1280, height: 800 }, { preset, width: 640, height: 400 }]),
+    // one row under a 4× CPU slowdown: the wait for the board is a condition, so a slow machine changes nothing
+    { preset: 'decide', width: 1280, height: 800, slow: 4 },
     { preset: 'desk', width: 1280, height: 640, deny: 2 },
     { preset: 'desk', width: 1024, height: 520, idle: true },
-  ] as Array<{ preset: string; width: number; height: number; deny?: number; idle?: boolean }>)('G-DDL-08 under the $preset preset at $width×$height: the leaf and the strip meet no other zone, the rail stays clear of the foot, and with a card focused no key reaches the board', async ({ preset, width, height, deny = 0, idle = false }) => {
+  ] as Array<{ preset: string; width: number; height: number; deny?: number; idle?: boolean; slow?: number }>)('G-DDL-08 under the $preset preset at $width×$height (deny $deny, idle $idle, slow $slow): the leaf and the strip meet no other zone, the rail stays clear of the foot, and with a card focused no key reaches the board', async ({ preset, width, height, deny = 0, idle = false, slow = 0 }) => {
     const title = { desk: 'Layout: Desk', focus: 'Layout: Focus', decide: 'Layout: Decide' }[preset]!;
     const RECTS = `(() => { const r = (q) => { const e = document.querySelector(q); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; };
       const rail = document.querySelector('.bd-host .bd-rail'); const foot = document.querySelector('.bd-host .bd-foot'); const keys = rail ? [...rail.querySelectorAll('button')].map((k) => k.getBoundingClientRect()).filter((k) => k.height > 0) : [];
       const c = ${CUR}; const leafEl = document.querySelector('.bd-host .bd-leaf');
       return { leaf: r('.bd-host .bd-leaf'), turn: r('#board-turn'), pane: r('#pane-transcript'), stack: r('#stack'), status: r('#status-line'), pinned: r('#pinned'), composer: r('#composer'), sessions: r('#pane-sessions'), workshop: r('#workshop'), header: r('#app-header, header'),
+        visible: document.visibilityState, focus: document.hasFocus(),
         layout: JSON.parse(localStorage.getItem('gnomon.gui.layout') || '{}').name ?? null, state: c ? c.leaf.state() : null, room: c ? c.leaf.room() : null,
         rail: rail && keys.length ? { over: rail.scrollHeight - rail.clientHeight, keys: keys.length, gap: Math.round(foot.getBoundingClientRect().top - Math.max(...keys.map((k) => k.bottom))) } : null,
         outside: leafEl ? [...leafEl.querySelectorAll('*')].filter((e) => { const b = e.getBoundingClientRect(); const l = leafEl.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden]') && !e.closest('.bd-board') && (b.bottom > l.bottom + 1 || b.right > l.right + 1 || b.top < l.top - 1 || b.left < l.left - 1); }).map((e) => e.className).slice(0, 5) : null }; })()`;
@@ -907,14 +918,21 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
         ...typeBoard, { read: RECTS, as: 'rects' },
         facts('before'), ...steps,
       ],
-      { fixture: idle ? 'desk' : 'always-scopes', width, height, shot: `app-ddl08-${preset}-${width}x${height}` },
+      { fixture: idle ? 'desk' : 'always-scopes', width, height, cpuThrottle: slow, shot: `app-ddl08-${preset}-${width}x${height}` },
     );
     expect(a.errors).toEqual([]);
     expect(String(a.row)).toContain(title);
     type R = { x: number; y: number; r: number; b: number } | null;
-    const r = a.rects as { leaf: R; turn: R; pane: R; stack: R; status: R; pinned: R; composer: R; sessions: R; workshop: R; layout: string | null; state: string | null; room: number | null; rail: { over: number; keys: number; gap: number } | null; outside: string[] | null };
+    const r = a.rects as { leaf: R; turn: R; pane: R; stack: R; status: R; pinned: R; composer: R; sessions: R; workshop: R; layout: string | null; state: string | null; room: number | null; rail: { over: number; keys: number; gap: number } | null; outside: string[] | null; visible: string };
+    if (process.env.GNOMON_MEASURE) appendFileSync(process.env.GNOMON_MEASURE, `G-DDL-08 ${preset} ${width}x${height}${deny ? ` deny${deny}` : ''}${idle ? ' idle' : ''}${slow ? ` slow${slow}` : ''}: state=${r.state} room=${r.room} strip=${r.turn ? Math.round(r.turn.b - r.turn.y) : null} rail=${JSON.stringify(r.rail)} pane=${Math.round(r.pane!.r - r.pane!.x)}\n`);
     expect(r.layout).toBe(preset);
+    // the page PAINTS while it is measured (Probe: it went hidden when the palette closed, and every rect below was of a frozen page)
+    expect(r.visible).toBe('visible');
     expect(r.leaf, 'the board opened').not.toBeNull();
+    // the turn strip is drawn (it was 0×0 on the hidden page, so "the strip meets nothing" proved nothing)
+    expect(r.turn, 'the turn strip').not.toBeNull();
+    expect(r.turn!.b - r.turn!.y, 'the turn strip has height').toBeGreaterThanOrEqual(28);
+    expect(r.turn!.y, 'the strip starts where the leaf ends').toBeGreaterThanOrEqual(r.leaf!.b - 0.5);
     const leaf = r.leaf!;
     const pane = r.pane!;
     // inside the centre column
@@ -926,7 +944,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     // the stack, the status strip, the pinned cards and the composer (and the sessions rail and the Workshop where the preset shows them)
     for (const [name, zone] of [['stack', r.stack], ['status strip', r.status], ['pinned zone', r.pinned], ['composer', r.composer], ['sessions rail', r.sessions], ['Workshop', r.workshop]] as const) {
       expect(meets(zone, leaf), `the leaf meets the ${name}`).toBe(false);
-      if (r.turn) expect(meets(zone, r.turn), `the turn strip meets the ${name}`).toBe(false);
+      expect(meets(zone, r.turn!), `the turn strip meets the ${name}`).toBe(false);
     }
     // the zones the preset keeps are really on the page (so "meets none" is not a hidden zone passing)
     expect(r.composer && r.composer.b > r.composer.y, 'the composer shows').toBe(true);
