@@ -619,7 +619,8 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
 
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
-      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { wait: 900 }, facts('shown'),
+      // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 15_000 }, { wait: 400 }, facts('shown'),
     ]);
     expect(a.errors).toEqual([]);
     expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
