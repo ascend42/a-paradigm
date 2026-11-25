@@ -24,6 +24,9 @@ export function leafStateOf(s: { load: LeafLoad; alive: boolean; boardHeight: nu
 
 export const LEAF_COPY = {
   medium: '› board',
+  // (the head key and its title are the specimen's: specimen-board.html#leaf)
+  dimensions: 'Dimensions ▾',
+  dimensionsTitle: 'Dimensions in this project (/boards)',
   loading: 'opening the board…',
   yielded: 'A card has the keys · click the board to draw',
   tooShort: 'The window is too short to draw here · make it taller, or decide the pinned cards',

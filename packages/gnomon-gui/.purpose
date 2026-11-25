@@ -798,6 +798,16 @@ components:
       Not built here: the Dimensions list surface (/boards is the palette
       pattern for now), the keep line's final words, G-DDL-08 across
       layout presets.
+      Boards S1.3 pass P4b-3: the leaf head's Dimensions ▾ key (design board-
+      leaf anatomy: 'this project's dimensions, the same list as /boards') is
+      live. BoardDockDeps.dimensions is called only for a trusted press and
+      opens the app's Dimensions list (the palette's, as /boards and the
+      palette row do); the list is over the board, Esc closes it and focus
+      returns to the key, and a row of the open board puts the keys on it with
+      nothing sent. A Dimensions list surface of its own is NOT built: the
+      design record names the key and where the list is reached, and gives no
+      component for the list (its place, rows and states are for Luna to
+      rule).
     path: src/ui/board-dock.ts
     type: module
     tags: [gnomon, gui, dimension, board]

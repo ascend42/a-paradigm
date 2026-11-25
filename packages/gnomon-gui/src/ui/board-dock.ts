@@ -49,6 +49,11 @@ export interface BoardDockDeps {
   reconnecting?: () => boolean;
   /** where focus goes when the leaf folds and what opened it is gone (the composer) */
   fallbackFocus: () => HTMLElement | null;
+  /**
+   * The leaf head's `Dimensions ▾` key: open this project's Dimensions list, the same one `/boards` opens. Called
+   * only for a trusted press (the list is opened only on its own trusted event, Aegis final).
+   */
+  dimensions?: (event: Event) => void;
   /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
   turn?: () => void;
   now?: () => number;
@@ -244,6 +249,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       load: d.load,
       cardFocused: d.cardFocused,
       onFold: (cause) => void fold(cause),
+      ...(d.dimensions ? { onDimensions: (cause: Event) => void (cause.isTrusted === true && d.dimensions?.(cause)) } : {}),
       ...session.leafOptions(),
       onReady: (handle) => {
         session.attachHandle(handle);

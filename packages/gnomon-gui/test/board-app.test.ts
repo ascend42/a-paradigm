@@ -642,6 +642,37 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(stamps[stamps.length - 1]![1]).not.toBeNull();
   }, 240_000);
 
+  it('the head\'s Dimensions ▾ key (design board-leaf anatomy) opens the same list as /boards on a real press; a synthetic press opens nothing; Esc closes the list and leaves the board open with focus back on the key; a row of the open board puts the keys on it', async () => {
+    const KEY = `(() => { const k = [...document.querySelectorAll('.bd-host .bd-head .key')].find((x) => /^Dimensions/.test(x.textContent)); return k ? { text: k.textContent, title: k.title, disabled: k.getAttribute('aria-disabled'), popup: k.getAttribute('aria-haspopup'), focused: document.activeElement === k } : null; })()`;
+    const LIST = `({ open: !document.getElementById('palette').hidden, head: document.querySelector('#palette-list .menu-h')?.textContent ?? null, placeholder: document.getElementById('palette-input').placeholder, rows: [...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent) })`;
+    const a = await real([
+      ...typeBoard, { read: KEY, as: 'key' },
+      // untrusted: nothing opens
+      { read: `(() => { const k = [...document.querySelectorAll('.bd-host .bd-head .key')].find((x) => /^Dimensions/.test(x.textContent)); k.click(); k.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return 1; })()`, as: 'synth' }, { wait: 300 }, { read: LIST, as: 'afterSynth' },
+      // a real press
+      { press: '.bd-host .bd-head .key[aria-haspopup="dialog"]' }, { wait: 400 }, { read: LIST, as: 'list' }, facts('listOpen'),
+      { key: 'Escape' }, { wait: 400 }, { read: LIST, as: 'closed' }, facts('afterEsc'), { read: KEY, as: 'keyAfter' },
+      // again, and Enter on its row: the board this session has open takes the keys (nothing is sent)
+      { press: '.bd-host .bd-head .key[aria-haspopup="dialog"]' }, { wait: 400 }, { key: 'Enter' }, { wait: 700 }, { read: LIST, as: 'chosen' }, facts('afterRow'),
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    // the specimen's key: its words, its title, a key that presses
+    expect(a.key).toMatchObject({ text: 'Dimensions ▾', title: 'Dimensions in this project (/boards)', disabled: null, popup: 'dialog' });
+    expect(a.afterSynth).toMatchObject({ open: false });
+    expect(a.list).toMatchObject({ open: true, head: 'Dimensions', placeholder: 'find a dimension' });
+    expect((a.list as { rows: string[] }).rows).toHaveLength(1);
+    expect((a.list as { rows: string[] }).rows[0]).toMatch(/^Totals are off by a cent/);
+    // the list is over the board, not in its place: the board stays open and nothing was sent for it
+    expect(f('listOpen')).toMatchObject({ open: true, frames: 1, rows: ['session.start:command'] });
+    expect(a.closed).toMatchObject({ open: false });
+    expect(f('afterEsc')).toMatchObject({ open: true, frames: 1, rows: ['session.start:command'] });
+    expect(a.keyAfter).toMatchObject({ focused: true });
+    expect(a.chosen).toMatchObject({ open: false });
+    expect(f('afterRow')).toMatchObject({ open: true, frames: 1, rows: ['session.start:command'] });
+    expect(f('afterRow').active).toMatch(/excalidraw/);
+  }, 120_000);
+
   it('Probe: a board that is out of date (a driven hash mismatch) is held still: a real drag and real keys add nothing and send nothing, and Esc still folds it', async () => {
     const lie = `(() => { const m = ${A}.mod; const run = m.run.bind(m); m.run = (...x) => { const r = run(...x); if (x[0] === 'dim.open' && r && r.ok) r.hash = 'sha256:' + '0'.repeat(64); return r; }; return 1; })()`;
     const a = await real([

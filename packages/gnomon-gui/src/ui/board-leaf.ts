@@ -54,6 +54,11 @@ export interface BoardLeafOptions {
   onOps?: (ops: DimOp[], cause: Event | null) => void;
   /** A new node id (a ULID) for each pasted mark; the leaf mints its own when none is given. */
   mint?: () => string;
+  /**
+   * The head's `Dimensions ▾` key (design board-leaf anatomy: "this project's dimensions, the same list as /boards"),
+   * with the press that asked. Without it (the dev fixtures) the key is drawn disabled.
+   */
+  onDimensions?: (cause: Event) => void;
 }
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -274,10 +279,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // ── head and keep line ───────────────────────────────────────────────────
   function drawHead(state: LeafState): void {
     const failed = state === 'failed';
-    headKey.textContent = failed ? LEAF_COPY.tryAgain : 'Dimensions ▾';
-    headKey.title = failed ? '' : 'Not built yet · type /boards for this project’s dimensions';
-    if (failed) headKey.removeAttribute('aria-disabled');
-    else headKey.setAttribute('aria-disabled', 'true'); // the list is S1.3's
+    headKey.textContent = failed ? LEAF_COPY.tryAgain : LEAF_COPY.dimensions;
+    // the key opens the same list as /boards (the design's words); a leaf nobody gave a list to draws it disabled
+    headKey.title = failed ? '' : o.onDimensions ? LEAF_COPY.dimensionsTitle : 'Type /boards for this project’s dimensions';
+    if (failed || o.onDimensions) headKey.removeAttribute('aria-disabled');
+    else headKey.setAttribute('aria-disabled', 'true');
+    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', 'dialog');
+    else headKey.removeAttribute('aria-haspopup');
     keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
     // held still: its line stays for as long as it lasts, over anything else the keep line would say
@@ -838,7 +846,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   el.addEventListener('focusin', (e) => {
     if (e.target instanceof HTMLTextAreaElement && boardHost.contains(e.target)) for (const fn of [...textOpen]) fn();
   }, true);
-  headKey.addEventListener('click', () => load === 'failed' && start());
+  headKey.addEventListener('click', (e) => (load === 'failed' ? start() : o.onDimensions?.(e)));
   escKey.addEventListener('click', (e) => o.onFold?.(e));
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
   // the rail key under the pointer and looped with the redraw's own refocus)

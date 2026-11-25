@@ -1989,6 +1989,8 @@ const boardDock = mountBoardDock({
   say: (text, kind) => notice(text, kind, { source: 'board' }),
   reconnecting: () => linkComing,
   fallbackFocus: () => $('composer-text'),
+  // the leaf head's Dimensions ▾ key: the same list as /boards (design board-leaf anatomy), on its own trusted press
+  dimensions: () => openDimensions(),
   turn: () => paintBoardTurn(),
 });
 // #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
