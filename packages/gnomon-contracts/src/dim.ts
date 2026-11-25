@@ -1139,8 +1139,21 @@ export interface DimGrantPayload {
   write: boolean;
   relayedFor: DimRowRelayedFor;
 }
-/** hsid → write, from HONOURED grant rows only. A session with no entry has its default (`dimGrantDefault`). */
-export type DimGrants = ReadonlyMap<string, boolean>;
+/** The standing of one session: what its newest honoured grant row said, and that row's seq. */
+export interface DimGrant {
+  write: boolean;
+  /** the seq of the row this entry came from: the high-water mark for that hsid */
+  seq: number;
+}
+/**
+ * hsid → its newest HONOURED grant row. A session with no entry has its default (`dimGrantDefault`).
+ *
+ * It is a Map on purpose. NEVER carry it through a plain object keyed by hsid (a keyframe, a state key, a tool
+ * answer, `Object.fromEntries`): an hsid is a stored string, and `__proto__`, `constructor` or `toString` as a key
+ * of a plain object either vanishes or answers with something that is not a grant. Serialise it as a list of
+ * `[hsid, write, seq]` entries and rebuild the Map entry by entry.
+ */
+export type DimGrants = ReadonlyMap<string, DimGrant>;
 
 export function emptyDimGrants(): DimGrants {
   return new Map();
@@ -1151,32 +1164,46 @@ export function emptyDimGrants(): DimGrants {
  * M4): the row's host-written `relayedFor` must fold as the human hand AND carry `surface: 'gui'` and no `agent`
  * key. A grant row stamped `bridge`, `voice` or `cli`, one that names an agent, one with no principal and one with
  * no stamp at all change nothing: a tool call that managed to append the kind cannot grant itself the pen.
+ *
+ * FAILS CLOSED ON VERSION: an honoured row whose `v` is not the version this file reads (missing, 0, 2, not a
+ * number) folds as `write: false` for its hsid, whatever its `write` says. This is an authorization row, not a
+ * drawing: a reader that does not know what a later version means must not read it as "may draw". (The op fold
+ * is the other way round on purpose: it reads a higher `v` by the v1 rules.)
  */
-function honouredGrant(row: DimRow, dim: string): { hsid: string; write: boolean } | null {
-  if (!row || row.kind !== DIM_AUX_KINDS.grant) return null;
+function honouredGrant(row: DimRow, dim: string): { hsid: string; write: boolean; seq: number } | null {
+  if (!row || row.kind !== DIM_AUX_KINDS.grant || !Number.isSafeInteger(row.seq)) return null;
   const p = row.payload;
-  if (!isPlainObject(p) || !Number.isSafeInteger(own(p, 'v')) || (own(p, 'v') as number) < 1 || own(p, 'dim') !== dim) return null;
+  if (!isPlainObject(p) || own(p, 'dim') !== dim) return null;
   const hsid = own(p, 'hsid');
-  const write = own(p, 'write');
-  if (!NON_EMPTY(hsid) || typeof write !== 'boolean') return null;
+  if (!NON_EMPTY(hsid)) return null;
   const r = own(p, 'relayedFor');
   if (!isPlainObject(r) || own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent')) return null;
   if (byOf(p).cls !== 'human') return null;
-  return { hsid, write };
+  if (own(p, 'v') !== DIM_ROW_VERSION) return { hsid, write: false, seq: row.seq };
+  const write = own(p, 'write');
+  if (typeof write !== 'boolean') return null;
+  return { hsid, write, seq: row.seq };
 }
 
 /**
- * Fold grant rows of one dimension, in log order; `from` continues an earlier fold. The ONE grant fold: the
- * dimension mod and the page both call it, so what the page shows is what the mod enforces. Pure and tolerant:
- * the input map is not changed, rows of any other kind or dimension are skipped, and it never throws. The last
- * honoured row for an hsid wins.
+ * Fold grant rows of one dimension; `from` continues an earlier fold. The ONE grant fold: the dimension mod and
+ * the page both call it, so what the page shows is what the mod enforces. Pure and tolerant: the input map is not
+ * changed, rows of any other kind or dimension are skipped, and it never throws.
+ *  - `dim` must match DIM_ID_PATTERN; for any other value nothing is folded and a copy of `from` is returned.
+ *  - The honoured row with the HIGHEST seq wins for an hsid. A row at or below the seq already folded for that
+ *    hsid changes nothing, so a redelivered or re-read older row (a follow that reconnects, a page read twice)
+ *    can never bring back a grant a later row revoked. A row with no integer seq is skipped.
  */
 export function foldDimGrants(rows: Iterable<DimRow>, dim: string, from: DimGrants = emptyDimGrants()): DimGrants {
   const out = new Map(from);
+  if (typeof dim !== 'string' || !DIM_ID_PATTERN.test(dim)) return out;
   for (const row of rows) {
     try {
       const g = honouredGrant(row, dim);
-      if (g) out.set(g.hsid, g.write);
+      if (!g) continue;
+      const cur = out.get(g.hsid);
+      if (cur && g.seq <= cur.seq) continue;
+      out.set(g.hsid, { write: g.write, seq: g.seq });
     } catch {
       // a malformed row grants nothing
     }
@@ -1190,12 +1217,17 @@ export function dimGrantDefault(state: DimState, hsid: string): boolean {
 }
 
 /**
- * The effective write grant: may this session's agent draw in the dimension? Its last honoured grant row, else
+ * The effective write grant: may this session's agent draw in the dimension? Its newest honoured grant row, else
  * the default. A session that is not attached may never draw, whatever a row says.
+ *
+ * It answers the GRANT only. It does not read `state.ended`: the caller refuses a draw in an ended dimension
+ * itself, before or after asking this (the mod's `dim-ended`), and `grants` must be the fold of the same
+ * dimension as `state`.
  */
 export function dimMayDraw(state: DimState, grants: DimGrants, hsid: string): boolean {
   if (!NON_EMPTY(hsid) || !state.attached.includes(hsid)) return false;
-  return grants.get(hsid) ?? dimGrantDefault(state, hsid);
+  const g = grants.get(hsid);
+  return g ? g.write === true : dimGrantDefault(state, hsid);
 }
 
 /* ── the published hash vector ────────────────────────────────────────────── */

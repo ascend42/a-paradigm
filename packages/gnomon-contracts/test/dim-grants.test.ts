@@ -2,6 +2,8 @@
  * #contract-dim-shape, S1.4 P0: the two auxiliary kinds and the ONE write-grant fold (Aegis S1.4 M4, M9, F1).
  * The effective grant of an hsid is its last HONOURED grant row, else the default (first attached on, later
  * attached off). A grant row is honoured only when its host-written `relayedFor` has `surface: 'gui'` and no agent.
+ * Review of S1.4 P0 (Aegis N6): an unknown `v` fails closed, a redelivered older row changes nothing, and nothing
+ * is folded for a `dim` that is not a dimension id.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -104,8 +106,6 @@ describe('the write-grant fold', () => {
     const noise: DimRow[] = [
       grant(B, 'true'), grant(B, 1), grant(B, null), grant('', true), grant(7, true), grant(undefined, true),
       { ...grant(B, true), payload: { v: 1, dim: OTHER, hsid: B, write: true, relayedFor: gui } },
-      { ...grant(B, true), payload: { v: 0, dim: DIM, hsid: B, write: true, relayedFor: gui } },
-      { ...grant(B, true), payload: { dim: DIM, hsid: B, write: true, relayedFor: gui } },
       { ...grant(B, true), kind: DIM_KINDS.attach },
       { ...grant(B, true), kind: DIM_AUX_KINDS.drawRefused },
       { ...grant(B, true), kind: 'modns.acme.dimension.grant' },
@@ -118,8 +118,56 @@ describe('the write-grant fold', () => {
     expect(() => foldDimGrants(noise, DIM)).not.toThrow();
     expect(foldDimGrants(noise, DIM).size).toBe(0);
     expect(may(noise, B)).toBe(false);
-    // a later row version is read by the same rule
-    expect(may([{ ...grant(B, true), payload: { v: 2, dim: DIM, hsid: B, write: true, later: 'x', relayedFor: gui } }], B)).toBe(true);
+    // a row with no integer seq has no place in the order: skipped
+    for (const bad of [undefined, null, '7', 1.5, NaN]) expect(may([{ ...grant(B, true), seq: bad as unknown as number }], B), String(bad)).toBe(false);
+  });
+
+  it('an honoured row of a version this file does not read folds as write false, whatever it says', () => {
+    const versioned = (hsid: string, v: unknown, write: unknown, relayedFor: unknown = gui): DimRow => ({ seq: seq++, kind: DIM_AUX_KINDS.grant, payload: { ...(v === NONE ? {} : { v }), dim: DIM, hsid, write, later: 'x', relayedFor } });
+    for (const v of [2, 3, 0, -1, 1.5, '1', null, NONE]) {
+      const name = `v ${String(v)}`;
+      // it does not grant, and it revokes: the default-on session and a session a person granted both lose the pen
+      expect(may([versioned(B, v, true)], B), `${name}: grants`).toBe(false);
+      expect(may([versioned(A, v, true)], A), `${name}: revokes the default`).toBe(false);
+      expect(may([grant(B, true), versioned(B, v, true)], B), `${name}: revokes a grant`).toBe(false);
+      expect(foldDimGrants([versioned(B, v, true)], DIM).get(B)?.write, name).toBe(false);
+      // a v1 row after it is read again
+      expect(may([versioned(B, v, true), grant(B, true)], B), `${name}: then v1`).toBe(true);
+    }
+    // only from an honoured stamp: an unknown version from a tool surface still changes nothing
+    expect(may([versioned(A, 2, false, { principal: 'p:t/session', surface: 'bridge', agent: 'claude' })], A)).toBe(true);
+    expect(may([versioned(A, 2, false, NONE)], A)).toBe(true);
+    // v1 itself is read as written
+    expect(may([versioned(B, 1, true)], B)).toBe(true);
+  });
+
+  it('nothing is folded unless dim is a dimension id; a copy of from is returned', () => {
+    const from = foldDimGrants([grant(B, true)], DIM);
+    for (const bad of ['', 'not-a-dim', 'dim:nope', `${DIM} `, '__proto__', undefined, null, 7]) {
+      const rows: DimRow[] = [{ seq: 99, kind: DIM_AUX_KINDS.grant, payload: { v: 1, dim: bad, hsid: A, write: false, relayedFor: gui } }];
+      const out = foldDimGrants(rows, bad as string, from);
+      expect(out, String(bad)).not.toBe(from);
+      expect([...out], String(bad)).toEqual([...from]);
+      expect(foldDimGrants(rows, bad as string).size, String(bad)).toBe(0);
+    }
+  });
+
+  it('a row at or below the seq already folded for its hsid changes nothing (a redelivered older row)', () => {
+    const at = (n: number, hsid: string, write: boolean): DimRow => ({ seq: n, kind: DIM_AUX_KINDS.grant, payload: { v: 1, dim: DIM, hsid, write, relayedFor: gui } });
+    // revoke at 5, grant at 9, row 5 again: still granted
+    expect(may([at(5, B, false), at(9, B, true), at(5, B, false)], B)).toBe(true);
+    // and the other way: grant at 5, revoke at 9, the old grant again: still revoked
+    expect(may([at(5, A, true), at(9, A, false), at(5, A, true)], A)).toBe(false);
+    // across a continued fold, and for a row at the very same seq
+    const first = foldDimGrants([at(5, A, true), at(9, A, false)], DIM);
+    expect(first.get(A)).toEqual({ write: false, seq: 9 });
+    expect(dimMayDraw(state, foldDimGrants([at(5, A, true), at(8, A, true), at(9, A, true)], DIM, first), A)).toBe(false);
+    expect(dimMayDraw(state, foldDimGrants([at(10, A, true)], DIM, first), A)).toBe(true);
+    // the mark is per hsid: an older row for another session still lands
+    expect(dimMayDraw(state, foldDimGrants([at(3, B, true)], DIM, first), B)).toBe(true);
+    // a whole page read twice folds to the same map
+    const page = [at(5, B, false), at(6, A, false), at(9, B, true)];
+    expect([...foldDimGrants(page, DIM, foldDimGrants(page, DIM))]).toEqual([...foldDimGrants(page, DIM)]);
   });
 
   it('a grant row for a session that is not attached never lets it draw', () => {
@@ -136,7 +184,8 @@ describe('the write-grant fold', () => {
     const snapshot = [...first];
     const both = foldDimGrants(rows.slice(2), DIM, first);
     expect([...first]).toEqual(snapshot);
+    const flat = (g: ReadonlyMap<string, { write: boolean }>): Array<[string, boolean]> => [...g].map(([h, e]): [string, boolean] => [h, e.write]).sort();
     expect([...both].sort()).toEqual([...foldDimGrants(rows, DIM)].sort());
-    expect([...both].sort()).toEqual([[A, true], [B, true]]);
+    expect(flat(both)).toEqual([[A, true], [B, true]]);
   });
 });
