@@ -454,6 +454,26 @@ describe.skipIf(!!process.env.CI || !chrome)('the board in the real app on a rea
     expect(r.fits).toBe(true);
   }, 120_000);
 
+  it('#gui-board-turn (Aegis L3): show chat keeps its focus when the strip repaints under it', async () => {
+    const a = await real([
+      realClock, ...toIdle, ...typeBoard, { read: `(document.querySelector('#board-turn .bd-turn-key').focus(), document.activeElement.className)`, as: 'before' },
+      append('turn.sent', { turn: 'turn:p4b2/l3' }), { wait: 400 }, replyRow('A new reply repaints the row.'), append('turn.result', { subtype: 'success', turn: 'turn:p4b2/l3' }), { wait: 500 },
+      { read: `({ active: document.activeElement.className, row: document.querySelector('#board-turn .bd-turn-turn').innerText })`, as: 'after' },
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(a.before).toMatch(/bd-turn-key/);
+    expect((a.after as { row: string }).row).toMatch(/A new reply repaints the row/);
+    expect((a.after as { active: string }).active).toMatch(/bd-turn-key/);
+  }, 120_000);
+
+  it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
+    const a = await real([
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { wait: 900 }, facts('shown'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
+  }, 120_000);
+
   it('#gui-board-turn: a real press on the strip’s working key folds the board, leaves its steps unfolded in the chat and puts focus on that key there; a synthetic one does nothing', async () => {
     const a = await real([
       realClock, ...toIdle, ...typeBoard, ...sendTyped('run the totals tests'), append('turn.sent', { turn: 'turn:p4b2/2' }), toolRow('npm test -- --filter totals'), { wait: 600 }, strip('running'),

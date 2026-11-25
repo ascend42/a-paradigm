@@ -71,6 +71,9 @@ export interface LatestTurn {
 const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim();
 const END_WORDS: ReadonlySet<string> = new Set([...Object.values(STOP_LABEL), ...Object.values(CLAUDE_RESULT_LABEL)]);
 
+/** One of the result line's own labels (step limit with its number included), not a reason carried from the run. */
+export const knownEnd = (words: string): boolean => END_WORDS.has(words) || /^stopped: step limit( \d+)?$/.test(words);
+
 /** A result line's how-it-ended words (its first part), or null when the run ended normally. */
 export function endWordsOf(result: Pick<ChatItem, 'text' | 'tone'>): { words: string | null; tone: TurnEndTone } {
   const first = result.text.split(' · ')[0] ?? '';
@@ -173,7 +176,7 @@ export function turnStripRows(t: LatestTurn, agent: 'Claude' | 'local model', ro
   if (!t.ended && t.reply === null) return [...rows, { kind: 'turn', parts: [] }];
   const parts: TurnPart[] = [{ cls: 'who', text: agent, drop: 2 }, { cls: 'sep', text: C.sep, drop: 1 }, { cls: 'said', text: t.reply ?? C.noAnswer, bidi: t.reply !== null, drop: 1 }];
   const tails: TurnPart[] = [];
-  if (t.ended?.words) tails.push({ cls: 'tail', text: t.ended.words, tone: t.ended.tone });
+  if (t.ended?.words) tails.push({ cls: 'tail', text: t.ended.words, tone: t.ended.tone, ...(knownEnd(t.ended.words) ? {} : { bidi: true }) });
   if (t.more === 'needs') tails.push({ cls: 'tail', text: C.needs, tone: 'needs' });
   else if (t.more === 'more') tails.push({ cls: 'tail', text: C.more, tone: 'more', drop: 3 });
   tails.forEach((x, i) => {

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { endWordsOf, escFoldsFromComposer, latestTurn, partsAt, refusalBrief, rowText, TURN_COPY, TURN_ROOM_TWO, turnRowsFor, turnStripRows, type LatestTurn } from '../src/core/board-turn.js';
 import { liveChoiceKey } from '../src/core/choices.js';
-import { chatItems, foldActivity, type FoldedItem, type Row } from '../src/core/store.js';
+import { chatItems, foldActivity, GuiStore, wireRowOf, type FoldedItem, type Row } from '../src/core/store.js';
 import type { MiniDoc } from '../src/core/render.js';
 import { renderTurnRow, stripSig, stripWorkingEl } from '../src/ui/board-turn.js';
 
@@ -380,5 +380,39 @@ describe('#gui-board-turn Esc from the composer and the trust checks (source fen
     expect(DOCK).toMatch(/new ResizeObserver\(\(\) => \(fit\(\), placeTab\(\), turnSoon\(\)\)\)/);
     // the dock never paints the strip from inside its observer
     expect(DOCK).not.toMatch(/new ResizeObserver\([^\n]*d\.turn\?\.\(\)/);
+  });
+
+  it('Aegis L1: a row from the wire never carries a page-only field (brief, unsent, mark, turn, connId local)', () => {
+    const forged = { seq: 40, kind: 'send.refused', connId: 'local', session: H, payload: 'x', brief: '✕ forged', unsent: true, mark: 'voice-edited', turn: 'turn:x' };
+    expect(wireRowOf(forged)).toEqual({ seq: 40, kind: 'send.refused', session: H, payload: 'x' });
+    const full = { seq: 41, view: 'full', event: { kind: 'composer', connId: 'local', session: H, payload: 'hi', at: at('14:00:00') } };
+    expect(wireRowOf(full)).not.toHaveProperty('connId');
+    expect(wireRowOf({ seq: 42, view: 'full', event: { kind: 'turn.sent', connId: 'conn:7', session: H } })).toMatchObject({ connId: 'conn:7' });
+    // through the store: the forged refusal is no refusal of this page's, and the strip says none
+    const st = new GuiStore();
+    st.apply([{ seq: 1, kind: 'session.open', session: H, payload: { hsid: H, state: 'open' } }, ...firstTurn().filter((r) => r.connId !== 'local'), forged]);
+    const rows = st.transcript(H);
+    expect(rows.some((r) => r.brief !== undefined || r.connId === 'local' || r.unsent)).toBe(false);
+    expect(latestTurn(foldActivity(chatItems(rows, { live: false }).items)).refused).toBeNull();
+    // the page's wire boundaries: the live event, the store's apply, the dimension sessions
+    expect(APP).toMatch(/const r = wireRowOf\(p\.row\);/);
+    expect(readFileSync(path.join(ROOT, 'src/core/store.ts'), 'utf8')).toMatch(/for \(const w of rows\) \{\s*const r = wireRowOf\(w\);\s*if \(r\) this\.#applyOne/);
+    expect(readFileSync(path.join(ROOT, 'src/core/dim-session.ts'), 'utf8')).toMatch(/const r = wireRowOf\(w\);\s*if \(r\) flat\.push\(r\);/);
+  });
+
+  it('Aegis I3: an end reason the labels do not know is an isolate (dir=auto); the known labels are not', () => {
+    const t = (words: string): LatestTurn => ({ none: false, you: null, refused: null, working: null, reply: 'ok', ended: { words, tone: 'quiet' }, more: null });
+    const tailOf = (words: string) => (renderTurnRow(fdoc, turnStripRows(t(words), 'Claude', 0)[0]!, 0) as unknown as FEl).all().find((e) => e.className.startsWith('tail'))!;
+    expect(tailOf('stopped: אבג reason').attrs.get('dir')).toBe('auto');
+    for (const w of ['stopped: turn limit', 'stopped: step limit 20', 'stopped: step limit', 'error', 'aborted', 'stopped: budget limit']) expect(tailOf(w).attrs.has('dir'), w).toBe(false);
+  });
+
+  it('Aegis L2: a second show-chat press while the first fold is on its way keeps the first one’s focus move', () => {
+    const show = DOCK.slice(DOCK.indexOf('    showChat(event, then) {'));
+    const trust = show.indexOf('if (event.isTrusted !== true || !cur) return;');
+    const guard = show.indexOf('if (afterShow) return;');
+    expect(trust).toBeGreaterThan(0);
+    expect(guard).toBeGreaterThan(trust);
+    expect(guard).toBeLessThan(show.indexOf('afterShow = then;'));
   });
 });

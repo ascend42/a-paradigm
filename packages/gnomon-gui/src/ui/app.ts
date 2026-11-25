@@ -38,7 +38,7 @@ import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { renderHostSlips, wireHostSlips } from './host-slip.js';
 import { copyTextOf, hostHintsOf, type HostHint } from '../core/host-hints.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
-import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
+import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, wireRowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { changedBefore, hasLive, LiveTicker, liveText, stepClockText, workParts } from '../core/live-turn.js';
 import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '../core/turn-steps.js';
@@ -2116,7 +2116,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
     if (p.row) {
       logStore.apply([p.row]); // the GUI store and the dimension sessions, both
-      const r = rowOf(p.row);
+      const r = wireRowOf(p.row); // Aegis L1: never a page-only field from the wire
       if (r) {
         dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
         offerVoiceRow(r); // #gui-offer-slip L1: only a LIVE heard "not now" dismisses (never a backlog replay)

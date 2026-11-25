@@ -26,7 +26,10 @@ const REPLY_MIN_PX = 28;
 function partEl(doc: MiniDoc, p: TurnPart, turn: boolean): MiniEl {
   const drop = p.drop !== undefined ? { 'data-drop': String(p.drop) } : null;
   if (p.cls === 'tail') {
-    return h(doc, 'span', { class: `tail ${p.tone ?? 'quiet'}${p.first ? ' first' : ''}`, ...drop }, h(doc, 'span', { class: 'tsep' }, TURN_COPY.sep), p.text);
+    const tail = h(doc, 'span', { class: `tail ${p.tone ?? 'quiet'}${p.first ? ' first' : ''}`, ...drop }, h(doc, 'span', { class: 'tsep' }, TURN_COPY.sep), p.text);
+    // Aegis I3: an end reason the labels do not know carries its words from the run: an isolate too
+    if (p.bidi) tail.setAttribute('dir', 'auto');
+    return tail;
   }
   const el = h(doc, 'span', { class: `${p.cls}${turn && p.cls === 'sep' && p.drop === 1 ? ' who-sep' : ''}`, ...drop }, p.text);
   // dir=auto: an isolate, so an RTL message keeps its first words and a reply's direction cannot leak (Mika 2)
@@ -130,11 +133,14 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
         sig = next;
         const had = document.activeElement;
         const hadWork = had instanceof HTMLElement && el.contains(had) ? (had.dataset.stripWork ?? null) : null;
+        const hadShow = had === show;
         while (el.firstChild) el.removeChild(el.firstChild);
         for (const r of rows) el.appendChild(renderTurnRow(doc, r, Date.now()) as unknown as Node);
         el.querySelector('.bd-turn-turn')?.appendChild(show);
         // a repaint keeps a focused working key focused (its row was rebuilt)
         if (hadWork !== null) el.querySelector<HTMLElement>(`[data-strip-work="${CSS.escape(hadWork)}"]`)?.focus({ preventScroll: true });
+        // Aegis L3: show chat is moved into the rebuilt row, which detaches it: its focus comes back with it
+        if (hadShow && document.activeElement !== show) show.focus({ preventScroll: true });
       }
       const turn = el.querySelector<HTMLElement>('.bd-turn-turn');
       if (turn) fit(turn);

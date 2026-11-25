@@ -157,6 +157,20 @@ export function rowOf(w: unknown): Row | null {
   return { seq, kind: 'unknown', view: str(o.view) ?? 'unknown' };
 }
 
+/**
+ * Aegis L1 (review of PR #120): a row as it comes from the WIRE (a log page, a live event, a dimension session's
+ * rows). The fields only this page sets on its own lines (`brief`, `unsent`, `mark`, `turn`, and `connId: 'local'`)
+ * are never taken from the wire: a flat row passed through `rowOf` would otherwise carry them into the chat as if the
+ * page had written them (a forged refusal line, a forged composer echo).
+ */
+export function wireRowOf(w: unknown): Row | null {
+  const r = rowOf(w);
+  if (!r) return null;
+  const { brief: _b, unsent: _u, mark: _m, turn: _t, ...rest } = r;
+  if (rest.connId === 'local') delete rest.connId;
+  return rest;
+}
+
 export class GuiStore {
   readonly sessions = new Map<string, SessionRow>();
   /** hsid → row seqs (indices into `rows`) in seq order. */
@@ -259,7 +273,7 @@ export class GuiStore {
   apply(rows: readonly unknown[]): Set<string> {
     const what = new Set<string>();
     for (const w of rows) {
-      const r = rowOf(w);
+      const r = wireRowOf(w);
       if (r) this.#applyOne(r, what);
     }
     this.#emit(what);

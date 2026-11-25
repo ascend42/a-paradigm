@@ -422,6 +422,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     showChat(event, then) {
       // trusted first: a synthetic press neither folds nor says the held line (G-GUI-04, Aegis N2)
       if (event.isTrusted !== true || !cur) return;
+      // Aegis L2: a second press while the first fold is on its way keeps the first one's focus move
+      if (afterShow) return;
       if (keptOpen()) return cur.leaf.sayHeld();
       afterShow = then;
       void fold(event).finally(() => {
