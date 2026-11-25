@@ -74,6 +74,11 @@ const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof
  */
 export const RESERVED_PRINCIPAL_NAMES: readonly string[] = Object.freeze(['mods-mcp']);
 
+/** Is this principal name one no person, device, agent or token may take? (the name validators' one question) */
+export function isReservedPrincipalName(name: string): boolean {
+  return RESERVED_PRINCIPAL_NAMES.includes(name);
+}
+
 function checkRow(row: unknown, ns: string): string | null {
   if (!isObj(row) || row.schemaVersion !== REGISTRY_ROW_SCHEMA) return 'schema';
   if (row.kind !== 'kernel' && row.kind !== 'device') return 'kind';
