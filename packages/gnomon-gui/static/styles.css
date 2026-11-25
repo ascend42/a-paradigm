@@ -1392,7 +1392,7 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .bd-host { position: absolute; left: 0; right: 0; top: 0; z-index: 12; }
 .bd-host[hidden] { display: none; }
 .bd-tab-on .feed > .toast-anchor { right: 48px; }
-.bd-open .feed > .toast-anchor { top: 44px; }
+.bd-open .feed > .toast-anchor { top: 48px; }
 .loops-word .lw-narrow { display: none; }
 @media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
 @media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }

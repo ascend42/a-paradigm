@@ -647,8 +647,11 @@ components:
   gui-dim-session:
     description: >-
       #gui-dim-session (boards S1.3 pass P4a, s1.3-draft point 6) - the LIVE
-      loop of the open dimensions as one unit, not yet mounted in the app
-      (test/board-isolation.test.ts: ui/app.ts imports none of it).
+      loop of the open dimensions as one unit. Since pass P4b-1 ui/app.ts
+      makes the page's ONE DimSessions (the GnomonClient itself to connect()
+      on every socket, onClose to linkDown(), the cursor-epoch reset to
+      reset(), every followed row to apply()) and #gui-board-dock mounts
+      each session's leaf. A refused delete keeps its selection.
       DimSessions is the one place sessions are made; a DimSession is ONE
       open dimension: it pins the dimension in #gui-dim-store, owns a
       #gui-dim-live (Session.connId passed as its connId), and wires: the
@@ -708,6 +711,58 @@ components:
       - test/dim-session.test.ts
       - test/dim-session-live.test.ts
       - ../gnomon/test/dimension-dogfood.test.ts
+  gui-board-dock:
+    description: >-
+      #gui-board-dock (boards S1.3 pass P4b-1, s1.3-draft point 7; design
+      component board-leaf) - where the board leaf lives in the shipped
+      app. Owns the leaf's place over the centre column (the chat header
+      and the chat; its height is set from the feed's bottom, so it stops
+      above the pinned cards and the composer), the edge tab
+      "<title> · board" (under the Loops tab when both show) and the ONE
+      leaf of the focused session's open dimension. Carries out the plans
+      of #gui-board-open on the trusted event that asked, through
+      DimSessions.open (the gesture stamp is minted from that event);
+      fold is session.fold (dim.close), or the page's own fold while the
+      board is held still (link down, out of date: nothing is sent); a
+      session switch is session.leave() and says what was lost; a rebuilt
+      session gets a new leaf. Words being typed when the link goes are
+      held in page memory only (Aegis option b): cleaned and bounded by
+      the leaf, kept per dimension and principal, put back only into a
+      text the person opens on the rebuilt board, never committed here,
+      dropped on reset, switch, fold, hash mismatch or principal change.
+      With a card focused ⌥B leaves an open board alone, and app.ts runs
+      no programmatic card focus during a board text edit (G-DDL-08).
+      Not built here (P4b-2): the Dimensions list surface (/boards is the
+      palette pattern for now), the keep line's final words, the working
+      line under the leaf, G-DDL-08 across layout presets.
+    path: src/ui/board-dock.ts
+    type: module
+    tags: [gnomon, gui, dimension, board]
+    related: ["#gui-board-open", "#gui-dim-session", "#gui-board", "#gui", "#dimension-mod"]
+    tests:
+      - test/board-app.test.ts
+      - test/board-isolation.test.ts
+      - ../gnomon/test/dimension-board-browser.test.ts
+  gui-board-open:
+    description: >-
+      #gui-board-open (boards S1.3 pass P4b-1) - how a board is opened, as
+      PURE plans: /board (the session's last dimension, else a new one
+      titled with the session's name, titleFrom session), /board <title>
+      (a new one, titleFrom user), the menu row, ⌥B (reopens only), a row
+      of the Dimensions list (attach then open when the session is not
+      attached; an ended dimension says it reopens); opened is command for
+      a typed command and menu for a pointer or ⌥B entry. Also the
+      Dimensions list rows (time from lastAt, ended, partly held, a
+      dimension still opening at link loss) and followBoth, the ONE store
+      followLog is handed: every row the GUI store takes also goes to the
+      dimension sessions, and a cursor-epoch reset resets both. lastDim
+      and the listings are display hints, never access decisions.
+    path: src/core/board-open.ts
+    type: module
+    tags: [gnomon, gui, dimension, board]
+    related: ["#gui-board-dock", "#gui-dim-store", "#gui-dim-session"]
+    tests:
+      - test/board-open.test.ts
   gui-dim-undo:
     description: >-
       #gui-dim-undo (boards S1.3 pass P3a, s1.3-draft point 6 undo; Aegis B3)

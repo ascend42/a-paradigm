@@ -2072,9 +2072,9 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   c.onClose(() => {
     client = null;
     session = null;
-    dimSessions.linkDown(); // an open board is held still; nothing is queued
-    boardDock.repaint();
     stopStatusPolls();
+    dimSessions.linkDown(); // #gui-dim-session: an open board is held still; nothing is queued
+    boardDock.repaint();
     paintCapture(voiceStatusOf(status), false);
     if (restarting(sessionStorage)) return void awaitRestart();
     showReconnect('the connection ended; the GUI session ended with it (D54)');
