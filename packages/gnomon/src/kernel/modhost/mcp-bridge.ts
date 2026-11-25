@@ -18,7 +18,8 @@
  *    until S1.4-P5 (Aegis M1: nothing draws before the revoke key and the dashed stroke exist), so a real kernel
  *    lists nothing and writes no mcp.json entry in this pass; tests pass an allowlist through the ports;
  *  - the mod is first-party (`gnomon`-published, tier first-party) and its installed package hash is one of the
- *    kernel's CURRENT pins, never a superseded or a historical first-party hash (Aegis A7);
+ *    kernel's CURRENT pins, never a superseded, a retired or a historical first-party hash (Aegis A7;
+ *    isCurrentFirstPartyPin in manifest/install.ts);
  *  - the tool declares neither `network` nor `spend` (a tool call with an hsid could reach `session.send`);
  *  - the tool carries a manifest `schema` of type `object` whose `description` is a string of at most 1,024
  *    characters with no control or format character, and whose canonical JSON is at most 8 KiB (Aegis M6);
@@ -79,8 +80,7 @@
  */
 import { createHash } from 'node:crypto';
 import { canonicalJson, type ToolRelayedFor } from '@a-company/gnomon-contracts';
-import { HISTORICAL_FIRST_PARTY_PINS } from '../manifest/grants.js';
-import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../manifest/install.js';
+import { isCurrentFirstPartyPin } from '../manifest/install.js';
 import { GNOMON_VERSION } from '../../version.js';
 import { walkPayloadKeys } from './bridge.js';
 import { RowFold } from './fold.js';
@@ -144,14 +144,8 @@ export interface BridgeTool {
   inputSchema: Record<string, unknown>;
 }
 
-/**
- * Is this package hash one of the kernel's CURRENT first-party pins? A superseded pin and a historical format-1 pin
- * keep their first-party TIER (so an old install still loads), but neither is current: a tree at one of them lists
- * no tool (Aegis A7, "an older first-party tree with tools must not stay drawable after a fix").
- */
-export function isCurrentFirstPartyPin(packageHash: string): boolean {
-  return FIRST_PARTY_PACKAGE_HASHES.has(packageHash) && !SUPERSEDED_FIRST_PARTY_PINS.has(packageHash) && !HISTORICAL_FIRST_PARTY_PINS.has(packageHash);
-}
+/** The pin rule's one definition lives beside the private pin tables (manifest/install.ts); the bridge holds no collection. */
+export { isCurrentFirstPartyPin };
 
 /** The list rule (see the header). Pure; fail closed per mod and per tool; sorted by mod id, then by the allowlist's order. */
 export function modBridgeTools(mods: readonly BridgeMod[], allow: Readonly<Record<string, readonly string[]>> = MOD_BRIDGE_TOOLS, currentPin: (packageHash: string) => boolean = isCurrentFirstPartyPin): BridgeTool[] {

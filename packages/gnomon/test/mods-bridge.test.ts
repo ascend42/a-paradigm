@@ -15,8 +15,8 @@ import { PRINCIPAL_KINDS } from '@a-company/gnomon-contracts';
 import { readDeskMods } from '../src/kernel/desk/mcp-passthrough.js';
 import { deviceRowFor, RESERVED_PRINCIPAL_NAMES, resolveRegistryText } from '../src/kernel/identity/registry.js';
 import { mintReadToken, readTokensPath, resolveReadTokensText } from '../src/kernel/identity/read-token.js';
-import { HISTORICAL_FIRST_PARTY_PINS } from '../src/kernel/manifest/grants.js';
-import { FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
+import { historicalFirstPartyPins, isHistoricalFirstPartyPin } from '../src/kernel/manifest/grants.js';
+import { firstPartyPins, isCurrentFirstPartyPin as pinRuleOfInstall, isFirstPartyPin, isRetiredPin, isSupersededPin, retiredPins, supersededPins } from '../src/kernel/manifest/install.js';
 import { writePause } from '../src/kernel/modhost/control.js';
 import {
   bridgeHeld, bridgeRefs, checkBridgeArguments,  escapeBridgeJson, fenceBridgeResult, isCurrentFirstPartyPin, MOD_BRIDGE_ENTRY, MOD_BRIDGE_FENCE_CLOSE, MOD_BRIDGE_FENCE_SENTENCE,
@@ -26,7 +26,7 @@ import {
 import { MOD_REFUSAL_CODES, ModRefusal } from '../src/kernel/modhost/refusal.js';
 import { refuseAppend } from '../src/kernel/socket/log-append.js';
 import { loopClampAllows } from '../src/kernel/supervisor/loop-clamp.js';
-import { unsandboxedModLauncher } from '../src/kernel/testing.js';
+import { unsandboxedModLauncher, withPinTablesForTest } from '../src/kernel/testing.js';
 import { fakeLog } from './dimension-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig, testModBridge } from './mod-helpers.js';
@@ -172,19 +172,44 @@ describe('#mod-tool-bridge: the list rule and the empty production allowlist (Ae
     expect(listed([mod(), mod({ name: 'gnomon.twin' })], { [PROBE]: ['t'], 'gnomon.twin': ['t'] })).toEqual([]);
   });
 
-  it('a superseded or a historical first-party hash is not a current pin; an unknown hash is not one either', () => {
-    const current = [...FIRST_PARTY_PACKAGE_HASHES].filter((h) => !SUPERSEDED_FIRST_PARTY_PINS.has(h) && !HISTORICAL_FIRST_PARTY_PINS.has(h));
+  it('a superseded, a retired or a historical first-party hash is not a current pin; an unknown hash is not one either; the rule is the one in install.ts', () => {
+    expect(isCurrentFirstPartyPin).toBe(pinRuleOfInstall); // ONE definition, beside the private tables
+    const superseded = supersededPins().map(([h]) => h);
+    const retired = retiredPins().map(([h]) => h);
+    const current = firstPartyPins().filter((h) => !isSupersededPin(h) && !isHistoricalFirstPartyPin(h) && !isRetiredPin(h));
     expect(current.length).toBeGreaterThan(0);
     for (const h of current) expect(isCurrentFirstPartyPin(h)).toBe(true);
-    expect(SUPERSEDED_FIRST_PARTY_PINS.size).toBeGreaterThan(0);
-    for (const h of SUPERSEDED_FIRST_PARTY_PINS.keys()) expect(isCurrentFirstPartyPin(h)).toBe(false);
-    for (const h of HISTORICAL_FIRST_PARTY_PINS) expect(isCurrentFirstPartyPin(h)).toBe(false);
+    expect([superseded.length > 0, retired.length > 0, historicalFirstPartyPins().length > 0]).toEqual([true, true, true]);
+    for (const h of [...superseded, ...retired, ...historicalFirstPartyPins()]) expect(isCurrentFirstPartyPin(h)).toBe(false);
     expect(isCurrentFirstPartyPin(`sha256:${'0'.repeat(64)}`)).toBe(false);
     // through the default rule: a first-party tree WITH schemas at a superseded hash, and one at no pin, list nothing
-    const sup = [...SUPERSEDED_FIRST_PARTY_PINS.keys()][0]!;
-    expect(modBridgeTools([mod({ packageHash: sup })], { [PROBE]: ['t'] })).toEqual([]);
+    expect(modBridgeTools([mod({ packageHash: superseded[0]! })], { [PROBE]: ['t'] })).toEqual([]);
     expect(modBridgeTools([mod({ packageHash: `sha256:${'1'.repeat(64)}` })], { [PROBE]: ['t'] })).toEqual([]);
     expect(modBridgeTools([mod({ packageHash: current[0]! })], { [PROBE]: ['t'] })).toHaveLength(1);
+  });
+
+  it('each of the three exclusions holds on its own: a hash that is first-party AND retired (or superseded) is not current', () => {
+    // the shipped tables keep a retired hash out of the first-party set, so the seam builds the case the rule must still refuse
+    const h = `sha256:${'a'.repeat(64)}`;
+    expect(withPinTablesForTest((t) => void t.firstParty.add(h), () => isCurrentFirstPartyPin(h))).toBe(true);
+    expect(withPinTablesForTest((t) => (t.firstParty.add(h), void t.retired.set(h, 'test')), () => [isFirstPartyPin(h), isRetiredPin(h), isCurrentFirstPartyPin(h)])).toEqual([true, true, false]);
+    expect(withPinTablesForTest((t) => (t.firstParty.add(h), void t.superseded.set(h, 'sha256:prior')), () => [isFirstPartyPin(h), isCurrentFirstPartyPin(h)])).toEqual([true, false]);
+    expect(isCurrentFirstPartyPin(h)).toBe(false); // the tables are back
+  });
+
+  it('the RETIRED dimension 1.0.0 tree, given tool schemas, lists nothing: an older first-party tree is not drawable after a fix (Aegis A7)', () => {
+    const fx = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'test', 'fixtures', 'first-party-retired', 'dimension-1.0.0.json'), 'utf8')) as { packageHash: string; files: Record<string, string> };
+    expect(fx.packageHash).toMatch(/^sha256:7e79c843/);
+    expect(isRetiredPin(fx.packageHash)).toBe(true);
+    const manifest = JSON.parse(fx.files['gnomon-manifest.json']!) as { publisher: string; name: string; provides: { tools: Array<{ name: string; effects: string[]; schema?: unknown }> } };
+    for (const t of manifest.provides.tools) t.schema = SCHEMA; // as if that tree had shipped schemas
+    const tree: BridgeMod = { name: 'gnomon.dimension', manifest: manifest as never, packageHash: fx.packageHash, tier: 'first-party' };
+    const allow = { 'gnomon.dimension': ['dim-view', 'dim-draw'] };
+    expect(modBridgeTools([tree], allow)).toEqual([]);
+    // only the pin stops it: the same tree under a rule that calls every hash current lists both tools
+    expect(modBridgeTools([tree], allow, () => true).map((t) => t.name)).toEqual(['dim-view', 'dim-draw']);
+    // and even a kernel that still held that hash as first-party would not list it while it is retired
+    expect(withPinTablesForTest((t) => void t.firstParty.add(fx.packageHash), () => modBridgeTools([tree], allow))).toEqual([]);
   });
 
   it('a real installed probe: the kernel pin rule lists nothing for it (its hash is no pin); with a test rule it lists the two schema-bearing tools', async () => {
