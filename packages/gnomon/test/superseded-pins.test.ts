@@ -7,9 +7,9 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { aliasOf, HISTORICAL_FIRST_PARTY_PINS } from '../src/kernel/manifest/grants.js';
+import { aliasOf, historicalFirstPartyPins, isHistoricalFirstPartyPin } from '../src/kernel/manifest/grants.js';
 import { appendGrantRow, effectiveInstall, readGrants } from '../src/kernel/manifest/index.js';
-import { deriveTier, FIRST_PARTY_PACKAGE_HASHES, rollbackPresenceBinding, stageInstall, SUPERSEDED_FIRST_PARTY_PINS } from '../src/kernel/manifest/install.js';
+import { deriveTier, firstPartyPins, isFirstPartyPin, rollbackPresenceBinding, stageInstall, isSupersededPin, supersededPins, supersededPriorModAbiId } from '../src/kernel/manifest/install.js';
 import { MANIFEST_FILE, readManifest } from '../src/kernel/manifest/manifest.js';
 import { snapshotFolder } from '../src/kernel/manifest/snapshot.js';
 import { mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
@@ -31,22 +31,22 @@ afterEach(async () => {
 describe('SUPERSEDED_FIRST_PARTY_PINS', () => {
   it('the vendored old trees hash to exactly the superseded pins (the fixture cannot drift)', () => {
     const hashes = SUPERSEDED_TREES.map((m) => hashOf(path.join(SUPERSEDED_DIR, m), `gnomon.${m}`));
-    expect(new Set(hashes)).toEqual(new Set(SUPERSEDED_FIRST_PARTY_PINS.keys()));
-    expect(hashes).toHaveLength(SUPERSEDED_FIRST_PARTY_PINS.size);
+    expect(new Set(hashes)).toEqual(new Set(supersededPins().map(([h]) => h)));
+    expect(hashes).toHaveLength(supersededPins().length);
   });
 
   it('a superseded pin keeps its tier, never aliases, and is disjoint from the current and historical sets', () => {
     const current = ['workshop', 'ledger', 'paradigm-context', 'neurons', 'constellation'].map((m) => hashOf(path.join(SHIPPED, m), `gnomon.${m}`));
-    for (const h of SUPERSEDED_FIRST_PARTY_PINS.keys()) {
+    for (const h of supersededPins().map(([h]) => h)) {
       expect(deriveTier(h)).toBe('first-party');
-      expect(FIRST_PARTY_PACKAGE_HASHES.has(h)).toBe(true);
-      expect(HISTORICAL_FIRST_PARTY_PINS.has(h)).toBe(false);
+      expect(isFirstPartyPin(h)).toBe(true);
+      expect(isHistoricalFirstPartyPin(h)).toBe(false);
       expect(current).not.toContain(h);
       // an alias resolves to gnomon.<name> only from a FORMAT-1 historical pin
       for (const legacy of SUPERSEDED_TREES) expect(aliasOf(legacy, 'first-party', h)).toBe(`local.${legacy}`);
     }
-    for (const h of current) expect(FIRST_PARTY_PACKAGE_HASHES.has(h)).toBe(true);
-    for (const h of HISTORICAL_FIRST_PARTY_PINS) expect(aliasOf('workshop', 'first-party', h)).toBe('gnomon.workshop');
+    for (const h of current) expect(isFirstPartyPin(h)).toBe(true);
+    for (const h of historicalFirstPartyPins()) expect(aliasOf('workshop', 'first-party', h)).toBe('gnomon.workshop');
   });
 
   it('rollback protection: a NEW stage of a superseded tree is refused TIER and its snapshot is not kept', () => {
@@ -80,7 +80,7 @@ describe('SUPERSEDED_FIRST_PARTY_PINS', () => {
       const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
       appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
       appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
-      expect(SUPERSEDED_FIRST_PARTY_PINS.has(snap.packageHash)).toBe(true);
+      expect(isSupersededPin(snap.packageHash)).toBe(true);
       // the human approves the Update card: the shipped tree is pinned
       const now = install(r, path.join(SHIPPED, m)).packageHash;
       expect(now).not.toBe(snap.packageHash);
@@ -102,6 +102,33 @@ describe('SUPERSEDED_FIRST_PARTY_PINS', () => {
       // nothing was appended and the shipped tree is still the pin
       expect(readGrants(r.home, r.auth).installs).toHaveLength(rows);
       expect(effectiveInstall(readGrants(r.home, r.auth), name)!.packageHash).toBe(now);
+    }
+  });
+
+  it('F1: after an uninstall nothing is pinned, so a superseded hash is not exempt: rollback to it is refused', () => {
+    for (const m of SUPERSEDED_TREES) {
+      const r = rig();
+      cleanups.push(r.cleanup);
+      const name = `gnomon.${m}`;
+      const snap = snapshotFolder(r.home, path.join(SUPERSEDED_DIR, m), name, noEvents);
+      const read = readManifest(fs.readFileSync(path.join(snap.dir, MANIFEST_FILE)), { tier: 'first-party' });
+      const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
+      appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
+      appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
+      appendGrantRow(r.home, r.auth, { kind: 'grant.uninstall', name, packageHash: snap.packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZD' });
+      expect(effectiveInstall(readGrants(r.home, r.auth), name)).toBeUndefined();
+      const rows = readGrants(r.home, r.auth).installs.length;
+      let err: unknown;
+      try {
+        rollbackModSnapshot(r.home, name, snap.packageHash, { presenceToken: mintTestPresence('mod.rollback', { bind: rollbackPresenceBinding(name, snap.packageHash) }), authority: r.auth });
+      } catch (e) {
+        err = e;
+      }
+      expect(err, m).toBeInstanceOf(ManifestRefusal);
+      expect((err as ManifestRefusal).manifestCode).toBe('TIER');
+      expect((err as ManifestRefusal).detail).toMatchObject({ name, why: 'superseded', toPackageHash: snap.packageHash });
+      expect(readGrants(r.home, r.auth).installs).toHaveLength(rows);
+      expect(effectiveInstall(readGrants(r.home, r.auth), name)).toBeUndefined();
     }
   });
 });
