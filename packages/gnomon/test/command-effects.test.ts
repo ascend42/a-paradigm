@@ -197,7 +197,7 @@ describe('S1.4 command effects through the running host (host.ts passes the comm
     third.provides = { ...third.provides, commands: COMMANDS };
     const fp = firstPartyProbeManifest();
     fp.provides = { ...fp.provides, commands: COMMANDS };
-    const { rows, run } = await started([
+    const { rows, run, reqs } = await started([
       { firstParty: false, manifest: third },
       { firstParty: true, manifest: fp },
     ]);
@@ -209,6 +209,32 @@ describe('S1.4 command effects through the running host (host.ts passes the comm
     const agent = { principal: 'p:abcdefgh/s-01', connId: 'conn-9' };
     for (const who of [cli, agent]) expect([await run(FIRST_PARTY_PROBE, 'probe.rw', 'append', who), await run(FIRST_PARTY_PROBE, 'probe.rw', 'state.set', who)]).toEqual([false, false]);
     expect(rows).toHaveLength(0);
+    // nothing of the above reached the bridge: no kernel.call at all, so no row and no slot of the append budget
+    expect(reqs).toEqual([]);
   });
 
+  it('the human reserve rests on the read cap: a command call whose surface is not gui never reaches the bridge with a write, so it can never append as callKind command', async () => {
+    const third = probeManifest();
+    third.provides = { ...third.provides, commands: COMMANDS };
+    const fp = firstPartyProbeManifest();
+    fp.provides = { ...fp.provides, commands: COMMANDS };
+    const { rows, run, reqs } = await started([
+      { firstParty: false, manifest: third },
+      { firstParty: true, manifest: fp },
+    ]);
+    const callers: Array<[string, string, { principal: string; connId: string; surface?: 'gui' | 'cli' }]> = [
+      ['first-party, a human on a device key', FIRST_PARTY_PROBE, { principal: 'p:abcdefgh/matt', connId: 'conn-8', surface: 'cli' }],
+      ['first-party, no surface (agent, session, voice, mod)', FIRST_PARTY_PROBE, { principal: 'p:abcdefgh/s-01', connId: 'conn-9' }],
+      ['third-party, a human on the GUI', 'acme.probe', GUI],
+      ['third-party, a human on a device key', 'acme.probe', { principal: 'p:abcdefgh/matt', connId: 'conn-8', surface: 'cli' }],
+    ];
+    for (const [label, name, who] of callers) {
+      for (const c of COMMANDS) expect([label, c.id, await run(name, c.id, 'append', who)]).toEqual([label, c.id, false]);
+    }
+    expect(reqs.filter((q) => q.verb === 'log.append')).toEqual([]);
+    expect(rows).toHaveLength(0);
+    // the one caller that may: a person on the GUI with the first-party mod, and only then is the call kind `command`
+    expect(await run(FIRST_PARTY_PROBE, 'probe.rw', 'append')).toBe(true);
+    expect(reqs.filter((q) => q.verb === 'log.append').map((q) => [q.callKind, q.stamp?.relayedFor.surface])).toEqual([['command', 'gui']]);
+  });
 });

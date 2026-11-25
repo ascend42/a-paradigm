@@ -1096,7 +1096,11 @@ export class ModHost {
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
         const callId = typeof params.callId === 'string' ? params.callId : undefined;
         const stamp = (ctx.kind === 'command' || ctx.kind === 'tool') && ctx.stamp ? ctx.stamp : undefined;
-        // S1.4 A4: from the bound context alone (the mod's request has no say); a view render counts as idle
+        // S1.4 A4: from the bound context alone (the mod's request has no say); a view render counts as idle.
+        // THE HUMAN RESERVE RESTS ON THE COMMAND READ CAP: `command` here means "a person on the GUI" only because
+        // effectsFor (above) already refused every write of a command whose stamp is not `surface: gui` from a
+        // gnomon-published mod (commandCap, G-MOD-17). A command context that could write for any other caller
+        // would hand that caller the 15 reserved rows (test/command-effects.test.ts pins the two together).
         const callKind: ModCallKind = ctx.kind === 'tool' ? 'tool' : ctx.kind === 'command' ? 'command' : 'idle';
         return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}), ...(stamp ? { stamp } : {}), callKind }) };
       }
