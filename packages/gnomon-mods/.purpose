@@ -187,8 +187,12 @@ components:
       tightened contract (scan cap, wider strip set, view re-validation,
       DIM_AUX_KINDS, the write-grant fold) and grantDefault now reads the
       published dimGrantDefault; no command, tool, kind or state key changes.
-      The 1.0.0 pin is replaced, not superseded: an installed 1.0.0 is no
-      longer first-party and waits for its Update card. Tested in test/dimension-mod.test.ts (rules,
+      The 1.0.0 pin is replaced and RETIRED (RETIRED_FIRST_PARTY_PINS in
+      #manifest-loader), not superseded. An install already pinned at 1.0.0
+      keeps loading first-party, because loadMod takes the tier from that
+      install's signed grant.trust row, until the person approves the Update
+      card; 1.0.0 can no longer be staged, approved from an old card or
+      rolled back to (test/retired-pins.test.ts). Tested in test/dimension-mod.test.ts (rules,
       caps, keyframes, isolation) and test/dimension-relay.test.ts (the
       relay table per caller class over real connections, a mod's own
       log.read, first-party identity).

@@ -62,7 +62,8 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     const h = hashSourceTree(DIMENSION_TREE, DIMENSION, () => undefined).packageHash;
     expect([...FIRST_PARTY_PACKAGE_HASHES], `the dimension tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
     expect(SUPERSEDED_FIRST_PARTY_PINS.has(h)).toBe(false);
-    // S1.4 P0 replaced the S1.3 pin: the 1.0.0 tree is no longer first-party by hash, and it is not a superseded pin either
+    // S1.4 P0 replaced the S1.3 pin: a NEW install of the 1.0.0 tree no longer derives first-party (an install already
+    // pinned at it keeps its signed tier until its Update: test/retired-pins.test.ts), and it is not a superseded pin
     const S1_3_PIN = 'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9';
     expect(h).not.toBe(S1_3_PIN);
     expect(FIRST_PARTY_PACKAGE_HASHES.has(S1_3_PIN)).toBe(false);
