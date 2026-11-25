@@ -370,13 +370,15 @@ export async function realPaste(cdp, origin, text, x, y, platform = process.plat
  * time), 'never-requested' (the server saw no request for this page's run id within `loadDeadlineMs`: the browser
  * never loaded it, a launch failure), or 'no-report' (the page was requested and sent nothing in `timeoutMs`).
  * `pageRequestedMs` is when the page itself was first asked for. A report that lands after the wait gave up is
- * returned as `lateReport`, never as `report`: it does not count as a report, and the caller judges what it carries.
+ * returned as `lateReport`, never as `report`: it does not count as a report, and the caller judges what it carries;
+ * `runId` lets the caller pick up a report that lands later still (server.lateReport). With `deadlineMs` the URL
+ * carries `deadline=<epoch ms>`, fixed at launch, for the page's own watchdog.
  */
-export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { loadDeadlineMs = null } = {}) {
+export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { loadDeadlineMs = null, deadlineMs = null } = {}) {
   const run = randomBytes(6).toString('hex');
   const sep = pagePath.includes('?') ? '&' : '?';
-  const url = `${server.origin}${pagePath}${sep}run=${run}`;
   const t0 = Date.now();
+  const url = `${server.origin}${pagePath}${sep}run=${run}${deadlineMs ? `&deadline=${t0 + deadlineMs}` : ''}`;
   const from = server.requests.length;
   // the WKWebView host times out a little BEFORE this wait does, so its last lines (the page's visibility and phase,
   // T-2026-11-06-003) reach the launcher tail of a run that never reported
@@ -422,8 +424,8 @@ export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { lo
   await proc.kill();
   const first = requested();
   const pageRequestedMs = first ? first.at - t0 : null;
-  if (report) return { report, wallMs, pageRequestedMs };
+  if (report) return { report, runId: run, wallMs, pageRequestedMs };
   const lateReport = server.lateReport(run);
   const miss = exitedFirst ? 'exited' : neverRequested || !first ? 'never-requested' : 'no-report';
-  return { report: null, wallMs, launcherTail: tail.slice(-800), miss, exit: exitedFirst ? exit : null, pageRequestedMs, ...(lateReport ? { lateReport } : {}) };
+  return { report: null, runId: run, wallMs, launcherTail: tail.slice(-800), miss, exit: exitedFirst ? exit : null, pageRequestedMs, ...(lateReport ? { lateReport } : {}) };
 }

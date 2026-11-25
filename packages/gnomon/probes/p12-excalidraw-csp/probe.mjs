@@ -36,9 +36,14 @@
 // browser sends NO report is retried, that page alone, ONCE per engine, and both attempts stay in the evidence
 // (launchRetries, with the page). Since T-2026-11-25-002 this covers the pinned page too (it used to be outside the
 // retry, and a pinned-page miss failed the probe with no launcher tail in the result), and a miss says why
-// (exited / never-requested / no-report). A page that reported is never retried, nor one whose late report carries
-// a CSP row. A run counts as mounted only if BOTH its pages mounted. The page's watchdog is set from the host's
-// wait (75 s of 90 s): at 45 s it cut off the probe build's page on a slow runner (Chrome, ~43 s there).
+// (exited / never-requested / no-report). A page that sent any report, on time or late, is never retried, nor one
+// that asked for anything outside the bundle; a report still in flight when its browser stopped is drained before
+// the server closes and judged. A run counts as mounted only if BOTH its pages mounted. The page's watchdog fires
+// 5 s before a deadline the host fixes at launch (80 s into the 90 s wait): a fixed 45 s from the driver's start cut
+// off the probe build's page on a slow runner (Chrome, ~43 s there).
+// Residual risk: a page whose main thread hangs before it can post is a 'no-report' miss, which is retryable, so a
+// CSP row it never posted would not be seen. The retry scope stays wide until CI evidence (nonReportingRuns[].miss)
+// shows which miss class the flake is; then it is narrowed to that class.
 import { gnomonCsp } from '../_shared/browser.mjs';
 import { exercisedChecks, pasteCarried, runAccounting, runBoardUnderCsp, runMounted, shippedBoard, staticScan } from './harness.mjs';
 

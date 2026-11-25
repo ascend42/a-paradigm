@@ -90,8 +90,10 @@ const DRIVER = `'use strict';
     fetch('/report?run=' + encodeURIComponent(run), { method: 'POST', body: JSON.stringify(R) });
   };
   // the page's own deadline: it reports what it has (stage 'watchdog', never clean) before the host stops waiting.
-  // The host sets it from its wait (?watchdog=ms); 45 s when it does not.
-  var WATCHDOG = Number(new URLSearchParams(location.search).get('watchdog')) || 45000;
+  // The host fixes it at launch (?deadline=, epoch ms) and the watchdog fires 5 s before it, so a page that loaded
+  // late still reports; 45 s from now when there is no deadline.
+  var DEADLINE = Number(new URLSearchParams(location.search).get('deadline'));
+  var WATCHDOG = DEADLINE > 0 ? Math.max(0, DEADLINE - 5000 - Date.now()) : 45000;
   R.watchdogMs = WATCHDOG;
   setTimeout(function () { R.send('watchdog'); }, WATCHDOG);
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -989,13 +991,30 @@ export function reskinProblems(r) {
 /** The ink token of each theme as a computed colour: the harness page defines no tokens, so the caret takes the text's own colour, which is the mark's line colour (ink) in that theme. */
 export const RGB_INK = { day: 'rgb(22, 21, 15)', night: 'rgb(232, 244, 240)' };
 
+/** Paths a page may ask for besides the bundle's files: the server's report and paste hooks, the two page paths
+ * (`/` is served as /index.html) and the browser's own favicon probe (_shared/browser.mjs startServer). */
+export const STRAY_OK = new Set(['/report', '/paste', '/', '/pinned.html', '/favicon.ico']);
+
+/** The requests of a page row that were for something outside the bundle. */
+export function strayRequests(r, known) {
+  return (r?.requests ?? []).filter((q) => !known.has(q.path) && !STRAY_OK.has(q.path));
+}
+
 /** Why a run is not clean ([] when it is): the G-DDL-06 predicate, one run of one engine. */
 export function runProblems(r, known) {
   if (r.error) {
     // a page that did not report is never clean; a report that came after the wait gave up does not make it one,
-    // and any CSP row it carries is a violation like any other
+    // and everything it says is judged: its CSP rows are violations like any other
     const p = [r.miss && MISS[r.miss] ? `${r.error} (${MISS[r.miss]})` : r.error];
-    if (r.lateReport?.violationCount) p.push(`${r.lateReport.violationCount} CSP violation(s) in a report that came after the timeout: ${r.lateReport.violations.map((v) => `${v.directive} ${v.blocked} in ${v.phase} x${v.count}`).join('; ')}`);
+    const late = r.lateReport;
+    if (late) {
+      p.push(`a report came after the timeout: stage ${late.stage}, mounted ${late.mounted}`);
+      if (late.violationCount) p.push(`${late.violationCount} CSP violation(s) in a report that came after the timeout: ${late.violations.map((v) => `${v.directive} ${v.blocked} in ${v.phase} x${v.count}`).join('; ')}`);
+      if (late.errors?.length) p.push(`page errors in the late report: ${late.errors.join(' | ')}`);
+      if (late.rejections?.length) p.push(`unhandled rejections in the late report: ${late.rejections.join(' | ')}`);
+    }
+    const stray = strayRequests(r, known);
+    if (stray.length) p.push(`requests outside the bundle: ${[...new Set(stray.map((q) => q.path))].slice(0, 8).join(', ')}`);
     return p;
   }
   const p = [];
@@ -1020,7 +1039,7 @@ export function runProblems(r, known) {
     if (r.syntheticDraw?.added !== 0 || r.syntheticDraw?.edits !== 0) p.push(`synthetic input counted in the pinned chunk: ${JSON.stringify(r.syntheticDraw)}`);
   }
   if (r.stage !== 'done') p.push(`stage ${r.stage}`);
-  const stray = (r.requests ?? []).filter((q) => !known.has(q.path) && q.path !== '/report' && q.path !== '/paste' && q.path !== '/' && q.path !== '/pinned.html' && q.path !== '/favicon.ico'); // the browser's own favicon probe
+  const stray = strayRequests(r, known);
   if (stray.length) p.push(`requests outside the bundle: ${[...new Set(stray.map((q) => q.path))].slice(0, 8).join(', ')}`);
   return p;
 }
@@ -1037,25 +1056,53 @@ export function pageRow(mode, { report, wallMs, pageRequestedMs }, requests) {
 }
 
 /** The row of one page that sent no report: never clean (runProblems), and it says why (runPage's `miss`). */
-export function missRow(mode, { wallMs, launcherTail, miss, exit, pageRequestedMs, lateReport }, requests) {
-  const late = lateReport ? { stage: lateReport.stage, sentAt: lateReport.sentAt, phaseAt: lateReport.phaseAt, violationCount: (lateReport.violations ?? []).length, violations: aggregate(lateReport.violations ?? []) } : undefined;
-  return { mode, wallMs, error: NO_REPORT, miss, exit, pageRequestedMs, launcherTail, requests, ...(late ? { lateReport: late } : {}) };
+export function missRow(mode, { runId, wallMs, launcherTail, miss, exit, pageRequestedMs, lateReport }, requests) {
+  return { mode, runId, wallMs, error: NO_REPORT, miss, exit, pageRequestedMs, launcherTail, requests, ...(lateReport ? { lateReport: lateOf(lateReport) } : {}) };
+}
+
+/** What the result keeps of a report that came after its page's wait gave up: everything runProblems judges. */
+export function lateOf(report) {
+  const v = report.violations ?? [];
+  return { stage: report.stage, mounted: report.mounted === true, sentAt: report.sentAt, phaseAt: report.phaseAt, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [] };
 }
 
 /**
- * Whether a page row may be retried: only a page that sent NO report (a launch failure or a missed report), and
- * never one whose late report carries a CSP row. A page that reported is never retried, whatever it reported.
+ * Attach the reports that landed after their page's wait gave up (a POST still in flight when the browser was
+ * stopped) to the missed pages they belong to: the runs' pages and the retried attempts. `take(runId)` returns such
+ * a report once, or null. Returns how many were attached.
  */
-export function retryable(row) {
-  return !!row && row.error === NO_REPORT && !(row.lateReport?.violationCount > 0);
+export function attachLateReports(rows, retried, take) {
+  let n = 0;
+  for (const p of [...rows.flatMap((r) => [r, r.pinned]), ...retried]) {
+    if (!p || p.error !== NO_REPORT || p.lateReport || !p.runId) continue;
+    const late = take(p.runId);
+    if (late) {
+      p.lateReport = lateOf(late);
+      n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * Whether a page row may be retried: only a page that sent NO report at all (a launch failure or a missed report)
+ * and asked for nothing outside the bundle. A page that sent any report, on time or late, is never retried, whatever
+ * it reported, so no finding of it can leave the verdict.
+ */
+export function retryable(row, known) {
+  return !!row && row.error === NO_REPORT && !row.lateReport && strayRequests(row, known).length === 0;
 }
 
 /** Both pages of a run mounted (the pinned bytes and the probe build). A run with a missing page did not. */
 export const runMounted = (r) => !!r && r.mounted === true && r.pinned?.mounted === true;
 
-/** Every problem of an engine's runs, both pages of each ([] when every run is clean). */
-export function engineProblems(rows, known) {
-  return rows.flatMap((r, i) => [...(r.pinned ? runProblems(r.pinned, known).map((p) => `run ${i + 1} (pinned bytes): ${p}`) : [`run ${i + 1}: the pinned bytes were not run`]), ...runProblems(r, known).map((p) => `run ${i + 1} (probe build): ${p}`)]);
+/**
+ * Every problem of an engine's runs, both pages of each ([] when every run is clean). A retried attempt that turns
+ * out to have said something (a report that landed late, or a request outside the bundle) is judged as well.
+ */
+export function engineProblems(rows, known, retried = []) {
+  const attempts = retried.filter((a) => a.lateReport || strayRequests(a, known).length).flatMap((a) => runProblems(a, known).map((p) => `run ${a.run} (${a.page === 'pinned' ? 'pinned bytes' : 'probe build'}, retried attempt): ${p}`));
+  return [...attempts, ...rows.flatMap((r, i) => [...(r.pinned ? runProblems(r.pinned, known).map((p) => `run ${i + 1} (pinned bytes): ${p}`) : [`run ${i + 1}: the pinned bytes were not run`]), ...runProblems(r, known).map((p) => `run ${i + 1} (probe build): ${p}`)])];
 }
 
 /**
@@ -1079,9 +1126,11 @@ export function runAccounting(rows) {
 /**
  * Load the shipped board under the CSP in each picked engine, `runs` times; every run is two pages. A PAGE that
  * sends no report (a launch failure or a missed report) is retried, that page alone, at most `launchRetries` times
- * per engine; every retried attempt stays in `launchRetries` with the page it was. A page that reported is never
- * retried, and neither is one whose late report carries a CSP row, so a violation can never be retried away.
- * The page's own watchdog is set from `timeoutMs` (it reports before the host stops waiting), and a page the
+ * per engine; every retried attempt stays in `launchRetries` with the page it was. A page that sent any report, on
+ * time or late, is never retried, nor one that asked for anything outside the bundle, so no finding can be retried
+ * away; reports still in flight when a browser was stopped are drained before the server closes and judged.
+ * The page's watchdog fires 5 s before a deadline the host fixes at launch (?deadline=, epoch ms; 80 s into the
+ * 90 s wait, inside the WKWebView host's 85 s), so a page that loads late still reports 'watchdog'. A page the
  * browser never asked for within `loadDeadlineMs` is a launch failure, not a wait to the full timeout.
  * Resolves {csp, engines: {name: {version, family, runs: [...], launchRetries, clean, problems}}, missing}.
  */
@@ -1091,8 +1140,9 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
   const known = new Set(files.keys());
   const { pick, missing } = engines ? { pick: engines, missing: {} } : pickEngines();
   const server = await startServer({ files });
-  // the page's deadline sits inside the host's wait and inside the WKWebView host's own (timeout - 5 s)
-  const watchdogMs = Math.max(10_000, timeoutMs - 15_000);
+  // the page's deadline, from launch: inside the host's wait and inside the WKWebView host's own (timeout - 5 s)
+  const deadlineMs = Math.max(10_000, timeoutMs - 10_000);
+  const engineRows = [];
   const out = {};
   try {
     for (const e of pick) {
@@ -1101,10 +1151,10 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
       const page = async (run, mode) => {
         for (;;) {
           const b0 = server.requests.length;
-          const got = await runPage(server, e, `${mode === 'pinned' ? '/pinned.html' : '/'}?watchdog=${watchdogMs}`, timeoutMs, { loadDeadlineMs });
+          const got = await runPage(server, e, mode === 'pinned' ? '/pinned.html' : '/', timeoutMs, { loadDeadlineMs, deadlineMs });
           const rq = server.requests.slice(b0).map((q) => ({ method: q.method, path: q.path }));
           const row = got.report ? pageRow(mode, got, rq) : missRow(mode, got, rq);
-          if (!retryable(row) || retried.length >= launchRetries) return row;
+          if (!retryable(row, known) || retried.length >= launchRetries) return row;
           retried.push({ run, page: mode, ...row });
         }
       };
@@ -1115,7 +1165,13 @@ export async function runBoardUnderCsp({ runs = 1, timeoutMs = 90_000, launchRet
         r.pinned = pinned;
         rows.push(r);
       }
-      const problems = engineProblems(rows, known);
+      engineRows.push({ e, rows, retried });
+    }
+    // a report POST still in flight when its browser was stopped lands after runPage looked: take it now, judge it
+    await new Promise((r) => setTimeout(r, 500));
+    for (const { e, rows, retried } of engineRows) {
+      attachLateReports(rows, retried, (id) => server.lateReport(id));
+      const problems = engineProblems(rows, known, retried);
       out[e.name] = { version: e.version, family: e.family ?? e.kind, runs: rows, launchRetries: retried, clean: problems.length === 0, problems };
     }
   } finally {

@@ -45,19 +45,27 @@ components:
       T-2026-11-25-002 (P12 on CI): every run is two pages and the retry is
       per PAGE: a page that sends no report (the pinned page included, which
       used to sit outside the retry) is re-run alone, at most once per engine,
-      and each attempt stays in launchRetries with its page; a page that
-      reported, or a miss whose late report carries a CSP row, is never
-      retried. _shared/browser.mjs runPage says why a page missed (exited,
-      never-requested within loadDeadlineMs, no-report), when the page was
-      first requested, the browser's exit, and any report that came after
-      the wait (lateReport, judged, never counted as a report). The page's
-      watchdog comes from the host's wait (?watchdog=, 75 s of 90 s; it was
-      45 s, which cut off the probe build's page on a slow macos-15 runner)
-      and each report carries phaseAt and sentAt. The result counts a run as
+      and each attempt stays in launchRetries with its page; a page that sent
+      any report, on time or late, or asked for anything outside the bundle
+      (strayRequests, STRAY_OK) is never retried. _shared/browser.mjs runPage
+      says why a page missed (exited, never-requested within loadDeadlineMs,
+      no-report), when the page was first requested, the browser's exit, and
+      any report that came after the wait (lateReport, judged in full, never
+      counted as a report); reports still in flight are drained before the
+      server closes (attachLateReports) and a retried attempt that turns out
+      to have reported is judged too. The page's watchdog fires 5 s before a
+      launch-fixed deadline (?deadline= epoch ms, 80 s into the 90 s wait,
+      inside the WKWebView host's 85 s; it was 45 s from the driver's start,
+      which cut off the probe build's page on a slow macos-15 runner) and
+      each report carries phaseAt and sentAt. Residual risk: a page whose
+      main thread hangs before posting is a retryable 'no-report' miss, so a
+      CSP row it never posted is not seen; the retry scope is narrowed to
+      the miss class CI evidence shows once it shows one. The result counts a run as
       mounted only if both pages mounted, lists every non-reporting page in
       nonReportingRuns (run, page, wallMs, miss, launcherTail), and gives
       per-page timings (pinnedBytes, probeTimings). harness.mjs runAccounting,
-      engineProblems, retryable and runMounted are pure and tested in
+      engineProblems, retryable, strayRequests, attachLateReports and
+      runMounted are pure and tested in
       test/p12-run-accounting.test.ts. P12 has its own CI step (30 min).
       Pass B: the page also checks that a dropped image is reported to the
       host (onRefused, onAttempt) and reads the handle's marks and view.

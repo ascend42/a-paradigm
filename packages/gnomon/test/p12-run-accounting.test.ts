@@ -5,11 +5,13 @@
  *  - every page that sent no report is listed in nonReportingRuns, the pinned page included, with its wall time,
  *    why it missed and the launcher's last lines;
  *  - a missed report or a timeout is never clean, and a late report's CSP row is a violation;
- *  - only a page that sent no report may be retried, never one that reported and never a late CSP row.
+ *  - only a page that sent no report at all and asked for nothing outside the bundle may be retried: a page that
+ *    sent any report, on time or late, is never retried (Aegis, finding A);
+ *  - a report still in flight when the browser stopped is attached to its missed page and judged (edge B).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs probe harness (no types)
-import { engineProblems, MISS, missRow, NO_REPORT, retryable, runAccounting, runMounted } from '../probes/p12-excalidraw-csp/harness.mjs';
+import { attachLateReports, engineProblems, MISS, missRow, NO_REPORT, retryable, runAccounting, runMounted, STRAY_OK } from '../probes/p12-excalidraw-csp/harness.mjs';
 
 const KNOWN = new Set(['/index.html', '/pinned.html', '/harness.js', '/harness.css', '/board/board.js', '/board/board.css']);
 const PASTE = { via: 'synthetic', carried: 'text', types: ['text/plain'], stopped: true, added: 0, said: [], heard: 0, literal: false, engine: 0, nodes: [], violations: 0 };
@@ -74,8 +76,8 @@ describe('P12: a timeout or a missed report is never clean', () => {
   });
 
   it('a late report does not make a miss clean, and its CSP row is reported as a violation', () => {
-    const late = miss('pinned', { lateReport: { stage: 'done', violations: [] } });
-    expect(pinnedOf(engineProblems([run(probeOk, late)], KNOWN))).toEqual([`run 1 (pinned bytes): ${NO_REPORT} (${MISS['no-report']})`]);
+    const late = miss('pinned', { lateReport: { stage: 'done', mounted: true, violations: [] } });
+    expect(pinnedOf(engineProblems([run(probeOk, late)], KNOWN))).toEqual([`run 1 (pinned bytes): ${NO_REPORT} (${MISS['no-report']})`, 'run 1 (pinned bytes): a report came after the timeout: stage done, mounted true']);
     const bad = miss('pinned', { lateReport: { stage: 'done', violations: [{ directive: 'img-src', blockedURI: 'data' }] } });
     expect(pinnedOf(engineProblems([run(probeOk, bad)], KNOWN)).join(' | ')).toMatch(/1 CSP violation\(s\) in a report that came after the timeout: img-src data/);
   });
@@ -83,15 +85,55 @@ describe('P12: a timeout or a missed report is never clean', () => {
 
 describe('P12 retry: only a page that sent no report', () => {
   it('a missed page may be retried, whatever the miss', () => {
-    for (const why of Object.keys(MISS)) expect(retryable(miss('pinned', { miss: why }))).toBe(true);
+    for (const why of Object.keys(MISS)) expect(retryable(miss('pinned', { miss: why }), KNOWN)).toBe(true);
   });
   it('a page that reported is never retried, clean or not; a CSP violation above all', () => {
-    expect(retryable(pinnedOk)).toBe(false);
-    expect(retryable({ ...pinnedOk, violationCount: 1, violations: [{ directive: 'img-src', blocked: 'data', phase: 'pinned', count: 1 }] })).toBe(false);
-    expect(retryable({ ...probeOk, stage: 'watchdog' })).toBe(false);
-    expect(retryable({ ...probeOk, mounted: false })).toBe(false);
+    expect(retryable(pinnedOk, KNOWN)).toBe(false);
+    expect(retryable({ ...pinnedOk, violationCount: 1, violations: [{ directive: 'img-src', blocked: 'data', phase: 'pinned', count: 1 }] }, KNOWN)).toBe(false);
+    expect(retryable({ ...probeOk, stage: 'watchdog' }, KNOWN)).toBe(false);
+    expect(retryable({ ...probeOk, mounted: false }, KNOWN)).toBe(false);
   });
   it('a miss whose late report carries a CSP row is never retried', () => {
-    expect(retryable(miss('pinned', { lateReport: { stage: 'watchdog', violations: [{ directive: 'img-src', blockedURI: 'data' }] } }))).toBe(false);
+    expect(retryable(miss('pinned', { lateReport: { stage: 'watchdog', violations: [{ directive: 'img-src', blockedURI: 'data' }] } }), KNOWN)).toBe(false);
+  });
+  it('a miss with ANY late report is never retried: a driver error, no mount, page errors, or nothing wrong at all', () => {
+    expect(retryable(miss('pinned', { lateReport: { stage: 'driver-error', mounted: false, violations: [] } }), KNOWN)).toBe(false);
+    expect(retryable(miss('probe', { lateReport: { stage: 'watchdog', mounted: true, errors: ['boom @x:1'], violations: [] } }), KNOWN)).toBe(false);
+    expect(retryable(miss('probe', { lateReport: { stage: 'done', mounted: true, rejections: ['nope'], violations: [] } }), KNOWN)).toBe(false);
+    expect(retryable(miss('pinned', { lateReport: { stage: 'done', mounted: true, violations: [] } }), KNOWN)).toBe(false);
+  });
+  it('a miss whose attempt asked for something outside the bundle is never retried, and the request is a problem', () => {
+    const stray = { ...miss('pinned'), requests: [{ method: 'GET', path: '/pinned.html' }, { method: 'GET', path: '/board/fonts/Excalifont-Regular.woff2' }] };
+    expect(retryable(stray, KNOWN)).toBe(false);
+    expect(pinnedOf(engineProblems([run(probeOk, stray)], KNOWN)).join(' | ')).toMatch(/requests outside the bundle: \/board\/fonts\/Excalifont-Regular\.woff2/);
+  });
+  it('the paths allowed besides the bundle are the server\'s hooks, the two pages and the favicon probe', () => {
+    expect([...STRAY_OK].sort()).toEqual(['/', '/favicon.ico', '/paste', '/pinned.html', '/report']);
+    expect(retryable({ ...miss('pinned'), requests: [{ method: 'GET', path: '/pinned.html' }, { method: 'GET', path: '/favicon.ico' }, { method: 'POST', path: '/paste' }] }, KNOWN)).toBe(true);
+  });
+});
+
+describe('P12 late reports: one still in flight when the browser stopped is judged (edge B)', () => {
+  const late = (id: string) => ({ ...miss('pinned'), runId: id });
+  it('a report drained before the server closes is attached to its missed page and makes the problems it carries', () => {
+    const rows = [run(probeOk, late('aa')), run({ ...miss('probe'), runId: 'bb' }, pinnedOk)];
+    const pending = new Map<string, unknown>([['aa', { stage: 'done', mounted: true, violations: [{ directive: 'img-src', blockedURI: 'data:' }], errors: [] }]]);
+    const take = (id: string) => { const v = pending.get(id) ?? null; pending.delete(id); return v; };
+    expect(attachLateReports(rows, [], take)).toBe(1);
+    expect(rows[0]!.pinned.lateReport).toMatchObject({ stage: 'done', mounted: true, violationCount: 1 });
+    expect(rows[1]!).not.toHaveProperty('lateReport');
+    expect(runAccounting(rows).violationCount).toBe(1);
+    expect(pinnedOf(engineProblems(rows, KNOWN)).join(' | ')).toMatch(/1 CSP violation\(s\) in a report that came after the timeout: img-src data/);
+  });
+  it('a retried attempt whose report lands late is judged too: the retry does not clear it', () => {
+    const attempt = { run: 2, page: 'pinned', ...late('cc') };
+    const rows = [run(probeOk, pinnedOk), run(probeOk, pinnedOk)];
+    expect(engineProblems(rows, KNOWN, [attempt]).filter((p: string) => p.includes('retried attempt'))).toEqual([]);
+    attachLateReports(rows, [attempt], (id: string) => (id === 'cc' ? { stage: 'driver-error', mounted: false, violations: [], errors: ['boom @x:1'] } : null));
+    expect(engineProblems(rows, KNOWN, [attempt]).filter((p: string) => p.includes('retried attempt')).join(' | ')).toMatch(/run 2 \(pinned bytes, retried attempt\): .*stage driver-error, mounted false.*page errors in the late report: boom/);
+  });
+  it('a page that already has a late report, or that reported, takes nothing', () => {
+    const had = { ...late('dd'), lateReport: { stage: 'done', mounted: true, violationCount: 0, violations: [] } };
+    expect(attachLateReports([run({ ...probeOk, runId: 'ee' }, had)], [], () => ({ stage: 'x' }))).toBe(0);
   });
 });
