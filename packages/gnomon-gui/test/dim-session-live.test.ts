@@ -91,6 +91,36 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('undone').lastOps).toEqual(Array(64).fill('delete'));
   }, 120_000);
 
+  it('B1 through the real engine (Judge): the fixture\'s 64 marks, selected by one marquee and deleted by one real Delete, all go (the limit is 64, not under it); ONE Cmd+Z brings all 64 back with the mod\'s hash', async () => {
+    const a = await real(
+      [
+        facts('start'),
+        { drag: [[8, 8], [200, 150], [440, 306]] }, { read: `${B}.state().selected`, as: 'picked' },
+        { key: 'Delete' }, { wait: 1500 }, facts('deleted'),
+        { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows.slice(${'-'}6).map((r) => (r.payload.ops || []).map((o) => o.type)); })()`, as: 'tail' },
+        { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+        { key: 'z', meta: true }, { wait: 400 }, facts('again'),
+      ],
+      'many',
+      'live-delete-64',
+    );
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('start')).toMatchObject({ nodes: 64, marks: 64, sameAsMod: true, notices: [] });
+    expect(a.picked).toBe(64);
+    // every one of the 64 is deleted, as rows of mine, and nothing is refused or said
+    const rows = f('deleted').rows - f('start').rows;
+    expect(rows).toBeGreaterThanOrEqual(1);
+    expect(rows).toBeLessThanOrEqual(4);
+    expect(f('deleted')).toMatchObject({ keep: 'saved', pending: 0, canUndo: true, nodes: 0, marks: 0, sameAsMod: true, drift: 0, notices: [] });
+    const deletes = (a.tail as string[][]).slice(-rows).flat();
+    expect(deletes).toEqual(Array(64).fill('delete'));
+    // ONE undo takes the whole delete back: 64 marks, the mod's fold, on the board
+    expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 64, marks: 64, sameAsMod: true, drift: 0, notices: [] });
+    // and that was the whole of it: a second Cmd+Z has nothing left of the delete to undo
+    expect(f('again')).toMatchObject({ nodes: 64, marks: 64, rows: f('undone').rows });
+  }, 120_000);
+
   it('review leftovers in the engine: words selected in the chrome are copied as themselves (N3); a paste that is too long only AFTER cleaning is refused with its line (N1); pastes step and the step starts again', async () => {
     const long = `${'a'.repeat(3990)}${'\u202e'.repeat(8)}`;
     const a = await real([
