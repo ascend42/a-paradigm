@@ -45,7 +45,8 @@ const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], Ar
  * from outside the page dropped on the stage; {ime: composing, commit: text} drives an IME composition into the
  * focused field; {drag: …, alt: true} holds Alt; {await: expression} awaits a promise and records its value.
  */
-export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [] }) {
+/** `ready`: the page-side expression that is true once the page can be driven (default: the preview's own mark; the kernel-served app has none). */
+export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [], ready = 'document.documentElement.dataset.preview === "ready"' }) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'gnomon-leaf-'));
   const proc = spawn(chrome, ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${width},${height}`, '--hide-scrollbars', '--force-device-scale-factor=1', '--remote-debugging-port=0', url], { stdio: 'ignore' });
   let ws = null;
@@ -83,8 +84,8 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     const evaluate = async (expression) => (await call('Runtime.evaluate', { expression, returnByValue: true })).result?.value;
     await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     const until = Date.now() + timeoutMs;
-    while (Date.now() < until && (await evaluate('document.documentElement.dataset.preview === "ready"')) !== true) await sleep(100);
-    if ((await evaluate('document.documentElement.dataset.preview === "ready"')) !== true) throw new Error('the fixture never set data-preview="ready"');
+    while (Date.now() < until && (await evaluate(ready)) !== true) await sleep(100);
+    if ((await evaluate(ready)) !== true) throw new Error('the page was never ready (the fixture never set data-preview="ready")');
     await sleep(300);
     const acted = {};
     const centre = async (selector) => JSON.parse(await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return 'null'; const b = e.getBoundingClientRect(); return JSON.stringify({ x: b.x + b.width / 2, y: b.y + b.height / 2 }); })()`));
