@@ -663,7 +663,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       let wanted: string[] | null = null;
       const selectWanted = (): void => {
         if (!wanted || dead !== null || busy()) return;
-        const engineIds = wanted.map((n) => (prev.nodes.has(n) ? engineByNode.get(n) : undefined));
+        // a fallback stub is locked in the engine (no handles, no drag, no delete): it is never selected from here
+        const engineIds = wanted.filter((n) => !dimIsFallback(prev.nodes.get(n)?.node ?? {})).map((n) => (prev.nodes.has(n) ? engineByNode.get(n) : undefined));
         if (engineIds.some((id) => id === undefined || !shown.has(id))) return;
         wanted = null;
         api.updateScene({ appState: { selectedElementIds: Object.fromEntries(engineIds.map((id) => [id, true])), selectedGroupIds: {} } as never, captureUpdate: CaptureUpdateAction.NEVER });
@@ -900,7 +901,16 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const chrome = options.chrome ?? null;
       const inBoard = (n: unknown): boolean => n instanceof Node && (host.contains(n) || (chrome !== null && chrome.contains(n)));
       /** A text field of the leaf's chrome (not of the board): it keeps its own paste, copy and cut. */
-      const chromeField = (e: Event): boolean => chrome !== null && e.target instanceof Node && chrome.contains(e.target) && !host.contains(e.target) && (takesPlainText(e.target) || (e.target as HTMLElement).isContentEditable === true);
+      /** A control of the leaf's chrome that holds its own value (ANY input, a textarea, a select, an editable element; Aegis N2): it keeps its own paste, copy and cut. */
+      const ownsValue = (t: EventTarget | null): boolean => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLElement && t.isContentEditable);
+      const chromeField = (e: Event): boolean => chrome !== null && e.target instanceof Node && chrome.contains(e.target) && !host.contains(e.target) && ownsValue(e.target);
+      /** Words of the chrome are selected (the title, the keep line), outside the board: that copy is the person's own (Aegis N3). */
+      const chromeSelection = (): boolean => {
+        if (chrome === null) return false;
+        const s = document.getSelection();
+        const n = s && !s.isCollapsed && s.rangeCount > 0 ? s.anchorNode : null;
+        return n !== null && chrome.contains(n) && !host.contains(n);
+      };
       const within = (e: Event): boolean => !chromeField(e) && (inBoard(e.target) || inBoard(document.activeElement));
       /** A text field of this board that is being typed in (the engine's text editor, a frame's title): it pastes natively. */
       const typingIn = (e: Event): boolean => e.target instanceof Node && host.contains(e.target) && takesPlainText(e.target);
@@ -961,7 +971,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const onCopyFirst = (cut: boolean) => (e: ClipboardEvent): void => {
         if (dead !== null) return;
         // a copy or a cut made anywhere else on the page: the caller forgets what it held
-        if (!within(e)) return void [...outsideListeners].forEach((l) => l());
+        // (so is a copy of words selected in the leaf's chrome: it is left to the browser, and never gives the marks)
+        if (!within(e) || chromeSelection()) return void [...outsideListeners].forEach((l) => l());
         // the words being typed are copied by the field itself
         if (typingIn(e)) return void e.stopImmediatePropagation();
         e.preventDefault();
@@ -1177,6 +1188,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         marks(): BoardMarkView[] {
           const selected = api.getAppState().selectedElementIds as Record<string, unknown>;
           return (live() as unknown as Element[]).map((el) => viewOf(el, selected));
+        },
+        setView(v): void {
+          live();
+          if (!v || ![v.scrollX, v.scrollY, v.zoom].every((n) => Number.isFinite(n)) || v.zoom < 0.1 || v.zoom > 30) return;
+          api.updateScene({ appState: { scrollX: v.scrollX, scrollY: v.scrollY, zoom: { value: v.zoom } } as never, captureUpdate: CaptureUpdateAction.NEVER });
+          announce();
+          sceneChanged();
         },
         view(): BoardView {
           live();

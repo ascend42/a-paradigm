@@ -24,8 +24,15 @@
  *  - An edit needs a gesture stamp. `local` and `undo` with no stamp change nothing and answer a `not-sent` notice:
  *    nothing is ever shown optimistically that the sender would refuse to send.
  *  - One send is in flight per dimension, and sends are spaced DIM_LIVE_SEND_GAP_MS apart (the mod may append 20
- *    rows a second). Edits made meanwhile queue, and queued edits coalesce into one batch of at most
- *    DIM_LIMITS.opsPerRow ops (an undo is never merged with anything). The NEWEST stamp rides a coalesced batch.
+ *    rows a second; the caller's shared limiter holds that across dimensions). Edits made meanwhile queue, and a
+ *    queued edit that fits ONE row is merged into the single-row batch still waiting before it when both fit one
+ *    row together (core/dim-rows.ts; an undo and a multi-row action are never merged with anything). The NEWEST
+ *    stamp rides a merged batch.
+ *  - ROWS THAT FIT. One action whose ops do not fit one row (more than DIM_LIMITS.opsPerRow ops, or over the row
+ *    budget of core/dim-rows.ts) becomes several rows, in order, on the SAME stamp: a GROUP. A group is at most
+ *    DIM_ACTION_ROWS rows (the stamp's fan-out, and B3's rows per undo); an action that needs more, or one op that
+ *    fits no row, is refused whole with a notice (`too-large`, `row-too-large`) and nothing is kept. When one row
+ *    of a group is dropped, the rows of that group still waiting fall with it, under the same notice.
  *  - A batch is CONFIRMED when the row with the acked seq arrives, in either order. A row of mine (my principal,
  *    the GUI surface, and my connection when both sides name one) that arrives before the ack is taken as the
  *    in-flight batch's row: it confirms at once when it carries exactly the batch's ops, and otherwise waits for
@@ -40,14 +47,18 @@
  *    inverse is planned by core/dim-undo.ts (validated, refused whole over its bounds) and sent like any edit, on
  *    its own fresh gesture stamp. Undo does nothing while any batch of mine is pending (`canUndo` is false until
  *    it confirms). An entry leaves the list only when its inverse is CONFIRMED; a failed send keeps it. An entry
- *    whose inverse can never be sent is dropped with one notice, so the older ones stay reachable.
+ *    whose inverse can never be sent is dropped with one notice, so the older ones stay reachable. ONE ACTION IS ONE
+ *    UNDO STEP: the rows of a group are one entry (those of them that were kept), undone together by one inverse,
+ *    which is itself packed into rows and leaves the list when its LAST row is confirmed. An entry part of whose
+ *    inverse landed and part of which was dropped is forgotten (it cannot be planned again).
  *
  * BOUNDS: at most DIM_LIVE_LIMITS.pending batches wait (a further edit is refused with a notice), DIM_LIVE_LIMITS.seen
  * early rows and DIM_LIVE_LIMITS.undo undo entries are remembered.
  */
 import { DIM_FIELDS, DIM_KINDS, DIM_LIMITS, DIM_REFUSAL_CODES, canonicalJson, foldDim, isPlainObject, validateDimOps } from '@a-company/gnomon-contracts';
 import type { DimActor, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
-import { planUndo } from './dim-undo.js';
+import { DIM_ACTION_ROWS, fitsOneDimRow, packDimRows } from './dim-rows.js';
+import { DIM_UNDO_LIMITS, invertDimOps, planUndo } from './dim-undo.js';
 import type { Gesture } from './gesture.js';
 
 /** How long a batch may wait for its ack and row before it is dropped. */
@@ -60,8 +71,10 @@ export const DIM_LIVE_LIMITS = Object.freeze({ pending: 16, seen: 256, undo: 64 
 export interface DimNotice {
   /**
    * A `DimRefusalCode`, a DIM_COMMAND_REFUSALS code of the mod, or: `timeout` (no answer in time), `link-down`,
-   * `busy` (too many edits waiting), `not-sent`, `gesture-refused`, `read-only`, `no-answer`, `refused` (the
-   * sender's codes, core/mod-command.ts), `undo-nothing`, `undo-too-many-ops`, `undo-too-many-rows`, `undo-invalid`.
+   * `busy` (too many edits waiting), `not-undoable` (the action's inverse would be over the undo bound; `why` is
+   * `delete` for a delete of too many marks), `undo-too-large` (an entry whose inverse can never be sent), `too-large` (one action over DIM_ACTION_ROWS rows), `row-too-large` (one op
+   * fits no row), `not-sent`, `gesture-refused`, `read-only`, `no-answer`, `refused` (the sender's codes,
+   * core/mod-command.ts), `undo-nothing`, `undo-too-many-ops`, `undo-too-many-rows`, `undo-invalid`.
    */
   code: string;
   field: string;
@@ -89,6 +102,8 @@ export interface DimLiveBatch {
   id: number;
   ops: DimOp[];
   gesture: Gesture;
+  /** more rows of the same action follow on this stamp: the caller lets no other stamp be sent on the connection until the last one has gone */
+  more: boolean;
 }
 
 export interface DimLiveDeps {
@@ -104,6 +119,12 @@ export interface DimLiveDeps {
   now(): number;
   /** a fresh node id (a ULID), for a node an undo re-adds */
   mint(): string;
+  /**
+   * true: `send` only hands the batch over, and the caller reports `left(id)` when its command really goes out
+   * (it may wait its turn first). The wait for an answer is then counted from `left`, and a batch that has not
+   * left yet is never dropped by the timeout while the link is up (it would be said lost and then sent).
+   */
+  leaves?: boolean;
 }
 
 export interface DimLiveStatus {
@@ -119,8 +140,12 @@ export interface DimLiveStatus {
 }
 
 interface UndoEntry {
-  seq: number;
-  ops: DimOp[];
+  /** the group the rows came from (one action that became several rows), or null */
+  group: number | null;
+  /** this page's confirmed rows of one action, oldest first */
+  rows: Array<{ seq: number; ops: DimOp[] }>;
+  /** a row of this entry's inverse has landed: it can no longer be planned whole */
+  partly: boolean;
 }
 
 interface Pending {
@@ -132,8 +157,12 @@ interface Pending {
   sentAt: number | null;
   ackSeq: number | null;
   ackAt: number | null;
-  /** the undo entry this batch is the inverse of */
+  /** the undo entry this batch is (a row of) the inverse of */
   undo: UndoEntry | null;
+  /** the action this row is one of several rows of, or null */
+  group: number | null;
+  /** the last row of its group (or a batch with no group) */
+  last: boolean;
   /** `canonicalJson(ops)`, for matching the row that carries them */
   key: string;
   /** a row of mine that arrived before the ack: taken as this batch's row, so the batch is no longer overlaid */
@@ -180,6 +209,7 @@ export class DimLive {
   #flight: Pending | null = null;
   #queue: Pending[] = [];
   #nextId = 1;
+  #nextGroup = 1;
   #linkUp = true;
   #lastSentAt: number | null = null;
   /** the seq of the newest row of this dimension `row()` has been told about (or that was there at the start) */
@@ -217,6 +247,31 @@ export class DimLive {
     return this.#flight && !this.#flight.landed ? [this.#flight, ...this.#queue] : this.#queue;
   }
 
+  /** True while batch `id` is the one in flight: a send that waited its turn checks this before it leaves (a batch dropped meanwhile must never go out). */
+  flying(id: number): boolean {
+    return this.#flight !== null && this.#flight.id === id;
+  }
+
+  /** The command of batch `id` has actually left: its wait for an answer is counted from now, not from when it was handed over. */
+  left(id: number): void {
+    if (this.#flight && this.#flight.id === id) this.#flight.sentAt = this.#d.now();
+  }
+
+  /** When the in-flight batch's wait began: its ack, else when it left; one that has not left yet waits from when it was queued only while the link is down. */
+  #waitingSince(f: Pending): number | null {
+    return f.ackAt ?? f.sentAt ?? (this.#d.leaves && this.#linkUp ? null : f.at);
+  }
+
+  /** True while a pending batch (in flight or waiting) rides this stamp. */
+  rides(gesture: Gesture): boolean {
+    return this.#pending().some((b) => b.gesture === gesture);
+  }
+
+  /** How many ops are pending (what is lost if the controller is thrown away now). */
+  pendingOps(): number {
+    return this.#pending().reduce((n, b) => n + b.ops.length, 0);
+  }
+
   /** What the board draws now. Read-only. */
   view(): DimState {
     return this.#fold(this.#overlay());
@@ -239,31 +294,44 @@ export class DimLive {
     const now = this.#d.now();
     if (this.#lastSentAt !== null && now - this.#lastSentAt < DIM_LIVE_SEND_GAP_MS && now >= this.#lastSentAt) return;
     const next = this.#queue.shift()!;
-    next.sentAt = now;
+    next.sentAt = this.#d.leaves ? null : now;
     this.#lastSentAt = now;
     this.#flight = next;
     this.#seen = [];
-    this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture });
+    this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture, more: !next.last });
   }
 
-  #enqueue(ops: DimOp[], gesture: Gesture, undo: UndoEntry | null): boolean {
+  /** Why these ops, applied to `base`, could not be undone within the undo bound; null when they can. */
+  #notUndoable(base: DimState, ops: readonly DimOp[]): 'too-many-ops' | 'too-many-rows' | null {
+    let n = 0;
+    // (ids for the count only: a re-added node's id is as long as any other)
+    const inverse = invertDimOps(base, ops, () => `0000000000000000000${String(n++).padStart(7, '0')}`, base);
+    if (inverse.length > DIM_UNDO_LIMITS.ops) return 'too-many-ops';
+    const rows = packDimRows(inverse);
+    return rows === null || rows.length > DIM_ACTION_ROWS ? 'too-many-rows' : null;
+  }
+
+  /** Queue the rows of ONE action (already packed). All or nothing: false when they do not all fit the pending bound. */
+  #enqueue(rows: DimOp[][], gesture: Gesture, undo: UndoEntry | null): boolean {
     const now = this.#d.now();
-    let rest = ops;
     const last = this.#queue[this.#queue.length - 1];
-    if (!undo && last && !last.undo && last.ops.length < DIM_LIMITS.opsPerRow) {
-      // top up the batch that is still waiting
-      const room = DIM_LIMITS.opsPerRow - last.ops.length;
-      last.ops = [...last.ops, ...rest.slice(0, room)];
-      last.key = canonicalJson(last.ops);
-      // the NEWEST stamp rides the batch: it has the most life and uses left, and stamps are sent in rising order
-      last.gesture = gesture;
-      rest = rest.slice(room);
+    if (rows.length === 1 && !undo && last && !last.undo && last.group === null) {
+      // one row's worth joins the single-row batch still waiting, when both fit one row together
+      const merged = [...last.ops, ...rows[0]!];
+      // (the merged batch is one undo entry: it must stay undoable as one)
+      if (merged.length <= DIM_LIMITS.opsPerRow && fitsOneDimRow(merged) && !this.#notUndoable(this.#fold(this.#overlay().filter((b) => b !== last)), merged)) {
+        last.ops = merged;
+        last.key = canonicalJson(merged);
+        // the NEWEST stamp rides the batch: it has the most life and uses left, and stamps are sent in rising order
+        last.gesture = gesture;
+        return true;
+      }
     }
-    for (let i = 0; i < rest.length; i += DIM_LIMITS.opsPerRow) {
-      if (this.#pending().length >= DIM_LIVE_LIMITS.pending) return false;
-      const chunk = rest.slice(i, i + DIM_LIMITS.opsPerRow);
-      this.#queue.push({ id: this.#nextId++, ops: chunk, gesture, at: now, sentAt: null, ackSeq: null, ackAt: null, undo, key: canonicalJson(chunk), landed: null });
-    }
+    if (this.#pending().length + rows.length > DIM_LIVE_LIMITS.pending) return false;
+    const group = rows.length > 1 ? this.#nextGroup++ : null;
+    rows.forEach((ops, i) => {
+      this.#queue.push({ id: this.#nextId++, ops, gesture, at: now, sentAt: null, ackSeq: null, ackAt: null, undo, group, last: i === rows.length - 1, key: canonicalJson(ops), landed: null });
+    });
     return true;
   }
 
@@ -298,14 +366,17 @@ export class DimLive {
     }
     if (notice) notice.lost = ops.length - ok.length;
     if (ok.length === 0) return { changed: false, resync: true, notice };
-    const before = this.#queue.map((b) => ({ b, ops: b.ops, key: b.key, gesture: b.gesture }));
-    const count = this.#queue.length;
-    if (!this.#enqueue(ok, gesture, undo)) {
-      // all or nothing: put the queue back as it was
-      this.#queue.length = count;
-      for (const s of before) Object.assign(s.b, { ops: s.ops, key: s.key, gesture: s.gesture });
-      return refuse('busy');
+    // rows that fit: one action is one row, or a group of at most DIM_ACTION_ROWS rows, or nothing at all
+    const rows = packDimRows(ok);
+    if (rows === null) return refuse('row-too-large');
+    if (rows.length > DIM_ACTION_ROWS) return refuse('too-large');
+    // EVERY ACTION THAT IS SENT CAN BE UNDONE (Aegis B3 stands: 64 inverse ops, 4 rows). One whose inverse would be
+    // over the undo bound is refused here, whole, before anything is shown as kept
+    if (!undo) {
+      const why = this.#notUndoable(this.view(), ok);
+      if (why) return refuse('not-undoable', ok.every((op) => op.type === 'delete') ? 'delete' : why);
     }
+    if (!this.#enqueue(rows, gesture, undo)) return refuse('busy');
     this.#pump();
     return { changed: true, resync: notice !== null, notice };
   }
@@ -323,10 +394,19 @@ export class DimLive {
     const entry = this.#undo[this.#undo.length - 1];
     if (!entry) return fail('undo-nothing');
     if (!this.#linkUp) return fail('link-down');
-    const plan = planUndo({ before: this.#d.stateAt(entry.seq - 1), rows: [entry.ops], current: this.view(), actor: this.#d.me, mint: this.#d.mint });
+    // each row is inverted against the state just before THAT row: what another hand changed between two rows of
+    // the action is what comes back, never an older value
+    const plan = planUndo({ before: this.#d.stateAt(entry.rows[0]!.seq - 1), befores: entry.rows.map((r) => this.#d.stateAt(r.seq - 1)), rows: entry.rows.map((r) => r.ops), current: this.view(), actor: this.#d.me, mint: this.#d.mint });
     if (!plan.ok) {
       this.#undo.pop();
       return plan.code === 'invalid' ? fail('undo-invalid', plan.refusal?.field ?? 'ops', plan.refusal?.code ?? null, true) : fail(`undo-${plan.code}`, 'ops', null, true);
+    }
+    // an inverse that can never be sent (it fits no row, or needs more rows than one stamp carries) must not wedge
+    // the list: the entry goes, with one notice, and the older ones stay reachable
+    const rows = packDimRows(plan.ops);
+    if (rows === null || rows.length > DIM_ACTION_ROWS) {
+      this.#undo.pop();
+      return fail('undo-too-large', 'ops', null, true);
     }
     return this.#local(plan.ops, gesture, entry);
   }
@@ -336,6 +416,13 @@ export class DimLive {
     let lost = batch.ops.length;
     if (this.#flight === batch) this.#flight = null;
     else this.#queue = this.#queue.filter((b) => b !== batch);
+    if (batch.group !== null) {
+      // the rest of the same action falls with it (and is never sent on that stamp)
+      for (const b of this.#queue) if (b.group === batch.group) lost += b.ops.length;
+      this.#queue = this.#queue.filter((b) => b.group !== batch.group);
+    }
+    // an inverse part of which landed cannot be planned again: the entry goes
+    if (batch.undo?.partly) this.#undo = this.#undo.filter((e) => e !== batch.undo);
     const kept: Pending[] = [];
     for (const b of this.#queue) {
       const v = validateDimOps(this.#fold(kept), b.ops, this.#d.me);
@@ -355,10 +442,18 @@ export class DimLive {
   /** The batch is in the log. `ops` are what the row carries (null when the row itself was not kept: then nothing is offered for undo). */
   #confirm(batch: Pending, seq: number, ops: DimOp[] | null): void {
     this.#flight = null;
-    if (batch.undo) this.#undo = this.#undo.filter((e) => e !== batch.undo);
-    else if (ops) {
-      this.#undo.push({ seq, ops });
-      if (this.#undo.length > DIM_LIVE_LIMITS.undo) this.#undo.shift();
+    if (batch.undo) {
+      // the entry leaves the list when the LAST row of its inverse is in the log
+      if (batch.last) this.#undo = this.#undo.filter((e) => e !== batch.undo);
+      else batch.undo.partly = true;
+    } else if (ops) {
+      const top = this.#undo[this.#undo.length - 1];
+      // the rows of one action are ONE entry
+      if (batch.group !== null && top && top.group === batch.group) top.rows.push({ seq, ops });
+      else {
+        this.#undo.push({ group: batch.group, rows: [{ seq, ops }], partly: false });
+        if (this.#undo.length > DIM_LIVE_LIMITS.undo) this.#undo.shift();
+      }
     }
     this.#pump();
   }
@@ -460,9 +555,20 @@ export class DimLive {
   timeout(): DimLiveResult {
     const now = this.#d.now();
     const f = this.#flight;
-    if (f && now - (f.ackAt ?? f.sentAt ?? f.at) >= DIM_LIVE_TIMEOUT_MS) {
+    const since = f ? this.#waitingSince(f) : null;
+    if (f && since !== null && now - since >= DIM_LIVE_TIMEOUT_MS) {
       if (f.landed && f.ackSeq === null) return this.#settleFromRow(f, f.landed);
-      return this.#drop(f, { code: this.#linkUp ? 'timeout' : 'link-down', field: 'ops', why: f.ackAt !== null ? 'no-row' : 'no-ack' });
+      // no answer at all: the mod is not answering, so what waits behind would only fall one batch at a time. The
+      // whole queue goes with it, under ONE notice
+      const stalled = f.ackAt === null;
+      let behind = 0;
+      if (stalled) {
+        behind = this.#queue.reduce((n, b) => n + b.ops.length, 0);
+        this.#queue = [];
+      }
+      const r = this.#drop(f, { code: this.#linkUp ? 'timeout' : 'link-down', field: 'ops', why: f.ackAt !== null ? 'no-row' : 'no-ack' });
+      if (r.notice) r.notice.lost += behind;
+      return r;
     }
     if (!this.#linkUp) {
       const stale = this.#queue.find((b) => now - b.at >= DIM_LIVE_TIMEOUT_MS);
@@ -490,8 +596,11 @@ export class DimLive {
   nextDeadline(): number | null {
     const f = this.#flight;
     const times: number[] = [];
-    if (f) times.push((f.ackAt ?? f.sentAt ?? f.at) + DIM_LIVE_TIMEOUT_MS);
-    else if (this.#linkUp && this.#queue.length > 0 && this.#lastSentAt !== null) times.push(this.#lastSentAt + DIM_LIVE_SEND_GAP_MS);
+    const since = f ? this.#waitingSince(f) : null;
+    if (f && since !== null) times.push(since + DIM_LIVE_TIMEOUT_MS);
+    else if (f) {
+      /* handed over, not gone yet: no deadline of its own while the link is up */
+    } else if (this.#linkUp && this.#queue.length > 0 && this.#lastSentAt !== null) times.push(this.#lastSentAt + DIM_LIVE_SEND_GAP_MS);
     if (!this.#linkUp) for (const b of this.#queue) times.push(b.at + DIM_LIVE_TIMEOUT_MS);
     return times.length > 0 ? Math.min(...times) : null;
   }

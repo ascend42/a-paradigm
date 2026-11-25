@@ -12,11 +12,11 @@
  *
  * No inline style attribute is written: sizes and positions go through CSSOM properties, classes do the rest.
  */
-import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, dimKindName, resolveContentColour } from '@a-company/gnomon-contracts';
+import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveContentColour } from '@a-company/gnomon-contracts';
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
-import { DimClipboard, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
+import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -40,8 +40,8 @@ export interface BoardLeafOptions {
   cardFocused: () => boolean;
   /** called once the engine is up (the fixture adds its marks here) */
   onReady?: (handle: BoardHandle) => void;
-  /** Esc with nothing else to leave */
-  onFold?: () => void;
+  /** Esc with nothing else to leave, or the head's esc key: with the trusted event that asked (the fold's gesture stamp is minted from it) */
+  onFold?: (cause: Event) => void;
   /**
    * The dimension as the leaf's owner holds it now (the live controller's view; the fixture's fold). A copy reads
    * the copied nodes from it and a paste is placed on top of it. Without it nothing is copied and nothing pasted.
@@ -78,6 +78,18 @@ export interface BoardLeaf {
   setTheme(theme: BoardTheme): void;
   /** load again from scratch (the head's Try again) */
   retry(): void;
+  /** Say one line in the keep line's place and to a screen reader (a notice of the live loop, in the leaf's own words). */
+  say(line: string): void;
+  /** Forget the copy register (the kernel link went down). */
+  forget(): void;
+  /**
+   * Hold the board still and say why for as long as it lasts (the link is down; the fold is out of date), or let it
+   * go (null). The picture stays; the rail is dimmed; no press, drag, paste or key draws anything; the line stays in
+   * the keep line's place and is announced once.
+   */
+  setInert(why: LeafInert | null): void;
+  /** The live loop's keep state in the keep line's place (`Saving…`, `Not saved`), or null for the usual keep line. A save is shown only once it is slow. */
+  setKeep(line: string | null): void;
   destroy(): void;
 }
 
@@ -156,15 +168,31 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (r.skipped > 0) return clip.clear(), say(CLIP_COPY.cutRefused), null;
     return { text: r.text, ids: r.ids };
   };
-  let textPastes = 0;
-  let textPastedAt = '';
+  // ONE step for pastes made one after another, words and clones alike: each sits a step down and right of the
+  // last. It starts again after any other action (a press, a key that is not the paste's own), when the view moves,
+  // and when something else is pasted.
+  let pasteStep = -1;
+  let pastedAt = '';
+  let pastedText = '';
+  const otherAction = (e: Event): void => {
+    if (e instanceof KeyboardEvent && (['Meta', 'Control', 'Shift', 'Alt'].includes(e.key) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v'))) return;
+    pasteStep = -1;
+  };
   const pasted = (hd: BoardHandle, text: string, cause: Event): void => {
     const view = o.view?.() ?? null;
     if (!view || !o.onOps) return;
     const v = hd.view();
     const box = { x: -v.scrollX, y: -v.scrollY, w: v.width / v.zoom, h: v.height / v.zoom };
-    const r = clip.paste(text, view, o.mint ?? mintNodeId, box);
+    const where = `${v.scrollX},${v.scrollY},${v.zoom}`;
+    const step = where === pastedAt && text === pastedText ? pasteStep + 1 : 0;
+    const r = clip.paste(text, view, o.mint ?? mintNodeId, box, { repeat: step });
     if (r.kind === 'nothing-held') return say(refusalLine('clipboard'));
+    // the length is checked AFTER the words are cleaned (Aegis N1): a bidi control becomes a visible glyph, so
+    // cleaned words can be longer than what was pasted, and a text over the limit would fail at the validator unsaid
+    if (r.kind === 'text' && dimPastedWords(text).length > DIM_LIMITS.text) return say(refusalLineOf({ what: 'text', why: 'too-long', detail: String(DIM_LIMITS.text) }));
+    pasteStep = step;
+    pastedAt = where;
+    pastedText = text;
     // what was pasted is what is selected afterwards (the originals used to stay selected: Delete took THEM)
     const sent = (ops: DimOp[]): void => {
       o.onOps!(ops, cause);
@@ -172,10 +200,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     };
     if (r.kind === 'clones') return void (r.ops.length > 0 && sent(r.ops));
     // a text pasted again with the view where it was steps down and right, so it never sits exactly on the last one
-    const where = `${v.scrollX},${v.scrollY},${v.zoom}`;
-    textPastes = where === textPastedAt ? textPastes + 1 : 0;
-    textPastedAt = where;
-    const op = dimPasteTextOp(text, view, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, o.mint ?? mintNodeId, { repeat: textPastes, top: box.y });
+    const op = dimPasteTextOp(text, view, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, o.mint ?? mintNodeId, { repeat: step, top: box.y });
     if (op) sent([op]);
   };
 
@@ -205,7 +230,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const boardHeight = (): number => Math.max(0, el.clientHeight - head.offsetHeight - keep.offsetHeight - FOOT_HEIGHT);
   /** under the least height a board can be drawn on, whatever the state: the body and the foot are not drawn */
   const short = (): boolean => boardHeight() < BOARD_MIN_HEIGHT;
-  const yielded = (): boolean => load === 'ready' && o.cardFocused();
+  let inert: LeafInert | null = null;
+  let keepLine: string | null = null;
+  let keepShown: string | null = null;
+  let keepTimer: ReturnType<typeof setTimeout> | undefined;
+  /** the board takes no input: a card has the keys, or the board is held still */
+  const yielded = (): boolean => load === 'ready' && (o.cardFocused() || inert !== null);
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
   // ── head and keep line ───────────────────────────────────────────────────
@@ -215,8 +245,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     headKey.title = failed ? '' : 'Dimensions in this project (/boards)';
     if (failed) headKey.removeAttribute('aria-disabled');
     else headKey.setAttribute('aria-disabled', 'true'); // the list is S1.3's
-    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said ? ' bd-said-line' : ''}`;
+    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
+    // held still: its line stays for as long as it lasts, over anything else the keep line would say
+    if (inert && state !== 'failed' && state !== 'loading') {
+      keep.title = INERT_COPY[inert];
+      return void keep.append(INERT_COPY[inert]);
+    }
     // what the board refused is said in the keep line's place (as the yielded line is), so nothing below moves
     if (said && state !== 'failed' && state !== 'loading') {
       keep.title = said;
@@ -232,6 +267,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
     if (state === 'too-short') return void keep.append(LEAF_COPY.tooShort);
     if (state === 'yielded') return void keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`);
+    // the live loop's own state (a slow save, not saved) takes the keep line's place while it lasts
+    if (keepShown) {
+      keep.title = keepShown;
+      return void keep.append(keepShown);
+    }
     const k = keepParts(o);
     const text = `dimension in ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`;
     keep.title = text;
@@ -280,7 +320,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
   function drawRail(state: LeafState): void {
     const s = st();
-    const off = state !== 'open' && state !== 'empty';
+    const off = (state !== 'open' && state !== 'empty') || inert !== null;
     rail.className = `bd-rail${off ? ' yielded' : ''}`;
     const lay = railLayout(boardHeight() || 9999, s?.tool ?? 'select');
     const style = s?.style ?? { line: CONTENT_DEFAULTS.line, fill: null, weight: 'fine' as BoardWeight };
@@ -496,9 +536,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
   let saidAt = 0;
   function say(text: string): void {
+    // the same line while it is still showing is not announced a second time (a drag from the rail onto the board
+    // is refused by the leaf's guard and by the board: it is said once)
+    const again = text === said && Date.now() - saidAt < 1500;
     said = text;
     saidAt = Date.now();
-    saidLine.textContent = text;
+    if (!again) saidLine.textContent = text;
     clearTimeout(saidTimer);
     saidTimer = setTimeout(unsay, 6000);
     draw();
@@ -621,7 +664,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       // Esc order: a text edit or the tool first (the rail action below), then the tray, then the leaf folds
       if (menu) return void ((menu = null), draw(), e.stopPropagation());
       if (trayOpen) return void ((trayOpen = false), draw(), handle?.focus(), e.stopPropagation());
-      return void o.onFold?.();
+      return void o.onFold?.(e);
     }
     if (isField(active) && !boardHost.contains(active)) return;
     const a = railKeyAction(e, { boardFocused: el.contains(active), editingText: s?.editingText ?? false, cardFocused: o.cardFocused() });
@@ -658,6 +701,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // through a press on empty ground and through selecting another mark)
   el.addEventListener('pointerdown', unsay, true);
   el.addEventListener('keydown', unsay, true);
+  el.addEventListener('pointerdown', otherAction, true);
+  el.addEventListener('keydown', otherAction, true);
   // the rail is one tab stop; ↑ and ↓ move within it
   rail.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -673,6 +718,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const WAKE_HOLD_MS = 500;
   let wakeUntil = 0;
   const onWake = (e: Event): void => {
+    // held still: a press does nothing at all (it does not wake the board either)
+    if (inert !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (!yielded()) {
       if (performance.now() < wakeUntil) {
         e.preventDefault();
@@ -699,7 +750,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   for (const type of ['pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'dragover', 'drop', 'paste', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) stage.addEventListener(type, onHeld, true);
   stage.addEventListener('wheel', onHeld, { capture: true, passive: false });
   headKey.addEventListener('click', () => load === 'failed' && start());
-  escKey.addEventListener('click', () => o.onFold?.());
+  escKey.addEventListener('click', (e) => o.onFold?.(e));
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
   // the rail key under the pointer and looped with the redraw's own refocus)
   const onFocus = (): void => void queueMicrotask(() => yielded() !== wasYielded && draw());
@@ -719,9 +770,41 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       draw();
     },
     retry: start,
+    say,
+    forget,
+    setInert(why) {
+      if (why === inert) return;
+      inert = why;
+      el.dataset.inert = why ?? '';
+      if (why) {
+        // one line, announced once; whatever was being said gives way to it
+        said = '';
+        clearTimeout(saidTimer);
+        saidLine.textContent = INERT_COPY[why];
+        trayOpen = false;
+        menu = null;
+      } else saidLine.textContent = '';
+      railKey = '';
+      draw();
+    },
+    setKeep(line) {
+      if (line === keepLine) return;
+      keepLine = line;
+      clearTimeout(keepTimer);
+      if (line === null || line !== 'Saving…') {
+        keepShown = line;
+        return draw();
+      }
+      // a save is shown only once it is slow
+      keepTimer = setTimeout(() => {
+        keepShown = keepLine;
+        draw();
+      }, KEEP_SLOW_MS);
+    },
     destroy() {
       generation++;
       clearTimeout(saidTimer);
+      clearTimeout(keepTimer);
       for (const off of offs.splice(0)) off();
       window.removeEventListener('blur', forget);
       clip.clear();

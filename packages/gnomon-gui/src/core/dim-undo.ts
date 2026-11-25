@@ -39,11 +39,21 @@ const step = (state: DimState, op: unknown): DimState => foldDim([{ seq: Number.
  * marks, then arrows, so each may cite the one before), then the other inverses, last op first.
  */
 export function invertDimOps(before: DimState, ops: readonly DimOp[], mint: () => string, current?: DimState): DimOp[] {
-  let state = before.dim === null ? { ...before, dim: '' } : before;
+  return invertDimRows([{ before, ops }], mint, current);
+}
+
+/**
+ * The inverse of several rows of ONE action, each inverted against the state just before THAT row (so a change
+ * another hand made between two of the rows is what a later row's inverse restores, never an older value), with one
+ * rename map across them all. Rows oldest first; the result is ordered as `invertDimOps` orders it.
+ */
+export function invertDimRows(rows: ReadonlyArray<{ before: DimState; ops: readonly DimOp[] }>, mint: () => string, current?: DimState): DimOp[] {
   const adds: Array<{ tier: number; op: DimOp }> = [];
   const rest: DimOp[][] = [];
   const renamed = new Map<string, string>();
-  for (const op of ops) {
+  for (const row of rows) {
+  let state = row.before.dim === null ? { ...row.before, dim: '' } : row.before;
+  for (const op of row.ops) {
     const inv: DimOp[] = [];
     if (plain(op)) {
       if (op.type === 'add') {
@@ -83,6 +93,7 @@ export function invertDimOps(before: DimState, ops: readonly DimOp[], mint: () =
     rest.push(inv);
     state = step(state, op);
   }
+  }
   const name = (id: string): string => renamed.get(id) ?? id;
   const out: DimOp[] = [...adds.sort((a, b) => a.tier - b.tier).map((a) => a.op), ...rest.reverse().flat()];
   // an id that was deleted is gone for good: every mention of it becomes the re-added node's id
@@ -119,9 +130,10 @@ export type UndoPlan =
  * followed one another; `before` is the state just before the first of them; `current` is the board as it stands
  * (pending edits included). All or nothing: the plan is the whole inverse, validated, or a refusal.
  */
-export function planUndo(o: { before: DimState; rows: ReadonlyArray<readonly DimOp[]>; current: DimState; actor: DimActor; mint: () => string }): UndoPlan {
+export function planUndo(o: { before: DimState; rows: ReadonlyArray<readonly DimOp[]>; current: DimState; actor: DimActor; mint: () => string; befores?: readonly DimState[] }): UndoPlan {
   if (o.rows.length > DIM_UNDO_LIMITS.rows) return { ok: false, code: 'too-many-rows' };
-  const ops = invertDimOps(o.before, o.rows.flat(), o.mint, o.current);
+  // `befores`: the state just before EACH row (rows of other hands may lie between the rows of one action)
+  const ops = o.befores && o.befores.length === o.rows.length ? invertDimRows(o.rows.map((r, i) => ({ before: o.befores![i]!, ops: r })), o.mint, o.current) : invertDimOps(o.before, o.rows.flat(), o.mint, o.current);
   if (ops.length === 0) return { ok: false, code: 'nothing' };
   if (ops.length > DIM_UNDO_LIMITS.ops) return { ok: false, code: 'too-many-ops' };
   const v = validateDimOps(o.current, ops, o.actor);

@@ -122,3 +122,29 @@ describe('#gui-board fences', () => {
     expect(readFileSync(path.join(root, 'core', 'board.ts'), 'utf8')).toMatch(/syntheticInput\?: boolean/);
   });
 });
+
+describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 characters; Mika, review of PR #117)', () => {
+  it('the three shortened lines, and every stand-in line for a notice of the live loop', async () => {
+    const { CLIP_COPY, noticeLine, refusalLineOf } = await import('../src/core/board-leaf.js');
+    const lines = [refusalLineOf({ what: 'text', why: 'too-long', detail: '4000' }), CLIP_COPY.leftOut(6), CLIP_COPY.leftOut(1), CLIP_COPY.cutRefused];
+    expect(lines).toEqual(['One mark holds 4,000 characters · paste or type less', '6 marks were left out · a copy takes 64 at most', '1 mark was left out · a copy takes 64 at most', 'Nothing was cut · a cut takes 64 marks at most']);
+    const notices = [
+      { about: 'link', code: 'link-down' }, { about: 'edit', code: 'link-down' }, { about: 'undo', code: 'redo-unavailable' }, { about: 'undo', code: 'undo-nothing' }, { about: 'undo', code: 'undo-invalid' },
+      { about: 'open', code: 'open-failed' }, { about: 'close', code: 'close-failed' }, { about: 'check', code: 'hash-mismatch' }, { about: 'edit', code: 'too-large' }, { about: 'edit', code: 'row-too-large' },
+      { about: 'edit', code: 'busy' }, { about: 'edit', code: 'not-sent' }, { about: 'edit', code: 'gesture-refused' }, { about: 'edit', code: 'timeout' }, { about: 'edit', code: 'no-answer' }, { about: 'edit', code: 'id-missing' },
+      { about: 'link', code: 'reconnected' }, { about: 'link', code: 'not-saved' }, { about: 'edit', code: 'out-of-date' }, { about: 'edit', code: 'closing' }, { about: 'edit', code: 'not-undoable', why: 'delete' }, { about: 'edit', code: 'not-undoable', why: 'too-many-rows' }, { about: 'undo', code: 'undo-too-large' },
+    ].flatMap((n) => [noticeLine({ ...n, lost: 1 }), noticeLine({ ...n, lost: 64 })]);
+    const { INERT_COPY, keepStateLine } = await import('../src/core/board-leaf.js');
+    expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 65 })).toBe('Nothing was deleted · a delete takes 64 marks at most');
+    expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Not saved · reconnecting', '2 changes weren’t saved · do them again']);
+    expect(noticeLine({ about: 'undo', code: 'undo-too-many-ops', lost: 0 })).toBe('That was too much to undo · it stays as it is');
+    expect(noticeLine({ about: 'close', code: 'close-failed', lost: 0 })).toBe('Your marks are saved · the board didn’t fold · try again');
+    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'Saving…', 'Not saved · reconnecting', 'Not saved · reconnecting']);
+    for (const line of [...lines, ...notices, ...Object.values(INERT_COPY)]) {
+      expect(line.length, line).toBeLessThanOrEqual(59);
+      // plain words: never a code, a field name or a kernel word
+      expect(line, line).not.toMatch(/[a-z]-[a-z]+-|ops\b|\bdim\b|gesture|stamp|seq\b/);
+    }
+  });
+});
+

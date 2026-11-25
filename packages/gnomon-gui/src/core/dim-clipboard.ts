@@ -13,7 +13,11 @@
  *    stand-in line when the register does not hold it (it was cleared on blur, or another copy replaced it) is
  *    answered `nothing-held`, so the leaf adds nothing and says so instead of pasting the line as words;
  *  - at most DIM_CLIPBOARD_LIMITS.clones clones;
- *  - `from`, `to` and `parent` are renamed to the clone when their target is in the copied set, and dropped otherwise;
+ *  - `from`, `to` and `parent` are renamed to the clone when their target is in the copied set. Outside it, `from`
+ *    and `to` are always dropped; a `parent` (a frame that was NOT copied) is KEPT only when the paste is into the
+ *    same dimension the copy was made in, that frame still stands there, and the clone's whole box (its points
+ *    included) lands inside the frame's. A frame deleted since, another dimension, or a clone that lands outside
+ *    the frame: `parent` is dropped;
  *  - every clone has a new id, and nothing but shape, words and colour is carried: the closed key list
  *    `DIM_CLIPBOARD_KEYS`. No author, no `refs`, no `rel`, no carried-through field. The paster is the author,
  *    because the clones are ordinary `add` ops that go through the validator and the mod like any edit.
@@ -95,9 +99,10 @@ function boxOf(f: Record<string, unknown>): DimViewBox {
 /** True when a node's box (or its point, for a mark with no size) lies inside a live frame's box. */
 function landsIn(node: Record<string, unknown>, frame: Record<string, unknown> | undefined): boolean {
   if (!frame || own(frame, 'kind') !== 'frame') return false;
-  const n = (o: Record<string, unknown>, k: string): number => (typeof own(o, k) === 'number' ? (own(o, k) as number) : 0);
-  const [x, y, w, h] = [n(node, 'x'), n(node, 'y'), n(node, 'w'), n(node, 'h')];
-  return x >= n(frame, 'x') && y >= n(frame, 'y') && x + w <= n(frame, 'x') + n(frame, 'w') && y + h <= n(frame, 'y') + n(frame, 'h');
+  // the extent of its points counts: a stroke or an arrow that starts inside and runs out is not in the frame
+  const a = boxOf(node);
+  const f = boxOf({ x: own(frame, 'x'), y: own(frame, 'y'), w: own(frame, 'w'), h: own(frame, 'h') });
+  return a.x >= f.x && a.y >= f.y && a.x + a.w <= f.x + f.w && a.y + a.h <= f.y + f.h;
 }
 
 export class DimClipboard {
@@ -152,11 +157,14 @@ export class DimClipboard {
    * in `current`, in their copied order; frames come first and arrows last so each op may cite an earlier one.
    * Nothing is validated here: the caller sends the ops through the live controller.
    */
-  paste(text: unknown, current: DimState, mint: () => string, view?: DimViewBox): DimPasteResult {
+  paste(text: unknown, current: DimState, mint: () => string, view?: DimViewBox, o: { repeat?: number } = {}): DimPasteResult {
     // (the stand-in line is matched EXACTLY: the same words with a space around them are words somebody typed)
     if (!this.matches(text)) return typeof text === 'string' && STAND_INS.has(lf(text)) ? { kind: 'nothing-held' } : { kind: 'text' };
     this.#pastes += 1;
-    let shift = DIM_CLIPBOARD_LIMITS.offset * this.#pastes;
+    // `repeat` (the leaf's count of pastes made one after another, 0 for the first): the step starts again after
+    // any other action, and a set centred on the view steps too, so a second paste never sits exactly on the first
+    const repeat = o.repeat !== undefined && Number.isSafeInteger(o.repeat) && o.repeat >= 0 ? o.repeat : null;
+    let shift = DIM_CLIPBOARD_LIMITS.offset * (repeat === null ? this.#pastes : repeat + 1);
     let [dx, dy] = [0, 0];
     if (view) {
       // the clones land where the person is looking: when the offset copy would be wholly out of view (they have
@@ -167,8 +175,9 @@ export class DimClipboard {
       const x1 = Math.max(...boxes.map((b) => b.x + b.w)) + shift;
       const y1 = Math.max(...boxes.map((b) => b.y + b.h)) + shift;
       if (x1 < view.x || x0 > view.x + view.w || y1 < view.y || y0 > view.y + view.h) {
-        dx = Math.round(view.x + view.w / 2 - (x0 + x1) / 2);
-        dy = Math.round(view.y + view.h / 2 - (y0 + y1) / 2);
+        const step = DIM_CLIPBOARD_LIMITS.offset * (repeat ?? 0);
+        dx = Math.round(view.x + view.w / 2 - (x0 + x1) / 2) + step;
+        dy = Math.round(view.y + view.h / 2 - (y0 + y1) / 2) + step;
       }
     }
     shift = Math.round(shift);

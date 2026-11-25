@@ -410,10 +410,10 @@ describe.skipIf(!!process.env.CI || !chrome)('C8: paste, copy, cut, drop and dup
     expect(a.selectedAll as number).toBeGreaterThan(64);
     expect(a.editsAfterCut).toBe(a.editsBeforeCut);
     expect(a.countAfterCut).toBe(a.countBeforeCut);
-    expect(String(a.cutLine)).toContain('nothing was cut');
+    expect(String(a.cutLine)).toBe('Nothing was cut · a cut takes 64 marks at most');
     expect(a.clipAfterCut).toBe('sentinel');
     // the copy says what it left out, and the paste is the 64 it took
-    expect(String(a.copyLine)).toMatch(/^\d+ marks were left out of the copy/);
+    expect(String(a.copyLine)).toMatch(/^\d+ marks were left out · a copy takes 64 at most$/);
     const pasted = (a.pasteMany as Edit[]).at(-1)!;
     expect(pasted.cause).toBe('paste');
     expect(pasted.ops).toHaveLength(64);
