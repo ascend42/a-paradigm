@@ -733,6 +733,8 @@ export interface DimRefusal {
   fix: string;
   /** colour-bad only: a named swatch from the closed list that may be used instead */
   swatch?: string;
+  /** colour-bad by the contrast rule only: which part failed, and whether only the night value did (closed list, never input) */
+  contrast?: { why: ContentContrastWhy; night: boolean };
   /** secret only: the rule kind that matched, never the text */
   rule?: string;
 }
@@ -1058,6 +1060,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     code: p.code,
     fix: p.why && p.swatch !== undefined ? contentContrastFix(p.why, !!p.night, p.swatch) : DIM_REFUSAL_FIXES[p.code],
     ...(p.swatch !== undefined ? { swatch: p.swatch } : {}),
+    ...(p.why ? { contrast: { why: p.why, night: !!p.night } } : {}),
     ...extra,
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-type' })], secret: false };

@@ -263,6 +263,9 @@ describe('G-DDL-11: closed writes', () => {
     expect(codes([{ type: 'update', id: id(2), patch: { color: 'custom:#858585', fill: 'cobalt' } }], noLabel)).toEqual(['not-owner@id']);
     // one refusal per field: a colour that fails alone is not refused a second time as a pair
     expect(codes([filled, { type: 'update', id: id(21), patch: { color: 'custom:#FF8800' } }])).toEqual(['colour-bad@color']);
+    // the refusal names which part failed, from the closed list (the GUI's notice says it in words)
+    expect(validateDimOps(state, [nightLined, { type: 'update', id: id(23), patch: { fill: 'custom:#22EE66' } }], human).refused[0]!.contrast).toEqual({ why: 'pair-fill', night: true });
+    expect(validateDimOps(state, add(rect(20, { color: 'custom:#B4382A' })), human).refused[0]!.contrast).toBeUndefined();
     // every hand gets the same refusal
     for (const actor of [human, agent]) expect(codes(add(rect(20, { color: 'custom:#858585', fill: 'cobalt' })), actor)).toEqual(['colour-bad@color']);
     // the published code list did not move: colour-bad is the existing code

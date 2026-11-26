@@ -1367,6 +1367,7 @@ function validateDimOps(state, ops, actor, opts = {}) {
     code: p.code,
     fix: p.why && p.swatch !== void 0 ? contentContrastFix(p.why, !!p.night, p.swatch) : DIM_REFUSAL_FIXES[p.code],
     ...p.swatch !== void 0 ? { swatch: p.swatch } : {},
+    ...p.why ? { contrast: { why: p.why, night: !!p.night } } : {},
     ...extra
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: "ops", code: "field-type" })], secret: false };
