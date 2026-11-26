@@ -29,7 +29,6 @@ import {
   collectGitInputs,
   collectLayerInputs,
   detectWidening,
-  COMMAND_DEFAULT_EFFECTS_KEY,
   digestInputs,
   generateRepo,
   gitHash,
@@ -976,7 +975,7 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     expect(texts.find((t) => t.startsWith('effects:'))).toMatch(/^effects: read, write · /);
   });
 
-  it('S1.4: a tree that REMOVES effects from a command raises an Update card too: absent still means the tool union', () => {
+  it('S1.4 P3: a tree that REMOVES effects from a command only narrows: absent means read, so nothing widens', () => {
     const home = tmp();
     const auth = root();
     const m = (effects?: Array<'read' | 'write'>): ManifestV2 => {
@@ -990,15 +989,15 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
     fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(m(), null, 2));
     const ev = events();
-    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
-    if (paused.state !== 'paused') throw new Error('expected paused');
-    expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['effects']);
-    const texts = (readStaged(home, 'acme.diff-lens', paused.cardId!)!.card.block.children as Array<{ text: string }>).map((c) => c.text);
-    expect(texts.some((t) => t.includes('nothing widens'))).toBe(false);
-    expect(texts.find((t) => t.startsWith('WIDENED'))).toBe('WIDENED: effects +cmd:lens.toggle:*default');
+    const loaded = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
+    expect(ev.seen.some((e) => e.kind === 'manifest.widened')).toBe(false);
+    if (loaded.state === 'paused') {
+      const texts = (readStaged(home, 'acme.diff-lens', loaded.cardId!)!.card.block.children as Array<{ text: string }>).map((c) => c.text);
+      expect(texts.some((t) => t.startsWith('WIDENED'))).toBe(false);
+    }
   });
 
-  it('S1.4: detectWidening keys a command effect as cmd:<id>:<effect> and an absent field as cmd:<id>:*default; narrowing a declared set adds nothing', () => {
+  it('S1.4: detectWidening keys a command effect as cmd:<id>:<effect>; an absent field adds no key (P3: absent is read); narrowing adds nothing', () => {
     const a = baseManifest();
     const cmd = (effects?: Array<'read' | 'write'>): ManifestV2 => {
       const m = baseManifest();
@@ -1009,13 +1008,12 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     expect(detectWidening(a, cmd(['read']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:read'] }]);
     expect(detectWidening(cmd(['read']), cmd(['read', 'write']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
     expect(detectWidening(cmd(['read', 'write']), cmd(['read']))).toEqual([]);
-    // dropping the field is NOT a narrowing while absent means the union of the tool effects: it is keyed and shown
-    expect(detectWidening(cmd(['read', 'write']), cmd())).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:*default'] }]);
-    expect(detectWidening(cmd(['read']), cmd())).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:*default'] }]);
+    // P3: dropping the field narrows (absent is read only), so nothing is added
+    expect(detectWidening(cmd(['read', 'write']), cmd())).toEqual([]);
+    expect(detectWidening(cmd(['read']), cmd())).toEqual([]);
     // two trees that both leave the field out differ in nothing, and a first install lists the default key
     expect(detectWidening(cmd(), cmd())).toEqual([]);
-    expect(detectWidening(null, a).find((w) => w.field === 'effects')!.added).toEqual(['cmd:lens.toggle:*default', 'lens.diff:read']);
-    expect(COMMAND_DEFAULT_EFFECTS_KEY).toBe('*default');
+    expect(detectWidening(null, a).find((w) => w.field === 'effects')!.added).toEqual(['lens.diff:read']);
     // a first install lists the command entries beside the tool entries
     expect(detectWidening(null, cmd(['read', 'write'])).find((w) => w.field === 'effects')!.added).toEqual(['cmd:lens.toggle:read', 'cmd:lens.toggle:write', 'lens.diff:read']);
     // a tool named `cmd` keeps its own one-colon key and never reads as a command entry

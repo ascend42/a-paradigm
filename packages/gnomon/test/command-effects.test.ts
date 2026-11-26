@@ -61,16 +61,16 @@ describe('S1.4 command effects, the pure rule (effects.ts)', () => {
     expect([...commandEffects(readOnlyTools, 'probe.rw')].sort()).toEqual(['read', 'write']);
   });
 
-  it('ABSENT: a command without the field keeps the old default, the union of the tool effects (not flipped in P1)', () => {
+  it('ABSENT (S1.4 P3, G-MOD-20): a command without the field is read-only for every mod, whatever its tools declare', () => {
     const gui = { principal: 'p', connId: 'c', surface: 'gui' };
     const m = M('gnomon');
-    expect([...effectsFor(m, cmd('probe.who', gui), false)].sort()).toEqual(['network', 'read', 'spend', 'write']);
-    expect([...commandEffects(m, 'probe.who')].sort()).toEqual([...toolEffects(m)].sort());
-    // the default is the TOOL union only: another command's declared write does not leak into it
-    const readOnlyTools = M('gnomon', [{ name: 'probe.read', effects: ['read'] }]);
-    expect([...effectsFor(readOnlyTools, cmd('probe.who', gui), false)]).toEqual(['read']);
-    expect([...toolEffects(readOnlyTools)]).toEqual(['read']);
+    expect([...toolEffects(m)].sort()).toEqual(['network', 'read', 'spend', 'write']);
+    expect([...effectsFor(m, cmd('probe.who', gui), false)]).toEqual(['read']);
+    expect([...commandEffects(m, 'probe.who')]).toEqual(['read']);
+    // a third-party command without the field: read-only too
+    expect([...effectsFor(M('acme'), cmd('probe.who', gui), false)]).toEqual(['read']);
   });
+
 
   it('UNKNOWN: a context with no command id, and an id the manifest does not declare, are read-only (fail closed)', () => {
     const gui = { principal: 'p', connId: 'c', surface: 'gui' };
@@ -117,12 +117,12 @@ describe('S1.4 command effects, the pure rule (effects.ts)', () => {
     const m = M('gnomon');
     m.provides!.commands = [{ id: 'probe.rw', title: 't', effects: ['read', 'network', 'spend'] as unknown as Cmd['effects'] }];
     expect([...effectsFor(m, cmd('probe.rw', { surface: 'gui' }), false)]).toEqual(['read']);
-    // an inherited `effects` is not a declaration
-    const inherited = Object.create({ effects: ['read'] }) as Cmd;
+    // an inherited `effects` is not a declaration: the command is read-only (P3), never the inherited list
+    const inherited = Object.create({ effects: ['read', 'write'] }) as Cmd;
     inherited.id = 'probe.rw';
     inherited.title = 't';
     m.provides!.commands = [inherited];
-    expect([...effectsFor(m, cmd('probe.rw', { surface: 'gui' }), false)].sort()).toEqual(['network', 'read', 'spend', 'write']);
+    expect([...effectsFor(m, cmd('probe.rw', { surface: 'gui' }), false)]).toEqual(['read']);
   });
 });
 
@@ -150,7 +150,7 @@ async function started(mods: Array<{ firstParty: boolean; manifest: ManifestV2 }
 }
 
 describe('S1.4 command effects through the running host (host.ts passes the command id of the call in force)', () => {
-  it('first-party, a human on the GUI: read declared ⇒ no append and no state.set; read+write declared ⇒ both; no field ⇒ the tool union as before', async () => {
+  it('first-party, a human on the GUI: read declared ⇒ no append and no state.set; read+write declared ⇒ both; no field ⇒ read only (S1.4 P3)', async () => {
     const fp = firstPartyProbeManifest();
     fp.provides = { ...fp.provides, commands: COMMANDS };
     const { rows, run, r } = await started([{ firstParty: true, manifest: fp }]);
@@ -163,13 +163,13 @@ describe('S1.4 command effects through the running host (host.ts passes the comm
     }
     expect(seen).toEqual([
       // command, log.append, state.set, state.get
-      ['probe.who', true, true, true], // no field: the tool union (the probe's tools declare write)
+      ['probe.who', false, false, true], // no field: read only since S1.4 P3 (G-MOD-20), though the tools declare write
       ['probe.ro', false, false, true], // exactly read, though the mod's tools declare write
       ['probe.rw', true, true, true],
       ['probe.w', true, true, false], // exactly write: not even a read
     ]);
     // each refused call is a logged effect refusal: probe.ro's append and state.set, probe.w's state.get
-    expect(r.events.filter((e) => e.kind === 'mod.effect.refused').map((e) => [e.payload.effect, e.payload.method])).toEqual([['write', 'kernel.call'], ['write', 'state.set'], ['read', 'state.get']]);
+    expect(r.events.filter((e) => e.kind === 'mod.effect.refused').map((e) => [e.payload.effect, e.payload.method])).toEqual([['write', 'kernel.call'], ['write', 'state.set'], ['write', 'kernel.call'], ['write', 'state.set'], ['read', 'state.get']]);
   });
 
   it('a command may write though every tool is read-only, the launch plan then has write, and the undeclared command stays at the tool union', async () => {

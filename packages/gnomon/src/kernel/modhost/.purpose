@@ -309,10 +309,10 @@ components:
       against the manifest. A command whose manifest entry declares effects
       runs with exactly that set (read and write only: the loader refuses
       network or spend on a command, and commandEffects cuts to COMMAND_EFFECTS
-      again); a command without the field keeps the union of the mod's TOOL
-      effects, which is the default before this pass. That default is NOT
-      flipped here; S1.4 P3 makes it read in the commit that ships the
-      dimension manifest with effects on every command. The dev cap and the
+      again); a command without the field is READ-ONLY for every mod
+      (G-MOD-20, flipped in S1.4 P3 in the one commit that ships the dimension
+      manifest with effects on every command and its pin; the installed S1.3
+      dimension tree, which declares none, is read-only from then on). The dev cap and the
       command read cap of S1.3 (1) are applied after, so commandCap stays the
       outer cap: a third-party command declaring write is still read-only on
       every surface. A command context with no command id, or an id the

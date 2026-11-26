@@ -11,8 +11,9 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_AUX_KINDS, DIM_KINDS, dimHash, foldDimGrants, type DimState } from '@a-company/gnomon-contracts';
 import { hostDir } from '../src/kernel/modhost/state.js';
-import { unsandboxedModLauncher } from '../src/kernel/testing.js';
-import { DIMENSION, DIMENSION_TREE, dimId, fakeLog, installDimension, rectOp, ulid } from './dimension-helpers.js';
+import { unsandboxedModLauncher, withPinTablesForTest } from '../src/kernel/testing.js';
+import { PKG_ROOT } from './helpers.js';
+import { DIMENSION, DIMENSION_TREE, dimId, fakeLog, installDimension, installTree, rectOp, ulid } from './dimension-helpers.js';
 import { host, rig as modRig } from './mod-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
@@ -702,5 +703,33 @@ describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
       expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), /a person's marks included|whoever drew it/.test(d)]).toEqual([t.name, true, true, true, true, true]);
     }
     expect(m.provides.tools.find((t) => t.name === 'dim-draw')!.schema.description).toMatch(/Send opId on every draw and reuse the same opId/);
+  });
+});
+
+describe('G-MOD-20 (S1.4 P3, Aegis A7): a command without `effects` is read-only; the bundled tree declares them and draws', () => {
+  const OLD = 'sha256:7e79c8439b116dbbc1dd542dba84e848546247c820e59954ce20ee49b4ee34c9';
+  it('the bundled tree draws after the flip; the installed S1.3 tree (no command effects) cannot write: its commands answer append-failed and no row lands', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    expect(await w.run('dim.op', { dim, ops: [rectOp(1)] })).toMatchObject({ ok: true, applied: 1 });
+    // the S1.3 tree, installed by the kernel that shipped it (its signed grant keeps it first-party here)
+    const r = modRig();
+    cleanups.push(r.cleanup);
+    const fx = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'test', 'fixtures', 'first-party-retired', 'dimension-1.0.0.json'), 'utf8')) as { files: Record<string, string> };
+    const dir = path.join(r.root, 'old', 'dimension');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [name, text] of Object.entries(fx.files)) fs.writeFileSync(path.join(dir, name), text);
+    withPinTablesForTest((t) => {
+      t.firstParty.add(OLD);
+      t.retired.delete(OLD);
+    }, () => installTree(r, dir, DIMENSION));
+    const log = fakeLog();
+    const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: 30_000, focusRepo: (hsid) => REPOS[hsid] ?? null });
+    cleanups.push(() => h.stopAll());
+    await h.start(DIMENSION);
+    const res = (await h.relayCommand({ name: DIMENSION, commandId: 'dim.open', args: { dim, title: 'Plan', opened: 'command', focus: { hsid: A } }, ...GUI })) as Res;
+    expect(res).toMatchObject({ ok: false, code: 'append-failed' });
+    expect(log.rows).toEqual([]);
+    expect(r.events.some((e) => e.kind === 'mod.effect.refused')).toBe(true);
   });
 });
