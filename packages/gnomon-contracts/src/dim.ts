@@ -23,7 +23,7 @@
  * can be bundled into the mod tree. Pure functions, no DOM, no node:*.
  */
 import { canonicalJson, deepFreeze, isPlainObject, sha256Tagged } from './internal.js';
-import { contentColourCheck, type ContentRole } from './content-palette.js';
+import { contentColourCheck, contentContrastFix, contentPairCheck, type ContentColourCheck, type ContentContrastWhy, type ContentRole } from './content-palette.js';
 import { secretKindsIn } from './secret-rules.js';
 
 export const DIM_SHAPE_V1 = 'dim-shape:v1' as const;
@@ -733,6 +733,8 @@ export interface DimRefusal {
   fix: string;
   /** colour-bad only: a named swatch from the closed list that may be used instead */
   swatch?: string;
+  /** colour-bad by the contrast rule only: which part failed, and whether only the night value did (closed list, never input) */
+  contrast?: { why: ContentContrastWhy; night: boolean };
   /** secret only: the rule kind that matched, never the text */
   rule?: string;
 }
@@ -804,7 +806,25 @@ const fieldName = (k: string): string => (DIM_FIELDS.includes(k) ? k : 'unknown'
 const isCoreKind = (k: unknown): k is DimCoreKind => typeof k === 'string' && (DIM_CORE_KINDS as readonly string[]).includes(k);
 const inRange = (v: unknown, lo: number, hi: number): boolean => Number.isSafeInteger(v) && (v as number) >= lo && (v as number) <= hi;
 
-type Problem = { field: string; code: DimRefusalCode; swatch?: string };
+type Problem = { field: string; code: DimRefusalCode; swatch?: string; why?: ContentContrastWhy; night?: boolean };
+
+/** A refused colour check as a problem on `field` (content_palette.contrast_rule: the why picks the fix sentence). */
+const colourProblem = (field: string, c: Exclude<ContentColourCheck, { ok: true }>): Problem => ({ field, code: 'colour-bad', ...(c.offer ? { swatch: c.offer } : {}), ...(c.why ? { why: c.why, night: !!c.night } : {}) });
+
+/**
+ * contrast_rule.pair, on the node as it would stand after the op: the line on its own fill, judged on the field
+ * being written (the line when both are written). Skipped when either field already has a problem, so a field
+ * gets one refusal. An update reaches here only after `editable` allowed the edit (a refused hand gets not-owner
+ * alone). Aegis P0b F2: the check sees the node as THIS batch leaves it; two hands writing one mark's line and fill
+ * in separate rows, each judged against the other's earlier value, can still store a failing pair. The paint-time
+ * recheck (`resolveContentPair`) is the backstop: that line draws as ink, and nothing is rewritten.
+ */
+function pairProblems(kind: DimCoreKind, node: Record<string, unknown>, written: readonly string[], problems: readonly Problem[]): Problem[] {
+  const field = written.includes('color') ? 'color' : written.includes('fill') ? 'fill' : null;
+  if (!field || node.color === undefined || node.fill === undefined || problems.some((p) => p.field === 'color' || p.field === 'fill')) return [];
+  const c = contentPairCheck(node.color, node.fill, field === 'color' ? 'line' : 'fill', { text: kind === 'text' });
+  return c.ok ? [] : [colourProblem(field, c)];
+}
 
 /** Check one node field value against the running state. `self` is the node's own id. */
 function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kind: DimCoreKind, self: string, key: string, v: unknown): Problem[] {
@@ -829,8 +849,8 @@ function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kin
     case 'color':
     case 'fill': {
       const role: ContentRole = key === 'color' ? 'line' : 'fill';
-      const c = contentColourCheck(v, role);
-      return c.ok ? [] : bad('colour-bad', c.offer ? { swatch: c.offer } : {});
+      const c = contentColourCheck(v, role, { text: kind === 'text' });
+      return c.ok ? [] : [colourProblem(key, c)];
     }
     case 'label':
       return str(DIM_LIMITS.label);
@@ -934,6 +954,7 @@ function checkOp(d: Draft, op: unknown, actor: DimActor): { problems: Problem[];
       } else problems.push(...checkField(d, kind, self, k, node[k]));
     }
     for (const k of Object.keys(node)) if (node[k] === null && DIM_NODE_KEYS[kind].includes(k) && !DIM_NODE_REQUIRED[kind].includes(k)) problems.push({ field: k, code: 'field-type' });
+    problems.push(...pairProblems(kind, { color: node.color ?? undefined, fill: node.fill ?? undefined }, Object.keys(node), problems));
     if (self) touched.push(self);
     return out;
   }
@@ -951,6 +972,8 @@ function checkOp(d: Draft, op: unknown, actor: DimActor): { problems: Problem[];
       } else if (patch[k] === undefined) problems.push({ field: k, code: 'field-type' });
       else problems.push(...checkField(d, e.kind, op.id as string, k, patch[k]));
     }
+    const stands = (k: 'color' | 'fill'): unknown => (Object.prototype.hasOwnProperty.call(patch, k) ? (patch[k] ?? undefined) : e.cur.node[k]);
+    problems.push(...pairProblems(e.kind, { color: stands('color'), fill: stands('fill') }, pk, problems));
     touched.push(op.id as string);
     return out;
   }
@@ -1035,8 +1058,9 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     index,
     field: fieldName(p.field),
     code: p.code,
-    fix: DIM_REFUSAL_FIXES[p.code],
+    fix: p.why && p.swatch !== undefined ? contentContrastFix(p.why, !!p.night, p.swatch) : DIM_REFUSAL_FIXES[p.code],
     ...(p.swatch !== undefined ? { swatch: p.swatch } : {}),
+    ...(p.why ? { contrast: { why: p.why, night: !!p.night } } : {}),
     ...extra,
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: 'ops', code: 'field-type' })], secret: false };
@@ -1221,6 +1245,8 @@ const VIEW_INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
  *    is left out.
  *  - `color`, `fill`: the current palette check; a token that fails it is left out (the renderer then draws ink
  *    or no fill, as `resolveContentColour` does).
+ *    Aegis P0b F3: each colour is checked ALONE here (by role, with the text floor for a text mark); the pair of a
+ *    line on its own fill is not, so the view may show a failing pair that the renderer paints with an ink line.
  *  - `text`, `label`, `title`, `rel`, `head`, `z`, every number and `points`: the type, length, range and pattern
  *    checks of the validator; an over-long string or a value of the wrong type is left out.
  *  - `parent`, `from`, `to`: the id pattern only. Whether the node they name is still on the board is the
