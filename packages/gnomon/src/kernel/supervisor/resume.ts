@@ -29,6 +29,7 @@
  * nobody asked to stop; an `api-token` card is bound to its session. An `install` card IS raised again, by
  * #mod-host's pickup from its staged record (the record, not the log, keys it), with presence asked afresh.
  */
+import { parseTurnId } from '@a-company/gnomon-contracts';
 import type { PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { DRAIN_EXIT_REASONS, type DrainOutcome, type ResumeInput, type SessionSupervisor } from './supervisor.js';
@@ -79,6 +80,8 @@ interface Track {
   sandbox?: { layersHash: string; gitHash: string | null; permitId: string };
   drained?: { id: string; uuid: string; at: string };
   exitReason?: string;
+  /** the highest n of this hsid's turn.sent rows: a resumed run numbers its turns after it (ids.ts: monotonic per hsid) */
+  lastTurn?: number;
 }
 
 const OUTCOME_OF: Readonly<Record<string, DrainOutcome>> = Object.freeze({ [DRAIN_EXIT_REASONS.clean]: 'clean', [DRAIN_EXIT_REASONS.interrupted]: 'interrupted' });
@@ -101,6 +104,11 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
     if (!trust.principals.includes(r.principal) || typeof r.keyId !== 'string' || !trust.isKernelKey(r.keyId, r.seq)) continue;
     const p = obj(r.payload);
     const hsid = typeof r.session === 'string' ? r.session : typeof p.hsid === 'string' ? p.hsid : null;
+    if (r.kind === 'turn.sent' && hsid) {
+      const n = typeof p.turn === 'string' ? parseTurnId(p.turn) : undefined;
+      if (n && n.hsid === hsid && n.n > (t(hsid).lastTurn ?? 0)) t(hsid).lastTurn = n.n;
+      continue;
+    }
     switch (r.kind) {
       case 'permit.grant': {
         const permit = obj(p.permit) as unknown as PermitV1;
@@ -169,7 +177,7 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
     resume.push({
       hsid, uuid: x.drained.uuid, drainedEventId: x.drained.id, drainedAt: x.drained.at, outcome, principal: x.open.by, principalClass: x.open.principalClass, cwd: x.open.cwd,
       ...(x.open.worktree ? { worktree: x.open.worktree } : {}), ...(x.open.model ? { model: x.open.model } : {}),
-      layersHash: x.sandbox.layersHash, gitHash: x.sandbox.gitHash, permit, ...(permit ? {} : { permitMissing: true }),
+      layersHash: x.sandbox.layersHash, gitHash: x.sandbox.gitHash, permit, ...(permit ? {} : { permitMissing: true }), ...(x.lastTurn ? { lastTurn: x.lastTurn } : {}),
     });
   }
   return { resume, unfinished, cards: [...pending.values()] };

@@ -222,8 +222,9 @@ components:
       a cold repeat says inputUnknown; NEW_KEY_FIX for an undefined new:<key>;
       the op-id input is canonical JSON and measured first; read-only calls
       never saveIdx; an agent may add inside another hand's frame (a change to
-      another hand's mark is still not-owner; a later pass widens it). Open: a
-      resumed session's turn numbers restart at 1 (I-3).
+      another hand's mark is still not-owner; a later pass widens it). I-3:
+      the kernel continues a resumed session's turn numbers (#supervisor), so
+      the budget's "an older turn is refused" holds across resumes.
       State keys added: opens, turns. Tested in test/dimension-tools.test.ts
       (G-DDL-03, G-DDL-09, A8, M3, M4, M8, M9, A4 with a real-window clock,
       G-MOD-20) and test/dimension-kinds.test.ts (all six kinds refused for

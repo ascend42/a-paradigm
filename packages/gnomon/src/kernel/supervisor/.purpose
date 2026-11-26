@@ -294,6 +294,13 @@ components:
       runner, absent in the daemon today, so the template runs), else as the
       kernel's template. One hash-only skill.run{via} row per listed run.
       buildRepoContext gains skillsOnly (no memory walk, no agents/commands).
+      Turn ids are monotonic per hsid across runs (S1.4 P3, I-3): planResume
+      (resume.ts) keeps the highest n of each hsid's kernel-signed turn.sent
+      rows as ResumeInput.lastTurn, read in the boot's existing resume pass
+      (daemon.ts adds turn.sent to its kinds), and #spawnClaude seeds
+      s.turns from it, so a resumed run's first turn is lastTurn + 1 and no
+      turn ref or causes ref repeats. A fresh session (new hsid) starts at 1.
+      Tests: test/resume-plan.test.ts, test/session-resume.test.ts.
     path: src/kernel/supervisor/
     type: module
     tags: [gnomon, kernel, session, paradigm-8, m1.7]
