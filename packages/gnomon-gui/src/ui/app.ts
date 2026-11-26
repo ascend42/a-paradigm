@@ -3964,6 +3964,13 @@ let palSel = 0;
 let palItems: Command[] = [];
 /** #gui-board-dock: the palette as the Dimensions list (`/boards`, ⌘K "Dimensions: list"); null is the command palette */
 let palDims: DimensionRow[] | null = null;
+/**
+ * Aegis F2: the Dimensions list's order is FROZEN while it is open (the first paint's order, joined by dim; a new
+ * dimension joins at the end), and the selection is kept by dim, never by index: an agent's row re-sorts `rows()` by
+ * `lastSeq`, and an index would make Enter open (and attach this session to) another board.
+ */
+let palOrder: string[] | null = null;
+let palSelDim: string | null = null;
 function openDimensions(): void {
   palSel = 0;
   openPalette('', true);
@@ -3973,6 +3980,8 @@ let palOpener: HTMLElement | null = null;
 function openPalette(prefix = '', dims = false): void {
   closeAppMenu();
   palDims = dims ? [] : null;
+  palOrder = null;
+  palSelDim = null;
   $<HTMLInputElement>('palette-input').setAttribute('aria-label', dims ? 'Dimensions' : 'command');
   $<HTMLInputElement>('palette-input').placeholder = dims ? 'find a dimension' : 'command or verb';
   if ($('palette').hidden) palOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -3986,6 +3995,8 @@ function openPalette(prefix = '', dims = false): void {
 function closePalette(): void {
   if ($('palette').hidden) return;
   palDims = null;
+  palOrder = null;
+  palSelDim = null;
   $('palette').hidden = true;
   const back = palOpener;
   palOpener = null;
@@ -3995,8 +4006,14 @@ function paintPalette(): void {
   if (palDims) {
     // the Dimensions list in the palette's pattern: this repo's dimensions, newest first; a press opens one
     const q = $<HTMLInputElement>('palette-input').value.trim().toLowerCase();
-    palDims = boardDock.rows().filter((r) => !q || r.title.toLowerCase().includes(q));
-    palSel = Math.min(palSel, Math.max(0, palDims.length - 1));
+    const fresh = boardDock.rows();
+    if (!palOrder) palOrder = fresh.map((r) => r.dim);
+    for (const r of fresh) if (!palOrder.includes(r.dim)) palOrder.push(r.dim);
+    const at = (dim: string): number => palOrder!.indexOf(dim);
+    palDims = fresh.sort((a, b) => at(a.dim) - at(b.dim)).filter((r) => !q || r.title.toLowerCase().includes(q));
+    const kept = palSelDim ? palDims.findIndex((r) => r.dim === palSelDim) : -1;
+    palSel = kept >= 0 ? kept : Math.min(palSel, Math.max(0, palDims.length - 1));
+    palSelDim = palDims[palSel]?.dim ?? null;
     const list = $('palette-list');
     clear(list);
     list.appendChild(h(doc, 'div', { class: 'menu-h', role: 'presentation' }, 'Dimensions') as unknown as HTMLElement);
@@ -4603,11 +4620,13 @@ function wire(): void {
   });
   $('palette-input').addEventListener('input', () => {
     palSel = 0;
+    palSelDim = null;
     paintPalette();
   });
   $('palette-input').addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') palSel = Math.min(palSel + 1, (palDims ?? palItems).length - 1);
     else if (e.key === 'ArrowUp') palSel = Math.max(palSel - 1, 0);
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && palDims) palSelDim = palDims[palSel]?.dim ?? null;
     else if (e.key === 'Enter' && palDims) {
       // a row of the Dimensions list opens on THIS press (attach then open when it is not this session's)
       const row = palDims[palSel];

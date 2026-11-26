@@ -690,6 +690,28 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     }, 240_000);
   });
 
+  it('aegis F2: the open Dimensions list keeps its order and its selection by dim: an agent row that would re-sort it does not change what Enter opens', async () => {
+    // a row of the dimension mod on `dim`, as an agent's attach would be written (the principal and scope of the log's last dimension row)
+    const agentRow = (dimExpr: string) => ({ read: `(() => { const k = ${A}.kernel; const last = k.rows.filter((r) => String(r.event.kind).startsWith('modns.gnomon.dimension.')).pop(); const dim = ${dimExpr}; const id = '01JF2AGENT' + String(k.rows.length).padStart(16, '0'); return k.append('modns.gnomon.dimension.op', { v: 1, dim, ops: [{ type: 'add', node: { id, kind: 'rect', x: 40, y: 40, z: 'V' + k.rows.length, w: 30, h: 20 } }], relayedFor: last.event.payload.relayedFor }, undefined, { principal: last.event.principal, scope: last.event.scope }); })()`, as: `agent-${dimExpr.length}-${Math.random()}` });
+    const ROWS = `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => ({ dim: r.dataset.dim, title: r.querySelector('.pal-title').textContent, sel: r.classList.contains('sel') }))`;
+    const b = await real([
+      ...toIdle, ...typeBoard, ...foldByEsc,
+      { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 }, { read: `${CUR}.session.dim`, as: 'dimB' }, ...foldByEsc,
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 1' }, { key: 'ArrowDown' }, { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent !== 'plan B'`, as: 'A open', timeoutMs: 30_000 }, { read: `${CUR}.session.dim`, as: 'dimA' },
+      agentRow(`${JSON.stringify('')} || [...${A}.board.dock.rows()].find((r) => r.title === 'plan B').dim`),
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 2' }, { read: ROWS, as: 'before' },
+      // the person is on plan B's row (the first); an agent then writes on the open board A: it would re-sort A first
+      agentRow(`${CUR}.session.dim`), { until: `(${A}.board.dock.rows()[0] || {}).dim === ${CUR}.session.dim && ${CUR}.session.view().nodes.size > 0`, as: 'rows() re-sorted by the agent row, and the open board drew it' }, { read: ROWS, as: 'after' },
+      { key: 'Enter' }, { until: `document.getElementById('palette').hidden && !!${CUR} && ${CUR}.leaf.state() !== 'loading'`, as: 'what Enter opened is up', timeoutMs: 20_000 }, { read: `${CUR}.leaf.el.querySelector('.title').textContent`, as: 'opened' },
+    ]);
+    expect(b.errors).toEqual([]);
+    type Row = { dim: string; title: string; sel: boolean };
+    expect((b.before as Row[])[0]).toMatchObject({ title: 'plan B', sel: true });
+    expect((b.after as Row[]).map((r) => r.dim)).toEqual((b.before as Row[]).map((r) => r.dim));
+    expect((b.after as Row[]).find((r) => r.sel)!.title).toBe('plan B');
+    expect(b.opened).toBe('plan B');
+  }, 300_000);
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)
