@@ -182,7 +182,10 @@ components:
       budget; every op charged to the turn and per id to the foreign
       sub-budgets inside fit before the first append (re-add of another
       hand's mark = 1 touch), over budget answers more, refunds only for ops
-      never written; grant re-checked between rows. Tests:
+      never written; grant re-checked between rows. Review fixes: shown =
+      sets the view answer carries (a reset shows none); a re-add with
+      words or foreign wordsBy charges words; cancel before the first row;
+      a draw's oid in the rows is op-id-reused for an undo. Tests:
       test/dimension-undo-tool.test.ts.
       It declares the four modns.gnomon.dimension.* kinds and the two
       auxiliary ones (grant, draw.refused); tools dim-view (read), dim-draw
