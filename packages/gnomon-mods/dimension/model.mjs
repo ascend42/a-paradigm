@@ -109,7 +109,7 @@ export const MOD_REFUSAL_FIXES = Object.freeze({
   'not-agent-tool': 'Only the agent of a live session can use the board tools.',
   'no-turn': 'The board tools work only inside a turn of the calling session.',
   'no-open-dim': 'This session has no board open. Ask the person to open a board with /board.',
-  'write-not-granted': 'The person has not let this session draw on this board. Ask them to turn on "may draw" for it; dim-view still reads the board.',
+  'write-not-granted': 'The person has not let this session edit this board. Ask them to turn on "may edit" for it; dim-view still reads the board.',
   'turn-budget': 'This turn has used its 64 ops. Stop drawing; the count starts again on the next turn.',
   'call-too-large': 'Send fewer or smaller ops; one call holds at most 4 rows of 16 KiB each.',
   'op-id-bad': 'Use an opId of 1 to 64 characters from A-Z, a-z, 0-9, _ and -.',

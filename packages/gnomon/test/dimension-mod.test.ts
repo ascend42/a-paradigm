@@ -111,7 +111,7 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     }
     const draw = m.provides!.tools!.find((t) => t.name === 'dim-draw')!.schema as { description: string; properties: Record<string, unknown> };
     expect(/Send opId on every draw and reuse the same opId when you retry/.test(draw.description)).toBe(true);
-    expect(Object.keys(draw.properties).sort()).toEqual(['dim', 'opId', 'ops']);
+    expect(Object.keys(draw.properties).sort()).toEqual(['base', 'dim', 'opId', 'ops']);
     expect(Object.keys((m.provides!.tools!.find((t) => t.name === 'dim-view')!.schema as { properties: Record<string, unknown> }).properties).sort()).toEqual(['dim', 'limit', 'since']);
   });
 
