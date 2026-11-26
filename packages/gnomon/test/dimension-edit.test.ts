@@ -1276,3 +1276,44 @@ describe('E1 review group E: harness and nits (Probe F2; Aegis N-2, N-6; Judge n
     expect(h.entries).toBe(3);
   });
 });
+
+describe('E1 re-check (Aegis R-1, N-a)', () => {
+  it('R-1: a tool never adopts: a known board with no index is refused with no log read and nothing written', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await w.editState((s) => {
+      delete s[`idx:${dim.slice(4)}`];
+    });
+    const before = JSON.stringify(w.state());
+    const pages = () => w.log.reads.filter((p) => Array.isArray(p.kinds)).length; // fold pages (not the log-id probe)
+    const reads = pages();
+    expect(await w.tool('dim-view', { dim }, agentOf('hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZC'))).toMatchObject({ ok: false, code: 'dim-unknown' });
+    expect(await w.tool('dim-view', { dim }, agentOf(B))).toMatchObject({ ok: false, code: 'dim-unknown' });
+    expect(pages()).toBe(reads);
+    expect(JSON.stringify(w.state())).toBe(before);
+  });
+
+  it('N-a: an act held for a continuation is dropped when someone undoes it between the two calls', { timeout: 120_000 }, async () => {
+    let T = 0;
+    const w = await editRig({ now: () => T });
+    const dim = await board(w);
+    for (let k = 0; k < 3; k++) {
+      T += 2_000;
+      await w.run('dim.op', { dim, ops: [textOp(2 * k + 1, 'a'.repeat(4000)), textOp(2 * k + 2, 'b'.repeat(4000))] });
+    }
+    T += 2_000;
+    await draw(w, dim, B, 1, [1, 2, 3, 4, 5, 6].map((n) => ({ type: 'delete', id: ulid(n) })));
+    T += 2_000;
+    for (let i = 0; i < 19; i++) await w.run('dim.op', { dim, ops: [rectOp(100 + i)] });
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, more: true });
+    const first = (w.opRows().at(-1)!.payload as { act: string }).act;
+    T += 2_000;
+    // another person undoes that held act (the partial undo) before the first person continues
+    expect(await w.run('dim.undo', { dim, of: { principal: HUMAN, act: first } }, A, GUI2)).toMatchObject({ ok: true });
+    T += 2_000;
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true });
+    const acts = w.opRows().filter((r) => (r.payload as { undo?: { of: Record<string, string> } }).undo?.of.hsid === B).map((r) => (r.payload as { act: string }).act);
+    expect(acts.at(-1)).not.toBe(first);
+  });
+});

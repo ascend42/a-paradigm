@@ -314,8 +314,11 @@ async function foldFromLog(host, dim, from, since, cancelled, onOp, keys) {
 async function load(host, dim, cancelled, admit) {
   const hit = loaded.get(dim);
   if (hit) {
-    loaded.delete(dim);
-    loaded.set(dim, hit);
+    // a caller the board does not admit moves nothing in the cache, not even the use order (Aegis R-1)
+    if (!admit || admit(hit)) {
+      loaded.delete(dim);
+      loaded.set(dim, hit);
+    }
     return hit;
   }
   const id = ulidOf(dim);
@@ -336,6 +339,9 @@ async function load(host, dim, cancelled, admit) {
     if (!admit || admit(entry)) remember(dim, entry);
     return entry;
   }
+  // a TOOL never adopts (Aegis R-1): adoption writes the index and drops a keyframe, so only a person's command
+  // does it; the tool path (the one that passes `admit`) answers dim-unknown before any log read
+  if (admit) return null;
   // no usable index: look for the dimension in the log before anyone may create it again
   const keys = new Set();
   const { state, grants, oids, first, last } = await foldFromLog(host, dim, { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() }, 0, cancelled, undefined, keys);
@@ -352,7 +358,7 @@ async function load(host, dim, cancelled, admit) {
   await dropKeyframe(host, id);
   kfs = kfs.filter((e) => e.id !== id);
   const entry = { idx: { repo: first.repo, firstSeq: first.seq, lastSeq: last, title: state.title, log: logId }, state, grants, oids, sinceKf: 0, dirty: true, hist: emptyHistory(logId, keys) };
-  remember(dim, entry);
+  if (!admit || admit(entry)) remember(dim, entry);
   return entry;
 }
 
@@ -710,7 +716,9 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     if (out.more) entry.hist.pending.set(pk, { act, principal: actor.principal, ids: scope });
     else entry.hist.pending.delete(pk);
     // the person pressed this set's notice: its pin is released (Aegis G6), but only by an undo of the WHOLE set
-    // that finished (Aegis I-3, Judge nit): a per-mark undo (`ids`) or an answer with `more` keeps it standing
+    // that finished (Aegis I-3, Judge nit): a per-mark undo (`ids`) or an answer with `more` keeps it standing.
+    // A whole-set undo with no `more` releases it even when some marks were skipped (changed since, gone,
+    // refused): the answer's `skipped` says which (Aegis N-b)
     if (!a.ids && !out.more) unpinSet(entry.hist, setKey(a.of));
     await saveIdx(host, a.dim, entry);
     if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
