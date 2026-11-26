@@ -359,6 +359,8 @@ export interface SupervisorOptions {
   bridgeNow?: () => number;
   /** TEST RIG ONLY: the session scratch base (default the identity's DARWIN_USER_TEMP_DIR) */
   scratchBase?: string;
+  /** TEST RIG ONLY: awaited at the start of a session's exit path (#onExit), so a test can hold it past a daemon stop */
+  exitHold?: () => Promise<void>;
 }
 
 /** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
@@ -1373,6 +1375,7 @@ export class SessionSupervisor {
   async #onExit(s: Session): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    if (this.#o.exitHold) await this.#o.exitHold().catch(() => undefined);
     // Aegis M-B: every exit path (exited, drained, killed) empties this session's session-env/<uuid>, links never followed
     await this.#emptySessionEnv(s.hsid, s.uuid);
     if (this.#platform === 'win32') this.#releaseWin32(s.hsid);

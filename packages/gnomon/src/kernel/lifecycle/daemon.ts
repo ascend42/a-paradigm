@@ -382,7 +382,7 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
  * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
  */
 export interface DaemonSeams {
-  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
+  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void> };
   /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
   modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
   billing?: BillingScanSource;
@@ -717,7 +717,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         }
         // #mod-tool-bridge: the folded suspect and counter rows of live sessions are written and awaited BEFORE the
         // children stop, so they are in the log ahead of each session's `session.exited` whatever the exit path's timing.
-        // A refusal that lands after this is written by the session's own exit path (closeSession, awaited there).
         try {
           await supervisor.flushBridge();
         } catch {
@@ -725,6 +724,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         }
         await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
+        // #mod-tool-bridge, the second flush: a bridge call in flight when the mod above was killed is refused
+        // (`mod-refused`) AFTER the first flush, and a call that arrived between the first flush and the sweep opens a
+        // new suspect fold. The session's exit path (#onExit → closeSession) would write them, but shutdown never waits
+        // for it (it awaits the session-env sweep and the fuse first), so they could reach a closed log. Both producers
+        // are gone now (the mods and the session children are stopped), so this flush is final: it writes the folds of
+        // every session #onExit has not removed and awaits the appends (bounded), before `log.close` below. A
+        // session whose #onExit runs later finds its folds empty and writes nothing twice.
+        try {
+          await supervisor.flushBridge();
+        } catch {
+          /* shutdown before the supervisor existed */
+        }
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
         emit({ kind: 'daemon.exit', reason });
         hub.close();

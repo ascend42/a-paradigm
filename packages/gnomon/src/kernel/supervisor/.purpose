@@ -102,7 +102,11 @@ components:
       flushed at exit); it never blocks. Session exit closes the bridge's
       refusal fold (modBridge.closeSession, awaited) and its suspect fold
       (awaited, bounded); flushBridge() does both for every live session at
-      daemon stop, before the children stop. held comes from bridgeHeld
+      daemon stop, before the children stop and again after the mods and the
+      children are stopped (a call in flight when its mod is killed is refused
+      after the first flush; shutdown never waits for #onExit).
+      SupervisorOptions.exitHold (TEST RIG ONLY) is awaited at the start of
+      #onExit so a test can hold the exit path past a daemon stop. held comes from bridgeHeld
       (mcp-bridge.ts), also used by the permission pass. #bridgeSession runs
       only for tools/call; the detector skips a session that is not running.
       SupervisorOptions.bridgeNow (TEST RIG ONLY) is the suspect fold's

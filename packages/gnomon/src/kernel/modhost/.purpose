@@ -55,7 +55,7 @@ components:
       is in the desk set (installed, verified, granted, unpaused), on the
       closed allowlist with the tool, first-party (publisher gnomon, tier
       first-party), at a CURRENT pin (isCurrentFirstPartyPin: in
-      FIRST_PARTY_PACKAGE_HASHES and neither superseded nor historical); the
+      FIRST_PARTY_PACKAGE_HASHES and neither superseded, retired nor historical); the
       tool declares no network or spend effect and carries a schema of type
       object whose description is at most 1,024 chars with no Cc/Cf/Zl/Zp and
       whose canonical JSON is at most 8 KiB; a name two listed mods declare is

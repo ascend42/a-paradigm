@@ -66,6 +66,11 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge: effective manual by a stri
     expect(raised).toMatchObject({ changed: true, applied: true, to: 'L3' });
     const after = (await k.client.call('status')) as { runModes?: unknown; strictness?: unknown };
     if (process.env.PROBE_OBS) fs.writeFileSync(`${process.env.PROBE_OBS}.ceiling.json`, JSON.stringify({ before: before.runModes, after: after.runModes, strictness: after.strictness }, null, 1));
+    // the session's CHOSEN mode is still not manual: only the ceiling makes it effective manual, so the refusal below is the ceiling's
+    const view = (after.runModes as { sessions?: Array<{ hsid: string; chosen: string; effective: string }> } | undefined)?.sessions?.find((x) => x.hsid === s.hsid);
+    expect(view?.chosen).toBeDefined();
+    expect(view!.chosen).not.toBe('manual');
+    expect(view!.effective).toBe('manual');
     await new Promise((r) => setTimeout(r, 1_100)); // past the one-second call window, so a refusal is not the rate cap's
     await k.client.call('session.send', { hsid: s.hsid, content: [{ text: 'two' }] });
     expect(await waitFor(() => answers(w).length >= 2, 30_000)).toBe(true);
@@ -119,5 +124,46 @@ describe.skipIf(!darwinFloor().ok)('#mod-tool-bridge: effective manual by a stri
     expect(counterAt).toBeLessThan(exitedAt);
     expect(suspectAt).toBeLessThan(exitedAt);
     expect(mine.filter((r) => r.event.kind === 'approval.suspect')).toHaveLength(1);
+  }, 120_000);
+
+  it('a kernel that shuts down while a bridge call is in flight: the mod is killed, the call is refused after the first flush, and its counter row is still in the log (the second flush, Aegis I5)', async () => {
+    const w = sessionWorld();
+    cleanups.push(() => w.cleanup());
+    const t = tempHome('ph-');
+    cleanups.push(() => removeTree(path.dirname(t.home)));
+    const userHome = path.dirname(t.home);
+    const devHome = path.join(userHome, 'devhome');
+    expect(await runDevCommand(['init', '--home', devHome], quiet(), { userHome, host: 'mac-1' })).toBe(0);
+    const dev = loadDevHome(devHome, { userHome });
+    const holdSource = `
+import { serveMod } from './gnomon-mod-sdk.mjs';
+serveMod({ tools: { 'bridge-hold': () => new Promise(() => {}) } });
+`;
+    const holdManifest = firstPartyProbeManifest({ provides: { tools: [{ name: 'bridge-hold', effects: ['read'], schema: SCHEMA }] }, requires: { capabilities: [], egress: 'none' } } as never);
+    installFirstParty({ root: userHome, home: dev.home, auth: dev.root as never, events: [], cleanup: async () => undefined }, holdManifest, holdSource);
+    setMode(w, { permissionAsk: { hold: true, steps: [{ line: { type: 'control_request', request_id: 'm-call', request: { subtype: 'mcp_message', server_name: 'gnomon-mods', message: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'bridge-hold', arguments: {} } } } } }] } });
+    // the session's exit path is HELD until the daemon has stopped (shutdown never waits for it), so only the daemon's
+    // own flush after the sweep can write the row; without that flush the row reaches a closed log and is lost
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((r) => (release = r));
+    cleanups.push(() => release());
+    const start = (exitHold?: () => Promise<void>) => startDevKernel(devHome, { userHome, start: (o) => startDaemonForTest(o, { supervisor: { claudePath: w.claude, allowScripts: true, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), ...(exitHold ? { exitHold } : {}) }, billing: { env: () => ({}), layers: () => [] }, modBridge: { allow: { [PROBE]: ['bridge-hold'] }, currentPin: () => true } }) });
+    const k = await start(() => held);
+    let stopped = false;
+    cleanups.push(() => (stopped ? undefined : k.stop()));
+    const s = await k.client.call<{ hsid: string }>('session.open', { cwd: w.cwd, attended: true });
+    await k.client.call('session.send', { hsid: s.hsid, content: [{ text: 'hold' }] });
+    // the call admitted the mod (started on first call) and was handed to it; the mod never answers
+    expect(await waitFor(() => k.handle.mods.running().includes(PROBE), 30_000)).toBe(true);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(answers(w)).toHaveLength(0); // still in flight
+    await k.stop(); // no session.stop first: the mod sweep refuses the call after the first flush
+    stopped = true;
+    release(); // the held exit path now runs against a closed log: it writes nothing
+    const k2 = await start();
+    cleanups.push(() => k2.stop());
+    const refused = [...k2.handle.log.read({ reader: { class: 'human' }, kinds: ['inject.receipt'] })].map((v) => (v as unknown as { event: { session?: string; payload: Record<string, unknown> } }).event).filter((e) => e.payload.outcome === 'refused' && e.payload.hsid === s.hsid);
+    expect(refused, JSON.stringify(refused)).toHaveLength(1);
+    expect(refused[0]!.payload).toMatchObject({ outcome: 'refused', coalesced: true, count: 1, byWhy: { 'mod-refused': 1 } });
   }, 120_000);
 });
