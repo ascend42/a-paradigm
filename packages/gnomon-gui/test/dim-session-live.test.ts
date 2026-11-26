@@ -207,7 +207,10 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(view.was[2]).toBeGreaterThan(1);
     expect(view.was[1]).not.toBe(0);
     expect(view.now).toEqual(view.was);
-    expect(g('back')).toMatchObject({ link: 'up', keep: 'saved', canUndo: false, nodes: g('start').nodes, sameAsMod: true, line: 'Reconnected · everything here is saved' });
+    expect(g('back')).toMatchObject({ link: 'up', keep: 'saved', canUndo: false, nodes: g('start').nodes, sameAsMod: true });
+    // aegis C2.3 and F7: the fixture's rebuilt session says it is back before any hash has been compared on it, so the
+    // line is plain "Reconnected" (it says nothing of saving while the board is unchecked)
+    expect(g('back').line).toBe('Reconnected');
     expect(g('drawn')).toMatchObject({ keep: 'saved', pending: 0, canUndo: true, nodes: g('start').nodes + 1, rows: g('start').rows + 1, sameAsMod: true, stored: true });
   }, 180_000);
 

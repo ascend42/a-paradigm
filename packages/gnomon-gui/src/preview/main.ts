@@ -198,13 +198,13 @@ async function openLiveBoard(host: HTMLElement, key: PreviewKey, load: () => Pro
         if (!c.notice) return;
         live.notices.push(c.notice);
         // (the loss of the link is said by the held-still line itself, for as long as it lasts)
-        if (!(c.notice.about === 'link' && c.notice.code === 'link-down')) leaf.say(noticeLine(c.notice));
+        if (!(c.notice.about === 'link' && c.notice.code === 'link-down')) leaf.say(noticeLine({ ...c.notice, verified: session.status().verified }));
       });
       // what the session was told before the leaf existed (what a reconnect lost, or that it is back)
       const told = session.lastNotice();
       if (told) {
         live.notices.push(told);
-        leaf.say(noticeLine(told));
+        leaf.say(noticeLine({ ...told, verified: session.status().verified }));
       }
     });
   // a reconnect destroys the session and its leaf: the new session gets a new leaf
