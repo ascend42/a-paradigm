@@ -303,7 +303,7 @@ export const GRANT_COPY = Object.freeze({
   /** WORKING LINE (Luna): the grant map has not arrived yet (opening) */
   titleUnknown: (name: string): string => `${name} · the board has not said yet who may edit`,
   /** WORKING LINE (Luna, aegis I-3): a change the board never answered; the key waits for a row or an answer */
-  titleUnsure: (name: string): string => `${name} · not known whether the change was made; waiting for the board`,
+  titleUnsure: (name: string): string => `${name} · not known whether the change was made · waiting for the board`,
   /** ORCHESTRATOR RULING (mika F4; Luna to confirm): said after the key of a session that is not running */
   notRunning: 'not running',
   spokenOn: (name: string): string => `${name} may edit this board: it can change and remove any mark`,
@@ -311,7 +311,7 @@ export const GRANT_COPY = Object.freeze({
   refusedOn: (name: string): string => `Not changed · ${name} may still edit`,
   refusedOff: (name: string): string => `Not changed · ${name} still may not edit`,
   /** WORKING LINE (Luna, aegis I-3): the board did not answer a press in time */
-  unsure: (name: string): string => `Not known whether it changed · ${name}’s key waits for the board`,
+  unsure: (name: string): string => `Not known whether it changed · the key for ${name} waits for the board`,
   noKey: 'can’t draw on a board yet',
 });
 

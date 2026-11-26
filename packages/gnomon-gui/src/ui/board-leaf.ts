@@ -938,18 +938,32 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // a pending change past its quiet: drawn again then
     const pend = grants.find((g) => g.since !== null && now - g.since < DIM_GRANT_QUIET_MS);
     if (pend && grantQuietTimer === null) grantQuietTimer = setTimeout(() => ((grantQuietTimer = null), drawFoot()), DIM_GRANT_QUIET_MS - (now - pend.since!) + 5);
-    // mika F1 / aegis I-5 (design hands_foot.overflow): a draw key is never clipped while a step remains. From the
-    // LAST keyed hand back: (1) its session's name is cut to 5 characters and …, the whole name in title=; then, from
-    // the last back again, (2) its name and session go (the seal's accessible name and the key's sentence keep them)
+    // mika F1 / aegis I-5 (design hands_foot.overflow): a draw key is never clipped while a step remains, in order:
+    // (0) a not-running note goes first, from the last hand back (its meaning stays in the key's sentence; ruling F1-b);
+    // (1) from the last keyed hand back, its session's name is cut to 5 characters and …;
+    // (2a, mika F1-a) on EVERY keyed hand that shows a session, at once, the shared name ('Claude') goes: the session
+    //     is what tells two Claudes apart; (2b) only then the session, from the last hand back, and last a lone name.
+    // A hand whose words went carries them whole in title= (and in the seal's accessible name and the key's sentence)
     const over = (): boolean => foot.scrollWidth > foot.clientWidth + 0.5;
-    for (const e of [...keyedEls].reverse()) {
+    const back = [...keyedEls].reverse();
+    for (const e of back) {
+      if (!over()) break;
+      if (!e.note.hidden && e.key) e.note.hidden = true;
+    }
+    for (const e of back) {
       if (!over()) break;
       if (e.session !== null && [...e.session].length > SESSION_FLOOR) setText(e.hintName, `${[...e.session].slice(0, SESSION_FLOOR).join('').trimEnd()}…`);
     }
-    for (const e of [...keyedEls].reverse()) {
+    if (over()) for (const e of keyedEls) if (e.session !== null) e.name.hidden = true;
+    for (const e of back) {
       if (!over()) break;
-      e.name.hidden = true;
       e.hint.hidden = true;
+      e.name.hidden = true;
+    }
+    for (const e of keyedEls) {
+      const gone = e.name.hidden || (e.session !== null && (e.hint.hidden || e.hintName.textContent !== e.session));
+      if (gone) e.hand.title = e.full;
+      else e.hand.removeAttribute('title');
     }
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' and every hand with a key stay
     // (a draw key is never put out of reach: design hands_foot.overflow; the '+<k> ▾' menu is not built yet)

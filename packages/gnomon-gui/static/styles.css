@@ -1971,7 +1971,10 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 /* S1.4 P4b (design board-leaf.hands_foot, components.draw-grant): every count sits in a fixed slot 4 characters wide,
    so a count going from 9 to 1 000 leaves every key's box where it was; the key stands 8px after its count; its width
    is held at its longest words ('may not edit', 12ch) plus the glyph slot, so a press never moves the next hand's key */
-.bd-foot .bd-count { display: inline-block; width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.bd-foot .bd-count { display: inline-block; font-variant-numeric: tabular-nums; }
+/* (mika F3-a: the fixed slot is for 'you' and the keyed hands, the counts that sit before something that must not move) */
+.bd-foot .bd-hand-keyed .bd-count, .bd-foot .bd-hand:first-child .bd-count { width: 4ch; }
+.bd-foot .bd-hand-keyed .bd-count { text-align: right; }
 .bd-foot .bd-hand-keyed { flex: none; }
 /* mika F4 / F7: a keyed hand's note (' · not running', the no-key line) in --sec, after the key with the hand's gap */
 .bd-foot .bd-hand-note { color: var(--sec); white-space: nowrap; }

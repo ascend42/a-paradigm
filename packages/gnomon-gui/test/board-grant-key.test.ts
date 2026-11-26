@@ -152,13 +152,34 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the remo
       { read: `[...document.querySelectorAll('.bd-foot .bd-hand-note')].filter((n) => !n.hidden).map((n) => n.textContent)`, as: 'notes' },
       { read: `(globalThis.__said = [], new MutationObserver(() => { const t = document.querySelector('.bd-leaf .sr-only[role=status]').textContent; globalThis.__said.push(t); }).observe(document.querySelector('.bd-leaf .sr-only[role=status]'), { childList: true, characterData: true, subtree: true }), ${LEAF}.speak('Claude added 3 marks'), 1)`, as: 's1' }, { wait: 200 },
       { read: `(${LEAF}.speak('Claude added 3 marks'), 1)`, as: 's2' }, { wait: 200 }, { read: 'globalThis.__said', as: 'said' },
-    ]);
+    ], { width: 2000 });
     expect(a.busyName).toBe('Claude may draw on this board and change or remove any mark, yours included · press to stop it');
     expect(a.gap).toBe(8);
     expect(a.notes).toEqual(['· not running', '· can’t draw on a board yet']);
     // cleared, then set on the next frame: a live region hears the same words a second time
     expect(a.said).toEqual(['Claude added 3 marks', '', 'Claude added 3 marks']);
   }, 180_000);
+  const handsRead = `[...document.querySelectorAll('.bd-foot .bd-hand-keyed')].map((h) => { const [name, sess] = h.querySelectorAll('bdi'); return { name: name.hidden ? null : name.textContent, session: sess.closest('.bd-hand-s').hidden ? null : sess.textContent, note: (() => { const n = h.querySelector('.bd-hand-note'); return n && !n.hidden ? n.textContent : null; })(), title: h.title || null }; })`;
+  it('mika F1-a: the shared name goes before any session (all hands at once), and a hand whose words went has them in title=; F1-b: a not-running note goes first', async () => {
+    for (const width of [1280, 560]) {
+      const a = await real([{ read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(named('Totals are off by a cent', 'billing-ui follow-up')), as: 'set' }, { wait: 400 }, { read: handsRead, as: 'hands' }, { read: footFit, as: 'fit' }], { width, shot: `r2-giveway-named-${width}` });
+      const hands = a.hands as Array<{ name: string | null; session: string | null; title: string | null }>;
+      // the shared 'Claude' has gone from BOTH before any session goes
+      if (hands.some((h) => h.session === null)) expect(hands.map((h) => h.name), `${width}`).toEqual([null, null]);
+      if (width === 1280) {
+        expect(hands.map((h) => h.name)).toEqual([null, null]);
+        expect(hands.map((h) => h.session !== null)).toEqual([true, true]);
+      }
+      for (const h of hands) if (h.name === null) expect(h.title, `${width}`).toMatch(/^Claude, /);
+      for (const k of a.fit as Array<{ inside: boolean }>) expect(k.inside, `${width}`).toBe(true);
+    }
+    const b = await real([{ read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants([one(true, 'live'), { ...one(false, 'idle'), hsid: B2 }]), as: 'set' }, { wait: 400 }, { read: handsRead, as: 'hands' }, { read: footFit, as: 'fit' }], { width: 560, shot: 'r2-giveway-idle-560' });
+    for (const k of b.fit as Array<{ inside: boolean }>) expect(k.inside, JSON.stringify(b.hands)).toBe(true);
+    // the note went first: the names it would otherwise have cost are still there
+    const bh = b.hands as Array<{ name: string | null; note: string | null }>;
+    expect(bh.map((h) => h.note)).toEqual([null, null]);
+    expect(bh.some((h) => h.name !== null)).toBe(true);
+  }, 240_000);
   it.todo('two agents at a 1024 window and three agents at 1440: the +<k> menu (a later S1.4 pass) keeps every key in reach');
 
   it('aegis I-4: a first mark of the session (another label) moves no key and drops no focus; a second Claude attaching keeps focus on the key', async () => {
