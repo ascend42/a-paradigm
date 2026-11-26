@@ -557,7 +557,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       const once = failing.length === 2 && !failing[0]!.c.ok && !failing[1]!.c.ok && failing[0]!.c.why === failing[1]!.c.why && failing[0]!.c.offer === failing[1]!.c.offer;
       for (const { role, c } of once ? failing.slice(0, 1) : failing) {
         if (c.ok) continue;
-        const named = !once;
+        // a why that already names its role (the distance rule's 'as a fill it would hide …') is not named twice
+        const named = !once && !c.why.includes(`as a ${role}`);
         answer.append(h('span', 'bd-refuse', {}, named ? trayRefusalLine(c.why, role) : c.line));
         if (c.offer) {
           const offer = c.offer;
