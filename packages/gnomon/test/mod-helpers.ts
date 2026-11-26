@@ -85,7 +85,7 @@ export function probeManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
         { name: 'probe.spend', effects: ['read', 'spend'] },
       ],
       views: [{ id: 'probe.view', slot: 'panel', placement: 'append' }],
-      commands: [{ id: 'probe.who', title: 'Who acted' }],
+      commands: [{ id: 'probe.who', title: 'Who acted', effects: ['read', 'write'] }],
       events: ['modns.acme.probe.done'],
     },
     requires: { capabilities: ['log.append:modns.acme.probe.*'], egress: [{ host: 'api.example.com', purpose: 'test' }] },
