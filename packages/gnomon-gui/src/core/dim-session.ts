@@ -177,6 +177,9 @@ export interface DimSessionLeaf {
   forget(): void;
   /** hold the board still and say why, or let it go (null): the link is down, or the fold is out of date */
   setInert?(why: 'link-down' | 'out-of-date' | null): void;
+  /** words held in an open text by a board too short to draw on (the leaf's own hold), or nothing */
+  holdsWords?(): boolean;
+  typed?(): string | null;
 }
 
 /** The options a leaf is mounted with so that it is this session's leaf (spread into `mountBoardLeaf`'s options). */
@@ -252,6 +255,7 @@ export class DimSession {
   /** the fold did not hash as the mod said: nothing more is sent from this board until a reset */
   #readOnly = false;
   #checkedSeq: number | null = null;
+  #heldWords: string | null = null;
   readonly #partial: boolean;
   #verified: boolean | null = null;
   #lost = 0;
@@ -506,6 +510,11 @@ export class DimSession {
     return this.#openOk;
   }
 
+  /** Words a too-short board held in an open text when the session was destroyed (read before its leaf went), or null. */
+  get heldWords(): string | null {
+    return this.#heldWords;
+  }
+
   /** How many pending ops were thrown away when the session was destroyed (0 while it lives). */
   get lost(): number {
     return this.#lost;
@@ -708,6 +717,13 @@ export class DimSession {
     this.#handle = null;
     const leaf = this.#leaf;
     this.#leaf = null;
+    // aegis F1 gap a: the words a too-short board holds are read BEFORE the leaf goes, so a kernel-driven end (a
+    // reset, a session that is gone) can say them; carried on the `destroyed` event
+    try {
+      this.#heldWords = leaf?.holdsWords?.() ? (leaf.typed?.() ?? null) : null;
+    } catch {
+      this.#heldWords = null;
+    }
     leaf?.destroy();
     this.#x.deps.store.unpin(this.dim);
     this.#x.gone(this, why);

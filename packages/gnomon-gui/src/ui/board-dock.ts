@@ -389,6 +389,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     }
     if (e.type !== 'destroyed') return;
     if (e.why !== 'link' && held && held.dim === e.session.dim) dropWords();
+    // aegis F1 gap a: an end the dock did not start (a reset on a cursor epoch, a session that is gone) took words a
+    // too-short board held: said by their first characters (a fold, a switch and a drop say it themselves; a link
+    // end keeps them in page memory)
+    if (cur && cur.session === e.session && e.why !== 'fold' && e.why !== 'switch' && e.why !== 'link' && e.session.heldWords) d.say(KEEP_COPY.wordsGoneWith(e.session.heldWords), 'warn');
     if (e.why === 'link' && !e.session.openedOk) {
       // still opening when the link went: it is not resumed, though its open may have landed. The list shows it.
       const a = asked.get(e.session.dim);

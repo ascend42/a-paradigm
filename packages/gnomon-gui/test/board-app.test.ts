@@ -681,6 +681,14 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
     }, 180_000);
     it('a pick of another board in the Dimensions list (/boards) is refused and says the held line; the words stay', async () => {
+      // aegis re-check: the toast is never false: once the leave has settled no text with the words was stored
+      expect(a.stored).toEqual([]);
+    }, 180_000);
+    it('aegis re-check (F1 gap a): an end the kernel drives (the reset of a cursor epoch) reads the held words before the leaf goes, and says them', async () => {
+      const a = await real([...toIdle, ...typeBoard, ...holdHello, { read: `(${A}.board.sessions.reset(), 1)`, as: 'reset' }, { until: `!${CUR}`, as: 'the leaf gone' }, { read: SEEF1, as: 'after' }]);
+      expect(a.errors).toEqual([]);
+      const toasts = (a.after as { toasts: string[] }).toasts;
+      expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
       const a = await real([
         ...toIdle, ...typeBoard, ...foldByEsc, { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 },
         ...holdHello, { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'the list' },
