@@ -23,6 +23,7 @@ import { decodePng } from '../scripts/board-colours.mjs';
 import { findChrome, leafUrl, shootLeaf } from '../scripts/board-leaf-shots.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
 import { startPreview } from '../scripts/preview.mjs';
+import { TOO_SHORT_SPEAK_MS } from '../src/core/board-leaf.js';
 import { railLayout, railNeed } from '../src/core/board-rail.js';
 import { differingShare, TOLERANCE, type Png } from './board-golden.js';
 
@@ -260,6 +261,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     const SIZE = (room: number, as: string) => ({ await: `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const chrome = Math.round(host.getBoundingClientRect().height) - leaf.room(); host.style.height = (chrome + ${room}) + 'px'; await fr(); return leaf.room(); })()`, as });
     const LOOK = `(() => { const l = document.querySelector('#preview-board .bd-leaf'); const g = (q) => { const e = l.querySelector(q); const b = e.getBoundingClientRect(); return { shown: getComputedStyle(e).display !== 'none' && b.height > 0, h: Math.round(b.height) }; }; const f = l.querySelector('.bd-board textarea');
       return { state: globalThis.gnomonPreviewLeaf.state(), rail: g('.bd-rail').shown, body: g('.bd-body'), foot: g('.bd-foot'), line: l.querySelector('.bd-keep').textContent, ink: l.querySelector('.bd-keep').classList.contains('bd-said-line'), spoken: l.querySelector('[role="status"]').textContent, tool: ${B}.state().tool, selected: ${B}.state().selected, edits: globalThis.gnomonPreviewFixture ? globalThis.gnomonPreviewFixture.edits.length : null, folds: globalThis.gnomonPreviewFolds ?? 0, field: f ? f.value : null, inert: l.dataset.inert ?? '', active: document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : null, inBoard: l.querySelector('.bd-board').contains(document.activeElement) }; })()`;
+    // sizes the board to each room in turn, a frame apart, inside the page; returns each state and the page time it took
+    const CROSS = (rooms: number[]) => `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const chrome = Math.round(host.getBoundingClientRect().height) - leaf.room(); const t0 = performance.now(); const states = [];
+      for (const room of ${JSON.stringify(rooms)}) { host.style.height = (chrome + room) + 'px'; await fr(); states.push(leaf.state()); } return { states, ms: Math.round(performance.now() - t0) }; })()`;
     const SPOKEN = { read: `(globalThis.__spoken = [], new MutationObserver(() => globalThis.__spoken.push(document.querySelector('#preview-board .bd-leaf [role="status"]').textContent)).observe(document.querySelector('#preview-board .bd-leaf [role="status"]'), { childList: true, characterData: true, subtree: true }), 1)`, as: 'observing' };
     const acted = (await real('open', [
       // (the keyboard is on the board first, as opening leaves it: the keys below must have somewhere to go)
@@ -268,11 +272,16 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       // (⌘A is the engine's OWN key handler, which the engine's yield does not cover; a tool letter it already ignores)
       { key: 'a', meta: true, commands: ['selectAll'] }, { key: 'r' }, { key: 'Backspace' }, { at: [120, 40], press: true }, { read: LOOK, as: 'keys' },
       // C3_6: crossing the floor back and forth (a turn strip row coming and going) speaks the line once
-      SIZE(400, 'up'), { read: '(globalThis.__t = performance.now(), 1)', as: 't0' }, { until: 'performance.now() - globalThis.__t > 1600', as: 'the 1.5s since the last time the line was spoken' }, SPOKEN, SIZE(130, 'down1'), SIZE(400, 'up1'), SIZE(130, 'down2'), { read: 'globalThis.__spoken.filter(Boolean)', as: 'spoken' },
+      // (the three crossings run in ONE page script, timed by the page: done as three DevTools round trips they took
+      // over 1.5s on a loaded machine, and the line was then rightly spoken again, a flake that read as speaking twice)
+      SIZE(400, 'up'), { read: '(globalThis.__t = performance.now(), 1)', as: 't0' }, { until: `performance.now() - globalThis.__t > ${TOO_SHORT_SPEAK_MS + 100}`, as: 'the 1.5s since the last time the line was spoken' }, SPOKEN,
+      { await: CROSS([130, 400, 130]), as: 'crossed' }, { read: 'globalThis.__spoken.filter(Boolean)', as: 'spoken' },
+      // and once per entry: an entry after the 1.5s has passed speaks it again
+      { read: '(globalThis.__t = performance.now(), 1)', as: 't1' }, { until: `performance.now() - globalThis.__t > ${TOO_SHORT_SPEAK_MS + 100}`, as: 'the 1.5s again' }, { await: CROSS([400, 130]), as: 'crossedLate' }, { read: 'globalThis.__spoken.filter(Boolean)', as: 'spokenLate' },
       // C3_3: Esc folds a board that is too short
       { key: 'Escape' }, { read: LOOK, as: 'esc' },
       // C3_2: a text being typed keeps its words, held, while too short; they are said to be back when there is room
-      SIZE(400, 'tall'), { key: 't' }, { at: [160, 120], press: true }, { wait: 300 }, ...[...'hello'].map((k) => ({ key: k, settle: 25 })), { read: LOOK, as: 'typing' },
+      SIZE(400, 'tall'), { key: 't' }, { at: [160, 120], press: true }, { until: `document.activeElement === document.querySelector('#preview-board .bd-board textarea')`, as: 'the text open and focused' }, ...[...'hello'].map((k) => ({ key: k, settle: 25 })), { read: LOOK, as: 'typing' },
       SIZE(130, 'shrunk'), ...[...'xyz'].map((k) => ({ key: k, settle: 25 })), { key: 'Escape' }, { read: LOOK, as: 'held' },
       // ruled (C3_2): the head's esc key does not fold while the words are held; it says the held line again
       { press: '#preview-board .bd-head [title^="Fold"]' }, { read: LOOK, as: 'escKey' },
@@ -293,7 +302,13 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(L('keys').tool).toBe(L('short').tool);
     expect(L('keys').edits).toBe(L('short').edits);
     expect(L('keys').spoken).toBe(L('short').line);
+    // C3_6: the crossings were really made, all inside the 1.5s (else this run cannot judge the rule, and says so)
+    const crossed = acted.crossed as { states: string[]; ms: number };
+    expect(crossed.states.map((st) => st === 'too-short')).toEqual([true, false, true]);
+    expect(crossed.ms, `the three crossings took ${crossed.ms}ms of page time, not inside the ${TOO_SHORT_SPEAK_MS}ms the rule speaks of`).toBeLessThan(TOO_SHORT_SPEAK_MS);
     expect(acted.spoken).toEqual([L('short').line]);
+    expect((acted.crossedLate as { states: string[] }).states.map((st) => st === 'too-short')).toEqual([false, true]);
+    expect(acted.spokenLate).toEqual([L('short').line, L('short').line]);
     expect(L('esc').folds).toBe(1);
     expect(L('typing').field).toBe('hello');
     expect(L('held')).toMatchObject({ field: 'hello', line: 'No room to draw · your words are kept on this page', edits: L('typing').edits });
