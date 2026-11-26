@@ -328,6 +328,40 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     }
   }, 300_000);
 
+  it('design widths_narrow (H1, H2): the head drops › board, then the glyph, then esc under 340px, and cuts the title last; one draw, measured again on a theme or title change; rename and Dimensions never go', async () => {
+    const HEAD = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const head = () => host.querySelector('.bd-head'); const vis = (q) => { const e = head().querySelector(q); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0; };
+      const look = (w, as) => { const t = head().querySelector('.title'); return { w, as, glyph: vis('.bd-g'), esc: vis('[title^="Fold"]'), medium: vis('.bd-medium'), rename: vis('.rename-btn'), dims: vis('[aria-haspopup], .key:not(.rename-btn):not([title^="Fold"])'), cut: t.scrollWidth > t.clientWidth + 0.5, rows: Math.round(head().getBoundingClientRect().height) }; };
+      const out = []; const one = Math.round(head().getBoundingClientRect().height);
+      for (const title of ['Totals are off by a cent in the invoice PDF', 'auth']) { leaf.setTitle(title); await fr();
+        for (const w of [300, 303, 339, 341, 424, 519, 680]) { host.style.width = w + 'px'; await fr(); out.push({ ...look(w, title), one }); } }
+      leaf.setTitle('Totals are off by a cent in the invoice PDF'); host.style.width = '303px'; await fr(); const a = look(303, 'again'); leaf.setTheme('day'); await fr(); const b = look(303, 'again'); leaf.setTheme('night'); await fr(); const night = look(303, 'night');
+      host.style.width = '424px'; leaf.setTitle('Totals are off'); await fr(); const retitled = look(424, 'retitled');
+      return { out, a, b, night, retitled }; })()`;
+    const acted = (await real('open', [ERRORS, { await: HEAD, as: 'head' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1440, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    type H = { w: number; as: string; glyph: boolean; esc: boolean; medium: boolean; rename: boolean; dims: boolean; cut: boolean; rows: number; one?: number };
+    const r = acted.head as { out: H[]; a: H; b: H; night: H; retitled: H };
+    for (const x of r.out) {
+      const at = `${x.w}px "${x.as}"`;
+      expect([x.rename, x.dims], `${at}: rename and Dimensions never go`).toEqual([true, true]);
+      expect(x.rows, `${at}: the head wrapped`).toBe(x.one);
+      if (x.w < 520) expect(x.medium, at).toBe(false);
+      // in order: the glyph only goes while the title would be cut; esc only under 340 and only after the glyph
+      if (!x.esc) expect([x.glyph, x.w < 340], at).toEqual([false, true]);
+      if (x.w >= 340) expect(x.esc, at).toBe(true);
+      if (x.glyph) expect(x.cut, `${at}: the glyph stayed while the title was cut`).toBe(false);
+      if (x.as === 'auth') expect([x.glyph, x.esc, x.cut], at).toEqual([true, true, false]);
+    }
+    const long303 = r.out.find((x) => x.w === 303 && x.as !== 'auth')!;
+    expect([long303.glyph, long303.esc]).toEqual([false, false]);
+    // H2: one draw: drawing again does not flip the glyph on and off
+    expect(r.b).toMatchObject({ glyph: r.a.glyph, esc: r.a.esc, cut: r.a.cut });
+    expect(r.night.rename).toBe(true);
+    // a title change measures again: a short title brings the glyph back
+    expect(r.retitled).toMatchObject({ glyph: true, esc: true, cut: false });
+  }, 300_000);
+
   it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {
     const acted = await real('open', [
       { press: '#preview-board [data-key="percent"]' },

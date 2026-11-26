@@ -269,6 +269,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       load: d.load,
       cardFocused: d.cardFocused,
       ...(d.pinned ? { pinned: d.pinned } : {}),
+      kept: () => keptOpen(),
       onFold: (cause) => void fold(cause),
       // the list opens only on the person's own press (written as every other trusted-event check here is: `!== true`)
       ...(d.dimensions

@@ -61,6 +61,8 @@ export interface BoardLeafOptions {
   onDimensions?: (cause: Event) => void;
   /** How many cards are pinned in this session now: the too-short line names deciding one only when there is one (design `too_short.line`). */
   pinned?: () => number;
+  /** True while show chat does NOT fold the board (held still with words or unsaved changes): the head's esc is then the pointer's only fold and never leaves the head (design widths_narrow.luna_final.H1). */
+  kept?: () => boolean;
 }
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -244,7 +246,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const titleEl = h('span', 'title', { title: o.title }, o.title);
   const headKey = h('button', 'key quiet', { type: 'button' });
   const escKey = h('button', 'key quiet', { type: 'button', title: 'Fold to the edge tab (Esc)' }, 'esc');
-  const head = h('div', 'lp-head bd-head', {}, h('span', 'bd-g', { 'aria-hidden': 'true' }, '◰'), titleEl, h('span', 'bd-medium', {}, LEAF_COPY.medium), h('button', 'key quiet rename-btn', { type: 'button', 'aria-label': 'Rename dimension', 'aria-disabled': 'true', title: 'Rename is not built yet' }, '✎'), h('span', 'spacer'), headKey, escKey);
+  const glyphEl = h('span', 'bd-g', { 'aria-hidden': 'true' }, '◰');
+  const head = h('div', 'lp-head bd-head', {}, glyphEl, titleEl, h('span', 'bd-medium', {}, LEAF_COPY.medium), h('button', 'key quiet rename-btn', { type: 'button', 'aria-label': 'Rename dimension', 'aria-disabled': 'true', title: 'Rename is not built yet' }, '✎'), h('span', 'spacer'), headKey, escKey);
   const keep = h('div', 'lp-keep bd-keep');
   const rail = h('div', 'bd-rail', { role: 'radiogroup', 'aria-label': 'Board tools', 'aria-orientation': 'vertical' });
   // the drawing surface is one region with a name; its description is the empty note's hint (design `tab_order`)
@@ -355,6 +358,22 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const text = `dimension in ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`;
     keep.title = led(text);
     keep.append('dimension in ', h('span', `swatch ${o.projectHue ?? 'h0'}`), ` ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`);
+  }
+
+  /**
+   * The narrow head (design widths_narrow, luna_final H1 and H2): ornament goes before a control and the title last.
+   * '› board' goes under 520px (styles.css). Then ONE draw: the glyph and esc are put back, the title measured with the
+   * head's own paint, and they are dropped in order while the title would still be cut: the ◰ glyph, then (in a leaf
+   * under 340px, and only while show chat folds) the esc key. Then the title is cut with …. Rename and Dimensions never go.
+   */
+  const HEAD_ESC_MIN = 340;
+  function fitHead(): void {
+    glyphEl.style.display = '';
+    escKey.style.display = '';
+    const cut = (): boolean => titleEl.scrollWidth > titleEl.clientWidth + 0.5;
+    if (!cut()) return;
+    glyphEl.style.display = 'none';
+    if (cut() && el.getBoundingClientRect().width < HEAD_ESC_MIN && !(holdsWords() || o.kept?.())) escKey.style.display = 'none';
   }
 
   // ── the rail ─────────────────────────────────────────────────────────────
@@ -716,6 +735,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       // the foot first: whether the check is in it decides the line under the head's lead (check.signs.unchecked)
       drawFoot();
       drawHead(state);
+      fitHead();
       drawRail(state);
       drawTray(state);
       drawNote(state);
@@ -983,7 +1003,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     setTheme(next) {
       theme = next;
       handle?.setTheme(next);
-      draw();
+      draw(); // (the title's face is wider at night: the head is measured again, H2)
     },
     retry: start,
     say,
@@ -1030,6 +1050,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       titleEl.title = title;
       boardHost.setAttribute('aria-label', `Board: ${title}`);
       el.setAttribute('aria-label', `Dimension: ${title}`);
+      fitHead();
     },
     setCheck(line, tone = 'ok', co = {}) {
       const title = co.title ?? '';
