@@ -171,6 +171,9 @@ components:
   mcp-passthrough:
     description: >-
       #mcp-passthrough (TD-2026-10-20-812 A2, slice S1; spec §12.9).
+      S1.4-P2: a DeskMod also carries packageHash (the installed snapshot's,
+      verified here) and tier (the manifest's trust tier); #mod-tool-bridge's
+      list rule reads them and lists nothing for a mod without them.
       src/kernel/desk/mcp-passthrough.ts: DeskMods / readDeskMods (installed,
       pinned snapshot verifies, manifest matches its grant, capabilities and
       egress granted, not paused; cached on the grant table) and mergeDeskMcp,

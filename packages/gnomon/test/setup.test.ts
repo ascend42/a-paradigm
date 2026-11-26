@@ -19,6 +19,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { runBareCommand } from '../src/cli/bare-cli.js';
 import { groupDigest, runSetup, runSetupCommand, type GuiSetupDeps, type SetupDeps } from '../src/cli/setup-cli.js';
 import { runUp } from '../src/cli/up-cli.js';
+import { sanitizeName } from '../src/cli/identity-cli.js';
+import { isReservedPrincipalName } from '../src/kernel/identity/registry.js';
 import {
   acceptUnsignedHelperForTests,
   DEV_TEST_HELPER_ACK,
@@ -206,6 +208,28 @@ describe('gnomon setup (#first-run)', () => {
     expect(fake.prompts.filter((p) => /delete the (approvals|root) key of generation test0001/.test(p)).length).toBe(2);
     expect(fake.keys.has('test0001.root')).toBe(false);
     expect(readIdentity(homeOf(u))!.gen).not.toBe('test0001');
+  });
+
+  it('S1.4 (Aegis I4): a reserved principal name is refused bad-name BEFORE any key is created or presence is asked, by the engine and by every name validator', async () => {
+    const fake = new FakeHelper(null);
+    const ops: string[] = [];
+    const home = path.join(tmp(), 'reserved-home');
+    const p = new Provisioner({ home, helperPath: exe(tmp()), verifier: DEV, start: view(fake, ops), once: () => (q) => fake.handle(q) });
+    const out = await p.provision({ mode: 'init', existing: null, name: 'mods-mcp', host: 'mac' });
+    expect(out).toMatchObject({ ok: false, reason: 'bad-name' });
+    expect(ops).toEqual([]); // the helper was never asked anything: no key, no prompt
+    expect(fake.prompts).toEqual([]);
+    expect(fake.keys.size).toBe(0);
+    expect(readIdentity(home)).toBeNull();
+    // the CLI validators: `identity init --name mods-mcp` is refused at parse; a $USER of that name falls back
+    expect(sanitizeName('mods-mcp')).toBe('founder');
+    expect(sanitizeName('Mods-MCP')).toBe('founder');
+    expect(sanitizeName('mods-mcp-2')).toBe('mods-mcp-2');
+    expect(isReservedPrincipalName('mods-mcp')).toBe(true);
+    expect(isReservedPrincipalName('founder')).toBe(false);
+    // the same engine with a free name does create keys (the refusal above is the name, not the rig)
+    expect((await p.provision({ mode: 'init', existing: null, name: 'matt', host: 'mac' })).ok).toBe(true);
+    expect(ops.some((x) => x.startsWith('key.create'))).toBe(true);
   });
 
   it('G-SET-04 (MEDIUM-2): a generation that is the live root of the GNOMON_HOME home is never purged; purgeGeneration re-checks every visible record under the lock', async () => {

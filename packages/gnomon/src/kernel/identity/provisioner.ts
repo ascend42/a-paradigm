@@ -48,7 +48,7 @@ import { deviceKeyPath, loadDeviceKey, writeNewDeviceKey } from './device-key.js
 import { HardwareRootAuthority, p256FromX963, p256KeyIdOfPem, pemOf } from './hardware.js';
 import { helperOnceSync, HelperProcess, pinHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from './helper.js';
 import { APPROVALS_ROW_SCHEMA, appendIdentityJournal, helperPublicKey, IDENTITY_SCHEMA, identityPath, openHardwareIdentity, readIdentity, writeIdentity, type IdentityRecord } from './provision.js';
-import { appendSignedRegistryRow, deviceRowFor, readRegistry, registryPath, type RegistryRow } from './registry.js';
+import { appendSignedRegistryRow, deviceRowFor, isReservedPrincipalName, readRegistry, registryPath, type RegistryRow } from './registry.js';
 
 export type ProvisionMode = 'init' | 'rotate' | 'recover';
 export type PresencePurposeId = 'rotate-statement' | 'approvals-binding' | 'device-row' | 'complete-device' | 'purge-old' | 'purge';
@@ -288,6 +288,8 @@ export class Provisioner extends EventEmitter {
     this.#budget = ROOT_PROMPT_BUDGET[mode];
     // I12: the engine validates what any surface collected, on its own
     if (!PRINCIPAL_NAME_PATTERN.test(name)) return this.#refuse('bad-name', 'the name must match [a-z0-9][a-z0-9._-]{0,63}');
+    // S1.4 (Aegis I4): a reserved name is refused HERE, before the helper starts: no key is created and no presence is asked
+    if (isReservedPrincipalName(name)) return this.#refuse('bad-name', `the name ${name} is reserved for the kernel; choose another`);
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(host)) return this.#refuse('bad-host', 'the host must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}');
     const pin = this.#pin();
     if ('ok' in pin) return pin;

@@ -49,6 +49,7 @@ import {
   type PinnedHelper,
   type ProvisionEvent,
 } from '../kernel/identity/index.js';
+import { isReservedPrincipalName } from '../kernel/identity/registry.js';
 import { runPreflight, type PreflightCheck } from '../kernel/setup/preflight.js';
 import { SetupEndpoint, type SetupEndpointOptions, type SetupGrant } from '../kernel/setup/setup-endpoint.js';
 import { channelLine, channelRefused } from './launch-tty.js';
@@ -265,7 +266,8 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
     for (let tries = 0; tries < 3 && !name; tries++) {
       const a = await rl.ask(`\nYour name on approvals [${dflt}]: `);
       const n = a === '' ? dflt : a;
-      if (PRINCIPAL_NAME_PATTERN.test(n)) name = n;
+      if (PRINCIPAL_NAME_PATTERN.test(n) && !isReservedPrincipalName(n)) name = n;
+      else if (isReservedPrincipalName(n)) io.stdout.write('  that name is reserved for the kernel; choose another\n');
       else io.stdout.write('  lowercase letters, digits, ".", "_" or "-", starting with a letter or digit, at most 64\n');
     }
     if (!name) return stop(new SetupRefusal('bad-name', 'no valid name was given'));
