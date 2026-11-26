@@ -2,6 +2,7 @@
 // dimension row may hold lives here, so the stdio loop (index.mjs) is only plumbing and the rules can be tested
 // without a host. The fold and the validator are the published `dim-shape:v1` (dim-shape.mjs, generated).
 import {
+  DIM_ACT_PATTERN,
   DIM_AGENT_LABEL_PATTERN,
   DIM_FIELDS,
   DIM_ID_PATTERN,
@@ -181,8 +182,19 @@ export function landed(state, kind, payload, stamp, seq) {
   return foldDimRow(state, { seq, kind, payload: { ...payload, relayedFor: stamp } });
 }
 
-/** `oid` (S1.4, Aegis A8): 16 hex of sha256(hsid, 0x00, dim, 0x00, opId), computed by the caller. Never the model's string. */
-export const opPayload = (dim, ok, oid) => ({ v: DIM_ROW_VERSION, dim, ops: ok, ...(oid !== undefined ? { oid } : {}) });
+/**
+ * `oid` (S1.4, Aegis A8): 16 hex of sha256(hsid, 0x00, dim, 0x00, opId), computed by the caller. Never the model's string.
+ * `marks` (S1.4 E1, Aegis ruling 3): `act` (a person's action id, pattern-checked by readArgs or minted by the mod)
+ * and `undo` (built by the mod from its own plan, `undoMarker`). Never from input: no caller passes an input object here.
+ */
+export const opPayload = (dim, ok, oid, marks) => ({
+  v: DIM_ROW_VERSION,
+  dim,
+  ops: ok,
+  ...(oid !== undefined ? { oid } : {}),
+  ...(marks && marks.act !== undefined ? { act: marks.act } : {}),
+  ...(marks && marks.undo !== undefined ? { undo: marks.undo } : {}),
+});
 /** A first start row names the dimension; a reopen row carries NO title (the fold keeps the first one). */
 export const startPayload = (dim, hsid, opened, title) => ({ v: DIM_ROW_VERSION, dim, ...(title !== undefined ? { title } : {}), attached: [hsid], opened });
 export const attachPayload = (dim, hsid) => ({ v: DIM_ROW_VERSION, dim, hsid });
@@ -271,7 +283,7 @@ const REPO = /^repo:[0-9a-f]{16}$/;
 export const COMMAND_ARGS = Object.freeze({
   'dim.open': Object.freeze(['dim', 'title', 'titleFrom', 'opened']),
   'dim.attach': Object.freeze(['dim']),
-  'dim.op': Object.freeze(['dim', 'ops']),
+  'dim.op': Object.freeze(['dim', 'ops', 'act']),
   'dim.close': Object.freeze(['dim']),
   'dim.grant': Object.freeze(['dim', 'write']),
   'dim.select': Object.freeze(['dim', 'ids']),
@@ -305,7 +317,14 @@ export function readArgs(commandId, args) {
     out.title = own(a, 'title');
     out.fromSession = from === 'session';
   }
-  if (commandId === 'dim.op') out.ops = own(a, 'ops');
+  if (commandId === 'dim.op') {
+    out.ops = own(a, 'ops');
+    // S1.4 E1 (Aegis ruling 3): `act` is the page's id for ONE action, a ULID and nothing else. `undo`, `restored`
+    // and `of` are not args of dim.op (the closed list above refuses them args-bad): only the mod writes a marker.
+    const act = own(a, 'act');
+    if (act !== undefined && (typeof act !== 'string' || !DIM_ACT_PATTERN.test(act))) return { code: 'args-bad' };
+    if (act !== undefined) out.act = act;
+  }
   if (commandId === 'dim.grant') {
     // the session the grant is FOR is the host-composed `hsid` (the page names it as the focus; the host joins it
     // to a live session). `write` is a boolean and nothing else: a truthy string never grants.

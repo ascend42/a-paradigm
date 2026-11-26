@@ -159,3 +159,62 @@ describe('#dimension-mod E1 item 1: keyframe v3 carries attribution; v2 is ignor
     expect(dimAttrDigest(w.log.fold(dim))).not.toBe(dimAttrDigest({ ...w.log.fold(dim), nodes: new Map([...w.log.fold(dim).nodes].map(([k, v]) => [k, { node: v.node, by: v.by, hsid: v.hsid, addedSeq: v.addedSeq }])) }));
   });
 });
+
+describe('#dimension-mod E1 item 2: `act` on dim.op; `undo`, `restored`, `of` refused on every args and input surface (Aegis ruling 3)', () => {
+  it('dim.op writes a pattern-checked act on its row, honoured as the person\'s action; a bad act is args-bad with no row', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const act = ulid(77, '01JDAC');
+    const ok = await w.run('dim.op', { dim, ops: [rectOp(1)], act });
+    expect(ok).toMatchObject({ ok: true, applied: 1 });
+    const row = w.opRows().at(-1)!;
+    expect((row.payload as Record<string, unknown>).act).toBe(act);
+    const { dimActOf, dimChangeSetOf } = await import('@a-company/gnomon-contracts');
+    expect(dimActOf({ seq: row.seq, kind: row.kind, payload: row.payload })).toEqual({ principal: HUMAN, act });
+    expect(dimChangeSetOf({ seq: row.seq, kind: row.kind, payload: row.payload })).toEqual({ kind: 'act', principal: HUMAN, act });
+    // without act: no act key on the row
+    await w.run('dim.op', { dim, ops: [rectOp(2)] });
+    expect(Object.hasOwn(w.opRows().at(-1)!.payload as object, 'act')).toBe(false);
+    const before = w.opRows().length;
+    for (const bad of ['01jdac0000000000000000000x', 'x', 7, null, { act }, [act], `${act}0`]) expect(await w.run('dim.op', { dim, ops: [rectOp(3)], act: bad })).toMatchObject({ ok: false, code: 'args-bad' });
+    expect(w.opRows()).toHaveLength(before);
+  });
+
+  it('undo, restored and of are refused on dim.op args, dim-draw and dim-view input, and inside an op or a node; no row is written', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    const before = w.log.rows.length;
+    const marker = { of: { principal: HUMAN, act: ulid(5, '01JDAC') }, restored: [[ulid(8), ulid(1), { cls: 'human', principal: HUMAN }]] };
+    const extras: Record<string, unknown> = { undo: marker, restored: marker.restored, of: marker.of };
+    for (const [k, v] of Object.entries(extras)) {
+      // 1. dim.op args
+      expect([k, await w.run('dim.op', { dim, ops: [rectOp(2)], [k]: v })]).toMatchObject([k, { ok: false, code: 'args-bad' }]);
+      // 2. dim-draw input (and dim-view input)
+      expect([k, await w.tool('dim-draw', { dim, ops: [rectOp(2)], [k]: v }, agentOf(B))]).toMatchObject([k, { ok: false, code: 'args-bad' }]);
+      expect([k, await w.tool('dim-view', { dim, [k]: v }, agentOf(B))]).toMatchObject([k, { ok: false, code: 'args-bad' }]);
+      // 3. inside an op, and inside a node
+      const inOp = { ...rectOp(2), [k]: v };
+      const inNode = { type: 'add', node: { ...(rectOp(2).node as object), [k]: v } };
+      for (const op of [inOp, inNode, { type: 'update', id: ulid(1), patch: { [k]: v } }]) {
+        const viaCommand = await w.run('dim.op', { dim, ops: [op] });
+        expect(viaCommand).toMatchObject({ ok: false, code: 'ops-refused' });
+        expect((viaCommand.refused as Array<{ code: string }>)[0]!.code).toBe('field-unknown');
+        const viaTool = await w.tool('dim-draw', { dim, ops: [op] }, agentOf(B));
+        expect(viaTool).toMatchObject({ ok: false, code: 'ops-refused' });
+        expect((viaTool.refused as Array<{ code: string }>).some((r) => r.code === 'field-unknown')).toBe(true);
+      }
+    }
+    // no op row at all (dim-draw's refusals write count rows only, and those carry closed keys)
+    expect(w.log.rows.slice(before).filter((x) => x.kind === DIM_KINDS.op)).toHaveLength(0);
+    for (const x of w.log.rows.slice(before)) expect(JSON.stringify(x.payload)).not.toContain('"undo"');
+  });
+
+  it('an act sent on dim-draw input never reaches a row (tool rows carry v, dim, ops and oid only)', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    expect(await w.tool('dim-draw', { dim, ops: [rectOp(1)], act: ulid(5, '01JDAC') }, agentOf(B))).toMatchObject({ ok: false, code: 'args-bad' });
+    expect(await w.tool('dim-draw', { dim, ops: [rectOp(1)] }, agentOf(B))).toMatchObject({ ok: true });
+    expect(Object.keys(w.opRows().at(-1)!.payload as object).sort()).toEqual(['dim', 'ops', 'relayedFor', 'v']);
+  });
+});

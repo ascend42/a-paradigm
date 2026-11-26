@@ -572,8 +572,8 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   // a secret anywhere, or nothing accepted: no row at all
   if (v.secret) return refusal('secret', { refused: v.refused });
   if (v.ok.length === 0) return refusal('ops-refused', { refused: v.refused });
-  // the row is built from the validator's own copies only
-  const seq = await write(DIM_KINDS.op, opPayload(a.dim, v.ok));
+  // the row is built from the validator's own copies only; `act` is the pattern-checked arg (readArgs), never input as is
+  const seq = await write(DIM_KINDS.op, opPayload(a.dim, v.ok, undefined, a.act !== undefined ? { act: a.act } : undefined));
   if (typeof seq !== 'number') return seq;
   entry.sinceKf += v.ok.length;
   if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
