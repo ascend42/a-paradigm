@@ -589,6 +589,9 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   }
   const dim = a.dim ?? opens.get(actor.hsid);
   if (!dim) return refusal('no-open-dim');
+  // I-1: a tool never adopts. A dimension this home does not index is refused BEFORE any log read: otherwise an
+  // agent naming made-up ids would make every call fold the whole log (up to MAX_PAGES pages, uncached)
+  if (!dims.includes(ulidOf(dim))) return refusal('dim-unknown');
   let entry;
   try {
     entry = await load(host, dim, cancelled);
@@ -691,6 +694,9 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   const created = [];
   let applied = 0;
   let stop = null;
+  // I-2: ops of rows the host DEFINITELY did not write (a budget refusal, or rows never tried after a definite
+  // stop) go back to the turn's budget; an unknown or failed append is never refunded (M8)
+  let refund = 0;
   for (let r = 0; r < packed.rows.length; r++) {
     const pos = packed.rows[r];
     if (stop === null && cancelled()) stop = 'cancelled';
@@ -704,12 +710,14 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
       if (stop === null && (entry.state.ended || !dimMayDraw(entry.state, entry.grants, actor.hsid))) stop = 'write-not-granted';
     }
     let seq = null;
+    let unknown = false;
     if (stop === null) {
       const payload = opPayload(dim, pos.map((j) => v.ok[j]), oid);
       seq = await appendTool(host, DIM_KINDS.op, payload);
       if (seq === BUSY) stop = 'append-busy';
       else if (seq === null) {
         stop = 'append-failed';
+        unknown = true; // this row may have landed: never refunded
         loaded.delete(dim);
       } else {
         entry.state = landed(entry.state, DIM_KINDS.op, payload, stamp, seq);
@@ -723,12 +731,23 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
         }
       }
     }
-    if (stop !== null) for (const j of pos) refused.push(refusedEntry(okIdx[j], 'op', stop));
+    if (stop !== null) {
+      for (const j of pos) refused.push(refusedEntry(okIdx[j], 'op', stop));
+      if (!unknown) refund += pos.length;
+    }
+  }
+  if (refund > 0) {
+    try {
+      await charge(host, actor, -refund, 0);
+    } catch {
+      /* the overcount stands (M8: never an undercount) */
+    }
   }
   refused.sort((x, y) => x.index - y.index);
   if (applied > 0) {
     await saveIdx(host, dim, entry);
-    if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, dim, entry);
+    // a cancelled call answers now: the keyframe waits for the next draw or close
+    if (entry.sinceKf >= KEYFRAME_EVERY_OPS && stop !== 'cancelled') await saveKeyframe(host, dim, entry);
   }
   await countRow(host, dim, entry, actor, refused);
   if (applied === 0) return refusal(stop ?? 'ops-refused', { dim, refused, budgetLeft: budgetLeft(turns, actor) });

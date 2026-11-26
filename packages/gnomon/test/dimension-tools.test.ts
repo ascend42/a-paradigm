@@ -484,7 +484,8 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     const w = await toolRig();
     await board(w);
     await w.tool('dim-draw', { ops: ops(3), opId: 'draw-1' });
-    await w.dropState((k) => k === 'opens' || k === 'turns');
+    // memory (restart) and every keyframe gone; the index stays (a tool never adopts a dimension, I-1)
+    await w.dropState((k) => !k.startsWith('kf:'));
     const res = await w.tool('dim-draw', { ops: ops(5, 40), opId: 'draw-1' });
     expect(res).toMatchObject({ ok: true, repeat: true, applied: 3 });
     expect(opRows(w)).toHaveLength(1);
@@ -731,5 +732,71 @@ describe('G-MOD-20 (S1.4 P3, Aegis A7): a command without `effects` is read-only
     expect(res).toMatchObject({ ok: false, code: 'append-failed' });
     expect(log.rows).toEqual([]);
     expect(r.events.some((e) => e.kind === 'mod.effect.refused')).toBe(true);
+  });
+});
+
+describe('S1.4 P3 review, Aegis Important (I-1, I-2, I-4)', () => {
+  it('I-1: a tool naming a well-formed dimension this home does not know is refused dim-unknown with ZERO log pages read (tools never adopt)', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    w.log.pad(50_000);
+    const reads = w.log.reads.length;
+    for (let i = 0; i < 5; i++) {
+      expect(await w.tool('dim-view', { dim: dimId(900 + i) })).toMatchObject({ ok: false, code: 'dim-unknown' });
+      expect(await w.tool('dim-draw', { dim: dimId(900 + i), ops: ops(1) })).toMatchObject({ ok: false, code: 'dim-unknown' });
+    }
+    expect(w.log.reads.length).toBe(reads);
+  });
+
+  it('I-2: a budget refusal (written: false) refunds the turn: agent B refused append-busy in A\'s second keeps 64, and its retry after the window applies', { timeout: 60_000 }, async () => {
+    const w = await toolRig({ now: () => performance.now() });
+    const dim = await board(w);
+    await w.run('dim.grant', { dim, write: true }, B);
+    await new Promise((res) => setTimeout(res, 1_100));
+    expect((await w.tool('dim-draw', { ops: [...fullDraw(60), rectOp(1, { link: 'x' })] })).ok).toBe(true);
+    const busy = await w.tool('dim-draw', { ops: ops(64, 2000) }, agentOf(B));
+    expect(busy).toMatchObject({ ok: false, code: 'append-busy', budgetLeft: 64 });
+    await new Promise((res) => setTimeout(res, 1_100));
+    expect(await w.tool('dim-draw', { ops: ops(64, 2000) }, agentOf(B))).toMatchObject({ ok: true, applied: 64, budgetLeft: 0 });
+  });
+
+  it('I-2: a revoke between rows refunds the rows never written; a failed (unknown) append is never refunded', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    let n = 0;
+    w.log.afterAppend = (row) => {
+      if (row.kind === DIM_KINDS.op && ++n === 2) w.inject(DIM_AUX_KINDS.grant, { v: 1, dim, hsid: A, write: false, relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } });
+    };
+    const res = await w.tool('dim-draw', { ops: fullDraw(60) });
+    expect(res.budgetLeft).toBe(64 - (res.applied as number));
+  });
+});
+
+/** Agent-owned marks written straight into the log: 32 rows of 64 rects stamped as A's agent. */
+function agentRows(w: Rig, dim: string, from: number, rowsN: number): void {
+  for (let r = 0; r < rowsN; r++) w.inject(DIM_KINDS.op, { v: 1, dim, ops: ops(64, from + r * 64), relayedFor: agentOf(A) });
+}
+
+describe('I-4: the worst ACCEPTED and APPLIED draws on a 10,048-node board answer inside the 5 s timeout', () => {
+  it('64 moves of 32 agent-owned ids (63 fit one call and apply), then text adds at the text limit filling one call, both applied', { timeout: 180_000 }, async () => {
+    const w = await toolRig({ callTimeoutMs: 5_000 });
+    const dim = await board(w);
+    for (let r = 0; r < 125; r++) w.inject(DIM_KINDS.op, { v: 1, dim, ops: ops(64, 100_000 + r * 64), relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } });
+    agentRows(w, dim, 1000, 32);
+    await w.restart();
+    await w.tool('dim-view', { limit: 1 });
+    expect(w.log.fold(dim).nodes.size).toBe(125 * 64 + 32 * 64);
+    const moves = Array.from({ length: 64 }, (_, i) => ({ type: 'move', ids: Array.from({ length: 32 }, (_, j) => ulid(1000 + i * 32 + j)), dx: 1, dy: 1 }));
+    let t = performance.now();
+    const moved = await w.tool('dim-draw', { ops: moves });
+    // the 64th move does not fit the 64 KiB call less the count-row reserve: it is refused call-too-large by index
+    expect([moved.ok, moved.applied, performance.now() - t < 5_000]).toEqual([true, 63, true]);
+    expect(moved.refused).toEqual([{ index: 63, field: 'op', code: 'call-too-large', fix: expect.any(String) }]);
+    // text at the limit (4,000 characters of plain words): 15 are sent, 12 fit the 64 KiB call less the reserve
+    const words = 'board notes on the auth handoff '.repeat(125);
+    const texts = Array.from({ length: 15 }, (_, i) => ({ type: 'add', node: { kind: 'text', x: i, y: i, text: words } }));
+    t = performance.now();
+    const drawn = await w.tool('dim-draw', { ops: texts }, agentOf(A, 2));
+    expect([drawn.ok, drawn.applied, performance.now() - t < 5_000]).toEqual([true, 12, true]);
   });
 });
