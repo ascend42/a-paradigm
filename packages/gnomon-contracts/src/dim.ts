@@ -1638,8 +1638,13 @@ interface DimLater {
 const sameSet = (a: DimChangeSet, b: DimChangeSet): boolean =>
   a.kind === 'act' ? b.kind === 'act' && a.principal === b.principal && a.act === b.act : b.kind === 'turn' && a.hsid === b.hsid && a.turn === b.turn;
 
-function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySet<number>, of?: DimChangeSet): DimLater {
+function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySet<number>, o: { of?: DimChangeSet; undoer?: DimBy; setDeleted?: ReadonlySet<string> } = {}): DimLater {
+  const of = o.of;
   const out: DimLater = { fields: new Map(), touched: new Map(), deleted: new Map(), restoredOld: new Set(), done: new Set() };
+  // Aegis N-1: every honoured restored entry with its marker row's seq, judged AFTER the loop, when every later
+  // delete is known; `dels` holds the newest delete of each id by ANY row, continuation rows included
+  const entries: Array<{ newId: string; oldId: string; seq: number; continuation: boolean }> = [];
+  const dels = new Map<string, number>();
   const newest = (m: Map<string, number>, id: string, seq: number): void => {
     if (!(m.get(id)! >= seq)) m.set(id, seq);
   };
@@ -1658,18 +1663,23 @@ function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySe
       if (setSeqs.has(seq)) continue; // a row of the set itself is never a later change
       const ops = own(p, 'ops');
       const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
-      if (of && mark && sameSet(mark.of, of)) {
+      if (Array.isArray(ops)) for (const op of ops) if (isPlainObject(op) && own(op, 'type') === 'delete' && typeof own(op, 'id') === 'string') newest(dels, own(op, 'id') as string, seq);
+      // Aegis N-2: a continuation is bound to the undoer's hand when the caller names it
+      const continuation = !!of && !!mark && sameSet(mark.of, of) && (!o.undoer || sameHand(byOf(p), o.undoer));
+      if (mark) for (const r of mark.restored) entries.push({ newId: r.newId, oldId: r.oldId, seq, continuation });
+      if (continuation && mark) {
         // a continuation (Judge I-3): an earlier call of THIS undo. Its marks are done, never a conflict. A link
-        // re-point it wrote (a patch of link keys naming one of its re-added ids) belongs to that re-add's mark.
-        const fresh = new Set(mark.restored.map((r) => r.newId));
-        for (const r of mark.restored) out.done.add(r.oldId);
+        // re-point it wrote belongs to that re-add's mark only when it names a re-added node whose old id is one the
+        // SET deleted (Aegis N-2); its restored old ids are done only when the re-add stands (after the loop).
+        const fresh = new Map(mark.restored.map((r) => [r.newId, r.oldId]));
+        const ours = (v: unknown): boolean => typeof v === 'string' && fresh.has(v) && !!o.setDeleted?.has(fresh.get(v)!);
         if (Array.isArray(ops)) {
           for (const op of ops) {
             if (!isPlainObject(op)) continue;
             const type = own(op, 'type');
             if (type === 'update' && isPlainObject(own(op, 'patch'))) {
               const patch = own(op, 'patch') as Record<string, unknown>;
-              const repoint = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => (LINK_KEYS as readonly string[]).includes(k) && fresh.has(patch[k] as string));
+              const repoint = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => (LINK_KEYS as readonly string[]).includes(k) && ours(patch[k]));
               if (!repoint && typeof own(op, 'id') === 'string') out.done.add(own(op, 'id') as string);
             } else if (type === 'move' && Array.isArray(own(op, 'ids'))) for (const id of own(op, 'ids') as unknown[]) (typeof id === 'string' && out.done.add(id));
             else if (type === 'delete' && typeof own(op, 'id') === 'string') out.done.add(own(op, 'id') as string);
@@ -1686,17 +1696,19 @@ function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySe
           else if (type === 'delete' && typeof own(op, 'id') === 'string') (newest(out.touched, own(op, 'id') as string, seq), newest(out.deleted, own(op, 'id') as string, seq));
         }
       }
-      // Judge nit 6: a restored entry counts only when its re-add stands now, or was deleted by a later row (so it
-      // landed). A marker whose re-add failed in the fold (an id clash) leaves its old id undoable.
-      if (mark) {
-        for (const r of mark.restored) {
-          const now = current.nodes.get(r.newId);
-          if (now ? now.restoredFrom?.id === r.oldId : current.gone.has(r.newId) && out.deleted.has(r.newId)) out.restoredOld.add(r.oldId);
-        }
-      }
     }
   } catch {
     // rows that cannot be read add nothing more
+  }
+  // Judge nit 6 and Aegis N-1: a restored entry counts only when its re-add LANDED: it stands now as that restore,
+  // or it is gone now and a row AFTER the marker row deleted it. A marker whose re-add failed in the fold (an id
+  // clash, with a live id or with one deleted earlier) leaves its old id undoable.
+  for (const e of entries) {
+    const now = current.nodes.get(e.newId);
+    const landed = now ? now.restoredFrom?.id === e.oldId : current.gone.has(e.newId) && (dels.get(e.newId) ?? Number.NEGATIVE_INFINITY) > e.seq;
+    if (!landed) continue;
+    if (e.continuation) out.done.add(e.oldId);
+    else out.restoredOld.add(e.oldId);
   }
   for (const n of current.nodes.values()) if (n.restoredFrom && typeof n.restoredFrom.id === 'string') out.restoredOld.add(n.restoredFrom.id);
   return out;
@@ -1896,7 +1908,8 @@ export interface DimUndoPlan {
  *    first (rows between two rows of the set included: a field is "changed since" when a row after THAT set row
  *    changed it, Judge I-2);
  *  - `of`: the set being undone. A row in `after` whose honoured undo marker names it is an earlier call of this
- *    undo (a continuation, `more`): its marks are done and never counted as conflicts (Judge I-3);
+ *    undo (a continuation, `more`): its marks are done and never counted as conflicts (Judge I-3), when its re-adds
+ *    landed; with `undoer`, only a marker on a row of that hand is a continuation (Aegis N-2);
  *  - `current`: the board now; `actor`: THE UNDOER (a person for `dim.undo`, the calling agent for `dim-undo`);
  *  - `mint`: the caller's id minter. New ids are never taken from input or from a marker;
  *  - `ids`: an optional scope (old ids), to undo one hand's change to some marks only.
@@ -1918,6 +1931,8 @@ export function planDimUndo(o: {
   actor: DimActor;
   mint: () => string;
   of?: DimChangeSet;
+  /** the undoer's hand as stamped on its rows: when given, only a marker on a row of THIS hand is a continuation */
+  undoer?: DimBy;
   ids?: readonly string[];
   scan?: (text: string) => readonly string[];
 }): DimUndoPlan {
@@ -1925,7 +1940,10 @@ export function planDimUndo(o: {
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== 'function') return empty();
     const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x): x is number => Number.isSafeInteger(x)));
-    const later = laterOf(o.after ?? [], o.current, setSeqs, o.of);
+    const setDeleted = new Set<string>();
+    for (const r of o.rows) if (Array.isArray(r.ops)) for (const op of r.ops) if (isPlainObject(op) && op.type === 'delete' && typeof op.id === 'string') setDeleted.add(op.id);
+    const undoer = o.undoer !== undefined ? dimViewBy(o.undoer) : undefined;
+    const later = laterOf(o.after ?? [], o.current, setSeqs, { ...(o.of ? { of: o.of } : {}), ...(undoer ? { undoer } : {}), setDeleted });
     const inv = invertCore(o.rows, o.mint, o.current, { later, ...(Array.isArray(o.ids) ? { ids: new Set(o.ids) } : {}) });
     const order: string[] = [];
     const units = new Map<string, DimOp[]>();

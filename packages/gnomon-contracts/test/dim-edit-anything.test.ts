@@ -534,3 +534,72 @@ describe('E0 review item 10: the planner on a 10,048-node board', () => {
     expect([p.ops.length, p.applied, p.more]).toEqual([64, 64, false]);
   });
 });
+
+describe('E0 re-check: the restored rule judges every marker after the loop, and a continuation is the undoer\'s own (Aegis N-1, N-2)', () => {
+  const minter = (from = 60): (() => string) => {
+    let n = from;
+    return () => id(n++);
+  };
+  const rowsOf = (all: DimRow[], set: DimRow[]): Array<{ before: DimState; ops: unknown[]; seq: number }> =>
+    set.map((r) => ({ before: foldDim(all.filter((x) => x.seq < r.seq)), ops: (r.payload as { ops: unknown[] }).ops, seq: r.seq }));
+  const OF = { hsid: 'h1', turn: 'turn:h1/1' };
+  const TURN = { kind: 'turn' as const, ...OF };
+  const marked = (a: DimActor, ops: unknown[], restored: unknown[], hsid = 'h1'): DimRow => row(a, ops, { undo: { of: OF, restored } }, hsid);
+
+  it('N-1a: a re-add that landed and was later deleted by another hand still counts as restored (of omitted)', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1) }])];
+    const set = [row(claude, [{ type: 'delete', id: id(1) }])];
+    const u = marked(human, [{ type: 'add', node: rect(60) }], [[id(60), id(1), handOf(human)]]);
+    const kitDel = row(kit, [{ type: 'delete', id: id(60) }], {}, 'h2');
+    const all = [...base, ...set, u, kitDel];
+    const p = planDimUndo({ rows: rowsOf(all, set), after: [u, kitDel], current: foldDim(all), actor: human, mint: minter(70) });
+    expect([p.restored, p.ops]).toEqual([[], []]);
+  });
+
+  it('N-1b: a re-add that clashed with an id deleted EARLIER does not count as restored (of omitted)', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1) }, { type: 'add', node: rect(2) }])];
+    const set = [row(claude, [{ type: 'delete', id: id(1) }])];
+    const earlier = row(human, [{ type: 'delete', id: id(2) }]);
+    const clash = marked(human, [{ type: 'add', node: rect(2) }], [[id(2), id(1), handOf(human)]]);
+    const all = [...base, ...set, earlier, clash];
+    expect(foldDim(all).nodes.has(id(2))).toBe(false);
+    const p = planDimUndo({ rows: rowsOf(all, set), after: [earlier, clash], current: foldDim(all), actor: human, mint: minter(70) });
+    expect(p.restored.map((r) => r[1])).toEqual([id(1)]);
+  });
+
+  it('N-2a: with `undoer`, a marker of the set on another hand\'s row is not a continuation', () => {
+    seq = 0;
+    const base = [start()];
+    const set = [row(claude, [{ type: 'add', node: rect(10) }, { type: 'add', node: rect(11) }])];
+    const kitRow = marked(kit, [{ type: 'delete', id: id(10) }], [], 'h2');
+    const all = [...base, ...set, kitRow];
+    const asHuman = planDimUndo({ rows: rowsOf(all, set), after: [kitRow], current: foldDim(all), actor: human, mint: minter(), of: TURN, undoer: handOf(human) });
+    // kit's delete is another hand's later change: counted gone, never a silent "done"
+    expect([asHuman.applied, asHuman.skipped.gone]).toEqual([1, 1]);
+  });
+
+  it('N-2b: a continuation\'s restored old id is done only when its re-add stands', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1) }, { type: 'add', node: rect(2) }])];
+    const set = [row(claude, [{ type: 'delete', id: id(1) }])];
+    // a continuation marker whose re-add clashed with a live id: nothing was restored
+    const clash = marked(human, [{ type: 'add', node: rect(2) }], [[id(2), id(1), handOf(human)]]);
+    const all = [...base, ...set, clash];
+    const p = planDimUndo({ rows: rowsOf(all, set), after: [clash], current: foldDim(all), actor: human, mint: minter(70), of: TURN, undoer: handOf(human) });
+    expect(p.restored.map((r) => r[1])).toEqual([id(1)]);
+  });
+
+  it('N-2c: a continuation\'s link edit is a re-point only when it names a re-add of a mark the SET deleted', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1) }, { type: 'add', node: rect(2) }, { type: 'add', node: rect(3) }, { type: 'add', node: { id: id(4), kind: 'arrow', x: 0, y: 0, z: 'P', points: [0, 0, 5, 5], from: id(1) } }])];
+    const set = [row(claude, [{ type: 'update', id: id(4), patch: { from: id(2) } }])];
+    // a "continuation" re-adds mark 3 (which the set never deleted) and points the arrow at it
+    const cont = marked(human, [{ type: 'add', node: rect(61) }, { type: 'update', id: id(4), patch: { from: id(61) } }], [[id(61), id(3), handOf(human)]]);
+    const all = [...base, ...set, cont];
+    const p = planDimUndo({ rows: rowsOf(all, set), after: [cont], current: foldDim(all), actor: human, mint: minter(70), of: TURN, undoer: handOf(human) });
+    // the arrow's link edit is that row's own change: the arrow is done, its from is not overwritten back to 1
+    expect(p.ops.some((op) => op.type === 'update' && op.id === id(4))).toBe(false);
+  });
+});

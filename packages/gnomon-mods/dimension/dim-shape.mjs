@@ -1582,8 +1582,11 @@ function dimUndoMarkOf(row) {
 }
 var LINK_KEYS = ["from", "to", "parent"];
 var sameSet = (a, b) => a.kind === "act" ? b.kind === "act" && a.principal === b.principal && a.act === b.act : b.kind === "turn" && a.hsid === b.hsid && a.turn === b.turn;
-function laterOf(after, current, setSeqs, of) {
+function laterOf(after, current, setSeqs, o = {}) {
+  const of = o.of;
   const out = { fields: /* @__PURE__ */ new Map(), touched: /* @__PURE__ */ new Map(), deleted: /* @__PURE__ */ new Map(), restoredOld: /* @__PURE__ */ new Set(), done: /* @__PURE__ */ new Set() };
+  const entries = [];
+  const dels = /* @__PURE__ */ new Map();
   const newest = (m, id, seq) => {
     if (!(m.get(id) >= seq)) m.set(id, seq);
   };
@@ -1602,16 +1605,21 @@ function laterOf(after, current, setSeqs, of) {
       if (setSeqs.has(seq)) continue;
       const ops = own(p, "ops");
       const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
-      if (of && mark && sameSet(mark.of, of)) {
-        const fresh = new Set(mark.restored.map((r) => r.newId));
-        for (const r of mark.restored) out.done.add(r.oldId);
+      if (Array.isArray(ops)) {
+        for (const op of ops) if (isPlainObject(op) && own(op, "type") === "delete" && typeof own(op, "id") === "string") newest(dels, own(op, "id"), seq);
+      }
+      const continuation = !!of && !!mark && sameSet(mark.of, of) && (!o.undoer || sameHand(byOf(p), o.undoer));
+      if (mark) for (const r of mark.restored) entries.push({ newId: r.newId, oldId: r.oldId, seq, continuation });
+      if (continuation && mark) {
+        const fresh = new Map(mark.restored.map((r) => [r.newId, r.oldId]));
+        const ours = (v) => typeof v === "string" && fresh.has(v) && !!o.setDeleted?.has(fresh.get(v));
         if (Array.isArray(ops)) {
           for (const op of ops) {
             if (!isPlainObject(op)) continue;
             const type = own(op, "type");
             if (type === "update" && isPlainObject(own(op, "patch"))) {
               const patch = own(op, "patch");
-              const repoint = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => LINK_KEYS.includes(k) && fresh.has(patch[k]));
+              const repoint = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => LINK_KEYS.includes(k) && ours(patch[k]));
               if (!repoint && typeof own(op, "id") === "string") out.done.add(own(op, "id"));
             } else if (type === "move" && Array.isArray(own(op, "ids"))) for (const id of own(op, "ids")) typeof id === "string" && out.done.add(id);
             else if (type === "delete" && typeof own(op, "id") === "string") out.done.add(own(op, "id"));
@@ -1628,14 +1636,15 @@ function laterOf(after, current, setSeqs, of) {
           else if (type === "delete" && typeof own(op, "id") === "string") newest(out.touched, own(op, "id"), seq), newest(out.deleted, own(op, "id"), seq);
         }
       }
-      if (mark) {
-        for (const r of mark.restored) {
-          const now = current.nodes.get(r.newId);
-          if (now ? now.restoredFrom?.id === r.oldId : current.gone.has(r.newId) && out.deleted.has(r.newId)) out.restoredOld.add(r.oldId);
-        }
-      }
     }
   } catch {
+  }
+  for (const e of entries) {
+    const now = current.nodes.get(e.newId);
+    const landed = now ? now.restoredFrom?.id === e.oldId : current.gone.has(e.newId) && (dels.get(e.newId) ?? Number.NEGATIVE_INFINITY) > e.seq;
+    if (!landed) continue;
+    if (e.continuation) out.done.add(e.oldId);
+    else out.restoredOld.add(e.oldId);
   }
   for (const n of current.nodes.values()) if (n.restoredFrom && typeof n.restoredFrom.id === "string") out.restoredOld.add(n.restoredFrom.id);
   return out;
@@ -1767,7 +1776,12 @@ function planDimUndo(o) {
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== "function") return empty();
     const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x) => Number.isSafeInteger(x)));
-    const later = laterOf(o.after ?? [], o.current, setSeqs, o.of);
+    const setDeleted = /* @__PURE__ */ new Set();
+    for (const r of o.rows) if (Array.isArray(r.ops)) {
+      for (const op of r.ops) if (isPlainObject(op) && op.type === "delete" && typeof op.id === "string") setDeleted.add(op.id);
+    }
+    const undoer = o.undoer !== void 0 ? dimViewBy(o.undoer) : void 0;
+    const later = laterOf(o.after ?? [], o.current, setSeqs, { ...o.of ? { of: o.of } : {}, ...undoer ? { undoer } : {}, setDeleted });
     const inv = invertCore(o.rows, o.mint, o.current, { later, ...Array.isArray(o.ids) ? { ids: new Set(o.ids) } : {} });
     const order = [];
     const units = /* @__PURE__ */ new Map();
