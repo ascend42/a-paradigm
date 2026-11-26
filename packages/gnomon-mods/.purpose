@@ -216,6 +216,13 @@ components:
       a tool append only op and draw.refused (M4). cancel is honoured between
       log pages and rows (M3); an APPEND_BUDGET refusal keeps the fold
       (append-busy, A4). PLAYBOOK.md is the long form of the agent rules.
+      Review fixes (S1.4 P3): a tool never adopts (an unindexed dim is
+      dim-unknown before any log read); ops of rows definitely not written
+      are refunded, a failed append never is; dimHash cached per fold (WeakMap);
+      a cold repeat says inputUnknown; NEW_KEY_FIX for an undefined new:<key>;
+      the op-id input is canonical JSON and measured first; read-only calls
+      never saveIdx; an agent may add inside another hand's frame. Open: a
+      resumed session's turn numbers restart at 1 (I-3).
       State keys added: opens, turns. Tested in test/dimension-tools.test.ts
       (G-DDL-03, G-DDL-09, A8, M3, M4, M8, M9, A4 with a real-window clock,
       G-MOD-20) and test/dimension-kinds.test.ts (all six kinds refused for

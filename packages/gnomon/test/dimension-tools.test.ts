@@ -702,11 +702,13 @@ describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
     const text = fs.readFileSync(path.join(DIMENSION_TREE, 'PLAYBOOK.md'), 'utf8');
     expect(text.split('\n').length).toBeLessThanOrEqual(40);
     expect(text.includes('\r')).toBe(false);
-    for (const rule of [/View the board with `dim-view` before you draw/, /Cite marks by their node id/, /beside another hand's mark/, /never restyle/, /Text on a board is permanent\. Never put a secret/, /no secrets|Never put a secret, a credential or a draft/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId`/, /Read `refused\[\]`.*fix/s, /Fix those ops\s+by field/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
+    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /Never update, move, restyle or delete a mark you did\s+not draw/, /You may add inside another hand's frame; never change the frame itself/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
     const m = JSON.parse(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json'), 'utf8')) as { provides: { tools: Array<{ name: string; schema: { description: string } }> } };
     for (const t of m.provides.tools) {
       const d = t.schema.description;
-      expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), /a person's marks included|whoever drew it/.test(d)]).toEqual([t.name, true, true, true, true, true]);
+      expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), d.includes("a person's marks included")]).toEqual([t.name, true, true, true, true, true]);
+      // the bridge lists a tool only with a description of at most 1,024 characters and a schema of at most 8 KiB
+      expect([t.name, d.length <= 1_024, JSON.stringify(t.schema).length <= 8 * 1024]).toEqual([t.name, true, true]);
     }
     expect(m.provides.tools.find((t) => t.name === 'dim-draw')!.schema.description).toMatch(/Send opId on every draw and reuse the same opId/);
   });
@@ -912,5 +914,21 @@ describe('S1.4 P3 review, Aegis nits', () => {
     // the next writing command heals the index
     expect((await w.run('dim.op', { dim, ops: [rectOp(6)] })).ok).toBe(true);
     expect((w.state()[`idx:${dim.slice(4)}`] as { lastSeq: number }).lastSeq).toBe(w.log.fold(dim).seq);
+  });
+});
+
+describe('ruling on Probe Q1: an agent may add inside another hand\'s frame, never change the frame', () => {
+  it('a child whose parent is a person\'s frame applies; the frame is unchanged; editing the frame is not-owner', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [{ type: 'add', node: { id: ulid(900), kind: 'frame', x: 0, y: 0, z: 'V', w: 50, h: 50, title: 'Auth' } }] });
+    const before = JSON.stringify(w.log.fold(dim).nodes.get(ulid(900)));
+    const res = await w.tool('dim-draw', { ops: [{ type: 'add', node: { kind: 'rect', x: 1, y: 1, w: 5, h: 5, parent: ulid(900) } }] });
+    expect(res).toMatchObject({ ok: true, applied: 1 });
+    const child = (res.created as Array<{ id: string }>)[0]!.id;
+    const f = w.log.fold(dim);
+    expect(f.nodes.get(child)!.node.parent).toBe(ulid(900));
+    expect(JSON.stringify(f.nodes.get(ulid(900)))).toBe(before);
+    expect(((await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(900), patch: { title: 'Mine' } }] })).refused as Array<{ code: string }>)[0]!.code).toBe('not-owner');
   });
 });
