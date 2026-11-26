@@ -258,7 +258,7 @@ describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
   it('a person undoes an agent turn field by field; a delete is re-added under a new id with links re-pointed and the original hand', () => {
     const { rows, set } = board();
     const p = plan(rows, set);
-    expect(p.skipped).toEqual({ changed: 0, gone: 0, refused: 0 });
+    expect(p.skipped).toEqual({ changed: 0, gone: 0, refused: 0, partial: 0 });
     expect(p.more).toBe(false);
     expect(p.restored).toEqual([[id(60), id(3), handOf(human)]]);
     const undo = land(rows, p);
@@ -280,8 +280,8 @@ describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
       row(kit, [{ type: 'move', ids: [id(2)], dx: 1, dy: 0 }, { type: 'update', id: id(5), patch: { label: 'kit' } }], {}, 'h2'),
     ];
     const p = plan(rows, set, after);
-    // the label of 1 was changed since; its colour is still restored. 2 was moved since. 5 was touched after its add.
-    expect(p.skipped).toEqual({ changed: 3, gone: 0, refused: 0 });
+    // the label of 1 was changed since, its colour is still restored (partial); 2 was moved since; 5 was touched after its add
+    expect(p.skipped).toEqual({ changed: 2, gone: 0, refused: 0, partial: 1 });
     const s = foldDim([...rows, ...after, land(rows, p)]);
     expect(s.nodes.get(id(1))!.node).toMatchObject({ label: 'person again', color: 'graphite' });
     expect(s.nodes.get(id(2))!.node).toMatchObject({ x: 11, y: 5 });
@@ -289,7 +289,7 @@ describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
     expect(s.nodes.has(id(60))).toBe(true);
     // a node gone now (deleted later by someone else) is skipped as gone
     const gone = [row(human, [{ type: 'delete', id: id(2) }])];
-    expect(plan(rows, set, gone).skipped).toEqual({ changed: 0, gone: 1, refused: 0 });
+    expect(plan(rows, set, gone).skipped).toEqual({ changed: 0, gone: 1, refused: 0, partial: 0 });
     // a link re-pointed since is the other hand's: only a link that STILL names the old id is re-pointed
     const repointed = [row(kit, [{ type: 'update', id: id(4), patch: { from: id(1) } }], {}, 'h2')];
     const q = plan(rows, set, repointed);
@@ -309,7 +309,7 @@ describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
     // a newer rule: the caller's scan stands for the secret rules of the day
     const scan = (t: string): readonly string[] => (t.includes('NEWRULE') ? ['newrule'] : []);
     const p = plan(all, set, [], { scan });
-    expect(p.skipped).toEqual({ changed: 0, gone: 0, refused: 2 });
+    expect(p.skipped).toEqual({ changed: 0, gone: 0, refused: 2, partial: 0 });
     expect(p.ops).toEqual([{ type: 'update', id: id(2), patch: { label: null } }]);
     expect(p.restored).toEqual([]);
     // and what it hands back is a batch the validator accepts whole
@@ -428,5 +428,65 @@ describe('E0 review group A: attribution is not laundered through undo (Aegis I-
     const b = [start(), row(human, [{ type: 'add', node: text(10, 'agent words') }], { undo: { of, restored: [[id(10), id(1), handOf(kit)]] } }), row(human, [{ type: 'update', id: id(10), patch: { text: 'person words' } }])];
     const nb = foldDim(b).nodes.get(id(10))!;
     expect([nb.by, nb.restoredFrom!.by, nb.wordsBy]).toEqual([handOf(human), handOf(kit), handOf(human)]);
+  });
+});
+
+describe('E0 review group B: planner correctness (Judge I-2, I-3, nits 5 and 6)', () => {
+  const minter = (from = 60): (() => string) => {
+    let n = from;
+    return () => id(n++);
+  };
+  const rowsOf = (all: DimRow[], set: DimRow[]): Array<{ before: DimState; ops: unknown[]; seq: number }> =>
+    set.map((r) => ({ before: foldDim(all.filter((x) => x.seq < r.seq)), ops: (r.payload as { ops: unknown[] }).ops, seq: r.seq }));
+  const TURN = { kind: 'turn' as const, hsid: 'h1', turn: 'turn:h1/1' };
+
+  it('I-2: a row of another hand BETWEEN two rows of the set wins over the earlier row\'s inverse', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1, { label: 'person' }) }, { type: 'add', node: rect(2) }])];
+    const a = row(claude, [{ type: 'update', id: id(1), patch: { label: 'claude' } }]);
+    const between = row(human, [{ type: 'update', id: id(1), patch: { label: 'person again' } }, { type: 'update', id: id(2), patch: { color: 'graphite' } }]);
+    const c = row(claude, [{ type: 'update', id: id(2), patch: { color: null } }]);
+    const all = [...base, a, between, c];
+    const p = planDimUndo({ rows: rowsOf(all, [a, c]), after: [between], current: foldDim(all), actor: human, mint: minter(), of: TURN });
+    const s = foldDim([...all, row(human, p.ops)]);
+    // a's label is left (the person changed it after a); c's colour inverse restores the person's between value
+    expect(s.nodes.get(id(1))!.node.label).toBe('person again');
+    expect(s.nodes.get(id(2))!.node.color).toBe('graphite');
+    expect([p.applied, p.skipped]).toEqual([1, { changed: 1, gone: 0, refused: 0, partial: 0 }]);
+  });
+
+  it('I-3: a 70-add undo finishes in two calls with nothing skipped; the first call\'s row is a continuation, not a conflict', () => {
+    seq = 0;
+    const base = [start()];
+    const set = [row(claude, Array.from({ length: 64 }, (_, i) => ({ type: 'add', node: rect(i + 10) }))), row(claude, Array.from({ length: 6 }, (_, i) => ({ type: 'add', node: rect(i + 80) })))];
+    const all = [...base, ...set];
+    const first = planDimUndo({ rows: rowsOf(all, set), after: [], current: foldDim(all), actor: human, mint: minter(), of: TURN });
+    expect([first.ops.length, first.more, first.skipped]).toEqual([64, true, { changed: 0, gone: 0, refused: 0, partial: 0 }]);
+    const u1 = row(human, first.ops, { undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: first.restored } });
+    const second = planDimUndo({ rows: rowsOf(all, set), after: [u1], current: foldDim([...all, u1]), actor: human, mint: minter(), of: TURN });
+    expect([second.ops.length, second.applied, second.more, second.skipped]).toEqual([6, 6, false, { changed: 0, gone: 0, refused: 0, partial: 0 }]);
+    expect(foldDim([...all, u1, row(human, second.ops)]).nodes.size).toBe(0);
+  });
+
+  it('nit 5: per mark: an added mark deleted since is gone; a mark updated and deleted by the set is one applied mark', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1) }])];
+    const set = [row(claude, [{ type: 'add', node: rect(5) }, { type: 'update', id: id(1), patch: { label: 'x' } }, { type: 'delete', id: id(1) }])];
+    const after = [row(kit, [{ type: 'update', id: id(5), patch: { label: 'k' } }], {}, 'h2'), row(kit, [{ type: 'delete', id: id(5) }], {}, 'h2')];
+    const all = [...base, ...set, ...after];
+    const p = planDimUndo({ rows: rowsOf(all, set), after, current: foldDim(all), actor: human, mint: minter(), of: TURN });
+    expect([p.applied, p.skipped]).toEqual([1, { changed: 0, gone: 1, refused: 0, partial: 0 }]);
+    expect(p.restored.map((r) => r[1])).toEqual([id(1)]);
+  });
+
+  it('nit 6: a marker whose re-add failed in the fold (an id clash) does not count its old id as restored', () => {
+    seq = 0;
+    const base = [start(), row(human, [{ type: 'add', node: rect(1) }, { type: 'add', node: rect(2) }])];
+    const set = [row(claude, [{ type: 'delete', id: id(1) }])];
+    // a hostile or broken undo row re-adds under an id already on the board: the add does not apply
+    const clash = row(human, [{ type: 'add', node: rect(2, { label: 'clash' }) }], { undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: [[id(2), id(1), handOf(human)]] } });
+    const all = [...base, ...set, clash];
+    const p = planDimUndo({ rows: rowsOf(all, set), after: [clash], current: foldDim(all), actor: human, mint: minter() });
+    expect(p.restored.map((r) => r[1])).toEqual([id(1)]);
   });
 });

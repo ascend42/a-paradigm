@@ -1577,31 +1577,59 @@ function dimUndoMarkOf(row) {
   }
 }
 var LINK_KEYS = ["from", "to", "parent"];
-function laterOf(after, current) {
-  const out = { fields: /* @__PURE__ */ new Map(), touched: /* @__PURE__ */ new Set(), restoredOld: /* @__PURE__ */ new Set() };
-  const field = (id, k) => {
+var sameSet = (a, b) => a.kind === "act" ? b.kind === "act" && a.principal === b.principal && a.act === b.act : b.kind === "turn" && a.hsid === b.hsid && a.turn === b.turn;
+function laterOf(after, current, setSeqs, of) {
+  const out = { fields: /* @__PURE__ */ new Map(), touched: /* @__PURE__ */ new Map(), deleted: /* @__PURE__ */ new Map(), restoredOld: /* @__PURE__ */ new Set(), done: /* @__PURE__ */ new Set() };
+  const newest = (m, id, seq) => {
+    if (!(m.get(id) >= seq)) m.set(id, seq);
+  };
+  const field = (id, k, seq) => {
     if (typeof id !== "string") return;
-    out.touched.add(id);
+    newest(out.touched, id, seq);
     let f = out.fields.get(id);
-    if (!f) out.fields.set(id, f = /* @__PURE__ */ new Set());
-    f.add(k);
+    if (!f) out.fields.set(id, f = /* @__PURE__ */ new Map());
+    if (!(f.get(k) >= seq)) f.set(k, seq);
   };
   try {
     for (const row of after) {
       const p = opPayloadOf(row);
       if (!p) continue;
+      const seq = Number.isSafeInteger(row.seq) ? row.seq : Number.POSITIVE_INFINITY;
+      if (setSeqs.has(seq)) continue;
       const ops = own(p, "ops");
+      const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
+      if (of && mark && sameSet(mark.of, of)) {
+        const fresh = new Set(mark.restored.map((r) => r.newId));
+        for (const r of mark.restored) out.done.add(r.oldId);
+        if (Array.isArray(ops)) {
+          for (const op of ops) {
+            if (!isPlainObject(op)) continue;
+            const type = own(op, "type");
+            if (type === "update" && isPlainObject(own(op, "patch"))) {
+              const patch = own(op, "patch");
+              const repoint = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => LINK_KEYS.includes(k) && fresh.has(patch[k]));
+              if (!repoint && typeof own(op, "id") === "string") out.done.add(own(op, "id"));
+            } else if (type === "move" && Array.isArray(own(op, "ids"))) for (const id of own(op, "ids")) typeof id === "string" && out.done.add(id);
+            else if (type === "delete" && typeof own(op, "id") === "string") out.done.add(own(op, "id"));
+          }
+        }
+        continue;
+      }
       if (Array.isArray(ops)) {
         for (const op of ops) {
           if (!isPlainObject(op)) continue;
           const type = own(op, "type");
-          if (type === "update" && isPlainObject(own(op, "patch"))) for (const k of Object.keys(own(op, "patch"))) field(own(op, "id"), k);
-          else if (type === "move" && Array.isArray(own(op, "ids"))) for (const id of own(op, "ids")) field(id, "x"), field(id, "y");
-          else if (type === "delete" && typeof own(op, "id") === "string") out.touched.add(own(op, "id"));
+          if (type === "update" && isPlainObject(own(op, "patch"))) for (const k of Object.keys(own(op, "patch"))) field(own(op, "id"), k, seq);
+          else if (type === "move" && Array.isArray(own(op, "ids"))) for (const id of own(op, "ids")) field(id, "x", seq), field(id, "y", seq);
+          else if (type === "delete" && typeof own(op, "id") === "string") newest(out.touched, own(op, "id"), seq), newest(out.deleted, own(op, "id"), seq);
         }
       }
-      const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
-      if (mark) for (const r of mark.restored) out.restoredOld.add(r.oldId);
+      if (mark) {
+        for (const r of mark.restored) {
+          const now = current.nodes.get(r.newId);
+          if (now ? now.restoredFrom?.id === r.oldId : current.gone.has(r.newId) && out.deleted.has(r.newId)) out.restoredOld.add(r.oldId);
+        }
+      }
     }
   } catch {
   }
@@ -1616,29 +1644,33 @@ function invertCore(rows, mint, current, o = {}) {
   const restored = /* @__PURE__ */ new Map();
   const skipped = /* @__PURE__ */ new Map();
   const skip = (id, why) => {
-    if (!skipped.has(id)) skipped.set(id, why);
+    if (!skipped.has(id) || why === "gone") skipped.set(id, why);
   };
   const later = o.later;
   const inScope = (id) => !o.ids || typeof id === "string" && o.ids.has(id);
   for (const row of rows) {
     let state = row.before.dim === null ? { ...row.before, dim: "" } : row.before;
+    const at = Number.isSafeInteger(row.seq) ? row.seq : Number.NEGATIVE_INFINITY;
+    const since = (m, id) => (m?.get(id) ?? Number.NEGATIVE_INFINITY) > at;
+    const fieldSince = (id, k) => (later?.fields.get(id)?.get(k) ?? Number.NEGATIVE_INFINITY) > at;
+    const done = (id) => typeof id === "string" && !!later?.done.has(id);
     for (const op of row.ops) {
       const inv = [];
       if (isPlainObject(op)) {
         if (op.type === "add") {
           const id = isPlainObject(op.node) ? op.node.id : void 0;
-          if (typeof id === "string" && !state.nodes.has(id) && !state.gone.has(id) && inScope(id)) {
-            if (later?.touched.has(id)) skip(id, "changed");
+          if (typeof id === "string" && !state.nodes.has(id) && !state.gone.has(id) && inScope(id) && !done(id)) {
+            if (later && since(later.deleted, id)) skip(id, "gone");
+            else if (later && since(later.touched, id)) skip(id, "changed");
             else inv.push({ unit: `n:${id}`, op: { type: "delete", id } });
           }
         } else if (op.type === "update") {
           const cur = typeof op.id === "string" ? state.nodes.get(op.id) : void 0;
-          if (cur && isPlainObject(op.patch) && inScope(op.id)) {
+          if (cur && isPlainObject(op.patch) && inScope(op.id) && !done(op.id)) {
             const patch = {};
-            const changedSince = later?.fields.get(op.id);
             for (const k of Object.keys(op.patch)) {
               if (k === "id" || k === "kind" || DROPPED_KEYS.has(k) || op.patch[k] === void 0) continue;
-              if (changedSince?.has(k)) {
+              if (later && fieldSince(op.id, k)) {
                 skip(op.id, "changed");
                 continue;
               }
@@ -1648,12 +1680,12 @@ function invertCore(rows, mint, current, o = {}) {
             if (Object.keys(patch).length > 0) inv.push({ unit: `n:${op.id}`, op: { type: "update", id: op.id, patch } });
           }
         } else if (op.type === "move") {
-          let ids = Array.isArray(op.ids) ? op.ids.filter((id) => typeof id === "string" && state.nodes.has(id) && inScope(id)) : [];
+          let ids = Array.isArray(op.ids) ? op.ids.filter((id) => typeof id === "string" && state.nodes.has(id) && inScope(id) && !done(id)) : [];
           if (later) {
             ids = ids.filter((id) => {
-              const f = later.fields.get(id);
-              if (f && (f.has("x") || f.has("y"))) skip(id, "changed");
-              return !(f && (f.has("x") || f.has("y")));
+              const moved = fieldSince(id, "x") || fieldSince(id, "y");
+              if (moved) skip(id, "changed");
+              return !moved;
             });
           }
           if (ids.length > 0 && Number.isSafeInteger(op.dx) && Number.isSafeInteger(op.dy)) {
@@ -1664,11 +1696,11 @@ function invertCore(rows, mint, current, o = {}) {
           }
         } else if (op.type === "delete") {
           const cur = typeof op.id === "string" ? state.nodes.get(op.id) : void 0;
-          if (cur && inScope(op.id)) {
+          if (cur && inScope(op.id) && !done(op.id)) {
             if (later?.restoredOld.has(op.id)) skip(op.id, "changed");
             else {
               const id = mint();
-              const unit = `r:${op.id}`;
+              const unit = `n:${op.id}`;
               renamed.set(op.id, id);
               const entry = [id, op.id, cur.restoredFrom?.by ?? cur.by];
               if (cur.wordsBy || cur.otherBy) entry.push(cur.wordsBy ?? null, cur.otherBy ?? null);
@@ -1679,7 +1711,7 @@ function invertCore(rows, mint, current, o = {}) {
                 if (otherId === op.id) continue;
                 const patch = {};
                 for (const k of LINK_KEYS) if (own(other.node, k) === op.id) patch[k] = id;
-                if (Object.keys(patch).length > 0) inv.push({ unit, op: { type: "update", id: otherId, patch } });
+                if (Object.keys(patch).length > 0) inv.push({ unit, op: { type: "update", id: otherId, patch }, repoint: true });
               }
             }
           }
@@ -1715,7 +1747,7 @@ function invertCore(rows, mint, current, o = {}) {
     if (later && op.type !== "add") {
       const target = op.type === "move" ? op.ids[0] : op.type === "update" || op.type === "delete" ? op.id : void 0;
       if (target !== void 0 && !there(target)) {
-        if (e.unit.startsWith("n:")) skip(e.unit.slice(2), "gone");
+        if (!e.repoint) skip(e.unit.slice(2), "gone");
         continue;
       }
     }
@@ -1727,13 +1759,12 @@ function dimInvertRows(rows, mint, current) {
   return invertCore(rows, mint, current).entries.map((e) => e.op);
 }
 function planDimUndo(o) {
-  const empty = (refused = 0, extra = {}) => ({ ops: [], restored: [], skipped: { changed: 0, gone: 0, refused, ...extra }, applied: 0, more: false });
+  const empty = () => ({ ops: [], restored: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== "function") return empty();
-    const later = laterOf(o.after ?? [], o.current);
+    const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x) => Number.isSafeInteger(x)));
+    const later = laterOf(o.after ?? [], o.current, setSeqs, o.of);
     const inv = invertCore(o.rows, o.mint, o.current, { later, ...Array.isArray(o.ids) ? { ids: new Set(o.ids) } : {} });
-    const counts = { changed: 0, gone: 0, refused: 0 };
-    for (const why of inv.skipped.values()) counts[why] += 1;
     const order = [];
     const units = /* @__PURE__ */ new Map();
     for (const e of inv.entries) {
@@ -1741,6 +1772,7 @@ function planDimUndo(o) {
       if (!u) units.set(e.unit, u = []), order.push(e.unit);
       u.push(e.op);
     }
+    const refused = /* @__PURE__ */ new Set();
     const opts = o.scan ? { scan: o.scan } : {};
     const whole = (v, n2) => !v.secret && v.refused.length === 0 && v.ok.length === n2;
     const accepted = [];
@@ -1749,7 +1781,7 @@ function planDimUndo(o) {
       const ops = units.get(u);
       const v = validateDimOps(s, ops, o.actor, opts);
       if (!whole(v, ops.length)) {
-        counts.refused += 1;
+        refused.add(u);
         continue;
       }
       accepted.push(u);
@@ -1767,28 +1799,37 @@ function planDimUndo(o) {
       keep.push(u);
       n += c;
     }
+    const deferred = new Set(accepted.filter((u) => !keep.includes(u)));
+    const tally = (landed) => {
+      const out = { changed: 0, gone: 0, refused: 0, partial: 0, applied: landed.length };
+      const lands = new Set(landed);
+      for (const u of refused) if (!lands.has(u)) out.refused += 1;
+      for (const [id, why] of inv.skipped) {
+        const u = `n:${id}`;
+        if (lands.has(u)) {
+          if (why === "changed") out.partial += 1;
+        } else if (!refused.has(u) && !deferred.has(u)) out[why] += 1;
+      }
+      return out;
+    };
     for (let round = 0; round < 2; round++) {
       const set = new Set(keep);
       const entries = inv.entries.filter((e) => set.has(e.unit));
       const ops = entries.map((e) => e.op);
-      if (ops.length === 0) return { ...empty(counts.refused, { changed: counts.changed, gone: counts.gone }), more };
+      if (ops.length === 0) break;
       const v = validateDimOps(o.current, ops, o.actor, opts);
       if (whole(v, ops.length)) {
-        return {
-          ops: v.ok,
-          restored: keep.flatMap((u) => inv.restored.has(u) ? [inv.restored.get(u)] : []),
-          skipped: counts,
-          applied: keep.length,
-          more
-        };
+        const { applied, ...skipped2 } = tally(keep);
+        return { ops: v.ok, restored: keep.flatMap((u) => inv.restored.has(u) ? [inv.restored.get(u)] : []), skipped: skipped2, applied, more };
       }
       const bad = new Set(v.refused.map((r) => r.index >= 0 && r.index < entries.length ? entries[r.index].unit : "*"));
       if (bad.has("*")) break;
-      counts.refused += bad.size;
+      for (const u of bad) refused.add(u);
       keep = keep.filter((u) => !bad.has(u));
     }
-    counts.refused += keep.length;
-    return { ops: [], restored: [], skipped: counts, applied: 0, more };
+    for (const u of keep) refused.add(u);
+    const { applied: _none, ...skipped } = tally([]);
+    return { ops: [], restored: [], skipped, applied: 0, more };
   } catch {
     return empty();
   }
