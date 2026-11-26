@@ -1024,7 +1024,10 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       }
     }
     expect((narrow.place as P).width).toBeLessThanOrEqual(304);
-    expect(Object.values((desk.place as P).out)[0]!.shown).toBe(true);
+    // S1.4 P4b (design hands_foot.gives_way): the attached session's hand now carries its draw key, so at 424 (one
+    // agent) the check gives way whole, as Mika measured at a 1024 window; at 680 there is room and it is whole
+    expect(Object.values((desk.place as P).out)[0]!.shown).toBe(false);
+    expect(Object.values((desk.wide as P).out)[0]!.shown).toBe(true);
     expect(Object.values((desk.tight as P).out)[0]!.shown).toBe(false);
     expect((desk.tight as P).out['not checked yet']!.lead).toBe(true);
     // C2.5: the second home ships with the rule: the open board's row in the palette's list holds the check

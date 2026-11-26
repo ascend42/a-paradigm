@@ -16,8 +16,12 @@
  *  - A refused send shows `refusal.message` (never the wire code), on the turn row, alone.
  *  - Two rows when the board's room measured WITHOUT the strip is 300px or more, else the turn row alone (the you
  *    row goes first). Measured without the strip, so the switch cannot flicker.
- *  - A tight turn row drops the reply (with its separator), then the agent's name, then ` · more in the chat`; the
- *    end words and ` · needs you` are never dropped (the UI measures; this module orders).
+ *  - A tight turn row drops the reply (with its separator), then the agent's name, then ` · more in the chat`, then
+ *    ` on the board` of the drew tail, then `stopped: ` of the limit words; the end words' own limit, the count, a
+ *    failed end and ` · needs you` are never dropped (the UI measures; this module orders).
+ *  - S1.4 P4b (design turn_strip.luna_s14.drew): once the turn has ended, ` · drew <n> on the board` when tool rows on
+ *    the boards name this turn in their causes, n counted FROM THE ROWS (core/dim-store.ts turnMarks), never from
+ *    the reply; ` · changed <n> on the board` when it added nothing. Order: the end words, drew, needs you or more.
  */
 import { replyChoices } from './choices.js';
 import { hhmm } from './loops.js';
@@ -45,6 +49,11 @@ export const TURN_COPY = Object.freeze({
   notSent: 'may not have been sent: the connection to the kernel failed',
   /** the strip's working key never unfolds here: its name says where its steps open (Mika 3) */
   workName: (what: string): string => `${what} · show its steps in the chat`,
+  /** S1.4 P4b: the drew tail; ' on the board' is its own drop level (luna_s14.drew_tight) */
+  drew: (n: number): string => `drew ${n}`,
+  changed: (n: number): string => `changed ${n}`,
+  onBoard: ' on the board',
+  stopped: 'stopped: ',
 });
 
 /** Two rows at this much board room or more, measured without the strip. */
@@ -67,6 +76,8 @@ export interface LatestTurn {
   ended: { words: string | null; tone: TurnEndTone } | null;
   /** what the turn holds that the strip never copies */
   more: 'needs' | 'more' | null;
+  /** S1.4 P4b: what the latest ended turn did on the boards, from rows (DimSessions.drewFor), or null */
+  drew?: { added: number; changed: number; removed: number } | null;
 }
 
 const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim();
@@ -133,18 +144,23 @@ export function latestTurn(items: readonly FoldedItem[], o: { liveChoice?: strin
   return out;
 }
 
-/** One span of a strip row. `drop`: the tight-row level that hides it (1 reply, 2 name, 3 more); none is never dropped. */
+/**
+ * One span of a strip row. `drop`: the tight-row level that hides it (1 reply, 2 name, 3 more); none is never
+ * dropped. `sub`: a part of a tail's own words with a later level of its own (4 ' on the board', 5 'stopped: ',
+ * which leads the tail's words).
+ */
 export interface TurnPart {
   cls: 'who' | 'sep' | 'said' | 't' | 'tail' | 'none';
   text: string;
   /** dir=auto (an isolate) on the person's and the model's words */
   bidi?: boolean;
-  tone?: 'warn' | 'fail' | 'quiet' | 'needs' | 'more';
+  tone?: 'warn' | 'fail' | 'quiet' | 'needs' | 'more' | 'drew';
   /** the tail's own leading ' · ' (hidden with the name when the name drops) */
   lead?: boolean;
   /** the first tail of the row */
   first?: boolean;
   drop?: 1 | 2 | 3;
+  sub?: { text: string; drop: 4 | 5; lead: boolean };
 }
 
 export interface TurnStripRow {
@@ -179,7 +195,14 @@ export function turnStripRows(t: LatestTurn, agent: 'Claude' | 'local model', ro
   if (!t.ended && t.reply === null) return [...rows, { kind: 'turn', parts: [{ cls: 'none', text: C.waiting }] }];
   const parts: TurnPart[] = [{ cls: 'who', text: agent, drop: 2 }, { cls: 'sep', text: C.sep, drop: 1 }, { cls: 'said', text: t.reply ?? C.noAnswer, bidi: t.reply !== null, drop: 1 }];
   const tails: TurnPart[] = [];
-  if (t.ended?.words) tails.push({ cls: 'tail', text: t.ended.words, tone: t.ended.tone, ...(knownEnd(t.ended.words) ? {} : { bidi: true }) });
+  if (t.ended?.words) {
+    const w = t.ended.words;
+    // the fifth level takes 'stopped: ' off a limit's words; the tone and the limit's own words still say it ended
+    const cut = w.startsWith(C.stopped) && knownEnd(w);
+    tails.push({ cls: 'tail', text: cut ? w.slice(C.stopped.length) : w, tone: t.ended.tone, ...(cut ? { sub: { text: C.stopped, drop: 5 as const, lead: true } } : {}), ...(knownEnd(w) ? {} : { bidi: true }) });
+  }
+  const d = t.ended ? t.drew : null;
+  if (d && (d.added > 0 || d.changed + d.removed > 0)) tails.push({ cls: 'tail', text: d.added > 0 ? C.drew(d.added) : C.changed(d.changed + d.removed), tone: 'drew', sub: { text: C.onBoard, drop: 4, lead: false } });
   if (t.more === 'needs') tails.push({ cls: 'tail', text: C.needs, tone: 'needs' });
   else if (t.more === 'more') tails.push({ cls: 'tail', text: C.more, tone: 'more', drop: 3 });
   tails.forEach((x, i) => {
@@ -190,16 +213,16 @@ export function turnStripRows(t: LatestTurn, agent: 'Claude' | 'local model', ro
 }
 
 /** The parts a tight row still shows at a drop level (0 shows all). The name's going also takes the first tail's lead. */
-export function partsAt(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3): Array<TurnPart & { noLead?: boolean }> {
-  const kept = parts.filter((p) => p.drop === undefined || p.drop > level);
+export function partsAt(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5): Array<TurnPart & { noLead?: boolean }> {
+  const kept = parts.filter((p) => p.drop === undefined || p.drop > level).map((p) => (p.sub && p.sub.drop <= level ? (({ sub: _s, ...rest }) => rest)(p) : p));
   const named = kept.some((p) => p.cls === 'who');
   return kept.map((p, i) => (p.cls === 'tail' && p.lead && !named && kept.findIndex((x) => x.cls === 'tail') === i ? { ...p, noLead: true } : p));
 }
 
 /** The plain text a row reads at a drop level (tests and the accessible check). */
-export function rowText(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 = 0): string {
+export function rowText(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5 = 0): string {
   return partsAt(parts, level)
-    .map((p) => (p.cls === 'tail' ? `${p.lead && !p.noLead ? TURN_COPY.sep : ''}${p.text}` : p.text))
+    .map((p) => (p.cls === 'tail' ? `${p.lead && !p.noLead ? TURN_COPY.sep : ''}${p.sub?.lead ? p.sub.text : ''}${p.text}${p.sub && !p.sub.lead ? p.sub.text : ''}` : p.text))
     .join('');
 }
 

@@ -107,7 +107,9 @@ const store = new GuiStore();
  * goes to it (`logStore` is the one store `followLog` is handed), it is given the `GnomonClient` ITSELF on every new
  * socket, told when the link closes, and reset wherever the GUI store is.
  */
-const dimSessions = new DimSessions({ store: new DimStore() });
+// S1.4 P4b: a grant targets the focus hsid the host joins to a LIVE session, so a session that is not live has its
+// draw key disabled (never "may not edit")
+const dimSessions = new DimSessions({ store: new DimStore(), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen') });
 let boardRepaint: () => void = () => undefined;
 /** true while the page waits for a restart to reconnect by itself; false when the Reconnect dialog is the only way back */
 let linkComing = false;
@@ -864,7 +866,8 @@ function paintBoardTurnNow(): void {
   for (let i = u + 1; i < its.length; i++) if (its[i]!.role === 'assistant' && hostHintsFor(its[i]!.key, its[i]!.text).length) slipped.add(its[i]!.key);
   strip.paint({
     open: true,
-    turn: latestTurn(its, { liveChoice: liveChoiceKey(its), slipped }),
+    // S1.4 P4b: the tail ' · drew N on the board', counted from the rows of the latest ENDED turn (never the reply)
+    turn: { ...latestTurn(its, { liveChoice: liveChoiceKey(its), slipped }), drew: dimSessions.drewFor(focused) },
     agent: agentLabel() === 'local model' ? 'local model' : 'Claude',
     // the board's room measured WITHOUT the strip (Luna: two rows at 300px), so the switch cannot flicker
     room: () => (boardDock.current()?.leaf.room() ?? 0) + $('board-turn').offsetHeight,
@@ -2009,6 +2012,7 @@ const boardDock = mountBoardDock({
   // the leaf head's Dimensions ▾ key: the same list as /boards (design board-leaf anatomy), on its own trusted press
   dimensions: () => openDimensions(),
   turn: () => paintBoardTurn(),
+  localModel: (hsid) => backendWord(store.sessions.get(hsid)?.backend) === 'local model',
 });
 // #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
 turnStrip = mountBoardTurn({ el: $('board-turn'), onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)), onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)) });
@@ -2179,14 +2183,17 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
   paintVoice();
+  // aegis I-6: only a backlog read to its end gives the rebuilt boards their grant map
+  let backlog = true;
   try {
     await subscribe(c);
   } catch (err) {
+    backlog = false;
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', 'fail');
   }
   // the backlog is read: the sessions get THIS socket's client object itself (a gesture stamp is numbered per client
   // object), and an open dimension is rebuilt from the log as it now stands. Never for a socket that already closed.
-  if (client === c) dimSessions.connect({ client: c, principal: out.session.principal, connId: out.session.connId });
+  if (client === c) dimSessions.connect({ client: c, principal: out.session.principal, connId: out.session.connId }, { backlog });
   boardDock.repaint();
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
   offerLiveSince = store.head; // #gui-offer-slip: a slip shown after this slides in

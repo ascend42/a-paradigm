@@ -26,7 +26,8 @@ const REPLY_MIN_PX = 28;
 function partEl(doc: MiniDoc, p: TurnPart, turn: boolean): MiniEl {
   const drop = p.drop !== undefined ? { 'data-drop': String(p.drop) } : null;
   if (p.cls === 'tail') {
-    const tail = h(doc, 'span', { class: `tail ${p.tone ?? 'quiet'}${p.first ? ' first' : ''}`, ...drop }, h(doc, 'span', { class: 'tsep' }, TURN_COPY.sep), p.text);
+    const sub = p.sub ? h(doc, 'span', { class: 'tsub', 'data-drop': String(p.sub.drop) }, p.sub.text) : null;
+    const tail = h(doc, 'span', { class: `tail ${p.tone ?? 'quiet'}${p.first ? ' first' : ''}`, ...drop }, h(doc, 'span', { class: 'tsep' }, TURN_COPY.sep), ...(sub && p.sub!.lead ? [sub] : []), p.text, ...(sub && !p.sub!.lead ? [sub] : []));
     // Aegis I3: an end reason the labels do not know carries its words from the run: an isolate too
     if (p.bidi) tail.setAttribute('dir', 'auto');
     return tail;
@@ -103,13 +104,13 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
 
   /** the turn row drops by core order until it fits: reply (when it overflows or is cut to nothing), name, more */
   function fit(row: HTMLElement): void {
-    row.classList.remove('tight-1', 'tight-2', 'tight-3');
+    row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5');
     const line = row.querySelector<HTMLElement>('.bd-turn-line');
     if (!line || !row.querySelector('[data-drop]')) return;
     const said = line.querySelector<HTMLElement>('.said[data-drop]');
     const over = (): boolean => line.scrollWidth > line.clientWidth + 0.5;
     const starved = (): boolean => !!said && said.offsetParent !== null && said.scrollWidth > said.clientWidth + 0.5 && said.clientWidth < REPLY_MIN_PX;
-    for (const level of [1, 2, 3] as const) {
+    for (const level of [1, 2, 3, 4, 5] as const) {
       if (!over() && !(level === 1 && starved())) return;
       row.classList.add(`tight-${level}`);
     }

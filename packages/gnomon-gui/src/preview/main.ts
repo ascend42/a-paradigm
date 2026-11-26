@@ -16,7 +16,7 @@ import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey }
 import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
 import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
 import { followLog, GnomonClient } from '../core/client.js';
-import { keepStateLine, noticeLine } from '../core/board-leaf.js';
+import { keepStateLine, noticeLine, removedLine } from '../core/board-leaf.js';
 import { DimSessions, type DimSession } from '../core/dim-session.js';
 import { DimStore } from '../core/dim-store.js';
 import { GuiStore } from '../core/store.js';
@@ -25,7 +25,7 @@ import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
 import { loadBoard, type BoardModule } from '../core/board.js';
 import type { DimOp, LogRow } from '@a-company/gnomon-contracts';
 import { boardFixture, FIXTURE_DIM, fixtureRows, fixtureState } from './board-fixture.js';
-import { mountBoardLeaf, type BoardLeaf } from '../ui/board-leaf.js';
+import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from '../ui/board-leaf.js';
 import { cardHasFocus } from '../ui/card-focus.js';
 
 // DEV ONLY: every CSP refusal on a preview page goes to the preview server's /diag (GET /diag lists them), so a
@@ -90,12 +90,18 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       // (the fixture counts its folds on the page, so a real-input test can see Esc fold a leaf that is too short)
       onFold: () => void ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds = ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds ?? 0) + 1, diag('board fold asked')),
       pinned: () => document.querySelectorAll('#pinned .card').length,
+      // S1.4 P4b DEV: the draw keys the fixture says (`gnomonPreviewGrants`, a list of LeafGrant), and the presses
+      // that reached the leaf's owner (`gnomonPreviewGrantPresses`), so a real-input test sees what a press sends
+      grants: () => ((globalThis as { gnomonPreviewGrants?: LeafGrant[] }).gnomonPreviewGrants ?? []),
+      onGrant: (hsid, cause) => void ((globalThis as { gnomonPreviewGrantPresses?: unknown[] }).gnomonPreviewGrantPresses ??= []).push({ hsid, type: cause.type, trusted: cause.isTrusted }),
       // a copy, a paste: the leaf's own register over the fixture's fold; pasted ops go where the board's edits go
       view: () => fx.state(),
       onOps: (ops, cause) => send(ops, cause),
       onReady: (handle) => {
         // the fixture's stand-in for the live loop: an edit becomes a row of yours and the fold is rendered back
         handle.render(fx.state());
+        // S1.4 P4b DEV (mika): a held mark another hand removed is said in the leaf's own line, as the dock says it
+        handle.onGone?.((r) => (globalThis as { gnomonPreviewLeaf?: BoardLeaf }).gnomonPreviewLeaf?.say(removedLine('Claude', r.change)));
         send = (ops, cause) => {
           fx.edits.push({ ops, cause: cause ? cause.type : null });
           if (!fx.held) handle.render(fx.apply(ops));

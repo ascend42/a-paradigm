@@ -219,7 +219,8 @@ describe('#gui-board-turn the room rule and the drop order', () => {
     const more = turnStripRows({ ...worst, ended: { words: null, tone: 'quiet' }, more: 'more' }, 'Claude', 485)[1]!.parts;
     expect([0, 1, 2, 3].map((l) => rowText(more, l as 0 | 1 | 2 | 3))).toEqual(['Claude · Which rounding mode should the totals use? · more in the chat', 'Claude · more in the chat', 'more in the chat', '']);
     // no level ever drops an end word or needs you
-    for (const l of [0, 1, 2, 3] as const) expect(partsAt(parts, l).filter((p) => p.cls === 'tail').map((p) => p.text)).toEqual(['stopped: step limit 20', 'needs you']);
+    // (S1.4 P4b: 'stopped: ' is its own sub-part now, dropped only at level 5; the words read whole through level 4)
+    for (const l of [0, 1, 2, 3, 4] as const) expect(partsAt(parts, l).filter((p) => p.cls === 'tail').map((p) => `${p.sub?.lead ? p.sub.text : ''}${p.text}`)).toEqual(['stopped: step limit 20', 'needs you']);
     // the CSS hides by the same levels the core orders
     expect(CSS).toMatch(/\.bd-turn-turn\.tight-1 \[data-drop="1"\], \.bd-turn-turn\.tight-2 \[data-drop="2"\], \.bd-turn-turn\.tight-2 \.tail\.first \.tsep, \.bd-turn-turn\.tight-3 \[data-drop="3"\] \{ display: none; \}/);
   });

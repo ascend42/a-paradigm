@@ -282,3 +282,81 @@ export function failedCause(error: unknown, afterMount: boolean): string {
 /** A dimension title in the edge tab: cut at 24 characters with … (the whole title stays in title=). */
 export const TAB_TITLE_MAX = 24;
 export const tabTitle = (title: string): string => ([...title].length > TAB_TITLE_MAX ? `${[...title].slice(0, TAB_TITLE_MAX - 1).join('')}…` : title);
+
+// ── S1.4 P4b: the draw key, the said lines of an agent's hand (design draw-grant, board-leaf.said) ──────────────
+
+/**
+ * The draw key's words (design components.draw-grant.words, with edit_anything of E-design, 2026-11-26, which wins
+ * where it differs: the face reads "may edit" since a grant lets an agent add, change and remove any mark).
+ * Lines the record does not have are WORKING lines, listed for Luna: `titleIdle`, `titleUnknown`, `removedByPerson`
+ * and `removedByUnknown`.
+ */
+export const GRANT_COPY = Object.freeze({
+  on: 'may edit',
+  off: 'may not edit',
+  titleOn: (name: string): string => `${name} may draw on this board and change or remove any mark, yours included · press to stop it`,
+  titleOff: (name: string): string => `${name} may not draw, change or remove marks on this board · press to let it`,
+  titlePending: (name: string, words: string): string => `${name} ${words} this board · saving the change`,
+  titleDown: 'Not connected · this can’t be changed until the board is back',
+  /** ORCHESTRATOR RULING (Luna to confirm): a session that is not live can be neither granted nor revoked (Aegis, P3 review) */
+  titleIdle: (name: string, write: boolean): string => `${name} ${write ? 'may edit' : 'may not edit'} this board · its session isn’t running, so this can’t be changed now`,
+  /** WORKING LINE (Luna): the grant map has not arrived yet (opening) */
+  titleUnknown: (name: string): string => `${name} · the board has not said yet who may edit`,
+  /** WORKING LINE (Luna, aegis I-3): a change the board never answered; the key waits for a row or an answer */
+  titleUnsure: (name: string): string => `${name} · not known whether the change was made · waiting for the board`,
+  /** ORCHESTRATOR RULING (mika F4; Luna to confirm): said after the key of a session that is not running */
+  notRunning: 'not running',
+  spokenOn: (name: string): string => `${name} may edit this board: it can change and remove any mark`,
+  spokenOff: (name: string): string => `${name} may not edit this board`,
+  refusedOn: (name: string): string => `Not changed · ${name} may still edit`,
+  refusedOff: (name: string): string => `Not changed · ${name} still may not edit`,
+  /** WORKING LINE (Luna, aegis I-3): the board did not answer a press in time */
+  unsure: (name: string): string => `Not known whether it changed · the key for ${name} waits for the board`,
+  noKey: 'can’t draw on a board yet',
+});
+
+/** A count in the foot's fixed 4-character slot (design hands_foot.order, aegis): over 999 reads '999+'. */
+export const countSlot = (n: number): string => (n > 999 ? '999+' : String(n));
+
+/** What an agent turn did on this board (counted from its rows). */
+export interface HandMarks {
+  added: number;
+  changed: number;
+  removed: number;
+}
+
+const marksWord = (n: number): string => (n === 1 ? '1 mark' : `${n} marks`);
+
+/**
+ * The arrival line (design board-leaf.said.arrival): ONE line per agent turn, spoken only. 'Claude added 3 marks',
+ * 'Claude added 3 marks, changed 2 and removed 1', 'Claude changed 2 marks'. A part that is zero is left out; null
+ * when nothing landed.
+ */
+export function arrivalLine(name: string, m: HandMarks): string | null {
+  const parts: Array<[string, number]> = (
+    [
+      ['added', m.added],
+      ['changed', m.changed],
+      ['removed', m.removed],
+    ] as Array<[string, number]>
+  ).filter(([, n]) => n > 0);
+  if (parts.length === 0) return null;
+  const [lead, ...rest] = parts;
+  const head = `${name} ${lead![0]} ${marksWord(lead![1])}`;
+  if (rest.length === 0) return head;
+  const tail = rest.map(([w, n]) => `${w} ${n}`);
+  return rest.length === 1 ? `${head} and ${tail[0]}` : `${head}, ${tail.slice(0, -1).join(', ')} and ${tail[tail.length - 1]}`;
+}
+
+/**
+ * The removed-mid-drag line (design board-leaf.said.removed): 'Claude removed the mark you were moving', or '… you
+ * were changing' for a resize, a restyle or a text edit. `name` null: a person or the unknown hand removed it
+ * (WORKING LINES, listed for Luna).
+ */
+export function removedLine(name: string | null, change: 'moving' | 'changing', who: 'agent' | 'self' | 'person' | 'unknown' = name ? 'agent' : 'unknown'): string {
+  if (who === 'agent' && name) return `${name} removed the mark you were ${change}`;
+  // ORCHESTRATOR RULING (Luna to confirm): the person's own other page
+  if (who === 'self') return `The mark you were ${change} was removed on another of your pages`;
+  // another person: a row names no person, so it reads as the unknown hand (aegis I-7); WORKING LINE (Luna)
+  return `An unknown hand removed the mark you were ${change}`;
+}
