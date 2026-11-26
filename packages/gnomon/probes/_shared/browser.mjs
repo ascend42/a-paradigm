@@ -14,7 +14,7 @@
 //   edge            Microsoft Edge, --headless=new
 //   firefox         Firefox --headless with a throwaway profile
 //   wkwebview       system WebKit via _shared/wkwebview-load.swift (darwin only)
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import http from 'node:http';
@@ -261,37 +261,136 @@ export function findEngines() {
   return { engines, missing };
 }
 
-/** Launch `engine` on `url`; returns {kill, exited: Promise, output()}. */
+/**
+ * The processes of a process listing whose command line names `tag` (a launch's own profile directory name), never
+ * `self` and never the listing command itself. `listing` is `ps -axww -o pid=,command=` output, or the Windows
+ * `<pid> <command line>` lines of profileHolders: one process a line, its pid first.
+ */
+export function holdersFrom(listing, tag, self = process.pid) {
+  if (!tag) return [];
+  return String(listing)
+    .split(/\r?\n/)
+    .map((l) => l.trim().match(/^(\d+)\s+(.*)$/))
+    .filter((m) => m && m[2].includes(tag) && Number(m[1]) !== self && !m[2].includes('Get-CimInstance'))
+    .map((m) => ({ pid: Number(m[1]), command: m[2].slice(0, 240) }));
+}
+
+/**
+ * The live processes whose command line names `tag`: what a launcher handed the browser off to (a Firefox that
+ * relaunches itself, or Windows' launcher process, starts the browser with the same arguments, the profile among
+ * them, and exits 0). Resolves null when the platform's process listing could not be read.
+ */
+export function profileHolders(tag, platform = process.platform) {
+  const [cmd, args] = platform === 'win32'
+    ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-CimInstance Win32_Process -Filter "CommandLine like '%${tag}%'" | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }`]]
+    : ['/bin/ps', ['-axww', '-o', 'pid=,command=']];
+  return new Promise((resolve) => {
+    execFile(cmd, args, { encoding: 'utf8', timeout: 15_000, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout) => resolve(err ? null : holdersFrom(stdout, tag)));
+  });
+}
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e?.code === 'EPERM';
+  }
+};
+
+/**
+ * Launch `engine` on `url`. Returns {exited, gone, kill(), output(), profile}: `exited` resolves {code, signal} when
+ * the LAUNCHED process ends; `gone` resolves {code, signal, handoff} when the BROWSER has ended, that is the launched
+ * process and every process it handed off to. A launcher that relaunches the browser (Firefox restarting itself,
+ * Windows' launcher process) exits 0 while the browser it started goes on with the same arguments: the profile
+ * directory the harness made for this launch names it, so the processes whose command line holds that directory's
+ * unique name are the browser. `handoff` lists them ({pids}) when there were any after the launcher exited, else
+ * null. kill() stops the launcher and every such process, so no browser outlives its page or loses its profile under
+ * it, and resolves the pids it found still holding the profile after the launcher ended.
+ * `engine.preArgs` (tests: a stub launcher run by node) go before the engine's own arguments.
+ */
 export function launch(engine, url, timeoutSec = 60) {
   const profile = mkdtempSync(path.join(os.tmpdir(), `gnomon-probe-${engine.name}-`));
+  const tag = path.basename(profile);
   let args;
   if (engine.kind === 'chromium') args = engine.name === 'headless-shell' ? chromeArgs(profile, url).slice(1) : chromeArgs(profile, url);
   else if (engine.kind === 'firefox') args = ['--headless', '--no-remote', '--profile', profile, url];
   else args = [url, String(timeoutSec)];
-  const child = spawn(engine.bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  // only a launch whose arguments name the profile can be followed (the WKWebView host takes none)
+  const follows = args.some((a) => a.includes(tag));
+  const child = spawn(engine.bin, [...(engine.preArgs ?? []), ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   child.stdout.on('data', (d) => (out = (out + d).slice(-4000)));
   child.stderr.on('data', (d) => (out = (out + d).slice(-4000)));
   const exited = new Promise((r) => child.on('close', (code, signal) => r({ code, signal })));
+  let stopping = false;
+  const others = async () => (await profileHolders(tag))?.filter((h) => h.pid !== child.pid) ?? null;
+  // the browser ends when the launcher has ended and, twice in a row 500 ms apart, no process holds the profile
+  // (a relaunch spawns the new browser before the old process exits; the second look covers a hand-off in flight)
+  const gone = exited.then(async (x) => {
+    if (!follows) return { ...x, handoff: null };
+    const seen = new Set();
+    let empty = 0;
+    // bounded: a holder that never ends (a crash handler naming the profile after its browser died) must not hold the
+    // run past its own timeout; the run then ends as a miss, never a pass (Aegis, P12 hand-off review)
+    const until = Date.now() + timeoutSec * 1000;
+    while (!stopping && empty < 2 && Date.now() < until) {
+      const h = await others();
+      if (h === null) break; // no listing on this host: the launcher's exit is all there is to go on
+      h.forEach((p) => seen.add(p.pid));
+      empty = h.length === 0 ? empty + 1 : 0;
+      if (empty < 2) await sleep(h.length ? 250 : 500);
+    }
+    return { ...x, handoff: seen.size ? { pids: [...seen] } : null };
+  });
   return {
     exited,
+    gone,
     profile,
     output: () => out,
     async kill() {
+      stopping = true;
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
       const t = setTimeout(() => child.kill('SIGKILL'), 3000);
       await exited;
       clearTimeout(t);
+      let left = [];
+      if (follows) {
+        const held = (await others()) ?? [];
+        left = held.map((h) => h.pid);
+        for (const pid of left) {
+          try {
+            process.kill(pid, 'SIGTERM');
+          } catch {
+            // already gone
+          }
+        }
+        for (let i = 0; i < 30 && left.some(alive); i++) await sleep(100);
+        // SIGKILL only what still holds the profile NOW: a pid that ended on SIGTERM may already belong to another
+        // process (Windows reuses pids quickly), and `alive` cannot tell the two apart (Aegis, P12 hand-off review)
+        const still = new Set(((await others()) ?? []).map((h) => h.pid));
+        for (const pid of left.filter((p) => still.has(p))) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            // already gone
+          }
+        }
+        for (let i = 0; i < 20 && left.some(alive); i++) await sleep(100);
+      }
       try {
         rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
       } catch {
         // a Windows profile lock can outlive the process briefly; temp dir only
       }
+      return left;
     },
   };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 /**
  * The DevTools protocol of a launched Chromium-family browser (Chrome, Edge; they are started with
@@ -366,13 +465,16 @@ export async function realPaste(cdp, origin, text, x, y, platform = process.plat
 
 /**
  * Open `pagePath` on `server` in `engine` and wait for its report. A page that does not report says why, so a miss
- * is never a bare timeout: `miss` is 'exited' (the browser process ended first; `exit` has its code, signal and
- * time), 'never-requested' (the server saw no request for this page's run id within `loadDeadlineMs`: the browser
+ * is never a bare timeout: `miss` is 'exited' (the BROWSER ended first: the launched process and every process it
+ * handed off to, see launch(); `exit` has the launcher's code, signal and time, and `browserGoneAtMs` when a hand-off
+ * outlived it), 'never-requested' (the server saw no request for this page's run id within `loadDeadlineMs`: the browser
  * never loaded it, a launch failure), or 'no-report' (the page was requested and sent nothing in `timeoutMs`).
  * `pageRequestedMs` is when the page itself was first asked for. A report that lands after the wait gave up is
  * returned as `lateReport`, never as `report`: it does not count as a report, and the caller judges what it carries;
  * `runId` lets the caller pick up a report that lands later still (server.lateReport). With `deadlineMs` the URL
- * carries `deadline=<epoch ms>`, fixed at launch, for the page's own watchdog.
+ * carries `deadline=<epoch ms>`, fixed at launch, for the page's own watchdog. A launcher that exits 0 while the
+ * browser it started goes on (T-2026-11-25-002: Firefox on macos-15) is not a miss: the wait goes on for that browser,
+ * and the result carries `handoff` ({launcherExit, pids, stopped}) whether the page reported or not.
  */
 export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { loadDeadlineMs = null, deadlineMs = null } = {}) {
   const run = randomBytes(6).toString('hex');
@@ -383,8 +485,11 @@ export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { lo
   // the WKWebView host times out a little BEFORE this wait does, so its last lines (the page's visibility and phase,
   // T-2026-11-06-003) reach the launcher tail of a run that never reported
   const proc = launch(engine, url, Math.max(5, Math.floor(timeoutMs / 1000) - 5));
-  let exit = null;
-  proc.exited.then((x) => (exit = { ...x, atMs: Date.now() - t0 }));
+  // `launcherExit`: the launched process ended. `ended`: the BROWSER ended (the launcher and whatever it handed off to)
+  let launcherExit = null;
+  let ended = null;
+  proc.exited.then((x) => (launcherExit = { ...x, atMs: Date.now() - t0 }));
+  proc.gone.then((x) => (ended = { atMs: Date.now() - t0, handoff: x.handoff }));
   // POST /paste?x=&y= with the text as its body: a real paste through DevTools in a Chromium-family browser (200),
   // or 501 where there is no such channel (WKWebView, Firefox) and the page falls back to a synthetic event
   let cdp = null;
@@ -413,19 +518,24 @@ export async function runPage(server, engine, pagePath, timeoutMs = 60_000, { lo
         }, 250);
       })
     : new Promise(() => {});
-  const report = await Promise.race([server.waitReport(run, timeoutMs), proc.exited.then(() => server.waitReport(run, 1500)), loaded]);
+  // the wait ends early only when the BROWSER has gone (launcher and hand-off), never on a launcher that handed off
+  const report = await Promise.race([server.waitReport(run, timeoutMs), proc.gone.then(() => server.waitReport(run, 1500)), loaded]);
   if (poll) clearInterval(poll);
   if (!report) server.forget(run);
   server.hooks.delete('/paste');
   cdp?.close();
   const wallMs = Date.now() - t0;
   const tail = proc.output();
-  const exitedFirst = exit !== null;
-  await proc.kill();
+  const goneFirst = ended !== null;
+  const stopped = await proc.kill();
+  // a launcher that exited while the browser it started went on: when and how it exited, which processes were the
+  // browser after it, and which of them were still there to be stopped
+  const handedTo = launcherExit ? [...new Set([...(ended?.handoff?.pids ?? []), ...stopped])] : [];
+  const handoff = handedTo.length ? { launcherExit, pids: handedTo, stopped } : null;
   const first = requested();
   const pageRequestedMs = first ? first.at - t0 : null;
-  if (report) return { report, runId: run, wallMs, pageRequestedMs };
+  if (report) return { report, runId: run, wallMs, pageRequestedMs, ...(handoff ? { handoff } : {}) };
   const lateReport = server.lateReport(run);
-  const miss = exitedFirst ? 'exited' : neverRequested || !first ? 'never-requested' : 'no-report';
-  return { report: null, runId: run, wallMs, launcherTail: tail.slice(-800), miss, exit: exitedFirst ? exit : null, pageRequestedMs, ...(lateReport ? { lateReport } : {}) };
+  const miss = goneFirst ? 'exited' : neverRequested || !first ? 'never-requested' : 'no-report';
+  return { report: null, runId: run, wallMs, launcherTail: tail.slice(-800), miss, exit: goneFirst ? { ...launcherExit, ...(ended.handoff ? { browserGoneAtMs: ended.atMs } : {}) } : null, pageRequestedMs, ...(handoff ? { handoff } : {}), ...(lateReport ? { lateReport } : {}) };
 }
