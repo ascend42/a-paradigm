@@ -367,6 +367,16 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     expect(zs[1]! > zs[0]!).toBe(true);
   });
 
+  it('contrast (S1.4 P0b, Aegis F1): an agent\'s refused pair gets the validator\'s contrast sentence naming ink, and none of its input', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.run('dim.grant', { dim, write: true }, A);
+    const res = await w.tool('dim-draw', { ops: [rectOp(1, { color: 'custom:#858585', fill: 'cobalt' })] }, agentOf(A));
+    expect(res.refused).toEqual([{ index: 0, field: 'color', code: 'colour-bad', fix: "It would not show against this mark's fill: use ink, or a line with at least 3:1 against the fill in both themes." }]);
+    expect(JSON.stringify(res)).not.toMatch(/858585|cobalt/i);
+    expect(w.log.fold(dim).nodes.has(ulid(1))).toBe(false);
+  });
+
   it('edit-anything (S1.4 E0): an agent updates, moves and deletes a person\'s mark and another agent\'s mark', { timeout: 60_000 }, async () => {
     const w = await toolRig();
     const dim = await board(w);

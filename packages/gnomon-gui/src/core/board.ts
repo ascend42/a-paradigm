@@ -63,7 +63,10 @@ export interface BoardStyleRefusal {
  * for. It is read ONLY from the `by` of the folded dimension the board last rendered, never from an element, so
  * nothing pasted, dropped or copied can carry one.
  */
-export type BoardAuthor = { cls: 'human' } | { cls: 'agent'; id: string; name: string } | { cls: 'unknown' };
+/** The key a hand's seal and foot entry are worked out from: the host-stamped principal plus agent, length-prefixed (design author-seal derivation.input), so two sessions' Claudes are two hands. */
+export const handKey = (principal: string, agent: string): string => `${[...principal].length}:${principal}${agent}`;
+
+export type BoardAuthor = { cls: 'human' } | { cls: 'agent'; id: string; name: string; principal?: string; session?: string } | { cls: 'unknown' };
 
 /** What the host layer needs to know about one mark, to lay DOM over it. Scene units; see BoardView for the screen. */
 export interface BoardMarkView {
@@ -89,6 +92,12 @@ export interface BoardMarkView {
   line: string;
   fill: string | null;
   selected: boolean;
+  /** the pointer is over this mark (design author-seal naming.hover; core/board-overlay.ts hoveredMark) */
+  hovered?: boolean;
+  /** the engine width of the mark's line (its weight), for the too-small rule */
+  strokeWidth?: number;
+  /** a text's letter size in board units (every board text is BOARD_FONT_SIZE today), for its letters' height on the screen */
+  textSize?: number;
   /** a stub's kind exactly as it was given (the host pattern-checks it before showing it) */
   stubKind?: string;
   /** the mark this text is the label of, when it is one */

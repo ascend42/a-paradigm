@@ -135,7 +135,11 @@ components:
       with the key-edge token; src/board/skin.css dresses the surface and
       the text being typed. Every mark carries its content-palette tokens in
       customData.gnomon and is painted with resolveContentColour for the
-      active theme (setTheme repaints all marks); the canvas is transparent
+      active theme (setTheme repaints all marks); S1.4 P0b: board/normal.ts
+      paintOf rechecks the pair at paint (resolveContentPair; a text mark's
+      colour at the text floor; a failing line draws as ink, a failing fill as
+      none, a failing pair's line as ink; nothing stored is rewritten), used by
+      normalOf, dim-map and the restyle; the canvas is transparent
       so the host's ground shows, and exportPng fills the host's --ground.
       The handle: add, count, setTool (select, sticky, text, rect, ellipse,
       arrow, frame, stroke, hand; anything else throws), setStyle (line, fill
@@ -185,7 +189,10 @@ components:
       railLayout folding at 472 and 408 and then one tool per row),
       core/board-tray.ts (wells from the palette's names; customEntry
       through contentColourCheck, a refusal offers the nearest swatch and
-      stores nothing), core/board-overlay.ts (screen transform, pins, seals,
+      stores nothing; S1.4 P0b: customEntry takes the tool's context, the text
+      floor for the text tool and the mark's other colour for the pair, and a
+      contrast refusal uses CONTENT_CONTRAST_WORDS with ' at night' and its
+      own offer, 'Use ink' or 'Use paper' for a pair; P0b review: judgeToken, heldRefusals and trayRefusalLine ('✕ not used as a <role> · <why>'); the leaf judges a tool's held style before its first mark (the tool waits on the refusal row), the selection's other colours under select, both roles' reasons each with its key, the tray scrolls inside the stage), core/board-overlay.ts (screen transform, pins, seals,
       the box round a text that is not yours, stub words, the hands foot),
       core/board-leaf.ts (states and the design's copy). ui/board-leaf.ts
       draws them (head, keep line, rail, tray, overlay, notes, foot) and
@@ -3038,3 +3045,14 @@ components:
     tests:
       - test/settings.test.ts
       - test/voice-client.test.ts
+
+# S1.4 P4a (an agent's hand on the board): #gui-board and #gui-dim-map gain the engine `line` for a non-human
+# stroke (dim-map DIM_AGENT_STROKE_TYPE, dimIsAgentStroke; normal.ts isBoardType, Aegis question 6), the overlay's
+# ring, too-small, text forms, hoveredMark, selectionLine and the foot's session hint (core/board-overlay.ts), and four
+# counted patches (dash-two-three, frame-edge-dashed, dash-screen-floor, library-components-stubbed). Real-engine
+# proofs: test/board-agent-hand.test.ts. No new symbol ids.
+# Known gap (S1.4 P4a, Mika L3): on a 1x display an agent frame's vertical sides at 25% land on a half pixel (2.14:1
+# day, 2.45:1 night, under 3:1); fix before Windows or 1x support. Noted, no change (L4): between 41% and 49% a lone
+# side dash can stand beside a text's first and last letters. The rough dash now runs on across a polyline's short
+# runs (patches dash-runs-*), and a restored mark is drawn in the non-human of its two hands (dimHandOf).
+# Known gap (S1.4 P4a, Mika L5): an agent stroke's last point can fall in a gap of its dash, so its end is not drawn.

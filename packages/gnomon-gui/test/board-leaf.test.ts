@@ -249,6 +249,10 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     ].flatMap((n) => [noticeLine({ ...n, lost: 1 }), noticeLine({ ...n, lost: 64 })]);
     const { INERT_COPY, keepStateLine } = await import('../src/core/board-leaf.js');
     expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 65 })).toBe('Nothing was deleted · a delete takes 64 marks at most');
+    // Mika P0b S2b: a colour the contrast rule refused is named, in the tray's words; a malformed why says nothing new
+    expect(noticeLine({ about: 'edit', code: 'colour-bad', why: 'pair-line', lost: 1 })).toBe("That colour wasn’t kept · it would not show against this mark's fill");
+    expect(noticeLine({ about: 'edit', code: 'colour-bad', why: 'faint-fill:night', lost: 1 })).toBe('That colour wasn’t kept · words would be too faint on it at night');
+    expect(noticeLine({ about: 'edit', code: 'colour-bad', why: 'pair-line<script>', lost: 1 })).toBe('That change wasn’t kept · the board is as it was');
     // Aegis N1: 50 shapes with 20 tied arrows is under the limit the line used to state: no number is said
     expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 50 })).toBe('Nothing was deleted · select fewer marks and try again');
     expect(noticeLine({ about: 'edit', code: 'timeout', why: 'no-ack', lost: 1 })).toBe('That change may not be saved · fold and reopen to check');

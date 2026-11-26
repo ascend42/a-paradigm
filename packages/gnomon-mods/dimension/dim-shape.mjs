@@ -186,8 +186,8 @@ function deepFreeze(v) {
 var CUSTOM_COLOUR_PATTERN = /^custom:#[0-9A-Fa-f]{6}$/;
 var HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 var CONTENT_THEME_TOKENS = deepFreeze({
-  day: { "text.primary": "#16150F", "text.secondary": "#5A5850", "surface.sheet": "#F8F5EE", "line.key-edge": "#2A2925" },
-  night: { "text.primary": "#E8F4F0", "text.secondary": "#86998F", "surface.sheet": "#171A21", "line.key-edge": "#C9DCD6" }
+  day: { "text.primary": "#16150F", "text.secondary": "#5A5850", "surface.ground": "#EDE8DC", "surface.sheet": "#F8F5EE", "line.key-edge": "#2A2925" },
+  night: { "text.primary": "#E8F4F0", "text.secondary": "#86998F", "surface.ground": "#0F1116", "surface.sheet": "#171A21", "line.key-edge": "#C9DCD6" }
 });
 var CONTENT_NEUTRALS = deepFreeze({
   ink: { role: "line", token: "text.primary" },
@@ -240,6 +240,9 @@ var CONTENT_RESERVED_EXCEPTIONS = Object.freeze(["night:state.warn-bg"]);
 var CONTENT_FILL_GUARD_TOKENS = Object.freeze(["text.primary", "line.key-edge"]);
 var CONTENT_MIN_DISTANCE = 0.06;
 var CONTENT_NEUTRAL_CHROMA = 0.02;
+var CONTENT_EDGE_ON_FILL_MIN_RATIO = 3;
+var CONTENT_CONTRAST_FLOORS = deepFreeze({ line: 3, text: 4.5, fillText: 4.5 });
+var CONTENT_CONTRAST_SURFACES = Object.freeze(["surface.ground", "surface.sheet"]);
 var NIGHT_TRANSFORM = deepFreeze({
   line: { lFrom: 1.24, lMin: 0.7, lMax: 0.88, cMax: 0.15 },
   fill: { lFrom: 1.26, lMin: 0.3, lMax: 0.42, cMax: 0.07 },
@@ -582,6 +585,20 @@ function nightOf(hex2, role) {
     c2 = Math.max(0, c2 - NIGHT_TRANSFORM.gamut.cStep);
   }
 }
+var LUMINANCE_QUANTUM = 1e6;
+var LUM_OFFSET_Q = 0.05 * LUMINANCE_QUANTUM;
+function luminanceOf(hex2) {
+  const rgb = rgbOf(hex2);
+  return rgb ? 0.2126 * SRGB_LINEAR[rgb[0]] + 0.7152 * SRGB_LINEAR[rgb[1]] + 0.0722 * SRGB_LINEAR[rgb[2]] : null;
+}
+function contrastClears(a, b, floor) {
+  const x = luminanceOf(a);
+  const y = luminanceOf(b);
+  if (x === null || y === null) return false;
+  const hi = Math.floor(Math.max(x, y) * LUMINANCE_QUANTUM) + LUM_OFFSET_Q;
+  const lo = Math.ceil(Math.min(x, y) * LUMINANCE_QUANTUM) + LUM_OFFSET_Q;
+  return hi * 10 >= Math.round(floor * 10) * lo;
+}
 function clearOfReserved(hex2, theme) {
   for (const r of Object.values(CONTENT_RESERVED_COLOURS[theme])) if (!coloursClear(hex2, r)) return false;
   return true;
@@ -614,15 +631,83 @@ function nearestSwatch(hex2, role) {
   }
   return best;
 }
-function contentColourCheck(token, role) {
-  if (typeof token !== "string") return { ok: false, offer: null };
+var CONTENT_CONTRAST_WORDS = deepFreeze({
+  "faint-line": "too faint to see on the board",
+  "faint-text": "too faint to read as words",
+  "faint-fill": "words would be too faint on it",
+  "pair-line": "it would not show against this mark's fill",
+  "pair-fill": "this mark's line would not show against it"
+});
+var contentContrastWords = (why, night) => `${CONTENT_CONTRAST_WORDS[why]}${night ? " at night" : ""}`;
+function contentContrastFix(why, night, swatch) {
+  const said = contentContrastWords(why, night);
+  const head = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+  const tail = {
+    "faint-line": "or a custom colour with at least 3:1 against the board in both themes",
+    "faint-text": "or a custom colour with at least 4.5:1 against the board in both themes",
+    "faint-fill": "or a custom fill that keeps at least 4.5:1 for the board's ink in both themes",
+    "pair-line": "or a line with at least 3:1 against the fill in both themes",
+    "pair-fill": "or a fill with at least 3:1 against the line in both themes"
+  };
+  return `${head}: use ${swatch}, ${tail[why]}.`;
+}
+function valuesOf(token, role) {
+  if (typeof token !== "string") return null;
   const neutral = Object.prototype.hasOwnProperty.call(CONTENT_NEUTRALS, token) ? CONTENT_NEUTRALS[token] : void 0;
-  if (neutral) return neutral.role === role ? { ok: true } : { ok: false, offer: null };
+  if (neutral) return neutral.role === role ? { day: CONTENT_THEME_TOKENS.day[neutral.token], night: CONTENT_THEME_TOKENS.night[neutral.token] } : null;
   const swatch = CONTENT_SWATCHES.find((s) => s.name === token);
-  if (swatch) return swatch.day[role] ? { ok: true } : { ok: false, offer: null };
-  if (!CUSTOM_COLOUR_PATTERN.test(token)) return { ok: false, offer: null };
-  const hex2 = token.slice("custom:".length);
-  return customColourPasses(hex2, role) ? { ok: true } : { ok: false, offer: nearestSwatch(hex2, role) };
+  if (swatch) {
+    const day = swatch.day[role];
+    const night = swatch.night[role];
+    return day && night ? { day, night } : null;
+  }
+  if (!CUSTOM_COLOUR_PATTERN.test(token)) return null;
+  const hex2 = token.slice("custom:".length).toUpperCase();
+  return { day: hex2, night: nightOf(hex2, role) };
+}
+function contrastInTheme(value, role, use, theme) {
+  const t = CONTENT_THEME_TOKENS[theme];
+  if (role === "fill") return contrastClears(t["text.primary"], value, CONTENT_CONTRAST_FLOORS.fillText);
+  const floor = use.text ? CONTENT_CONTRAST_FLOORS.text : CONTENT_CONTRAST_FLOORS.line;
+  return CONTENT_CONTRAST_SURFACES.every((k) => contrastClears(value, t[k], floor));
+}
+function nearestNamed(hex2, role) {
+  let best = role === "line" ? "ink" : "paper";
+  let bestD = Infinity;
+  for (const [name, n] of Object.entries(CONTENT_NEUTRALS)) {
+    if (n.role !== role) continue;
+    const d = colourDistanceQSq(hex2, CONTENT_THEME_TOKENS.day[n.token]);
+    if (d < bestD) [best, bestD] = [name, d];
+  }
+  for (const s of CONTENT_SWATCHES) {
+    const v = s.day[role];
+    if (!v) continue;
+    const d = colourDistanceQSq(hex2, v);
+    if (d < bestD) [best, bestD] = [s.name, d];
+  }
+  return best;
+}
+function contentColourCheck(token, role, use = {}) {
+  if (typeof token !== "string") return { ok: false, offer: null };
+  const custom = CUSTOM_COLOUR_PATTERN.test(token);
+  const v = valuesOf(token, role);
+  if (!v) return { ok: false, offer: null };
+  if (custom && !customColourPasses(v.day, role)) return { ok: false, offer: nearestSwatch(v.day, role) };
+  const day = contrastInTheme(v.day, role, use, "day");
+  const night = contrastInTheme(v.night, role, use, "night");
+  if (day && night) return { ok: true };
+  const why = role === "fill" ? "faint-fill" : use.text ? "faint-text" : "faint-line";
+  return { ok: false, offer: nearestNamed(v.day, role), why, night: day };
+}
+function contentPairCheck(line, fill, field, use = {}) {
+  if (fill === null || fill === void 0) return { ok: true };
+  if (!contentColourCheck(line, "line", use).ok || !contentColourCheck(fill, "fill").ok) return { ok: true };
+  const l = valuesOf(line, "line");
+  const f = valuesOf(fill, "fill");
+  const day = contrastClears(l.day, f.day, CONTENT_EDGE_ON_FILL_MIN_RATIO);
+  const night = contrastClears(l.night, f.night, CONTENT_EDGE_ON_FILL_MIN_RATIO);
+  if (day && night) return { ok: true };
+  return field === "line" ? { ok: false, offer: "ink", why: "pair-line", night: day } : { ok: false, offer: "paper", why: "pair-fill", night: day };
 }
 
 var SECRET_RULES = deepFreeze([
@@ -1082,6 +1167,13 @@ function dimTextForScanS12(s) {
 var fieldName = (k) => DIM_FIELDS.includes(k) ? k : "unknown";
 var isCoreKind = (k) => typeof k === "string" && DIM_CORE_KINDS.includes(k);
 var inRange = (v, lo, hi) => Number.isSafeInteger(v) && v >= lo && v <= hi;
+var colourProblem = (field, c) => ({ field, code: "colour-bad", ...c.offer ? { swatch: c.offer } : {}, ...c.why ? { why: c.why, night: !!c.night } : {} });
+function pairProblems(kind, node, written, problems) {
+  const field = written.includes("color") ? "color" : written.includes("fill") ? "fill" : null;
+  if (!field || node.color === void 0 || node.fill === void 0 || problems.some((p) => p.field === "color" || p.field === "fill")) return [];
+  const c = contentPairCheck(node.color, node.fill, field === "color" ? "line" : "fill", { text: kind === "text" });
+  return c.ok ? [] : [colourProblem(field, c)];
+}
 function checkField(d, kind, self, key, v) {
   const bad = (code, extra = {}) => [{ field: key, code, ...extra }];
   const int = (lo, hi) => typeof v !== "number" || !Number.isSafeInteger(v) ? bad("field-type") : inRange(v, lo, hi) ? [] : bad("field-range");
@@ -1104,8 +1196,8 @@ function checkField(d, kind, self, key, v) {
     case "color":
     case "fill": {
       const role = key === "color" ? "line" : "fill";
-      const c = contentColourCheck(v, role);
-      return c.ok ? [] : bad("colour-bad", c.offer ? { swatch: c.offer } : {});
+      const c = contentColourCheck(v, role, { text: kind === "text" });
+      return c.ok ? [] : [colourProblem(key, c)];
     }
     case "label":
       return str(DIM_LIMITS.label);
@@ -1195,6 +1287,7 @@ function checkOp(d, op, actor) {
       } else problems.push(...checkField(d, kind, self, k, node[k]));
     }
     for (const k of Object.keys(node)) if (node[k] === null && DIM_NODE_KEYS[kind].includes(k) && !DIM_NODE_REQUIRED[kind].includes(k)) problems.push({ field: k, code: "field-type" });
+    problems.push(...pairProblems(kind, { color: node.color ?? void 0, fill: node.fill ?? void 0 }, Object.keys(node), problems));
     if (self) touched.push(self);
     return out;
   }
@@ -1212,6 +1305,8 @@ function checkOp(d, op, actor) {
       } else if (patch[k] === void 0) problems.push({ field: k, code: "field-type" });
       else problems.push(...checkField(d, e2.kind, op.id, k, patch[k]));
     }
+    const stands = (k) => Object.prototype.hasOwnProperty.call(patch, k) ? patch[k] ?? void 0 : e2.cur.node[k];
+    problems.push(...pairProblems(e2.kind, { color: stands("color"), fill: stands("fill") }, pk, problems));
     touched.push(op.id);
     return out;
   }
@@ -1270,8 +1365,9 @@ function validateDimOps(state, ops, actor, opts = {}) {
     index,
     field: fieldName(p.field),
     code: p.code,
-    fix: DIM_REFUSAL_FIXES[p.code],
+    fix: p.why && p.swatch !== void 0 ? contentContrastFix(p.why, !!p.night, p.swatch) : DIM_REFUSAL_FIXES[p.code],
     ...p.swatch !== void 0 ? { swatch: p.swatch } : {},
+    ...p.why ? { contrast: { why: p.why, night: !!p.night } } : {},
     ...extra
   });
   if (!Array.isArray(ops)) return { ok: [], refused: [refuse(-1, { field: "ops", code: "field-type" })], secret: false };

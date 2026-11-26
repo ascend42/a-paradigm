@@ -24,9 +24,10 @@ import './skin.css';
 import { CONTENT_DEFAULTS, contentColourCheck, DIM_LIMITS, emptyDimState, foldDim } from '@a-company/gnomon-contracts';
 import type { DimFoldNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
+import { handKey } from '../core/board.js';
 import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
-import { dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
-import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, fillColour, lineColour, normalOf, offNormal } from './normal.js';
+import { dimHandOf, dimIsAgentStroke, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
+import { BOARD_FONT_ID, BOARD_FONT_SIZE, FILLABLE, fillColour, isBoardType, lineColour, normalOf, offNormal, paintOf } from './normal.js';
 import { fitStroke } from './simplify.js';
 import { applySkin, gnomonBoardRuns, gnomonBoardSkin, onBoardRefusal, setBoardYielded } from './skin.js';
 
@@ -119,7 +120,7 @@ interface Stamp {
   stubKind?: string;
 }
 const HUMAN: BoardAuthor = { cls: 'human' };
-const VIEW_KIND: Readonly<Record<string, BoardMarkView['kind']>> = { rectangle: 'rect', ellipse: 'ellipse', diamond: 'diamond', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text' };
+const VIEW_KIND: Readonly<Record<string, BoardMarkView['kind']>> = { rectangle: 'rect', ellipse: 'ellipse', diamond: 'diamond', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', line: 'stroke', text: 'text' };
 const ENGINE_TOOL: Readonly<Record<BoardTool, EngineTool>> = { select: 'selection', sticky: 'rectangle', text: 'text', rect: 'rectangle', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', stroke: 'freedraw', hand: 'hand' };
 const RAIL_TOOL: Readonly<Record<EngineTool, BoardTool>> = { selection: 'select', rectangle: 'rect', ellipse: 'ellipse', arrow: 'arrow', frame: 'frame', freedraw: 'stroke', text: 'text', hand: 'hand' };
 /** The engine actions the handle may run through `gnomonAction`. */
@@ -245,9 +246,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const authorIn = (n: DimFoldNode | undefined): BoardAuthor | undefined => {
         if (!n) return undefined; // not in the rendered state: drawn since, so yours
-        const by = n.by as { cls?: unknown; agent?: unknown } | undefined;
+        const by = dimHandOf(n) as { cls?: unknown; agent?: unknown } | undefined;
         if (by?.cls === 'human') return HUMAN;
-        if (by?.cls === 'agent' && typeof by.agent === 'string' && by.agent.length > 0) return { cls: 'agent', id: by.agent, name: by.agent };
+        // the seal and the foot key on the principal PLUS the agent (design author-seal session_hint.seal): every Claude is not one hand
+        if (by?.cls === 'agent' && typeof by.agent === 'string' && by.agent.length > 0) {
+          const principal = typeof (by as { principal?: unknown }).principal === 'string' ? ((by as { principal: string }).principal) : '';
+          return { cls: 'agent', id: handKey(principal, by.agent), name: by.agent, principal, ...(typeof n.hsid === 'string' && n.hsid.length > 0 ? { session: n.hsid } : {}) };
+        }
         return { cls: 'unknown' };
       };
       const stampOf = (el: Element, state: DimState = prev): Stamp | null => {
@@ -256,7 +261,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         const n = foldNodeOf(el.id, state);
         const by = authorIn(n);
         const kind = !n ? (stickyDrawn.has(el.id) ? 'sticky' : undefined) : dimIsFallback(n.node) ? 'stub' : dimIsSticky(n.node) ? 'sticky' : undefined;
-        return { ...t, ...(kind ? { kind } : {}), ...(by && by.cls !== 'human' ? { by } : {}), ...(kind === 'stub' ? { stubKind: String(n!.node.kind ?? '') } : {}) };
+        return { ...t, ...(kind ? { kind } : {}), ...(by && by.cls !== 'human' ? { by } : {}), ...(kind === 'stub' ? { stubKind: String(n!.node.kind ?? '') } : {}), ...(dimIsAgentStroke(n) ? { agentStroke: true as const } : {}) };
       };
       /** Rects drawn with the Sticky tool since the last edit was reported (the tool has gone back to Select by then). */
       const stickyDrawn = new Set<string>();
@@ -438,6 +443,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           line: g?.line ?? CONTENT_DEFAULTS.line,
           fill: g?.fill ?? null,
           selected: selected[el.id] === true,
+          ...(typeof (el as { strokeWidth?: unknown }).strokeWidth === 'number' ? { strokeWidth: (el as { strokeWidth: number }).strokeWidth } : {}),
+          // (the normal form fixes every text at the board's one size, so that is the size its letters are drawn at)
+          ...(el.type === 'text' ? { textSize: BOARD_FONT_SIZE } : {}),
           ...(g?.stubKind !== undefined ? { stubKind: g.stubKind } : {}),
           ...(el.containerId ? { labelOf: el.containerId } : {}),
         };
@@ -451,7 +459,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             const dropped: string[] = [];
             const next = api.getSceneElementsIncludingDeleted().map((el) => {
               if (!mismatched(el as unknown as Element)) return el;
-              if (BOARD_TYPES.has(el.type)) return changed(el, painted(el as unknown as Element));
+              if (isBoardType(el.type, stampOf(el as unknown as Element))) return changed(el, painted(el as unknown as Element));
               dropped.push(el.type); // an image, an embed, an iframe, a line: not a board kind
               return changed(el, { isDeleted: true });
             });
@@ -470,7 +478,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         const n = label ? undefined : foldNodeOf(el.id, state);
         const stub = !!n && dimIsFallback(n.node);
         const by = authorIn(n);
-        const stamp: Stamp = { line: el.customData?.gnomon.line ?? CONTENT_DEFAULTS.line, fill: el.customData?.gnomon.fill ?? null, ...(stub ? { kind: 'stub' as const } : {}), ...(by && by.cls !== 'human' ? { by } : {}) };
+        const stamp: Stamp = { line: el.customData?.gnomon.line ?? CONTENT_DEFAULTS.line, fill: el.customData?.gnomon.fill ?? null, ...(stub ? { kind: 'stub' as const } : {}), ...(by && by.cls !== 'human' ? { by } : {}), ...(dimIsAgentStroke(n) ? { agentStroke: true as const } : {}) };
         const out: Record<string, unknown> = { ...el, ...normalOf(el, label ? { line: stamp.line, fill: null } : stamp, theme), groupIds: [] };
         if (el.type === 'text') Object.assign(out, { originalText: el.text ?? '', textAlign: label ? 'center' : 'left', verticalAlign: label ? 'middle' : 'top', autoResize: label || !(el.width > 0), ...(el.width > 0 ? {} : { width: 1 }) });
         // (a text with no size is dropped by the engine before it measures it, so it is 1 wide until it has; it
@@ -483,6 +491,11 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           Object.assign(out, { points, pressures: [], simulatePressure: true, lastCommittedPoint: points.length > 0 ? points[points.length - 1] : null });
         }
         if (el.type === 'arrow') Object.assign(out, { elbowed: false });
+        // an agent's stroke as the engine's dashed line (S1.4 P4a): a polyline, never curved, never a closed shape
+        // (a stored stroke of ONE point is a dot. A dashed line of no length paints nothing, so the engine holds it as
+        // a run of ONE unit, which its first dash and round caps paint as a dot; the diff reads that run back as the
+        // one point, below)
+        if (el.type === 'line') Object.assign(out, { points: el.points && el.points.length === 1 ? [el.points[0]!, [el.points[0]![0] + 1, el.points[0]![1]] as [number, number]] : (el.points ?? []), lastCommittedPoint: null, roundness: null });
         // a fallback's words are the host's (one owner: the overlay cuts them to the scrap; a label here would say the kind twice)
         if (stub) out.boundElements = (el.boundElements ?? []).filter((b) => b.type !== 'text');
         return out;
@@ -652,8 +665,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         const scene = all().map((el) => {
           if (el.type === 'text' && typeof el.originalText === 'string' && el.originalText !== el.text) return { ...el, text: el.originalText };
           // a stored dot is one point; the engine holds it as the same point twice
-          const stored = el.type === 'freedraw' && el.points?.length === 2 ? seen.get(el.id)?.points : undefined;
-          if (Array.isArray(stored) && stored.length === 2 && el.points![0]![0] === el.points![1]![0] && el.points![0]![1] === el.points![1]![1]) return { ...el, points: [el.points![0]] };
+          const stored = (el.type === 'freedraw' || el.type === 'line') && el.points?.length === 2 ? seen.get(el.id)?.points : undefined;
+          if (Array.isArray(stored) && stored.length === 2 && el.points![0]![0] + (el.type === 'line' ? 1 : 0) === el.points![1]![0] && el.points![0]![1] === el.points![1]![1]) return { ...el, points: [el.points![0]] };
           return el;
         });
         const gone = (op: DimOp): boolean => op.type === 'delete' && !shown.has(ids.engineOf(op.id));
@@ -1150,8 +1163,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             const stamp: Stamp = { ...old, ...(next.line !== undefined && !label ? { line: next.line } : {}), ...(next.fill !== undefined && FILLABLE.has(el.type) ? { fill: next.fill ?? (old.kind === 'sticky' ? CONTENT_DEFAULTS.stickyFill : null) } : {}) };
             restyled = true;
             return changed(el, {
-              strokeColor: lineColour(stamp.line, theme),
-              backgroundColor: fillColour(FILLABLE.has(el.type) ? stamp.fill : null, theme),
+              ...paintOf(el.type, stamp.line, stamp.fill, theme),
               ...(next.weight !== undefined && el.type !== 'text' && el.type !== 'frame' ? { strokeWidth: BOARD_WEIGHTS[next.weight === 'marker' && el.type !== 'freedraw' ? 'bold' : next.weight] } : {}),
               customData: { ...el.customData, gnomon: { line: stamp.line, fill: stamp.fill } },
             });

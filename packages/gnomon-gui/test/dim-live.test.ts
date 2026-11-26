@@ -54,6 +54,12 @@ const confirmNext = (r: ReturnType<typeof rig>): DimRow => {
 };
 
 describe('#gui-dim-live the write path', () => {
+  it('Mika P0b S2b: a colour the contrast rule refuses names its part in the notice, as a closed word', () => {
+    const r = rig();
+    const res = r.live.local([rect(1, { color: 'custom:#858585', fill: 'cobalt' })], press(r.now()));
+    expect(res.notice).toMatchObject({ code: 'colour-bad', field: 'color', why: 'pair-line' });
+    expect(r.live.local([rect(2, { color: 'custom:#B4382A' })], press(r.now())).notice).toMatchObject({ code: 'colour-bad', field: 'color', why: null });
+  });
   it('view is the confirmed fold plus pending batches drawn as me; ack then row confirms', () => {
     const r = rig();
     expect(r.live.status()).toEqual({ keep: 'saved', link: 'up', pending: 0, inFlight: false, canUndo: false, since: null });

@@ -79,6 +79,8 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       project: 'billing',
       projectHue: 'h0',
       session: 'Totals are off by a cent',
+      // the fixture's one attached session is this session (preview only; the app resolves through sessionInfo)
+      sessionName: (hsid: string) => (hsid === 'hsid-preview' ? 'Totals are off by a cent' : null),
       how: 'offer',
       agent: 'Arky',
       time: '14:02',

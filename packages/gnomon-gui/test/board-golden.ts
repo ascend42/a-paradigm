@@ -154,7 +154,13 @@ export function checkLiveReskin(name: string, family: string, r: LiveRun): void 
     if (shot.startsWith('colours-') || shot.startsWith('matrix-')) {
       const png = decodePng(Buffer.from(cap.png, 'base64')) as Png;
       if (family !== 'chromium' || png.width !== 1280) continue;
-      if (process.env.GNOMON_UPDATE_GOLDENS === '1') writeFileSync(path.join(GOLDENS, `${shot}.png`), Buffer.from(cap.png, 'base64'));
+      // GNOMON_GOLDEN_CANDIDATES=<dir>: the capture is written there for review INSTEAD of being compared, and the
+      // committed goldens are never touched (S1.4 P4a; Mika's review)
+      const candidates = process.env.GNOMON_GOLDEN_CANDIDATES;
+      if (candidates) {
+        mkdirSync(candidates, { recursive: true });
+        writeFileSync(path.join(candidates, `${shot}.png`), Buffer.from(cap.png, 'base64'));
+      } else if (process.env.GNOMON_UPDATE_GOLDENS === '1') writeFileSync(path.join(GOLDENS, `${shot}.png`), Buffer.from(cap.png, 'base64'));
       else expect(differingShare(golden(shot), png), `${name} ${shot}`).toBeLessThanOrEqual(TOLERANCE.share);
       continue;
     }

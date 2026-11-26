@@ -43,7 +43,7 @@ describe('G-DDL-11: closed writes', () => {
       { ...rect(12), kind: 'ellipse', fill: 'paper' },
       { ...rect(13), kind: 'diamond', fill: 'custom:#1e90ff' },
       { id: id(14), kind: 'arrow', x: 0, y: 0, z: 'F', points: [0, 0, 1, 1], head: 'both', from: id(2), to: id(11), rel: 'leads-to', label: 'x' },
-      { id: id(15), kind: 'text', x: 0, y: 0, z: 'G', text: 't', size: 4, w: 100, color: 'custom:#1E90FF' },
+      { id: id(15), kind: 'text', x: 0, y: 0, z: 'G', text: 't', size: 4, w: 100, color: 'custom:#686868' },
       { id: id(16), kind: 'frame', x: -1_000_000_000, y: 1_000_000_000, z: 'H', w: 1, h: 1_000_000_000, title: 'F' },
     ];
     expect(nodes.map((n) => n.kind)).toEqual([...DIM_CORE_KINDS]);
@@ -224,6 +224,52 @@ describe('G-DDL-11: closed writes', () => {
     expect(res.refused.map((r) => [r.field, r.code, r.swatch])).toEqual([['color', 'colour-bad', 'raspberry'], ['fill', 'colour-bad', 'cobalt']]);
     for (const r of res.refused) expect(CONTENT_SWATCH_NAMES).toContain(r.swatch);
     expect(validateDimOps(state, add(rect(20, { fill: 'custom:#2A2925' })), human).refused[0]!.swatch).toBeUndefined();
+  });
+
+  it('contrast (content_palette.contrast_rule): colour and fill by role, and the edge on its own fill as the node would stand', () => {
+    const fixOf = (ops: unknown, actor: DimActor = human): Array<[number, string, string, string | undefined, string]> =>
+      validateDimOps(state, ops, actor).refused.map((r) => [r.index, r.field, r.code, r.swatch, r.fix]);
+    // a line under 3:1 on the ground; a neutral is exempt from the distance rule only
+    expect(fixOf(add(rect(20, { color: 'custom:#F8F5EE' })))).toEqual([[0, 'color', 'colour-bad', 'sky', 'Too faint to see on the board: use sky, or a custom colour with at least 3:1 against the board in both themes.']]);
+    expect(codes(add(rect(20, { color: 'custom:#767676' })))).toEqual([]);
+    // the colour of a TEXT mark is read as words: 4.5
+    const text = (n: number, color: string): Record<string, unknown> => ({ id: id(n), kind: 'text', x: 0, y: 0, z: 'M', text: 't', color });
+    expect(fixOf(add(text(20, 'custom:#767676')))).toEqual([[0, 'color', 'colour-bad', 'graphite', 'Too faint to read as words: use graphite, or a custom colour with at least 4.5:1 against the board in both themes.']]);
+    expect(codes(add(text(20, 'custom:#686868')))).toEqual([]);
+    expect(codes(add(text(20, 'custom:#696969')))).toEqual(['colour-bad@color']);
+    // a fill keeps 4.5 for the board's ink
+    expect(fixOf(add(rect(20, { fill: 'custom:#404040' })))).toEqual([[0, 'fill', 'colour-bad', 'cobalt', "Words would be too faint on it: use cobalt, or a custom fill that keeps at least 4.5:1 for the board's ink in both themes."]]);
+    for (const v of ['#FF8800', '#FFD700', '#1E90FF']) expect([v, codes(add(rect(20, { fill: `custom:${v}` }))), codes(add(rect(20, { color: `custom:${v}` })))]).toEqual([v, [], ['colour-bad@color']]);
+    // the pair: each passes alone, the pair does not (2.74 by day). On an add of both, the line is refused
+    expect(codes(add(rect(20, { color: 'custom:#858585' }))).concat(codes(add(rect(20, { fill: 'cobalt' }))))).toEqual([]);
+    expect(fixOf(add(rect(20, { color: 'custom:#858585', fill: 'cobalt' })))).toEqual([[0, 'color', 'colour-bad', 'ink', "It would not show against this mark's fill: use ink, or a line with at least 3:1 against the fill in both themes."]]);
+    expect(codes(add(rect(20, { color: 'custom:#858585', fill: 'lemon' })))).toEqual([]);
+    expect(codes(add(rect(20, { color: 'custom:#00897B', fill: 'cobalt' })))).toEqual([]);
+    // an update is judged against the mark's other colour as it will stand, on the field being written
+    const filled = { type: 'add', node: rect(21, { fill: 'cobalt' }) };
+    const lined = { type: 'add', node: rect(22, { color: 'custom:#858585' }) };
+    expect(fixOf([filled, { type: 'update', id: id(21), patch: { color: 'custom:#858585' } }]).map((r) => r.slice(0, 4))).toEqual([[1, 'color', 'colour-bad', 'ink']]);
+    expect(fixOf([lined, { type: 'update', id: id(22), patch: { fill: 'cobalt' } }])).toEqual([[1, 'fill', 'colour-bad', 'paper', "This mark's line would not show against it: use paper, or a fill with at least 3:1 against the line in both themes."]]);
+    expect(codes([lined, { type: 'update', id: id(22), patch: { fill: 'lemon' } }])).toEqual([]);
+    expect(codes([filled, { type: 'update', id: id(21), patch: { color: 'custom:#858585', fill: null } }])).toEqual([]);
+    expect(codes([lined, { type: 'update', id: id(22), patch: { color: 'ink', fill: 'cobalt' } }])).toEqual([]);
+    // the night-only pair: passes by day (3.59), fails at night (2.82); ' at night' is added
+    const nightLined = { type: 'add', node: rect(23, { color: 'custom:#CC0066' }) };
+    expect(fixOf([nightLined, { type: 'update', id: id(23), patch: { fill: 'custom:#22EE66' } }])).toEqual([[1, 'fill', 'colour-bad', 'paper', "This mark's line would not show against it at night: use paper, or a fill with at least 3:1 against the line in both themes."]]);
+    // E0: any well-formed hand may edit any mark, and then the pair is judged; a hand that may not edit gets
+    // not-owner ALONE, never a colour refusal beside it
+    for (const actor of [human, agent, other]) expect(codes([filled, { type: 'update', id: id(21), patch: { color: 'custom:#858585' } }], actor)).toEqual(['colour-bad@color']);
+    const noLabel = { cls: 'agent', principal: 'p:t/session' } as unknown as DimActor;
+    expect(codes([{ type: 'update', id: id(2), patch: { color: 'custom:#858585', fill: 'cobalt' } }], noLabel)).toEqual(['not-owner@id']);
+    // one refusal per field: a colour that fails alone is not refused a second time as a pair
+    expect(codes([filled, { type: 'update', id: id(21), patch: { color: 'custom:#FF8800' } }])).toEqual(['colour-bad@color']);
+    // the refusal names which part failed, from the closed list (the GUI's notice says it in words)
+    expect(validateDimOps(state, [nightLined, { type: 'update', id: id(23), patch: { fill: 'custom:#22EE66' } }], human).refused[0]!.contrast).toEqual({ why: 'pair-fill', night: true });
+    expect(validateDimOps(state, add(rect(20, { color: 'custom:#B4382A' })), human).refused[0]!.contrast).toBeUndefined();
+    // every hand gets the same refusal
+    for (const actor of [human, agent]) expect(codes(add(rect(20, { color: 'custom:#858585', fill: 'cobalt' })), actor)).toEqual(['colour-bad@color']);
+    // the published code list did not move: colour-bad is the existing code
+    expect(DIM_REFUSAL_CODES.filter((c) => c.startsWith('colour'))).toEqual(['colour-bad']);
   });
 
   it('fix is a fixed sentence per code and never echoes input; every code and field is from the closed lists', () => {
