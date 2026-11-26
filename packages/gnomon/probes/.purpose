@@ -146,7 +146,20 @@ components:
       back to back, inside a Stop-hook continuation) and for a blocking Stop
       hook with and without --include-hook-events; finding: the replay line is
       written on consumption, never on receipt, and hook_response lines appear
-      only with --include-hook-events (exit_code 2, outcome 'error'). probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
+      only with --include-hook-events (exit_code 2, outcome 'error').
+      p-two-sdk-servers (S1.4 P2 prerequisite for #mod-tool-bridge, darwin,
+      real claude 2.1.332, haiku, zero deps, the buildClaudeArgv flags): two
+      `type: sdk` servers (`gnomon`, `gnomon-mods`) in one mcp.json, both
+      answered by stubs with one `echo` tool; four short turns in three
+      processes. Findings: both connect and each gets its own initialize /
+      tools/list / tools/call as mcp_message with its server_name; can_use_tool
+      precedes the tools/call in permission mode default, for a sub-agent too;
+      an allow rule in the --settings file SKIPS can_use_tool, and one in an
+      untrusted project layer is ignored; notifications/tools/list_changed
+      sent by the server makes claude ask tools/list again and the next turn
+      lists the new tool; a sub-agent's mcp_message carries nothing that names
+      it, its can_use_tool carries agent_id, and both carry the same tool use
+      id (params._meta 'claudecode/toolUseId'). probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
       cleanups on SIGINT/SIGTERM/ctx.signal for founder-run probes, ask()
       rejects on abort — wkwebview-load.swift, helper/) is shared code, not a
       probe id. p12 pins its whole tree with a committed package-lock.json

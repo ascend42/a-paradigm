@@ -154,12 +154,13 @@ components:
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   dimension-mod:
     description: >-
-      #dimension-mod (spec §12.7; S1.3 P2; first-party, human-only) -
+      #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3; first-party) -
       packages/gnomon-mods/dimension, id gnomon.dimension: the ONE writer of
-      dimension rows. Commands dim.open, dim.attach, dim.op, dim.close; the
-      four modns.gnomon.dimension.* kinds; tools dim-view (read) and dim-draw
-      (read, write), declared so the commands have a write effect and both
-      answering not-available until agents draw (S1.4); no view, keybinding,
+      dimension rows. Seven commands, each declaring effects (dim.open,
+      dim.attach, dim.op, dim.close, dim.grant read+write; dim.select,
+      dim.check read); the four modns.gnomon.dimension.* kinds and the two
+      auxiliary ones (grant, draw.refused); tools dim-view (read) and dim-draw
+      (read, write) for an attached session's agent (S1.4: see below); no view, keybinding,
       offer, capability or egress. model.mjs is pure: actorOf (a human only
       for a host stamp with surface gui and no agent), apply(state, ops,
       actor) (the one entry: validateDimOps, rows built from its accepted
@@ -195,6 +196,38 @@ components:
       rolled back to (test/retired-pins.test.ts). Tested in test/dimension-mod.test.ts (rules,
       caps, keyframes, isolation) and test/dimension-relay.test.ts (the
       relay table per caller class over real connections, a mod's own
-      log.read, first-party identity).
+      log.read, first-party identity). 1.1.0 (S1.4 P3, never shipped before
+      this pass): dim.grant{dim, write} for a person on the GUI, target = the
+      attached focus hsid the host joins (a client hsid is stripped; a session
+      that is not live cannot be granted), grant rows folded through the
+      shared foldDimGrants on every log page, keyframe v2 carrying the grant
+      map and the op-id memo as lists (v1 ignored); dim.open and dim.grant
+      answer the effective map (M9), attach writes no grant (M10).
+      dim.select (memory only), dim.check {seq, hash} with no write (the page's
+      hash point after an agent turn), hash on dim.op. Tools: toolActorOf
+      (whole agent stamp, turn of the same hsid), readToolInput (closed
+      shape), dim-view (opens default from dim.open and dim.attach, since,
+      limit, own selection, strokes as count+box), dim-draw (order of checks,
+      resolveSugar, ONE validation, packRows into 4 rows inside 64 KiB less a
+      count-row reserve, oid = sha256(hsid,0,dim,0,opId)[0:16] on the row,
+      memo of 256 oids and 32 answers, `turns` budget of 64 ops charged
+      BEFORE the first row and never refunded, grant re-read between rows,
+      count row of closed keys at most 8 per hsid and turn). appendTool lets
+      a tool append only op and draw.refused (M4). cancel is honoured between
+      log pages and rows (M3); an APPEND_BUDGET refusal keeps the fold
+      (append-busy, A4). PLAYBOOK.md is the long form of the agent rules.
+      Review fixes (S1.4 P3): a tool never adopts (an unindexed dim is
+      dim-unknown before any log read); ops of rows definitely not written
+      are refunded, a failed append never is; dimHash cached per fold (WeakMap);
+      a cold repeat says inputUnknown; NEW_KEY_FIX for an undefined new:<key>;
+      the op-id input is canonical JSON and measured first; read-only calls
+      never saveIdx; an agent may add inside another hand's frame (a change to
+      another hand's mark is still not-owner; a later pass widens it). I-3:
+      the kernel continues a resumed session's turn numbers (#supervisor), so
+      the budget's "an older turn is refused" holds across resumes.
+      State keys added: opens, turns. Tested in test/dimension-tools.test.ts
+      (G-DDL-03, G-DDL-09, A8, M3, M4, M8, M9, A4 with a real-window clock,
+      G-MOD-20) and test/dimension-kinds.test.ts (all six kinds refused for
+      every other writer).
     tags: [mods, first-party, dimensions]
-    oracles: [G-DDL-01, G-MOD-16, G-MOD-17, G-MOD-18]
+    oracles: [G-DDL-01, G-DDL-03, G-DDL-09, G-MOD-16, G-MOD-17, G-MOD-18, G-MOD-20]

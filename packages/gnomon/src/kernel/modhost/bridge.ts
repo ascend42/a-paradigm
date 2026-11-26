@@ -127,27 +127,42 @@ export const MOD_PAYLOAD_MAX_VISITED = 4_096;
  * The refusal never echoes a mod-supplied key or value.
  */
 export function checkModPayloadKeys(payload: Record<string, unknown>, at: { name: string; kind: string }): void {
-  const stack: Array<{ v: object; depth: number }> = [{ v: payload, depth: 1 }];
+  const bad = walkPayloadKeys(payload, { maxDepth: MOD_PAYLOAD_MAX_DEPTH, maxVisited: MOD_PAYLOAD_MAX_VISITED });
+  if (bad === null) return;
+  if (bad.why === 'payload-depth') throw new ModRefusal('LOG', `log.append payload nests deeper than ${MOD_PAYLOAD_MAX_DEPTH} levels`, { ...at, why: 'payload-depth' });
+  if (bad.why === 'payload-size') throw new ModRefusal('LOG', `log.append payload holds more than ${MOD_PAYLOAD_MAX_VISITED} keys and elements`, { ...at, why: 'payload-size' });
+  throw new ModRefusal('LOG', 'log.append payload has a prototype key (__proto__, constructor or prototype)', { ...at, why: 'prototype-key', depth: bad.depth });
+}
+
+/**
+ * THE iterative walk behind checkModPayloadKeys, with its limits as arguments so #mod-tool-bridge applies the same
+ * rule to a model's tool arguments (S1.4, Aegis A1). It returns the first breach, or null: a container deeper than
+ * `maxDepth` (the root's own keys are depth 1), more than `maxVisited` keys plus elements, or an own `__proto__`,
+ * `constructor` or `prototype` key at any depth. No recursion; only own enumerable keys and array indexes are read.
+ */
+export function walkPayloadKeys(root: object, limits: { maxDepth: number; maxVisited: number }): { why: 'payload-depth' | 'payload-size' | 'prototype-key'; depth: number } | null {
+  const stack: Array<{ v: object; depth: number }> = [{ v: root, depth: 1 }];
   let visited = 0;
   while (stack.length > 0) {
     const { v, depth } = stack.pop()!;
-    if (depth > MOD_PAYLOAD_MAX_DEPTH) throw new ModRefusal('LOG', `log.append payload nests deeper than ${MOD_PAYLOAD_MAX_DEPTH} levels`, { ...at, why: 'payload-depth' });
+    if (depth > limits.maxDepth) return { why: 'payload-depth', depth };
     const isArr = Array.isArray(v);
     const keys = isArr ? null : Object.keys(v);
     const n = isArr ? (v as unknown[]).length : keys!.length;
     visited += n;
-    if (visited > MOD_PAYLOAD_MAX_VISITED) throw new ModRefusal('LOG', `log.append payload holds more than ${MOD_PAYLOAD_MAX_VISITED} keys and elements`, { ...at, why: 'payload-size' });
+    if (visited > limits.maxVisited) return { why: 'payload-size', depth };
     for (let i = 0; i < n; i++) {
       let child: unknown;
       if (isArr) child = (v as unknown[])[i];
       else {
         const k = keys![i]!;
-        if (MOD_PAYLOAD_PROTOTYPE_KEYS.includes(k)) throw new ModRefusal('LOG', 'log.append payload has a prototype key (__proto__, constructor or prototype)', { ...at, why: 'prototype-key', depth });
+        if (MOD_PAYLOAD_PROTOTYPE_KEYS.includes(k)) return { why: 'prototype-key', depth };
         child = (v as Record<string, unknown>)[k];
       }
       if (child !== null && typeof child === 'object') stack.push({ v: child, depth: depth + 1 });
     }
   }
+  return null;
 }
 
 /**

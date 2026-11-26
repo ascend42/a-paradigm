@@ -1,0 +1,1289 @@
+{
+  "probe": "p-two-sdk-servers",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "claude": "2.1.332 (Claude Code)",
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "checks": {
+      "q1": true,
+      "q2": true,
+      "ranAll": true
+    },
+    "answers": {
+      "q1": {
+        "bothConnected": true,
+        "bothToolsInInit": true,
+        "methodsByServer": {
+          "gnomon": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list"
+          ],
+          "gnomon-mods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list",
+            "tools/call",
+            "tools/list",
+            "tools/call"
+          ]
+        },
+        "secondServerCalled": true
+      },
+      "q2": {
+        "kernelLaunch": {
+          "called": true,
+          "asked": true,
+          "askedFirst": true
+        },
+        "withAllowRuleInSettingsFile": {
+          "called": true,
+          "asked": false,
+          "askedFirst": false
+        },
+        "withAllowRuleInProjectLayer": {
+          "called": true,
+          "asked": true,
+          "askedFirst": true,
+          "ruleIgnoredAsUntrusted": true
+        },
+        "subAgentCall": {
+          "called": true,
+          "asked": true,
+          "askedFirst": true
+        },
+        "permissionModeAtInit": "default"
+      },
+      "q3": {
+        "listChangedSent": true,
+        "listChangedResponse": "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"probe-3a8fd910-4f32-4466-93ce-de02edb6ffb9\"}}",
+        "relistWithin15s": true,
+        "subAgentTool": "echo2",
+        "subAgentCallSeenBeforeTurnResult": true,
+        "toolsListCountSecondServer": [
+          "turn1",
+          "list-changed"
+        ],
+        "secondToolInLaterInit": true,
+        "subAgentRan": true,
+        "agentToolUseId": "toolu_01YSVo9G5sv8V1gA3WWMkSxG",
+        "subAgentToolUse": {
+          "phase": "turn2",
+          "id": "toolu_015RubcuR39K8R8xHXCcZGUw",
+          "name": "mcp__gnomon-mods__echo2",
+          "input": {
+            "text": "sub"
+          },
+          "parentToolUseId": "toolu_01YSVo9G5sv8V1gA3WWMkSxG"
+        },
+        "mcpMessageKeys": {
+          "main": [
+            "message.id",
+            "message.jsonrpc",
+            "message.method",
+            "message.params",
+            "params._meta",
+            "params.arguments",
+            "params.name",
+            "request.message",
+            "request.server_name",
+            "request.subtype",
+            "top.request",
+            "top.request_id",
+            "top.type"
+          ],
+          "sub": [
+            "message.id",
+            "message.jsonrpc",
+            "message.method",
+            "message.params",
+            "params._meta",
+            "params.arguments",
+            "params.name",
+            "request.message",
+            "request.server_name",
+            "request.subtype",
+            "top.request",
+            "top.request_id",
+            "top.type"
+          ]
+        },
+        "canUseToolKeys": {
+          "main": [
+            "request.display_name",
+            "request.input",
+            "request.mcp_server",
+            "request.permission_suggestions",
+            "request.server_policy_ask_only",
+            "request.subtype",
+            "request.tool_name",
+            "request.tool_use_id",
+            "top.request",
+            "top.request_id",
+            "top.type"
+          ],
+          "sub": [
+            "request.agent_id",
+            "request.display_name",
+            "request.input",
+            "request.mcp_server",
+            "request.permission_suggestions",
+            "request.server_policy_ask_only",
+            "request.subtype",
+            "request.tool_name",
+            "request.tool_use_id",
+            "top.request",
+            "top.request_id",
+            "top.type"
+          ]
+        },
+        "subMcpMessageNamesAgentToolUse": false,
+        "subCanUseToolAgentId": "a83668214e85f68f3",
+        "mainCanUseToolAgentId": null,
+        "subCallMetaToolUseIdIsItsCanUseToolId": true,
+        "subCanUseToolNamesAgentToolUse": false
+      }
+    },
+    "runA": {
+      "label": "A: kernel launch, no allow rule",
+      "argv": [
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--replay-user-messages",
+        "--include-partial-messages",
+        "--include-hook-events",
+        "--permission-mode",
+        "default",
+        "--permission-prompts",
+        "host",
+        "--permission-prompt-tool",
+        "stdio",
+        "--session-id",
+        "d79183b4-8677-499a-981f-1da5ee3f9cfa",
+        "--settings",
+        "<policy.json>",
+        "--setting-sources",
+        "",
+        "--mcp-config",
+        "<mcp.json>",
+        "--strict-mcp-config",
+        "--model",
+        "haiku",
+        "--no-session-persistence"
+      ],
+      "settingSources": "",
+      "projectSettings": null,
+      "policyAllow": null,
+      "envStripped": [
+        "AI_AGENT",
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_NOTES_DIR",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_EFFORT",
+        "CLAUDE_PID"
+      ],
+      "inits": [
+        {
+          "phase": "turn1",
+          "mcpTools": [
+            "mcp__gnomon__echo",
+            "mcp__gnomon-mods__echo"
+          ],
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default"
+        },
+        {
+          "phase": "turn2",
+          "mcpTools": [
+            "mcp__gnomon__echo",
+            "mcp__gnomon-mods__echo",
+            "mcp__gnomon-mods__echo2"
+          ],
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default"
+        }
+      ],
+      "mcpServers": [
+        {
+          "name": "gnomon",
+          "status": "connected",
+          "source": "sdk"
+        },
+        {
+          "name": "gnomon-mods",
+          "status": "connected",
+          "source": "sdk"
+        }
+      ],
+      "control": [
+        {
+          "seq": 1,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"7fa0cc0b-b995-45c9-ab22-12f6a78155aa\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\",\"version\":\"2.1.332\"}},\"jsonrpc\":\"2.0\",\"id\":0}}}",
+          "serverName": "gnomon",
+          "method": "initialize",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "capabilities",
+            "clientInfo",
+            "protocolVersion"
+          ],
+          "meta": null
+        },
+        {
+          "seq": 2,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"5ff2ad0a-2698-49bf-ba77-8fbded419a3d\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\",\"version\":\"2.1.332\"}},\"jsonrpc\":\"2.0\",\"id\":0}}}",
+          "serverName": "gnomon-mods",
+          "method": "initialize",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "capabilities",
+            "clientInfo",
+            "protocolVersion"
+          ],
+          "meta": null
+        },
+        {
+          "seq": 3,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"26bd714a-31f9-4d5e-b4e8-0badc1a53001\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}}",
+          "serverName": "gnomon",
+          "method": "notifications/initialized",
+          "tool": null,
+          "messageKeys": [
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 4,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"b615aff8-7bd8-46d5-8a01-0cf2ee6473c7\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}}",
+          "serverName": "gnomon-mods",
+          "method": "notifications/initialized",
+          "tool": null,
+          "messageKeys": [
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 5,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"dae8da21-6ea5-42ef-a23c-bb87245c496a\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":1}}}",
+          "serverName": "gnomon",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 6,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"e613a1fe-f568-4c89-b54a-0449dfb49568\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":1}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 7,
+          "phase": "turn1",
+          "subtype": "can_use_tool",
+          "requestKeys": [
+            "display_name",
+            "input",
+            "mcp_server",
+            "permission_suggestions",
+            "server_policy_ask_only",
+            "subtype",
+            "tool_name",
+            "tool_use_id"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"1955060c-b395-45db-88d9-5b3eea5ce7fb\",\"request\":{\"subtype\":\"can_use_tool\",\"tool_name\":\"mcp__gnomon-mods__echo\",\"mcp_server\":{\"name\":\"gnomon-mods\",\"source\":\"sdk\"},\"display_name\":\"Echo\",\"input\":{\"text\":\"one\"},\"permission_suggestions\":[{\"type\":\"addRules\",\"rules\":[{\"toolName\":\"mcp__gnomon-mods__echo\"}],\"behavior\":\"allow\",\"destination\":\"localSettings\"}],\"server_policy_ask_only\":true,\"tool_use_id\":\"toolu_019dKbQ7QGp4rQ6aUwwVj8Go\"}}",
+          "toolName": "mcp__gnomon-mods__echo",
+          "toolUseId": "toolu_019dKbQ7QGp4rQ6aUwwVj8Go",
+          "agentId": null
+        },
+        {
+          "seq": 8,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"8d795f86-6131-4321-afee-27e06e288112\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/call\",\"params\":{\"name\":\"echo\",\"arguments\":{\"text\":\"one\"},\"_meta\":{\"claudecode/toolUseId\":\"toolu_019dKbQ7QGp4rQ6aUwwVj8Go\",\"progressToken\":2}},\"jsonrpc\":\"2.0\",\"id\":2}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/call",
+          "tool": "echo",
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "_meta",
+            "arguments",
+            "name"
+          ],
+          "meta": {
+            "claudecode/toolUseId": "toolu_019dKbQ7QGp4rQ6aUwwVj8Go",
+            "progressToken": 2
+          }
+        },
+        {
+          "seq": 9,
+          "phase": "list-changed",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"3dca6dbe-4d45-4ff6-acfc-ab7da946a241\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":3}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 10,
+          "phase": "turn2",
+          "subtype": "can_use_tool",
+          "requestKeys": [
+            "agent_id",
+            "display_name",
+            "input",
+            "mcp_server",
+            "permission_suggestions",
+            "server_policy_ask_only",
+            "subtype",
+            "tool_name",
+            "tool_use_id"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"b40aea6a-de38-429f-a3a5-01564a069479\",\"request\":{\"subtype\":\"can_use_tool\",\"tool_name\":\"mcp__gnomon-mods__echo2\",\"mcp_server\":{\"name\":\"gnomon-mods\",\"source\":\"sdk\"},\"display_name\":\"Echo2\",\"input\":{\"text\":\"sub\"},\"permission_suggestions\":[{\"type\":\"addRules\",\"rules\":[{\"toolName\":\"mcp__gnomon-mods__echo2\"}],\"behavior\":\"allow\",\"destination\":\"localSettings\"}],\"server_policy_ask_only\":true,\"tool_use_id\":\"toolu_015RubcuR39K8R8xHXCcZGUw\",\"agent_id\":\"a83668214e85f68f3\"}}",
+          "toolName": "mcp__gnomon-mods__echo2",
+          "toolUseId": "toolu_015RubcuR39K8R8xHXCcZGUw",
+          "agentId": "a83668214e85f68f3"
+        },
+        {
+          "seq": 11,
+          "phase": "turn2",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"a43366c2-d221-44e1-a470-1a7fba2623fd\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/call\",\"params\":{\"name\":\"echo2\",\"arguments\":{\"text\":\"sub\"},\"_meta\":{\"claudecode/toolUseId\":\"toolu_015RubcuR39K8R8xHXCcZGUw\",\"progressToken\":4}},\"jsonrpc\":\"2.0\",\"id\":4}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/call",
+          "tool": "echo2",
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "_meta",
+            "arguments",
+            "name"
+          ],
+          "meta": {
+            "claudecode/toolUseId": "toolu_015RubcuR39K8R8xHXCcZGUw",
+            "progressToken": 4
+          }
+        }
+      ],
+      "controlResponses": [
+        {
+          "phase": "list-changed",
+          "line": "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"probe-3a8fd910-4f32-4466-93ce-de02edb6ffb9\"}}"
+        }
+      ],
+      "toolUses": [
+        {
+          "phase": "turn1",
+          "id": "toolu_019dKbQ7QGp4rQ6aUwwVj8Go",
+          "name": "mcp__gnomon-mods__echo",
+          "input": {
+            "text": "one"
+          },
+          "parentToolUseId": null
+        },
+        {
+          "phase": "turn2",
+          "id": "toolu_01YSVo9G5sv8V1gA3WWMkSxG",
+          "name": "Agent",
+          "input": {
+            "description": "Echo sub via mod tool",
+            "prompt": "Call the tool mcp__gnomon-mods__echo2 with text \"sub\" and reply with only its output text.",
+            "subagent_type": "general-purpose",
+            "run_in_background": false
+          },
+          "parentToolUseId": null
+        },
+        {
+          "phase": "turn2",
+          "id": "toolu_015RubcuR39K8R8xHXCcZGUw",
+          "name": "mcp__gnomon-mods__echo2",
+          "input": {
+            "text": "sub"
+          },
+          "parentToolUseId": "toolu_01YSVo9G5sv8V1gA3WWMkSxG"
+        }
+      ],
+      "toolResults": [
+        {
+          "phase": "turn1",
+          "toolUseId": "toolu_019dKbQ7QGp4rQ6aUwwVj8Go",
+          "isError": false,
+          "parentToolUseId": null,
+          "text": "[{\"type\":\"text\",\"text\":\"gnomon-mods:echo:one\"}]"
+        },
+        {
+          "phase": "turn2",
+          "toolUseId": "toolu_015RubcuR39K8R8xHXCcZGUw",
+          "isError": false,
+          "parentToolUseId": "toolu_01YSVo9G5sv8V1gA3WWMkSxG",
+          "text": "[{\"type\":\"text\",\"text\":\"gnomon-mods:echo2:sub\"}]"
+        },
+        {
+          "phase": "turn2",
+          "toolUseId": "toolu_01YSVo9G5sv8V1gA3WWMkSxG",
+          "isError": false,
+          "parentToolUseId": null,
+          "text": "[{\"type\":\"text\",\"text\":\"  <tools-used-before-summary>mcp__gnomon-mods__echo2</tools-used-before-summary>\\n  \\n[Subagent hand-back] The text below is the final report of a subagent this session delegat…(+612)"
+        }
+      ],
+      "results": [
+        {
+          "phase": "turn1",
+          "subtype": "success",
+          "isError": false,
+          "numTurns": 2,
+          "cost": 0.0019565800000000003,
+          "text": "gnomon-mods:echo:one"
+        },
+        {
+          "phase": "turn2",
+          "subtype": "success",
+          "isError": false,
+          "numTurns": 2,
+          "cost": 0.003444505,
+          "text": "gnomon-mods:echo2:sub"
+        }
+      ],
+      "stderr": "",
+      "exit": 0
+    },
+    "runB": {
+      "label": "B: the --settings file (policy.json) allows mcp__gnomon-mods__echo",
+      "argv": [
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--replay-user-messages",
+        "--include-partial-messages",
+        "--include-hook-events",
+        "--permission-mode",
+        "default",
+        "--permission-prompts",
+        "host",
+        "--permission-prompt-tool",
+        "stdio",
+        "--session-id",
+        "1bab2684-01d6-4311-831b-614961e51324",
+        "--settings",
+        "<policy.json>",
+        "--setting-sources",
+        "",
+        "--mcp-config",
+        "<mcp.json>",
+        "--strict-mcp-config",
+        "--model",
+        "haiku",
+        "--no-session-persistence"
+      ],
+      "settingSources": "",
+      "projectSettings": null,
+      "policyAllow": [
+        "mcp__gnomon-mods__echo"
+      ],
+      "envStripped": [
+        "AI_AGENT",
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_NOTES_DIR",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_EFFORT",
+        "CLAUDE_PID"
+      ],
+      "inits": [
+        {
+          "phase": "turn1",
+          "mcpTools": [
+            "mcp__gnomon__echo",
+            "mcp__gnomon-mods__echo"
+          ],
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default"
+        }
+      ],
+      "mcpServers": [
+        {
+          "name": "gnomon",
+          "status": "connected",
+          "source": "sdk"
+        },
+        {
+          "name": "gnomon-mods",
+          "status": "connected",
+          "source": "sdk"
+        }
+      ],
+      "control": [
+        {
+          "seq": 1,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"252640ee-da1f-43ae-a438-6f0a81c9d9b1\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\",\"version\":\"2.1.332\"}},\"jsonrpc\":\"2.0\",\"id\":0}}}",
+          "serverName": "gnomon",
+          "method": "initialize",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "capabilities",
+            "clientInfo",
+            "protocolVersion"
+          ],
+          "meta": null
+        },
+        {
+          "seq": 2,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"478dff9b-a976-480b-83a1-2de0db507262\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\",\"version\":\"2.1.332\"}},\"jsonrpc\":\"2.0\",\"id\":0}}}",
+          "serverName": "gnomon-mods",
+          "method": "initialize",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "capabilities",
+            "clientInfo",
+            "protocolVersion"
+          ],
+          "meta": null
+        },
+        {
+          "seq": 3,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"5726850d-7bfb-457b-9a2e-9915505c6094\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}}",
+          "serverName": "gnomon",
+          "method": "notifications/initialized",
+          "tool": null,
+          "messageKeys": [
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 4,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"72118232-f7f9-4716-9962-79474dc97b56\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}}",
+          "serverName": "gnomon-mods",
+          "method": "notifications/initialized",
+          "tool": null,
+          "messageKeys": [
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 5,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"4ee46370-5f2b-42ca-96c7-1ab455fb9358\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":1}}}",
+          "serverName": "gnomon",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 6,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"23f9494c-12e5-4b14-bcd4-8f7b6b05822c\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":1}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 7,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"0ea9008d-623e-4f09-b9ee-4af752408139\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/call\",\"params\":{\"name\":\"echo\",\"arguments\":{\"text\":\"one\"},\"_meta\":{\"claudecode/toolUseId\":\"toolu_016HrW4c4EHfq97R596zgJFs\",\"progressToken\":2}},\"jsonrpc\":\"2.0\",\"id\":2}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/call",
+          "tool": "echo",
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "_meta",
+            "arguments",
+            "name"
+          ],
+          "meta": {
+            "claudecode/toolUseId": "toolu_016HrW4c4EHfq97R596zgJFs",
+            "progressToken": 2
+          }
+        }
+      ],
+      "controlResponses": [],
+      "toolUses": [
+        {
+          "phase": "turn1",
+          "id": "toolu_016HrW4c4EHfq97R596zgJFs",
+          "name": "mcp__gnomon-mods__echo",
+          "input": {
+            "text": "one"
+          },
+          "parentToolUseId": null
+        }
+      ],
+      "toolResults": [
+        {
+          "phase": "turn1",
+          "toolUseId": "toolu_016HrW4c4EHfq97R596zgJFs",
+          "isError": false,
+          "parentToolUseId": null,
+          "text": "[{\"type\":\"text\",\"text\":\"gnomon-mods:echo:one\"}]"
+        }
+      ],
+      "results": [
+        {
+          "phase": "turn1",
+          "subtype": "success",
+          "isError": false,
+          "numTurns": 2,
+          "cost": 0.0019565800000000003,
+          "text": "gnomon-mods:echo:one"
+        }
+      ],
+      "stderr": "",
+      "exit": 0
+    },
+    "runC": {
+      "label": "C: the project settings layer allows mcp__gnomon-mods__echo (untrusted temp cwd)",
+      "argv": [
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--replay-user-messages",
+        "--include-partial-messages",
+        "--include-hook-events",
+        "--permission-mode",
+        "default",
+        "--permission-prompts",
+        "host",
+        "--permission-prompt-tool",
+        "stdio",
+        "--session-id",
+        "60c37dd6-dda7-42de-964d-c788b774158d",
+        "--settings",
+        "<policy.json>",
+        "--setting-sources",
+        "project",
+        "--mcp-config",
+        "<mcp.json>",
+        "--strict-mcp-config",
+        "--model",
+        "haiku",
+        "--no-session-persistence"
+      ],
+      "settingSources": "project",
+      "projectSettings": {
+        "permissions": {
+          "allow": [
+            "mcp__gnomon-mods__echo"
+          ]
+        }
+      },
+      "policyAllow": null,
+      "envStripped": [
+        "AI_AGENT",
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_NOTES_DIR",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_EFFORT",
+        "CLAUDE_PID"
+      ],
+      "inits": [
+        {
+          "phase": "turn1",
+          "mcpTools": [
+            "mcp__gnomon__echo",
+            "mcp__gnomon-mods__echo"
+          ],
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default"
+        }
+      ],
+      "mcpServers": [
+        {
+          "name": "gnomon",
+          "status": "connected",
+          "source": "sdk"
+        },
+        {
+          "name": "gnomon-mods",
+          "status": "connected",
+          "source": "sdk"
+        }
+      ],
+      "control": [
+        {
+          "seq": 1,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"45820fd1-ad85-40a6-ad3f-9ccf69f6fa84\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\",\"version\":\"2.1.332\"}},\"jsonrpc\":\"2.0\",\"id\":0}}}",
+          "serverName": "gnomon",
+          "method": "initialize",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "capabilities",
+            "clientInfo",
+            "protocolVersion"
+          ],
+          "meta": null
+        },
+        {
+          "seq": 2,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"f3500f72-3ca7-4f76-977f-587ff352186a\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"claude-code\",\"title\":\"Claude Code\",\"description\":\"Anthropic's agentic coding tool\",\"websiteUrl\":\"https://claude.com/claude-code\",\"version\":\"2.1.332\"}},\"jsonrpc\":\"2.0\",\"id\":0}}}",
+          "serverName": "gnomon-mods",
+          "method": "initialize",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "capabilities",
+            "clientInfo",
+            "protocolVersion"
+          ],
+          "meta": null
+        },
+        {
+          "seq": 3,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"561fb7c4-1a6c-4391-8dac-2d2a1b9deabe\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}}",
+          "serverName": "gnomon",
+          "method": "notifications/initialized",
+          "tool": null,
+          "messageKeys": [
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 4,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"c8f792ed-7445-4863-85e5-997eeb04d2e9\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}}",
+          "serverName": "gnomon-mods",
+          "method": "notifications/initialized",
+          "tool": null,
+          "messageKeys": [
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 5,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"94d96a0c-11f0-4eae-a5da-e553aa6181b3\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":1}}}",
+          "serverName": "gnomon",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 6,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"0e4d0808-e459-4e9a-bd9d-929f679306eb\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":1}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/list",
+          "tool": null,
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method"
+          ],
+          "paramsKeys": [],
+          "meta": null
+        },
+        {
+          "seq": 7,
+          "phase": "turn1",
+          "subtype": "can_use_tool",
+          "requestKeys": [
+            "display_name",
+            "input",
+            "mcp_server",
+            "permission_suggestions",
+            "server_policy_ask_only",
+            "subtype",
+            "tool_name",
+            "tool_use_id"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"bf5a140b-f3fe-4174-8693-c2490bf42948\",\"request\":{\"subtype\":\"can_use_tool\",\"tool_name\":\"mcp__gnomon-mods__echo\",\"mcp_server\":{\"name\":\"gnomon-mods\",\"source\":\"sdk\"},\"display_name\":\"Echo\",\"input\":{\"text\":\"one\"},\"permission_suggestions\":[{\"type\":\"addRules\",\"rules\":[{\"toolName\":\"mcp__gnomon-mods__echo\"}],\"behavior\":\"allow\",\"destination\":\"localSettings\"}],\"server_policy_ask_only\":true,\"tool_use_id\":\"toolu_01ApEfrca9HnJ6C5EE25iMNX\"}}",
+          "toolName": "mcp__gnomon-mods__echo",
+          "toolUseId": "toolu_01ApEfrca9HnJ6C5EE25iMNX",
+          "agentId": null
+        },
+        {
+          "seq": 8,
+          "phase": "turn1",
+          "subtype": "mcp_message",
+          "requestKeys": [
+            "message",
+            "server_name",
+            "subtype"
+          ],
+          "topKeys": [
+            "request",
+            "request_id",
+            "type"
+          ],
+          "line": "{\"type\":\"control_request\",\"request_id\":\"3876e26f-704a-490f-8d66-634d85bc7cec\",\"request\":{\"subtype\":\"mcp_message\",\"server_name\":\"gnomon-mods\",\"message\":{\"method\":\"tools/call\",\"params\":{\"name\":\"echo\",\"arguments\":{\"text\":\"one\"},\"_meta\":{\"claudecode/toolUseId\":\"toolu_01ApEfrca9HnJ6C5EE25iMNX\",\"progressToken\":2}},\"jsonrpc\":\"2.0\",\"id\":2}}}",
+          "serverName": "gnomon-mods",
+          "method": "tools/call",
+          "tool": "echo",
+          "messageKeys": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "paramsKeys": [
+            "_meta",
+            "arguments",
+            "name"
+          ],
+          "meta": {
+            "claudecode/toolUseId": "toolu_01ApEfrca9HnJ6C5EE25iMNX",
+            "progressToken": 2
+          }
+        }
+      ],
+      "controlResponses": [],
+      "toolUses": [
+        {
+          "phase": "turn1",
+          "id": "toolu_01CqViPkx2bsLD26iFf6FtRj",
+          "name": "ToolSearch",
+          "input": {
+            "query": "select:mcp__gnomon-mods__echo"
+          },
+          "parentToolUseId": null
+        },
+        {
+          "phase": "turn1",
+          "id": "toolu_01ApEfrca9HnJ6C5EE25iMNX",
+          "name": "mcp__gnomon-mods__echo",
+          "input": {
+            "text": "one"
+          },
+          "parentToolUseId": null
+        }
+      ],
+      "toolResults": [
+        {
+          "phase": "turn1",
+          "toolUseId": "toolu_01CqViPkx2bsLD26iFf6FtRj",
+          "isError": false,
+          "parentToolUseId": null,
+          "text": "[{\"type\":\"tool_reference\",\"tool_name\":\"mcp__gnomon-mods__echo\"}]"
+        },
+        {
+          "phase": "turn1",
+          "toolUseId": "toolu_01ApEfrca9HnJ6C5EE25iMNX",
+          "isError": false,
+          "parentToolUseId": null,
+          "text": "[{\"type\":\"text\",\"text\":\"gnomon-mods:echo:one\"}]"
+        }
+      ],
+      "results": [
+        {
+          "phase": "turn1",
+          "subtype": "success",
+          "isError": false,
+          "numTurns": 3,
+          "cost": 0.00227869,
+          "text": "gnomon-mods:echo:one"
+        }
+      ],
+      "stderr": "Ignoring 1 permissions.allow entry from .claude/settings.json: this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects[\"/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-p2sdk-TMlomv/fresh\"].hasTrustDialogAccepted: true in /Users/ascend/.claude.json.\n",
+      "exit": 0
+    }
+  },
+  "specRefs": [
+    "§6.6 kernel-run git verbs",
+    "#kernel-mcp",
+    "#mod-tool-bridge (S1.4 P2)"
+  ],
+  "at": "2026-11-25T14:44:59.880Z"
+}

@@ -67,6 +67,18 @@ export function registryPath(home: string): string {
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+/**
+ * Principal NAMES no registry row may carry: the kernel appends rows under them in-process, so a device, agent or
+ * read token that could authenticate as one would be read as the kernel's own writer. `mods-mcp` is the
+ * #mod-tool-bridge's receipt principal (S1.4, Aegis A2). A row naming one is rejected at read and refused at write.
+ */
+export const RESERVED_PRINCIPAL_NAMES: readonly string[] = Object.freeze(['mods-mcp']);
+
+/** Is this principal name one no person, device, agent or token may take? (the name validators' one question) */
+export function isReservedPrincipalName(name: string): boolean {
+  return RESERVED_PRINCIPAL_NAMES.includes(name);
+}
+
 function checkRow(row: unknown, ns: string): string | null {
   if (!isObj(row) || row.schemaVersion !== REGISTRY_ROW_SCHEMA) return 'schema';
   if (row.kind !== 'kernel' && row.kind !== 'device') return 'kind';
@@ -83,6 +95,7 @@ function checkRow(row: unknown, ns: string): string | null {
     if (row.deviceId.slice(4, 12) !== ns) return 'deviceId-ns';
     const p = typeof row.principalId === 'string' ? parsePrincipalId(row.principalId) : undefined;
     if (!p || p.foreign || p.ns !== ns) return 'principal';
+    if (RESERVED_PRINCIPAL_NAMES.includes(p.name)) return 'principal-reserved';
     if (!(PRINCIPAL_KINDS as readonly unknown[]).includes(row.principalKind)) return 'principalKind';
     // §4.9 / S32-01: peers are not clients; a kernel never authenticates as a device.
     if (row.principalKind === 'peer' || row.principalKind === 'kernel') return 'principalKind';

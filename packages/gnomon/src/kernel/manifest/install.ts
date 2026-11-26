@@ -149,7 +149,7 @@ const FIRST_PARTY_PACKAGE_HASHES = new Set<string>([
   // contract. The old hash is in RETIRED_FIRST_PARTY_PINS, not here and not in the superseded table. An install
   // already pinned at 1.0.0 KEEPS LOADING first-party (its tier is its signed grant.trust row) until the person
   // approves the Update card; it can no longer be staged, decided or rolled back to.
-  'sha256:95811f3f2b7fbd217c8fb696a1f7007933b17c487218df2f7ffbb7b793a8bade', // packages/gnomon-mods/dimension 1.0.1 (gnomon.dimension)
+  'sha256:bebf970204cd9f6f0c8d30f5df550d3fb204bbae11bfae8ca18dbd2bfdf36c07', // packages/gnomon-mods/dimension 1.1.0 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),
@@ -175,6 +175,15 @@ export function isSupersededPin(packageHash: string): boolean {
 /** Is this a retired first-party pin (never staged, approved or rolled back to)? */
 export function isRetiredPin(packageHash: string): boolean {
   return RETIRED_FIRST_PARTY_PINS.has(packageHash);
+}
+/**
+ * Is this package hash one of the kernel's CURRENT first-party pins (S1.4, #mod-tool-bridge; Aegis A7, I1)? A
+ * superseded pin and a historical format-1 pin keep their first-party TIER, so an old install still loads, and a
+ * retired pin is refused everywhere; none of the three is current. THE one definition: a tool is offered to an
+ * agent only from a tree at a current pin, so an older first-party tree with tools is not drawable after a fix.
+ */
+export function isCurrentFirstPartyPin(packageHash: string): boolean {
+  return isFirstPartyPin(packageHash) && !isSupersededPin(packageHash) && !isRetiredPin(packageHash) && !isHistoricalFirstPartyPin(packageHash);
 }
 /** The ONE prior `modAbiId` listed for a superseded pin, or null. */
 export function supersededPriorModAbiId(packageHash: string): string | null {

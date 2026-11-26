@@ -258,11 +258,9 @@ components:
       id can hold a colon, so the keys never collide): a tree that adds write
       to a command gets the long Update card with "WIDENED: effects
       +cmd:<id>:write" and a manifest.widened row. A command with NO effects
-      field is keyed cmd:<id>:*default (COMMAND_DEFAULT_EFFECTS_KEY): absent
-      still means the union of the tool effects, so a tree that REMOVES the
-      field widens the command, and the key makes that removal an addition the
-      card shows. S1.4 P3 removes the key in the change that makes absent mean
-      read; from then on dropping the field only narrows. The install card's effects line counts a command's
+      field adds no key: since S1.4 P3 an absent field means read only
+      (G-MOD-20), so a tree that drops the field only narrows and raises no
+      card (the cmd:<id>:*default key of P1 is removed). The install card's effects line counts a command's
       declared effects with the tools'. Tests: test/manifest-loader.test.ts.
     path: src/kernel/manifest/
     type: module

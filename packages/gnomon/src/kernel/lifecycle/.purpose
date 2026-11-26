@@ -12,6 +12,12 @@ context:
     build-stamp.ts and update-watch.ts pick up a new build; app-bundle.ts,
     app-zip.ts and release-pins.ts check the shipped app.
   - >-
+    Shutdown (daemon.ts) flushes the #mod-tool-bridge folds twice: before the
+    mods and children stop, and again after them (a bridge call in flight when
+    its mod is killed is refused after the first flush, and shutdown never
+    waits for a session's exit path), both before the log closes.
+    DaemonSeams.supervisor.exitHold (TEST RIG ONLY) reaches the supervisor.
+  - >-
     Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
     relative to packages/gnomon, the package root.
 components:

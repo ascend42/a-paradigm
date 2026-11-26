@@ -129,7 +129,7 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
     expect(pinned(r)).toBeUndefined();
   });
 
-  it('an installed 1.0.0 keeps loading first-party until its Update is approved; after the update, rollback is refused and 1.0.1 still loads', () => {
+  it('an installed 1.0.0 keeps loading first-party until its Update is approved; after the update, rollback is refused and the shipped tree still loads', () => {
     const r = newRig();
     const old = asEarlierKernel(() => installTree(r, oldTree(r), DIMENSION));
     expect(old.packageHash).toBe(OLD);
@@ -137,7 +137,7 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
     const before = loadMod({ home: r.home, name: DIMENSION, trust: r.auth });
     expect(before).toMatchObject({ state: 'ready', packageHash: OLD, tier: 'first-party', source: 'package' });
     expect(before.state === 'ready' && before.manifest.version).toBe('1.0.0');
-    // the Update card for the shipped tree is an update, and approving it pins 1.0.1
+    // the Update card for the shipped tree is an update, and approving it pins the shipped tree
     const now = installTree(r, DIMENSION_TREE, DIMENSION).packageHash;
     expect(now).not.toBe(OLD);
     expect(isFirstPartyPin(now)).toBe(true);
@@ -150,12 +150,12 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
       expect(err.detail).toMatchObject({ name: DIMENSION, why: 'retired', toPackageHash: OLD });
       expect(seen).toEqual([{ kind: 'manifest.refuse', payload: { name: DIMENSION, code: 'TIER', why: 'retired' } }]);
     }
-    // nothing was appended, and the mod still loads 1.0.1 first-party
+    // nothing was appended, and the mod still loads the shipped tree first-party
     expect(readGrants(r.home, r.auth).installs).toHaveLength(rows);
     expect(pinned(r)).toBe(now);
     const after = loadMod({ home: r.home, name: DIMENSION, trust: r.auth });
     expect(after).toMatchObject({ state: 'ready', packageHash: now, tier: 'first-party' });
-    expect(after.state === 'ready' && after.manifest.version).toBe('1.0.1');
+    expect(after.state === 'ready' && after.manifest.version).toBe('1.1.0');
   });
 
   it('F1: after an uninstall nothing is pinned, so the retired hash is not exempt as "the tree pinned now": rollback to it is refused', () => {

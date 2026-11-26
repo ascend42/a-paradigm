@@ -72,6 +72,49 @@ components:
       - test/kernel-mcp-session.test.ts
     oracles: [G-GIT-08]
   supervisor:
+    mod-tool-bridge: >-
+      S1.4-P2 (#mod-tool-bridge, the supervisor half; SupervisorOptions.
+      modBridge). mcp.json: after the desk merge and the kernel's own entry,
+      the bridge's {type:'sdk', name:'gnomon-mods'} is written LAST, only on
+      this (Claude Code) spawn path and only when modBridge.tools() yields a
+      tool at spawn; never in production before P5. #onMcp dispatches by
+      server name FIRST, so the bridge answers with no git verbs (win32);
+      answered outside the stdout queue, exactly once (a throw is a control
+      error line), session.inject{channel:'mods-mcp'}. #bridgeSession
+      captures the caller synchronously, before the first await, from the
+      Session object only: hsid, principalId, agent BRIDGE_AGENT_LABEL
+      ('claude'), turn = turnIds[max(1, consumedTurns) - 1] (null: no-turn),
+      surface from the new Session.turnOrigins (kept in LOCKSTEP with
+      turnIds: pushed in send, spliced by result, cleared at exit; voice and
+      voice-unverified stamp 'voice'), held = loop origin or
+      #modeTransition() manual with no approved plan (the same function
+      #onPermission uses). #onPermission: a tool under mcp__gnomon-mods__
+      passes only when listed, behind mayAuto('mod-tool') (a loop session is
+      denied), with approval.auto{modeRef:'mod-tool'} before the allow; no
+      card, no Always rule, no updatedPermissions; any other name under the
+      prefix is denied. The allowed tool_use id is remembered
+      (Session.bridgeAllowed, bounded). #bridgeDetect (the ungated-tool
+      detector, extended): a bridge tools/call whose own
+      _meta["claudecode/toolUseId"] (a string of at most 128 chars matching
+      BRIDGE_TOOL_USE_ID; used for matching only) matches no allowed request
+      is counted into ONE approval.suspect{why:'ungated-tool-use',
+      server:'gnomon-mods', count, byWhy} row per session per 10 s (RowFold,
+      flushed at exit); it never blocks. Session exit closes the bridge's
+      refusal fold (modBridge.closeSession, awaited) and its suspect fold
+      (awaited, bounded); flushBridge() does both for every live session at
+      daemon stop, before the children stop and again after the mods and the
+      children are stopped (a call in flight when its mod is killed is refused
+      after the first flush; shutdown never waits for #onExit).
+      SupervisorOptions.exitHold (TEST RIG ONLY) is awaited at the start of
+      #onExit so a test can hold the exit path past a daemon stop. held comes from bridgeHeld
+      (mcp-bridge.ts), also used by the permission pass. #bridgeSession runs
+      only for tools/call; the detector skips a session that is not running.
+      SupervisorOptions.bridgeNow (TEST RIG ONLY) is the suspect fold's
+      clock. No Claude session is a loop
+      session in 8.0 and nothing in this file sets Session.loopOrigin (the
+      guard in test/loop-model.test.ts), so the loop refusal is tested at the
+      answerer (held: 'loop') and by a source test of #bridgeSession, not
+      through a live loop session. Tests: test/mods-bridge-session.test.ts.
     session-identity-env: >-
       SupervisorOptions.identity (seam; default runner/env.ts
       sessionIdentity()) is resolved ONCE in the constructor and passed to
@@ -294,6 +337,13 @@ components:
       runner, absent in the daemon today, so the template runs), else as the
       kernel's template. One hash-only skill.run{via} row per listed run.
       buildRepoContext gains skillsOnly (no memory walk, no agents/commands).
+      Turn ids are monotonic per hsid across runs (S1.4 P3, I-3): planResume
+      (resume.ts) keeps the highest n of each hsid's kernel-signed turn.sent
+      rows as ResumeInput.lastTurn, read in the boot's existing resume pass
+      (daemon.ts adds turn.sent to its kinds), and #spawnClaude seeds
+      s.turns from it, so a resumed run's first turn is lastTurn + 1 and no
+      turn ref or causes ref repeats. A fresh session (new hsid) starts at 1.
+      Tests: test/resume-plan.test.ts, test/session-resume.test.ts.
     path: src/kernel/supervisor/
     type: module
     tags: [gnomon, kernel, session, paradigm-8, m1.7]

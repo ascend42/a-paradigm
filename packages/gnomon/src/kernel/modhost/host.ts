@@ -279,7 +279,15 @@ export interface RenderResult {
   flags: string[];
 }
 
+/** `detail.why` of the NOT_RUNNING refusal a pinned tool call gets when the running child is another package. */
+export const MOD_PIN_CHANGED = 'pin-changed';
+
 export interface CallOptions {
+  /**
+   * S1.4 (#mod-tool-bridge, Aegis I3): the package hash the caller LISTED the tool at. Checked in the same tick as the
+   * dispatch, against the child that takes the call: another package ⇒ NOT_RUNNING{why: 'pin-changed'}, nothing sent.
+   */
+  expectPackageHash?: string;
   relayedFor?: RelayedFor;
   /** Aegis M1: the relaying caller's §5 class (host-side only, never sent to the mod) */
   relayedClass?: string;
@@ -811,6 +819,7 @@ export class ModHost {
   async #call(name: string, method: string, params: Record<string, unknown>, ctx: CallContext, opts: CallOptions = {}): Promise<unknown> {
     return this.#enqueue(name, async () => {
       const r = this.#require(name);
+      if (opts.expectPackageHash !== undefined && r.packageHash !== opts.expectPackageHash) throw new ModRefusal('NOT_RUNNING', `${name} runs another package than the one its tool was listed at`, { name, why: MOD_PIN_CHANGED });
       const cancelToken = method === 'view.render' || method === 'tool.call' ? randomUUID() : null;
       const callId = method === 'view.render' || method === 'tool.call' || method === 'command.run' ? randomUUID() : null;
       r.ctx = ctx;

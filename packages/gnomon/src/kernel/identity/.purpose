@@ -13,6 +13,20 @@ context:
     relative to packages/gnomon, the package root.
 components:
   identity:
+    reserved-principal-names: >-
+      S1.4-P2 (#mod-tool-bridge, Aegis A2, I4). registry.ts
+      RESERVED_PRINCIPAL_NAMES (['mods-mcp']) and isReservedPrincipalName:
+      names the kernel appends rows under in-process, which no person,
+      device, agent or token may take. A registry device row naming one is
+      rejected at read with reason principal-reserved and refused at write
+      (deviceRowFor throws); a read-token row is rejected (reason principal)
+      and mintReadToken throws. The name validators refuse it with the
+      existing bad-name refusal BEFORE any key is created or presence is
+      asked: Provisioner.provision (provisioner.ts), identity-cli
+      (sanitizeName falls back to founder; --name is refused at parse),
+      setup-cli's prompt, and the kernel's setup endpoint for setup.name. The
+      contracts setup validator is unchanged (the GUI bundles it). Tests:
+      test/mods-bridge.test.ts, test/setup.test.ts.
     approval-devices: >-
       DEFERRED, not built (TD-2026-10-19-946; spec §22 items 23-24).
       Approvals happen only on the Mac. Enrolled approval devices (phone

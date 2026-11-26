@@ -180,6 +180,17 @@ describe.skipIf(!SANDBOX_OK)('§2.4 rule 11: resume after an upgrade (T-2026-10-
     expect(r.rows.slice(boot).filter((x) => x.kind === 'turn.sent')).toEqual([]);
     await port.send({ principal: HUMAN, principalClass: 'human', features: ['journal.cursor', 'session.resume'] }, { hsid: idle.hsid, content: [{ text: 'hi' }] });
     expect(r.of('turn.sent', idle.hsid, boot)).toHaveLength(1);
+    // S1.4 P3 (I-3): turn ids are monotonic per hsid across a resume in a NEW kernel. The resumed run numbers its
+    // first turn after the highest turn.sent n of the drained run, so no turn ref (and no row's `causes`) repeats.
+    // `busy` sent a turn before the drain (idle sent none: its first resumed turn is 1, as before)
+    const nOf = (x: { payload: Record<string, unknown> }) => Number(String(x.payload.turn).split('/').pop());
+    const before = r.rows.slice(0, boot).filter((x) => x.kind === 'turn.sent' && x.payload.hsid === busy.hsid).map(nOf);
+    expect(before.length).toBeGreaterThan(0);
+    await port.send({ principal: HUMAN, principalClass: 'human', features: ['journal.cursor', 'session.resume'] }, { hsid: busy.hsid, content: [{ text: 'again' }] });
+    expect(r.of('turn.sent', busy.hsid, boot).map((x) => x.payload.turn)).toEqual([`turn:${busy.hsid}/${Math.max(...before) + 1}`]);
+    expect(nOf(r.of('turn.sent', idle.hsid, boot)[0]!)).toBe(1);
+    const all = r.rows.filter((x) => x.kind === 'turn.sent' && x.payload.hsid === busy.hsid).map((x) => x.payload.turn);
+    expect(new Set(all).size).toBe(all.length);
   });
 
   it('drain resolves only after each drained session\'s exit path ran: its permit.release rows precede any resume (a late release once landed after the new kernel booted)', async () => {
