@@ -779,7 +779,9 @@ describe('#dimension-mod E1 item 8: source scan (Aegis G3): no op row is built f
     const core = src.slice(src.indexOf('async function undoCore('), src.indexOf('/** A draw that wrote no op row'));
     expect(core.match(/const plan = planDimUndo\(/g)).toHaveLength(1);
     expect(/plan\.ops\s*=|plan\.ops\.push|plan\.ops\.splice/.test(core)).toBe(false);
-    for (const m of core.matchAll(/payloadOf\(([^)]*)\)/g)) expect(['ops', 'ops, ', '[...cur, plan.ops[i]]'].includes(m[1]!.trim()) || m[1]!.includes('plan.ops')).toBe(true);
+    // the packer's ops are plan.ops[i] only
+    expect(core.match(/const op = plan\.ops\[i\];/g)).toHaveLength(1);
+    for (const m of core.matchAll(/payloadOf\(([^)]*)\)/g)) expect([m[1], ['ops', '[...cur, op]', '[op]'].includes(m[1]!.trim())]).toEqual([m[1], true]);
   });
 });
 
@@ -863,5 +865,72 @@ describe('E1 review group A: pins and the loaded-board cache (Aegis I-1, I-3; Pr
     // A views all eight (attached): the cache is full, and the board with a pin is the one kept
     for (const o of others) expect(await w.tool('dim-view', { dim: o }, agentOf(A, 3))).toMatchObject({ v: 1 });
     expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 1 });
+  });
+});
+
+describe('E1 review group B: change-set integrity (Aegis I-2, I-4, I-5; Judge I-2, I-4)', () => {
+  it('Aegis I-2: a set whose earlier rows a keyframe covers answers undo-expired after a cold open from it', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }]);
+    await w.run('dim.grant', { dim, write: true }, B); // writes a keyframe after B's first row of turn 1
+    await w.restart();
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(2), patch: { color: 'graphite' } }]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: false, code: 'undo-expired' });
+  });
+
+  it('Judge I-4: a later row of an evicted set opens no new, partial set (undo-expired)', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const act = ulid(7, '01JDAC');
+    await w.run('dim.op', { dim, ops: [rectOp(1)], act }); // the person's own action: never pinned
+    for (let t = 2; t <= 40; t++) await draw(w, dim, A, t, [rectOp(100 + t)]);
+    // the action was evicted; a late row of the same action (the page reuses its act) must not make it undoable in part
+    await w.run('dim.op', { dim, ops: [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }], act });
+    expect(await w.run('dim.undo', { dim, of: { principal: HUMAN, act } })).toMatchObject({ ok: false, code: 'undo-expired' });
+  });
+
+  it('Judge I-2: ids:[X] then ids:[Y] are two change-sets of the person (two acts), never one', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }, { type: 'update', id: ulid(2), patch: { color: 'graphite' } }]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1), ids: [ulid(1)] })).toMatchObject({ ok: true, applied: 1 });
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1), ids: [ulid(2)] })).toMatchObject({ ok: true, applied: 1 });
+    const acts = w.opRows().filter((r) => (r.payload as Record<string, unknown>).undo).map((r) => (r.payload as { act: string }).act);
+    expect(new Set(acts).size).toBe(2);
+  });
+
+  it('Aegis I-5: undo, redo, undo again reverses the agent\'s change (an undone undo is no continuation)', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }, { type: 'delete', id: ulid(2) }]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 2 });
+    const act = (w.opRows().at(-1)!.payload as { act: string }).act;
+    expect(await w.run('dim.undo', { dim, of: { principal: HUMAN, act } })).toMatchObject({ ok: true, applied: 2 });
+    expect(w.log.fold(dim).nodes.get(ulid(1))!.node.color).toBe('graphite');
+    const again = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(again).toMatchObject({ ok: true, applied: 2 });
+    const page = w.log.fold(dim);
+    expect(page.nodes.get(ulid(1))!.node.color).toBeUndefined();
+    expect([...page.nodes.values()].filter((n) => n.restoredFrom?.id === ulid(2) || n.restoredFrom?.by.cls === 'human').length).toBeGreaterThan(0);
+  });
+
+  it('Aegis I-4: a re-add that cannot fit a row with its marker is counted refused, and the rest of the undo lands', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const m = await loadModel();
+    const stamp = { principal: HUMAN, connId: GUI.connId, surface: 'gui' };
+    const stroke = (n: number) => ({ type: 'add', node: { id: ulid(9), kind: 'stroke', x: 0, y: 0, z: 'V', points: Array.from({ length: n }, () => 999) } });
+    let n = 2;
+    while (n + 2 <= 4096 && m.rowBytes!(m.opPayload!(dim, [stroke(n + 2)]), stamp) !== null) n += 2;
+    expect(await w.run('dim.op', { dim, ops: [stroke(n)] })).toMatchObject({ ok: true });
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await draw(w, dim, B, 1, [{ type: 'delete', id: ulid(9) }, { type: 'update', id: ulid(1), patch: { color: 'graphite' } }]);
+    const u = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(u).toMatchObject({ ok: true, applied: 1, skipped: { refused: 1 } });
+    expect(w.log.fold(dim).nodes.get(ulid(1))!.node.color).toBeUndefined();
   });
 });

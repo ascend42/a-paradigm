@@ -1671,11 +1671,38 @@ function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySe
     if (!(f.get(k)! >= seq)) f.set(k, seq);
   };
   try {
-    for (const row of after) {
+    // Judge I-2, Aegis I-5 (E1 review): an earlier undo of THIS set that was itself undone later (a redo) is
+    // neither a continuation nor a later change: that undo's rows and the rows of the undo that reversed them are
+    // left out together (they cancel), so undo, redo, undo reverses the set again. Nothing else is cancelled.
+    const list = [...after];
+    const seqOf = (r: DimRow): number => (Number.isSafeInteger(r.seq) ? r.seq : Number.POSITIVE_INFINITY);
+    const markOf = (r: DimRow): DimUndoMark | null => {
+      const p = opPayloadOf(r);
+      return p && own(p, 'undo') !== undefined ? dimUndoMarkOf(r) : null;
+    };
+    /** the change-sets of earlier undos of `of` whose own set an undo row after them reversed */
+    const redone: DimChangeSet[] = [];
+    if (of) {
+      for (const r of list) {
+        const m = markOf(r);
+        const cs = m && sameSet(m.of, of) ? dimChangeSetOf(r) : null;
+        if (!cs || redone.some((x) => sameSet(x, cs))) continue;
+        if (list.some((z) => seqOf(z) > seqOf(r) && !!markOf(z) && sameSet(markOf(z)!.of, cs))) redone.push(cs);
+      }
+    }
+    const cancelled = (r: DimRow): boolean => {
+      if (redone.length === 0) return false;
+      const cs = dimChangeSetOf(r);
+      if (cs && redone.some((x) => sameSet(x, cs))) return true;
+      const m = markOf(r);
+      return !!m && redone.some((x) => sameSet(x, m.of));
+    };
+    for (const row of list) {
       const p = opPayloadOf(row);
       if (!p) continue;
       const seq = Number.isSafeInteger(row.seq) ? row.seq : Number.POSITIVE_INFINITY;
       if (setSeqs.has(seq)) continue; // a row of the set itself is never a later change
+      if (cancelled(row)) continue;
       const ops = own(p, 'ops');
       const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
       if (Array.isArray(ops)) for (const op of ops) if (isPlainObject(op) && own(op, 'type') === 'delete' && typeof own(op, 'id') === 'string') newest(dels, own(op, 'id') as string, seq);

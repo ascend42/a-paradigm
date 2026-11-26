@@ -68,7 +68,7 @@ import {
   titleFor,
   UNDO_ENTRIES_MAX,
   catchUpCuts,
-  continuationAct,
+  keyframeSets,
   emptyHistory,
   evictSet,
   noteHistoryRow,
@@ -325,7 +325,8 @@ async function load(host, dim, cancelled, admit) {
     const kf = await readKeyframe(host, dim);
     const usable = kf && kf.state.seq >= idx.firstSeq ? kf : null;
     const from = usable ?? { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() };
-    const keys = new Set();
+    // the sets the keyframe's history held, then the ones the rows after it carry (Aegis I-2)
+    const keys = new Set(usable?.sets ?? []);
     const { state, grants, oids, last } = await foldFromLog(host, dim, from, usable ? usable.state.seq : idx.firstSeq - 1, cancelled, undefined, keys);
     // the fold must have reached at least the row the index names: anything less means rows are missing
     if (last < idx.lastSeq || state.dim !== dim) throw new Error('fold short');
@@ -471,7 +472,7 @@ async function dropKeyframe(host, id) {
 async function saveKeyframe(host, dim, entry) {
   const id = ulidOf(dim);
   try {
-    const enc = encodeKeyframe(entry.state, logId, { grants: entry.grants, oids: entry.oids });
+    const enc = encodeKeyframe(entry.state, logId, { grants: entry.grants, oids: entry.oids, sets: keyframeSets(entry.hist) });
     entry.sinceKf = 0;
     if (!enc) return;
     const old = plain(await host.get(`kf:${id}`));
@@ -687,7 +688,12 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     if (a.base !== undefined && a.base > entry.state.seq) return refusal('args-bad');
     // the person's own act: a continuation of their earlier call of this undo keeps its act, else a fresh one
     // (minted here, never the page's: Aegis ruling 3), so one undo is one change-set of the person in its own right
-    const act = continuationAct(entry.hist, a.of, actor.principal) ?? mintUlid();
+    // Judge I-2, Aegis I-5: the act is reused ONLY for the continuation of this person's own call that answered
+    // `more` for this set and this scope; every other undo is an action of its own
+    const pk = setKey(a.of);
+    const pend = entry.hist?.pending.get(pk);
+    const scope = JSON.stringify(a.ids ?? null);
+    const act = pend && pend.principal === actor.principal && pend.ids === scope ? pend.act : mintUlid();
     const out = await undoCore(host, a.dim, entry, {
       cs: a.of,
       ...(a.ids ? { ids: a.ids } : {}),
@@ -697,7 +703,12 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       act,
       appendRow: (payload) => append(host, DIM_KINDS.op, payload),
     });
-    if (out.code) return refusal(out.code, out.extra);
+    if (out.code) {
+      if (out.code !== 'append-busy') entry.hist?.pending.delete(pk);
+      return refusal(out.code, out.extra);
+    }
+    if (out.more) entry.hist.pending.set(pk, { act, principal: actor.principal, ids: scope });
+    else entry.hist.pending.delete(pk);
     // the person pressed this set's notice: its pin is released (Aegis G6), but only by an undo of the WHOLE set
     // that finished (Aegis I-3, Judge nit): a per-mark undo (`ids`) or an answer with `more` keeps it standing
     if (!a.ids && !out.more) unpinSet(entry.hist, setKey(a.of));
@@ -1018,11 +1029,27 @@ async function undoCore(host, dim, entry, o) {
   let curBytes = 0;
   let i = 0;
   const limit = Math.min(plan.ops.length, o.maxOps ?? plan.ops.length);
+  // Aegis I-4: an op that cannot fit a row even ALONE (a near-limit re-add with its marker) is left out with every
+  // later op that names the id it would add, counted in skipped.refused; packing goes on
+  const dropped = new Set();
+  let unfit = 0;
+  const names = (op) => (op.type === 'add' ? false : op.type === 'move' ? op.ids.some((x) => dropped.has(x)) : dropped.has(op.id) || (op.type === 'update' && Object.values(op.patch).some((v) => typeof v === 'string' && dropped.has(v))));
   while (i < limit) {
-    const b = rowBytes(payloadOf([...cur, plan.ops[i]]), o.stamp);
+    const op = plan.ops[i];
+    if (names(op)) {
+      i++;
+      continue;
+    }
+    const b = rowBytes(payloadOf([...cur, op]), o.stamp);
     if (b !== null && used + b <= CALL_BYTES) {
-      cur.push(plan.ops[i]);
+      cur.push(op);
       curBytes = b;
+      i++;
+      continue;
+    }
+    if (cur.length === 0 && (b === null || rowBytes(payloadOf([op]), o.stamp) === null)) {
+      if (op.type === 'add') dropped.add(op.node.id);
+      unfit++;
       i++;
       continue;
     }
@@ -1034,7 +1061,8 @@ async function undoCore(host, dim, entry, o) {
   }
   if (cur.length > 0) rows.push(cur);
   let more = plan.more || i < plan.ops.length;
-  if (rows.length === 0) return { code: 'row-too-large' };
+  const skipped = { ...plan.skipped, refused: plan.skipped.refused + unfit };
+  if (rows.length === 0) return unfit > 0 ? { code: 'undo-nothing', extra: { skipped } } : { code: 'row-too-large' };
   const landedIds = new Set();
   let landedRows = 0;
   for (const ops of rows) {
@@ -1057,7 +1085,7 @@ async function undoCore(host, dim, entry, o) {
   }
   // per mark: the plan's own counts when every row landed, else the marks the landed rows reached
   const whole = landedRows === rows.length && i === plan.ops.length;
-  return { applied: whole ? plan.applied : landedIds.size, skipped: plan.skipped, more };
+  return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more };
 }
 
 /** A draw that wrote no op row: its count row, then the refusal. */

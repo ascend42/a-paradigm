@@ -1602,11 +1602,34 @@ function laterOf(after, current, setSeqs, o = {}) {
     if (!(f.get(k) >= seq)) f.set(k, seq);
   };
   try {
-    for (const row of after) {
+    const list = [...after];
+    const seqOf = (r) => Number.isSafeInteger(r.seq) ? r.seq : Number.POSITIVE_INFINITY;
+    const markOf = (r) => {
+      const p = opPayloadOf(r);
+      return p && own(p, "undo") !== void 0 ? dimUndoMarkOf(r) : null;
+    };
+    const redone = [];
+    if (of) {
+      for (const r of list) {
+        const m = markOf(r);
+        const cs = m && sameSet(m.of, of) ? dimChangeSetOf(r) : null;
+        if (!cs || redone.some((x) => sameSet(x, cs))) continue;
+        if (list.some((z) => seqOf(z) > seqOf(r) && !!markOf(z) && sameSet(markOf(z).of, cs))) redone.push(cs);
+      }
+    }
+    const cancelled = (r) => {
+      if (redone.length === 0) return false;
+      const cs = dimChangeSetOf(r);
+      if (cs && redone.some((x) => sameSet(x, cs))) return true;
+      const m = markOf(r);
+      return !!m && redone.some((x) => sameSet(x, m.of));
+    };
+    for (const row of list) {
       const p = opPayloadOf(row);
       if (!p) continue;
       const seq = Number.isSafeInteger(row.seq) ? row.seq : Number.POSITIVE_INFINITY;
       if (setSeqs.has(seq)) continue;
+      if (cancelled(row)) continue;
       const ops = own(p, "ops");
       const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
       if (Array.isArray(ops)) {

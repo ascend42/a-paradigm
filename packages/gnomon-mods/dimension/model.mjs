@@ -409,8 +409,15 @@ function encodeAux(aux) {
   if (aux && aux.grants instanceof Map) for (const [hsid, g] of aux.grants) if (plain(g) && typeof g.write === 'boolean' && Number.isSafeInteger(g.seq)) grants.push([hsid, g.write, g.seq]);
   const oids = [];
   if (aux && aux.oids instanceof Map) for (const [oid, m] of aux.oids) if (OID.test(oid) && Number.isSafeInteger(m.applied) && Number.isSafeInteger(m.seq)) oids.push([oid, m.applied, m.seq]);
-  return { grants, oids: oids.slice(-MEMO_CAP) };
+  // S1.4 E1 review (Aegis I-2): the change-set keys the history held, so a cold open from this keyframe never
+  // undoes in part a set whose earlier rows the keyframe covers
+  const sets = [];
+  if (aux && aux.sets) for (const k of aux.sets) if (typeof k === 'string' && k.length > 0 && k.length <= SET_KEY_MAX) sets.push(k);
+  return { grants, oids: oids.slice(-MEMO_CAP), sets: sets.slice(-KEYFRAME_SETS) };
 }
+/** Change-set keys a keyframe carries, and the longest one (an hsid of 128 and a turn of `turn:<hsid>/<n>`). */
+export const KEYFRAME_SETS = 512;
+const SET_KEY_MAX = 512;
 function decodeAux(aux) {
   const a = plain(aux);
   if (!a || !Array.isArray(own(a, 'grants')) || !Array.isArray(own(a, 'oids'))) return null;
@@ -425,7 +432,9 @@ function decodeAux(aux) {
     if (!Array.isArray(o) || o.length !== 3 || typeof o[0] !== 'string' || !OID.test(o[0]) || !Number.isSafeInteger(o[1]) || o[1] < 0 || !Number.isSafeInteger(o[2]) || o[2] < 1) return null;
     oids.set(o[0], { applied: o[1], seq: o[2] });
   }
-  return { grants, oids };
+  const sets = own(a, 'sets');
+  if (!Array.isArray(sets) || sets.length > KEYFRAME_SETS || !sets.every((k) => typeof k === 'string' && k.length > 0 && k.length <= SET_KEY_MAX)) return null;
+  return { grants, oids, sets: [...sets] };
 }
 
 /** Keyframe format. v3 (S1.4 E1) adds each node's attribution; a v1 or v2 keyframe is ignored and rebuilt from the log. */
@@ -560,7 +569,7 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
     }
     const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, goneBy, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
     // the content and adder by the published hash, the attribution by the published digest (Aegis G7, P5 gate)
-    return dimHash(state) === h.hash && dimAttrDigest(state) === h.attr ? { state, grants: aux.grants, oids: aux.oids } : null;
+    return dimHash(state) === h.hash && dimAttrDigest(state) === h.attr ? { state, grants: aux.grants, oids: aux.oids, sets: aux.sets } : null;
   } catch {
     return null;
   }
@@ -1060,7 +1069,9 @@ export function readOf(v) {
  * the change-set keys of the op rows the cold open folded (a set seen there is held from no row, never in part).
  */
 export function emptyHistory(log, before) {
-  return { log, rows: [], sets: new Map(), pins: [], entries: 0, presentAt: -Infinity, before: before ?? new Set() };
+  const h = { log, rows: [], sets: new Map(), pins: [], entries: 0, presentAt: -Infinity, before: new Set(), pending: new Map() };
+  for (const k of before ?? []) noteStraddle(h, k);
+  return h;
 }
 
 const handSame = (a, b) => !!a && !!b && a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
@@ -1159,8 +1170,28 @@ export function evictSet(h, key) {
   const set = h.sets.get(key);
   if (!set) return;
   h.sets.delete(key);
+  // Judge I-4: a later row of an evicted set opens no new, partial set: the key is held as straddling (bounded)
+  noteStraddle(h, key);
   h.entries -= checkpointSize(set.before);
   if (set.pinned) h.pins = h.pins.filter((k) => k !== key);
+}
+
+/** Keys a history holds as straddling (a set held from no row): the oldest goes past it. */
+export const STRADDLE_MAX = 1024;
+export function noteStraddle(h, key) {
+  h.before.delete(key);
+  h.before.add(key);
+  while (h.before.size > STRADDLE_MAX) h.before.delete(h.before.values().next().value);
+}
+/** The keys a keyframe of this history carries: the held sets first, then the newest straddling keys. */
+export function keyframeSets(h) {
+  if (!h) return [];
+  const out = [...h.sets.keys()];
+  for (const k of [...h.before].reverse()) {
+    if (out.length >= KEYFRAME_SETS) break;
+    if (!out.includes(k)) out.push(k);
+  }
+  return out.slice(0, KEYFRAME_SETS);
 }
 
 /** The per-dimension bounds: UNDO_SETS sets (the oldest unpinned first), UNDO_ROWS rows (UNDO_ROWS_PINNED for pins). */
@@ -1224,21 +1255,6 @@ export function setRowsOf(h, key) {
   return { set, rows, after };
 }
 
-/**
- * The act of an earlier call of this person's undo of `of` (a continuation, `more`): the newest ring row stamped by
- * this person whose honoured marker names `of`. Its act is reused, so one undo is one change-set however many calls.
- */
-export function continuationAct(h, cs, principal) {
-  const k = setKey(cs);
-  for (let i = h.rows.length - 1; i >= 0; i--) {
-    const r = h.rows[i];
-    if (!Object.hasOwn(r.payload, 'undo')) continue;
-    const mark = dimUndoMarkOf(r);
-    const act = dimActOf(r);
-    if (mark && act && act.principal === principal && setKey(mark.of) === k) return act.act;
-  }
-  return null;
-}
 
 /**
  * A catch-up's op rows split into stretches (S1.4 E1): each stretch starts at a row that opens a change-set this
