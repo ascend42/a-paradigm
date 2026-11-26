@@ -192,6 +192,11 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
         // delete the agent stroke, then undo: the host re-adds it as the person's (dim-undo, stated); never a line without its agent
         { read: `(${B}.select(['${S}']), 1)`, as: 'sel' }, { wait: 250 }, { read: `(${B}.focus(), ${B}.state().selected)`, as: 'selected' },
         { key: 'Delete' }, { wait: 300 }, { read: lines, as: 'afterDelete' }, { read: `[...${D}.state().nodes.values()].filter((n) => n.node.kind === 'stroke').map((n) => n.by.cls).join(' ')`, as: 'foldAfterDelete' }, { key: 'z', meta: process.platform === 'darwin', ctrl: process.platform !== 'darwin' }, { wait: 400 },
+        // (Aegis) the engine's own history is inert: after Delete and the undo key, BEFORE any re-render, no line is
+        // live in the engine and no add was sent; and a bare z (no chord) changes nothing either
+        { read: lines, as: 'beforeRerender' }, { read: `${D}.edits.flatMap((e) => e.ops).filter((o) => o.type === 'add').length`, as: 'addsBeforeRerender' },
+        { read: `${B}.marks().length`, as: 'marksBeforeRerender' },
+        { key: 'z' }, { wait: 300 }, { read: lines, as: 'afterBareZ' }, { read: `${D}.edits.flatMap((e) => e.ops).filter((o) => o.type === 'add').length`, as: 'addsAfterBareZ' },
         { read: `${D}.undoKeys ? ${D}.undoKeys.length : globalThis.gnomonPreviewDim.undoKeys?.length ?? -1`, as: 'undoKeys' },
         // the undo's ops, applied as the person's (as the app's sender does), and rendered
         { read: `(${B}.render(${D}.apply(${JSON.stringify(plan.ops)}, 'you')), 1)`, as: 'undone' }, { wait: 300 },
@@ -213,6 +218,11 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
     expect(acted.selected).toBe(1);
     expect(acted.afterDelete).toBe('');
     expect(acted.foldAfterDelete).toBe('');
+    expect(acted.beforeRerender).toBe('');
+    expect(acted.addsBeforeRerender).toBe(0);
+    expect(acted.marksBeforeRerender).toBe(0);
+    expect(acted.afterBareZ).toBe('');
+    expect(acted.addsAfterBareZ).toBe(0);
     // TODAY's dim-undo re-adds it under a NEW id as the person's: a freehand, solid stroke, never a line without its
     // agent. Pass E0 (contracts) changes the shared undo planner so a re-add keeps its original hand: when it lands,
     // this becomes 'agent' (a dashed line again) and the new-id check stays
