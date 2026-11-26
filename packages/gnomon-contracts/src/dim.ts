@@ -271,6 +271,13 @@ export interface DimState {
   ended: boolean;
   nodes: ReadonlyMap<string, DimFoldNode>;
   gone: ReadonlySet<string>;
+  /**
+   * S1.4 E1 (Aegis, defence in depth; OUTSIDE the hash and the digest): the ORIGINAL hand (`restoredFrom.by`, else
+   * `by`) of each deleted id, set by the fold's delete. A restored entry is honoured only when its old id is here and
+   * its hand is this one, so a marker cannot give a re-added mark a hand its deleted mark never had. Optional for a
+   * state built by hand; the fold always keeps it, and the mod's keyframe v3 carries it.
+   */
+  goneBy?: ReadonlyMap<string, DimBy>;
   seq: number;
   /** ops applied */
   ops: number;
@@ -284,6 +291,7 @@ interface Draft {
   ended: boolean;
   nodes: Map<string, DimFoldNode>;
   gone: Set<string>;
+  goneBy: Map<string, DimBy>;
   seq: number;
   ops: number;
   unapplied: number;
@@ -314,11 +322,11 @@ function copyJson(v: unknown, depth = 0): unknown {
 
 /** An empty state. Pass `dim` to fold one dimension out of a log that holds several; else the first start row names it. */
 export function emptyDimState(dim: string | null = null): DimState {
-  return { dim, title: '', attached: [], ended: false, nodes: new Map(), gone: new Set(), seq: 0, ops: 0, unapplied: 0 };
+  return { dim, title: '', attached: [], ended: false, nodes: new Map(), gone: new Set(), goneBy: new Map(), seq: 0, ops: 0, unapplied: 0 };
 }
 
 function draftOf(s: DimState): Draft {
-  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
+  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), goneBy: new Map(s.goneBy ?? []), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
 }
 
 const NON_EMPTY = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
@@ -357,8 +365,8 @@ function sameHand(a: DimBy, b: DimBy): boolean {
   return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
 }
 
-/** The free-text fields of a node: writing or clearing one by another hand sets `wordsBy` (Aegis G1). */
-const WORDS_KEYS = new Set(['text', 'label', 'title', 'refs']);
+/** The free-text fields of a node: writing or clearing one by another hand sets `wordsBy` (Aegis G1; `rel` since E1, Aegis N-2). */
+const WORDS_KEYS = new Set(['text', 'label', 'title', 'refs', 'rel']);
 
 /** The attribution of an applied update or move (see `DimFoldNode`). */
 function changed(cur: DimFoldNode, node: Record<string, unknown>, by: DimBy, hsid: string | null, seq: number, words: boolean): DimFoldNode {
@@ -386,7 +394,12 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
     case 'add': {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== 'string' || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      const from = restored?.get(node.id);
+      // Aegis (E1 review, defence in depth): a restored entry is honoured only when its old id was DELETED before
+      // this row and the entry's hand is the deleted mark's original hand (`goneBy`); a marker naming an id that is
+      // live or was never on the board, or another hand, leaves no provenance
+      const named = restored?.get(node.id);
+      const was = named ? d.goneBy.get(named.id) : undefined;
+      const from = named && d.gone.has(named.id) && !d.nodes.has(named.id) && was !== undefined && sameHand(dimViewBy(was), named.by) ? named : undefined;
       const fresh: DimFoldNode = { node: copyJson(node) as Record<string, unknown>, by, hsid, addedSeq: seq };
       if (from) {
         // G5 and I-1: the original hand, and who had written into or changed the mark before it was deleted
@@ -425,6 +438,8 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
     }
     case 'delete': {
       if (typeof op.id !== 'string' || !d.nodes.has(op.id)) return false;
+      const del = d.nodes.get(op.id)!;
+      d.goneBy.set(op.id, del.restoredFrom?.by ?? del.by);
       d.nodes.delete(op.id);
       d.gone.add(op.id);
       return true;
@@ -1600,7 +1615,8 @@ export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
     } else if (ok === 'act,principal') {
       const principal = own(o, 'principal');
       const act = own(o, 'act');
-      if (!NON_EMPTY(principal) || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+      // Aegis N-1 (E1 review): the principal is bounded like a stamp's (at most 256 characters)
+      if (!NON_EMPTY(principal) || principal.length > 256 || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
       of = { kind: 'act', principal, act };
     } else return null;
     const out: DimUndoMark = { of, restored: [] };
@@ -1682,11 +1698,38 @@ function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySe
     if (!(f.get(k)! >= seq)) f.set(k, seq);
   };
   try {
-    for (const row of after) {
+    // Judge I-2, Aegis I-5 (E1 review): an earlier undo of THIS set that was itself undone later (a redo) is
+    // neither a continuation nor a later change: that undo's rows and the rows of the undo that reversed them are
+    // left out together (they cancel), so undo, redo, undo reverses the set again. Nothing else is cancelled.
+    const list = [...after];
+    const seqOf = (r: DimRow): number => (Number.isSafeInteger(r.seq) ? r.seq : Number.POSITIVE_INFINITY);
+    const markOf = (r: DimRow): DimUndoMark | null => {
+      const p = opPayloadOf(r);
+      return p && own(p, 'undo') !== undefined ? dimUndoMarkOf(r) : null;
+    };
+    /** the change-sets of earlier undos of `of` whose own set an undo row after them reversed */
+    const redone: DimChangeSet[] = [];
+    if (of) {
+      for (const r of list) {
+        const m = markOf(r);
+        const cs = m && sameSet(m.of, of) ? dimChangeSetOf(r) : null;
+        if (!cs || redone.some((x) => sameSet(x, cs))) continue;
+        if (list.some((z) => seqOf(z) > seqOf(r) && !!markOf(z) && sameSet(markOf(z)!.of, cs))) redone.push(cs);
+      }
+    }
+    const cancelled = (r: DimRow): boolean => {
+      if (redone.length === 0) return false;
+      const cs = dimChangeSetOf(r);
+      if (cs && redone.some((x) => sameSet(x, cs))) return true;
+      const m = markOf(r);
+      return !!m && redone.some((x) => sameSet(x, m.of));
+    };
+    for (const row of list) {
       const p = opPayloadOf(row);
       if (!p) continue;
       const seq = Number.isSafeInteger(row.seq) ? row.seq : Number.POSITIVE_INFINITY;
       if (setSeqs.has(seq)) continue; // a row of the set itself is never a later change
+      if (cancelled(row)) continue;
       const ops = own(p, 'ops');
       const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
       if (Array.isArray(ops)) for (const op of ops) if (isPlainObject(op) && own(op, 'type') === 'delete' && typeof own(op, 'id') === 'string') newest(dels, own(op, 'id') as string, seq);

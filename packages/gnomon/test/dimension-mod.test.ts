@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIM_AUX_KINDS, DIM_KINDS, DIM_REFUSAL_CODES, MOD_ABI_ID, canonicalJson, dimHash, emptyDimState, foldDim, validateDimOps, type DimState } from '@a-company/gnomon-contracts';
+import { DIM_AUX_KINDS, DIM_KINDS, DIM_REFUSAL_CODES, MOD_ABI_ID, canonicalJson, dimAttrDigest, dimHash, emptyDimState, foldDim, validateDimOps, type DimState } from '@a-company/gnomon-contracts';
 import { compatModAbiId, deriveTier, firstPartyPins, isFirstPartyPin, isSupersededPin, supersededPins, supersededPriorModAbiId } from '../src/kernel/manifest/install.js';
 import { readManifest } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
@@ -75,10 +75,10 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     expect(compatModAbiId({ packageHash: h, tier: 'first-party', source: 'package', manifest: m }, MOD_ABI_ID)).toBeNull();
   });
 
-  it('the manifest: seven commands each with declared effects, the four dimension kinds and the two auxiliary kinds, two tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
+  it('the manifest: nine commands each with declared effects, the four dimension kinds and the two auxiliary kinds, two tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
     const m = readManifest(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json')), { tier: 'first-party' }).manifest;
     expect([m.publisher, m.name, m.abi]).toEqual(['gnomon', 'dimension', 'mod-abi:v1']);
-    // S1.4 (Aegis A7): every command declares its effects; only dim.select and dim.check are read-only
+    // S1.4 (Aegis A7): every command declares its effects; only dim.select, dim.check and (E1) dim.seen are read-only
     expect(m.provides?.commands?.map((c) => [c.id, c.effects])).toEqual([
       ['dim.open', ['read', 'write']],
       ['dim.attach', ['read', 'write']],
@@ -87,6 +87,8 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
       ['dim.grant', ['read', 'write']],
       ['dim.select', ['read']],
       ['dim.check', ['read']],
+      ['dim.undo', ['read', 'write']],
+      ['dim.seen', ['read']],
     ]);
     // F1: the two auxiliary kinds are declared here and are NOT in the published kind list
     expect([...(m.provides?.events ?? [])].sort()).toEqual([...Object.values(DIM_KINDS), ...Object.values(DIM_AUX_KINDS)].sort());
@@ -109,7 +111,7 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     }
     const draw = m.provides!.tools!.find((t) => t.name === 'dim-draw')!.schema as { description: string; properties: Record<string, unknown> };
     expect(/Send opId on every draw and reuse the same opId when you retry/.test(draw.description)).toBe(true);
-    expect(Object.keys(draw.properties).sort()).toEqual(['dim', 'opId', 'ops']);
+    expect(Object.keys(draw.properties).sort()).toEqual(['base', 'dim', 'opId', 'ops']);
     expect(Object.keys((m.provides!.tools!.find((t) => t.name === 'dim-view')!.schema as { properties: Record<string, unknown> }).properties).sort()).toEqual(['dim', 'limit', 'since']);
   });
 
@@ -187,7 +189,7 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
       expect(opened).toMatchObject({ ok: true, created: true, dim, title: 'Plan', firstSeq: 1, seq: 1 });
       expect(w.log.rows[0]).toMatchObject({ kind: DIM_KINDS.start, scope: { repo: REPO }, payload: { v: 1, dim, title: 'Plan', attached: [A], opened: 'command', relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } } });
       const op = await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'One' }), rectOp(2), { type: 'move', ids: [ulid(1)], dx: 5, dy: 5 }] });
-      expect(op).toEqual({ ok: true, dim, seq: 2, hash: dimHash(w.log.fold(dim)), applied: 3, refused: [] });
+      expect(op).toEqual({ ok: true, dim, seq: 2, hash: dimHash(w.log.fold(dim)), attr: dimAttrDigest(w.log.fold(dim)), applied: 3, refused: [] });
       expect(Object.keys(w.log.rows[1]!.payload).sort()).toEqual(['dim', 'ops', 'relayedFor', 'v']);
       const closed = await w.run('dim.close', { dim });
       expect(closed).toMatchObject({ ok: true, already: false, seq: 3, ops: 3, nodes: 2 });

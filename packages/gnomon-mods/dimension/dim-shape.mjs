@@ -860,10 +860,10 @@ function copyJson(v, depth = 0) {
   return null;
 }
 function emptyDimState(dim = null) {
-  return { dim, title: "", attached: [], ended: false, nodes: /* @__PURE__ */ new Map(), gone: /* @__PURE__ */ new Set(), seq: 0, ops: 0, unapplied: 0 };
+  return { dim, title: "", attached: [], ended: false, nodes: /* @__PURE__ */ new Map(), gone: /* @__PURE__ */ new Set(), goneBy: /* @__PURE__ */ new Map(), seq: 0, ops: 0, unapplied: 0 };
 }
 function draftOf(s) {
-  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
+  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), goneBy: new Map(s.goneBy ?? []), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
 }
 var NON_EMPTY = (v) => typeof v === "string" && v.length > 0;
 var own = (o, k) => Object.prototype.hasOwnProperty.call(o, k) ? o[k] : void 0;
@@ -890,7 +890,7 @@ function dimHsidOf(state, row) {
 function sameHand(a, b) {
   return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
 }
-var WORDS_KEYS = /* @__PURE__ */ new Set(["text", "label", "title", "refs"]);
+var WORDS_KEYS = /* @__PURE__ */ new Set(["text", "label", "title", "refs", "rel"]);
 function changed(cur, node, by, hsid, seq, words) {
   const out = { ...cur, node, changedBy: by, changedSeq: seq, changedHsid: hsid };
   const original = cur.restoredFrom?.by ?? cur.by;
@@ -910,7 +910,9 @@ function applyOp(d, op, by, hsid, seq, restored) {
     case "add": {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== "string" || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      const from = restored?.get(node.id);
+      const named = restored?.get(node.id);
+      const was = named ? d.goneBy.get(named.id) : void 0;
+      const from = named && d.gone.has(named.id) && !d.nodes.has(named.id) && was !== void 0 && sameHand(dimViewBy(was), named.by) ? named : void 0;
       const fresh = { node: copyJson(node), by, hsid, addedSeq: seq };
       if (from) {
         fresh.restoredFrom = { id: from.id, by: from.by };
@@ -948,6 +950,8 @@ function applyOp(d, op, by, hsid, seq, restored) {
     }
     case "delete": {
       if (typeof op.id !== "string" || !d.nodes.has(op.id)) return false;
+      const del = d.nodes.get(op.id);
+      d.goneBy.set(op.id, del.restoredFrom?.by ?? del.by);
       d.nodes.delete(op.id);
       d.gone.add(op.id);
       return true;
@@ -1638,7 +1642,7 @@ function dimUndoMarkOf(row) {
     } else if (ok === "act,principal") {
       const principal = own(o, "principal");
       const act = own(o, "act");
-      if (!NON_EMPTY(principal) || typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
+      if (!NON_EMPTY(principal) || principal.length > 256 || typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
       of = { kind: "act", principal, act };
     } else return null;
     const out = { of, restored: [] };
@@ -1694,11 +1698,34 @@ function laterOf(after, current, setSeqs, o = {}) {
     if (!(f.get(k) >= seq)) f.set(k, seq);
   };
   try {
-    for (const row of after) {
+    const list = [...after];
+    const seqOf = (r) => Number.isSafeInteger(r.seq) ? r.seq : Number.POSITIVE_INFINITY;
+    const markOf = (r) => {
+      const p = opPayloadOf(r);
+      return p && own(p, "undo") !== void 0 ? dimUndoMarkOf(r) : null;
+    };
+    const redone = [];
+    if (of) {
+      for (const r of list) {
+        const m = markOf(r);
+        const cs = m && sameSet(m.of, of) ? dimChangeSetOf(r) : null;
+        if (!cs || redone.some((x) => sameSet(x, cs))) continue;
+        if (list.some((z) => seqOf(z) > seqOf(r) && !!markOf(z) && sameSet(markOf(z).of, cs))) redone.push(cs);
+      }
+    }
+    const cancelled = (r) => {
+      if (redone.length === 0) return false;
+      const cs = dimChangeSetOf(r);
+      if (cs && redone.some((x) => sameSet(x, cs))) return true;
+      const m = markOf(r);
+      return !!m && redone.some((x) => sameSet(x, m.of));
+    };
+    for (const row of list) {
       const p = opPayloadOf(row);
       if (!p) continue;
       const seq = Number.isSafeInteger(row.seq) ? row.seq : Number.POSITIVE_INFINITY;
       if (setSeqs.has(seq)) continue;
+      if (cancelled(row)) continue;
       const ops = own(p, "ops");
       const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
       if (Array.isArray(ops)) {

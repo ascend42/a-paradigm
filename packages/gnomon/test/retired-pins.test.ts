@@ -155,7 +155,7 @@ describe('RETIRED_FIRST_PARTY_PINS', () => {
     expect(pinned(r)).toBe(now);
     const after = loadMod({ home: r.home, name: DIMENSION, trust: r.auth });
     expect(after).toMatchObject({ state: 'ready', packageHash: now, tier: 'first-party' });
-    expect(after.state === 'ready' && after.manifest.version).toBe('1.1.0');
+    expect(after.state === 'ready' && after.manifest.version).toBe('1.2.0');
   });
 
   it('F1: after an uninstall nothing is pinned, so the retired hash is not exempt as "the tree pinned now": rollback to it is refused', () => {

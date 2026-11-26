@@ -2,6 +2,7 @@
 // dimension row may hold lives here, so the stdio loop (index.mjs) is only plumbing and the rules can be tested
 // without a host. The fold and the validator are the published `dim-shape:v1` (dim-shape.mjs, generated).
 import {
+  DIM_ACT_PATTERN,
   DIM_AGENT_LABEL_PATTERN,
   DIM_FIELDS,
   DIM_ID_PATTERN,
@@ -15,11 +16,17 @@ import {
   DIM_ROW_VERSION,
   DIM_VIEW_PRINCIPAL_PATTERN,
   DIM_Z_PATTERN,
+  dimActOf,
+  dimAttrDigest,
+  dimChangeSetOf,
   dimGrantDefault,
   dimHash,
+  dimRowBy,
+  dimUndoMarkOf,
   dimViewOf,
   dimZPlace,
   emptyDimState,
+  foldDim,
   foldDimRow,
   validateDimOps,
 } from './dim-shape.mjs';
@@ -32,6 +39,15 @@ export const MEMO_CAP = 256;
 export const ANSWERS_CAP = 32;
 /** S1.4 C5 / Aegis M8: accepted ops one session may draw in one turn, across calls, rows and dimensions. */
 export const TURN_OPS = 64;
+/**
+ * S1.4 E1 (Aegis ruling 1, F8): marks of OTHER hands one session may touch in one turn, counted PER ID (a move's
+ * ids each count), charged before the append like TURN_OPS. Of them at most TURN_FOREIGN_DELETES deletes and at
+ * most TURN_FOREIGN_WORDS updates that set or clear text, label, title, refs or rel. "Other hand": the mark's original
+ * hand (`restoredFrom.by`, else `by`) is not the caller's.
+ */
+export const TURN_FOREIGN = 32;
+export const TURN_FOREIGN_DELETES = 16;
+export const TURN_FOREIGN_WORDS = 16;
 /** Sessions the `turns` state key holds; the least recently charged one is evicted (stated residual). */
 export const TURNS_CAP = 256;
 /** `opens`: sessions whose last opened dimension is remembered (the tools' default `dim`). */
@@ -71,7 +87,7 @@ export const KEYFRAME_BUDGET_BYTES = 640 * 1024;
 export const MOD_REFUSAL_FIXES = Object.freeze({
   'not-human-gui': 'Only a person using the Gnomon window can change a dimension.',
   'no-session': 'Open the dimension from a live session; none was named, or the named one is not live.',
-  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op, dim.close, dim.grant, dim.select or dim.check.',
+  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op, dim.close, dim.grant, dim.select, dim.check, dim.undo or dim.seen.',
   'args-bad': 'Send only the listed arguments of this command, each with its listed type.',
   'dim-bad': 'Use dim: followed by a 26-character ULID as the dimension id.',
   'opened-bad': 'Say how the dimension was opened: command, menu or offer.',
@@ -93,13 +109,21 @@ export const MOD_REFUSAL_FIXES = Object.freeze({
   'not-agent-tool': 'Only the agent of a live session can use the board tools.',
   'no-turn': 'The board tools work only inside a turn of the calling session.',
   'no-open-dim': 'This session has no board open. Ask the person to open a board with /board.',
-  'write-not-granted': 'The person has not let this session draw on this board. Ask them to turn on "may draw" for it; dim-view still reads the board.',
+  'write-not-granted': 'The person has not let this session edit this board. Ask them to turn on "may edit" for it; dim-view still reads the board.',
   'turn-budget': 'This turn has used its 64 ops. Stop drawing; the count starts again on the next turn.',
   'call-too-large': 'Send fewer or smaller ops; one call holds at most 4 rows of 16 KiB each.',
   'op-id-bad': 'Use an opId of 1 to 64 characters from A-Z, a-z, 0-9, _ and -.',
   'op-id-reused': 'This opId was already used for a different draw. Use a new opId for new ops.',
   'append-busy': 'The row was not written: the board is taking too many rows this second. Nothing changed for it; send it again in a moment.',
   cancelled: 'The call took too long and was stopped. Rows it had already written stay; read the board again before you retry.',
+  // S1.4 E1 (edit-anything; Luna's E-design words, agent-facing): undo, the stale view and the foreign budget
+  'undo-expired': 'This change is too old to undo in one step; view the board and change the marks yourself.',
+  'undo-nothing': 'Nothing in that change is left to undo; view the board.',
+  'undo-not-allowed': 'You may undo one person\'s change per turn; finish this turn first.',
+  'undo-set-bad': 'That change was not shown to you; view the board and name a change from its changes.',
+  'changed-since': 'This mark changed after the seq you sent as base; view the board again and send its seq as base.',
+  'foreign-budget': 'This turn has changed as many marks of other hands as it may (32, of them 16 removals and 16 rewritten words). Stop changing others\' marks; the count starts again on the next turn.',
+  'not-pinned': 'That change is not standing on this board; nothing was released.',
 });
 export const MOD_REFUSAL_CODES = Object.freeze(Object.keys(MOD_REFUSAL_FIXES));
 
@@ -180,8 +204,19 @@ export function landed(state, kind, payload, stamp, seq) {
   return foldDimRow(state, { seq, kind, payload: { ...payload, relayedFor: stamp } });
 }
 
-/** `oid` (S1.4, Aegis A8): 16 hex of sha256(hsid, 0x00, dim, 0x00, opId), computed by the caller. Never the model's string. */
-export const opPayload = (dim, ok, oid) => ({ v: DIM_ROW_VERSION, dim, ops: ok, ...(oid !== undefined ? { oid } : {}) });
+/**
+ * `oid` (S1.4, Aegis A8): 16 hex of sha256(hsid, 0x00, dim, 0x00, opId), computed by the caller. Never the model's string.
+ * `marks` (S1.4 E1, Aegis ruling 3): `act` (a person's action id, pattern-checked by readArgs or minted by the mod)
+ * and `undo` (built by the mod from its own plan, `undoMarker`). Never from input: no caller passes an input object here.
+ */
+export const opPayload = (dim, ok, oid, marks) => ({
+  v: DIM_ROW_VERSION,
+  dim,
+  ops: ok,
+  ...(oid !== undefined ? { oid } : {}),
+  ...(marks && marks.act !== undefined ? { act: marks.act } : {}),
+  ...(marks && marks.undo !== undefined ? { undo: marks.undo } : {}),
+});
 /** A first start row names the dimension; a reopen row carries NO title (the fold keeps the first one). */
 export const startPayload = (dim, hsid, opened, title) => ({ v: DIM_ROW_VERSION, dim, ...(title !== undefined ? { title } : {}), attached: [hsid], opened });
 export const attachPayload = (dim, hsid) => ({ v: DIM_ROW_VERSION, dim, hsid });
@@ -270,11 +305,14 @@ const REPO = /^repo:[0-9a-f]{16}$/;
 export const COMMAND_ARGS = Object.freeze({
   'dim.open': Object.freeze(['dim', 'title', 'titleFrom', 'opened']),
   'dim.attach': Object.freeze(['dim']),
-  'dim.op': Object.freeze(['dim', 'ops']),
+  'dim.op': Object.freeze(['dim', 'ops', 'act']),
   'dim.close': Object.freeze(['dim']),
   'dim.grant': Object.freeze(['dim', 'write']),
   'dim.select': Object.freeze(['dim', 'ids']),
   'dim.check': Object.freeze(['dim']),
+  // S1.4 E1: a person undoes a change-set, and dismisses a standing notice (Aegis S1 to S3)
+  'dim.undo': Object.freeze(['dim', 'of', 'ids', 'base']),
+  'dim.seen': Object.freeze(['dim', 'of']),
 });
 
 /**
@@ -304,13 +342,35 @@ export function readArgs(commandId, args) {
     out.title = own(a, 'title');
     out.fromSession = from === 'session';
   }
-  if (commandId === 'dim.op') out.ops = own(a, 'ops');
+  if (commandId === 'dim.op') {
+    out.ops = own(a, 'ops');
+    // S1.4 E1 (Aegis ruling 3): `act` is the page's id for ONE action, a ULID and nothing else. `undo`, `restored`
+    // and `of` are not args of dim.op (the closed list above refuses them args-bad): only the mod writes a marker.
+    const act = own(a, 'act');
+    if (act !== undefined && (typeof act !== 'string' || !DIM_ACT_PATTERN.test(act))) return { code: 'args-bad' };
+    if (act !== undefined) out.act = act;
+  }
   if (commandId === 'dim.grant') {
     // the session the grant is FOR is the host-composed `hsid` (the page names it as the focus; the host joins it
     // to a live session). `write` is a boolean and nothing else: a truthy string never grants.
     const write = own(a, 'write');
     if (typeof write !== 'boolean') return { code: 'args-bad' };
     out.write = write;
+  }
+  if (commandId === 'dim.undo' || commandId === 'dim.seen') {
+    const of = readOf(own(a, 'of'));
+    if (!of) return { code: 'args-bad' };
+    out.of = of;
+  }
+  if (commandId === 'dim.undo') {
+    const ids = own(a, 'ids');
+    if (ids !== undefined) {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > SELECT_MAX || new Set(ids).size !== ids.length || !ids.every((x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x))) return { code: 'args-bad' };
+      out.ids = [...ids];
+    }
+    const base = own(a, 'base');
+    if (base !== undefined && (!Number.isSafeInteger(base) || base < 0)) return { code: 'args-bad' };
+    if (base !== undefined) out.base = base;
   }
   if (commandId === 'dim.select') {
     const ids = own(a, 'ids');
@@ -349,8 +409,15 @@ function encodeAux(aux) {
   if (aux && aux.grants instanceof Map) for (const [hsid, g] of aux.grants) if (plain(g) && typeof g.write === 'boolean' && Number.isSafeInteger(g.seq)) grants.push([hsid, g.write, g.seq]);
   const oids = [];
   if (aux && aux.oids instanceof Map) for (const [oid, m] of aux.oids) if (OID.test(oid) && Number.isSafeInteger(m.applied) && Number.isSafeInteger(m.seq)) oids.push([oid, m.applied, m.seq]);
-  return { grants, oids: oids.slice(-MEMO_CAP) };
+  // S1.4 E1 review (Aegis I-2): the change-set keys the history held, so a cold open from this keyframe never
+  // undoes in part a set whose earlier rows the keyframe covers
+  const sets = [];
+  if (aux && aux.sets) for (const k of aux.sets) if (typeof k === 'string' && k.length > 0 && k.length <= SET_KEY_MAX) sets.push(k);
+  return { grants, oids: oids.slice(-MEMO_CAP), sets: sets.slice(-KEYFRAME_SETS) };
 }
+/** Change-set keys a keyframe carries, and the longest one (an hsid of 128 and a turn of `turn:<hsid>/<n>`). */
+export const KEYFRAME_SETS = 512;
+const SET_KEY_MAX = 512;
 function decodeAux(aux) {
   const a = plain(aux);
   if (!a || !Array.isArray(own(a, 'grants')) || !Array.isArray(own(a, 'oids'))) return null;
@@ -365,7 +432,58 @@ function decodeAux(aux) {
     if (!Array.isArray(o) || o.length !== 3 || typeof o[0] !== 'string' || !OID.test(o[0]) || !Number.isSafeInteger(o[1]) || o[1] < 0 || !Number.isSafeInteger(o[2]) || o[2] < 1) return null;
     oids.set(o[0], { applied: o[1], seq: o[2] });
   }
-  return { grants, oids };
+  const sets = own(a, 'sets');
+  if (!Array.isArray(sets) || sets.length > KEYFRAME_SETS || !sets.every((k) => typeof k === 'string' && k.length > 0 && k.length <= SET_KEY_MAX)) return null;
+  return { grants, oids, sets: [...sets] };
+}
+
+/** Keyframe format. v3 (S1.4 E1) adds each node's attribution; a v1 or v2 keyframe is ignored and rebuilt from the log. */
+export const KEYFRAME_VERSION = 3;
+
+/**
+ * A node's attribution as a keyframe item holds it (S1.4 E1; Aegis P5 gate): `null` when the fold holds none, else
+ * an object of own keys only, each present only when the fold holds it: `cb`/`cs`/`ch` (changedBy, changedSeq,
+ * changedHsid), `ob`/`os` (otherBy, otherSeq), `wb`/`ws` (wordsBy, wordsSeq) and `rf` ([id, by], restoredFrom).
+ */
+function kfAttrOf(n) {
+  const a = {};
+  if (n.changedBy !== undefined) (a.cb = n.changedBy), (a.cs = n.changedSeq ?? 0), (a.ch = n.changedHsid ?? null);
+  if (n.otherBy !== undefined) (a.ob = n.otherBy), (a.os = n.otherSeq ?? 0);
+  if (n.wordsBy !== undefined) (a.wb = n.wordsBy), (a.ws = n.wordsSeq ?? 0);
+  if (n.restoredFrom !== undefined) a.rf = [n.restoredFrom.id, n.restoredFrom.by];
+  return Object.keys(a).length > 0 ? a : null;
+}
+const ATTR_KEYS = ['cb', 'cs', 'ch', 'ob', 'os', 'wb', 'ws', 'rf'];
+const seqOk = (v) => Number.isSafeInteger(v) && v >= 0;
+/** The fold fields of a keyframe item's attribution, `{}` for `null`, or `null` when anything about it is wrong. */
+function attrFrom(v) {
+  if (v === null) return {};
+  const a = plain(v);
+  if (!a || Object.keys(a).length === 0 || !Object.keys(a).every((k) => ATTR_KEYS.includes(k))) return null;
+  const out = {};
+  const pair = (byKey, seqKey, byField, seqField) => {
+    const has = Object.hasOwn(a, byKey);
+    if (has !== Object.hasOwn(a, seqKey)) return false;
+    if (!has) return true;
+    const by = byOk(a[byKey]);
+    if (!by || !seqOk(a[seqKey])) return false;
+    out[byField] = by;
+    out[seqField] = a[seqKey];
+    return true;
+  };
+  if (!pair('cb', 'cs', 'changedBy', 'changedSeq') || !pair('ob', 'os', 'otherBy', 'otherSeq') || !pair('wb', 'ws', 'wordsBy', 'wordsSeq')) return null;
+  if (Object.hasOwn(a, 'ch') !== Object.hasOwn(a, 'cb')) return null;
+  if (Object.hasOwn(a, 'ch')) {
+    if (!(a.ch === null || typeof a.ch === 'string')) return null;
+    out.changedHsid = a.ch;
+  }
+  if (Object.hasOwn(a, 'rf')) {
+    const rf = a.rf;
+    const by = Array.isArray(rf) && rf.length === 2 && typeof rf[0] === 'string' ? byOk(rf[1]) : null;
+    if (!by) return null;
+    out.restoredFrom = { id: rf[0], by };
+  }
+  return out;
 }
 
 /**
@@ -374,11 +492,15 @@ function decodeAux(aux) {
  * Keyframe `v: 2` (S1.4): the head also carries `aux`, the write grants (`[hsid, write, seq]`) and the op-id memo
  * (`[oid, applied, seq]`, the newest MEMO_CAP). Both are covered by `sum` and so by the log id: a grant's high-water
  * seq is a seq of ONE log, and a keyframe written for another log is refused whole, grants included.
+ * Keyframe `v: 3` (S1.4 E1): a node item is `['n', id, node, by, hsid, addedSeq, attr]` (`kfAttrOf`), so the sum, and
+ * so the log id, covers attribution too; the head carries `attr` (`dimAttrDigest`) beside `hash`, and a decoded
+ * state must answer both, so a keyframe whose attribution does not match its own digest is refused whole.
  */
 export function encodeKeyframe(state, log, aux) {
   const items = [];
-  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq]);
-  for (const id of state.gone) items.push(['g', id]);
+  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq, kfAttrOf(n)]);
+  // v3: a deleted id with its original hand (`goneBy`, Aegis defence in depth), or null when the fold has none
+  for (const id of state.gone) items.push(['g', id, state.goneBy?.get(id) ?? null]);
   const chunks = [];
   let cur = [];
   let size = 2;
@@ -397,21 +519,22 @@ export function encodeKeyframe(state, log, aux) {
   }
   if (cur.length > 0) chunks.push(cur);
   const meta = { dim: state.dim, title: state.title, attached: [...state.attached], ended: state.ended, ops: state.ops, unapplied: state.unapplied };
-  const head = { v: 2, log, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta, aux: encodeAux(aux) };
+  const head = { v: KEYFRAME_VERSION, log, seq: state.seq, hash: dimHash(state), attr: dimAttrDigest(state), n: chunks.length, bytes: total, meta, aux: encodeAux(aux) };
   return { head: { ...head, sum: sumOf(JSON.stringify([head, chunks])) }, chunks };
 }
 
 /**
  * What a stored keyframe holds, `{ state, grants, oids }`, or `null` when anything about it is wrong (it is then
  * ignored and rebuilt from the log). A `v: 1` keyframe (S1.3) carries no grants and no memo: it is ignored, never
- * read as "no grant rows".
+ * read as "no grant rows". A `v: 2` keyframe (S1.4 P2) carries no attribution: it is ignored too, never read as
+ * "nobody changed anything" (the view, `attr` and the undo planner's `restoredFrom` would all misattribute).
  */
 export function decodeKeyframe(headIn, chunks, dim, log) {
   try {
     const h = plain(headIn);
     // a keyframe is a fold of ONE log's rows: another log's seqs mean nothing here (Aegis S1.3 L1)
     if (!h || typeof log !== 'string' || own(h, 'log') !== log) return null;
-    if (own(h, 'v') !== 2 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
+    if (own(h, 'v') !== KEYFRAME_VERSION || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'attr') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
     const m = plain(own(h, 'meta'));
     if (!m || own(m, 'dim') !== dim || typeof own(m, 'title') !== 'string' || typeof own(m, 'ended') !== 'boolean') return null;
     const attached = own(m, 'attached');
@@ -419,24 +542,34 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
     if (!Array.isArray(chunks) || chunks.length !== own(h, 'n')) return null;
     const aux = decodeAux(own(h, 'aux'));
     if (!aux) return null;
-    const head = { v: 2, log, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied }, aux: encodeAux(aux) };
+    const head = { v: KEYFRAME_VERSION, log, seq: h.seq, hash: h.hash, attr: h.attr, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied }, aux: encodeAux(aux) };
     if (sumOf(JSON.stringify([head, chunks])) !== h.sum) return null;
     const nodes = new Map();
     const gone = new Set();
+    const goneBy = new Map();
     for (const chunk of chunks) {
       if (!Array.isArray(chunk)) return null;
       for (const it of chunk) {
         if (!Array.isArray(it) || typeof it[1] !== 'string') return null;
-        if (it[0] === 'g') gone.add(it[1]);
+        if (it[0] === 'g') {
+          if (it.length !== 3) return null;
+          const by = it[2] === null ? null : byOk(it[2]);
+          if (it[2] !== null && !by) return null;
+          gone.add(it[1]);
+          if (by) goneBy.set(it[1], by);
+        }
         else if (it[0] === 'n') {
           const by = byOk(it[3]);
-          if (!plain(it[2]) || !by || !(it[4] === null || typeof it[4] === 'string') || !Number.isSafeInteger(it[5])) return null;
-          nodes.set(it[1], { node: it[2], by, hsid: it[4], addedSeq: it[5] });
+          if (it.length !== 7 || !plain(it[2]) || !by || !(it[4] === null || typeof it[4] === 'string') || !Number.isSafeInteger(it[5])) return null;
+          const attr = attrFrom(it[6]);
+          if (attr === null) return null;
+          nodes.set(it[1], { node: it[2], by, hsid: it[4], addedSeq: it[5], ...attr });
         } else return null;
       }
     }
-    const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
-    return dimHash(state) === h.hash ? { state, grants: aux.grants, oids: aux.oids } : null;
+    const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, goneBy, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
+    // the content and adder by the published hash, the attribution by the published digest (Aegis G7, P5 gate)
+    return dimHash(state) === h.hash && dimAttrDigest(state) === h.attr ? { state, grants: aux.grants, oids: aux.oids, sets: aux.sets } : null;
   } catch {
     return null;
   }
@@ -483,7 +616,7 @@ export function toolActorOf(relayedFor) {
 
 export const TOOL_INPUT = Object.freeze({
   'dim-view': Object.freeze(['dim', 'since', 'limit']),
-  'dim-draw': Object.freeze(['dim', 'ops', 'opId']),
+  'dim-draw': Object.freeze(['dim', 'ops', 'opId', 'base']),
 });
 
 /**
@@ -518,6 +651,10 @@ export function readToolInput(tool, input) {
   if (!Array.isArray(ops)) return { code: 'args-bad' };
   out.ops = ops;
   if (opId !== undefined) out.opId = opId;
+  // S1.4 E1 (F4, Aegis ruling 6): optional; the seq of the caller's view. Checked per id against the fold.
+  const base = own(a, 'base');
+  if (base !== undefined && (!Number.isSafeInteger(base) || base < 0)) return { code: 'args-bad' };
+  if (base !== undefined) out.base = base;
   return { args: out };
 }
 
@@ -532,18 +669,94 @@ export function budgetLeft(turns, actor) {
   return Math.max(0, TURN_OPS - t.used);
 }
 
-/** The `turns` state key as a list `[hsid, turn, used, countRows]` (never an object keyed by hsid), and back. */
+/** The foreign sub-budgets this session has left in this turn (as `budgetLeft`). */
+export function foreignLeft(turns, actor) {
+  const t = turns.get(actor.hsid);
+  const full = { touch: TURN_FOREIGN, del: TURN_FOREIGN_DELETES, words: TURN_FOREIGN_WORDS };
+  if (!t || actor.turn > t.turn) return full;
+  if (actor.turn < t.turn) return { touch: 0, del: 0, words: 0 };
+  return { touch: Math.max(0, TURN_FOREIGN - (t.foreign ?? 0)), del: Math.max(0, TURN_FOREIGN_DELETES - (t.fdel ?? 0)), words: Math.max(0, TURN_FOREIGN_WORDS - (t.fwords ?? 0)) };
+}
+
+const WORDS_FIELDS = ['text', 'label', 'title', 'refs', 'rel'];
+/**
+ * What one accepted op charges to the foreign sub-budgets, from the state BEFORE the call (a mark this call adds
+ * is the caller's own): `{touch, del, words}`, per id.
+ */
+export function foreignCharge(state, op, hand) {
+  const out = { touch: 0, del: 0, words: 0 };
+  const o = plain(op);
+  if (!o) return out;
+  const type = own(o, 'type');
+  const ids = type === 'move' && Array.isArray(own(o, 'ids')) ? o.ids : type === 'update' || type === 'delete' ? [own(o, 'id')] : [];
+  for (const id of ids) {
+    const n = typeof id === 'string' ? state.nodes.get(id) : undefined;
+    if (!n) continue;
+    const original = n.restoredFrom?.by ?? n.by;
+    if (original.cls === hand.cls && original.principal === hand.principal && original.agent === hand.agent) continue;
+    out.touch += 1;
+    if (type === 'delete') out.del += 1;
+    const patch = type === 'update' ? plain(own(o, 'patch')) : null;
+    if (patch && Object.keys(patch).some((k) => WORDS_FIELDS.includes(k))) out.words += 1;
+  }
+  return out;
+}
+
+/**
+ * F4 / Aegis ruling 6: an update, move or delete of a mark changed or (re-)added after `base` is refused
+ * `changed-since`, per op (a move: when any of its ids is). Read from the fold's own seqs, O(1) per id.
+ */
+export function changedSince(state, op, base) {
+  const o = plain(op);
+  if (!o) return false;
+  const type = own(o, 'type');
+  const ids = type === 'move' && Array.isArray(own(o, 'ids')) ? o.ids : type === 'update' || type === 'delete' ? [own(o, 'id')] : [];
+  for (const id of ids) {
+    const n = typeof id === 'string' ? state.nodes.get(id) : undefined;
+    if (n && Math.max(n.addedSeq ?? 0, n.changedSeq ?? 0) > base) return true;
+  }
+  return false;
+}
+
+/**
+ * The `turns` state key as a list `[hsid, turn, used, countRows, foreign, foreignDeletes, foreignWords]` (never an
+ * object keyed by hsid), and back. The S1.4 P2 four-element form still decodes (no foreign use yet).
+ */
 export function encodeTurns(turns) {
-  return [...turns].map(([h, t]) => [h, t.turn, t.used, t.counts]);
+  return [...turns].map(([h, t]) => [h, t.turn, t.used, t.counts, t.foreign ?? 0, t.fdel ?? 0, t.fwords ?? 0]);
 }
 export function decodeTurns(v) {
   const out = new Map();
   if (!Array.isArray(v)) return out;
   for (const e of v.slice(-TURNS_CAP)) {
-    if (!Array.isArray(e) || e.length !== 4 || !nonEmpty(e[0], 128) || !Number.isSafeInteger(e[1]) || !Number.isSafeInteger(e[2]) || !Number.isSafeInteger(e[3])) continue;
-    out.set(e[0], { turn: e[1], used: Math.min(Math.max(e[2], 0), TURN_OPS), counts: Math.max(e[3], 0) });
+    if (!Array.isArray(e) || (e.length !== 4 && e.length !== 7) || !nonEmpty(e[0], 128) || !e.slice(1).every((x) => Number.isSafeInteger(x))) continue;
+    const f = e.length === 7 ? e : [0, 0, 0, 0, 0, 0, 0];
+    out.set(e[0], { turn: e[1], used: Math.min(Math.max(e[2], 0), TURN_OPS), counts: Math.max(e[3], 0), foreign: Math.min(Math.max(f[4], 0), TURN_FOREIGN), fdel: Math.min(Math.max(f[5], 0), TURN_FOREIGN_DELETES), fwords: Math.min(Math.max(f[6], 0), TURN_FOREIGN_WORDS) });
   }
   return out;
+}
+
+/**
+ * The view's byte bound (S1.4 E1, carried from the E0 review; Judge I-3): a 500-node page with full attribution
+ * measured 294,752 bytes as plain hands (108,752 without), past the bridge's 256 KiB result cap. So:
+ *  - attribution is COMPACT: `changedBy`, `otherBy`, `wordsBy` and `restoredFrom.by` are indices into the answer's
+ *    `hands` list (each hand once, as `dimViewBy` bounds it); `by` stays the hand itself;
+ *  - the WHOLE answer (fence included) is held under VIEW_ANSWER_BYTES, counted as the bridge's escaping makes it
+ *    (`bridgeBytes`); nodes past it are cut (`truncated`), and a change list over VIEW_CHANGES_BYTES is a reset.
+ */
+export const VIEW_ANSWER_BYTES = 240 * 1024;
+export const VIEW_CHANGES_BYTES = 64 * 1024;
+/** The fence around a tool result (mcp-bridge.ts fenceBridgeResult): its tag, sentence and close, with room to spare. */
+const VIEW_FENCE_BYTES = 1024;
+const BRIDGE_ESCAPED = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}<]/gu;
+/**
+ * The UTF-8 bytes of a JSON text after the bridge's escaping (`escapeBridgeJson`): every Cc, Cf, Zl and Zp code
+ * point and every `<` becomes `\uXXXX` per UTF-16 unit (6 bytes each).
+ */
+export function bridgeBytes(json) {
+  let n = utf8.encode(json).length;
+  for (const m of json.matchAll(BRIDGE_ESCAPED)) n += 6 * m[0].length - utf8.encode(m[0]).length;
+  return n;
 }
 
 /** A stroke is shown as its point count and its box, never its point list (H1: an integer list can carry an encoding). */
@@ -574,9 +787,15 @@ function strokeView(n) {
 export function viewAnswer(state, o) {
   const v = dimViewOf(state);
   const all = v.nodes.map((n) => (n.kind === 'stroke' ? strokeView(n) : n));
-  const pick = o.touched ? all.filter((n) => o.touched.has(n.id)) : all;
-  const nodes = pick.slice(0, o.limit);
-  return {
+  // Aegis P-3: a change list past its own bound is a reset (the whole board again)
+  let changes = o.changes;
+  let touched = o.touched;
+  if (Array.isArray(changes) && bridgeBytes(JSON.stringify(changes)) > VIEW_CHANGES_BYTES) {
+    changes = 'reset';
+    touched = undefined;
+  }
+  const pick = touched ? all.filter((n) => touched.has(n.id)) : all;
+  const head = {
     v: 1,
     dim: v.dim,
     title: v.title,
@@ -585,15 +804,64 @@ export function viewAnswer(state, o) {
     open: !state.ended,
     mayDraw: o.mayDraw,
     budgetLeft: o.budgetLeft,
-    nodes,
+    nodes: [],
+    hands: [],
     legend: v.legend,
     selection: o.selection,
-    ...(o.changes !== undefined ? { changes: o.changes } : {}),
+    ...(changes !== undefined ? { changes } : {}),
+    truncated: { nodes: pick.length },
+  };
+  // Judge I-3: ONE answer budget, measured as the bridge hands it over (its escaping), everything counted: the
+  // head, the change list, the legend, the selection and the fence; then each node in z order with the hands it
+  // adds (hands are built AFTER the cut, from the nodes that are sent)
+  let used = bridgeBytes(JSON.stringify(head)) + VIEW_FENCE_BYTES;
+  const hands = [];
+  const keys = new Map();
+  const nodes = [];
+  for (const n of pick.slice(0, o.limit)) {
+    const added = [];
+    const ix = (by) => {
+      const k = JSON.stringify([by.cls, by.principal, by.agent ?? null]);
+      if (!keys.has(k)) {
+        keys.set(k, hands.length + added.length);
+        added.push({ k, by });
+      }
+      return keys.get(k);
+    };
+    let c = n;
+    if (n.changedBy !== undefined || n.otherBy !== undefined || n.wordsBy !== undefined || n.restoredFrom !== undefined) {
+      c = { ...n };
+      for (const f of ['changedBy', 'otherBy', 'wordsBy']) if (c[f] !== undefined) c[f] = ix(c[f]);
+      if (c.restoredFrom !== undefined) c.restoredFrom = { id: c.restoredFrom.id, by: ix(c.restoredFrom.by) };
+    }
+    const cost = bridgeBytes(JSON.stringify(c)) + 1 + added.reduce((a, h) => a + bridgeBytes(JSON.stringify(h.by)) + 1, 0);
+    if (used + cost > VIEW_ANSWER_BYTES) {
+      for (const h of added) keys.delete(h.k);
+      break;
+    }
+    used += cost;
+    for (const h of added) hands.push(h.by);
+    nodes.push(c);
+  }
+  const { nodes: _n, hands: _h, truncated: _t, changes: _c, ...rest } = head;
+  return {
+    ...rest,
+    nodes,
+    ...(hands.length > 0 ? { hands } : {}),
+    legend: v.legend,
+    selection: o.selection,
+    ...(changes !== undefined ? { changes } : {}),
     ...(pick.length > nodes.length ? { truncated: { nodes: pick.length } } : {}),
   };
 }
 
 const idOk = (x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x);
+const HSID_SHOWN = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
+/** May a change-set's strings be shown to a model (the view's patterns: an hsid, a principal, a ULID act)? */
+function ofShown(cs) {
+  if (cs.kind === 'act') return DIM_VIEW_PRINCIPAL_PATTERN.test(cs.principal) && DIM_ACT_PATTERN.test(cs.act);
+  return HSID_SHOWN.test(cs.hsid) && cs.turn.length <= 160;
+}
 /**
  * Change entries from op rows (already in seq order, this dimension only): ids only, each list bounded by what one
  * row may hold, the hand from the row's stamp (`byOf(row)`). `null` when there are more than CHANGES_MAX entries:
@@ -604,6 +872,14 @@ export function changesOf(rows, byOf) {
   const touched = new Set();
   const entries = rows.map((row) => {
     const e = { seq: row.seq, by: byOf(row), added: [], updated: [], moved: [], deleted: [] };
+    // S1.4 E1 (Aegis ruling 5): the change-set the row belongs to, so a later undo can name it from this view, and
+    // `undo: {of}` when the row is an honoured undo (an agent then sees its turn was undone and does not redraw it)
+    const r = { seq: row.seq, kind: DIM_KINDS.op, payload: row.payload };
+    const cs = dimChangeSetOf(r);
+    // Aegis N-1: a set's strings are shown only in their patterns, like `by` (else the entry carries none)
+    if (cs && ofShown(cs)) e.set = ofOf(cs);
+    const mark = Object.hasOwn(row.payload, 'undo') ? dimUndoMarkOf(r) : null;
+    if (mark && ofShown(mark.of)) e.undo = { of: ofOf(mark.of) };
     const ops = Array.isArray(own(row.payload, 'ops')) ? row.payload.ops.slice(0, DIM_LIMITS.opsPerRow) : [];
     for (const op of ops) {
       const o = plain(op);
@@ -780,4 +1056,265 @@ export function canonicalText(v) {
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalText(v[k])}`).join(',')}}`;
   }
   return JSON.stringify(v) ?? 'null';
+}
+
+/* ── change-sets, checkpoints and the recent-rows ring (S1.4 E1; Arky §3.2; Aegis G6, N1) ─────────────── */
+
+/** Change-sets one loaded dimension keeps a checkpoint for (the state just before the set's first row). */
+export const UNDO_SETS = 32;
+/** Op rows of one loaded dimension kept in the ring (payload and stamp, for the planner's `after`). */
+export const UNDO_ROWS = 512;
+/** Rows the ring may keep past UNDO_ROWS while a PINNED set still needs them; past it even a pinned set goes. */
+export const UNDO_ROWS_PINNED = 2048;
+/** Pinned sets per dimension (G6; Luna's notice cap, both kinds together): a ninth unpins the oldest pinned set. */
+export const UNDO_PINS = 8;
+/** Checkpoint Map entries (nodes + deleted ids) the whole mod keeps (G6): past it the oldest unpinned set goes first. */
+export const UNDO_ENTRIES_MAX = 1_000_000;
+/** A person "has the board open" while a command of theirs for it came within this long (agent-on-agent pins). */
+export const PRESENCE_MS = 10 * 60 * 1000;
+
+/** The key of a change-set, `dimChangeSetOf`'s identity as one string (a person's is `(principal, act)`, never act alone). */
+export function setKey(cs) {
+  return cs.kind === 'act' ? `act\u0000${cs.principal}\u0000${cs.act}` : `turn\u0000${cs.hsid}\u0000${cs.turn}`;
+}
+/** A change-set as an `of` (the marker's and the commands' form). */
+export const ofOf = (cs) => (cs.kind === 'act' ? { principal: cs.principal, act: cs.act } : { hsid: cs.hsid, turn: cs.turn });
+
+/**
+ * `of` as a command names it: exactly `{hsid, turn}` (turn `turn:<hsid>/<n>`) or `{principal, act}` (a ULID act);
+ * own keys only. Returns the change-set or null. Read the way `dimUndoMarkOf` reads a marker's `of`.
+ */
+export function readOf(v) {
+  const o = plain(v);
+  if (!o) return null;
+  const keys = Object.keys(o).sort().join(',');
+  if (keys === 'hsid,turn') {
+    const hsid = own(o, 'hsid');
+    const turn = own(o, 'turn');
+    if (!nonEmpty(hsid, 128) || typeof turn !== 'string' || !turn.startsWith(`turn:${hsid}/`) || !/^[1-9][0-9]{0,14}$/.test(turn.slice(`turn:${hsid}/`.length))) return null;
+    return { kind: 'turn', hsid, turn };
+  }
+  if (keys === 'act,principal') {
+    const principal = own(o, 'principal');
+    const act = own(o, 'act');
+    if (!nonEmpty(principal, 256) || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+    return { kind: 'act', principal, act };
+  }
+  return null;
+}
+
+/**
+ * A fresh history for one loaded fold. MEMORY ONLY: never state or a keyframe, dropped with the fold (G6). `before`:
+ * the change-set keys of the op rows the cold open folded (a set seen there is held from no row, never in part).
+ */
+export function emptyHistory(log, before) {
+  const h = { log, rows: [], sets: new Map(), pins: [], entries: 0, presentAt: -Infinity, before: new Set(), pending: new Map() };
+  for (const k of before ?? []) noteStraddle(h, k);
+  return h;
+}
+
+const handSame = (a, b) => !!a && !!b && a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
+const checkpointSize = (s) => s.nodes.size + s.gone.size + (s.goneBy ? s.goneBy.size : 0);
+
+/**
+ * Note one op row that LANDED (its seq returned, or read from the log), with the state just before it. Opens a
+ * change-set at its first row with that state as the checkpoint (a reference: a fold is replaced, never mutated),
+ * marks what the set touched, pins it (G6) and applies the per-dimension bounds. `now` is the caller's clock.
+ * `after` (a catch-up stretch): a later state, read only for the hand of a node `before` does not hold.
+ * Returns the keys of the sets this note evicted.
+ */
+export function noteHistoryRow(h, before, row, now, after) {
+  const r = { seq: row.seq, kind: DIM_KINDS.op, payload: row.payload };
+  const cs = dimChangeSetOf(r);
+  const key = cs ? setKey(cs) : null;
+  h.rows.push({ ...r, key });
+  if (cs) {
+    let set = h.sets.get(key);
+    if (!set) {
+      // `straddles`: the set had rows before this fold was opened (its earlier rows are not held): never planned in part
+      set = { key, cs, firstSeq: r.seq, seqs: [], before, pinned: false, offered: false, human: false, other: false, undidPerson: false, straddles: h.before.has(key) };
+      h.sets.set(key, set);
+      h.entries += checkpointSize(before);
+    }
+    set.seqs.push(r.seq);
+    const hand = dimRowBy(r);
+    const ops = Array.isArray(own(r.payload, 'ops')) ? r.payload.ops : [];
+    for (const op of ops) {
+      const o = plain(op);
+      if (!o) continue;
+      const t = own(o, 'type');
+      const ids = t === 'move' && Array.isArray(own(o, 'ids')) ? o.ids : t === 'update' || t === 'delete' ? [own(o, 'id')] : [];
+      for (const id of ids) {
+        // a node's hand never changes after its add: any state that holds it answers (`after` for a catch-up stretch)
+        const n = typeof id === 'string' ? (before.nodes.get(id) ?? after?.nodes.get(id)) : undefined;
+        if (!n) continue;
+        const original = n.restoredFrom?.by ?? n.by;
+        if (handSame(original, hand)) continue;
+        set.other = true;
+        if (original.cls === 'human') set.human = true;
+      }
+    }
+    const mark = Object.hasOwn(r.payload, 'undo') ? dimUndoMarkOf(r) : null;
+    if (mark && mark.of.kind === 'act') set.undidPerson = true;
+    // Aegis N-a: a continuation must never add rows to an act someone has since undone
+    if (mark && mark.of.kind === 'act') for (const [k, p] of h.pending) if (p.act === mark.of.act && p.principal === mark.of.principal) h.pending.delete(k);
+    offerPin(h, set, now);
+  }
+  return trimHistory(h);
+}
+
+/**
+ * Pin a set the person still needs (G6; the orchestrator's ruling): one that touched a person's marks or undid a
+ * person's action, and an agent's set that touched another hand's marks while a person has the board open. A
+ * ninth pin unpins the oldest pinned set (it stays undoable until normal eviction, N1).
+ */
+function offerPin(h, set, now) {
+  // a set released once (pushed out by a newer pin, or dismissed) is never pinned again (Judge I-1: no churn)
+  if (set.pinned || set.released) return;
+  const present = now - h.presentAt <= PRESENCE_MS;
+  const want = set.human || set.undidPerson || (set.cs.kind === 'turn' && set.other && present);
+  if (set.cs.kind === 'turn' && set.other && present) set.offered = true;
+  if (!want) return;
+  set.pinned = true;
+  h.pins.push(set.key);
+  // Probe F1: over the cap, the oldest pin that is NOT a person's (touched no person's mark, undid no person's
+  // action) goes first; a person's pin is pushed out only by another person's pin
+  const personal = (s) => s.human || s.undidPerson;
+  while (h.pins.length > UNDO_PINS) {
+    let i = h.pins.findIndex((k) => !personal(h.sets.get(k)));
+    if (i < 0) i = 0; // every pin is a person's: the oldest goes (the new one is a person's too, or it was taken)
+    const [k] = h.pins.splice(i, 1);
+    const old = h.sets.get(k);
+    if (old) (old.pinned = false), (old.released = true);
+  }
+}
+
+/** A person's command for this dimension came now: agent-on-agent sets that landed while nobody looked are pinned. */
+export function notePresence(h, now) {
+  h.presentAt = now;
+  for (const set of h.sets.values()) if (!set.pinned && !set.offered && set.cs.kind === 'turn' && set.other) offerPin(h, set, now);
+}
+
+/** Release one pinned set (dim.seen, or the person's undo of it). True when it was pinned. */
+export function unpinSet(h, key) {
+  const set = h.sets.get(key);
+  if (!set || !set.pinned) return false;
+  set.pinned = false;
+  set.offered = true;
+  set.released = true;
+  h.pins = h.pins.filter((k) => k !== key);
+  return true;
+}
+
+/** Drop one set and its checkpoint. */
+export function evictSet(h, key) {
+  const set = h.sets.get(key);
+  if (!set) return;
+  h.sets.delete(key);
+  // Judge I-4: a later row of an evicted set opens no new, partial set: the key is held as straddling (bounded)
+  noteStraddle(h, key);
+  h.entries -= checkpointSize(set.before);
+  if (set.pinned) h.pins = h.pins.filter((k) => k !== key);
+}
+
+/** Keys a history holds as straddling (a set held from no row): the oldest goes past it. */
+export const STRADDLE_MAX = 1024;
+export function noteStraddle(h, key) {
+  h.before.delete(key);
+  h.before.add(key);
+  while (h.before.size > STRADDLE_MAX) h.before.delete(h.before.values().next().value);
+}
+/** The keys a keyframe of this history carries: the held sets first, then the newest straddling keys. */
+export function keyframeSets(h) {
+  if (!h) return [];
+  const out = [...h.sets.keys()];
+  for (const k of [...h.before].reverse()) {
+    if (out.length >= KEYFRAME_SETS) break;
+    if (!out.includes(k)) out.push(k);
+  }
+  return out.slice(0, KEYFRAME_SETS);
+}
+
+/** The per-dimension bounds: UNDO_SETS sets (the oldest unpinned first), UNDO_ROWS rows (UNDO_ROWS_PINNED for pins). */
+function trimHistory(h) {
+  const gone = [];
+  const oldest = (pinned) => {
+    let best = null;
+    for (const s of h.sets.values()) if (s.pinned === pinned && (best === null || s.firstSeq < best.firstSeq)) best = s;
+    return best;
+  };
+  while (h.sets.size > UNDO_SETS) {
+    const s = oldest(false) ?? oldest(true);
+    gone.push(s.key);
+    evictSet(h, s.key);
+  }
+  // rows older than every kept set's first row are needed by nothing
+  let need = Infinity;
+  for (const s of h.sets.values()) need = Math.min(need, s.firstSeq);
+  let cut = 0;
+  while (cut < h.rows.length && h.rows[cut].seq < need) cut++;
+  // the ring: past UNDO_ROWS, a row goes with every set that needs it, unpinned first; pinned sets hold up to UNDO_ROWS_PINNED
+  while (h.rows.length - cut > UNDO_ROWS) {
+    const pinnedNeed = Math.min(Infinity, ...[...h.sets.values()].filter((s) => s.pinned).map((s) => s.firstSeq));
+    if (h.rows[cut].seq >= pinnedNeed && h.rows.length - cut <= UNDO_ROWS_PINNED) {
+      break;
+    }
+    const dropped = h.rows[cut].seq;
+    cut++;
+    for (const s of [...h.sets.values()]) if (s.firstSeq <= dropped) (gone.push(s.key), evictSet(h, s.key));
+  }
+  if (cut > 0) h.rows.splice(0, cut);
+  return gone;
+}
+
+/**
+ * The planner's input for one held set: its rows oldest first, each with the state just before it (folded forward
+ * from the checkpoint through the ring, one copy per set row), and every other ring row after the set's first row.
+ * `null` when the ring does not reach the set's first row (it was trimmed).
+ */
+export function setRowsOf(h, key) {
+  const set = h.sets.get(key);
+  if (!set || set.straddles) return null;
+  const i0 = h.rows.findIndex((r) => r.seq === set.firstSeq);
+  if (i0 < 0) return null;
+  const rows = [];
+  const after = [];
+  let state = set.before;
+  let pending = [];
+  for (let i = i0; i < h.rows.length; i++) {
+    const r = h.rows[i];
+    if (r.key === key) {
+      // one linear fold per stretch between two set rows (one state copy per set row, never one per ring row)
+      if (pending.length > 0) state = foldDim(pending, undefined, state);
+      rows.push({ before: state, ops: Array.isArray(own(r.payload, 'ops')) ? r.payload.ops : [], seq: r.seq });
+      pending = [{ seq: r.seq, kind: r.kind, payload: r.payload }];
+    } else {
+      pending.push({ seq: r.seq, kind: r.kind, payload: r.payload });
+      after.push({ seq: r.seq, kind: r.kind, payload: r.payload });
+    }
+  }
+  return { set, rows, after };
+}
+
+
+/**
+ * A catch-up's op rows split into stretches (S1.4 E1): each stretch starts at a row that opens a change-set this
+ * history does not hold yet, so the state at the stretch's start is that set's checkpoint. Only the last UNDO_SETS
+ * openings get a stretch of their own (earlier ones would be evicted anyway); their sets are noted as straddling.
+ * Returns `{ cuts: Set<index> , straddle: Set<key> }` over `rows`.
+ */
+export function catchUpCuts(h, rows) {
+  const opens = [];
+  const seen = new Set(h.sets.keys());
+  rows.forEach((row, i) => {
+    if (row.kind !== DIM_KINDS.op) return;
+    const cs = dimChangeSetOf(row);
+    if (!cs) return;
+    const k = setKey(cs);
+    if (seen.has(k)) return;
+    seen.add(k);
+    opens.push({ i, k });
+  });
+  const keep = opens.slice(-UNDO_SETS);
+  return { cuts: new Set(keep.map((o) => o.i)), straddle: new Set(opens.slice(0, opens.length - keep.length).map((o) => o.k)) };
 }
