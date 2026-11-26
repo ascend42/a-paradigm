@@ -154,7 +154,7 @@ components:
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   dimension-mod:
     description: >-
-      #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3, S1.4 E1; first-party, 1.2.0) -
+      #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3, S1.4 E1, E2; first-party, 1.2.0) -
       packages/gnomon-mods/dimension, id gnomon.dimension: the ONE writer of
       dimension rows. Nine commands, each declaring effects (dim.open,
       dim.attach, dim.op, dim.close, dim.grant, dim.undo read+write; dim.select,
@@ -174,9 +174,19 @@ components:
       changes carry set and undo, attribution compact (hands indices) within
       one bridge-escaped answer budget (240 KiB); keyframe v3 carries attribution, goneBy
       and the history's set keys (v1/v2 ignored). Tests: test/dimension-edit.test.ts.
+      S1.4 E2: tool dim-undo{dim?, of, ids?, opId?} (read, write) through
+      undoCore as the calling agent; symmetric per the founder (own turn,
+      another agent's, a person's action; Aegis H1/H2 not adopted). Order:
+      grant, op-id memo (shared with dim-draw), named-from-view (shownTo,
+      else undo-set-bad), one person set per agent turn (undo-not-allowed),
+      budget; every op charged to the turn and per id to the foreign
+      sub-budgets inside fit before the first append (re-add of another
+      hand's mark = 1 touch), over budget answers more, refunds only for ops
+      never written; grant re-checked between rows. Tests:
+      test/dimension-undo-tool.test.ts.
       It declares the four modns.gnomon.dimension.* kinds and the two
-      auxiliary ones (grant, draw.refused); tools dim-view (read) and dim-draw
-      (read, write) for an attached session's agent (S1.4: see below); no view, keybinding,
+      auxiliary ones (grant, draw.refused); tools dim-view (read), dim-draw
+      and dim-undo (read, write) for an attached session's agent (S1.4: see below); no view, keybinding,
       offer, capability or egress. model.mjs is pure: actorOf (a human only
       for a host stamp with surface gui and no agent), apply(state, ops,
       actor) (the one entry: validateDimOps, rows built from its accepted
