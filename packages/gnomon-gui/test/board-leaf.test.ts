@@ -169,6 +169,8 @@ describe('design keep_words (design-foot): case, colour and contractions', () =>
     expect(KEEP_COPY.dropped).toBe('Some marks may be missing here · the saved board has them');
     expect(KEEP_COPY.wordsGone).toBe('The words you were typing weren’t saved');
     expect([KEEP_COPY.wordsAndChangesGone(1), KEEP_COPY.wordsAndChangesGone(3)]).toEqual(['Your words and one change weren’t saved', 'Your words and 3 changes weren’t saved']);
+    expect(KEEP_COPY.wordsGoneWith('hel\n\n  lo')).toBe('The words you were typing weren’t saved · “hel lo”');
+    expect(KEEP_COPY.wordsGoneWith('x'.repeat(40))).toBe(`The words you were typing weren’t saved · “${'x'.repeat(23)}…”`);
     expect([KEEP_COPY.changesGone(1), KEEP_COPY.changesGone(2)]).toEqual(['One change on the board wasn’t saved', '2 changes on the board weren’t saved']);
     for (const q of [KEEP_COPY.opening, KEEP_COPY.folding, KEEP_COPY.saving]) expect(q).toBe(q.toLowerCase());
     const stated = Object.values(KEEP_COPY).map((v) => (typeof v === 'function' ? v(2) : v)).filter((v) => ![KEEP_COPY.opening, KEEP_COPY.folding, KEEP_COPY.saving].includes(v as never));

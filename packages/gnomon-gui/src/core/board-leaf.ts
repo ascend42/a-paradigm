@@ -172,7 +172,8 @@ export const KEEP_COPY = {
   wordsGone: 'The words you were typing weren’t saved',
   // (aegis F1: a session switch cannot be refused; the words that went are named by their first characters)
   wordsGoneWith: (words: string): string => {
-    const w = [...String(words).trim()];
+    // (aegis re-check: whitespace collapsed, so a newline in the words never breaks the toast's one line)
+    const w = [...String(words).replace(/\s+/g, ' ').trim()];
     return `The words you were typing weren’t saved · “${w.length > 24 ? `${w.slice(0, 23).join('')}…` : w.join('')}”`;
   },
   reconnected: 'Reconnected',

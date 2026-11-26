@@ -332,9 +332,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
 
   /** The leaf is gone (its session destroyed it, or is about to): the dock's own part. */
   /** Words held by a too-short board that a leave is about to take: said by their first characters, never silently (aegis F1). */
-  function sayHeldWordsGone(c: { leaf: BoardLeaf }): void {
+  function sayHeldWordsGone(c: { leaf: BoardLeaf }): boolean {
     const words = c.leaf.holdsWords() ? c.leaf.typed() : null;
     if (words) d.say(KEEP_COPY.wordsGoneWith(words), 'warn');
+    return !!words;
   }
   function drop(): void {
     const c = cur;
@@ -388,11 +389,11 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       return;
     }
     if (e.type !== 'destroyed') return;
-    if (e.why !== 'link' && held && held.dim === e.session.dim) dropWords();
     // aegis F1 gap a: an end the dock did not start (a reset on a cursor epoch, a session that is gone) took words a
     // too-short board held: said by their first characters (a fold, a switch and a drop say it themselves; a link
     // end keeps them in page memory)
     if (cur && cur.session === e.session && e.why !== 'fold' && e.why !== 'switch' && e.why !== 'link' && e.session.heldWords) d.say(KEEP_COPY.wordsGoneWith(e.session.heldWords), 'warn');
+    if (e.why !== 'link' && held && held.dim === e.session.dim) dropWords();
     if (e.why === 'link' && !e.session.openedOk) {
       // still opening when the link went: it is not resumed, though its open may have landed. The list shows it.
       const a = asked.get(e.session.dim);
@@ -503,11 +504,14 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       if (c && c.session.hsid !== d.focused()) {
         // the leaf follows the session: this one is left (what is pending gets a moment to settle), and the loss is said
         // (a switch cannot be refused: words held by a too-short board are said by their first characters, aegis F1)
-        sayHeldWordsGone(c);
+        const said = sayHeldWordsGone(c);
+        // the words were said gone: the field is emptied BEFORE the host hides, so the blur commits nothing
+        if (said) c.leaf.clearTyped();
         cur = null;
         for (const f of c.off.splice(0)) f();
         host.hidden = true;
-        dropWords();
+        // (words held by the link too: the excerpt above is the one toast said)
+        dropWords(!said);
         void c.session.leave().then((lost) => {
           if (lost > 0) d.say(lost > 1 ? `${lost} changes on the board weren’t saved` : 'One change on the board wasn’t saved', 'warn');
           paintTab();

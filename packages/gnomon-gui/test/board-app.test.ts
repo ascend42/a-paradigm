@@ -674,13 +674,13 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const holdHello = [{ press: '.bd-host [data-key="tool:text"]' }, { at: [200, 330], press: true }, { until: `!!document.querySelector('.bd-host .bd-board textarea')`, as: 'a text open' }, ...type('hello'), { read: SHORT, as: 'short' }, { until: `${CUR}.leaf.state() === 'too-short' && ${CUR}.leaf.holdsWords()`, as: 'words held while too short' }];
     it('a session switch (which cannot be refused) says the words are gone, by their first characters', async () => {
       const other = `(() => { const r = [...document.querySelectorAll('#session-list .session-row[data-hsid]')].find((x) => !x.classList.contains('active')); if (!r) return null; r.id = 'f1-other'; return r.dataset.hsid; })()`;
-      const a = await real([...toIdle, ...typeBoard, ...holdHello, { read: other, as: 'other' }, { press: '#f1-other' }, { until: `!${CUR}`, as: 'the leaf left (the switch says what it lost as it goes)', timeoutMs: 15_000 }, { read: SEEF1, as: 'after' }]);
+      const a = await real([...toIdle, ...typeBoard, ...holdHello, { read: other, as: 'other' }, { read: `(globalThis.__oldF1 = ${CUR}.session, 1)`, as: 'old' }, { press: '#f1-other' }, { until: `!${CUR}`, as: 'the leaf left (the switch says what it lost as it goes)', timeoutMs: 15_000 }, { read: SEEF1, as: 'after' },
+        { until: `!globalThis.__oldF1.alive`, as: 'the left session settled and went', timeoutMs: 15_000 },
+        { read: `${A}.kernel.rows.filter((r) => String(r.event.kind).endsWith('dimension.op')).flatMap((r) => (r.event.payload.ops || []).filter((o) => o.node && typeof o.node.text === 'string' && o.node.text.includes('hello')).map((o) => o.node.text))`, as: 'stored' }]);
       expect(a.errors).toEqual([]);
       expect(a.other).toBeTruthy();
       const toasts = (a.after as { toasts: string[] }).toasts;
       expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
-    }, 180_000);
-    it('a pick of another board in the Dimensions list (/boards) is refused and says the held line; the words stay', async () => {
       // aegis re-check: the toast is never false: once the leave has settled no text with the words was stored
       expect(a.stored).toEqual([]);
     }, 180_000);
@@ -689,6 +689,8 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       expect(a.errors).toEqual([]);
       const toasts = (a.after as { toasts: string[] }).toasts;
       expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
+    }, 180_000);
+    it('a pick of another board in the Dimensions list (/boards) is refused and says the held line; the words stay', async () => {
       const a = await real([
         ...toIdle, ...typeBoard, ...foldByEsc, { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 },
         ...holdHello, { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'the list' },

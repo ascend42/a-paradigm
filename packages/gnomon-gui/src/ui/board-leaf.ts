@@ -128,6 +128,11 @@ export interface BoardLeaf {
    * opens an edit and never commits one: the person's next trusted press or key does that.
    */
   putTyped(words: string): boolean;
+  /**
+   * Empty the open text without committing it (a switch that has already said the words are gone): the blur that
+   * follows then has nothing to store, so the line "weren't saved" is never false (aegis re-check of F1).
+   */
+  clearTyped(): void;
   /** Be told when the person opens a text on the board (the field took focus). Returns the unsubscribe. */
   onTextOpen(listener: () => void): () => void;
   destroy(): void;
@@ -1105,6 +1110,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       f.value = dimPastedWords(words).slice(0, DIM_LIMITS.text);
       f.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
+    },
+    clearTyped() {
+      const f = boardField();
+      if (!f || f.value === '') return;
+      f.value = '';
+      f.dispatchEvent(new Event('input', { bubbles: true }));
     },
     onTextOpen(listener) {
       textOpen.add(listener);
