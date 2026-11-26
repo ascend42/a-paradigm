@@ -663,3 +663,29 @@ describe('#dimension-mod M3: cancel is honoured, so an agent cannot take the boa
     expect(ms).toBeLessThan(5_000);
   });
 });
+
+describe('#dimension-mod A4: a host APPEND_BUDGET refusal is a definite "not written" (REAL-WINDOW clock)', () => {
+  it('two sessions drawing in the same second: the second is refused append-busy (tool-rows), the fold is kept (no cold re-read), and a person still draws', { timeout: 60_000 }, async () => {
+    // the real monotonic clock: with the default test clock (a second per append) the budget never binds
+    const w = await toolRig({ now: () => performance.now() });
+    const dim = await board(w);
+    await w.run('dim.grant', { dim, write: true }, B);
+    await new Promise((res) => setTimeout(res, 1_100)); // the window is empty
+    // one full draw: 4 op rows and its count row are the whole tool share of 5 rows a second
+    const first = await w.tool('dim-draw', { ops: [...fullDraw(60), rectOp(1, { link: 'x' })] });
+    expect(first.ok).toBe(true);
+    expect(opRows(w)).toHaveLength(4);
+    expect(countRows(w)).toHaveLength(1);
+    const rows = w.log.rows.length;
+    const second = await w.tool('dim-draw', { ops: [rectOp(2)] }, agentOf(B));
+    expect(second).toMatchObject({ ok: false, code: 'append-busy' });
+    expect(w.log.rows.length).toBe(rows);
+    // the fold was kept: the next call reads no log page (a dropped fold would be read again from the log)
+    const reads = w.log.reads.length;
+    expect((await w.tool('dim-view', {}, agentOf(B))).seq).toBe(w.log.fold(dim).seq);
+    expect(w.log.reads.length).toBe(reads);
+    // the human reserve: a person's command in the same second lands
+    expect(await w.run('dim.op', { dim, ops: [rectOp(3)] })).toMatchObject({ ok: true, applied: 1 });
+    expect(w.log.reads.length).toBe(reads);
+  });
+});

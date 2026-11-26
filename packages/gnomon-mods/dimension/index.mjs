@@ -384,14 +384,25 @@ async function saveKeyframe(host, dim, entry) {
   }
 }
 
-/** Append one row. Resolves the seq, or null when the host refused or failed (nothing was written). */
+/** The host's budget refusal (A4): a DEFINITE "not written", decided before the log was touched. */
+const BUSY = Object.freeze({ busy: true });
+function isBudgetRefusal(e) {
+  const d = e && plain(e.data);
+  const inner = d ? plain(own(d, 'data')) : null;
+  return !!inner && own(inner, 'modCode') === 'APPEND_BUDGET' && own(inner, 'written') === false;
+}
+
+/**
+ * Append one row. Resolves the seq; BUSY when the host refused it for its append budget (nothing was written, so
+ * the fold stays right); or null for any other failure, after which the mod cannot tell whether the row landed.
+ */
 async function append(host, kind, payload) {
   try {
     const out = plain(await host.kernel('log.append', { kind, payload }));
     const seq = out ? own(out, 'seq') : undefined;
     return Number.isSafeInteger(seq) && seq > 0 ? seq : null;
-  } catch {
-    return null;
+  } catch (e) {
+    return isBudgetRefusal(e) ? BUSY : null;
   }
 }
 
@@ -424,6 +435,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     const payload = startPayload(a.dim, a.hsid, a.opened, t.title);
     if (rowProblem(payload, stamp)) return refusal('row-too-large');
     const seq = await append(host, DIM_KINDS.start, payload);
+    if (seq === BUSY) return refusal('append-busy');
     if (seq === null) return refusal('append-failed');
     const fresh = { idx: { repo: a.repo, firstSeq: seq, lastSeq: seq, title: t.title, log: logId }, state: landed(emptyDimState(a.dim), DIM_KINDS.start, payload, stamp, seq), grants: emptyDimGrants(), oids: new Map(), sinceKf: 0, dirty: false };
     try {
@@ -456,6 +468,8 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   const write = async (kind, payload) => {
     if (rowProblem(payload, stamp)) return refusal('row-too-large');
     const seq = await append(host, kind, payload);
+    // a budget refusal wrote nothing: the fold is still the log's, so it is kept (A4)
+    if (seq === BUSY) return refusal('append-busy');
     if (seq === null) {
       // the mod cannot tell "not written" from "written, reply lost": forget the fold, so the next command reads the log
       loaded.delete(a.dim);
@@ -692,7 +706,8 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
     if (stop === null) {
       const payload = opPayload(dim, pos.map((j) => v.ok[j]), oid);
       seq = await appendTool(host, DIM_KINDS.op, payload);
-      if (seq === null) {
+      if (seq === BUSY) stop = 'append-busy';
+      else if (seq === null) {
         stop = 'append-failed';
         loaded.delete(dim);
       } else {
