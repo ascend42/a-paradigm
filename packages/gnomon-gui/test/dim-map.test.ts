@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, emptyDimState, foldDim, validateDimOps } from '@a-company/gnomon-contracts';
 import type { DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
-import { DIM_ENGINE_KEYS, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
+import { DIM_AGENT_STROKE_TYPE, DIM_ENGINE_KEYS, dimIsAgentStroke, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
 import type { DimMapIds, EngineElement } from '../src/board/dim-map.js';
-import { BOARD_TYPES, FILLABLE, normalOf, offNormal } from '../src/board/normal.js';
+import { BOARD_TYPES, FILLABLE, isBoardType, normalOf, offNormal } from '../src/board/normal.js';
 import { fixtureRows } from '../src/preview/board-fixture.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -479,13 +479,15 @@ describe('#gui-dim-map review fixes (PR #113)', () => {
     for (const theme of ['day', 'night'] as const) {
       const ids = idTable();
       const els = dimToElements(state, theme, ids);
-      expect(new Set(els.map((e) => e.type))).toEqual(new Set(['frame', 'freedraw', 'text', 'rectangle', 'ellipse', 'diamond', 'arrow']));
+      // (an agent's or the unknown hand's stroke is the engine's dashed `line`, S1.4 P4a)
+      expect(new Set(els.map((e) => e.type))).toEqual(new Set(['frame', 'freedraw', 'line', 'text', 'rectangle', 'ellipse', 'diamond', 'arrow']));
       const completed = els.map((el) => {
         const label = el.type === 'text' && typeof el.containerId === 'string';
         const fnode = label ? undefined : state.nodes.get(ids.nodeOf(el.id));
         const by = !fnode || fnode.by.cls === 'human' ? undefined : fnode.by.cls === 'agent' ? { cls: 'agent' as const, id: fnode.by.agent!, name: fnode.by.agent! } : { cls: 'unknown' as const };
-        const stamp = { line: el.customData!.gnomon.line, fill: el.customData!.gnomon.fill, ...(fnode && dimIsFallback(fnode.node) ? { kind: 'stub' as const } : {}), ...(by ? { by } : {}) };
-        expect(BOARD_TYPES.has(el.type), el.type).toBe(true);
+        const stamp = { line: el.customData!.gnomon.line, fill: el.customData!.gnomon.fill, ...(fnode && dimIsFallback(fnode.node) ? { kind: 'stub' as const } : {}), ...(by ? { by } : {}), ...(dimIsAgentStroke(fnode) ? { agentStroke: true as const } : {}) };
+        expect(isBoardType(el.type, stamp), el.type).toBe(true);
+        expect(el.type === 'line').toBe(dimIsAgentStroke(fnode));
         // a fourth disagreement would show here: the normal form may ADD keys, never change one the map set
         expect(offNormal(el, stamp, theme), `${theme} ${el.type} ${el.id}`).toBe(false);
         return { ...el, ...normalOf(el, stamp, theme) };
@@ -531,5 +533,60 @@ describe('#gui-dim-map review fixes (PR #113)', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'board', 'dim-map.ts'), 'utf8');
     expect(src).not.toMatch(/dimZBetween/);
     expect(src).toMatch(/dimZPlace\(/);
+  });
+});
+
+describe('#gui-dim-map S1.4 P4a: an agent\'s stroke is the engine\'s dashed line (Aegis, S1.4 draft question 6)', () => {
+  const STYLE = { line: 'ink', fill: null };
+  const state = foldDim(fixtureRows('matrix'));
+  const strokes = [...state.nodes].filter(([, n]) => n.node.kind === 'stroke');
+  it('the map emits `line` for a stroke whose by is not human, and freedraw for the person\'s; the node stays kind stroke', () => {
+    const ids = idTable();
+    const els = new Map(dimToElements(state, 'day', ids).map((e) => [e.id, e]));
+    expect(strokes.length).toBeGreaterThanOrEqual(3);
+    for (const [nodeId, n] of strokes) {
+      const el = els.get(ids.engineOf(nodeId))!;
+      expect(el.type).toBe(n.by.cls === 'human' ? 'freedraw' : DIM_AGENT_STROKE_TYPE);
+      expect(el.strokeStyle).toBe(n.by.cls === 'human' ? 'solid' : 'dashed');
+    }
+  });
+  it('a `line` whose engine id is not an agent stroke of the rendered state yields NO node: a new one, one on a person\'s stroke id, one on a rect id', () => {
+    const ids = idTable();
+    const els = dimToElements(state, 'day', ids);
+    const human = strokes.find(([, n]) => n.by.cls === 'human')!;
+    const rect = [...state.nodes].find(([, n]) => n.node.kind === 'rect')!;
+    // a brand-new line (the l key, a paste, a duplicate): no add
+    const fresh = { id: 'new-line', type: 'line', x: 10, y: 10, width: 50, height: 0, points: [[0, 0], [50, 0]], strokeColor: '#000', strokeWidth: 2, strokeStyle: 'dashed' };
+    expect(elementsToOps(state, [...els, fresh] as never, ids, STYLE)).toEqual([]);
+    // the person's stroke turned into a line: not read as a mark, so it is neither edited nor re-made (and the
+    // handle removes the line, normal.ts); the map never writes an op FROM it
+    const asLine = els.map((e) => (e.id === ids.engineOf(human[0]) ? { ...e, type: 'line', strokeStyle: 'dashed' } : e));
+    expect(elementsToOps(state, asLine as never, ids, STYLE).filter((op) => op.type !== 'delete')).toEqual([]);
+    const rectLine = els.map((e) => (e.id === ids.engineOf(rect[0]) ? { ...e, type: 'line', points: [[0, 0], [5, 5]] } : e));
+    expect(elementsToOps(state, rectLine as never, ids, STYLE).filter((op) => op.type === 'add' || op.type === 'update')).toEqual([]);
+  });
+  it('a person\'s point edit of an agent stroke is ONE points update; the validator keeps by, so the stroke stays dashed', () => {
+    const ids = idTable();
+    const els = dimToElements(state, 'day', ids);
+    const [nodeId, n] = strokes.find(([, q]) => q.by.cls === 'agent')!;
+    const edited = els.map((e) => (e.id === ids.engineOf(nodeId) ? { ...e, points: [...e.points!, [e.points!.at(-1)![0] + 30, e.points!.at(-1)![1] + 30]] } : e));
+    const ops = elementsToOps(state, edited as never, ids, STYLE);
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({ type: 'update', id: nodeId });
+    expect(Object.keys((ops[0] as { patch: object }).patch).sort()).toEqual(['points', 'x', 'y']);
+    const r = validateDimOps(state, ops, { cls: 'human', principal: 'p:preview/matt' } as never);
+    expect(r.refused ?? []).toEqual([]);
+    expect(n.by.cls).toBe('agent');
+  });
+  it('normalOf for a line: no head at either end, tied to nothing, transparent, the dash from by; any other line is not a board type', () => {
+    const by = { cls: 'agent' as const, id: 'a', name: 'a' };
+    const want = normalOf({ type: 'line', startArrowhead: 'arrow', endArrowhead: 'triangle' }, { line: 'ink', fill: 'sky', by, agentStroke: true }, 'day');
+    expect(want).toMatchObject({ startArrowhead: null, endArrowhead: null, startBinding: null, endBinding: null, backgroundColor: 'transparent', strokeStyle: 'dashed', roundness: null });
+    expect(isBoardType('line', { line: 'ink', fill: null, by, agentStroke: true })).toBe(true);
+    for (const stamp of [null, { line: 'ink', fill: null }, { line: 'ink', fill: null, by }, { line: 'ink', fill: null, agentStroke: true as const }, { line: 'ink', fill: null, by: { cls: 'human' as const }, agentStroke: true as const }]) {
+      expect(isBoardType('line', stamp), JSON.stringify(stamp)).toBe(false);
+      expect(offNormal({ type: 'line' }, stamp, 'day')).toBe(true);
+    }
+    expect(BOARD_TYPES.has('line')).toBe(false);
   });
 });

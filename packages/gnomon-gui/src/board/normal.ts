@@ -17,6 +17,13 @@ import { BOARD_WEIGHTS, type BoardAuthor, type BoardTheme } from '../core/board.
  * removed. A diamond has no rail tool: the board draws and edits one that is stored, and cannot start one.
  */
 export const BOARD_TYPES: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow', 'frame', 'freedraw', 'text']);
+/**
+ * S1.4 P4a (Aegis, S1.4 draft question 6): `line` is a board type for ONE element only: the one the handle's
+ * rendered fold maps to a stroke whose `by` is not human (the stamp's `agentStroke`, set by the handle from the
+ * fold, never from the element). Every other `line` (the `l` key, a paste, a duplicate, a restore) is removed and
+ * refused as before. The check is on (type, mapped node), never on the type alone.
+ */
+export const isBoardType = (type: string, stamp: MarkStamp | null): boolean => BOARD_TYPES.has(type) || (type === 'line' && stamp?.agentStroke === true && stamp.by !== undefined && stamp.by.cls !== 'human');
 /** Element types whose background is a fill a person chose. */
 export const FILLABLE: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond']);
 export const BOARD_FONT_ID = 10;
@@ -41,6 +48,8 @@ export interface MarkStamp {
   fill: string | null;
   kind?: 'sticky' | 'stub';
   by?: BoardAuthor;
+  /** the fold maps this element's id to a stroke another hand drew (src/board/dim-map.ts dimIsAgentStroke) */
+  agentStroke?: true;
 }
 
 /** The properties an element of a board type must have, for its stamp (none: default ink, no fill, yours) and theme. */
@@ -59,6 +68,9 @@ export function normalOf(el: { type: string; strokeWidth?: number; startArrowhea
     locked: stamp?.kind === 'stub',
     // WHICH ends carry a head is the arrow's own (`head` of dim-shape:v1: none, end or both, so a start head never
     // stands without an end head); the SHAPE of a head is fixed: the open arrow, never a stock triangle, bar or dot
+    // an agent's stroke drawn as a `line`: no head at either end, tied to nothing, never filled (a closed run of
+    // points would otherwise fill), its dash from `by` above (Aegis, S1.4 draft question 6)
+    ...(el.type === 'line' ? { startArrowhead: null, endArrowhead: null, startBinding: null, endBinding: null, backgroundColor: 'transparent' } : {}),
     ...(el.type === 'arrow' ? { startArrowhead: el.startArrowhead != null ? 'arrow' : null, endArrowhead: el.startArrowhead != null || el.endArrowhead != null ? 'arrow' : null } : {}),
     ...(el.type === 'frame' || el.type === 'text' || stamp?.kind === 'stub' ? {} : { strokeWidth: nearestWeight(el.strokeWidth ?? BOARD_WEIGHTS.fine) }),
     ...(el.type === 'text' ? { fontFamily: BOARD_FONT_ID, fontSize: BOARD_FONT_SIZE } : {}),
@@ -68,7 +80,7 @@ export function normalOf(el: { type: string; strokeWidth?: number; startArrowhea
 /** True when a live element is not in its normal form (or is not a board type at all, and must go). */
 export function offNormal(el: { type: string; isDeleted?: boolean; strokeWidth?: number; startArrowhead?: unknown; endArrowhead?: unknown }, stamp: MarkStamp | null, theme: BoardTheme): boolean {
   if (el.isDeleted) return false;
-  if (!BOARD_TYPES.has(el.type)) return true;
+  if (!isBoardType(el.type, stamp)) return true;
   const want = normalOf(el, stamp, theme);
   const have = el as unknown as Record<string, unknown>;
   return Object.keys(want).some((k) => have[k] !== undefined && have[k] !== want[k]);

@@ -88,7 +88,19 @@ export interface DimMapStyle {
  * through normalOf and reading it back yields no op.
  */
 const KIND_TYPE: Readonly<Record<DimCoreKind, string>> = { stroke: 'freedraw', rect: 'rectangle', ellipse: 'ellipse', diamond: 'diamond', arrow: 'arrow', text: 'text', frame: 'frame' };
-const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map(DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k]));
+/**
+ * S1.4 P4a (design author-seal strokes.agent-stroke; Aegis, S1.4 draft question 6): the engine type of a stroke a
+ * hand that is NOT the person's drew. The engine dashes a `line` along its whole length and cannot dash a freehand
+ * stroke (a filled outline), so the map alone chooses `line`, from the stamped author, for that node only. The node
+ * stays kind `stroke`. A `line` element reads back as a stroke ONLY when its engine id is such a node of the state
+ * it was rendered from (`elementsToOps`); every other `line` is no mark and never yields a node.
+ */
+export const DIM_AGENT_STROKE_TYPE = 'line';
+const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map([...DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k] as const), [DIM_AGENT_STROKE_TYPE, 'stroke'] as const]);
+/** True when a folded node is a stroke drawn as the engine's dashed `line`: a drawable stroke whose `by` is not human (fails closed). */
+export function dimIsAgentStroke(n: DimFoldNode | undefined): boolean {
+  return !!n && own(n.node, 'kind') === 'stroke' && drawable(n.node) && (n.by as { cls?: unknown } | undefined)?.cls !== 'human';
+}
 const FILL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond']);
 const LABEL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond', 'arrow']);
 const LABEL_TYPES: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow']);
@@ -173,7 +185,7 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
   const rot = own(node, 'rot');
   let mid: [number, number] | null = null;
   const main: EngineElement = {
-    id, type: KIND_TYPE[kind], x: x0, y: y0, width: 0, height: 0,
+    id, type: kind === 'stroke' && strokeStyle === 'dashed' ? DIM_AGENT_STROKE_TYPE : KIND_TYPE[kind], x: x0, y: y0, width: 0, height: 0,
     angle: num(rot) ? (rot / 1800) * Math.PI : 0,
     strokeColor: lineColour(tokens.line, theme), backgroundColor: fillColour(tokens.fill, theme),
     strokeWidth: kind === 'text' || kind === 'frame' ? BOARD_WEIGHTS.fine : (WEIGHT_WIDTHS[(weight === 2 || weight === 3 ? weight : 1) - 1] as number),
@@ -363,6 +375,8 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
   const mains = new Map<string, EngineElementIn>();
   const labels = new Map<string, string>();
   const order: EngineElementIn[] = [];
+  const agentLines = new Set<string>();
+  for (const [nodeId, n] of prev.nodes) if (dimIsAgentStroke(n)) agentLines.add(ids.engineOf(nodeId));
   // a text is a label only of a live mark that can carry one; a `containerId` naming nothing is no container
   const carriers = new Set<string>();
   for (const el of elements) if (el && !el.isDeleted && typeof el.id === 'string' && LABEL_TYPES.has(el.type)) carriers.add(el.id);
@@ -373,6 +387,8 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
       continue;
     }
     if (!TYPE_KIND.has(el.type) || mains.has(el.id)) continue;
+    // a `line` is a mark only where the rendered state has an agent's (or an unknown hand's) stroke under that very id
+    if (el.type === DIM_AGENT_STROKE_TYPE && !agentLines.has(el.id)) continue;
     mains.set(el.id, el);
     order.push(el);
   }
