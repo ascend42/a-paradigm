@@ -37,13 +37,13 @@ const turnOf = (hsid: string, n: number) => ({ hsid, turn: `turn:${hsid}/${n}` }
 const actOf = (n: number) => ulid(n, '01JD1A');
 const textOp = (n: number, text: string) => ({ type: 'add', node: { id: ulid(n), kind: 'text', x: n, y: n, z: 'V', text } });
 
-async function undoRig(opts: { now?: () => number } = {}) {
+async function undoRig(opts: { now?: () => number; callTimeoutMs?: number } = {}) {
   const r = modRig();
   cleanups.push(r.cleanup);
   installDimension(r);
   const log = fakeLog(opts.now ? { now: opts.now } : {});
   const stateFile = path.join(hostDir(r.home, DIMENSION), 'state.db');
-  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: 30_000, focusRepo: () => REPO });
+  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: opts.callTimeoutMs ?? 30_000, focusRepo: () => REPO });
   cleanups.push(() => h.stopAll());
   await h.start(DIMENSION);
   const run = async (commandId: string, args: Record<string, unknown>, hsid: string = A): Promise<Res> => (await h.relayCommand({ name: DIMENSION, commandId, args: { ...args, focus: { hsid } }, ...GUI })) as Res;
@@ -52,7 +52,11 @@ async function undoRig(opts: { now?: () => number } = {}) {
   /** [hsid, turn, used, countRows, foreign, foreignDeletes, foreignWords] of one session */
   const turnsOf = (hsid: string) => (state().turns as unknown[][]).find((e) => e[0] === hsid)!;
   const opRows = () => log.rows.filter((x) => x.kind === DIM_KINDS.op);
-  return { r, h, log, run, tool, state, turnsOf, opRows };
+  const restart = async (): Promise<void> => {
+    await h.stop(DIMENSION);
+    await h.start(DIMENSION);
+  };
+  return { r, h, log, run, tool, state, turnsOf, opRows, restart };
 }
 type Rig = Awaited<ReturnType<typeof undoRig>>;
 
@@ -156,7 +160,7 @@ describe('#dimension-mod E2: the order and the set rules (Aegis E2)', () => {
     const rows = w.opRows().length;
     const used = w.turnsOf(B)[2];
     const second = await undo(w, dim, B, 1, { of: { principal: HUMAN, act: actOf(2) } });
-    expect(second).toMatchObject({ ok: false, code: 'undo-not-allowed', fix: 'You may undo one person\'s change per turn; finish this turn first.' });
+    expect(second).toMatchObject({ ok: false, code: 'undo-not-allowed', fix: 'You already undid one of a person\'s changes this turn; you may continue that one, or undo another in a later turn.' });
     expect([w.opRows().length, w.turnsOf(B)[2]]).toEqual([rows, used]);
     // an agent's turn is not a person's set: still allowed in the same turn
     expect(await draw(w, dim, A, 1, [rectOp(3)])).toMatchObject({ ok: true });
@@ -317,6 +321,72 @@ describe('#dimension-mod E2: budgets charged before the append (M8), refunds onl
     // six texts make exactly two rows here: row 2 may have landed, so it stays charged (M8: never an undercount)
     expect(one).toBe(3);
     expect(v.turnsOf(A).slice(2, 6)).toEqual([6, 0, 6, 0]);
+  });
+});
+
+describe('#dimension-mod E2 review fixes (Aegis I-1, I-2, N-1, N-3, N-4)', () => {
+  it('I-1: a view whose change list is over its byte bound answers reset and shows no set: an undo of one of them is undo-set-bad', { timeout: 120_000 }, async () => {
+    const w = await undoRig();
+    const dim = await board(w);
+    for (let k = 0; k < 40; k++) expect(await w.run('dim.op', { dim, ops: Array.from({ length: 64 }, (_, i) => rectOp(1000 + k * 64 + i)), act: actOf(k + 1) })).toMatchObject({ ok: true, applied: 64 });
+    const v = await view(w, dim, B, 1);
+    expect(v.changes).toBe('reset');
+    // the newest set: still held (32 checkpoints) and within the 32 a view may note, so only I-1 refuses it
+    expect(await undo(w, dim, B, 1, { of: { principal: HUMAN, act: actOf(40) } })).toMatchObject({ ok: false, code: 'undo-set-bad' });
+    // a view that carries it (since just before it) shows it, and the undo lands (16 foreign removals a turn)
+    await view(w, dim, B, 1, w.log.fold(dim).seq - 1);
+    expect(await undo(w, dim, B, 1, { of: { principal: HUMAN, act: actOf(40) } })).toMatchObject({ ok: true, applied: 16, more: true });
+  });
+
+  it('I-2: 20 re-adds of a person\'s deleted texts are 20 rewritten-words charges: 16 land, more: true', { timeout: 60_000 }, async () => {
+    const w = await undoRig();
+    const dim = await board(w);
+    const ids = Array.from({ length: 20 }, (_, i) => 100 + i);
+    expect(await w.run('dim.op', { dim, ops: ids.map((n) => textOp(n, `note ${n}`)) })).toMatchObject({ ok: true });
+    expect(await w.run('dim.op', { dim, ops: ids.map((n) => ({ type: 'delete', id: ulid(n) })), act: actOf(1) })).toMatchObject({ ok: true });
+    await view(w, dim, B, 1);
+    const u = await undo(w, dim, B, 1, { of: { principal: HUMAN, act: actOf(1) } });
+    expect(u).toMatchObject({ ok: true, applied: 16, more: true });
+    expect([...w.log.fold(dim).nodes.values()].filter((n) => n.restoredFrom)).toHaveLength(16);
+    expect(w.turnsOf(B).slice(2)).toEqual([16, 0, 16, 0, 16]);
+  });
+
+  it('N-3: a re-add of the undoer\'s OWN mark whose words came from a person is a words charge (not a touch)', { timeout: 60_000 }, async () => {
+    const w = await undoRig();
+    const dim = await board(w);
+    expect(await draw(w, dim, B, 1, [rectOp(1)])).toMatchObject({ ok: true });
+    expect(await w.run('dim.op', { dim, ops: [{ type: 'update', id: ulid(1), patch: { label: 'the person wrote this' } }] })).toMatchObject({ ok: true });
+    expect(await w.run('dim.op', { dim, ops: [{ type: 'delete', id: ulid(1) }], act: actOf(1) })).toMatchObject({ ok: true });
+    await view(w, dim, B, 2);
+    expect(await undo(w, dim, B, 2, { of: { principal: HUMAN, act: actOf(1) } })).toMatchObject({ ok: true, applied: 1 });
+    expect(w.turnsOf(B).slice(2)).toEqual([1, 0, 0, 0, 1]);
+  });
+
+  it('N-1: a call the host cancelled before the first row writes no row and charges nothing', { timeout: 60_000 }, async () => {
+    const w = await undoRig({ callTimeoutMs: 1_500 });
+    const dim = await board(w);
+    expect(await draw(w, dim, B, 1, [rectOp(1)])).toMatchObject({ ok: true });
+    await view(w, dim, A, 1);
+    const rows = w.opRows().length;
+    // the catch-up's one page answers after the timeout: the cancel arrived during it, and no later page is read
+    w.log.readDelayMs = 1_700;
+    const err = await undo(w, dim, A, 1, { of: turnOf(B, 1) }).then(
+      () => null,
+      (e: { modCode?: string }) => e,
+    );
+    w.log.readDelayMs = 0;
+    expect(err).toMatchObject({ modCode: 'TIMEOUT' });
+    expect(await w.run('dim.check', { dim })).toMatchObject({ ok: true });
+    expect(w.opRows()).toHaveLength(rows);
+    expect((w.state().turns as unknown[][]).find((e) => e[0] === A)).toBeUndefined();
+  });
+
+  it('N-4: an undo under the opId of an older draw (its oid in the rows, the memo gone after a restart) is op-id-reused, never that draw\'s repeat', { timeout: 60_000 }, async () => {
+    const w = await undoRig();
+    const dim = await board(w);
+    expect(await w.tool('dim-draw', { dim, ops: [rectOp(1)], opId: 'd1' }, agentOf(A, 1))).toMatchObject({ ok: true });
+    await w.restart();
+    expect(await undo(w, dim, A, 1, { of: turnOf(A, 1), opId: 'd1' })).toMatchObject({ ok: false, code: 'op-id-reused' });
   });
 });
 

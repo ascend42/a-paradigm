@@ -1040,8 +1040,8 @@ async function undoTool(host, dim, entry, actor, a, stamp, cancelled) {
     input = sumOf(canonicalText({ undo: { of: ofOf(a.of), ids: a.ids ?? null } }));
     const memo = answers.get(dim)?.get(oid);
     if (memo) return memo.input === input ? { ...memo.answer, budgetLeft: budgetLeft(turns, actor), repeat: true } : refusal('op-id-reused');
-    const seen = entry.oids.get(oid);
-    if (seen) return { ok: true, dim, seq: entry.state.seq, hash: hashOf(entry.state), applied: seen.applied, budgetLeft: budgetLeft(turns, actor), repeat: true, inputUnknown: true, fix: REPEAT_UNKNOWN_FIX };
+    // Aegis E2 N-4: an oid in the rows is a DRAW's (undo rows carry none): never answered as that draw's repeat
+    if (entry.oids.has(oid)) return refusal('op-id-reused');
   }
   // Aegis ruling 5: only a set a dim-view changes answer listed to THIS hsid on this board (stops blind or
   // remembered ids; not proof against a planted id the agent was also shown)
@@ -1075,6 +1075,11 @@ async function undoTool(host, dim, entry, actor, a, stamp, cancelled) {
     // M8: the plan's ops are charged here, after planning and BEFORE the first append; the first ops that fit the
     // turn's ops and the foreign touches, deletes and words go, from the first that does not none goes
     fit: async (planOps, restored) => {
+      // Aegis E2 N-1: a call the host cancelled writes no first row (as dim-draw); nothing is charged yet
+      if (cancelled()) {
+        o.fitCode = 'cancelled';
+        return 0;
+      }
       const fl = foreignLeft(turns, actor);
       fc = planOps.map((op) => undoForeignCharge(entry.state, op, hand, restored));
       const sum = { touch: 0, del: 0, words: 0 };
@@ -1306,8 +1311,11 @@ async function viewTool(host, dim, entry, actor, a, cancelled) {
     }
     const ch = changesOf(mine, dimRowBy);
     if (!ch) return viewAnswer(state, { ...base, changes: 'reset' });
-    noteShown(dim, actor.hsid, ch.entries);
-    return viewAnswer(state, { ...base, changes: ch.entries, touched: ch.touched });
+    const answer = viewAnswer(state, { ...base, changes: ch.entries, touched: ch.touched });
+    // Aegis E2 I-1: only the sets the answer actually CARRIES count as shown (a list over its byte bound is a
+    // reset, which shows none)
+    if (Array.isArray(answer.changes)) noteShown(dim, actor.hsid, answer.changes);
+    return answer;
   } catch {
     return viewAnswer(state, { ...base, changes: 'reset' });
   }

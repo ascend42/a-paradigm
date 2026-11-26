@@ -119,8 +119,8 @@ export const MOD_REFUSAL_FIXES = Object.freeze({
   // S1.4 E1 (edit-anything; Luna's E-design words, agent-facing): undo, the stale view and the foreign budget
   'undo-expired': 'This change is too old to undo in one step; view the board and change the marks yourself.',
   'undo-nothing': 'Nothing in that change is left to undo; view the board.',
-  'undo-not-allowed': 'You may undo one person\'s change per turn; finish this turn first.',
-  'undo-set-bad': 'That change was not shown to you; view the board and name a change from its changes.',
+  'undo-not-allowed': 'You already undid one of a person\'s changes this turn; you may continue that one, or undo another in a later turn.',
+  'undo-set-bad': 'That change was not shown to you, or its session has left the board; call dim-view with since set to a seq from before it, and copy a set from its changes.',
   'changed-since': 'This mark changed after the seq you sent as base; view the board again and send its seq as base.',
   'foreign-budget': 'This turn has changed as many marks of other hands as it may (32, of them 16 removals and 16 rewritten words). Stop changing others\' marks; the count starts again on the next turn.',
   'not-pinned': 'That change is not standing on this board; nothing was released.',
@@ -720,7 +720,8 @@ export function foreignCharge(state, op, hand) {
 /**
  * What one op of an agent's undo plan (S1.4 E2, `dim-undo`) charges to the foreign sub-budgets, per id against each
  * mark's ORIGINAL hand: as `foreignCharge` for an update, move or delete (a re-point of 5 foreign arrows is 5), and
- * a re-add of a deleted mark of another hand (its `restored` entry's hand) is one foreign touch too.
+ * a re-add of a deleted mark of another hand (its `restored` entry's hand) is one foreign touch too, and one
+ * rewritten-words charge when it carries words or its words came from another hand (Aegis E2 I-2, N-3).
  */
 export function undoForeignCharge(state, op, hand, restored) {
   const out = foreignCharge(state, op, hand);
@@ -728,8 +729,17 @@ export function undoForeignCharge(state, op, hand, restored) {
   if (!o || own(o, 'type') !== 'add') return out;
   const id = own(plain(own(o, 'node')) ?? {}, 'id');
   const e = Array.isArray(restored) ? restored.find((x) => x[0] === id) : undefined;
+  const foreign = (b) => !!b && !(b.cls === hand.cls && b.principal === hand.principal && b.agent === hand.agent);
   const by = e ? plain(e[2]) : null;
-  if (by && !(by.cls === hand.cls && by.principal === hand.principal && by.agent === hand.agent)) out.touch += 1;
+  if (foreign(by)) out.touch += 1;
+  // Aegis E2 I-2 and N-3: a re-add of another hand's words (any non-empty words field), or of a mark whose words
+  // came from another hand (`wordsBy`), is also one rewritten-words charge
+  const node = plain(own(o, 'node')) ?? {};
+  const hasWords = WORDS_FIELDS.some((k) => {
+    const v = own(node, k);
+    return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
+  });
+  if ((foreign(by) && hasWords) || foreign(e ? plain(e[3]) : null)) out.words += 1;
   return out;
 }
 
