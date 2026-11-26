@@ -902,8 +902,10 @@ function applyRow(d, row) {
   }
   const by = byOf(p);
   const hsid = hsidOf(d.attached, p);
+  const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
+  const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by }])) : void 0;
   for (const op of p.ops) {
-    if (applyOp(d, op, by, hsid, d.seq)) d.ops += 1;
+    if (applyOp(d, op, by, hsid, d.seq, restored)) d.ops += 1;
     else d.unapplied += 1;
   }
 }
@@ -1469,6 +1471,104 @@ function dimRowBy(row) {
     return { ...UNKNOWN_BY };
   }
 }
+var DIM_ACT_PATTERN = DIM_NODE_ID_PATTERN;
+var DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64 });
+var TURN_N = /^[1-9][0-9]{0,14}$/;
+var HSID_MAX = 128;
+function opPayloadOf(row) {
+  if (!isPlainObject(row) || own(row, "kind") !== DIM_KINDS.op) return null;
+  const p = own(row, "payload");
+  return isPlainObject(p) ? p : null;
+}
+function turnOf(hsid, turn) {
+  if (!NON_EMPTY(hsid) || hsid.length > HSID_MAX || typeof turn !== "string") return null;
+  const prefix = `turn:${hsid}/`;
+  return turn.startsWith(prefix) && TURN_N.test(turn.slice(prefix.length)) ? turn : null;
+}
+function dimActOf(row) {
+  try {
+    const p = opPayloadOf(row);
+    if (!p) return null;
+    const act = own(p, "act");
+    if (typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
+    const r = own(p, "relayedFor");
+    if (!isPlainObject(r) || own(r, "surface") !== "gui" || Object.prototype.hasOwnProperty.call(r, "agent")) return null;
+    const by = byOf(p);
+    return by.cls === "human" ? { principal: by.principal, act } : null;
+  } catch {
+    return null;
+  }
+}
+function dimChangeSetOf(row) {
+  try {
+    const a = dimActOf(row);
+    if (a) return { kind: "act", principal: a.principal, act: a.act };
+    const p = opPayloadOf(row);
+    if (!p || byOf(p).cls !== "agent") return null;
+    const r = own(p, "relayedFor");
+    const hsid = own(r, "hsid");
+    const turn = turnOf(hsid, own(r, "turn"));
+    return turn ? { kind: "turn", hsid, turn } : null;
+  } catch {
+    return null;
+  }
+}
+function dimUndoMarkOf(row) {
+  try {
+    const p = opPayloadOf(row);
+    if (!p || byOf(p).cls === "unknown") return null;
+    const u = own(p, "undo");
+    if (!isPlainObject(u)) return null;
+    for (const k of Object.keys(u)) if (k !== "of" && k !== "ids" && k !== "restored" && k !== "skipped") return null;
+    const o = own(u, "of");
+    if (!isPlainObject(o)) return null;
+    const ok = Object.keys(o).sort().join(",");
+    let of;
+    if (ok === "hsid,turn") {
+      const turn = turnOf(own(o, "hsid"), own(o, "turn"));
+      if (!turn) return null;
+      of = { kind: "turn", hsid: own(o, "hsid"), turn };
+    } else if (ok === "act,principal") {
+      const principal = own(o, "principal");
+      const act = own(o, "act");
+      if (!NON_EMPTY(principal) || typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
+      of = { kind: "act", principal, act };
+    } else return null;
+    const out = { of, restored: [] };
+    const ids = own(u, "ids");
+    if (ids !== void 0) {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > DIM_UNDO_MARK_LIMITS.ids || new Set(ids).size !== ids.length) return null;
+      if (!ids.every((x) => typeof x === "string" && DIM_NODE_ID_PATTERN.test(x))) return null;
+      out.ids = [...ids];
+    }
+    const restored = own(u, "restored");
+    if (restored !== void 0) {
+      if (!Array.isArray(restored) || restored.length > DIM_UNDO_MARK_LIMITS.restored) return null;
+      const ops = own(p, "ops");
+      const added = /* @__PURE__ */ new Set();
+      if (Array.isArray(ops)) {
+        for (const op of ops) {
+          if (!isPlainObject(op) || own(op, "type") !== "add") continue;
+          const node = own(op, "node");
+          const nid = isPlainObject(node) ? own(node, "id") : void 0;
+          if (typeof nid === "string") added.add(nid);
+        }
+      }
+      const seen = /* @__PURE__ */ new Set();
+      for (const e of restored) {
+        if (!Array.isArray(e) || e.length !== 3) continue;
+        const [newId, oldId, by] = e;
+        if (typeof newId !== "string" || typeof oldId !== "string" || !DIM_NODE_ID_PATTERN.test(newId) || !DIM_NODE_ID_PATTERN.test(oldId)) continue;
+        if (!added.has(newId) || seen.has(newId) || newId === oldId) continue;
+        seen.add(newId);
+        out.restored.push({ newId, oldId, by: dimViewBy(by) });
+      }
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
 var DIM_HASH_VECTOR_ROWS = deepFreeze([
   {
     seq: 1,
@@ -1537,6 +1637,7 @@ var DIM_HASH_VECTOR_ROWS = deepFreeze([
 ]);
 var DIM_HASH_VECTOR_HASH = "sha256:d8b171c96fbdc391befc39a0553896a842f503ac8cc094ad4581f003fed4b596";
 export {
+  DIM_ACT_PATTERN,
   DIM_AGENT_LABEL_PATTERN,
   DIM_AUX_KINDS,
   DIM_BY_CLASSES,
@@ -1566,11 +1667,14 @@ export {
   DIM_SCAN_LIMITS,
   DIM_SHAPE_V1,
   DIM_SURFACES,
+  DIM_UNDO_MARK_LIMITS,
   DIM_VIEW_PRINCIPAL_PATTERN,
   DIM_WRITABLE_OP_TYPES,
   DIM_Z_PATTERN,
+  dimActOf,
   dimAttrDigest,
   dimCanonical,
+  dimChangeSetOf,
   dimFallbackLabel,
   dimGrantDefault,
   dimHash,
@@ -1581,6 +1685,7 @@ export {
   dimOpOid,
   dimRowBy,
   dimTextForScan,
+  dimUndoMarkOf,
   dimViewBy,
   dimViewOf,
   dimZBetween,

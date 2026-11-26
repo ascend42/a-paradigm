@@ -459,8 +459,11 @@ function applyRow(d: Draft, row: DimRow): void {
   }
   const by = byOf(p);
   const hsid = hsidOf(d.attached, p);
+  // G5: a node this row re-adds through an undo carries what it was restored from, read by the one reader only
+  const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
+  const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by }])) : undefined;
   for (const op of p.ops) {
-    if (applyOp(d, op, by, hsid, d.seq)) d.ops += 1;
+    if (applyOp(d, op, by, hsid, d.seq, restored)) d.ops += 1;
     else d.unapplied += 1;
   }
 }
@@ -1421,6 +1424,165 @@ export function dimRowBy(row: DimRow): DimBy {
     return dimViewBy(isPlainObject(row?.payload) ? byOf(row.payload) : UNKNOWN_BY);
   } catch {
     return { ...UNKNOWN_BY };
+  }
+}
+
+/* ── change-set and undo markers (S1.4 edit-anything; Aegis ruling 3; NOT in the client API descriptor) ── */
+
+/**
+ * Two payload keys an op row may carry beside `v`, `dim`, `ops` and `relayedFor`, written by the dimension mod
+ * only (E1): `act` (a person's action id) and `undo` (what an undo row undid). Neither is read by the fold's hash,
+ * and no op key, kind or refusal code is added for them. These readers are the ONE way to honour them; a marker
+ * they do not honour means nothing. Own keys only, pattern-checked, capped; never throw.
+ */
+/** A person's action id: a ULID, as a node id. */
+export const DIM_ACT_PATTERN = DIM_NODE_ID_PATTERN;
+/** At most this many ids (`undo.ids`) and restored entries (`undo.restored`) are honoured on one marker. */
+export const DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64 });
+/** The `<n>` of `turn:<hsid>/<n>`, as the mod's `toolActorOf` reads it. */
+const TURN_N = /^[1-9][0-9]{0,14}$/;
+const HSID_MAX = 128;
+
+/** An op row's payload and its stamp, or null (another kind, no payload). */
+function opPayloadOf(row: unknown): Record<string, unknown> | null {
+  if (!isPlainObject(row) || own(row, 'kind') !== DIM_KINDS.op) return null;
+  const p = own(row, 'payload');
+  return isPlainObject(p) ? p : null;
+}
+
+/** `turn` when it is exactly `turn:<hsid>/<n>` of this hsid, else null. */
+function turnOf(hsid: unknown, turn: unknown): string | null {
+  if (!NON_EMPTY(hsid) || hsid.length > HSID_MAX || typeof turn !== 'string') return null;
+  const prefix = `turn:${hsid}/`;
+  return turn.startsWith(prefix) && TURN_N.test(turn.slice(prefix.length)) ? turn : null;
+}
+
+/** A person's action of one op row. */
+export interface DimAct {
+  principal: string;
+  act: string;
+}
+/**
+ * The person's action an op row belongs to, or null. Honoured ONLY on a row stamped by a person on the Gnomon
+ * window: the stamp folds as the human hand, `surface: 'gui'`, and no `agent` key. An `act` on any other row (an
+ * agent's, a cli one, an unstamped one) is ignored. The identity is `(principal, act)`, never `act` alone: a second
+ * person reusing the first person's act id is another action.
+ */
+export function dimActOf(row: DimRow): DimAct | null {
+  try {
+    const p = opPayloadOf(row);
+    if (!p) return null;
+    const act = own(p, 'act');
+    if (typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+    const r = own(p, 'relayedFor');
+    if (!isPlainObject(r) || own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent')) return null;
+    const by = byOf(p);
+    return by.cls === 'human' ? { principal: by.principal, act } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The change-set (undo unit) of one op row: a person's action, or an agent session's turn. */
+export type DimChangeSet = { kind: 'act'; principal: string; act: string } | { kind: 'turn'; hsid: string; turn: string };
+/**
+ * The change-set an op row belongs to, or null (a row no undo can name). A person's set is `(principal, act)`
+ * (`dimActOf`). An agent's set is `(stamp.hsid, turn)`, honoured only on a row whose stamp folds as an agent hand and
+ * whose `turn` is exactly `turn:<stamp.hsid>/<n>`; an `act` on such a row is ignored.
+ */
+export function dimChangeSetOf(row: DimRow): DimChangeSet | null {
+  try {
+    const a = dimActOf(row);
+    if (a) return { kind: 'act', principal: a.principal, act: a.act };
+    const p = opPayloadOf(row);
+    if (!p || byOf(p).cls !== 'agent') return null;
+    const r = own(p, 'relayedFor') as Record<string, unknown>;
+    const hsid = own(r, 'hsid');
+    const turn = turnOf(hsid, own(r, 'turn'));
+    return turn ? { kind: 'turn', hsid: hsid as string, turn } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One honoured restored entry: the re-added node's new id, the id it was restored from, and the ORIGINAL hand. */
+export interface DimRestored {
+  newId: string;
+  oldId: string;
+  /** bounded by `dimViewBy`: a hand outside the view patterns is the unknown hand (fails closed, never human) */
+  by: DimBy;
+}
+export interface DimUndoMark {
+  of: DimChangeSet;
+  /** the scope the undo was asked for, when it was */
+  ids?: string[];
+  restored: DimRestored[];
+}
+/**
+ * The undo marker of an op row, or null. `undo: {of, ids?, restored?}`:
+ *  - the row must be an op row whose stamp folds as a human or an agent hand; any other marker is ignored;
+ *  - `of` is honoured only in its two forms, with exactly these own keys: `{hsid, turn}` with `turn` exactly
+ *    `turn:<hsid>/<n>`, or `{principal, act}` with a non-empty principal and a ULID act; else the marker is null;
+ *  - `ids`, when present, is 1 to 64 distinct node ids, else the marker is null;
+ *  - `restored` is at most 64 entries (more: the marker is null); each entry `[newId, oldId, by]` is honoured only
+ *    when both are node ids, `newId` is the id of an `add` op IN THE SAME ROW, and no earlier entry named it. An
+ *    entry that fails is dropped by itself. `by` is bounded by `dimViewBy`.
+ * The fold reads `restored` through this reader only (`restoredFrom`); it never changes `by`.
+ */
+export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
+  try {
+    const p = opPayloadOf(row);
+    if (!p || byOf(p).cls === 'unknown') return null;
+    const u = own(p, 'undo');
+    if (!isPlainObject(u)) return null;
+    for (const k of Object.keys(u)) if (k !== 'of' && k !== 'ids' && k !== 'restored' && k !== 'skipped') return null;
+    const o = own(u, 'of');
+    if (!isPlainObject(o)) return null;
+    const ok = Object.keys(o).sort().join(',');
+    let of: DimChangeSet;
+    if (ok === 'hsid,turn') {
+      const turn = turnOf(own(o, 'hsid'), own(o, 'turn'));
+      if (!turn) return null;
+      of = { kind: 'turn', hsid: own(o, 'hsid') as string, turn };
+    } else if (ok === 'act,principal') {
+      const principal = own(o, 'principal');
+      const act = own(o, 'act');
+      if (!NON_EMPTY(principal) || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+      of = { kind: 'act', principal, act };
+    } else return null;
+    const out: DimUndoMark = { of, restored: [] };
+    const ids = own(u, 'ids');
+    if (ids !== undefined) {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > DIM_UNDO_MARK_LIMITS.ids || new Set(ids).size !== ids.length) return null;
+      if (!ids.every((x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x))) return null;
+      out.ids = [...(ids as string[])];
+    }
+    const restored = own(u, 'restored');
+    if (restored !== undefined) {
+      if (!Array.isArray(restored) || restored.length > DIM_UNDO_MARK_LIMITS.restored) return null;
+      const ops = own(p, 'ops');
+      const added = new Set<string>();
+      if (Array.isArray(ops)) {
+        for (const op of ops) {
+          if (!isPlainObject(op) || own(op, 'type') !== 'add') continue;
+          const node = own(op, 'node');
+          const nid = isPlainObject(node) ? own(node, 'id') : undefined;
+          if (typeof nid === 'string') added.add(nid);
+        }
+      }
+      const seen = new Set<string>();
+      for (const e of restored) {
+        if (!Array.isArray(e) || e.length !== 3) continue;
+        const [newId, oldId, by] = e as unknown[];
+        if (typeof newId !== 'string' || typeof oldId !== 'string' || !DIM_NODE_ID_PATTERN.test(newId) || !DIM_NODE_ID_PATTERN.test(oldId)) continue;
+        if (!added.has(newId) || seen.has(newId) || newId === oldId) continue;
+        seen.add(newId);
+        out.restored.push({ newId, oldId, by: dimViewBy(by) });
+      }
+    }
+    return out;
+  } catch {
+    return null;
   }
 }
 

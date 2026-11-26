@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KINDS, dimAttrDigest, dimHash, dimViewOf, foldDim, validateDimOps,
+  DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_UNDO_MARK_LIMITS, dimActOf, dimAttrDigest, dimChangeSetOf, dimHash, dimUndoMarkOf, dimViewOf, foldDim, validateDimOps,
   type DimActor, type DimBy, type DimFoldNode, type DimRow, type DimState,
 } from '../src/dim.js';
 
@@ -148,5 +148,87 @@ describe('E0 item 4: dimAttrDigest (Aegis G7)', () => {
     const text = JSON.stringify(CLIENT_API_DESCRIPTOR);
     for (const w of ['dim-attr', 'changedBy', 'otherBy', 'wordsBy', 'restoredFrom', 'dimMayEdit']) expect([w, text.includes(w)]).toEqual([w, false]);
     expect(computeClientApiId()).toBe(CLIENT_API_ID);
+  });
+});
+
+describe('E0 item 5: the honouring readers dimActOf, dimChangeSetOf and dimUndoMarkOf (Aegis ruling 3)', () => {
+  const ACT = '01JVA1DACT0000000000000001';
+  const opRow = (relayedFor: unknown, extra: Record<string, unknown> = {}, ops: unknown[] = []): DimRow => ({ seq: 5, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops, relayedFor, ...extra } });
+  const gui = { principal: HUMAN, surface: 'gui', connId: 'c1' };
+  const tool = { principal: 'p:t/session', surface: 'bridge', agent: 'claude', hsid: 'h1', turn: 'turn:h1/3' };
+
+  it('act is honoured only on a person\'s gui row, and the set is (principal, act)', () => {
+    expect(dimActOf(opRow(gui, { act: ACT }))).toEqual({ principal: HUMAN, act: ACT });
+    expect(dimChangeSetOf(opRow(gui, { act: ACT }))).toEqual({ kind: 'act', principal: HUMAN, act: ACT });
+    // a second principal reusing the first person's act id is another set
+    expect(dimChangeSetOf(opRow({ ...gui, principal: 'p:t/other' }, { act: ACT }))).toEqual({ kind: 'act', principal: 'p:t/other', act: ACT });
+    // forgeries and near misses: an agent row, a cli row, a gui row naming an agent, no stamp, a bad pattern, a prototype key, another kind
+    expect(dimActOf(opRow(tool, { act: ACT }))).toBeNull();
+    expect(dimActOf(opRow({ principal: HUMAN, surface: 'cli' }, { act: ACT }))).toBeNull();
+    expect(dimActOf(opRow({ ...gui, agent: 'claude' }, { act: ACT }))).toBeNull();
+    expect(dimActOf(opRow(undefined, { act: ACT }))).toBeNull();
+    expect(dimActOf(opRow({ principal: '', surface: 'gui' }, { act: ACT }))).toBeNull();
+    for (const bad of ['', 'act-1', ACT.toLowerCase(), `${ACT}0`, 'I'.repeat(26), 7, null, { act: ACT }]) expect(dimActOf(opRow(gui, { act: bad }))).toBeNull();
+    const proto = Object.assign(Object.create({ act: ACT }) as Record<string, unknown>, { v: 1, dim: DIM, ops: [], relayedFor: gui });
+    expect(dimActOf({ seq: 5, kind: DIM_KINDS.op, payload: proto })).toBeNull();
+    expect(dimActOf({ seq: 5, kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, act: ACT, relayedFor: gui } })).toBeNull();
+    expect(dimActOf(null as unknown as DimRow)).toBeNull();
+  });
+
+  it('an agent\'s set is (stamp.hsid, turn), turn honoured only as turn:<stamp.hsid>/<n>; an act on an agent row does not group it', () => {
+    expect(dimChangeSetOf(opRow(tool))).toEqual({ kind: 'turn', hsid: 'h1', turn: 'turn:h1/3' });
+    expect(dimChangeSetOf(opRow(tool, { act: ACT }))).toEqual({ kind: 'turn', hsid: 'h1', turn: 'turn:h1/3' });
+    for (const turn of ['turn:h2/3', 'turn:h1/0', 'turn:h1/03', 'turn:h1/3x', 'turn:h1/', 'h1/3', 3, undefined]) expect([turn, dimChangeSetOf(opRow({ ...tool, turn }))]).toEqual([turn, null]);
+    expect(dimChangeSetOf(opRow({ ...tool, hsid: '' , turn: 'turn:/3' }))).toBeNull();
+    expect(dimChangeSetOf(opRow({ ...tool, agent: '' }))).toBeNull();
+    // a person's row carrying a turn is not an agent set
+    expect(dimChangeSetOf(opRow({ ...gui, hsid: 'h1', turn: 'turn:h1/3' }))).toBeNull();
+  });
+
+  it('dimUndoMarkOf honours of in its two forms, ids and restored within caps, and only entries naming an add of the same row', () => {
+    const add = (n: number): unknown => ({ type: 'add', node: rect(n) });
+    const mark = (undo: unknown, ops: unknown[] = [add(10)], stamp: unknown = gui): DimRow => opRow(stamp, { undo }, ops);
+    const ofTurn = { hsid: 'h1', turn: 'turn:h1/3' };
+    expect(dimUndoMarkOf(mark({ of: ofTurn, restored: [[id(10), id(1), handOf(kit)]] }))).toEqual({ of: { kind: 'turn', ...ofTurn }, restored: [{ newId: id(10), oldId: id(1), by: handOf(kit) }] });
+    expect(dimUndoMarkOf(mark({ of: { principal: HUMAN, act: ACT }, ids: [id(1)] }, [], tool))).toEqual({ of: { kind: 'act', principal: HUMAN, act: ACT }, ids: [id(1)], restored: [] });
+    // of: only the two forms, closed keys
+    for (const of of [{ act: ACT }, { turn: 'turn:h1/3' }, { ...ofTurn, act: ACT }, { hsid: 'h2', turn: 'turn:h1/3' }, { principal: '', act: ACT }, { principal: HUMAN, act: 'x' }, 'turn:h1/3', null]) expect(dimUndoMarkOf(mark({ of }))).toBeNull();
+    // a marker naming an id the row did not add is ignored (that entry), as is a repeat, a self-restore and a malformed entry
+    const r = dimUndoMarkOf(mark({ of: ofTurn, restored: [[id(11), id(1), handOf(human)], [id(10), id(2), handOf(human)], [id(10), id(3), handOf(human)], [id(10), id(10), handOf(human)], [id(10)], 'x'] }));
+    expect(r!.restored).toEqual([{ newId: id(10), oldId: id(2), by: handOf(human) }]);
+    // an update of an existing node is not an add
+    expect(dimUndoMarkOf(mark({ of: ofTurn, restored: [[id(10), id(1), handOf(human)]] }, [{ type: 'update', id: id(10), patch: { x: 1 } }]))!.restored).toEqual([]);
+    // the hand is bounded: a forged hand reads as the unknown hand, never human
+    expect(dimUndoMarkOf(mark({ of: ofTurn, restored: [[id(10), id(1), { cls: 'human', principal: 'p:t/human\u202e' }]] }))!.restored[0]!.by).toEqual({ cls: 'unknown', principal: 'unknown' });
+    // caps
+    const many = Array.from({ length: DIM_UNDO_MARK_LIMITS.restored + 1 }, (_, i) => [id(10), id(i), handOf(human)]);
+    expect(dimUndoMarkOf(mark({ of: ofTurn, restored: many }))).toBeNull();
+    expect(dimUndoMarkOf(mark({ of: ofTurn, ids: Array.from({ length: 65 }, (_, i) => `01JVA1D000000000000000${String(i).padStart(4, '0')}`) }))).toBeNull();
+    expect(dimUndoMarkOf(mark({ of: ofTurn, ids: [] }))).toBeNull();
+    expect(dimUndoMarkOf(mark({ of: ofTurn, ids: [id(1), id(1)] }))).toBeNull();
+    expect(dimUndoMarkOf(mark({ of: ofTurn, extra: 1 }))).toBeNull();
+    // a marker on a row whose stamp vouches for nobody is ignored
+    expect(dimUndoMarkOf(mark({ of: ofTurn }, [add(10)], null))).toBeNull();
+    expect(dimUndoMarkOf(mark({ of: ofTurn }, [add(10)], { principal: 'p:t/x', surface: 'bridge' }))).toBeNull();
+    expect(dimUndoMarkOf({ seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, undo: { of: ofTurn }, relayedFor: gui } })).toBeNull();
+  });
+
+  it('G5: the fold records restoredFrom with the ORIGINAL hand from an honoured marker only; by stays the undoer', () => {
+    const rows = [start(), row(kit, [{ type: 'add', node: text(1, 'kit words') }], {}, 'h2'), row(claude, [{ type: 'delete', id: id(1) }])];
+    rows.push(row(human, [{ type: 'add', node: text(10, 'kit words') }], { act: '01JVA1DACT0000000000000002', undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: [[id(10), id(1), handOf(kit)]] } }));
+    const n = foldDim(rows).nodes.get(id(10))!;
+    expect([n.by, n.restoredFrom]).toEqual([handOf(human), { id: id(1), by: handOf(kit) }]);
+    expect(dimViewOf(foldDim(rows)).nodes.find((x) => x.id === id(10))!.restoredFrom).toEqual({ id: id(1), by: handOf(kit) });
+    // a forged entry (an id the row did not add, a marker on an agent add claiming a human origin) never changes by
+    const forged = [start(), row(claude, [{ type: 'add', node: rect(20) }], { undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: [[id(21), id(1), handOf(human)]] } })];
+    expect(foldDim(forged).nodes.get(id(20))!.restoredFrom).toBeUndefined();
+    const claimed = [start(), row(claude, [{ type: 'add', node: rect(20) }], { undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: [[id(20), id(1), handOf(human)]] } })];
+    expect(foldDim(claimed).nodes.get(id(20))!.by).toEqual(handOf(claude));
+    // a marker on an unstamped row is not read at all
+    const bareRow: DimRow = { seq: 9, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: [{ type: 'add', node: rect(30) }], undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: [[id(30), id(1), handOf(human)]] } } };
+    expect(foldDim([start(), bareRow]).nodes.get(id(30))!.restoredFrom).toBeUndefined();
+    // the hash is the same with or without the marker
+    const plain = rows.map((r) => ({ ...r, payload: { ...(r.payload as Record<string, unknown>), undo: undefined } }));
+    expect(dimHash(foldDim(plain))).toBe(dimHash(foldDim(rows)));
   });
 });
