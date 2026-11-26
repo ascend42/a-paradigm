@@ -1975,6 +1975,7 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-foot .bd-hand-keyed { flex: none; }
 .key.quiet.bd-grant { display: inline-flex; align-items: center; gap: 6px; box-sizing: content-box; height: var(--key-h); min-height: var(--key-h); padding: 0 8px; margin-left: 2px; min-width: calc(12ch + 24px); justify-content: flex-start; font-size: var(--fs-control); font-weight: 400; color: var(--ink2); white-space: nowrap; }
 .bd-grant .bd-grant-g { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 12px; }
+.bd-grant .bd-grant-w { white-space: nowrap; }
 .bd-grant .bd-grant-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 4 2; }
 .bd-grant .bd-grant-g .spin { width: 9px; height: 9px; box-sizing: border-box; border: 1.5px solid var(--rule); border-top-color: var(--key-edge); border-radius: 50%; animation: turn-spin 0.9s linear infinite; }
 [data-motion="reduced"] .bd-grant .bd-grant-g .spin { animation: none; }
