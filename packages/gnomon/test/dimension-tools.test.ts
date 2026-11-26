@@ -707,6 +707,7 @@ describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
     for (const t of m.provides.tools) {
       const d = t.schema.description;
       expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), d.includes("a person's marks included")]).toEqual([t.name, true, true, true, true, true]);
+      expect([t.name, d.includes('today the board refuses a change to a mark you did not draw (not-owner)')]).toEqual([t.name, true]);
       // the bridge lists a tool only with a description of at most 1,024 characters and a schema of at most 8 KiB
       expect([t.name, d.length <= 1_024, JSON.stringify(t.schema).length <= 8 * 1024]).toEqual([t.name, true, true]);
     }
@@ -930,5 +931,16 @@ describe('ruling on Probe Q1: an agent may add inside another hand\'s frame; a c
     expect(f.nodes.get(child)!.node.parent).toBe(ulid(900));
     expect(JSON.stringify(f.nodes.get(ulid(900)))).toBe(before);
     expect(((await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(900), patch: { title: 'Mine' } }] })).refused as Array<{ code: string }>)[0]!.code).toBe('not-owner');
+  });
+});
+
+describe('I-3 at the mod: a resumed session continues its turn numbers, so it draws with a fresh budget', () => {
+  it('drawn out at turn 40; the resumed run\'s turn 41 (the kernel continues after the last turn.sent) draws 64; turn 40 again has none', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    expect((await w.tool('dim-draw', { ops: ops(64, 1) }, agentOf(A, 40))).budgetLeft).toBe(0);
+    await w.restart(); // the new kernel's mod: the charge is in state
+    expect(await w.tool('dim-draw', { ops: ops(1, 200) }, agentOf(A, 40))).toMatchObject({ code: 'turn-budget' });
+    expect(await w.tool('dim-draw', { ops: ops(64, 300) }, agentOf(A, 41))).toMatchObject({ ok: true, applied: 64 });
   });
 });
