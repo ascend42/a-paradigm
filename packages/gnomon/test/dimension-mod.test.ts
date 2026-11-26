@@ -421,10 +421,11 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
   );
 
   it(
-    'tool.call answers not-available and appends nothing (Aegis A3)',
+    'tool.call with no host-known caller is refused not-agent-tool and appends nothing (Aegis A3)',
     async () => {
       const w = await dimRig();
-      for (const tool of ['dim-view', 'dim-draw']) expect(await w.h.callTool(DIMENSION, tool, { dim: dimId(1), ops: [rectOp(1)] })).toEqual({ refused: 'not-available', saw: [] });
+      // S1.4: a call with no host-known caller is nobody's: refused before anything is read
+      for (const tool of ['dim-view', 'dim-draw']) expect(await w.h.callTool(DIMENSION, tool, { dim: dimId(1), ops: [rectOp(1)] })).toMatchObject({ ok: false, code: 'not-agent-tool' });
       expect(w.log.rows).toEqual([]);
       expect(w.state()).toEqual({});
     },
@@ -748,7 +749,7 @@ describe('#dimension-mod: the log is the truth, the index a hint (Aegis S1.3 M1,
       expect(await w.run('dim.open', { dim, title: 'New log', opened: 'command' })).toMatchObject({ ok: true, created: true });
       const s = w.state();
       expect([s.dims, s.log, s.kfs]).toEqual([[dim.slice(4)], FAKE_LOG_ID, []]);
-      expect(Object.keys(s).sort()).toEqual(['dims', `idx:${dim.slice(4)}`, 'kfs', 'log'].sort());
+      expect(Object.keys(s).sort()).toEqual(['dims', `idx:${dim.slice(4)}`, 'kfs', 'log', 'opens'].sort());
       // a stale id is unknown under this log, not served from an old index
       expect((await w.run('dim.op', { dim: `dim:${stale[0]}`, ops: [rectOp(1)] })).code).toBe('dim-unknown');
     },

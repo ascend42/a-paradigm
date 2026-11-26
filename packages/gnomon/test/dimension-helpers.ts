@@ -100,13 +100,14 @@ export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): F
           throw new Error('append failed (test)');
         }
         seq += 1;
-        log.rows.push({ ...row, payload: JSON.parse(JSON.stringify(row.payload)) as Record<string, unknown>, seq });
+        const mine = seq;
+        log.rows.push({ ...row, payload: JSON.parse(JSON.stringify(row.payload)) as Record<string, unknown>, seq: mine });
         log.afterAppend?.(log.rows[log.rows.length - 1]!);
         if (log.loseReplies > 0) {
           log.loseReplies -= 1;
           throw new Error('reply lost (test)');
         }
-        return { seq };
+        return { seq: mine };
       },
       callAs: async (_principal, verb, params) => {
         if (verb !== 'log.read') return {};

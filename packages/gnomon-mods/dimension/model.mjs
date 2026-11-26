@@ -3,7 +3,6 @@
 // without a host. The fold and the validator are the published `dim-shape:v1` (dim-shape.mjs, generated).
 import {
   DIM_AGENT_LABEL_PATTERN,
-  DIM_AUX_KINDS,
   DIM_FIELDS,
   DIM_ID_PATTERN,
   DIM_KINDS,
@@ -18,7 +17,6 @@ import {
   DIM_Z_PATTERN,
   dimGrantDefault,
   dimHash,
-  dimMayDraw,
   dimViewOf,
   dimZPlace,
   emptyDimState,
@@ -234,7 +232,11 @@ export function rowProblem(payload, stamp) {
 
 /** The canonical-JSON byte size of the row with its stamp, or `null` when the host would refuse it (see rowProblem). */
 export function rowBytes(payload, stamp) {
-  const full = { ...payload, relayedFor: stamp };
+  return measure({ ...payload, relayedFor: stamp }, ROW_MAX_BYTES, ROW_MAX_VISITED);
+}
+
+/** The JSON byte size of `full`, or `null` past `maxBytes`, `maxVisited` values or depth ROW_MAX_DEPTH. */
+export function measure(full, maxBytes, maxVisited) {
   // the walk first: it stops after 4,096 values whatever it is given, so the byte count below reads a bounded tree
   const stack = [{ v: full, depth: 1 }];
   let visited = 0;
@@ -245,19 +247,19 @@ export function rowBytes(payload, stamp) {
     const keys = Array.isArray(v) ? null : Object.keys(v);
     const n = keys ? keys.length : v.length;
     visited += n;
-    if (visited > ROW_MAX_VISITED) return null;
+    if (visited > maxVisited) return null;
     for (let i = 0; i < n; i++) {
       const c = keys ? v[keys[i]] : v[i];
       if (keys) chars += keys[i].length;
       if (typeof c === 'string') chars += c.length;
       else if (c !== null && typeof c === 'object') stack.push({ v: c, depth: depth + 1 });
       // a UTF-8 byte count is never below the UTF-16 length: past the limit already, without encoding anything
-      if (chars > ROW_MAX_BYTES) return null;
+      if (chars > maxBytes) return null;
     }
   }
   try {
     const bytes = utf8.encode(JSON.stringify(full)).length;
-    return bytes > ROW_MAX_BYTES ? null : bytes;
+    return bytes > maxBytes ? null : bytes;
   } catch {
     return null;
   }
@@ -622,4 +624,133 @@ export function changesOf(rows, byOf) {
     return e;
   });
   return { entries, touched };
+}
+
+/* ── dim-draw: tool sugar, packing and the count row ──────────────────────── */
+
+const NEW_KEY = /^new:[a-z0-9]{1,16}$/;
+/** A copy of an object's OWN enumerable keys, each defined (never assigned: an own `__proto__` stays a key the validator refuses by name). */
+function copyOwn(o) {
+  const out = {};
+  for (const k of Object.keys(o)) setOwn(out, k, o[k]);
+  return out;
+}
+function setOwn(o, k, v) {
+  Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true });
+}
+
+/**
+ * Tool sugar, resolved BEFORE validation and never stored (S1.4 §2). An `add` may leave out `node.id` or give
+ * `new:<key>` (`[a-z0-9]{1,16}`): the mod mints a ULID. `from`, `to` and `parent` of a later add or update may name
+ * that `new:<key>`. An `add` with no `z` goes on top (`dimZPlace` above the highest z of the board and of the
+ * call). Everything else passes through as given, for the validator to accept or refuse by name. `created` maps an
+ * add's index to `{key?, id}`. `mint` is the caller's ULID source (this file does no I/O).
+ */
+export function resolveSugar(state, ops, mint) {
+  const keys = new Map();
+  let top = null;
+  for (const [, n] of state.nodes) {
+    const z = n.node.z;
+    if (typeof z === 'string' && DIM_Z_PATTERN.test(z) && (top === null || z > top)) top = z;
+  }
+  const out = [];
+  const created = new Map();
+  const link = (target, src) => {
+    for (const f of ['from', 'to', 'parent']) {
+      const v = own(src, f);
+      if (typeof v === 'string' && keys.has(v)) setOwn(target, f, keys.get(v));
+    }
+  };
+  for (let i = 0; i < ops.length; i++) {
+    const o = plain(ops[i]);
+    const type = o ? own(o, 'type') : undefined;
+    const node = type === 'add' ? plain(own(o, 'node')) : null;
+    const patch = type === 'update' ? plain(own(o, 'patch')) : null;
+    if (node) {
+      const n = copyOwn(node);
+      const id = own(node, 'id');
+      let key;
+      if (id === undefined || (typeof id === 'string' && NEW_KEY.test(id) && !keys.has(id))) {
+        const m = mint();
+        if (id !== undefined) {
+          key = id.slice(4);
+          keys.set(id, m);
+        }
+        setOwn(n, 'id', m);
+      }
+      const z = own(node, 'z');
+      if (z === undefined) {
+        const placed = dimZPlace(top, null);
+        setOwn(n, 'z', placed);
+        top = placed;
+      } else if (typeof z === 'string' && DIM_Z_PATTERN.test(z) && (top === null || z > top)) top = z;
+      link(n, node);
+      const op = copyOwn(o);
+      setOwn(op, 'node', n);
+      out.push(op);
+      if (typeof own(n, 'id') === 'string') created.set(i, { ...(key !== undefined ? { key } : {}), id: own(n, 'id') });
+    } else if (patch) {
+      const p = copyOwn(patch);
+      link(p, patch);
+      const op = copyOwn(o);
+      setOwn(op, 'patch', p);
+      out.push(op);
+    } else out.push(ops[i]);
+  }
+  return { ops: out, created };
+}
+
+/**
+ * Pack accepted ops, in order, into at most CALL_ROWS rows that each pass the host's row limits, inside
+ * `budgetBytes` in all. Returns the rows as lists of positions into `ok`, and `cut`: the first position that did
+ * not fit (it and everything after it are refused `call-too-large`, so no later op lands without an earlier one).
+ */
+export function packRows(dim, ok, oid, stamp, budgetBytes) {
+  const rows = [];
+  let cur = [];
+  let curBytes = 0;
+  let used = 0;
+  let i = 0;
+  while (i < ok.length) {
+    const b = rowBytes(opPayload(dim, [...cur.map((j) => ok[j]), ok[i]], oid), stamp);
+    if (b !== null && used + b <= budgetBytes) {
+      cur.push(i);
+      curBytes = b;
+      i++;
+      continue;
+    }
+    if (cur.length === 0 || rows.length + 1 >= CALL_ROWS) break;
+    rows.push(cur);
+    used += curBytes;
+    cur = [];
+    curBytes = 0;
+  }
+  if (cur.length > 0) rows.push(cur);
+  return { rows, cut: i };
+}
+
+/**
+ * The count row of a draw with refusals (C5): closed enums and counts only. A key is `<field>|<code>` with the
+ * field from DIM_FIELDS (else `unknown`) and the code from the two closed lists (else `unknown`): never input.
+ */
+export function countPayload(dim, refused) {
+  const by = {};
+  let pairs = 0;
+  let more = 0;
+  for (const r of refused) {
+    const field = DIM_FIELDS.includes(r.field) ? r.field : 'unknown';
+    const code = DIM_REFUSAL_CODES.includes(r.code) || Object.hasOwn(MOD_REFUSAL_FIXES, r.code) ? r.code : 'unknown';
+    const k = `${field}|${code}`;
+    if (Object.hasOwn(by, k)) by[k] += 1;
+    else if (pairs < COUNT_PAIRS) {
+      by[k] = 1;
+      pairs++;
+    } else more++;
+  }
+  return { v: DIM_ROW_VERSION, dim, n: refused.length, by, ...(more > 0 ? { more } : {}) };
+}
+
+/** A refusal entry of a draw: exactly `{index, field, code, fix}` from the closed lists (no rule, no swatch, no input). */
+export function refusedEntry(index, field, code) {
+  return { index, field: DIM_FIELDS.includes(field) ? field : 'unknown', code, fix: fixFor(code) };
 }

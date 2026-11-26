@@ -330,3 +330,291 @@ describe('#dimension-mod dim-view (S1.4 §2; G-DDL-03 view row; Aegis A3)', () =
     expect((await w.tool('dim-view', {}, (({ turn: _t, ...x }) => x)(whole) as Record<string, string>)).code).toBe('no-turn');
   });
 });
+
+const ops = (n: number, from = 1, more: Record<string, unknown> = {}) => Array.from({ length: n }, (_, i) => rectOp(from + i, more));
+/** Text marks that need four rows of about 15 KiB: the whole per-call byte budget of one draw. */
+const fullDraw = (n: number) => Array.from({ length: n }, (_, i) => ({ type: 'add', node: { id: ulid(500 + i), kind: 'text', x: i, y: i, z: 'V', text: 'plan the auth handoff step by step '.repeat(26) } }));
+const opRows = (w: Rig) => w.rowsOf(DIM_KINDS.op);
+const countRows = (w: Rig) => w.rowsOf(DIM_AUX_KINDS.drawRefused);
+
+describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
+  it('an agent adds 3 marks: one row, the nodes fold agent from the host stamp, created has the 3 ids (minted, new:<key> and given)', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const res = await w.tool('dim-draw', {
+      ops: [
+        { type: 'add', node: { id: 'new:box', kind: 'rect', x: 0, y: 0, w: 10, h: 10 } },
+        { type: 'add', node: { kind: 'text', x: 0, y: 20, text: 'note' } },
+        { type: 'add', node: { id: ulid(7), kind: 'arrow', x: 0, y: 0, z: 'k', points: [0, 0, 5, 5], from: 'new:box' } },
+      ],
+    });
+    expect(res).toMatchObject({ ok: true, dim, applied: 3, refused: [], budgetLeft: 61 });
+    expect(opRows(w)).toHaveLength(1);
+    const created = res.created as Array<{ index: number; key?: string; id: string }>;
+    expect(created.map((c) => c.index)).toEqual([0, 1, 2]);
+    expect(created[0]!.key).toBe('box');
+    expect(created[2]!.id).toBe(ulid(7));
+    const f = w.log.fold(dim);
+    for (const c of created) expect(f.nodes.get(c.id)!.by).toEqual({ cls: 'agent', principal: agentOf(A).principal, agent: 'claude' });
+    // new:<key> resolved to the minted id; the stored op has exactly the op keys (no sugar stored)
+    expect(f.nodes.get(ulid(7))!.node.from).toBe(created[0]!.id);
+    expect(JSON.stringify(opRows(w)[0]!.payload)).not.toContain('new:');
+    expect(res.hash).toBe(dimHash(f));
+    // an add with no z is placed on top
+    const zs = created.map((c) => f.nodes.get(c.id)!.node.z as string);
+    expect(zs[1]! > zs[0]!).toBe(true);
+  });
+
+  it('ownership: an agent cannot edit a human mark or another principal\'s mark; it edits its own', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.run('dim.grant', { dim, write: true }, B);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    const mine = await w.tool('dim-draw', { ops: [rectOp(2)] }, agentOf(B));
+    expect(mine).toMatchObject({ applied: 1 });
+    const before = opRows(w).length;
+    for (const op of [{ type: 'update', id: ulid(1), patch: { label: 'x' } }, { type: 'move', ids: [ulid(1)], dx: 1, dy: 1 }, { type: 'delete', id: ulid(1) }, { type: 'delete', id: ulid(2) }]) {
+      const res = await w.tool('dim-draw', { ops: [op] }, agentOf(A));
+      expect([res.ok, (res.refused as Array<{ code: string }>)[0]!.code]).toEqual([false, 'not-owner']);
+    }
+    expect(opRows(w)).toHaveLength(before);
+    expect((await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(2), patch: { label: 'mine' } }] }, agentOf(B))).applied).toBe(1);
+  });
+
+  it('G-DDL-09: link, by, relayedFor and an unknown field are refused by name; identity in input changes nothing', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    for (const [extra, field] of [[{ link: 'x' }, 'unknown'], [{ by: { cls: 'human', principal: HUMAN } }, 'unknown'], [{ relayedFor: { surface: 'gui' } }, 'unknown'], [{ colour: 'red' }, 'unknown']] as const) {
+      const res = await w.tool('dim-draw', { ops: [rectOp(1, extra)] });
+      expect(res.refused).toEqual([{ index: 0, field, code: 'field-unknown', fix: expect.any(String) }]);
+    }
+    // identity anywhere in input: refused as an unknown top-level key, or ignored; the row's hand is the stamp's
+    expect((await w.tool('dim-draw', { ops: [rectOp(1)], hsid: B, principal: HUMAN })).code).toBe('args-bad');
+    const ok = await w.tool('dim-draw', { ops: [{ type: 'add', node: { id: ulid(2), kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 } }] });
+    expect(ok.applied).toBe(1);
+    expect(opRows(w).at(-1)!.payload.relayedFor).toEqual(agentOf(A));
+    expect(w.log.fold(dim).nodes.get(ulid(2))!.by.cls).toBe('agent');
+    // A5: a voice stamp folds agent too, and gets the same refusals
+    const voice = { ...agentOf(A), surface: 'voice' };
+    expect((await w.tool('dim-draw', { ops: [rectOp(1, { link: 'x' })] }, voice)).refused).toEqual((await w.tool('dim-draw', { ops: [rectOp(1, { link: 'x' })] })).refused);
+  });
+
+  it('65 ops in one call: too-many-ops and no row; a 64-op batch over one row lands as several rows in order, all folded', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const many = await w.tool('dim-draw', { ops: ops(65) });
+    expect([many.ok, many.code, (many.refused as Array<{ code: string }>)[0]!.code]).toEqual([false, 'ops-refused', 'too-many-ops']);
+    expect(opRows(w)).toHaveLength(0);
+    const big = await w.tool('dim-draw', { ops: ops(64, 100, { label: 'x'.repeat(190) }) });
+    expect(big).toMatchObject({ ok: true, applied: 64, refused: [] });
+    const rows = opRows(w);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.length).toBeLessThanOrEqual(4);
+    expect(rows.flatMap((r) => (r.payload.ops as Array<{ node: { id: string } }>).map((o) => o.node.id))).toEqual(ops(64, 100).map((o) => (o.node as { id: string }).id));
+    expect(w.log.fold(dim).nodes.size).toBe(64);
+  });
+
+  it('a secret in op 60 of 64: no op row at all, one count row of closed keys', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const batch = ops(64);
+    batch[59] = { type: 'add', node: { id: ulid(60), kind: 'text', x: 0, y: 0, z: 'V', text: 'key AKIAIOSFODNN7EXAMPLE' } };
+    const res = await w.tool('dim-draw', { ops: batch });
+    expect([res.ok, res.code]).toEqual([false, 'secret']);
+    expect(opRows(w)).toHaveLength(0);
+    expect(countRows(w)).toHaveLength(1);
+    expect(countRows(w)[0]!.payload).toEqual({ v: 1, dim, n: 1, by: { 'text|secret': 1 }, relayedFor: agentOf(A) });
+    expect(JSON.stringify(countRows(w))).not.toContain('AKIA');
+  });
+
+  it('M8: 40 ops then 40 in the same turn: 24 applied, 16 turn-budget; a new turn resets; an older turn has nothing left', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    expect((await w.tool('dim-draw', { ops: ops(40, 1) }, agentOf(A, 3))).applied).toBe(40);
+    const second = await w.tool('dim-draw', { ops: ops(40, 100) }, agentOf(A, 3));
+    expect([second.applied, second.budgetLeft]).toEqual([24, 0]);
+    expect((second.refused as Array<{ code: string; index: number }>).map((r) => [r.index, r.code])).toEqual(Array.from({ length: 16 }, (_, i) => [24 + i, 'turn-budget']));
+    expect(await w.tool('dim-draw', { ops: ops(1, 300) }, agentOf(A, 3))).toMatchObject({ ok: false, code: 'turn-budget', budgetLeft: 0 });
+    expect((await w.tool('dim-draw', { ops: ops(1, 300) }, agentOf(A, 4))).applied).toBe(1);
+    expect(await w.tool('dim-draw', { ops: ops(1, 301) }, agentOf(A, 2))).toMatchObject({ ok: false, code: 'turn-budget' });
+  });
+
+  it('M8: the charge is written before the first row: a mod killed after the charge has less budget after its restart', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    // the append fails: the charge stands (never refunded), as it would after a crash between charge and append
+    w.log.failAppends = 1;
+    const res = await w.tool('dim-draw', { ops: ops(10) });
+    expect([res.ok, res.code]).toEqual([false, 'append-failed']);
+    expect(opRows(w)).toHaveLength(0);
+    await w.restart();
+    expect((await w.tool('dim-view', {})).budgetLeft).toBe(54);
+    expect(w.state().turns).toEqual([[A, 1, 10, 1]]);
+  });
+
+  it('M8: 17 sessions drawing do not reset the first one\'s count (the state is keyed by hsid)', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.tool('dim-draw', { ops: ops(60) });
+    const s = w.state();
+    // 17 more sessions charged in this turn, written as the mod writes them
+    const others = Array.from({ length: 17 }, (_, i) => [`hsid:v1:01HZZZZZZZZZZZZZZZZZZZZ${String(i).padStart(3, '0')}`, 1, 5, 0]);
+    await w.dropState(() => true);
+    s.turns = [...(s.turns as unknown[]), ...others];
+    await w.h.stop(DIMENSION);
+    fs.writeFileSync(path.join(hostDir(w.r.home, DIMENSION), 'state.db'), JSON.stringify(s));
+    await w.h.start(DIMENSION);
+    expect((await w.tool('dim-view', { dim })).budgetLeft).toBe(4);
+  });
+
+  it('A8: the same opId and input once: one set of rows, repeat: true, budget charged once; other input: op-id-reused', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    const first = await w.tool('dim-draw', { ops: ops(3), opId: 'draw-1' });
+    const again = await w.tool('dim-draw', { ops: ops(3), opId: 'draw-1' });
+    expect(again).toMatchObject({ ok: true, applied: 3, repeat: true, budgetLeft: 61, seq: first.seq });
+    expect(opRows(w)).toHaveLength(1);
+    expect(await w.tool('dim-draw', { ops: ops(2, 50), opId: 'draw-1' })).toMatchObject({ ok: false, code: 'op-id-reused' });
+    expect(opRows(w)).toHaveLength(1);
+    expect(await w.tool('dim-draw', { ops: ops(1), opId: 'bad id!' })).toMatchObject({ ok: false, code: 'op-id-bad' });
+  });
+
+  it('A8: after memory and keyframe are gone, an oid found in the rows never appends again, whatever the input', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    await w.tool('dim-draw', { ops: ops(3), opId: 'draw-1' });
+    await w.dropState((k) => k === 'opens' || k === 'turns');
+    const res = await w.tool('dim-draw', { ops: ops(5, 40), opId: 'draw-1' });
+    expect(res).toMatchObject({ ok: true, repeat: true, applied: 3 });
+    expect(opRows(w)).toHaveLength(1);
+  });
+
+  it('A8: a draw cut short (2 of 4 rows landed) answers a repeat counting only the rows that carry its oid, and never appends the rest', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    let n = 0;
+    w.log.afterAppend = (row) => {
+      if (row.kind === DIM_KINDS.op && ++n === 2) w.log.failAppends = 1;
+    };
+    const big = ops(64, 100, { label: 'x'.repeat(190) });
+    const cut = await w.tool('dim-draw', { ops: big, opId: 'big-1' });
+    expect(cut.ok).toBe(true);
+    const landedOps = opRows(w).reduce((a, r) => a + (r.payload.ops as unknown[]).length, 0);
+    expect(cut.applied).toBe(landedOps);
+    w.log.afterAppend = null;
+    await w.restart();
+    const re = await w.tool('dim-draw', { ops: big, opId: 'big-1' });
+    expect(re).toMatchObject({ ok: true, repeat: true, applied: landedOps });
+    expect(opRows(w).reduce((a, r) => a + (r.payload.ops as unknown[]).length, 0)).toBe(landedOps);
+  });
+
+  it('A8: actor, attached, ended and grant run before the memo: a revoked session gets its refusal, not the stored answer', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.tool('dim-draw', { ops: ops(2), opId: 'once' });
+    await w.run('dim.grant', { dim, write: false }, A);
+    expect(await w.tool('dim-draw', { ops: ops(2), opId: 'once' })).toMatchObject({ ok: false, code: 'write-not-granted' });
+  });
+
+  it('A8: the model\'s opId reaches no row, refusal, state key or keyframe', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const marker = 'MARKERopId0123456789';
+    await w.tool('dim-draw', { ops: ops(3), opId: marker });
+    await w.tool('dim-draw', { ops: ops(1, 90, { link: 'x' }), opId: `${marker}2` });
+    const refusedRes = await w.tool('dim-draw', { ops: ops(2, 50), opId: marker });
+    await w.run('dim.close', { dim });
+    expect(JSON.stringify(w.log.rows)).not.toContain('MARKER');
+    expect(JSON.stringify(refusedRes)).not.toContain('MARKER');
+    expect(JSON.stringify(w.state())).not.toContain('MARKER');
+    expect(opRows(w)[0]!.payload.oid).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it('grant off, then on, then revoked: write-not-granted, applied, write-not-granted', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    expect(await w.tool('dim-draw', { ops: ops(1) }, agentOf(B))).toMatchObject({ ok: false, code: 'write-not-granted' });
+    await w.run('dim.grant', { dim, write: true }, B);
+    expect((await w.tool('dim-draw', { ops: ops(1) }, agentOf(B))).applied).toBe(1);
+    await w.run('dim.grant', { dim, write: false }, B);
+    expect(await w.tool('dim-draw', { ops: ops(1, 5) }, agentOf(B))).toMatchObject({ ok: false, code: 'write-not-granted' });
+  });
+
+  it('M9: revoked after row 2 of 4: rows 3 and 4 never land and are listed write-not-granted', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    let n = 0;
+    w.log.afterAppend = (row) => {
+      if (row.kind === DIM_KINDS.op && ++n === 2) w.inject(DIM_AUX_KINDS.grant, { v: 1, dim, hsid: A, write: false, relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } });
+    };
+    const res = await w.tool('dim-draw', { ops: fullDraw(60) });
+    expect(opRows(w)).toHaveLength(2);
+    const landedOps = opRows(w).reduce((a, r) => a + (r.payload.ops as unknown[]).length, 0);
+    expect(res.applied).toBe(landedOps);
+    const refused = res.refused as Array<{ index: number; code: string }>;
+    expect(refused.length).toBe(60 - landedOps);
+    expect(refused.every((r) => r.code === 'write-not-granted')).toBe(true);
+    // the plan was four rows: the two that never landed are the revoked ones
+    expect(refused.map((r) => r.index)).toEqual(Array.from({ length: 60 - landedOps }, (_, i) => landedOps + i));
+  });
+
+  it('not attached; ended; no open dimension: not-attached; dim-ended; no-open-dim', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    expect(await w.tool('dim-draw', { ops: ops(1) })).toMatchObject({ code: 'no-open-dim' });
+    const dim = dimId(1);
+    await w.run('dim.open', { dim, title: 'Plan', opened: 'command' });
+    expect(await w.tool('dim-draw', { dim, ops: ops(1) }, agentOf(B))).toMatchObject({ code: 'not-attached' });
+    await w.run('dim.close', { dim });
+    expect(await w.tool('dim-draw', { ops: ops(1) })).toMatchObject({ code: 'dim-ended' });
+    expect(opRows(w)).toHaveLength(0);
+  });
+
+  it('the count row: closed keys from hostile field names, at most 8 per hsid and turn, and it still fits beside a full 4-row draw', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    const hostile = await w.tool('dim-draw', { ops: [rectOp(1, { ['__proto__x']: 1, 'text|secret': 2, constructor: 3 })] });
+    expect(hostile.ok).toBe(false);
+    expect(Object.keys(countRows(w)[0]!.payload.by as object)).toEqual(['unknown|field-unknown']);
+    for (let i = 0; i < 10; i++) await w.tool('dim-draw', { ops: [rectOp(1, { link: 'x' })] });
+    expect(countRows(w)).toHaveLength(8);
+    // a new turn: a full draw (4 rows of 16 KiB) with one refusal still writes its count row
+    const res = await w.tool('dim-draw', { ops: [...fullDraw(60), rectOp(1, { link: 'x' })] }, agentOf(A, 2));
+    expect(res.ok).toBe(true);
+    expect(opRows(w).length).toBe(4);
+    expect(countRows(w)).toHaveLength(9);
+  });
+});
+
+describe('#dimension-mod M4: a tool call writes two kinds only', () => {
+  it('source: the tool path reaches only appendTool, whose allowlist is the op and draw.refused kinds', () => {
+    const src = fs.readFileSync(path.join(DIMENSION_TREE, 'index.mjs'), 'utf8');
+    const from = src.indexOf('async function runTool(');
+    const to = src.indexOf('/* ── host → mod');
+    expect(from).toBeGreaterThan(0);
+    const tools = src.slice(from, to);
+    expect(tools.match(/\bappend\(host/g)).toHaveLength(1); // inside appendTool only
+    expect(/\bwrite\(/.test(tools)).toBe(false);
+    for (const k of ['DIM_KINDS.start', 'DIM_KINDS.attach', 'DIM_KINDS.end', 'DIM_AUX_KINDS.grant']) expect(tools.includes(k)).toBe(false);
+    expect(tools).toContain('const TOOL_KINDS = Object.freeze([DIM_KINDS.op, DIM_AUX_KINDS.drawRefused]);');
+    expect(tools).toMatch(/async function appendTool\(host, kind, payload\) \{\n\s+if \(!TOOL_KINDS\.includes\(kind\)\) return null;/);
+  });
+
+  it('behaviour: no tool input yields a start, attach, end or grant row', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const before = w.log.rows.length;
+    const hostile: unknown[] = [
+      { ops: [{ type: 'start' }] },
+      { ops: [{ type: 'attach', hsid: B }] },
+      { ops: [{ type: 'end' }] },
+      { ops: [{ type: 'grant', hsid: B, write: true }] },
+      { ops: [{ type: 'add', node: { kind: DIM_AUX_KINDS.grant, x: 0, y: 0 } }] },
+      { ops: [], kind: DIM_KINDS.end },
+    ];
+    for (const input of hostile) await w.tool('dim-draw', input);
+    for (const input of hostile) await w.tool('dim-view', input);
+    const kinds = new Set(w.log.rows.slice(before).map((r) => r.kind));
+    expect([...kinds].every((k) => k === DIM_AUX_KINDS.drawRefused)).toBe(true);
+    expect(w.log.fold(dim).attached).toEqual([A, B]);
+  });
+});

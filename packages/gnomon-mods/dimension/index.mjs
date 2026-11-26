@@ -11,14 +11,29 @@
 //  - every check, the 512 cap and the row-size check included, runs BEFORE the append;
 //  - mod state and the in-memory fold change only AFTER the append returned a seq;
 //  - a refusal is a code and a fixed sentence, never input.
-import { DIM_AUX_KINDS, DIM_KINDS, dimHash, dimMayDraw, dimRowBy, emptyDimGrants, emptyDimState, foldDim, foldDimGrants } from './dim-shape.mjs';
+import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimHash, dimMayDraw, dimOpOid, dimRowBy, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, validateDimOps } from './dim-shape.mjs';
 import {
   ATTACH_CAP,
   DIM_CAP,
   KEYFRAME_BUDGET_BYTES,
   KEYFRAME_DIMS,
   KEYFRAME_EVERY_OPS,
+  ANSWERS_CAP,
+  CALL_BYTES,
+  CALL_ROWS,
+  COUNT_ROWS_PER_TURN,
+  COUNT_ROW_RESERVE,
   MEMO_CAP,
+  ROW_MAX_VISITED,
+  TURNS_CAP,
+  countPayload,
+  encodeTurns,
+  measure,
+  packRows,
+  refusedEntry,
+  resolveSugar,
+  sumOf,
+  toolStampOf,
   OPENS_CAP,
   budgetLeft,
   changesOf,
@@ -456,9 +471,14 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
 
   if (commandId === 'dim.attach') {
     // idempotent: a session already attached appends nothing
-    if (attached) return { ok: true, already: true, dim: a.dim, seq: state.seq };
+    // an attached session's tools default to this board too: attaching is how the person opens it for that session
+    if (attached) {
+      await noteOpen(host, a.hsid, a.dim);
+      return { ok: true, already: true, dim: a.dim, seq: state.seq };
+    }
     if (state.attached.length >= ATTACH_CAP) return refusal('attach-cap');
     const seq = await write(DIM_KINDS.attach, attachPayload(a.dim, a.hsid));
+    if (typeof seq === 'number') await noteOpen(host, a.hsid, a.dim);
     return typeof seq === 'number' ? { ok: true, already: false, dim: a.dim, seq } : seq;
   }
 
@@ -565,7 +585,170 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   // attach is the only door (C6): no grant is needed to view, but an unattached session sees nothing
   if (!entry.state.attached.includes(actor.hsid)) return refusal('not-attached');
   if (name === 'dim-view') return viewTool(host, dim, entry, actor, a, cancelled);
-  return refusal('not-agent-tool');
+  return drawTool(host, dim, entry, actor, a, toolStampOf(relayedFor), cancelled);
+}
+
+/** dim → oid → {input, answer}: the last ANSWERS_CAP draws with an opId, in memory (A8) */
+const answers = new Map();
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+/** A fresh ULID for a node the agent left unnamed (time, then 80 random bits). */
+function mintUlid() {
+  let t = Date.now();
+  let head = '';
+  for (let i = 0; i < 10; i++) {
+    head = B32[t % 32] + head;
+    t = Math.floor(t / 32);
+  }
+  const rnd = crypto.getRandomValues(new Uint8Array(16));
+  let tail = '';
+  for (let i = 0; i < 16; i++) tail += B32[rnd[i] % 32];
+  return head + tail;
+}
+
+/**
+ * M4: the ONLY append a tool call can reach. A tool writes op rows and its count row, nothing else: never a start,
+ * attach, end or grant row, whatever the host's effect gate would allow.
+ */
+const TOOL_KINDS = Object.freeze([DIM_KINDS.op, DIM_AUX_KINDS.drawRefused]);
+async function appendTool(host, kind, payload) {
+  if (!TOOL_KINDS.includes(kind)) return null;
+  return append(host, kind, payload);
+}
+
+/** Charge the turn budget (M8): the state write comes BEFORE the first row, and is never refunded. */
+async function charge(host, actor, n, counts) {
+  const t = turns.get(actor.hsid);
+  const same = t && t.turn === actor.turn;
+  const next = new Map(turns);
+  next.delete(actor.hsid);
+  next.set(actor.hsid, { turn: actor.turn, used: (same ? t.used : 0) + n, counts: (same ? t.counts : 0) + counts });
+  // the least recently charged session goes first (stated residual: a 257th session drawing resets the oldest)
+  while (next.size > TURNS_CAP) next.delete(next.keys().next().value);
+  await host.set('turns', encodeTurns(next));
+  turns = next;
+}
+
+async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
+  // order (S1.4 §2, A8): actor, input, dimension, attached (runTool); ended; grant; THEN the op-id memo
+  if (entry.state.ended) return refusal('dim-ended');
+  if (!dimMayDraw(entry.state, entry.grants, actor.hsid)) return refusal('write-not-granted');
+  const oid = a.opId !== undefined ? dimOpOid(actor.hsid, dim, a.opId) : undefined;
+  if (oid === null) return refusal('op-id-bad');
+  let input = null;
+  if (oid !== undefined) {
+    try {
+      input = sumOf(JSON.stringify(a.ops));
+    } catch {
+      return refusal('args-bad');
+    }
+    const memo = answers.get(dim)?.get(oid);
+    if (memo) return memo.input === input ? { ...memo.answer, budgetLeft: budgetLeft(turns, actor), repeat: true } : refusal('op-id-reused');
+    // an oid found in the rows never appends again (after a restart the input is unknown: a repeat, A8)
+    const seen = entry.oids.get(oid);
+    if (seen) return { ok: true, dim, seq: entry.state.seq, hash: dimHash(entry.state), applied: seen.applied, created: [], refused: [], budgetLeft: budgetLeft(turns, actor), repeat: true };
+  }
+  const left = budgetLeft(turns, actor);
+  if (left === 0) return refusal('turn-budget', { budgetLeft: 0 });
+  // size before the validator reads anything: the whole call within the per-call bytes and 4 rows of values
+  if (measure(a.ops, CALL_BYTES, ROW_MAX_VISITED * CALL_ROWS) === null) return refusal('call-too-large', { budgetLeft: left });
+  if (a.ops.length > DIM_LIMITS.opsPerRow) return finishRefused(host, dim, entry, actor, [refusedEntry(-1, 'ops', 'too-many-ops')], 'ops-refused');
+  const sugar = resolveSugar(entry.state, a.ops, mintUlid);
+  // ONE validation of the whole batch (C5): a secret anywhere refuses everything before the first append
+  const v = validateDimOps(entry.state, sugar.ops, { cls: 'agent', principal: actor.principal, agent: actor.agent });
+  const refused = v.refused.map((r) => refusedEntry(r.index, r.field, r.code));
+  if (v.secret) return finishRefused(host, dim, entry, actor, refused, 'secret');
+  const bad = new Set(v.refused.map((r) => r.index));
+  const okIdx = [];
+  for (let i = 0; i < sugar.ops.length && !bad.has(-1); i++) if (!bad.has(i)) okIdx.push(i);
+  if (okIdx.length !== v.ok.length) return finishRefused(host, dim, entry, actor, refused, 'ops-refused');
+  // the budget: the first `left` accepted ops, the rest refused turn-budget
+  for (const i of okIdx.slice(left)) refused.push(refusedEntry(i, 'op', 'turn-budget'));
+  const take = Math.min(left, okIdx.length);
+  const packed = packRows(dim, v.ok.slice(0, take), oid, stamp, CALL_BYTES - COUNT_ROW_RESERVE);
+  for (const j of okIdx.slice(packed.cut, take)) refused.push(refusedEntry(j, 'op', 'call-too-large'));
+  const planned = packed.cut;
+  if (planned === 0) return finishRefused(host, dim, entry, actor, refused, 'ops-refused');
+  try {
+    await charge(host, actor, planned, 0);
+  } catch {
+    return refusal('unavailable');
+  }
+  const created = [];
+  let applied = 0;
+  let stop = null;
+  for (let r = 0; r < packed.rows.length; r++) {
+    const pos = packed.rows[r];
+    if (stop === null && cancelled()) stop = 'cancelled';
+    if (stop === null && r > 0) {
+      // revocation takes effect at the next row (M9): read what the log holds since the last row, then ask again
+      try {
+        await catchUp(host, dim, entry, cancelled);
+      } catch {
+        stop = cancelled() ? 'cancelled' : 'unavailable';
+      }
+      if (stop === null && (entry.state.ended || !dimMayDraw(entry.state, entry.grants, actor.hsid))) stop = 'write-not-granted';
+    }
+    let seq = null;
+    if (stop === null) {
+      const payload = opPayload(dim, pos.map((j) => v.ok[j]), oid);
+      seq = await appendTool(host, DIM_KINDS.op, payload);
+      if (seq === null) {
+        stop = 'append-failed';
+        loaded.delete(dim);
+      } else {
+        entry.state = landed(entry.state, DIM_KINDS.op, payload, stamp, seq);
+        entry.idx = { ...entry.idx, lastSeq: seq };
+        if (oid !== undefined) noteOid(entry.oids, payload, seq);
+        entry.sinceKf += pos.length;
+        applied += pos.length;
+        for (const j of pos) {
+          const c = sugar.created.get(okIdx[j]);
+          if (c) created.push({ index: okIdx[j], ...c });
+        }
+      }
+    }
+    if (stop !== null) for (const j of pos) refused.push(refusedEntry(okIdx[j], 'op', stop));
+  }
+  refused.sort((x, y) => x.index - y.index);
+  if (applied > 0) {
+    await saveIdx(host, dim, entry);
+    if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, dim, entry);
+  }
+  await countRow(host, dim, entry, actor, refused);
+  if (applied === 0) return refusal(stop ?? 'ops-refused', { dim, refused, budgetLeft: budgetLeft(turns, actor) });
+  const answer = { ok: true, dim, seq: entry.state.seq, hash: dimHash(entry.state), applied, created, refused, budgetLeft: budgetLeft(turns, actor) };
+  if (oid !== undefined) {
+    let m = answers.get(dim);
+    if (!m) {
+      while (answers.size >= 64) answers.delete(answers.keys().next().value);
+      m = new Map();
+      answers.set(dim, m);
+    }
+    m.set(oid, { input, answer });
+    while (m.size > ANSWERS_CAP) m.delete(m.keys().next().value);
+  }
+  return answer;
+}
+
+/** A draw that wrote no op row: its count row, then the refusal. */
+async function finishRefused(host, dim, entry, actor, refused, code) {
+  await countRow(host, dim, entry, actor, refused);
+  return refusal(code, { dim, refused, budgetLeft: budgetLeft(turns, actor) });
+}
+
+/** One count row for a draw with refusals; at most COUNT_ROWS_PER_TURN per session and turn. Best effort. */
+async function countRow(host, dim, entry, actor, refused) {
+  if (refused.length === 0) return;
+  const t = turns.get(actor.hsid);
+  const counts = t && t.turn === actor.turn ? t.counts : 0;
+  if (counts >= COUNT_ROWS_PER_TURN) return;
+  try {
+    await charge(host, actor, 0, 1);
+  } catch {
+    return;
+  }
+  // the count row is outside every fold and every page this mod reads: it never moves the index
+  await appendTool(host, DIM_AUX_KINDS.drawRefused, countPayload(dim, refused));
 }
 
 async function viewTool(host, dim, entry, actor, a, cancelled) {
