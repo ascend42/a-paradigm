@@ -802,26 +802,45 @@ function hsidOf(attached, payload) {
 function dimHsidOf(state, row) {
   return hsidOf(state.attached, row.payload);
 }
-function applyOp(d, op, by, hsid, seq) {
+function sameHand(a, b) {
+  return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
+}
+var WORDS_KEYS = /* @__PURE__ */ new Set(["text", "label", "title", "refs"]);
+function changed(cur, node, by, hsid, seq, words) {
+  const out = { ...cur, node, changedBy: by, changedSeq: seq, changedHsid: hsid };
+  if (!sameHand(by, cur.by)) {
+    out.otherBy = by;
+    out.otherSeq = seq;
+    if (words) {
+      out.wordsBy = by;
+      out.wordsSeq = seq;
+    }
+  }
+  return out;
+}
+function applyOp(d, op, by, hsid, seq, restored) {
   if (!isPlainObject(op)) return false;
   switch (op.type) {
     case "add": {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== "string" || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      d.nodes.set(node.id, { node: copyJson(node), by, hsid, addedSeq: seq });
+      const from = restored?.get(node.id);
+      d.nodes.set(node.id, { node: copyJson(node), by, hsid, addedSeq: seq, ...from ? { restoredFrom: from } : {} });
       return true;
     }
     case "update": {
       const cur = typeof op.id === "string" ? d.nodes.get(op.id) : void 0;
       if (!cur || !isPlainObject(op.patch)) return false;
       const node = { ...cur.node };
+      let words = false;
       for (const k of Object.keys(op.patch)) {
         if (k === "id" || k === "kind" || DROPPED_KEYS.has(k)) continue;
         const v = op.patch[k];
         if (v === null) delete node[k];
         else if (v !== void 0) node[k] = copyJson(v);
+        if (v !== void 0 && WORDS_KEYS.has(k)) words = true;
       }
-      d.nodes.set(op.id, { ...cur, node });
+      d.nodes.set(op.id, changed(cur, node, by, hsid, seq, words));
       return true;
     }
     case "move": {
@@ -830,7 +849,7 @@ function applyOp(d, op, by, hsid, seq) {
       for (const id of op.ids) {
         const cur = typeof id === "string" ? d.nodes.get(id) : void 0;
         if (!cur || typeof cur.node.x !== "number" || typeof cur.node.y !== "number") continue;
-        d.nodes.set(id, { ...cur, node: { ...cur.node, x: cur.node.x + op.dx, y: cur.node.y + op.dy } });
+        d.nodes.set(id, changed(cur, { ...cur.node, x: cur.node.x + op.dx, y: cur.node.y + op.dy }, by, hsid, seq, false));
         moved = true;
       }
       return moved;

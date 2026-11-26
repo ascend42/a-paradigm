@@ -232,11 +232,33 @@ export interface DimBy {
   principal: string;
   agent?: string;
 }
+/**
+ * One node of the fold. `by` is the hand that ADDED it and never changes. The optional attribution fields (S1.4
+ * edit-anything, Aegis rulings 2 and 4: G1, G5) are set ONLY by the fold's `applyOp` when an op actually applies;
+ * an add sets none of them but `restoredFrom`. They are OUTSIDE the hash (`dimCanonical` hashes `{by, node}`
+ * only), so "checked up to" vouches for content and adder, never for attribution: that is vouched for only by
+ * `dimAttrDigest`.
+ *  - `changedBy`, `changedSeq`, `changedHsid`: the newest applied update or move, by any hand.
+ *  - `otherBy`, `otherSeq`: the newest applied update or move by a hand that is not `by`. It survives a later
+ *    change by `by` itself, so "who changed what" never silently disappears.
+ *  - `wordsBy`, `wordsSeq` (G1): the newest applied update by a hand that is not `by` that wrote or cleared a
+ *    free-text field (`text`, `label`, `title`, `refs`). A later restyle by another hand does not move it.
+ *  - `restoredFrom` (G5): on a node re-added by an undo, the old id and the ORIGINAL hand, read from the row's
+ *    undo marker through `dimUndoMarkOf` only (never from an op).
+ */
 export interface DimFoldNode {
   node: Record<string, unknown>;
   by: DimBy;
   hsid: string | null;
   addedSeq: number;
+  changedBy?: DimBy;
+  changedSeq?: number;
+  changedHsid?: string | null;
+  otherBy?: DimBy;
+  otherSeq?: number;
+  wordsBy?: DimBy;
+  wordsSeq?: number;
+  restoredFrom?: { id: string; by: DimBy };
 }
 export interface DimState {
   dim: string | null;
@@ -326,27 +348,55 @@ export function dimHsidOf(state: DimState, row: DimRow): string | null {
   return hsidOf(state.attached, row.payload);
 }
 
-/** Apply one op to the draft by the tolerant rules. Returns false when nothing was applied. */
-function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: number): boolean {
+/** Two hands are the same hand: the same class, principal and agent label. */
+function sameHand(a: DimBy, b: DimBy): boolean {
+  return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
+}
+
+/** The free-text fields of a node: writing or clearing one by another hand sets `wordsBy` (Aegis G1). */
+const WORDS_KEYS = new Set(['text', 'label', 'title', 'refs']);
+
+/** The attribution of an applied update or move (see `DimFoldNode`). */
+function changed(cur: DimFoldNode, node: Record<string, unknown>, by: DimBy, hsid: string | null, seq: number, words: boolean): DimFoldNode {
+  const out: DimFoldNode = { ...cur, node, changedBy: by, changedSeq: seq, changedHsid: hsid };
+  if (!sameHand(by, cur.by)) {
+    out.otherBy = by;
+    out.otherSeq = seq;
+    if (words) {
+      out.wordsBy = by;
+      out.wordsSeq = seq;
+    }
+  }
+  return out;
+}
+
+/**
+ * Apply one op to the draft by the tolerant rules. Returns false when nothing was applied. `restored` maps a
+ * re-added node's new id to what it was restored from (the row's honoured undo marker, `dimUndoMarkOf`).
+ */
+function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: number, restored?: ReadonlyMap<string, { id: string; by: DimBy }>): boolean {
   if (!isPlainObject(op)) return false;
   switch (op.type) {
     case 'add': {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== 'string' || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      d.nodes.set(node.id, { node: copyJson(node) as Record<string, unknown>, by, hsid, addedSeq: seq });
+      const from = restored?.get(node.id);
+      d.nodes.set(node.id, { node: copyJson(node) as Record<string, unknown>, by, hsid, addedSeq: seq, ...(from ? { restoredFrom: from } : {}) });
       return true;
     }
     case 'update': {
       const cur = typeof op.id === 'string' ? d.nodes.get(op.id) : undefined;
       if (!cur || !isPlainObject(op.patch)) return false;
       const node = { ...cur.node };
+      let words = false;
       for (const k of Object.keys(op.patch)) {
         if (k === 'id' || k === 'kind' || DROPPED_KEYS.has(k)) continue;
         const v = op.patch[k];
         if (v === null) delete node[k];
         else if (v !== undefined) node[k] = copyJson(v);
+        if (v !== undefined && WORDS_KEYS.has(k)) words = true;
       }
-      d.nodes.set(op.id as string, { ...cur, node });
+      d.nodes.set(op.id as string, changed(cur, node, by, hsid, seq, words));
       return true;
     }
     case 'move': {
@@ -355,7 +405,7 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
       for (const id of op.ids) {
         const cur = typeof id === 'string' ? d.nodes.get(id) : undefined;
         if (!cur || typeof cur.node.x !== 'number' || typeof cur.node.y !== 'number') continue;
-        d.nodes.set(id as string, { ...cur, node: { ...cur.node, x: cur.node.x + (op.dx as number), y: cur.node.y + (op.dy as number) } });
+        d.nodes.set(id as string, changed(cur, { ...cur.node, x: cur.node.x + (op.dx as number), y: cur.node.y + (op.dy as number) }, by, hsid, seq, false));
         moved = true;
       }
       return moved;
@@ -456,7 +506,10 @@ export function foldDim(rows: Iterable<DimRow>, upToSeq?: number, from: DimState
 /**
  * The hash input. `node` carries every field, known and carried through. `by` sits beside it, so a carried
  * field named `by` cannot collide. Left out: seq, addedSeq, connId, surface, hsid, attached, gone and the
- * counters, so the same ops replayed at other seqs hash the same. Strings are hashed as stored.
+ * counters, so the same ops replayed at other seqs hash the same. Strings are hashed as stored. Also left out
+ * (S1.4 edit-anything, Aegis ruling 2): the attribution fields `changedBy`, `changedSeq`, `changedHsid`,
+ * `otherBy`, `otherSeq`, `wordsBy`, `wordsSeq` and `restoredFrom`. The hash vouches for content and adder only;
+ * attribution is vouched for by `dimAttrDigest`.
  */
 export function dimCanonical(state: DimState): string {
   const nodes = [...state.nodes.entries()]
@@ -989,6 +1042,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     const before = new Map(touched.map((id) => [id, joined(d.nodes.get(id)?.node)]));
     // the node as it would stand after this op, whether or not the op passes the other checks
     const trial = problems.length === 0 ? d : draftOf(d);
+    // the trial sets attribution on the running copy (or its own copy) only, never on the caller's state
     const applied = applyOp(trial, op, by, null, d.seq);
     if (seen.size === 0) {
       for (const id of touched) {

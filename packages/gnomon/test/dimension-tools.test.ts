@@ -384,7 +384,11 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     const x0 = (rectOp(1) as { node: { x: number; y: number } }).node;
     expect(f.nodes.get(ulid(1))!.node).toMatchObject({ label: 'x', x: x0.x + 1, y: x0.y + 1 });
     expect(f.nodes.get(ulid(1))!.by.cls).toBe('human');
+    // attribution (outside the hash): the person's mark names the agent that changed it; B's mark names A
+    const handA = { cls: 'agent', principal: agentOf(A).principal, agent: 'claude' };
+    expect([f.nodes.get(ulid(1))!.otherBy, f.nodes.get(ulid(1))!.changedBy, f.nodes.get(ulid(1))!.wordsBy]).toEqual([handA, handA, handA]);
     expect(f.nodes.get(ulid(2))!.node.label).toBe('from A');
+    expect(f.nodes.get(ulid(2))!.otherBy).toEqual(handA);
     expect(f.nodes.has(ulid(3))).toBe(false);
     expect((await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(2), patch: { label: 'mine' } }] }, agentOf(B))).applied).toBe(1);
   });
