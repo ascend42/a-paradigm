@@ -1279,6 +1279,31 @@ export function dimMayDraw(state: DimState, grants: DimGrants, hsid: string): bo
   return g !== undefined ? isPlainObject(g) && g.write === true : dimGrantDefault(state, hsid);
 }
 
+/* ── agent tool helpers (S1.4; NOT in the client API descriptor) ──────────── */
+
+/** A model's own id for one draw: 1 to 64 characters of `A-Z a-z 0-9 _ -`. It never reaches a row (see dimOpOid). */
+export const DIM_OP_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The `oid` an op row carries for a draw sent with an `opId` (Aegis S1.4 A8): the first 16 hex characters of
+ * sha256 over `hsid`, a 0x00 byte, `dim`, a 0x00 byte and `opId`, as UTF-8. The input is unambiguous (none of
+ * the three may hold a 0x00) and names the dimension, so the same `opId` in another session or dimension is
+ * another oid. `null` when any part is out of its form. The model's string itself is never stored.
+ */
+export function dimOpOid(hsid: unknown, dim: unknown, opId: unknown): string | null {
+  if (!NON_EMPTY(hsid) || hsid.includes('\u0000') || typeof dim !== 'string' || !DIM_ID_PATTERN.test(dim) || typeof opId !== 'string' || !DIM_OP_ID_PATTERN.test(opId)) return null;
+  return sha256Tagged(`${hsid}\u0000${dim}\u0000${opId}`).slice('sha256:'.length, 'sha256:'.length + 16);
+}
+
+/** The bounded hand of one stored row (`dimViewBy` of the fold's own reading of its stamp), for a change list. */
+export function dimRowBy(row: DimRow): DimBy {
+  try {
+    return dimViewBy(isPlainObject(row?.payload) ? byOf(row.payload) : UNKNOWN_BY);
+  } catch {
+    return { ...UNKNOWN_BY };
+  }
+}
+
 /* ── the published hash vector ────────────────────────────────────────────── */
 
 /**

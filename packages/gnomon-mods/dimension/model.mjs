@@ -1,7 +1,56 @@
 // #dimension-mod model (spec §12.7): pure functions, no I/O and no platform import. Everything that decides what a
 // dimension row may hold lives here, so the stdio loop (index.mjs) is only plumbing and the rules can be tested
 // without a host. The fold and the validator are the published `dim-shape:v1` (dim-shape.mjs, generated).
-import { DIM_ID_PATTERN, DIM_KINDS, DIM_LIMITS, DIM_OPENED, DIM_ROW_VERSION, dimGrantDefault, dimHash, emptyDimState, foldDimRow, validateDimOps } from './dim-shape.mjs';
+import {
+  DIM_AGENT_LABEL_PATTERN,
+  DIM_AUX_KINDS,
+  DIM_FIELDS,
+  DIM_ID_PATTERN,
+  DIM_KINDS,
+  DIM_LIMITS,
+  DIM_NODE_ID_PATTERN,
+  DIM_OPENED,
+  DIM_OP_ID_PATTERN,
+  DIM_REFUSAL_CODES,
+  DIM_REFUSAL_FIXES,
+  DIM_ROW_VERSION,
+  DIM_VIEW_PRINCIPAL_PATTERN,
+  DIM_Z_PATTERN,
+  dimGrantDefault,
+  dimHash,
+  dimMayDraw,
+  dimViewOf,
+  dimZPlace,
+  emptyDimState,
+  foldDimRow,
+  validateDimOps,
+} from './dim-shape.mjs';
+
+/** `dim.select`: ids one selection may name. */
+export const SELECT_MAX = 64;
+/** Op-row oids a dimension remembers (memory and keyframe): an oid in them never appends again (A8). */
+export const MEMO_CAP = 256;
+/** Whole answers kept in memory per dimension, with the hash of their input (same id + other input: op-id-reused). */
+export const ANSWERS_CAP = 32;
+/** S1.4 C5 / Aegis M8: accepted ops one session may draw in one turn, across calls, rows and dimensions. */
+export const TURN_OPS = 64;
+/** Sessions the `turns` state key holds; the least recently charged one is evicted (stated residual). */
+export const TURNS_CAP = 256;
+/** `opens`: sessions whose last opened dimension is remembered (the tools' default `dim`). */
+export const OPENS_CAP = 256;
+/** One tool call: at most this many op rows, inside the host's 64 KiB per-call byte budget (bridge.ts). */
+export const CALL_ROWS = 4;
+export const CALL_BYTES = 64 * 1024;
+/** Bytes of the call budget kept for the count row, so a full draw with a refusal still writes it (Aegis A4). */
+export const COUNT_ROW_RESERVE = 3 * 1024;
+/** Count rows one session may write per turn. */
+export const COUNT_ROWS_PER_TURN = 8;
+/** `field|code` pairs one count row lists; the rest is one `more` count. */
+export const COUNT_PAIRS = 32;
+/** `dim-view`: nodes listed by default and at most; change entries a `since` answer lists. */
+export const VIEW_LIMIT = 200;
+export const VIEW_LIMIT_MAX = 500;
+export const CHANGES_MAX = 64;
 
 /** Dimensions one home may hold (the index lives in mod state, 1 MiB in all). */
 export const DIM_CAP = 512;
@@ -24,7 +73,7 @@ export const KEYFRAME_BUDGET_BYTES = 640 * 1024;
 export const MOD_REFUSAL_FIXES = Object.freeze({
   'not-human-gui': 'Only a person using the Gnomon window can change a dimension.',
   'no-session': 'Open the dimension from a live session; none was named, or the named one is not live.',
-  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op or dim.close.',
+  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op, dim.close, dim.grant, dim.select or dim.check.',
   'args-bad': 'Send only the listed arguments of this command, each with its listed type.',
   'dim-bad': 'Use dim: followed by a 26-character ULID as the dimension id.',
   'opened-bad': 'Say how the dimension was opened: command, menu or offer.',
@@ -42,6 +91,17 @@ export const MOD_REFUSAL_FIXES = Object.freeze({
   'row-too-large': 'Send fewer or smaller ops in one call; one row holds at most 16 KiB and 4,096 values.',
   'append-failed': 'The row was not written; nothing changed. Try again in a moment.',
   unavailable: 'The dimension could not be read from the log; nothing changed.',
+  // S1.4: the agent tools (dim-view, dim-draw), grants and the turn budget
+  'not-agent-tool': 'Only the agent of a live session can use the board tools.',
+  'no-turn': 'The board tools work only inside a turn of the calling session.',
+  'no-open-dim': 'This session has no board open. Ask the person to open a board with /board.',
+  'write-not-granted': 'The person has not let this session draw on this board. Ask them to turn on "may draw" for it; dim-view still reads the board.',
+  'turn-budget': 'This turn has used its 64 ops. Stop drawing; the count starts again on the next turn.',
+  'call-too-large': 'Send fewer or smaller ops; one call holds at most 4 rows of 16 KiB each.',
+  'op-id-bad': 'Use an opId of 1 to 64 characters from A-Z, a-z, 0-9, _ and -.',
+  'op-id-reused': 'This opId was already used for a different draw. Use a new opId for new ops.',
+  'append-busy': 'The row was not written: the board is taking too many rows this second. Nothing changed for it; send it again in a moment.',
+  cancelled: 'The call took too long and was stopped. Rows it had already written stay; read the board again before you retry.',
 });
 export const MOD_REFUSAL_CODES = Object.freeze(Object.keys(MOD_REFUSAL_FIXES));
 
@@ -49,6 +109,13 @@ export const MOD_REFUSAL_CODES = Object.freeze(Object.keys(MOD_REFUSAL_FIXES));
 export function refusal(code, extra) {
   const c = Object.hasOwn(MOD_REFUSAL_FIXES, code) ? code : 'args-bad';
   return { ok: false, code: c, fix: MOD_REFUSAL_FIXES[c], ...(extra ?? {}) };
+}
+
+/** The fixed sentence of a code from either closed list (the mod's, then the published validator's). */
+export function fixFor(code) {
+  if (Object.hasOwn(MOD_REFUSAL_FIXES, code)) return MOD_REFUSAL_FIXES[code];
+  if (Object.hasOwn(DIM_REFUSAL_FIXES, code)) return DIM_REFUSAL_FIXES[code];
+  return MOD_REFUSAL_FIXES['args-bad'];
 }
 
 /** A plain object (prototype null or Object.prototype), else null. */
@@ -115,10 +182,13 @@ export function landed(state, kind, payload, stamp, seq) {
   return foldDimRow(state, { seq, kind, payload: { ...payload, relayedFor: stamp } });
 }
 
-export const opPayload = (dim, ok) => ({ v: DIM_ROW_VERSION, dim, ops: ok });
+/** `oid` (S1.4, Aegis A8): 16 hex of sha256(hsid, 0x00, dim, 0x00, opId), computed by the caller. Never the model's string. */
+export const opPayload = (dim, ok, oid) => ({ v: DIM_ROW_VERSION, dim, ops: ok, ...(oid !== undefined ? { oid } : {}) });
 /** A first start row names the dimension; a reopen row carries NO title (the fold keeps the first one). */
 export const startPayload = (dim, hsid, opened, title) => ({ v: DIM_ROW_VERSION, dim, ...(title !== undefined ? { title } : {}), attached: [hsid], opened });
 export const attachPayload = (dim, hsid) => ({ v: DIM_ROW_VERSION, dim, hsid });
+/** `modns.gnomon.dimension.grant`: `write` is exactly a boolean (readArgs refused anything else). */
+export const grantPayload = (dim, hsid, write) => ({ v: DIM_ROW_VERSION, dim, hsid, write: write === true });
 /** The counts are the mod's own, from its fold: never a caller's. */
 export const endPayload = (state) => ({ v: DIM_ROW_VERSION, dim: state.dim, ops: state.ops, nodes: state.nodes.size });
 
@@ -159,6 +229,11 @@ const utf8 = new TextEncoder();
  * (key order does not change a length), nesting, and the count of keys and elements.
  */
 export function rowProblem(payload, stamp) {
+  return rowBytes(payload, stamp) === null ? 'row-too-large' : null;
+}
+
+/** The canonical-JSON byte size of the row with its stamp, or `null` when the host would refuse it (see rowProblem). */
+export function rowBytes(payload, stamp) {
   const full = { ...payload, relayedFor: stamp };
   // the walk first: it stops after 4,096 values whatever it is given, so the byte count below reads a bounded tree
   const stack = [{ v: full, depth: 1 }];
@@ -166,26 +241,26 @@ export function rowProblem(payload, stamp) {
   let chars = 0;
   while (stack.length > 0) {
     const { v, depth } = stack.pop();
-    if (depth > ROW_MAX_DEPTH) return 'row-too-large';
+    if (depth > ROW_MAX_DEPTH) return null;
     const keys = Array.isArray(v) ? null : Object.keys(v);
     const n = keys ? keys.length : v.length;
     visited += n;
-    if (visited > ROW_MAX_VISITED) return 'row-too-large';
+    if (visited > ROW_MAX_VISITED) return null;
     for (let i = 0; i < n; i++) {
       const c = keys ? v[keys[i]] : v[i];
       if (keys) chars += keys[i].length;
       if (typeof c === 'string') chars += c.length;
       else if (c !== null && typeof c === 'object') stack.push({ v: c, depth: depth + 1 });
       // a UTF-8 byte count is never below the UTF-16 length: past the limit already, without encoding anything
-      if (chars > ROW_MAX_BYTES) return 'row-too-large';
+      if (chars > ROW_MAX_BYTES) return null;
     }
   }
   try {
-    if (utf8.encode(JSON.stringify(full)).length > ROW_MAX_BYTES) return 'row-too-large';
+    const bytes = utf8.encode(JSON.stringify(full)).length;
+    return bytes > ROW_MAX_BYTES ? null : bytes;
   } catch {
-    return 'row-too-large';
+    return null;
   }
-  return null;
 }
 
 const REPO = /^repo:[0-9a-f]{16}$/;
@@ -195,6 +270,9 @@ export const COMMAND_ARGS = Object.freeze({
   'dim.attach': Object.freeze(['dim']),
   'dim.op': Object.freeze(['dim', 'ops']),
   'dim.close': Object.freeze(['dim']),
+  'dim.grant': Object.freeze(['dim', 'write']),
+  'dim.select': Object.freeze(['dim', 'ids']),
+  'dim.check': Object.freeze(['dim']),
 });
 
 /**
@@ -225,6 +303,24 @@ export function readArgs(commandId, args) {
     out.fromSession = from === 'session';
   }
   if (commandId === 'dim.op') out.ops = own(a, 'ops');
+  if (commandId === 'dim.grant') {
+    // the session the grant is FOR is the host-composed `hsid` (the page names it as the focus; the host joins it
+    // to a live session). `write` is a boolean and nothing else: a truthy string never grants.
+    const write = own(a, 'write');
+    if (typeof write !== 'boolean') return { code: 'args-bad' };
+    out.write = write;
+  }
+  if (commandId === 'dim.select') {
+    const ids = own(a, 'ids');
+    if (!Array.isArray(ids) || ids.length > SELECT_MAX) return { code: 'args-bad' };
+    const list = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (typeof id !== 'string' || !DIM_NODE_ID_PATTERN.test(id)) return { code: 'args-bad' };
+      if (!list.includes(id)) list.push(id);
+    }
+    out.ids = list;
+  }
   return { args: out };
 }
 
@@ -244,11 +340,40 @@ function byOk(by) {
   return { cls: b.cls, principal: b.principal, ...(agent !== undefined ? { agent } : {}) };
 }
 
+const OID = /^[0-9a-f]{16}$/;
+/** The auxiliary part of a keyframe as lists (never an object keyed by hsid: see DimGrants in dim-shape). */
+function encodeAux(aux) {
+  const grants = [];
+  if (aux && aux.grants instanceof Map) for (const [hsid, g] of aux.grants) if (plain(g) && typeof g.write === 'boolean' && Number.isSafeInteger(g.seq)) grants.push([hsid, g.write, g.seq]);
+  const oids = [];
+  if (aux && aux.oids instanceof Map) for (const [oid, m] of aux.oids) if (OID.test(oid) && Number.isSafeInteger(m.applied) && Number.isSafeInteger(m.seq)) oids.push([oid, m.applied, m.seq]);
+  return { grants, oids: oids.slice(-MEMO_CAP) };
+}
+function decodeAux(aux) {
+  const a = plain(aux);
+  if (!a || !Array.isArray(own(a, 'grants')) || !Array.isArray(own(a, 'oids'))) return null;
+  const grants = new Map();
+  for (const g of a.grants) {
+    if (!Array.isArray(g) || g.length !== 3 || !nonEmpty(g[0], 256) || typeof g[1] !== 'boolean' || !Number.isSafeInteger(g[2]) || g[2] < 1) return null;
+    grants.set(g[0], { write: g[1], seq: g[2] });
+  }
+  if (a.oids.length > MEMO_CAP) return null;
+  const oids = new Map();
+  for (const o of a.oids) {
+    if (!Array.isArray(o) || o.length !== 3 || typeof o[0] !== 'string' || !OID.test(o[0]) || !Number.isSafeInteger(o[1]) || o[1] < 0 || !Number.isSafeInteger(o[2]) || o[2] < 1) return null;
+    oids.set(o[0], { applied: o[1], seq: o[2] });
+  }
+  return { grants, oids };
+}
+
 /**
  * A state as a keyframe: a head and chunks of at most KEYFRAME_CHUNK_BYTES each. `hash` is the published
  * `dimHash`; `sum` covers every stored field, the log id included, so a damaged chunk or head is found. `null` above KEYFRAME_MAX_BYTES.
+ * Keyframe `v: 2` (S1.4): the head also carries `aux`, the write grants (`[hsid, write, seq]`) and the op-id memo
+ * (`[oid, applied, seq]`, the newest MEMO_CAP). Both are covered by `sum` and so by the log id: a grant's high-water
+ * seq is a seq of ONE log, and a keyframe written for another log is refused whole, grants included.
  */
-export function encodeKeyframe(state, log) {
+export function encodeKeyframe(state, log, aux) {
   const items = [];
   for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq]);
   for (const id of state.gone) items.push(['g', id]);
@@ -270,23 +395,29 @@ export function encodeKeyframe(state, log) {
   }
   if (cur.length > 0) chunks.push(cur);
   const meta = { dim: state.dim, title: state.title, attached: [...state.attached], ended: state.ended, ops: state.ops, unapplied: state.unapplied };
-  const head = { v: 1, log, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta };
+  const head = { v: 2, log, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta, aux: encodeAux(aux) };
   return { head: { ...head, sum: sumOf(JSON.stringify([head, chunks])) }, chunks };
 }
 
-/** The state a stored keyframe holds, or `null` when anything about it is wrong (it is then ignored and rebuilt). */
+/**
+ * What a stored keyframe holds, `{ state, grants, oids }`, or `null` when anything about it is wrong (it is then
+ * ignored and rebuilt from the log). A `v: 1` keyframe (S1.3) carries no grants and no memo: it is ignored, never
+ * read as "no grant rows".
+ */
 export function decodeKeyframe(headIn, chunks, dim, log) {
   try {
     const h = plain(headIn);
     // a keyframe is a fold of ONE log's rows: another log's seqs mean nothing here (Aegis S1.3 L1)
     if (!h || typeof log !== 'string' || own(h, 'log') !== log) return null;
-    if (own(h, 'v') !== 1 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
+    if (own(h, 'v') !== 2 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
     const m = plain(own(h, 'meta'));
     if (!m || own(m, 'dim') !== dim || typeof own(m, 'title') !== 'string' || typeof own(m, 'ended') !== 'boolean') return null;
     const attached = own(m, 'attached');
     if (!Array.isArray(attached) || !attached.every((x) => typeof x === 'string') || !Number.isSafeInteger(own(m, 'ops')) || !Number.isSafeInteger(own(m, 'unapplied'))) return null;
     if (!Array.isArray(chunks) || chunks.length !== own(h, 'n')) return null;
-    const head = { v: 1, log, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied } };
+    const aux = decodeAux(own(h, 'aux'));
+    if (!aux) return null;
+    const head = { v: 2, log, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied }, aux: encodeAux(aux) };
     if (sumOf(JSON.stringify([head, chunks])) !== h.sum) return null;
     const nodes = new Map();
     const gone = new Set();
@@ -303,7 +434,7 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
       }
     }
     const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
-    return dimHash(state) === h.hash ? state : null;
+    return dimHash(state) === h.hash ? { state, grants: aux.grants, oids: aux.oids } : null;
   } catch {
     return null;
   }

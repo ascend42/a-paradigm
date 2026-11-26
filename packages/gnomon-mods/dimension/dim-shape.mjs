@@ -1405,6 +1405,18 @@ function dimMayDraw(state, grants, hsid) {
   const g = grants.get(hsid);
   return g !== void 0 ? isPlainObject(g) && g.write === true : dimGrantDefault(state, hsid);
 }
+var DIM_OP_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+function dimOpOid(hsid, dim, opId) {
+  if (!NON_EMPTY(hsid) || hsid.includes("\0") || typeof dim !== "string" || !DIM_ID_PATTERN.test(dim) || typeof opId !== "string" || !DIM_OP_ID_PATTERN.test(opId)) return null;
+  return sha256Tagged(`${hsid}\0${dim}\0${opId}`).slice("sha256:".length, "sha256:".length + 16);
+}
+function dimRowBy(row) {
+  try {
+    return dimViewBy(isPlainObject(row?.payload) ? byOf(row.payload) : UNKNOWN_BY);
+  } catch {
+    return { ...UNKNOWN_BY };
+  }
+}
 var DIM_HASH_VECTOR_ROWS = deepFreeze([
   {
     seq: 1,
@@ -1490,6 +1502,7 @@ export {
   DIM_NODE_KEYS,
   DIM_NODE_REQUIRED,
   DIM_OPENED,
+  DIM_OP_ID_PATTERN,
   DIM_OP_KEYS,
   DIM_OP_TYPES,
   DIM_REFUSAL_CODES,
@@ -1511,6 +1524,8 @@ export {
   dimHsidOf,
   dimKindName,
   dimMayDraw,
+  dimOpOid,
+  dimRowBy,
   dimTextForScan,
   dimViewBy,
   dimViewOf,

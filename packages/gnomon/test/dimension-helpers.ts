@@ -56,6 +56,10 @@ export interface FakeLog {
   loseReplies: number;
   /** rows of other writers between the mod's rows (advances the seq) */
   pad(n: number): void;
+  /** a row of this kind written by someone other than the mod (a forged or replayed row); returns its seq */
+  inject(kind: string, payload: Record<string, unknown>): number;
+  /** called after each of the mod's appends lands (before its reply), with the row */
+  afterAppend: ((row: ModAppendRow & { seq: number }) => void) | null;
   kernelCall: ModKernelCall;
   /** the rows as a human reader's fold sees them */
   dimRows(): DimRow[];
@@ -67,7 +71,7 @@ export interface FakeLog {
  * checks, budgets on a clock that moves a second per append) and `log.read` pages the way socket/log-read.ts
  * does for a mod (cursor `since`, `until`, `kinds`, `limit`, rows as `{seq, view: 'full', event}`).
  */
-export function fakeLog(opts: { pageScan?: number } = {}): FakeLog {
+export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): FakeLog {
   let seq = 0;
   let clock = 0;
   const pageScan = opts.pageScan ?? 10_000;
@@ -78,6 +82,12 @@ export function fakeLog(opts: { pageScan?: number } = {}): FakeLog {
     failAppends: 0,
     loseReplies: 0,
     pad: (n) => void (seq += n),
+    inject: (kind, payload) => {
+      seq += 1;
+      log.rows.push({ kind, principal: 'p:00000000/forger', payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown>, seq });
+      return seq;
+    },
+    afterAppend: null,
     kernelCall: undefined as unknown as ModKernelCall,
     dimRows: () => log.rows.map((r) => ({ seq: r.seq, kind: r.kind, payload: r.payload })),
     fold: (dim) => foldDim(log.dimRows().filter((r) => (r.payload as { dim?: string }).dim === dim)),
@@ -91,6 +101,7 @@ export function fakeLog(opts: { pageScan?: number } = {}): FakeLog {
         }
         seq += 1;
         log.rows.push({ ...row, payload: JSON.parse(JSON.stringify(row.payload)) as Record<string, unknown>, seq });
+        log.afterAppend?.(log.rows[log.rows.length - 1]!);
         if (log.loseReplies > 0) {
           log.loseReplies -= 1;
           throw new Error('reply lost (test)');
@@ -119,7 +130,9 @@ export function fakeLog(opts: { pageScan?: number } = {}): FakeLog {
         return { rows: out, next, cursor: { logId: log.logId, seq: next }, logId: log.logId, head: seq, caughtUp: next >= seq, projection: 'mod', withheld: 0 };
       },
     },
-    { now: () => (clock += 1_000) },
+    // the default clock moves a second per append, so the row budgets never bind; a test of the budgets passes a
+    // real-window clock (opts.now), or it would pass vacuously
+    { now: opts.now ?? (() => (clock += 1_000)) },
   );
   return log;
 }

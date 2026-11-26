@@ -460,7 +460,7 @@ describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
       // no `until`, the index is only a hint). The fake scans 10,000 rows a page, as the kernel does: 25,000 padded
       // rows and a few of the mod's own are three pages.
       expect(w.log.reads[0]).toEqual({ until: 0, limit: 1 });
-      expect(w.log.reads[1]).toEqual({ since: { logId: w.log.logId, seq: head.seq }, kinds: [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end], limit: 1000 });
+      expect(w.log.reads[1]).toEqual({ since: { logId: w.log.logId, seq: head.seq }, kinds: [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end, DIM_AUX_KINDS.grant], limit: 1000 });
       expect(w.log.reads.slice(1).every((p) => p.until === undefined && (p.since as { seq: number }).seq >= head.seq)).toBe(true);
       expect(w.log.reads).toHaveLength(1 + 3);
       // the fold from the keyframe keeps authorship, deleted ids and counters: a deleted id is still refused
@@ -671,7 +671,7 @@ describe('#dimension-mod: the log is the truth, the index a hint (Aegis S1.3 M1,
     ]);
     const enc = m.encodeKeyframe!(state, 'log:a') as { head: Record<string, unknown>; chunks: unknown[] };
     expect(enc.head.log).toBe('log:a');
-    expect(dimHash(m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as DimState)).toBe(dimHash(state));
+    expect(dimHash((m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as { state: DimState }).state)).toBe(dimHash(state));
     for (const log of ['log:b', '', undefined, null]) expect([log, m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', log)]).toEqual([log, null]);
     // a head re-labelled for another log no longer sums
     expect(m.decodeKeyframe!({ ...enc.head, log: 'log:b' }, enc.chunks, 'dim:x', 'log:b')).toBeNull();

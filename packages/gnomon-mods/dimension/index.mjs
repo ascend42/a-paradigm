@@ -11,19 +11,21 @@
 //  - every check, the 512 cap and the row-size check included, runs BEFORE the append;
 //  - mod state and the in-memory fold change only AFTER the append returned a seq;
 //  - a refusal is a code and a fixed sentence, never input.
-import { DIM_KINDS, dimHash, emptyDimState, foldDim } from './dim-shape.mjs';
+import { DIM_AUX_KINDS, DIM_KINDS, dimHash, dimMayDraw, emptyDimGrants, emptyDimState, foldDim, foldDimGrants } from './dim-shape.mjs';
 import {
   ATTACH_CAP,
   DIM_CAP,
   KEYFRAME_BUDGET_BYTES,
   KEYFRAME_DIMS,
   KEYFRAME_EVERY_OPS,
+  MEMO_CAP,
   actorOf,
   apply,
   attachPayload,
   decodeKeyframe,
   encodeKeyframe,
   endPayload,
+  grantPayload,
   landed,
   opPayload,
   own,
@@ -40,6 +42,9 @@ const ABI = 'mod-abi:v1';
 // Echoed at init; the host refuses any other id (a mod-ABI change needs a new build of this mod).
 const MOD_ABI_ID = 'sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66';
 const KINDS = [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end];
+// the log pages of a fold also read the grant kind: without it every grant would vanish at a cold open
+const PAGE_KINDS = [...KINDS, DIM_AUX_KINDS.grant];
+const OID = /^[0-9a-f]{16}$/;
 const TOOLS = ['dim-view', 'dim-draw'];
 const RELAYED_FIELDS = ['principal', 'connId', 'surface', 'agent', 'hsid', 'turn'];
 const PAGE_ROWS = 1000;
@@ -73,7 +78,12 @@ let dims = null;
 /** [{id, bytes}] of the stored keyframes, most recent last (state key `kfs`) */
 let kfs = [];
 let logId = null;
-/** dim id → { idx: {repo, firstSeq, lastSeq, title, log}, state, sinceKf, dirty } in use order */
+/**
+ * dim id → { idx: {repo, firstSeq, lastSeq, title, log}, state, grants, oids, sinceKf, dirty } in use order.
+ * `grants` is the shared grant fold (a Map; never a plain object keyed by hsid); `oids` maps an op row's `oid` to
+ * `{applied, seq}`, the ops the rows carrying it hold and the last of them (A8: an oid seen in the rows never
+ * appends again).
+ */
 const loaded = new Map();
 
 const ulidOf = (dim) => dim.slice(4);
@@ -150,29 +160,41 @@ async function readKeyframe(host, dim) {
  * read. Returns the state, and the repo scope and seq of the first start row seen (for an adoption).
  */
 async function foldFromLog(host, dim, from, since) {
-  let state = from;
+  let state = from.state;
+  let grants = from.grants;
+  const oids = new Map(from.oids);
   let at = since;
+  // the newest row of this dimension seen, of ANY of its kinds: a grant row is not in the published fold's seq
+  let last = from.state.seq;
   let first = null;
   for (let i = 0; i < MAX_PAGES; i++) {
-    const page = plain(await host.kernel('log.read', { ...(at > 0 ? { since: { logId, seq: at } } : {}), kinds: KINDS, limit: PAGE_ROWS }));
+    const page = plain(await host.kernel('log.read', { ...(at > 0 ? { since: { logId, seq: at } } : {}), kinds: PAGE_KINDS, limit: PAGE_ROWS }));
     const rows = page && Array.isArray(own(page, 'rows')) ? page.rows : null;
     const next = page ? own(page, 'next') : undefined;
     if (!rows) throw new Error('no page');
     const batch = [];
+    const grantRows = [];
     for (const r of rows) {
       const ev = plain(r) && own(r, 'view') === 'full' ? plain(own(r, 'event')) : null;
       if (!ev || typeof own(ev, 'kind') !== 'string' || !Number.isSafeInteger(own(r, 'seq'))) continue;
       const payload = plain(own(ev, 'payload'));
       if (!payload || own(payload, 'dim') !== dim) continue;
+      if (r.seq > last) last = r.seq;
       if (first === null && ev.kind === DIM_KINDS.start) {
         const scope = plain(own(ev, 'scope'));
         first = { seq: r.seq, repo: scope ? own(scope, 'repo') : undefined };
       }
+      if (ev.kind === DIM_AUX_KINDS.grant) {
+        grantRows.push({ seq: r.seq, kind: ev.kind, payload });
+        continue;
+      }
+      if (ev.kind === DIM_KINDS.op) noteOid(oids, payload, r.seq);
       batch.push({ seq: r.seq, kind: ev.kind, payload });
     }
     // ONE linear fold per page, continuing the last (never a fold per row: that copies the state per row)
     if (batch.length > 0) state = foldDim(batch, undefined, state);
-    if (own(page, 'caughtUp') === true) return { state, first };
+    if (grantRows.length > 0) grants = foldDimGrants(grantRows, dim, grants);
+    if (own(page, 'caughtUp') === true) return { state, grants, oids, first, last };
     if (!Number.isSafeInteger(next) || next <= at) throw new Error('no progress');
     at = next;
   }
@@ -197,16 +219,17 @@ async function load(host, dim) {
   const idx = known && known.log === logId ? known : null;
   if (idx) {
     const kf = await readKeyframe(host, dim);
-    const usable = kf && kf.seq >= idx.firstSeq ? kf : null;
-    const { state } = await foldFromLog(host, dim, usable ?? emptyDimState(dim), usable ? usable.seq : idx.firstSeq - 1);
+    const usable = kf && kf.state.seq >= idx.firstSeq ? kf : null;
+    const from = usable ?? { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() };
+    const { state, grants, oids, last } = await foldFromLog(host, dim, from, usable ? usable.state.seq : idx.firstSeq - 1);
     // the fold must have reached at least the row the index names: anything less means rows are missing
-    if (state.seq < idx.lastSeq || state.dim !== dim) throw new Error('fold short');
-    const entry = { idx: { ...idx, lastSeq: state.seq }, state, sinceKf: 0, dirty: state.seq !== idx.lastSeq };
+    if (last < idx.lastSeq || state.dim !== dim) throw new Error('fold short');
+    const entry = { idx: { ...idx, lastSeq: last }, state, grants, oids, sinceKf: 0, dirty: last !== idx.lastSeq };
     remember(dim, entry);
     return entry;
   }
   // no usable index: look for the dimension in the log before anyone may create it again
-  const { state, first } = await foldFromLog(host, dim, emptyDimState(dim), 0);
+  const { state, grants, oids, first, last } = await foldFromLog(host, dim, { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() }, 0);
   if (state.seq === 0 || first === null) return null;
   if (typeof first.repo !== 'string' || !REPO.test(first.repo)) throw new Error('start row without a repo scope');
   if (!dims.includes(id)) {
@@ -219,10 +242,24 @@ async function load(host, dim) {
   // a keyframe under this id predates the adoption: it is not this fold's
   await dropKeyframe(host, id);
   kfs = kfs.filter((e) => e.id !== id);
-  const entry = { idx: { repo: first.repo, firstSeq: first.seq, lastSeq: state.seq, title: state.title, log: logId }, state, sinceKf: 0, dirty: true };
+  const entry = { idx: { repo: first.repo, firstSeq: first.seq, lastSeq: last, title: state.title, log: logId }, state, grants, oids, sinceKf: 0, dirty: true };
   remember(dim, entry);
   return entry;
 }
+
+/** Record an op row's `oid` (only ever a 16-hex value this mod computed; anything else is not read). */
+function noteOid(oids, payload, seq) {
+  const oid = own(payload, 'oid');
+  if (typeof oid !== 'string' || !OID.test(oid)) return;
+  const ops = own(payload, 'ops');
+  const prev = oids.get(oid);
+  oids.delete(oid);
+  oids.set(oid, { applied: (prev ? prev.applied : 0) + (Array.isArray(ops) ? ops.length : 0), seq });
+  while (oids.size > MEMO_CAP) oids.delete(oids.keys().next().value);
+}
+
+/** The effective grant of every attached session, as a LIST (M9: `dim.open` and `dim.grant` answer it). */
+const grantList = (entry) => entry.state.attached.map((hsid) => ({ hsid, write: dimMayDraw(entry.state, entry.grants, hsid) }));
 
 function remember(dim, entry) {
   loaded.delete(dim);
@@ -253,7 +290,7 @@ async function dropKeyframe(host, id) {
 async function saveKeyframe(host, dim, entry) {
   const id = ulidOf(dim);
   try {
-    const enc = encodeKeyframe(entry.state, logId);
+    const enc = encodeKeyframe(entry.state, logId, { grants: entry.grants, oids: entry.oids });
     entry.sinceKf = 0;
     if (!enc) return;
     const old = plain(await host.get(`kf:${id}`));
@@ -317,7 +354,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     if (rowProblem(payload, stamp)) return refusal('row-too-large');
     const seq = await append(host, DIM_KINDS.start, payload);
     if (seq === null) return refusal('append-failed');
-    const fresh = { idx: { repo: a.repo, firstSeq: seq, lastSeq: seq, title: t.title, log: logId }, state: landed(emptyDimState(a.dim), DIM_KINDS.start, payload, stamp, seq), sinceKf: 0, dirty: false };
+    const fresh = { idx: { repo: a.repo, firstSeq: seq, lastSeq: seq, title: t.title, log: logId }, state: landed(emptyDimState(a.dim), DIM_KINDS.start, payload, stamp, seq), grants: emptyDimGrants(), oids: new Map(), sinceKf: 0, dirty: false };
     try {
       // a keyframe left under this id is another dimension's fold (L1)
       await dropKeyframe(host, ulidOf(a.dim));
@@ -334,7 +371,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       // the row is in the log but the index could not take it: the next command adopts the dimension from the log
       return refusal('unavailable');
     }
-    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: dimHash(fresh.state) };
+    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: dimHash(fresh.state), grants: grantList(fresh) };
   }
 
   // every other path needs a known dimension of the caller's repo
@@ -352,7 +389,9 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       loaded.delete(a.dim);
       return refusal('append-failed');
     }
-    entry.state = landed(entry.state, kind, payload, stamp, seq);
+    // a grant row is outside the published fold: it moves the grant fold, through the same shared function
+    if (kind === DIM_AUX_KINDS.grant) entry.grants = foldDimGrants([{ seq, kind, payload: { ...payload, relayedFor: stamp } }], a.dim, entry.grants);
+    else entry.state = landed(entry.state, kind, payload, stamp, seq);
     entry.idx = { ...entry.idx, lastSeq: seq };
     await saveIdx(host, a.dim, entry);
     return seq;
@@ -371,7 +410,18 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   if (commandId === 'dim.open') {
     // a reopen: no title (the first start row named the dimension), and any title sent is not read
     const seq = await write(DIM_KINDS.start, startPayload(a.dim, a.hsid, a.opened));
-    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: dimHash(entry.state) } : seq;
+    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: dimHash(entry.state), grants: grantList(entry) } : seq;
+  }
+
+  if (commandId === 'dim.grant') {
+    // M10: a person on the window sets it for an ATTACHED session (the focus the host joined; checked above). The
+    // grant row is the only writer of the standing; the answer is the effective map the mod now enforces (M9).
+    if (state.ended) return refusal('dim-ended');
+    const seq = await write(DIM_AUX_KINDS.grant, grantPayload(a.dim, a.hsid, a.write));
+    if (typeof seq !== 'number') return seq;
+    // the keyframe carries the grant map: written now, so a cold open after a revoke never starts from before it
+    await saveKeyframe(host, a.dim, entry);
+    return { ok: true, dim: a.dim, seq, grants: grantList(entry) };
   }
 
   if (commandId === 'dim.close') {
@@ -383,7 +433,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     return { ok: true, already: false, dim: a.dim, seq, ops: payload.ops, nodes: payload.nodes, hash: dimHash(entry.state) };
   }
 
-  // dim.op
+  if (commandId !== 'dim.op') return refusal('command-unknown');
   if (state.ended) return refusal('dim-ended');
   const v = apply(state, a.ops, actor, { stamp });
   // ops that could never fit one row are refused before the validator reads them
@@ -459,7 +509,8 @@ process.stdin.on('data', (chunk) => {
       const w = pending.get(msg.id);
       if (!w) continue;
       pending.delete(msg.id);
-      if (msg.error) w.rej(new Error('host refused'));
+      // the host's refusal data rides along (an APPEND_BUDGET refusal is a definite "not written", A4)
+      if (msg.error) w.rej(Object.assign(new Error('host refused'), { data: msg.error && typeof msg.error === 'object' ? msg.error.data : undefined }));
       else w.res(msg.result);
       continue;
     }
