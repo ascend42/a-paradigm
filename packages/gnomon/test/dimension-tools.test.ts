@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIM_AUX_KINDS, DIM_KINDS, dimHash, foldDimGrants, type DimState } from '@a-company/gnomon-contracts';
+import { DIM_AUX_KINDS, DIM_KINDS, dimAttrDigest, dimHash, foldDimGrants, type DimState } from '@a-company/gnomon-contracts';
 import { hostDir } from '../src/kernel/modhost/state.js';
 import { unsandboxedModLauncher, withPinTablesForTest } from '../src/kernel/testing.js';
 import { PKG_ROOT } from './helpers.js';
@@ -229,7 +229,7 @@ describe('#dimension-mod dim.select, dim.check and the hash on a dim.op answer (
     await w.run('dim.op', { dim, ops: [rectOp(1)] });
     const before = w.log.rows.length;
     const at = await w.run('dim.check', { dim });
-    expect(at).toEqual({ ok: true, dim, seq: w.log.fold(dim).seq, hash: dimHash(w.log.fold(dim)) });
+    expect(at).toEqual({ ok: true, dim, seq: w.log.fold(dim).seq, hash: dimHash(w.log.fold(dim)), attr: dimAttrDigest(w.log.fold(dim)) });
     // a row the mod's fold has not seen (another writer, or a reply it lost): the check reads the log to its head
     w.inject(DIM_KINDS.op, { v: 1, dim, ops: [rectOp(9)], relayedFor: { principal: 'p:00000000/s-zzzzzzzb', surface: 'bridge', agent: 'claude', hsid: B } });
     const after = await w.run('dim.check', { dim });

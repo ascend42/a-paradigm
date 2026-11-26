@@ -719,6 +719,36 @@ export function decodeTurns(v) {
   return out;
 }
 
+/**
+ * The view's byte bound (S1.4 E1, carried from the E0 review): a 500-node page with full attribution measured
+ * 294,752 bytes as plain hands (108,752 without), past the bridge's 256 KiB result cap. Two measures:
+ *  - attribution is COMPACT: `changedBy`, `otherBy`, `wordsBy` and `restoredFrom.by` are indices into the answer's
+ *    `hands` list (each hand once, as `dimViewBy` bounds it); `by` stays the hand itself. The same page then
+ *    measures under VIEW_NODE_BYTES;
+ *  - the nodes of one answer hold at most VIEW_NODE_BYTES in all (a page of long texts is cut, `truncated`).
+ */
+export const VIEW_NODE_BYTES = 192 * 1024;
+function compactAttribution(nodes) {
+  const hands = [];
+  const keys = new Map();
+  const ix = (by) => {
+    const k = JSON.stringify([by.cls, by.principal, by.agent ?? null]);
+    if (!keys.has(k)) {
+      keys.set(k, hands.length);
+      hands.push(by);
+    }
+    return keys.get(k);
+  };
+  const out = nodes.map((n) => {
+    if (n.changedBy === undefined && n.otherBy === undefined && n.wordsBy === undefined && n.restoredFrom === undefined) return n;
+    const c = { ...n };
+    for (const f of ['changedBy', 'otherBy', 'wordsBy']) if (c[f] !== undefined) c[f] = ix(c[f]);
+    if (c.restoredFrom !== undefined) c.restoredFrom = { id: c.restoredFrom.id, by: ix(c.restoredFrom.by) };
+    return c;
+  });
+  return { nodes: out, hands };
+}
+
 /** A stroke is shown as its point count and its box, never its point list (H1: an integer list can carry an encoding). */
 function strokeView(n) {
   const pts = Array.isArray(n.points) ? n.points : [];
@@ -748,7 +778,16 @@ export function viewAnswer(state, o) {
   const v = dimViewOf(state);
   const all = v.nodes.map((n) => (n.kind === 'stroke' ? strokeView(n) : n));
   const pick = o.touched ? all.filter((n) => o.touched.has(n.id)) : all;
-  const nodes = pick.slice(0, o.limit);
+  const { nodes: listed, hands } = compactAttribution(pick.slice(0, o.limit));
+  // the byte bound (S1.4 E1): the answer stays inside VIEW_MAX_BYTES; marks past it are left for a smaller
+  // `limit` or a `since` view, and `truncated` says how many there are
+  let bytes = 0;
+  let fit = 0;
+  for (; fit < listed.length; fit++) {
+    bytes += utf8.encode(JSON.stringify(listed[fit])).length + 1;
+    if (bytes > VIEW_NODE_BYTES) break;
+  }
+  const nodes = listed.slice(0, fit);
   return {
     v: 1,
     dim: v.dim,
@@ -759,6 +798,7 @@ export function viewAnswer(state, o) {
     mayDraw: o.mayDraw,
     budgetLeft: o.budgetLeft,
     nodes,
+    ...(hands.length > 0 ? { hands } : {}),
     legend: v.legend,
     selection: o.selection,
     ...(o.changes !== undefined ? { changes: o.changes } : {}),
@@ -777,6 +817,13 @@ export function changesOf(rows, byOf) {
   const touched = new Set();
   const entries = rows.map((row) => {
     const e = { seq: row.seq, by: byOf(row), added: [], updated: [], moved: [], deleted: [] };
+    // S1.4 E1 (Aegis ruling 5): the change-set the row belongs to, so a later undo can name it from this view, and
+    // `undo: {of}` when the row is an honoured undo (an agent then sees its turn was undone and does not redraw it)
+    const r = { seq: row.seq, kind: DIM_KINDS.op, payload: row.payload };
+    const cs = dimChangeSetOf(r);
+    if (cs) e.set = ofOf(cs);
+    const mark = Object.hasOwn(row.payload, 'undo') ? dimUndoMarkOf(r) : null;
+    if (mark) e.undo = { of: ofOf(mark.of) };
     const ops = Array.isArray(own(row.payload, 'ops')) ? row.payload.ops.slice(0, DIM_LIMITS.opsPerRow) : [];
     for (const op of ops) {
       const o = plain(op);

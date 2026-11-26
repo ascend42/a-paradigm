@@ -79,6 +79,17 @@ async function board(w: Rig, n = 1): Promise<string> {
 const loadModel = async () => (await import(pathToFileURL(path.join(DIMENSION_TREE, 'model.mjs')).href)) as Record<string, (...a: unknown[]) => unknown>;
 type ViewNode = Record<string, unknown> & { id: string };
 const nodeOf = (v: Res, id: string): ViewNode | undefined => (v.nodes as ViewNode[]).find((n) => n.id === id);
+/** A node's attribution with the compact hand indices resolved through the answer's `hands` (S1.4 E1 item 6). */
+const handsOf = (v: Res, id: string): ViewNode | undefined => {
+  const n = nodeOf(v, id);
+  const hands = (v.hands ?? []) as unknown[];
+  if (!n) return n;
+  const out: ViewNode = { ...n };
+  for (const f of ['changedBy', 'otherBy', 'wordsBy']) if (typeof out[f] === 'number') out[f] = hands[out[f] as number];
+  const rf = out.restoredFrom as { id: string; by: unknown } | undefined;
+  if (rf && typeof rf.by === 'number') out.restoredFrom = { id: rf.id, by: hands[rf.by] };
+  return out;
+};
 
 describe('#dimension-mod E1 item 1: keyframe v3 carries attribution; v2 is ignored for every attribution consumer', () => {
   it('encode/decode keeps changedBy, otherBy, wordsBy and restoredFrom; the sum and the attr digest cover them', async () => {
@@ -149,7 +160,7 @@ describe('#dimension-mod E1 item 1: keyframe v3 carries attribution; v2 is ignor
     });
     const readsBefore = w.log.reads.length;
     const view = await w.tool('dim-view', { dim }, agentOf(A));
-    const n = nodeOf(view, id)!;
+    const n = handsOf(view, id)!;
     expect(n.wordsBy).toMatchObject({ cls: 'agent', agent: 'claude', principal: agentOf(B).principal });
     expect(n.otherBy).toMatchObject({ cls: 'agent' });
     // the cold open read the log from before the first row: the v2 keyframe was not trusted
@@ -301,7 +312,7 @@ describe('#dimension-mod E1 items 3 and 4: dim.undo of a held change-set (Arky Â
     expect(idea.by.cls).toBe('human'); // the re-add is stamped by the undoer ...
     expect(idea.restoredFrom!.by).toMatchObject({ cls: 'agent', agent: 'claude' }); // ... and carries the agent's hand (G5)
     const view = await w.tool('dim-view', { dim }, agentOf(A));
-    expect(nodeOf(view, idea.node.id as string)!.restoredFrom).toMatchObject({ id: ulid(4), by: { cls: 'agent' } });
+    expect(handsOf(view, idea.node.id as string)!.restoredFrom).toMatchObject({ id: ulid(4), by: { cls: 'agent' } });
   });
 
   it('undo-expired after a restart, and after an append-failed dropped the fold (never a plan built on a stale fold); undo-nothing; undo-set-bad', { timeout: 60_000 }, async () => {
@@ -504,5 +515,74 @@ describe('#dimension-mod E1 item 5: base and changed-since; the foreign sub-budg
     expect(t.get(A)).toMatchObject({ turn: 3, used: 10, foreign: 0, fdel: 0, fwords: 0 });
     expect(t.get(B)).toMatchObject({ turn: 2, used: 5, foreign: 7, fdel: 2, fwords: 1 });
     expect(m.encodeTurns!(t)).toEqual([[A, 3, 10, 1, 0, 0, 0], [B, 2, 5, 0, 7, 2, 1]]);
+  });
+});
+
+describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids in dim-view changes; the view byte bound', () => {
+  it('dim.check, dim.op and dim.undo answer attr = dimAttrDigest of the page fold; a row whose stamp was edited shows in attr while hash matches', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const op = await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'mine' })] });
+    expect(op.attr).toBe(dimAttrDigest(w.log.fold(dim)));
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { label: 'theirs' } }]);
+    const chk = await w.run('dim.check', { dim });
+    expect([chk.hash, chk.attr]).toEqual([dimHash(w.log.fold(dim)), dimAttrDigest(w.log.fold(dim))]);
+    // the page's fold of the same rows with one stamp edited (another agent label): content and adder agree, attribution does not
+    const { foldDim } = await import('@a-company/gnomon-contracts');
+    const rows = w.log.dimRows().map((r) => {
+      const p = r.payload as Record<string, unknown>;
+      const rf = p.relayedFor as Record<string, unknown> | undefined;
+      return rf?.agent ? { ...r, payload: { ...p, relayedFor: { ...rf, agent: 'mallory' } } } : r;
+    });
+    const page = foldDim(rows, undefined, { ...w.log.fold(dim), nodes: new Map(), gone: new Set(), seq: 0, ops: 0, unapplied: 0, attached: [], title: '', dim });
+    expect(dimHash(page)).toBe(chk.hash);
+    expect(dimAttrDigest(page)).not.toBe(chk.attr);
+  });
+
+  it('changes entries carry their set id and, on an honoured undo row, undo: {of}; attribution is compact (indices into hands)', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const act = ulid(4, '01JDAC');
+    await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'mine' })], act });
+    const since = (await w.tool('dim-view', { dim }, agentOf(B))).seq as number;
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { label: 'theirs' } }]);
+    await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    const v = await w.tool('dim-view', { dim, since: since - 1 }, agentOf(B, 2));
+    const ch = v.changes as Array<Record<string, unknown>>;
+    expect(ch[0]!.set).toEqual({ principal: HUMAN, act });
+    expect(ch[1]!.set).toEqual(turnOf(B, 1));
+    expect(ch[1]!.undo).toBeUndefined();
+    expect(ch[2]!.undo).toEqual({ of: turnOf(B, 1) });
+    expect((ch[2]!.set as Record<string, unknown>).principal).toBe(HUMAN);
+    const n = nodeOf(v, ulid(1))!;
+    const hands = v.hands as Array<Record<string, unknown>>;
+    expect(typeof n.changedBy).toBe('number');
+    expect(hands[n.changedBy as number]).toEqual({ cls: 'human', principal: HUMAN });
+    expect(hands[n.otherBy as number]).toMatchObject({ cls: 'agent', agent: 'claude' });
+    expect(n.by).toEqual({ cls: 'human', principal: HUMAN });
+  });
+
+  it('the byte bound: 500 marks with full attribution fit one answer; a page of long texts is cut by bytes with truncated', async () => {
+    const m = await loadModel();
+    const human = { cls: 'human', principal: HUMAN };
+    const ag = (k: string) => ({ cls: 'agent', principal: `p:00000000/s-${k}`, agent: `claude-${k}` });
+    const mk = (big: boolean) => {
+      const nodes = new Map<string, unknown>();
+      for (let i = 0; i < 500; i++) {
+        const node = big ? { id: ulid(i), kind: 'text', x: i, y: i, z: 'V', text: 'x'.repeat(4000) } : { id: ulid(i), kind: 'rect', x: i * 13, y: i * 7, z: 'V', w: 120, h: 60, label: `Label number ${i}`, color: 'graphite', fill: 'sky' };
+        nodes.set(ulid(i), { node, by: human, hsid: A, addedSeq: i + 1, changedBy: ag('a'), changedSeq: 600, otherBy: ag('a'), otherSeq: 600, wordsBy: ag('b'), wordsSeq: 601, restoredFrom: { id: ulid(9000 + i), by: ag('c') } });
+      }
+      return { dim: dimId(1), title: 't', attached: [A], ended: false, nodes, gone: new Set(), seq: 700, ops: 0, unapplied: 0 };
+    };
+    const o = { hash: 'sha256:x', mayDraw: true, budgetLeft: 64, selection: [], limit: 500 };
+    const full = m.viewAnswer!(mk(false), o) as Res;
+    const bytes = Buffer.byteLength(JSON.stringify(full));
+    expect((full.nodes as unknown[]).length).toBe(500);
+    expect(full.truncated).toBeUndefined();
+    expect(bytes).toBeLessThan(200 * 1024);
+    const big = m.viewAnswer!(mk(true), o) as Res;
+    expect(Buffer.byteLength(JSON.stringify(big))).toBeLessThan(200 * 1024);
+    expect((big.nodes as unknown[]).length).toBeLessThan(500);
+    expect(big.truncated).toEqual({ nodes: 500 });
   });
 });

@@ -651,7 +651,8 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       loaded.delete(a.dim);
       return refusal('unavailable');
     }
-    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state) };
+    // G7: the attribution digest beside the hash; the page compares both at this hash point
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrOf(entry.state) };
   }
 
   if (commandId === 'dim.seen') {
@@ -707,7 +708,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   entry.sinceKf += v.ok.length;
   if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
   // the hash of the fold at this seq: the page compares its own fold there (S1.4 §5)
-  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), applied: v.ok.length, refused: v.refused };
+  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), attr: attrOf(entry.state), applied: v.ok.length, refused: v.refused };
 }
 
 /* ── the two agent tools (S1.4 §2) ────────────────────────────────────────── */
@@ -749,6 +750,34 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   if (name === 'dim-view') return viewTool(host, dim, entry, actor, a, cancelled);
   return drawTool(host, dim, entry, actor, a, toolStampOf(relayedFor), cancelled);
 }
+
+/**
+ * Aegis ruling 5 (named from the agent's own view): the change-sets a `dim-view` changes answer listed to each hsid,
+ * the newest SHOWN_SETS per hsid, per dimension. MEMORY ONLY. E2's `dim-undo` reads it (`shownTo`).
+ */
+const SHOWN_SETS = 32;
+const shown = new Map();
+function noteShown(dim, hsid, entries) {
+  let byHsid = shown.get(dim);
+  if (!byHsid) {
+    while (shown.size >= SELECTION_DIMS) shown.delete(shown.keys().next().value);
+    shown.set(dim, (byHsid = new Map()));
+  }
+  let list = byHsid.get(hsid) ?? [];
+  for (const e of entries) {
+    if (!e.set) continue;
+    const k = setKey(readOfKnown(e.set));
+    list = [...list.filter((x) => x !== k), k];
+  }
+  byHsid.delete(hsid);
+  byHsid.set(hsid, list.slice(-SHOWN_SETS));
+  while (byHsid.size > OPENS_CAP) byHsid.delete(byHsid.keys().next().value);
+}
+/** Was this change-set listed to this hsid on this board (one of its last SHOWN_SETS)? */
+function shownTo(dim, hsid, cs) {
+  return !!shown.get(dim)?.get(hsid)?.includes(setKey(cs));
+}
+const readOfKnown = (of) => (Object.hasOwn(of, 'act') ? { kind: 'act', principal: of.principal, act: of.act } : { kind: 'turn', hsid: of.hsid, turn: of.turn });
 
 /** dim → oid → {input, answer}: the last ANSWERS_CAP draws with an opId, in memory (A8) */
 const answers = new Map();
@@ -1062,6 +1091,7 @@ async function viewTool(host, dim, entry, actor, a, cancelled) {
     }
     const ch = changesOf(mine, dimRowBy);
     if (!ch) return viewAnswer(state, { ...base, changes: 'reset' });
+    noteShown(dim, actor.hsid, ch.entries);
     return viewAnswer(state, { ...base, changes: ch.entries, touched: ch.touched });
   } catch {
     return viewAnswer(state, { ...base, changes: 'reset' });
