@@ -700,11 +700,16 @@ describe('#dimension-mod E1 item 8: the pin rules at the model, on an explicit c
 });
 
 describe('#dimension-mod E1 item 8: M3 with the history (Aegis G6 timing case)', () => {
-  it('32 checkpoints held across 8 loaded dimensions of 10,048 nodes each: every cold open, every draw while they are held, and the undo answer inside the 5 s timeout', { timeout: 600_000 }, async () => {
+  // The 5 s per-call bound is the product's (the host's call timeout); it is ASSERTED only in the isolated perf pass
+  // (GNOMON_PERF=1 or `npm run test:perf`, as kernel-log-posix's G-LOG-04), because inside the parallel suite, and on
+  // slower CI runners, the numbers measure the machine. Elsewhere the calls run under a 30 s harness ceiling and the
+  // figures are recorded (E1_MEASURE).
+  const PERF = process.env.GNOMON_PERF === '1' || process.env.npm_lifecycle_event === 'test:perf';
+  it('32 checkpoints held across 8 loaded dimensions of 10,048 nodes each: every cold open, every draw while they are held, and the undo answer (inside the 5 s call timeout in the perf pass)', { timeout: 600_000 }, async () => {
     // eight boards of 10,048 nodes in ONE log, 4 checkpoints each. The harness log pages at PAGE_MAX_BYTES (2 MiB) as
     // the kernel's log-read does (Probe F2); before that bound a 1,000-row page of these boards was about 7 MB and
     // the cold open never answered
-    const w = await editRig({ callTimeoutMs: 5_000 });
+    const w = await editRig({ callTimeoutMs: PERF ? 5_000 : 30_000 });
     let coldest = 0;
     const gui = { principal: HUMAN, connId: GUI.connId, surface: 'gui' };
     const dims: string[] = [];
@@ -732,9 +737,11 @@ describe('#dimension-mod E1 item 8: M3 with the history (Aegis G6 timing case)',
     const undoMs = performance.now() - t0;
     expect(u).toMatchObject({ ok: true, applied: 1 });
     expect(await timed(() => draw(w, dims[7]!, B, 99, [{ type: 'update', id: ulid(9000), patch: { color: 'graphite' } }]))).toMatchObject({ ok: true });
-    expect(slowest).toBeLessThan(5_000);
-    expect(coldest).toBeLessThan(5_000);
-    expect(undoMs).toBeLessThan(5_000);
+    if (PERF) {
+      expect(slowest).toBeLessThan(5_000);
+      expect(coldest).toBeLessThan(5_000);
+      expect(undoMs).toBeLessThan(5_000);
+    }
     // the measured numbers, for the E1 report, when asked for
     if (process.env.E1_MEASURE) fs.appendFileSync(process.env.E1_MEASURE, `M3+history: slowest draw ${slowest.toFixed(0)} ms, undo ${undoMs.toFixed(0)} ms, slowest cold open ${coldest.toFixed(0)} ms\n`);
   });

@@ -784,14 +784,17 @@ describe('S1.4 P3 review, Aegis Important (I-1, I-2, I-4)', () => {
   });
 
   it('I-2: a budget refusal (written: false) refunds the turn: agent B refused append-busy in A\'s second keeps 64, and its retry after the window applies', { timeout: 60_000 }, async () => {
-    const w = await toolRig({ now: () => performance.now() });
+    // a clock the test moves (never wall time): every append of one step lands in the same 1 s window however slow
+    // the machine is, and the next step starts a fresh window
+    let T = 0;
+    const w = await toolRig({ now: () => T });
     const dim = await board(w);
     await w.run('dim.grant', { dim, write: true }, B);
-    await new Promise((res) => setTimeout(res, 1_100));
+    T += 2_000; // the window is empty
     expect((await w.tool('dim-draw', { ops: [...fullDraw(60), rectOp(1, { link: 'x' })] })).ok).toBe(true);
     const busy = await w.tool('dim-draw', { ops: ops(64, 2000) }, agentOf(B));
     expect(busy).toMatchObject({ ok: false, code: 'append-busy', budgetLeft: 64 });
-    await new Promise((res) => setTimeout(res, 1_100));
+    T += 2_000; // a fresh window
     expect(await w.tool('dim-draw', { ops: ops(64, 2000) }, agentOf(B))).toMatchObject({ ok: true, applied: 64, budgetLeft: 0 });
   });
 
