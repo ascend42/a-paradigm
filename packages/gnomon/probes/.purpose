@@ -62,11 +62,25 @@ components:
       CSP row it never posted is not seen; the retry scope is narrowed to
       the miss class CI evidence shows once it shows one. The result counts a run as
       mounted only if both pages mounted, lists every non-reporting page in
-      nonReportingRuns (run, page, wallMs, miss, launcherTail), and gives
-      per-page timings (pinnedBytes, probeTimings). harness.mjs runAccounting,
-      engineProblems, retryable, strayRequests, attachLateReports and
-      runMounted are pure and tested in
+      nonReportingRuns (run, page, wallMs, miss, launcherTail, handoff), and
+      gives per-page timings (pinnedBytes, probeTimings). harness.mjs
+      runAccounting (which also counts a retried attempt's late CSP rows in
+      violationCount and violatedDirectives), engineProblems, retryable,
+      strayRequests, attachLateReports and runMounted are pure and tested in
       test/p12-run-accounting.test.ts. P12 has its own CI step (30 min).
+      The browser, not the launcher (T-2026-11-25-002, macos-15 CI 2026-11-26:
+      the Firefox launcher exited 0 at 2 s, the browser it started loaded the
+      pinned page and reported after the page had been called 'exited' and
+      retried): _shared/browser.mjs launch() follows a hand-off. The
+      processes whose command line holds the launch's unique profile
+      directory name are the browser (holdersFrom, profileHolders: ps on
+      macOS and Linux, Win32_Process on Windows); `gone` resolves when the
+      launcher and all of them have ended, runPage's early end and its
+      'exited' miss wait on `gone`, and kill() stops them before the profile
+      is removed. Every runPage result carries `handoff` {launcherExit, pids,
+      stopped} when a launcher exited with its browser alive. Tested with a
+      stub launcher in test/p12-browser-handoff.test.ts
+      (test/fixtures/handoff-launcher.mjs).
       Pass B: the page also checks that a dropped image is reported to the
       host (onRefused, onAttempt) and reads the handle's marks and view.
       S1.1 CI round: the two paste checks are a REAL paste in Chromium-family
@@ -156,3 +170,4 @@ components:
     tests:
       - test/probe-harness.test.ts
       - test/p12-run-accounting.test.ts
+      - test/p12-browser-handoff.test.ts

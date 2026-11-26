@@ -61,6 +61,28 @@ describe('P12 run accounting: both pages count', () => {
     expect(acc.violationCount).toBe(4);
     expect(acc.violatedDirectives.sort()).toEqual(['img-src', 'script-src', 'style-src-attr']);
   });
+
+  it('a retried attempt\'s late CSP row is counted too: violationCount and violatedDirectives are exact', () => {
+    const rows = [run(probeOk, pinnedOk), run(probeOk, pinnedOk)];
+    const attempt = { run: 2, page: 'pinned', ...miss('pinned', { runId: 'ff' }) };
+    expect(runAccounting(rows, [attempt]).violationCount).toBe(0);
+    attachLateReports(rows, [attempt], (id: string) => (id === 'ff' ? { stage: 'done', mounted: true, violations: [{ directive: 'font-src', blockedURI: 'https://esm.sh/x.woff2' }, { directive: 'font-src', blockedURI: 'https://esm.sh/y.woff2' }] } : null));
+    const acc = runAccounting(rows, [attempt]);
+    expect(acc.violationCount).toBe(2);
+    expect(acc.violatedDirectives).toEqual(['font-src']);
+    // the counters and the verdict agree: the attempt's row is a problem as well
+    expect(engineProblems(rows, KNOWN, [attempt]).join(' | ')).toMatch(/run 2 \(pinned bytes, retried attempt\): .*2 CSP violation\(s\) in a report that came after the timeout: font-src/);
+    // and a retried attempt is not a run: the run counts do not move
+    expect(acc.runs).toBe(2);
+    expect(acc.mountedRuns).toBe(2);
+    expect(acc.nonReportingRuns).toEqual([]);
+  });
+
+  it('nonReportingRuns keeps a miss\'s hand-off evidence', () => {
+    const handoff = { launcherExit: { code: 0, signal: null, atMs: 2044 }, pids: [4242], stopped: [4242] };
+    const got = runAccounting([run(probeOk, miss('pinned', { miss: 'never-requested', pageRequestedMs: null, handoff }))]).nonReportingRuns;
+    expect(got[0]).toMatchObject({ run: 1, page: 'pinned', miss: 'never-requested', handoff });
+  });
 });
 
 describe('P12: a timeout or a missed report is never clean', () => {

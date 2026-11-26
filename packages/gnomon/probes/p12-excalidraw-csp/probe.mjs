@@ -41,9 +41,15 @@
 // the server closes and judged. A run counts as mounted only if BOTH its pages mounted. The page's watchdog fires
 // 5 s before a deadline the host fixes at launch (80 s into the 90 s wait): a fixed 45 s from the driver's start cut
 // off the probe build's page on a slow runner (Chrome, ~43 s there).
+// The browser, not the launcher (T-2026-11-25-002, the first CI evidence of the miss class): on macos-15 the Firefox
+// launcher exited 0 at 2 s and the browser it had started loaded the pinned page and reported 6.5 s later, after the
+// page had been called 'exited' and retried. The class was a tracking error, not a browser that died:
+// _shared/browser.mjs launch() now follows the hand-off (the processes naming the launch's profile directory are the
+// browser), 'exited' means that browser ended, kill() stops it with its page, and the result says `handoff`.
+// A retried attempt's late CSP rows are counted in violationCount and violatedDirectives (runAccounting).
 // Residual risk: a page whose main thread hangs before it can post is a 'no-report' miss, which is retryable, so a
-// CSP row it never posted would not be seen. The retry scope stays wide until CI evidence (nonReportingRuns[].miss)
-// shows which miss class the flake is; then it is narrowed to that class.
+// CSP row it never posted would not be seen. The retry scope stays wide: the one miss class CI has shown was the
+// hand-off above, now fixed at its cause; it is narrowed once CI shows a class that remains.
 import { gnomonCsp } from '../_shared/browser.mjs';
 import { exercisedChecks, pasteCarried, runAccounting, runBoardUnderCsp, runMounted, shippedBoard, staticScan } from './harness.mjs';
 
@@ -81,7 +87,7 @@ export default async function probe(ctx) {
   for (const [name, e] of Object.entries(out.engines)) {
     // a run is mounted only if both its pages mounted; a page that sent no report is never clean (e.clean, problems)
     const ok = e.runs.filter(runMounted);
-    const acc = runAccounting(e.runs);
+    const acc = runAccounting(e.runs, e.launchRetries);
     engines[name] = {
       version: e.version,
       family: e.family,
@@ -91,9 +97,9 @@ export default async function probe(ctx) {
       problems: e.problems,
       // both pages of every run: the pinned bytes and the probe build (and any report that came after a timeout)
       violationCount: acc.violationCount,
-      pinnedBytes: e.runs.map((r) => (r.pinned ? { stage: r.pinned.stage ?? null, mounted: r.pinned.mounted ?? false, violationCount: r.pinned.violationCount ?? null, wallMs: r.pinned.wallMs, sentAt: r.pinned.sentAt, phaseAt: r.pinned.phaseAt, ...(r.pinned.error ? { error: r.pinned.error, miss: r.pinned.miss } : {}), fix: r.pinned.fix, syntheticDraw: r.pinned.syntheticDraw, png: r.pinned.png } : null)),
+      pinnedBytes: e.runs.map((r) => (r.pinned ? { stage: r.pinned.stage ?? null, mounted: r.pinned.mounted ?? false, violationCount: r.pinned.violationCount ?? null, wallMs: r.pinned.wallMs, sentAt: r.pinned.sentAt, phaseAt: r.pinned.phaseAt, ...(r.pinned.error ? { error: r.pinned.error, miss: r.pinned.miss } : {}), ...(r.pinned.handoff ? { handoff: r.pinned.handoff } : {}), fix: r.pinned.fix, syntheticDraw: r.pinned.syntheticDraw, png: r.pinned.png } : null)),
       // the probe build's page of every run: when it sent its report and when each phase began
-      probeTimings: e.runs.map((r) => ({ wallMs: r.wallMs, pageRequestedMs: r.pageRequestedMs, stage: r.stage ?? null, sentAt: r.sentAt, phaseAt: r.phaseAt })),
+      probeTimings: e.runs.map((r) => ({ wallMs: r.wallMs, pageRequestedMs: r.pageRequestedMs, stage: r.stage ?? null, sentAt: r.sentAt, phaseAt: r.phaseAt, ...(r.handoff ? { handoff: r.handoff } : {}) })),
       violatedDirectives: acc.violatedDirectives,
       exportPng: ok.length > 0 && ok.every((r) => r.png?.ok && r.pinned.png?.ok),
       medianMs: { module: median(ok.map((r) => r.ms.module)), mounted: median(ok.map((r) => r.ms.mounted)) },
