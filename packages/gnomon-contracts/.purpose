@@ -327,7 +327,8 @@ components:
       the text floor, and the line on its own fill as the node would stand after
       the op, refused on the field being written, the line when an add writes
       both; a contrast refusal's fix is contentContrastFix, a fixed sentence
-      naming the offered swatch, not hashed, and DIM_REFUSAL_CODES did not move), a
+      naming the offered swatch, not hashed, and DIM_REFUSAL_CODES did not move;
+      the refusal carries contrast {why, night}, a closed word the GUI names), a
       dangling from / to / parent, an edit by an actor that is not a well-formed
       hand (dimMayEdit; since S1.4 E0 any hand may edit any mark), an edit
       of a non-core node, more than 64 ops, and any secret match (whole batch

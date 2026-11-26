@@ -163,7 +163,7 @@ components:
       stores nothing; S1.4 P0b: customEntry takes the tool's context, the text
       floor for the text tool and the mark's other colour for the pair, and a
       contrast refusal uses CONTENT_CONTRAST_WORDS with ' at night' and its
-      own offer, 'Use ink' or 'Use paper' for a pair), core/board-overlay.ts (screen transform, pins, seals,
+      own offer, 'Use ink' or 'Use paper' for a pair; P0b review: judgeToken, heldRefusals and trayRefusalLine ('✕ not used as a <role> · <why>'); the leaf judges a tool's held style before its first mark (the tool waits on the refusal row), the selection's other colours under select, both roles' reasons each with its key, the tray scrolls inside the stage), core/board-overlay.ts (screen transform, pins, seals,
       the box round a text that is not yours, stub words, the hands foot),
       core/board-leaf.ts (states and the design's copy). ui/board-leaf.ts
       draws them (head, keep line, rail, tray, overlay, notes, foot) and
