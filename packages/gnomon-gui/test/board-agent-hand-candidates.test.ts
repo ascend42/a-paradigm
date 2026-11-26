@@ -3,7 +3,10 @@
  * GNOMON_P4A_CANDIDATES=1, into test/goldens/candidates/p4a/, never over a committed golden. Nothing here asserts a
  * picture: Mika looks at them first, then they are promoted (or not) in a later pass.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+// @ts-expect-error plain .mjs dev script (no types)
+import { decodePng } from '../scripts/board-colours.mjs';
+import { differingShare, TOLERANCE, type Png } from './board-golden.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -75,8 +78,8 @@ const HELPERS = `
     return { n: xs.length, gaps: gaps.length, period: gaps.length ? xs.length / gaps.length : null };
   };
 `;
-/** each case: the marks (all the agent's unless said), the zoom, and the scene point to centre */
-const CASES: Record<string, { marks: unknown[]; zoom: number; at: [number, number] }> = {};
+/** each case: the marks (all the agent's unless said), the zoom, the scene point to centre, and what is pointed at or selected */
+const CASES: Record<string, { marks: unknown[]; zoom: number; at: [number, number]; hover?: [number, number]; select?: boolean; edge?: boolean }> = {};
 for (const z of [0.25, 1, 4]) {
   CASES[`stroke-${z * 100}`] = { marks: [{ hand: 'arky', marks: [{ kind: 'stroke', x: 600, y: 400, points: [0, 0, 40, -20, 80, 10, 120, -10], weight: 2 }] }], zoom: z, at: [660, 400] };
   CASES[`frame-${z * 100}`] = { marks: [{ hand: 'arky', marks: [{ kind: 'frame', x: 600, y: 330, w: z === 4 ? 160 : 400, h: z === 4 ? 90 : 280, title: 'plan' }] }], zoom: z, at: z === 4 ? [680, 375] : [800, 470] };
@@ -88,9 +91,34 @@ for (const z of [0.49, 0.5]) CASES[`mix-${Math.round(z * 100)}`] = { marks: MIX,
 for (const z of [0.4, 0.41]) CASES[`text-boundary-${Math.round(z * 100)}`] = { marks: [{ hand: 'arky', marks: [{ kind: 'text', x: 600, y: 400, text: 'letters at the boundary' }] }], zoom: z, at: [680, 410] };
 CASES['box-14px-100'] = { marks: [{ hand: 'arky', marks: [{ kind: 'rect', x: 640, y: 380, w: 40, h: 14 }] }], zoom: 1, at: [660, 387] };
 CASES['marker-under-80-100'] = { marks: [{ hand: 'arky', marks: [{ kind: 'stroke', x: 620, y: 400, points: [0, 0, 70, 0], weight: 3 }] }], zoom: 1, at: [655, 400] };
+// Mika's missing goldens: a stroke hovered (R1), a long name at the board's right edge (R2), one agent mark selected with its keep line (R5)
+for (const z of [1, 0.4]) CASES[`hover-stroke-${z * 100}`] = { marks: [{ hand: 'arky', marks: [{ kind: 'stroke', x: 600, y: 400, points: [0, 0, 60, -10, 120, 20, 180, 0], weight: 3 }] }], zoom: z, at: [690, 400], hover: [690, 405] };
+CASES['long-name-edge-100'] = { marks: [{ hand: 'a-very-long-agent-name-that-runs-to-48-characters', marks: [{ kind: 'rect', x: 600, y: 400, w: 100, h: 60 }] }], zoom: 1, at: [400, 430], hover: [650, 430], edge: true };
+CASES['selected-keep-line-100'] = { marks: [{ hand: 'arky', marks: [{ kind: 'rect', x: 600, y: 400, w: 120, h: 70 }] }], zoom: 1, at: [660, 435], select: true };
 CASES['box-20x10-25'] = { marks: [{ hand: 'arky', marks: [{ kind: 'rect', x: 640, y: 380, w: 20, h: 10 }] }], zoom: 0.25, at: [650, 385] };
 
+/** Promoted after Mika's review (s1.4-p4a-mika-review.md): compared against test/goldens/agent/ on every local run. */
+export const PROMOTED: readonly string[] = Object.freeze(['stroke-100', 'stroke-400', 'frame-25', 'frame-100', 'frame-400', 'text-25', 'text-100', 'text-400', 'text-boundary-40', 'mix-49', 'mix-50', 'box-14px-100', 'box-20x10-25']);
+const GOLDEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'goldens', 'agent');
+
 const chrome = findChrome() as string | null;
+describe.skipIf(!!process.env.CI || !process.env.GNOMON_BROWSER_TESTS || !!process.env.GNOMON_P4A_CANDIDATES || !chrome)('#gui-board S1.4 P4a agent goldens (promoted after Mika\'s review)', () => {
+  let p: { url: string; close: () => Promise<void> };
+  beforeAll(async () => {
+    p = await startPreview({ port: 0 });
+  }, 60_000);
+  afterAll(() => p.close());
+  it.each(PROMOTED.flatMap((k) => (['day', 'night'] as const).map((t) => [k, t] as const)))('%s %s matches its golden', async (name, theme) => {
+    const c = CASES[name]!;
+    const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'open', theme, 'empty'), ...SIZE, script: `${HELPERS}
+      board.render(globalThis.gnomonPreviewState(${JSON.stringify(c.marks)}));
+      const got = await zoomTo(${c.zoom});
+      await centreOn(${c.at[0]}, ${c.at[1]});
+      return { zoom: got };` })) as { png: Buffer };
+    expect(differingShare(decodePng(readFileSync(path.join(GOLDEN, `agent-${name}-${theme}.png`))) as Png, decodePng(r.png) as Png), name).toBeLessThanOrEqual(TOLERANCE.share);
+  }, 120_000);
+});
+
 describe.skipIf(!process.env.GNOMON_P4A_CANDIDATES || !chrome)('#gui-board S1.4 P4a candidate goldens (for Mika; not a check)', () => {
   let p: { url: string; close: () => Promise<void> };
   beforeAll(async () => {
@@ -104,7 +132,12 @@ describe.skipIf(!process.env.GNOMON_P4A_CANDIDATES || !chrome)('#gui-board S1.4 
       board.render(globalThis.gnomonPreviewState(${JSON.stringify(c.marks)}));
       const got = await zoomTo(${c.zoom});
       await centreOn(${c.at[0]}, ${c.at[1]});
-      return { zoom: got };` })) as { png: Buffer; scripted: { zoom: number } };
+      ${c.edge ? `{ const v = board.view(); const sx = (${c.at[0]} + v.scrollX) * v.zoom; const c2 = document.querySelector('#preview-board canvas.interactive'); const b = c2.getBoundingClientRect(); c2.dispatchEvent(new WheelEvent('wheel', { deltaX: -(v.width - 30 - (700 + v.scrollX) * v.zoom), deltaY: 0, clientX: b.left + 10, clientY: b.top + 10, bubbles: true, cancelable: true })); await settle(); }` : ''}
+      ${c.select ? `board.select([board.marks().find((m) => !m.labelOf).node]); await settle();` : ''}
+      ${c.hover ? `{ const v = board.view(); const host = document.querySelector('#preview-board .bd-board'); const b = host.getBoundingClientRect(); host.dispatchEvent(new PointerEvent('pointermove', { clientX: b.left + (${c.hover[0]} + v.scrollX) * v.zoom, clientY: b.top + (${c.hover[1]} + v.scrollY) * v.zoom, bubbles: true })); await settle(); }` : ''}
+      return { zoom: got, chips: document.querySelectorAll('#preview-board .bd-over .chip').length, keep: document.querySelector('#preview-board .bd-keep')?.textContent ?? '' };` })) as { png: Buffer; scripted: { zoom: number; chips: number; keep: string } };
+    if (c.hover) expect(r.scripted.chips, name).toBe(1);
+    if (c.select) expect(r.scripted.keep, name).toMatch(/^arky · ◇ /);
     expect(Math.abs(r.scripted.zoom - c.zoom)).toBeLessThan(0.011);
     writeFileSync(path.join(OUT, `agent-${name}-${theme}.png`), r.png);
   }, 120_000);
