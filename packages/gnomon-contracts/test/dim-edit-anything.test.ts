@@ -321,7 +321,7 @@ describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
     expect([q.skipped.refused, q.applied, q.ops]).toEqual([1, 1, [{ type: 'update', id: id(2), patch: { label: null } }]]);
   });
 
-  it('validates as the UNDOER: an agent undoes a person\'s action; an actor that is no hand gets nothing', () => {
+  it('validates as the UNDOER: another agent undoes an agent\'s turn; an actor that is no hand gets nothing', () => {
     const { rows, set } = board();
     const asAgent = plan(rows, set, [], { actor: kit });
     expect([asAgent.applied > 0, asAgent.skipped.refused]).toEqual([true, 0]);
@@ -488,5 +488,49 @@ describe('E0 review group B: planner correctness (Judge I-2, I-3, nits 5 and 6)'
     const all = [...base, ...set, clash];
     const p = planDimUndo({ rows: rowsOf(all, set), after: [clash], current: foldDim(all), actor: human, mint: minter() });
     expect(p.restored.map((r) => r[1])).toEqual([id(1)]);
+  });
+});
+
+describe('E0 review group C: the hand rules match byOf and act (Judge nit 7)', () => {
+  it('dimMayEdit refuses a human that carries an agent key; dimUndoMarkOf honours only gui-human or agent rows and closed keys', async () => {
+    const { dimMayEdit } = await import('../src/dim.js');
+    expect(dimMayEdit({ cls: 'human', principal: HUMAN, agent: 'kit' })).toBe(false);
+    expect(dimMayEdit({ cls: 'human', principal: HUMAN, agent: undefined })).toBe(false);
+    expect(dimMayEdit({ cls: 'human', principal: HUMAN })).toBe(true);
+    const of = { hsid: 'h1', turn: 'turn:h1/1' };
+    const mk = (relayedFor: unknown, undo: unknown = { of }): DimRow => ({ seq: 5, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: [], relayedFor, undo } });
+    expect(dimUndoMarkOf(mk({ principal: HUMAN, surface: 'gui' }))).not.toBeNull();
+    expect(dimUndoMarkOf(mk({ principal: 'p:t/session', surface: 'bridge', agent: 'claude', hsid: 'h1' }))).not.toBeNull();
+    expect(dimUndoMarkOf(mk({ principal: HUMAN, surface: 'cli' }))).toBeNull();
+    expect(dimUndoMarkOf(mk({ principal: HUMAN, surface: 'gui' }, { of, skipped: { changed: 1 } }))).toBeNull();
+  });
+});
+
+/**
+ * MEASURED (E0 review item 10; Apple M4, darwin arm64, Node 26.0.0, contracts dist, 5 runs): planDimUndo of one
+ * agent turn of 64 marks (22 restyles, 21 moves, 21 deletes of the person's marks) on a 10,048-node board (10,027
+ * after the turn) takes 83 to 116 ms; the cost is per-mark validation, each copying the board's Map. The bound
+ * below is loose on purpose (a slow CI runner). A `dim-view` page of 500 nodes is 88,779 bytes of JSON without
+ * attribution and 233,741 bytes when every node carries changedBy, otherBy, wordsBy and restoredFrom (the worst
+ * case; E1 must keep the view answer inside its byte bound, by paging or by showing attribution compactly).
+ */
+describe('E0 review item 10: the planner on a 10,048-node board', () => {
+  it('plans a 64-mark undo well inside the mod\'s 5 s call timeout', () => {
+    const big = (n: number): string => `01JVA1D0000000000000${String(n).padStart(6, '0')}`;
+    const H = { principal: HUMAN, surface: 'gui' };
+    const A = { principal: 'p:t/session', surface: 'bridge', agent: 'claude', hsid: 'h1', turn: 'turn:h1/1' };
+    const rows: DimRow[] = [{ seq: 1, kind: DIM_KINDS.start, payload: { v: 1, dim: DIM, title: 'T', attached: ['h1'], opened: 'command', relayedFor: H } }];
+    for (let r = 0; r < 157; r++) rows.push({ seq: r + 2, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, relayedFor: H, ops: Array.from({ length: 64 }, (_, i) => ({ type: 'add', node: { id: big(r * 64 + i + 1), kind: 'rect', x: i, y: r, z: 'M', w: 10, h: 10, label: `m${i}` } })) } });
+    const ops: unknown[] = [];
+    for (let i = 0; i < 22; i++) ops.push({ type: 'update', id: big(i + 1), patch: { label: `c${i}`, color: 'graphite' } });
+    for (let i = 22; i < 43; i++) ops.push({ type: 'move', ids: [big(i + 1)], dx: 5, dy: 5 });
+    for (let i = 43; i < 64; i++) ops.push({ type: 'delete', id: big(i + 1) });
+    const before = foldDim(rows);
+    const current = foldDim([{ seq: 200, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, relayedFor: A, ops } }], undefined, before);
+    let n = 900000;
+    const t = performance.now();
+    const p = planDimUndo({ rows: [{ before, ops, seq: 200 }], after: [], current, actor: human, mint: () => big(n++) });
+    expect(performance.now() - t).toBeLessThan(2_500);
+    expect([p.ops.length, p.applied, p.more]).toEqual([64, 64, false]);
   });
 });

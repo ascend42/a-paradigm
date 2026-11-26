@@ -319,7 +319,8 @@ components:
       validateDimOps refuses by name (DIM_REFUSAL_CODES, one fixed `fix` sentence per
       code, input never echoed) an unknown or non-core kind, an unknown field, a
       wrong type or range, a failing colour (colour-bad, may name a swatch), a
-      dangling from / to / parent, an agent editing a mark it did not draw, an edit
+      dangling from / to / parent, an edit by an actor that is not a well-formed
+      hand (dimMayEdit; since S1.4 E0 any hand may edit any mark), an edit
       of a non-core node, more than 64 ops, and any secret match (whole batch
       refused; every string at any depth, plus for each touched node the strings as
       they would stand, joined and pairwise, so a credential split over two updates

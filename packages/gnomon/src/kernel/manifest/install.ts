@@ -145,11 +145,14 @@ const FIRST_PARTY_PACKAGE_HASHES = new Set<string>([
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
   // S1.3: the dimension mod (the one writer of dimension rows; echoes the current modAbiId, declares two tools).
-  // S1.4 P0 replaces the 1.0.0 pin (sha256:7e79c843…) with 1.0.1: dim-shape.mjs is rebuilt from the tightened
-  // contract. The old hash is in RETIRED_FIRST_PARTY_PINS, not here and not in the superseded table. An install
+  // S1.4 P0 retired the 1.0.0 pin (sha256:7e79c843…): dim-shape.mjs was rebuilt from the tightened contract as
+  // 1.0.1, and S1.4 P2 (the agent tools, grants and budget) made the tree 1.1.0. S1.4 E0 (edit-anything: dimMayEdit,
+  // attribution outside the hash, the markers' readers, planDimUndo) rebuilds dim-shape.mjs and re-pins 1.1.0; the
+  // mod's behaviour changes only in that its validator no longer refuses not-owner for a well-formed hand.
+  // The retired hash is in RETIRED_FIRST_PARTY_PINS, not here and not in the superseded table. An install
   // already pinned at 1.0.0 KEEPS LOADING first-party (its tier is its signed grant.trust row) until the person
   // approves the Update card; it can no longer be staged, decided or rolled back to.
-  'sha256:92ffc3537f8925e822926b7a30899377f69854e534b7bc3be2160860c5cf80e2', // packages/gnomon-mods/dimension 1.1.0 (gnomon.dimension)
+  'sha256:17c6608a9151ae29571a4f74fc5da258084ac1c4578996f9565f632da93f4351', // packages/gnomon-mods/dimension 1.1.0 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),

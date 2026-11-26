@@ -880,7 +880,8 @@ function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kin
  * May this actor edit (update, move or delete) a core mark? S1.4 edit-anything (founder decision TD-2026-11-26-715;
  * Aegis E0): ANY well-formed hand may edit ANY mark, whoever drew it. The hand that drew a node is no longer
  * compared. Fails closed: true only for a human with a non-empty principal, or an agent with a non-empty principal
- * AND a non-empty agent label; `null`, an unknown class, an empty principal or an agent with no label is false.
+ * AND a non-empty agent label; `null`, an unknown class, an empty principal, an agent with no label or a human
+ * that carries an `agent` key is false.
  * The refusal for a false answer stays `not-owner` (the code is hashed in the client API descriptor, so it keeps its
  * place in DIM_REFUSAL_CODES; no well-formed actor reaches it).
  */
@@ -888,7 +889,8 @@ export function dimMayEdit(actor: unknown): boolean {
   if (!isPlainObject(actor)) return false;
   const cls = own(actor, 'cls');
   if (!NON_EMPTY(own(actor, 'principal'))) return false;
-  if (cls === 'human') return true;
+  // a human hand carries no agent label, as the fold's `byOf` reads a stamp (Judge nit 7)
+  if (cls === 'human') return !Object.prototype.hasOwnProperty.call(actor, 'agent');
   return cls === 'agent' && NON_EMPTY(own(actor, 'agent'));
 }
 
@@ -1133,13 +1135,14 @@ export function dimFallbackLabel(kind: unknown): string {
 /**
  * One node of a view. `core: true` does NOT mean the node is whole: a stored field that fails today's write check
  * is left out, a REQUIRED one included (a core node may come without `x`, `z`, `text`, `points`, `w` or `h`).
- * A reader must tolerate every field but `id`, `kind`, `core` and `by` being absent.
+ * A reader must tolerate every field but `id`, `kind`, `core` and `by` being absent. Any node, core or not, may
+ * also carry the attribution fields (`changedBy`, `otherBy`, `wordsBy`, `restoredFrom`; S1.4 E0).
  */
 export interface DimViewNode {
   /** always DIM_NODE_ID_PATTERN: a node stored under any other id is not in the view */
   id: string;
   kind: string;
-  /** false: a kind this version does not know; only id, kind, x, y and by are shown */
+  /** false: a kind this version does not know; only id, kind, x, y, by and the attribution fields are shown */
   core: boolean;
   by: DimBy;
   /**
@@ -1243,7 +1246,7 @@ function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, 
 /**
  * The view of a state. A core node shows its `DIM_NODE_KEYS` fields, `by` and, when the fold holds them, the
  * attribution `changedBy`, `otherBy`, `wordsBy` and `restoredFrom` (every hand through `dimViewBy`), each field only when its stored
- * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
+ * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name, its attribution,
  * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
  * classes only. `by` is the BOUNDED one (`dimViewBy`): the legend counts the hand that is shown.
  *
@@ -1536,7 +1539,9 @@ export interface DimUndoMark {
 }
 /**
  * The undo marker of an op row, or null. `undo: {of, ids?, restored?}`:
- *  - the row must be an op row whose stamp folds as a human or an agent hand; any other marker is ignored;
+ *  - the row must be an op row stamped by a person on the Gnomon window (`surface: 'gui'`, no `agent` key) or by an
+ *    agent (a stamp that folds as the agent hand); any other marker (a cli row, an unstamped row) is ignored;
+ *  - the marker's own keys are exactly `of`, `ids?` and `restored?`; any other key makes it null;
  *  - `of` is honoured only in its two forms, with exactly these own keys: `{hsid, turn}` with `turn` exactly
  *    `turn:<hsid>/<n>`, or `{principal, act}` with a non-empty principal and a ULID act; else the marker is null;
  *  - `ids`, when present, is 1 to 64 distinct node ids, else the marker is null;
@@ -1549,10 +1554,15 @@ export interface DimUndoMark {
 export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
   try {
     const p = opPayloadOf(row);
-    if (!p || byOf(p).cls === 'unknown') return null;
+    if (!p) return null;
+    // the stamp rule of `act` (Judge nit 7): a person on the Gnomon window (gui, no agent key), or an agent stamp
+    const hand = byOf(p);
+    const r = own(p, 'relayedFor');
+    if (hand.cls === 'unknown' || !isPlainObject(r)) return null;
+    if (hand.cls === 'human' && (own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent'))) return null;
     const u = own(p, 'undo');
     if (!isPlainObject(u)) return null;
-    for (const k of Object.keys(u)) if (k !== 'of' && k !== 'ids' && k !== 'restored' && k !== 'skipped') return null;
+    for (const k of Object.keys(u)) if (k !== 'of' && k !== 'ids' && k !== 'restored') return null;
     const o = own(u, 'of');
     if (!isPlainObject(o)) return null;
     const ok = Object.keys(o).sort().join(',');

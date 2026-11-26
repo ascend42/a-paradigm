@@ -1154,7 +1154,7 @@ function dimMayEdit(actor) {
   if (!isPlainObject(actor)) return false;
   const cls = own(actor, "cls");
   if (!NON_EMPTY(own(actor, "principal"))) return false;
-  if (cls === "human") return true;
+  if (cls === "human") return !Object.prototype.hasOwnProperty.call(actor, "agent");
   return cls === "agent" && NON_EMPTY(own(actor, "agent"));
 }
 function editable(d, actor, id, field) {
@@ -1523,10 +1523,14 @@ function dimChangeSetOf(row) {
 function dimUndoMarkOf(row) {
   try {
     const p = opPayloadOf(row);
-    if (!p || byOf(p).cls === "unknown") return null;
+    if (!p) return null;
+    const hand = byOf(p);
+    const r = own(p, "relayedFor");
+    if (hand.cls === "unknown" || !isPlainObject(r)) return null;
+    if (hand.cls === "human" && (own(r, "surface") !== "gui" || Object.prototype.hasOwnProperty.call(r, "agent"))) return null;
     const u = own(p, "undo");
     if (!isPlainObject(u)) return null;
-    for (const k of Object.keys(u)) if (k !== "of" && k !== "ids" && k !== "restored" && k !== "skipped") return null;
+    for (const k of Object.keys(u)) if (k !== "of" && k !== "ids" && k !== "restored") return null;
     const o = own(u, "of");
     if (!isPlainObject(o)) return null;
     const ok = Object.keys(o).sort().join(",");
