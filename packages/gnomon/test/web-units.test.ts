@@ -312,7 +312,7 @@ describe('G-WEB-08 bundle pin', () => {
       // fails here and is read before it ships. `dangerouslySetInnerHTML:` counts props PASSED (0: the 13 bare
       // mentions are React's own prop handling); Gnomon's board code hands the engine no HTML.
       const sinks = { innerHTML: (s.match(/\.innerHTML\b/g) ?? []).length, outerHTML: (s.match(/\.outerHTML\b/g) ?? []).length, insertAdjacentHTML: (s.match(/insertAdjacentHTML/g) ?? []).length, dangerouslySetInnerHTMLProp: (s.match(/dangerouslySetInnerHTML:/g) ?? []).length };
-      if (n === 'board/board.js') expect(sinks, n).toEqual({ innerHTML: 7, outerHTML: 5, insertAdjacentHTML: 0, dangerouslySetInnerHTMLProp: 0 });
+      if (n === 'board/board.js') expect(sinks, n).toEqual({ innerHTML: 4, outerHTML: 3, insertAdjacentHTML: 0, dangerouslySetInnerHTMLProp: 0 }); // S1.4 P4a: the Library unit's sinks left with library-components-stubbed
       else expect(s, n).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }
