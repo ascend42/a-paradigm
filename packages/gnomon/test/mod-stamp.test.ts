@@ -401,7 +401,8 @@ describe('G-MOD-17: the command read cap: a command writes only for a human on t
   const cmd = (rf?: Record<string, string>): Extract<CallContext, { kind: 'command' }> => ({ kind: 'command', commandId: 'probe.who', ...(rf ? { stamp: { relayedFor: rf } } : {}) });
 
   it('the pure rule: full effects need an own surface: gui on the stamp AND publisher gnomon; every other command context is read', () => {
-    const full = ['read', 'write', 'network', 'spend'];
+    // the probe's command declares read and write (S1.4 P3: a command without the field would be read only)
+    const full = ['read', 'write'];
     const table: Array<[string, string, Record<string, string> | undefined, string[]]> = [
       ['human on the GUI, first-party', 'gnomon', { principal: 'p', connId: 'c', surface: 'gui' }, full],
       ['human on the GUI, third-party', 'acme', { principal: 'p', connId: 'c', surface: 'gui' }, ['read']],
@@ -420,9 +421,9 @@ describe('G-MOD-17: the command read cap: a command writes only for a human on t
     // a surface reachable only through a prototype vouches for nothing
     const inherited = Object.create({ surface: 'gui' }) as Record<string, string>;
     expect(commandCap(M('gnomon'), cmd(inherited))).toBe('read');
-    // the dev cap still applies on top, and the cap never widens a mod that declared no read
+    // the dev cap still applies on top, and the cap never widens past the command's own declaration
     expect([...effectsFor(M('gnomon'), cmd({ surface: 'gui' }), true)]).toEqual(['read']);
-    expect([...effectsFor({ ...M('acme'), provides: { tools: [{ name: 'probe.write', effects: ['write'] }], commands: probeManifest().provides!.commands! } }, cmd({ surface: 'gui' }), false)]).toEqual([]);
+    expect([...effectsFor({ ...M('acme'), provides: { tools: [{ name: 'probe.write', effects: ['write'] }], commands: [{ id: 'probe.who', title: 't', effects: ['write'] }] } }, cmd({ surface: 'gui' }), false)]).toEqual([]);
     // tools, views and idle are untouched by the command cap
     expect([...effectsFor(M('acme'), { kind: 'tool', tool: 'probe.write' }, false)]).toEqual(['read', 'write']);
     expect([...effectsFor(M('gnomon'), { kind: 'view' }, false)]).toEqual(['read']);

@@ -241,6 +241,8 @@ export interface ResumeInput {
   layersHash: string;
   gitHash: string | null;
   permit: PermitV1 | null;
+  /** the highest turn number the drained run sent (its turn.sent rows): the resumed run continues after it */
+  lastTurn?: number;
 }
 
 export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
@@ -1232,7 +1234,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], turnOrigins: [], bridgeRate: newBridgeRate(), bridgeAllowed: new Set(), consumedTurns: 0, replayLive: false,
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: r?.lastTurn ?? 0, seq: 0, meter: drv.newMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
         ...(repoCtx ? { skills: { dir: repoCtx.pluginDir, ctx: { skills: repoCtx.skills, refused: repoCtx.refused } } } : {}), binary: { exec: priv.exec, sha256: priv.sha256 },
       };

@@ -17,8 +17,8 @@
  *   - `command.run`     → for a human on the GUI and a `gnomon`-published
  *                         mod: exactly the command's own `effects` when its
  *                         manifest entry declares them (S1.4, Aegis A7), else
- *                         the union of the mod's TOOL effects (the default
- *                         kept until S1.4 P3 makes it `read`); `read` only for
+ *                         `read` only (G-MOD-20: a command writes only with
+ *                         declared `effects`); `read` only for
  *                         every other command context, declared or not
  *                         (commandCap, S1.3, G-MOD-17: the outer cap);
  *   - `view.render`     → `read` only (views are pure, §12.2);
@@ -53,7 +53,7 @@ export interface CallStamp {
  */
 export type CallContext = { kind: 'tool'; tool: string; hsid?: string; stamp?: CallStamp } | { kind: 'command'; commandId?: string; stamp?: CallStamp } | { kind: 'view' } | { kind: 'idle' };
 
-/** The union of a mod's TOOL effects: the set a command with no `effects` of its own runs with (until S1.4 P3). */
+/** The union of a mod's TOOL effects (the launch plan's base; a command never inherits it since S1.4 P3). */
 export function toolEffects(m: ManifestV2): Set<ToolEffect> {
   const out = new Set<ToolEffect>();
   for (const t of m.provides?.tools ?? []) for (const e of t.effects) out.add(e);
@@ -78,9 +78,10 @@ export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
 /**
  * The set a command runs with BEFORE the caps (S1.4, Aegis A7). A command whose manifest entry has an own `effects`
  * list gets exactly that list, cut to COMMAND_EFFECTS again here (the loader already refuses anything else, so the
- * cut only matters for a manifest object that did not come through the loader). A DECLARED command without the field
- * keeps the union of the mod's tool effects (until S1.4 P3). A context with no command id, and an id the manifest
- * does not declare, get `read` only: it fails closed, and no production caller builds either (host.ts runCommand
+ * cut only matters for a manifest object that did not come through the loader). A command WITHOUT the field is
+ * read-only for every mod (S1.4 P3, G-MOD-20): it no longer inherits the union of the tool effects, so a tree that
+ * predates the field (the S1.3 dimension tree) cannot write through a command. A context with no command id, and an
+ * id the manifest does not declare, get `read` only too: it fails closed, and no production caller builds either (host.ts runCommand
  * checks the id against the manifest first).
  */
 export function commandEffects(m: ManifestV2, commandId: string | undefined): Set<ToolEffect> {
@@ -89,7 +90,7 @@ export function commandEffects(m: ManifestV2, commandId: string | undefined): Se
   if (Object.hasOwn(c, 'effects') && Array.isArray(c.effects)) {
     return new Set<ToolEffect>(c.effects.filter((e) => (COMMAND_EFFECTS as readonly string[]).includes(e)));
   }
-  return toolEffects(m);
+  return new Set<ToolEffect>(['read']);
 }
 
 /**

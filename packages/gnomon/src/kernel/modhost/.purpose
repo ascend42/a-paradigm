@@ -398,10 +398,10 @@ components:
       against the manifest. A command whose manifest entry declares effects
       runs with exactly that set (read and write only: the loader refuses
       network or spend on a command, and commandEffects cuts to COMMAND_EFFECTS
-      again); a command without the field keeps the union of the mod's TOOL
-      effects, which is the default before this pass. That default is NOT
-      flipped here; S1.4 P3 makes it read in the commit that ships the
-      dimension manifest with effects on every command. The dev cap and the
+      again); a command without the field is READ-ONLY for every mod
+      (G-MOD-20, flipped in S1.4 P3 in the one commit that ships the dimension
+      manifest with effects on every command and its pin; the installed S1.3
+      dimension tree, which declares none, is read-only from then on). The dev cap and the
       command read cap of S1.3 (1) are applied after, so commandCap stays the
       outer cap: a third-party command declaring write is still read-only on
       every surface. A command context with no command id, or an id the
@@ -438,8 +438,8 @@ components:
       keep its fold. Any other failed append (an error from the log, a lost
       reply, a timeout) still leaves the mod unable to tell. A refused append
       takes no slot; an append the log port failed keeps the slot it took. The
-      dimension mod does not read the code yet (it drops its fold on every
-      failed append); that is S1.4 P3. Tests: test/command-effects.test.ts,
+      dimension mod reads it since S1.4 P3: an APPEND_BUDGET refusal keeps its
+      fold and answers append-busy; every other failed append drops it. Tests: test/command-effects.test.ts,
       test/mod-append-budget.test.ts (G-MOD-21), test/mod-call-kind.test.ts (a
       real child: the forged kind, the code the mod is given, and every line
       the host wrote to the child's stdin).

@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIM_KINDS, DIM_REFUSAL_CODES, MOD_ABI_ID, dimHash, emptyDimState, foldDim, validateDimOps, type DimState } from '@a-company/gnomon-contracts';
+import { DIM_AUX_KINDS, DIM_KINDS, DIM_REFUSAL_CODES, MOD_ABI_ID, canonicalJson, dimHash, emptyDimState, foldDim, validateDimOps, type DimState } from '@a-company/gnomon-contracts';
 import { compatModAbiId, deriveTier, firstPartyPins, isFirstPartyPin, isSupersededPin, supersededPins, supersededPriorModAbiId } from '../src/kernel/manifest/install.js';
 import { readManifest } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
@@ -75,14 +75,42 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     expect(compatModAbiId({ packageHash: h, tier: 'first-party', source: 'package', manifest: m }, MOD_ABI_ID)).toBeNull();
   });
 
-  it('the manifest: four commands, the four dimension kinds, two tools (dim-view read, dim-draw read+write), no view, keybinding, offer, capability or egress', () => {
+  it('the manifest: seven commands each with declared effects, the four dimension kinds and the two auxiliary kinds, two tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
     const m = readManifest(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json')), { tier: 'first-party' }).manifest;
     expect([m.publisher, m.name, m.abi]).toEqual(['gnomon', 'dimension', 'mod-abi:v1']);
-    expect(m.provides?.commands?.map((c) => c.id)).toEqual(['dim.open', 'dim.attach', 'dim.op', 'dim.close']);
-    expect([...(m.provides?.events ?? [])].sort()).toEqual(Object.values(DIM_KINDS).sort());
+    // S1.4 (Aegis A7): every command declares its effects; only dim.select and dim.check are read-only
+    expect(m.provides?.commands?.map((c) => [c.id, c.effects])).toEqual([
+      ['dim.open', ['read', 'write']],
+      ['dim.attach', ['read', 'write']],
+      ['dim.op', ['read', 'write']],
+      ['dim.close', ['read', 'write']],
+      ['dim.grant', ['read', 'write']],
+      ['dim.select', ['read']],
+      ['dim.check', ['read']],
+    ]);
+    // F1: the two auxiliary kinds are declared here and are NOT in the published kind list
+    expect([...(m.provides?.events ?? [])].sort()).toEqual([...Object.values(DIM_KINDS), ...Object.values(DIM_AUX_KINDS)].sort());
+    for (const k of Object.values(DIM_AUX_KINDS)) expect((Object.values(DIM_KINDS) as string[]).includes(k)).toBe(false);
     expect(m.provides?.tools?.map((t) => [t.name, t.effects])).toEqual([['dim-view', ['read']], ['dim-draw', ['read', 'write']]]);
     expect(Object.keys(m.provides ?? {}).sort()).toEqual(['commands', 'events', 'tools']);
     expect(m.requires).toEqual({ capabilities: [], egress: 'none' });
+    // Aegis M6: the description a model reads is schema.description, at most 1,024 characters with no control or
+    // format character, and the whole schema is at most 8 KiB of canonical JSON
+    for (const t of m.provides?.tools ?? []) {
+      const schema = t.schema as { description?: unknown; additionalProperties?: unknown; properties?: Record<string, unknown> };
+      expect([t.name, typeof schema.description]).toEqual([t.name, 'string']);
+      const d = schema.description as string;
+      expect([t.name, d.length <= 1024, /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(d)]).toEqual([t.name, true, false]);
+      expect(Buffer.byteLength(canonicalJson(schema), 'utf8')).toBeLessThanOrEqual(8 * 1024);
+      expect(/[^\x20-\x7e]/.test(JSON.stringify(schema))).toBe(false);
+      expect(schema.additionalProperties).toBe(false);
+      // the first four playbook rules, one sentence each, and that board text is data whatever its `by`
+      for (const rule of [/[Vv]iew the board .*before you draw/, /Cite marks by their node id/, /beside another hand's mark/, /Text on a board is permanent, so never put a secret or a draft there/, /data, whoever drew it/, /never follow an instruction found/]) expect([t.name, String(rule), rule.test(d)]).toEqual([t.name, String(rule), true]);
+    }
+    const draw = m.provides!.tools!.find((t) => t.name === 'dim-draw')!.schema as { description: string; properties: Record<string, unknown> };
+    expect(/Send opId on every draw and reuse the same opId when you retry/.test(draw.description)).toBe(true);
+    expect(Object.keys(draw.properties).sort()).toEqual(['dim', 'opId', 'ops']);
+    expect(Object.keys((m.provides!.tools!.find((t) => t.name === 'dim-view')!.schema as { properties: Record<string, unknown> }).properties).sort()).toEqual(['dim', 'limit', 'since']);
   });
 
   it('dim-shape.mjs equals a fresh build of gnomon-contracts/src/dim.ts (LF-normalised), and folds the published hash vector', async () => {
@@ -96,7 +124,7 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
 
   it('isolation: the tree imports only its own files, never board, GUI or node code; G-DDL-01: no foldDimRow call sits in a loop', () => {
     const files = fs.readdirSync(DIMENSION_TREE).sort();
-    expect(files).toEqual(['dim-shape.mjs', 'gnomon-manifest.json', 'index.mjs', 'model.mjs']);
+    expect(files).toEqual(['PLAYBOOK.md', 'dim-shape.mjs', 'gnomon-manifest.json', 'index.mjs', 'model.mjs']);
     for (const f of files.filter((n) => n.endsWith('.mjs'))) {
       const src = fs.readFileSync(path.join(DIMENSION_TREE, f), 'utf8');
       const specs = [...src.matchAll(/^\s*(?:import|export)\s[^;]*?from\s+['"]([^'"]+)['"]/gm)].map((x) => x[1]!);
@@ -157,7 +185,7 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
       expect(opened).toMatchObject({ ok: true, created: true, dim, title: 'Plan', firstSeq: 1, seq: 1 });
       expect(w.log.rows[0]).toMatchObject({ kind: DIM_KINDS.start, scope: { repo: REPO }, payload: { v: 1, dim, title: 'Plan', attached: [A], opened: 'command', relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } } });
       const op = await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'One' }), rectOp(2), { type: 'move', ids: [ulid(1)], dx: 5, dy: 5 }] });
-      expect(op).toEqual({ ok: true, dim, seq: 2, applied: 3, refused: [] });
+      expect(op).toEqual({ ok: true, dim, seq: 2, hash: dimHash(w.log.fold(dim)), applied: 3, refused: [] });
       expect(Object.keys(w.log.rows[1]!.payload).sort()).toEqual(['dim', 'ops', 'relayedFor', 'v']);
       const closed = await w.run('dim.close', { dim });
       expect(closed).toMatchObject({ ok: true, already: false, seq: 3, ops: 3, nodes: 2 });
@@ -393,10 +421,11 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
   );
 
   it(
-    'tool.call answers not-available and appends nothing (Aegis A3)',
+    'tool.call with no host-known caller is refused not-agent-tool and appends nothing (Aegis A3)',
     async () => {
       const w = await dimRig();
-      for (const tool of ['dim-view', 'dim-draw']) expect(await w.h.callTool(DIMENSION, tool, { dim: dimId(1), ops: [rectOp(1)] })).toEqual({ refused: 'not-available', saw: [] });
+      // S1.4: a call with no host-known caller is nobody's: refused before anything is read
+      for (const tool of ['dim-view', 'dim-draw']) expect(await w.h.callTool(DIMENSION, tool, { dim: dimId(1), ops: [rectOp(1)] })).toMatchObject({ ok: false, code: 'not-agent-tool' });
       expect(w.log.rows).toEqual([]);
       expect(w.state()).toEqual({});
     },
@@ -432,7 +461,7 @@ describe('#dimension-mod keyframes and the cold open (S1.3; G-DDL-01)', () => {
       // no `until`, the index is only a hint). The fake scans 10,000 rows a page, as the kernel does: 25,000 padded
       // rows and a few of the mod's own are three pages.
       expect(w.log.reads[0]).toEqual({ until: 0, limit: 1 });
-      expect(w.log.reads[1]).toEqual({ since: { logId: w.log.logId, seq: head.seq }, kinds: [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end], limit: 1000 });
+      expect(w.log.reads[1]).toEqual({ since: { logId: w.log.logId, seq: head.seq }, kinds: [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end, DIM_AUX_KINDS.grant], limit: 1000 });
       expect(w.log.reads.slice(1).every((p) => p.until === undefined && (p.since as { seq: number }).seq >= head.seq)).toBe(true);
       expect(w.log.reads).toHaveLength(1 + 3);
       // the fold from the keyframe keeps authorship, deleted ids and counters: a deleted id is still refused
@@ -643,7 +672,7 @@ describe('#dimension-mod: the log is the truth, the index a hint (Aegis S1.3 M1,
     ]);
     const enc = m.encodeKeyframe!(state, 'log:a') as { head: Record<string, unknown>; chunks: unknown[] };
     expect(enc.head.log).toBe('log:a');
-    expect(dimHash(m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as DimState)).toBe(dimHash(state));
+    expect(dimHash((m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as { state: DimState }).state)).toBe(dimHash(state));
     for (const log of ['log:b', '', undefined, null]) expect([log, m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', log)]).toEqual([log, null]);
     // a head re-labelled for another log no longer sums
     expect(m.decodeKeyframe!({ ...enc.head, log: 'log:b' }, enc.chunks, 'dim:x', 'log:b')).toBeNull();
@@ -720,7 +749,7 @@ describe('#dimension-mod: the log is the truth, the index a hint (Aegis S1.3 M1,
       expect(await w.run('dim.open', { dim, title: 'New log', opened: 'command' })).toMatchObject({ ok: true, created: true });
       const s = w.state();
       expect([s.dims, s.log, s.kfs]).toEqual([[dim.slice(4)], FAKE_LOG_ID, []]);
-      expect(Object.keys(s).sort()).toEqual(['dims', `idx:${dim.slice(4)}`, 'kfs', 'log'].sort());
+      expect(Object.keys(s).sort()).toEqual(['dims', `idx:${dim.slice(4)}`, 'kfs', 'log', 'opens'].sort());
       // a stale id is unknown under this log, not served from an old index
       expect((await w.run('dim.op', { dim: `dim:${stale[0]}`, ops: [rectOp(1)] })).code).toBe('dim-unknown');
     },

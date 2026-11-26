@@ -4,8 +4,8 @@
  * P4b-3; Aegis, final review of P4a: "not verified by reading: that only the dimension mod can append the dimension
  * row kinds. Test it").
  *
- * A real daemon and its real log. Every other writer is tried against all four kinds (`modns.gnomon.dimension.`
- * session.start, attach, op, session.end):
+ * A real daemon and its real log. Every other writer is tried against all six kinds (`modns.gnomon.dimension.`
+ * session.start, attach, op, session.end, and the S1.4 auxiliary grant and draw.refused):
  *   - a human, an agent, a session, the voice principal and a mod principal on real socket connections, and a
  *     human's read token;
  *   - another mod's `kernel.call` at the daemon's own bridge (`modKernelCall`), under names chosen to sit as close to
@@ -19,7 +19,7 @@
  */
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIM_KINDS, type PrincipalKind } from '@a-company/gnomon-contracts';
+import { DIM_AUX_KINDS, DIM_KINDS, type PrincipalKind } from '@a-company/gnomon-contracts';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, RootVerifier, loadDeviceKey, mintReadToken, readRegistry, registerDevice, registerKernelKey, writeNewDeviceKey } from '../src/kernel/identity/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { connectGnomon, type DeviceCredential, type GnomonSession, type ServerKeyPin } from '../src/kernel/socket/index.js';
@@ -37,6 +37,8 @@ const LIVE = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
 const OTHER = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
 const REPO = 'repo:0123456789abcdef';
 const SOCKET_MS = 90_000;
+/** S1.4: the four dimension kinds and the two auxiliary ones (grant, draw.refused); every other writer is refused all six */
+const SIX_KINDS: readonly string[] = [...DIM_ROW_KINDS, DIM_AUX_KINDS.grant, DIM_AUX_KINDS.drawRefused];
 
 /** The probe mod, asked to append ANY kind (its own source appends only its own). */
 const FIXED = "api.kernel('log.append', { kind: 'modns.acme.probe.done' })";
@@ -77,14 +79,14 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
         return s;
       };
       const dimRows = (): Array<{ seq: number; kind: string; principal: string }> =>
-        [...d.log.read({ reader: { class: 'human' }, kinds: [...DIM_ROW_KINDS] })].map((v) => {
+        [...d.log.read({ reader: { class: 'human' }, kinds: [...SIX_KINDS] })].map((v) => {
           const e = (v as { event: { kind: string; principal: string } }).event;
           return { seq: v.seq, kind: e.kind, principal: e.principal };
         });
       const dim = dimId(31);
       // a payload the mod itself could have written, so nothing but WHO asks is wrong with it
       const payloadOf = (kind: string): Record<string, unknown> =>
-        kind === DIM_KINDS.op ? { v: 1, dim, ops: [rectOp(1)] } : kind === DIM_KINDS.end ? { v: 1, dim, ops: 0, nodes: 0 } : kind === DIM_KINDS.attach ? { v: 1, dim, hsid: LIVE } : { v: 1, dim, title: 'Forged', attached: [LIVE], opened: 'menu' };
+        kind === DIM_AUX_KINDS.grant ? { v: 1, dim, hsid: LIVE, write: true } : kind === DIM_AUX_KINDS.drawRefused ? { v: 1, dim, n: 1, by: { 'op|turn-budget': 1 } } : kind === DIM_KINDS.op ? { v: 1, dim, ops: [rectOp(1)] } : kind === DIM_KINDS.end ? { v: 1, dim, ops: 0, nodes: 0 } : kind === DIM_KINDS.attach ? { v: 1, dim, hsid: LIVE } : { v: 1, dim, title: 'Forged', attached: [LIVE], opened: 'menu' };
 
       const refusals: string[] = [];
       /** every row of the log, whatever its kind (a connection writes rows of its own, so the head moves; what must not appear is a dimension row) */
@@ -98,7 +100,7 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       // 1. real socket connections, one per caller class, and a human's read token
       for (const cls of ['human', 'agent', 'mod', 'voice', 'session'] as const) {
         const s = await as(cls);
-        for (const kind of DIM_ROW_KINDS) {
+        for (const kind of SIX_KINDS) {
           const f = await s.conn.call('log.append', { kind, payload: payloadOf(kind) });
           expect('error' in f, `${cls} ${kind} must be refused`).toBe(true);
           if ('error' in f) refusals.push(`${cls}:${String(f.error.data.code)}`);
@@ -107,7 +109,7 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       const m = mintReadToken(t.home, root, { principalId: creds.get('human')!.principalId, ttlMs: 60_000 });
       const rt = await connectGnomon({ socketPath: d.pidfile.socketPath, client, serverKey: pin, readToken: m.token });
       cleanups.push(() => rt.conn.close());
-      for (const kind of DIM_ROW_KINDS) {
+      for (const kind of SIX_KINDS) {
         const f = await rt.conn.call('log.append', { kind, payload: payloadOf(kind) });
         expect('error' in f, `read-token ${kind} must be refused`).toBe(true);
       }
@@ -118,14 +120,14 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       // asked for a full mod id this call RESOLVED with a row written)
       const near = ['acme.probe', 'gnomon.probe', 'gnomon.dimension2', 'gnomon.dimensio', 'gnomon.dim', 'gnomon', 'dimension', 'gnomon.dimension.x', 'evil.gnomon.dimension'];
       for (const name of near) {
-        for (const kind of DIM_ROW_KINDS) {
+        for (const kind of SIX_KINDS) {
           const call = d.modKernelCall({ name, principal: `p:${root.ns}/mod-${name}`, verb: 'log.append', params: { kind, payload: payloadOf(kind) } });
           await expect(call, `mod ${name} ${kind}`).rejects.toMatchObject({ name: 'ModRefusal', modCode: 'VERB', detail: { name, verb: 'log.append' } });
         }
       }
       // and the dispatcher's mod cell for a mod principal that is not the owner
       for (const name of ['acme.probe', 'gnomon.probe']) {
-        for (const kind of DIM_ROW_KINDS) await expect(d.dispatcher.callAs(`p:${root.ns}/mod-${name}`, 'log.append', { kind, payload: payloadOf(kind) }), `callAs ${name} ${kind}`).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
+        for (const kind of SIX_KINDS) await expect(d.dispatcher.callAs(`p:${root.ns}/mod-${name}`, 'log.append', { kind, payload: payloadOf(kind) }), `callAs ${name} ${kind}`).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
       }
       none('another mod at the bridge');
 
@@ -146,7 +148,7 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       expect(allKinds().filter((k) => k === 'modns.acme.probe.done' || k === 'modns.gnomon.probe.done').sort()).toEqual(['modns.acme.probe.done', 'modns.gnomon.probe.done']);
       const afterOwn = d.log.head().seq;
       for (const name of ['acme.probe', first]) {
-        for (const kind of DIM_ROW_KINDS) {
+        for (const kind of SIX_KINDS) {
           expect(await h.callTool(name, 'probe.write', { op: 'append', kind, payload: payloadOf(kind) }), `${name} child ${kind}`).toMatchObject({ ok: false });
         }
       }
@@ -167,7 +169,7 @@ describe('#dimension-mod: only the dimension mod appends the dimension row kinds
       expect(new Set(rows.map((x) => x.principal))).toEqual(new Set([modPrincipal]));
 
       // what the socket said to each class, for the record of this run (a refusal code, never a success)
-      expect(refusals).toHaveLength(5 * DIM_ROW_KINDS.length);
+      expect(refusals).toHaveLength(5 * SIX_KINDS.length);
       expect(new Set(refusals.map((x) => x.split(':')[1]))).toEqual(new Set(['FORBIDDEN']));
     },
     SOCKET_MS,
