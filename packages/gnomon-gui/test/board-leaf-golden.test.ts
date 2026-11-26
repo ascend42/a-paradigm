@@ -23,6 +23,7 @@ import { decodePng } from '../scripts/board-colours.mjs';
 import { findChrome, leafUrl, shootLeaf } from '../scripts/board-leaf-shots.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
 import { startPreview } from '../scripts/preview.mjs';
+import { railLayout, railNeed } from '../src/core/board-rail.js';
 import { differingShare, TOLERANCE, type Png } from './board-golden.js';
 
 const DIR = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'test', 'goldens', 'leaf');
@@ -101,7 +102,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
   const TRAY_OPEN = "!document.querySelector('#preview-board .bd-tray').hidden";
   const ERRORS = { read: "(globalThis.__errs = [], addEventListener('error', (e) => globalThis.__errs.push(String(e.message))), 1)", as: 'listening' };
   type Acted = Record<string, unknown>;
-  const real = async (state: string, actions: unknown[], size = SIZES[0]): Promise<Acted> => ((await shootLeaf({ chrome, url: leafUrl(p.url, state, 'day'), ...size, actions })) as { acted: Acted }).acted;
+  const real = async (state: string, actions: unknown[], size: { width: number; height: number } = SIZES[0]): Promise<Acted> => ((await shootLeaf({ chrome, url: leafUrl(p.url, state, 'day'), ...size, timeoutMs: 120_000, actions })) as { acted: Acted }).acted;
 
   it('review B1 (REAL pointer and keys): every rail key takes its press, the tray opens by pointer, Tab and the arrows walk the whole rail', async () => {
     const tools = ['rect', 'ellipse', 'arrow', 'frame', 'stroke', 'sticky', 'text', 'hand', 'select'];
@@ -154,6 +155,74 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       expect(facts.rail?.h ?? 0, `${state}: the rail`).toBe(0);
       if (state === 'failed') expect(acted.keep).toBe('The board didn’t open · A part of it did not load.');
     }
+  }, 300_000);
+
+  it('T-2026-11-25-004 (real paint): at EVERY height a board can have the rail is no taller than its room and no rail key meets the foot, with any tool chosen; the rail\'s arithmetic is its paint; a ⋯ menu stays inside the board', async () => {
+    // the leaf is made 1px shorter at a time, from its whole height to the too-short state; then each tool is chosen
+    // at the heights where the bug was reported (about 190px of board) and at the rail's own steps
+    const SWEEP = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const hd = ${B}; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const full = Math.round(host.getBoundingClientRect().height); const chrome = full - leaf.room();
+      const look = () => { const rail = host.querySelector('.bd-rail'); const foot = host.querySelector('.bd-foot').getBoundingClientRect(); const body = host.querySelector('.bd-body').getBoundingClientRect(); const keys = [...rail.querySelectorAll(':scope > .bd-row > button')].map((k) => k.getBoundingClientRect());
+        const kids = [...rail.children]; const natural = 16 + kids.reduce((n, k) => n + (k.classList.contains('bd-grow') ? 4 : k.getBoundingClientRect().height + (k.classList.contains('bd-brk') ? 4 : 0)), 0) + 4 * (kids.length - 1);
+        return { room: leaf.room(), body: Math.round(body.height), over: rail.scrollHeight - rail.clientHeight, lastKey: keys.length ? Math.round(foot.top - Math.max(...keys.map((k) => k.bottom))) : null, keys: keys.length, shortKey: keys.some((k) => Math.round(k.height) !== 28), natural: Math.round(natural), ticks: [...rail.querySelectorAll('.bd-brk')].filter((t) => t.getBoundingClientRect().height < 0.99).length, tight: rail.classList.contains('tight'), tools: [...rail.querySelectorAll('[data-tool]')].map((t) => t.dataset.tool), state: leaf.state() }; };
+      const steps = []; let tooShortAt = null;
+      for (let h = full; h >= chrome + 120; h--) { host.style.height = h + 'px'; await fr(); const s = look(); if (s.state === 'too-short') { tooShortAt = tooShortAt ?? s.room; continue; } steps.push(s); }
+      const chosen = [];
+      for (const room of [472, 408, 367, 312, 304, 271, 239, 232, 230, 229, 198, 197, 190, 161, 157, 156, 148]) { if (chrome + room > full) continue; host.style.height = (chrome + room) + 'px'; await fr();
+        for (const t of ['select', 'sticky', 'text', 'rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand']) { hd.setTool(t); await fr(); const s = look(); chosen.push({ ...s, want: t, shown: s.tools.includes(t) || t === 'hand' }); } }
+      // Mika R3: ONE abrupt shrink from the whole height (a pinned card arriving), to each side of every fold step
+      hd.setTool('select'); const jumps = [];
+      for (const room of [300, 266, 226, 197, 153, 150, 148]) { host.style.height = full + 'px'; await fr(); await fr(); host.style.height = (chrome + room) + 'px'; await fr(); jumps.push({ ...look(), target: room, keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) }); }
+      host.style.height = full + 'px'; await fr(); const rest = { keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) };
+      hd.setTool('select'); host.style.height = (chrome + 190) + 'px'; await fr();
+      return { full, chrome, steps, chosen, tooShortAt, jumps, rest, at190: look() }; })()`;
+    const MENU = `(() => { const host = document.getElementById('preview-board'); const m = host.querySelector('.bd-menu'); const st = host.querySelector('.bd-stage').getBoundingClientRect(); const leaf = host.querySelector('.bd-leaf').getBoundingClientRect(); if (!m) return null; const b = m.getBoundingClientRect(); const items = [...m.querySelectorAll('.bd-mi')];
+      return { top: Math.round(b.top - st.top), bottom: Math.round(st.bottom - b.bottom), insideLeaf: b.top >= leaf.top && b.bottom <= leaf.bottom, items: items.map((i) => i.textContent), scrolls: m.scrollHeight > m.clientHeight + 1, firstReachable: (() => { const r = items[0].getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && items[0].contains(e); })() }; })()`;
+    const acted = (await real('open', [ERRORS, { await: SWEEP, as: 'sweep' }, { press: '#preview-board [data-key="more"]' }, { read: MENU, as: 'menu' }, { press: '#preview-board .bd-menu .bd-mi' }, { read: TOOL, as: 'picked' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    type Step = { room: number; body: number; over: number; lastKey: number | null; keys: number; shortKey: boolean; natural: number; ticks: number; tight: boolean; tools: string[]; state: string };
+    const sweep = acted.sweep as { full: number; chrome: number; steps: Step[]; chosen: Array<Step & { want: string; shown: boolean }>; tooShortAt: number | null; at190: Step; jumps: Array<Step & { target: number; keepH: number; headH: number }>; rest: { keepH: number; headH: number } };
+    expect(acted.errors).toEqual([]);
+    // the sweep really covered the short boards, down to the least the leaf draws
+    expect(sweep.steps.length).toBeGreaterThan(200);
+    for (const s of [...sweep.steps, ...sweep.chosen]) {
+      const at = `board ${s.room}px${'want' in s ? `, ${String((s as { want: string }).want)} chosen` : ''}`;
+      // the room the leaf reports is the body it draws (it was 3px more: the foot was counted as 29px of its 32)
+      expect(s.body, at).toBe(s.room);
+      expect(s.over, `${at}: the rail is taller than its room`).toBeLessThanOrEqual(0);
+      expect(s.lastKey, `${at}: the last rail key is ${s.lastKey}px from the foot`).toBeGreaterThanOrEqual(4);
+      expect(s.shortKey, `${at}: a key lost height`).toBe(false);
+      expect(s.ticks, `${at}: a tick lost its height`).toBe(0);
+      // what core/board-rail.ts adds up is what is painted
+      expect(s.natural, at).toBe(railNeed(railLayout(s.room, ('want' in s ? (s as { want: string }).want : 'select') as never)));
+      expect(s.natural, at).toBeLessThanOrEqual(s.room);
+    }
+    // Mika R3: after ONE abrupt shrink the head and the keep line keep their height, the leaf reads its real room,
+    // and the rail is the layout of that room: 8px from the foot (24 when tight), never the taller one it had
+    expect(sweep.jumps.map((j) => j.target)).toEqual([300, 266, 226, 197, 153, 150, 148]);
+    for (const j of sweep.jumps) {
+      const at = `one step down to ${j.target}px`;
+      expect([j.headH, j.keepH], `${at}: the head or the keep line was squeezed`).toEqual([sweep.rest.headH, sweep.rest.keepH]);
+      expect(j.room, at).toBe(j.target);
+      expect(j.body, at).toBe(j.target);
+      expect(j.natural, `${at}: the rail kept a layout taller than its room`).toBe(railNeed(railLayout(j.target)));
+      expect(j.over, at).toBeLessThanOrEqual(0);
+      expect(j.lastKey, `${at}: the last key is ${j.lastKey}px from the foot`).toBeGreaterThanOrEqual(8);
+      expect(j.tight, at).toBe(j.target < 157);
+    }
+    // (after the rail-versus-room lines above, so a rail that overflows fails THERE and not at this count)
+    expect(Math.min(...sweep.steps.map((s) => s.room))).toBe(148);
+    expect(sweep.tooShortAt).toBe(147);
+    for (const c of sweep.chosen) expect(c.shown, `board ${c.room}px: ${c.want} is chosen and not on the rail`).toBe(true);
+    // the reported case: about 190px of board. Select, ⋯, line-and-fill and the percent, clear of the foot
+    expect(sweep.at190).toMatchObject({ keys: 4, tools: ['select'], tight: false, over: 0 });
+    // its ⋯ menu holds every other tool, lies inside the board's own area and its first row can be pressed
+    const menu = acted.menu as { top: number; bottom: number; insideLeaf: boolean; items: string[]; scrolls: boolean; firstReachable: boolean };
+    expect(menu.items.map((i) => i.replace(/[A-Z]$/, ''))).toEqual(['Sticky', 'Text', 'Rectangle', 'Ellipse', 'Arrow · connect', 'Frame', 'Stroke', 'Hand: drag to move the view'].map((n) => n.replace(/^Hand.*/, 'Hand')));
+    expect(menu.top).toBeGreaterThanOrEqual(4);
+    expect(menu.bottom).toBeGreaterThanOrEqual(0);
+    expect(menu.insideLeaf).toBe(true);
+    expect(menu.firstReachable).toBe(true);
+    expect(acted.picked).toBe('sticky');
   }, 300_000);
 
   it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {

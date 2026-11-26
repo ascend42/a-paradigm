@@ -11,7 +11,10 @@
  * (`command`, titled, relayed for a human on the GUI) and ONE op row adding a rect, which the page also shows.
  *
  * Darwin only: a session runs only under the darwin session profile, and Chrome is found at its macOS path.
- * Never on CI (no Chrome there); run it ALONE.
+ * Never on CI; run it ALONE. The blocker is not Chrome (GitHub's macos-15 image has it): it is the session sandbox
+ * floor. A session starts only with System Integrity Protection on (darwinFloor, `floor: 'sip'`), GitHub's macOS
+ * runners have SIP off, and making the floor pass there would be a test switch on a security rule. The same page on
+ * the dev preview's kernel runs on CI: packages/gnomon-gui/test/board-app.test.ts, job `board-browser`.
  */
 import * as path from 'node:path';
 import { webcrypto } from 'node:crypto';
