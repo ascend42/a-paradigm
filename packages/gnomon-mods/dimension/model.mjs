@@ -121,7 +121,7 @@ export const MOD_REFUSAL_FIXES = Object.freeze({
   'undo-nothing': 'Nothing in that change is left to undo; view the board.',
   'undo-not-allowed': 'You may undo one person\'s change per turn; finish this turn first.',
   'undo-set-bad': 'That change was not shown to you; view the board and name a change from its changes.',
-  'changed-since': 'Another hand changed this mark after your view; view it again before you edit it.',
+  'changed-since': 'This mark changed after the seq you sent as base; view the board again and send its seq as base.',
   'foreign-budget': 'This turn has changed as many marks of other hands as it may (32, of them 16 removals and 16 rewritten words). Stop changing others\' marks; the count starts again on the next turn.',
   'not-pinned': 'That change is not standing on this board; nothing was released.',
 });
