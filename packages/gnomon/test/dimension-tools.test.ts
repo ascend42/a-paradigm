@@ -702,7 +702,7 @@ describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
     const text = fs.readFileSync(path.join(DIMENSION_TREE, 'PLAYBOOK.md'), 'utf8');
     expect(text.split('\n').length).toBeLessThanOrEqual(40);
     expect(text.includes('\r')).toBe(false);
-    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /Never update, move, restyle or delete a mark you did\s+not draw/, /You may add inside another hand's frame; never change the frame itself/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
+    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /Today the board refuses a change to a mark you did not draw \(`not-owner`\)/, /You may add a mark inside another hand's frame/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
     const m = JSON.parse(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json'), 'utf8')) as { provides: { tools: Array<{ name: string; schema: { description: string } }> } };
     for (const t of m.provides.tools) {
       const d = t.schema.description;
@@ -917,7 +917,7 @@ describe('S1.4 P3 review, Aegis nits', () => {
   });
 });
 
-describe('ruling on Probe Q1: an agent may add inside another hand\'s frame, never change the frame', () => {
+describe('ruling on Probe Q1: an agent may add inside another hand\'s frame; a change to the frame is not-owner today', () => {
   it('a child whose parent is a person\'s frame applies; the frame is unchanged; editing the frame is not-owner', { timeout: 60_000 }, async () => {
     const w = await toolRig();
     const dim = await board(w);
