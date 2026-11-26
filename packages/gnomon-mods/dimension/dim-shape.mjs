@@ -935,6 +935,31 @@ function dimCanonical(state) {
 function dimHash(state) {
   return sha256Tagged(dimCanonical(state));
 }
+function handKey(by) {
+  if (by === void 0) return null;
+  if (!isPlainObject(by)) return { cls: "unknown", principal: "unknown" };
+  const cls = own(by, "cls");
+  const principal = own(by, "principal");
+  const agent = own(by, "agent");
+  if (typeof cls !== "string" || typeof principal !== "string" || agent !== void 0 && typeof agent !== "string") return { cls: "unknown", principal: "unknown" };
+  return { cls, principal, ...agent !== void 0 ? { agent } : {} };
+}
+function dimAttrDigest(state) {
+  const nodes = [];
+  try {
+    const ids = [...state.nodes.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    for (const id of ids) {
+      const n = state.nodes.get(id);
+      const rf = n.restoredFrom;
+      const restored = isPlainObject(rf) ? { id: typeof own(rf, "id") === "string" ? own(rf, "id") : null, by: handKey(own(rf, "by")) } : null;
+      const entry = [id, handKey(n.changedBy), handKey(n.otherBy), handKey(n.wordsBy), restored];
+      if (entry.slice(1).some((x) => x !== null)) nodes.push(entry);
+    }
+  } catch {
+    return sha256Tagged(canonicalJson({ schema: "dim-attr:v1", unreadable: true }));
+  }
+  return sha256Tagged(canonicalJson({ schema: "dim-attr:v1", nodes }));
+}
 var Z_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 function zMid(a, b) {
   if (b !== null) {
@@ -1544,6 +1569,7 @@ export {
   DIM_VIEW_PRINCIPAL_PATTERN,
   DIM_WRITABLE_OP_TYPES,
   DIM_Z_PATTERN,
+  dimAttrDigest,
   dimCanonical,
   dimFallbackLabel,
   dimGrantDefault,

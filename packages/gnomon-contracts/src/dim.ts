@@ -523,6 +523,43 @@ export function dimHash(state: DimState): string {
   return sha256Tagged(dimCanonical(state));
 }
 
+/** A hand as the digests read it: its three strings, or the unknown hand. Never throws. */
+function handKey(by: unknown): Record<string, string> | null {
+  if (by === undefined) return null;
+  if (!isPlainObject(by)) return { cls: 'unknown', principal: 'unknown' };
+  const cls = own(by, 'cls');
+  const principal = own(by, 'principal');
+  const agent = own(by, 'agent');
+  if (typeof cls !== 'string' || typeof principal !== 'string' || (agent !== undefined && typeof agent !== 'string')) return { cls: 'unknown', principal: 'unknown' };
+  return { cls, principal, ...(agent !== undefined ? { agent } : {}) };
+}
+
+/**
+ * The attribution digest (S1.4 edit-anything, Aegis G7): `sha256:` + hex over `(id, changedBy, otherBy, wordsBy,
+ * restoredFrom)` of every node that carries any of them, in id order. UNHASHED in the sense of the contract: it is
+ * not `dimHash`, not in the client API descriptor and moves no id. `dimHash` vouches for content and adder;
+ * this vouches for attribution: the mod and the page run the one fold, so two sides that fold the same rows with
+ * the same stamps answer the same digest, and a row whose stamp differs between them shows here while `dimHash`
+ * still matches. Seqs and `changedHsid` are left out (the same ops replayed at other seqs digest the same).
+ * Pure, never throws.
+ */
+export function dimAttrDigest(state: DimState): string {
+  const nodes: unknown[] = [];
+  try {
+    const ids = [...state.nodes.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const id of ids) {
+      const n = state.nodes.get(id)!;
+      const rf: unknown = n.restoredFrom;
+      const restored = isPlainObject(rf) ? { id: typeof own(rf, 'id') === 'string' ? own(rf, 'id') : null, by: handKey(own(rf, 'by')) } : null;
+      const entry = [id, handKey(n.changedBy), handKey(n.otherBy), handKey(n.wordsBy), restored];
+      if (entry.slice(1).some((x) => x !== null)) nodes.push(entry);
+    }
+  } catch {
+    return sha256Tagged(canonicalJson({ schema: 'dim-attr:v1', unreadable: true }));
+  }
+  return sha256Tagged(canonicalJson({ schema: 'dim-attr:v1', nodes }));
+}
+
 /* ── z order ──────────────────────────────────────────────────────────────── */
 
 const Z_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';

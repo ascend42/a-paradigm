@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KINDS, dimHash, dimViewOf, foldDim, validateDimOps,
+  DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KINDS, dimAttrDigest, dimHash, dimViewOf, foldDim, validateDimOps,
   type DimActor, type DimBy, type DimFoldNode, type DimRow, type DimState,
 } from '../src/dim.js';
 
@@ -115,5 +115,38 @@ describe('E0 item 3: the view shows attribution through dimViewBy', () => {
     const n1 = v.nodes.find((n) => n.id === id(1))!;
     expect([n1.changedBy, n1.otherBy, n1.wordsBy, n1.restoredFrom]).toEqual([unknown, unknown, unknown, { id: id(9), by: unknown }]);
     expect(Object.prototype.hasOwnProperty.call(v.nodes.find((n) => n.id === id(2))!, 'restoredFrom')).toBe(false);
+  });
+});
+
+describe('E0 item 4: dimAttrDigest (Aegis G7)', () => {
+  const rows = (): DimRow[] => [start(), row(human, [{ type: 'add', node: text(1, 'my note') }, { type: 'add', node: rect(2) }]), row(claude, [{ type: 'update', id: id(1), patch: { text: 'Claude words' } }])];
+
+  it('a row whose stamp was edited folds to the same dimHash and another attribution digest', () => {
+    const real = foldDim(rows());
+    const edited = rows();
+    (edited[2]!.payload as { relayedFor: Record<string, unknown> }).relayedFor = { principal: 'p:t/session', surface: 'bridge', agent: 'kit', hsid: 'h1' };
+    const forged = foldDim(edited);
+    expect(dimHash(forged)).toBe(dimHash(real));
+    expect(dimAttrDigest(forged)).not.toBe(dimAttrDigest(real));
+  });
+
+  it('is stable across seqs and chunked replay, ignores nodes with no attribution and never throws', () => {
+    const r = rows();
+    const whole = dimAttrDigest(foldDim(r));
+    expect(dimAttrDigest(foldDim(r.slice(2), undefined, foldDim(r.slice(0, 2))))).toBe(whole);
+    expect(dimAttrDigest(foldDim(r.map((x) => ({ ...x, seq: x.seq + 100 }))))).toBe(whole);
+    expect(dimAttrDigest(foldDim(r.slice(0, 2)))).toBe(dimAttrDigest(foldDim([start()])));
+    const s = foldDim(r);
+    const odd: DimState = { ...s, nodes: new Map([...s.nodes].map(([k, n]) => [k, { ...n, changedBy: 5 as unknown as DimBy, restoredFrom: 'x' as unknown as { id: string; by: DimBy } }])) };
+    expect(dimAttrDigest(odd)).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(dimAttrDigest(null as unknown as DimState)).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(whole).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it('is not in the client API descriptor', async () => {
+    const { CLIENT_API_DESCRIPTOR, CLIENT_API_ID, computeClientApiId } = await import('../src/client-api.js');
+    const text = JSON.stringify(CLIENT_API_DESCRIPTOR);
+    for (const w of ['dim-attr', 'changedBy', 'otherBy', 'wordsBy', 'restoredFrom', 'dimMayEdit']) expect([w, text.includes(w)]).toEqual([w, false]);
+    expect(computeClientApiId()).toBe(CLIENT_API_ID);
   });
 });
