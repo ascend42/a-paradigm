@@ -331,7 +331,10 @@ export function launch(engine, url, timeoutSec = 60) {
     if (!follows) return { ...x, handoff: null };
     const seen = new Set();
     let empty = 0;
-    while (!stopping && empty < 2) {
+    // bounded: a holder that never ends (a crash handler naming the profile after its browser died) must not hold the
+    // run past its own timeout; the run then ends as a miss, never a pass (Aegis, P12 hand-off review)
+    const until = Date.now() + timeoutSec * 1000;
+    while (!stopping && empty < 2 && Date.now() < until) {
       const h = await others();
       if (h === null) break; // no listing on this host: the launcher's exit is all there is to go on
       h.forEach((p) => seen.add(p.pid));
@@ -363,7 +366,10 @@ export function launch(engine, url, timeoutSec = 60) {
           }
         }
         for (let i = 0; i < 30 && left.some(alive); i++) await sleep(100);
-        for (const pid of left.filter(alive)) {
+        // SIGKILL only what still holds the profile NOW: a pid that ended on SIGTERM may already belong to another
+        // process (Windows reuses pids quickly), and `alive` cannot tell the two apart (Aegis, P12 hand-off review)
+        const still = new Set(((await others()) ?? []).map((h) => h.pid));
+        for (const pid of left.filter((p) => still.has(p))) {
           try {
             process.kill(pid, 'SIGKILL');
           } catch {
