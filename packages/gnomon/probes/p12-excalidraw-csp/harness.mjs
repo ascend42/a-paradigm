@@ -1107,19 +1107,20 @@ export function engineProblems(rows, known, retried = []) {
 
 /**
  * The result's accounting of an engine's runs: a run is mounted only if BOTH its pages mounted; every page that
- * sent no report is listed (pinned or probe) with its wall time, why, and the launcher's last lines; the
- * violations of both pages and of any late report are counted.
+ * sent no report is listed (pinned or probe) with its wall time, why, the launcher's last lines and any hand-off;
+ * the violations of both pages, of any late report, and of the late report of a retried attempt (`retried`, the
+ * engine's launchRetries: an attempt has no report of its own, only a late one) are counted.
  */
-export function runAccounting(rows) {
+export function runAccounting(rows, retried = []) {
   const pages = (r) => [r, r.pinned].filter(Boolean);
   const late = (p) => (p.lateReport ? [p.lateReport] : []);
-  const all = rows.flatMap(pages);
+  const all = [...rows.flatMap(pages), ...retried];
   return {
     runs: rows.length,
     mountedRuns: rows.filter(runMounted).length,
     violationCount: all.reduce((a, p) => a + (p.violationCount ?? 0) + (p.lateReport?.violationCount ?? 0), 0),
     violatedDirectives: [...new Set(all.flatMap((p) => [p, ...late(p)]).flatMap((p) => (p.violations ?? []).map((v) => v.directive)))],
-    nonReportingRuns: rows.flatMap((r, i) => pages(r).filter((p) => p.error === NO_REPORT).map((p) => ({ run: i + 1, page: p.mode === 'pinned' ? 'pinned' : 'probe', wallMs: p.wallMs, miss: p.miss ?? null, exit: p.exit ?? null, pageRequestedMs: p.pageRequestedMs ?? null, launcherTail: p.launcherTail, ...(p.lateReport ? { lateReport: { stage: p.lateReport.stage, violationCount: p.lateReport.violationCount } } : {}) }))),
+    nonReportingRuns: rows.flatMap((r, i) => pages(r).filter((p) => p.error === NO_REPORT).map((p) => ({ run: i + 1, page: p.mode === 'pinned' ? 'pinned' : 'probe', wallMs: p.wallMs, miss: p.miss ?? null, exit: p.exit ?? null, pageRequestedMs: p.pageRequestedMs ?? null, launcherTail: p.launcherTail, ...(p.handoff ? { handoff: p.handoff } : {}), ...(p.lateReport ? { lateReport: { stage: p.lateReport.stage, violationCount: p.lateReport.violationCount } } : {}) }))),
   };
 }
 

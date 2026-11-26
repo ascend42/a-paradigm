@@ -81,7 +81,7 @@ export default async function probe(ctx) {
   for (const [name, e] of Object.entries(out.engines)) {
     // a run is mounted only if both its pages mounted; a page that sent no report is never clean (e.clean, problems)
     const ok = e.runs.filter(runMounted);
-    const acc = runAccounting(e.runs);
+    const acc = runAccounting(e.runs, e.launchRetries);
     engines[name] = {
       version: e.version,
       family: e.family,
