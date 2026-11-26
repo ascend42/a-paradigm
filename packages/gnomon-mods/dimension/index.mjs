@@ -1005,9 +1005,10 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
  * (the undoer: never "as a human" for a tool), per-node validated (G3), against the newest fold; packs the plan into
  * at most CALL_ROWS rows inside the call's bytes, each row carrying `act` and the mod-built `undo` marker (its
  * restored entries only for the re-adds IN that row, as `dimUndoMarkOf` honours them); appends them through
- * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.maxOps` (E2's turn and foreign
- * budgets) cuts the plan's ops before anything is appended; the rest answers `more` (a further call re-plans and
- * finishes, the earlier rows counted as its continuation).
+ * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.fit(planOps)` (E2: charges
+ * the turn and foreign budgets) answers how many of the plan's ops may be sent, after planning and before the first
+ * append; `o.between()` (E2: the grant re-check, M9) runs before each row after the first and stops the rest when
+ * it answers true. The rest answers `more`; `planned` and `landed` are the plan's op indices packed and written.
  * Returns `{applied, skipped, more}` or `{code, extra?}`. Never charges a turn: the caller does, before the append.
  */
 async function undoCore(host, dim, entry, o) {
@@ -1025,10 +1026,19 @@ async function undoCore(host, dim, entry, o) {
   // pack: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside CALL_BYTES
   const rows = [];
   let cur = [];
+  let curIx = [];
+  const rowIx = [];
   let used = 0;
   let curBytes = 0;
   let i = 0;
-  const limit = Math.min(plan.ops.length, o.maxOps ?? plan.ops.length);
+  // Judge I-5 (E2-readiness): the caller's `fit(planOps)` runs after planning and before the first append and
+  // answers how many of the plan's ops may be sent (E2 charges its turn and foreign budgets inside it)
+  let limit = plan.ops.length;
+  if (o.fit) {
+    const n = await o.fit(plan.ops);
+    limit = Number.isSafeInteger(n) ? Math.max(0, Math.min(n, plan.ops.length)) : 0;
+    if (limit === 0) return { code: o.fitCode ?? 'undo-nothing', extra: { skipped: plan.skipped }, planned: [], landed: [] };
+  }
   // Aegis I-4: an op that cannot fit a row even ALONE (a near-limit re-add with its marker) is left out with every
   // later op that names the id it would add, counted in skipped.refused; packing goes on
   const dropped = new Set();
@@ -1043,6 +1053,7 @@ async function undoCore(host, dim, entry, o) {
     const b = rowBytes(payloadOf([...cur, op]), o.stamp);
     if (b !== null && used + b <= CALL_BYTES) {
       cur.push(op);
+      curIx.push(i);
       curBytes = b;
       i++;
       continue;
@@ -1055,23 +1066,33 @@ async function undoCore(host, dim, entry, o) {
     }
     if (cur.length === 0 || rows.length + 1 >= CALL_ROWS) break;
     rows.push(cur);
+    rowIx.push(curIx);
     used += curBytes;
     cur = [];
+    curIx = [];
     curBytes = 0;
   }
-  if (cur.length > 0) rows.push(cur);
+  if (cur.length > 0) (rows.push(cur), rowIx.push(curIx));
+  const planned = rowIx.flat();
+  const landedIx = [];
   let more = plan.more || i < plan.ops.length;
   const skipped = { ...plan.skipped, refused: plan.skipped.refused + unfit };
   if (rows.length === 0) return unfit > 0 ? { code: 'undo-nothing', extra: { skipped } } : { code: 'row-too-large' };
   const landedIds = new Set();
   let landedRows = 0;
-  for (const ops of rows) {
+  for (let r = 0; r < rows.length; r++) {
+    const ops = rows[r];
+    // Judge I-5: E2's grant re-check between rows (M9); a stop leaves the rest for a further call
+    if (r > 0 && o.between && (await o.between())) {
+      more = true;
+      break;
+    }
     const payload = payloadOf(ops);
     const seq = await o.appendRow(payload);
     if (seq === BUSY || seq === null) {
       // a budget refusal wrote nothing (the fold is kept, A4); anything else may have landed: the fold is forgotten
       if (seq === null) loaded.delete(dim);
-      if (landedRows === 0) return { code: seq === BUSY ? 'append-busy' : 'append-failed' };
+      if (landedRows === 0) return { code: seq === BUSY ? 'append-busy' : 'append-failed', planned, landed: [] };
       more = true;
       break;
     }
@@ -1081,11 +1102,13 @@ async function undoCore(host, dim, entry, o) {
     entry.idx = { ...entry.idx, lastSeq: seq };
     entry.sinceKf += ops.length;
     landedRows++;
+    landedIx.push(...rowIx[r]);
     for (const op of ops) landedIds.add(op.type === 'move' ? op.ids[0] : op.type === 'add' ? op.node.id : op.id);
   }
   // per mark: the plan's own counts when every row landed, else the marks the landed rows reached
   const whole = landedRows === rows.length && i === plan.ops.length;
-  return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more };
+  // `planned` and `landed` are indices into the plan's ops (E2 refunds what was charged and never sent)
+  return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more, planned, landed: landedIx };
 }
 
 /** A draw that wrote no op row: its count row, then the refusal. */

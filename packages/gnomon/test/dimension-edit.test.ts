@@ -988,3 +988,18 @@ describe('E1 review group C: the view bound as the bridge sends it (Judge I-3; A
     expect(dimUndoMarkOf(row(`p:00000000/${'x'.repeat(300)}`))).toBeNull();
   });
 });
+
+describe('E1 review group D: undoCore is ready for E2 (Judge I-5)', () => {
+  it('source: fit(planOps) runs after planning and before the first append; between() runs before each later row; planned and landed are returned', () => {
+    const src = fs.readFileSync(path.join(DIMENSION_TREE, 'index.mjs'), 'utf8');
+    const core = src.slice(src.indexOf('async function undoCore('), src.indexOf('/** A draw that wrote no op row'));
+    const at = (re: RegExp) => core.search(re);
+    expect(at(/const plan = planDimUndo\(/)).toBeGreaterThan(0);
+    expect(at(/await o\.fit\(plan\.ops\)/)).toBeGreaterThan(at(/const plan = planDimUndo\(/));
+    expect(at(/await o\.appendRow\(/)).toBeGreaterThan(at(/await o\.fit\(plan\.ops\)/));
+    expect(at(/r > 0 && o\.between && \(await o\.between\(\)\)/)).toBeGreaterThan(at(/for \(let r = 0; r < rows\.length; r\+\+\)/));
+    expect(at(/r > 0 && o\.between/)).toBeLessThan(at(/await o\.appendRow\(/));
+    expect(core).toMatch(/return \{ applied: [^}]*planned, landed: landedIx \}/);
+    expect(core).not.toMatch(/maxOps/);
+  });
+});
