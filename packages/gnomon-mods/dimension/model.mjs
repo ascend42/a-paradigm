@@ -439,3 +439,187 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
     return null;
   }
 }
+
+/* ── the agent tools (S1.4 §2): identity, input, budget and the view ───────── */
+
+const TOOL_SURFACES = ['bridge', 'voice'];
+const TOOL_STAMP_FIELDS = ['principal', 'connId', 'surface', 'agent', 'hsid', 'turn'];
+
+/** The stamp the host writes on a row of a tool call: exactly the string fields of the `relayedFor` it sent. */
+export function toolStampOf(relayedFor) {
+  const r = plain(relayedFor);
+  const out = {};
+  if (!r) return out;
+  for (const k of TOOL_STAMP_FIELDS) {
+    const v = own(r, k);
+    if (typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Who calls a tool, from the HOST-WRITTEN `relayedFor` alone (never from input; G-DDL-09). An agent only when the
+ * stamp has a principal in the view's pattern, a tool surface (`bridge` or `voice`: both fold to `agent`, A5), an
+ * agent label in its pattern and an hsid; anything else is `not-agent-tool`. The turn must be the kernel's
+ * `turn:<hsid>/<n>` of that same hsid, else `no-turn`. `actorOf` stays human-only for commands.
+ */
+export function toolActorOf(relayedFor) {
+  const r = plain(relayedFor);
+  if (!r) return { code: 'not-agent-tool' };
+  const principal = own(r, 'principal');
+  const surface = own(r, 'surface');
+  const agent = own(r, 'agent');
+  const hsid = own(r, 'hsid');
+  if (typeof principal !== 'string' || !DIM_VIEW_PRINCIPAL_PATTERN.test(principal)) return { code: 'not-agent-tool' };
+  if (!TOOL_SURFACES.includes(surface) || typeof agent !== 'string' || !DIM_AGENT_LABEL_PATTERN.test(agent) || !nonEmpty(hsid, 128)) return { code: 'not-agent-tool' };
+  const turn = own(r, 'turn');
+  const prefix = `turn:${hsid}/`;
+  const n = typeof turn === 'string' && turn.startsWith(prefix) && /^[1-9][0-9]{0,14}$/.test(turn.slice(prefix.length)) ? Number(turn.slice(prefix.length)) : null;
+  if (n === null || !Number.isSafeInteger(n)) return { code: 'no-turn' };
+  return { actor: { cls: 'agent', principal, agent, hsid, turn: n } };
+}
+
+export const TOOL_INPUT = Object.freeze({
+  'dim-view': Object.freeze(['dim', 'since', 'limit']),
+  'dim-draw': Object.freeze(['dim', 'ops', 'opId']),
+});
+
+/**
+ * Read a tool's input against its CLOSED shape: own keys only, nothing spread or assigned, an unknown top-level key
+ * refused `args-bad`. `ops` is passed on untouched (the tool sugar and the validator read it). `opId` is checked
+ * here and never leaves the mod's call: only its hash (`oid`) is kept.
+ */
+export function readToolInput(tool, input) {
+  if (!Object.hasOwn(TOOL_INPUT, tool)) return { code: 'args-bad' };
+  const a = input === null || input === undefined ? {} : plain(input);
+  if (!a) return { code: 'args-bad' };
+  const allowed = TOOL_INPUT[tool];
+  for (const k of Object.keys(a)) if (!allowed.includes(k)) return { code: 'args-bad' };
+  const out = {};
+  const dim = own(a, 'dim');
+  if (dim !== undefined) {
+    if (typeof dim !== 'string' || !DIM_ID_PATTERN.test(dim)) return { code: 'dim-bad' };
+    out.dim = dim;
+  }
+  if (tool === 'dim-view') {
+    const since = own(a, 'since');
+    if (since !== undefined && (!Number.isSafeInteger(since) || since < 0)) return { code: 'args-bad' };
+    const limit = own(a, 'limit');
+    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > VIEW_LIMIT_MAX)) return { code: 'args-bad' };
+    if (since !== undefined) out.since = since;
+    out.limit = limit ?? VIEW_LIMIT;
+    return { args: out };
+  }
+  const opId = own(a, 'opId');
+  if (opId !== undefined && (typeof opId !== 'string' || !DIM_OP_ID_PATTERN.test(opId))) return { code: 'op-id-bad' };
+  const ops = own(a, 'ops');
+  if (!Array.isArray(ops)) return { code: 'args-bad' };
+  out.ops = ops;
+  if (opId !== undefined) out.opId = opId;
+  return { args: out };
+}
+
+/**
+ * The ops this session may still draw in this turn (Aegis M8). `turns` maps hsid → {turn, used}; a newer turn
+ * starts at TURN_OPS, an OLDER turn than the one stored has nothing left.
+ */
+export function budgetLeft(turns, actor) {
+  const t = turns.get(actor.hsid);
+  if (!t || actor.turn > t.turn) return TURN_OPS;
+  if (actor.turn < t.turn) return 0;
+  return Math.max(0, TURN_OPS - t.used);
+}
+
+/** The `turns` state key as a list `[hsid, turn, used, countRows]` (never an object keyed by hsid), and back. */
+export function encodeTurns(turns) {
+  return [...turns].map(([h, t]) => [h, t.turn, t.used, t.counts]);
+}
+export function decodeTurns(v) {
+  const out = new Map();
+  if (!Array.isArray(v)) return out;
+  for (const e of v.slice(-TURNS_CAP)) {
+    if (!Array.isArray(e) || e.length !== 4 || !nonEmpty(e[0], 128) || !Number.isSafeInteger(e[1]) || !Number.isSafeInteger(e[2]) || !Number.isSafeInteger(e[3])) continue;
+    out.set(e[0], { turn: e[1], used: Math.min(Math.max(e[2], 0), TURN_OPS), counts: Math.max(e[3], 0) });
+  }
+  return out;
+}
+
+/** A stroke is shown as its point count and its box, never its point list (H1: an integer list can carry an encoding). */
+function strokeView(n) {
+  const pts = Array.isArray(n.points) ? n.points : [];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    minX = Math.min(minX, pts[i]);
+    maxX = Math.max(maxX, pts[i]);
+    minY = Math.min(minY, pts[i + 1]);
+    maxY = Math.max(maxY, pts[i + 1]);
+  }
+  const out = {};
+  for (const k of Object.keys(n)) if (k !== 'points') out[k] = n[k];
+  out.points = Math.floor(pts.length / 2);
+  if (pts.length >= 2 && typeof n.x === 'number' && typeof n.y === 'number') out.box = { x: n.x + minX, y: n.y + minY, w: maxX - minX, h: maxY - minY };
+  return out;
+}
+
+/**
+ * The `dim-view` answer from a fold: `dimViewOf` (bounded `by`, carried-through fields left out, stored values
+ * re-checked), strokes as a count and a box, at most `limit` nodes in z order (`truncated` says how many there
+ * are), or only the `touched` ids when a change list is answered. Appends nothing.
+ */
+export function viewAnswer(state, o) {
+  const v = dimViewOf(state);
+  const all = v.nodes.map((n) => (n.kind === 'stroke' ? strokeView(n) : n));
+  const pick = o.touched ? all.filter((n) => o.touched.has(n.id)) : all;
+  const nodes = pick.slice(0, o.limit);
+  return {
+    v: 1,
+    dim: v.dim,
+    title: v.title,
+    seq: state.seq,
+    hash: o.hash,
+    open: !state.ended,
+    mayDraw: o.mayDraw,
+    budgetLeft: o.budgetLeft,
+    nodes,
+    legend: v.legend,
+    selection: o.selection,
+    ...(o.changes !== undefined ? { changes: o.changes } : {}),
+    ...(pick.length > nodes.length ? { truncated: { nodes: pick.length } } : {}),
+  };
+}
+
+const idOk = (x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x);
+/**
+ * Change entries from op rows (already in seq order, this dimension only): ids only, each list bounded by what one
+ * row may hold, the hand from the row's stamp (`byOf(row)`). `null` when there are more than CHANGES_MAX entries:
+ * the caller answers `changes: 'reset'` with the full view.
+ */
+export function changesOf(rows, byOf) {
+  if (rows.length > CHANGES_MAX) return null;
+  const touched = new Set();
+  const entries = rows.map((row) => {
+    const e = { seq: row.seq, by: byOf(row), added: [], updated: [], moved: [], deleted: [] };
+    const ops = Array.isArray(own(row.payload, 'ops')) ? row.payload.ops.slice(0, DIM_LIMITS.opsPerRow) : [];
+    for (const op of ops) {
+      const o = plain(op);
+      if (!o) continue;
+      const type = own(o, 'type');
+      if (type === 'add') {
+        const id = own(plain(own(o, 'node')) ?? {}, 'id');
+        if (idOk(id)) e.added.push(id);
+      } else if (type === 'update' || type === 'delete') {
+        const id = own(o, 'id');
+        if (idOk(id)) (type === 'update' ? e.updated : e.deleted).push(id);
+      } else if (type === 'move') {
+        const ids = own(o, 'ids');
+        if (Array.isArray(ids)) for (const id of ids.slice(0, DIM_LIMITS.moveIds)) if (idOk(id)) e.moved.push(id);
+      }
+    }
+    for (const k of ['added', 'updated', 'moved', 'deleted']) for (const id of e[k]) touched.add(id);
+    return e;
+  });
+  return { entries, touched };
+}

@@ -252,3 +252,81 @@ describe('#dimension-mod dim.select, dim.check and the hash on a dim.op answer (
     expect(JSON.stringify(w.state())).not.toContain(ulid(2));
   });
 });
+
+describe('#dimension-mod dim-view (S1.4 §2; G-DDL-03 view row; Aegis A3)', () => {
+  it('defaults to the board this session opened last, appends nothing, every node carries its bounded by, carried fields are absent, strokes are a count and a box', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.run('dim.op', {
+      dim,
+      ops: [rectOp(1, { label: 'auth' }), { type: 'add', node: { id: ulid(2), kind: 'stroke', x: 10, y: 20, z: 'W', points: [0, 0, 5, 9, -3, 4] } }],
+    });
+    // a carried-through field in a stored row (a later writer) is never shown
+    w.inject(DIM_KINDS.op, { v: 1, dim, ops: [{ type: 'add', node: { id: ulid(3), kind: 'rect', x: 1, y: 1, z: 'X', w: 2, h: 2, future: 'carried' } }], relayedFor: { principal: HUMAN, surface: 'gui' } });
+    await w.restart();
+    const rows = w.log.rows.length;
+    const v = await w.tool('dim-view', {});
+    expect(v).toMatchObject({ v: 1, dim, title: 'Plan', open: true, mayDraw: true, budgetLeft: 64, selection: [] });
+    expect(v.hash).toBe(dimHash(w.log.fold(dim)));
+    expect(v.seq).toBe(w.log.fold(dim).seq);
+    const nodes = v.nodes as Array<Record<string, unknown>>;
+    expect(nodes.map((n) => n.id)).toEqual([ulid(1), ulid(2), ulid(3)]);
+    for (const n of nodes) expect(n.by).toEqual({ cls: 'human', principal: HUMAN });
+    expect(JSON.stringify(v)).not.toContain('carried');
+    expect(nodes[1]).toMatchObject({ kind: 'stroke', points: 3, box: { x: 7, y: 20, w: 8, h: 9 } });
+    expect(w.log.rows.length).toBe(rows);
+    // B is attached but has no grant: it still views, and is told it may not draw
+    const vb = await w.tool('dim-view', { dim }, agentOf(B));
+    expect([vb.code, vb.mayDraw, vb.budgetLeft]).toEqual([undefined, false, 64]);
+  });
+
+  it('limit and truncated; since answers the change entries and only the touched live nodes; out of range is a reset', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const first = await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2), rectOp(3)] });
+    const second = await w.run('dim.op', { dim, ops: [{ type: 'move', ids: [ulid(1)], dx: 1, dy: 1 }, { type: 'delete', id: ulid(2) }, rectOp(4)] });
+    const lim = await w.tool('dim-view', { dim, limit: 2 });
+    expect((lim.nodes as unknown[]).length).toBe(2);
+    expect(lim.truncated).toEqual({ nodes: 3 });
+    const ch = await w.tool('dim-view', { dim, since: first.seq });
+    expect(ch.changes).toEqual([{ seq: second.seq, by: { cls: 'human', principal: HUMAN }, added: [ulid(4)], updated: [], moved: [ulid(1)], deleted: [ulid(2)] }]);
+    expect((ch.nodes as Array<{ id: string }>).map((n) => n.id).sort()).toEqual([ulid(1), ulid(4)].sort());
+    expect((await w.tool('dim-view', { dim, since: second.seq })).changes).toEqual([]);
+    expect((await w.tool('dim-view', { dim, since: second.seq + 50 })).changes).toBe('reset');
+    // more than a page of the log (the fake scans 10,000 rows a page) is a reset with the full view
+    w.log.pad(20_000);
+    await w.run('dim.op', { dim, ops: [rectOp(5)] });
+    const far = await w.tool('dim-view', { dim, since: first.seq });
+    expect(far.changes).toBe('reset');
+    expect((far.nodes as unknown[]).length).toBe(4);
+  });
+
+  it('selection is the caller\'s own hsid\'s only (A3), from dim.select', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+    await w.run('dim.select', { dim, ids: [ulid(1)] }, A);
+    await w.run('dim.select', { dim, ids: [ulid(2)] }, B);
+    expect((await w.tool('dim-view', {}, agentOf(A))).selection).toEqual([ulid(1)]);
+    expect((await w.tool('dim-view', { dim }, agentOf(B))).selection).toEqual([ulid(2)]);
+    await w.restart();
+    expect((await w.tool('dim-view', {}, agentOf(A))).selection).toEqual([]);
+  });
+
+  it('refusals: no open board, not attached, an unknown key, a bad dim, since or limit, a stamp that is not a whole agent, a turn of another session', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    expect(await w.tool('dim-view', {})).toMatchObject({ ok: false, code: 'no-open-dim' });
+    const dim = dimId(1);
+    await w.run('dim.open', { dim, title: 'Plan', opened: 'command' });
+    expect(await w.tool('dim-view', { dim }, agentOf(B))).toMatchObject({ ok: false, code: 'not-attached' });
+    expect(await w.tool('dim-view', {}, agentOf(B))).toMatchObject({ ok: false, code: 'no-open-dim' });
+    for (const bad of [{ hsid: B }, { dim: 'dim:nope' }, { since: -1 }, { since: 1.5 }, { limit: 0 }, { limit: 501 }, { by: { cls: 'human' } }, ['x'], 'x']) {
+      const res = await w.tool('dim-view', bad);
+      expect([JSON.stringify(bad), res.ok, ['args-bad', 'dim-bad'].includes(res.code as string)]).toEqual([JSON.stringify(bad), false, true]);
+    }
+    const whole = agentOf(A);
+    for (const rf of [{ ...whole, surface: 'gui' }, { ...whole, agent: 'bad label!' }, { ...whole, principal: 'p:EVIL' }, (({ agent: _a, ...x }) => x)(whole), (({ hsid: _h, ...x }) => x)(whole)]) expect((await w.tool('dim-view', {}, rf as Record<string, string>)).code).toBe('not-agent-tool');
+    expect((await w.tool('dim-view', {}, { ...whole, turn: `turn:${B}/1` })).code).toBe('no-turn');
+    expect((await w.tool('dim-view', {}, (({ turn: _t, ...x }) => x)(whole) as Record<string, string>)).code).toBe('no-turn');
+  });
+});
