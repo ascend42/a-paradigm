@@ -304,7 +304,12 @@ components:
       vector published in the client API descriptor (G-DDL-04). WRITES ARE CLOSED:
       validateDimOps refuses by name (DIM_REFUSAL_CODES, one fixed `fix` sentence per
       code, input never echoed) an unknown or non-core kind, an unknown field, a
-      wrong type or range, a failing colour (colour-bad, may name a swatch), a
+      wrong type or range, a failing colour (colour-bad, may name a swatch; S1.4
+      P0b: color and fill are checked by role and contrast, a text mark's color at
+      the text floor, and the line on its own fill as the node would stand after
+      the op, refused on the field being written, the line when an add writes
+      both; a contrast refusal's fix is contentContrastFix, a fixed sentence
+      naming the offered swatch, not hashed, and DIM_REFUSAL_CODES did not move), a
       dangling from / to / parent, an agent editing a mark it did not draw, an edit
       of a non-core node, more than 64 ops, and any secret match (whole batch
       refused; every string at any depth, plus for each touched node the strings as

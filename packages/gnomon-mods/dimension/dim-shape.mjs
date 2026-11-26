@@ -240,6 +240,7 @@ var CONTENT_RESERVED_EXCEPTIONS = Object.freeze(["night:state.warn-bg"]);
 var CONTENT_FILL_GUARD_TOKENS = Object.freeze(["text.primary", "line.key-edge"]);
 var CONTENT_MIN_DISTANCE = 0.06;
 var CONTENT_NEUTRAL_CHROMA = 0.02;
+var CONTENT_EDGE_ON_FILL_MIN_RATIO = 3;
 var CONTENT_CONTRAST_FLOORS = deepFreeze({ line: 3, text: 4.5, fillText: 4.5 });
 var CONTENT_CONTRAST_SURFACES = Object.freeze(["surface.ground", "surface.sheet"]);
 var NIGHT_TRANSFORM = deepFreeze({
@@ -637,6 +638,19 @@ var CONTENT_CONTRAST_WORDS = deepFreeze({
   "pair-line": "it would not show against this mark's fill",
   "pair-fill": "this mark's line would not show against it"
 });
+var contentContrastWords = (why, night) => `${CONTENT_CONTRAST_WORDS[why]}${night ? " at night" : ""}`;
+function contentContrastFix(why, night, swatch) {
+  const said = contentContrastWords(why, night);
+  const head = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+  const tail = {
+    "faint-line": "or a custom colour with at least 3:1 against the board in both themes",
+    "faint-text": "or a custom colour with at least 4.5:1 against the board in both themes",
+    "faint-fill": "or a custom fill that keeps at least 4.5:1 for the board's ink in both themes",
+    "pair-line": "or a line with at least 3:1 against the fill in both themes",
+    "pair-fill": "or a fill with at least 3:1 against the line in both themes"
+  };
+  return `${head}: use ${swatch}, ${tail[why]}.`;
+}
 function valuesOf(token, role) {
   if (typeof token !== "string") return null;
   const neutral = Object.prototype.hasOwnProperty.call(CONTENT_NEUTRALS, token) ? CONTENT_NEUTRALS[token] : void 0;
@@ -684,6 +698,16 @@ function contentColourCheck(token, role, use = {}) {
   if (day && night) return { ok: true };
   const why = role === "fill" ? "faint-fill" : use.text ? "faint-text" : "faint-line";
   return { ok: false, offer: nearestNamed(v.day, role), why, night: day };
+}
+function contentPairCheck(line, fill, field, use = {}) {
+  if (fill === null || fill === void 0) return { ok: true };
+  if (!contentColourCheck(line, "line", use).ok || !contentColourCheck(fill, "fill").ok) return { ok: true };
+  const l = valuesOf(line, "line");
+  const f = valuesOf(fill, "fill");
+  const day = contrastClears(l.day, f.day, CONTENT_EDGE_ON_FILL_MIN_RATIO);
+  const night = contrastClears(l.night, f.night, CONTENT_EDGE_ON_FILL_MIN_RATIO);
+  if (day && night) return { ok: true };
+  return field === "line" ? { ok: false, offer: "ink", why: "pair-line", night: day } : { ok: false, offer: "paper", why: "pair-fill", night: day };
 }
 
 var SECRET_RULES = deepFreeze([
@@ -1090,6 +1114,13 @@ function dimTextForScanS12(s) {
 var fieldName = (k) => DIM_FIELDS.includes(k) ? k : "unknown";
 var isCoreKind = (k) => typeof k === "string" && DIM_CORE_KINDS.includes(k);
 var inRange = (v, lo, hi) => Number.isSafeInteger(v) && v >= lo && v <= hi;
+var colourProblem = (field, c) => ({ field, code: "colour-bad", ...c.offer ? { swatch: c.offer } : {}, ...c.why ? { why: c.why, night: !!c.night } : {} });
+function pairProblems(kind, node, written, problems) {
+  const field = written.includes("color") ? "color" : written.includes("fill") ? "fill" : null;
+  if (!field || node.color === void 0 || node.fill === void 0 || problems.some((p) => p.field === "color" || p.field === "fill")) return [];
+  const c = contentPairCheck(node.color, node.fill, field === "color" ? "line" : "fill", { text: kind === "text" });
+  return c.ok ? [] : [colourProblem(field, c)];
+}
 function checkField(d, kind, self, key, v) {
   const bad = (code, extra = {}) => [{ field: key, code, ...extra }];
   const int = (lo, hi) => typeof v !== "number" || !Number.isSafeInteger(v) ? bad("field-type") : inRange(v, lo, hi) ? [] : bad("field-range");
@@ -1112,8 +1143,8 @@ function checkField(d, kind, self, key, v) {
     case "color":
     case "fill": {
       const role = key === "color" ? "line" : "fill";
-      const c = contentColourCheck(v, role);
-      return c.ok ? [] : bad("colour-bad", c.offer ? { swatch: c.offer } : {});
+      const c = contentColourCheck(v, role, { text: kind === "text" });
+      return c.ok ? [] : [colourProblem(key, c)];
     }
     case "label":
       return str(DIM_LIMITS.label);
@@ -1200,6 +1231,7 @@ function checkOp(d, op, actor) {
       } else problems.push(...checkField(d, kind, self, k, node[k]));
     }
     for (const k of Object.keys(node)) if (node[k] === null && DIM_NODE_KEYS[kind].includes(k) && !DIM_NODE_REQUIRED[kind].includes(k)) problems.push({ field: k, code: "field-type" });
+    problems.push(...pairProblems(kind, { color: node.color ?? void 0, fill: node.fill ?? void 0 }, Object.keys(node), problems));
     if (self) touched.push(self);
     return out;
   }
@@ -1217,6 +1249,8 @@ function checkOp(d, op, actor) {
       } else if (patch[k] === void 0) problems.push({ field: k, code: "field-type" });
       else problems.push(...checkField(d, e2.kind, op.id, k, patch[k]));
     }
+    const stands = (k) => Object.prototype.hasOwnProperty.call(patch, k) ? patch[k] ?? void 0 : e2.cur.node[k];
+    problems.push(...pairProblems(e2.kind, { color: stands("color"), fill: stands("fill") }, pk, problems));
     touched.push(op.id);
     return out;
   }
@@ -1275,7 +1309,7 @@ function validateDimOps(state, ops, actor, opts = {}) {
     index,
     field: fieldName(p.field),
     code: p.code,
-    fix: DIM_REFUSAL_FIXES[p.code],
+    fix: p.why && p.swatch !== void 0 ? contentContrastFix(p.why, !!p.night, p.swatch) : DIM_REFUSAL_FIXES[p.code],
     ...p.swatch !== void 0 ? { swatch: p.swatch } : {},
     ...extra
   });
