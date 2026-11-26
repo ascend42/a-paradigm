@@ -635,7 +635,8 @@ export class DimSession {
   linkDown(): void {
     if (this.#dead) return;
     this.#leaf?.forget();
-    this.#leaf?.setInert?.('link-down');
+    // (aegis F6: a board already out of date stays out of date: it is the higher line, and read-only either way)
+    if (!this.#readOnly) this.#leaf?.setInert?.('link-down');
     this.#release(this.#held);
     const r = this.#live.link(false);
     this.#after(r, 'link');

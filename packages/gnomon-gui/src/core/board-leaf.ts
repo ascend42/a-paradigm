@@ -87,12 +87,12 @@ export const CLIP_COPY = {
  * proposed for Luna: the pass that mounts the leaf in the app owns the keep line's words. Plain words only: a
  * notice's `code`, `field` and `why` are never shown. Every line fits the leaf at a 1024 window.
  */
-export function noticeLine(n: { about: string; code: string; lost: number; why?: string | null }): string {
+export function noticeLine(n: { about: string; code: string; lost: number; why?: string | null; verified?: boolean | null }): string {
   if (n.code === 'link-down' && n.about !== 'link') return 'The link is down · that change wasn’t saved';
   if (n.code === 'redo-unavailable') return 'Redo isn’t on the board yet';
   if (n.code === 'undo-nothing') return 'Nothing to undo';
-  // (design check.signs.never_implied, aegis C2.3: the dock says plain `Reconnected` while the board is unchecked)
-  if (n.code === 'reconnected') return 'Reconnected · everything here is saved';
+  // (design check.signs.never_implied, aegis C2.3 and F7: "everything here is saved" only for a board that is checked)
+  if (n.code === 'reconnected') return n.verified === true ? 'Reconnected · everything here is saved' : KEEP_COPY.reconnected;
   if (n.about === 'link' && n.code === 'link-down') return INERT_COPY['link-down'];
   if (n.code === 'out-of-date') return INERT_COPY['out-of-date'];
   if (n.code === 'closing') return 'The board is folding · that change wasn’t made';
@@ -171,7 +171,10 @@ export const KEEP_COPY = {
   wordsBack: 'Your words are back · click away to save them',
   wordsGone: 'The words you were typing weren’t saved',
   // (aegis F1: a session switch cannot be refused; the words that went are named by their first characters)
-  wordsGoneWith: (words: string): string => `The words you were typing weren’t saved · “${[...words.trim()].length > 24 ? `${[...words.trim()].slice(0, 23).join('')}…` : words.trim()}”`,
+  wordsGoneWith: (words: string): string => {
+    const w = [...String(words).trim()];
+    return `The words you were typing weren’t saved · “${w.length > 24 ? `${w.slice(0, 23).join('')}…` : w.join('')}”`;
+  },
   reconnected: 'Reconnected',
   copyDown: 'Nothing was copied · copy it again once reconnected',
   foldedDown: 'Folded while reconnecting · unsaved changes were dropped',

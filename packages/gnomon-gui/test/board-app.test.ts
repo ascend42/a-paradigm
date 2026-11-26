@@ -626,7 +626,9 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       // C3_4: a change in flight when the board goes too short still settles and is stored
       ...drawRect, SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short' && ${CUR}.session.status().pending === 0`, as: 'settled while too short', timeoutMs: 15_000 }, see('settled'), SHORTEN(false), { until: `${CUR}.leaf.state() !== 'too-short'`, as: 'room again' },
       { press: '.bd-host [data-key="tool:text"]' }, { at: [200, 330], press: true }, { until: `!!document.querySelector('.bd-host .bd-board textarea')`, as: 'a text open' }, ...type('hello'), see('typing'),
-      SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short'`, as: 'too short' }, ...type('adyn'), { key: ' ' }, { key: 'Enter', text: '\r' }, { key: 'Escape' }, see('typed'),
+      SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short'`, as: 'too short' }, ...type('adyn`'), { key: ' ' }, { key: 'Enter', text: '\r' }, { key: 'Escape' }, see('typed'),
+      // aegis F5: the check is painted again when the words become held (C1.4: never "the last change" with words held)
+      { read: `${CUR}.leaf.el.dataset.check`, as: 'checkHeld' },
       { press: '#board-turn .bd-turn-key' }, { key: 'b', alt: true }, see('folds'),
     ]);
     expect(a.errors).toEqual([]);
@@ -638,6 +640,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     // C3_1: nothing typed in the change reached the text, a card or the composer, and focus did not move
     expect(S('typed')).toMatchObject({ state: 'too-short', field: 'hello', focusIsField: true, composer: S('typing').composer, approve: S('typing').approve, frames: S('typing').frames });
     expect(S('typed').line).toBe('No room to draw · your words are kept on this page');
+    expect(a.checkHeld).toBe('checked up to an older change');
     // ruled C3_2: show chat and ⌥B refuse to fold while the words are held, and say so
     expect(S('folds')).toMatchObject({ open: true, field: 'hello', frames: S('typing').frames, line: 'No room to draw · your words are kept on this page' });
   }, 180_000);

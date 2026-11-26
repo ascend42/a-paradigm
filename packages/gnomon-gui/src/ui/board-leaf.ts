@@ -59,6 +59,8 @@ export interface BoardLeafOptions {
    * with the press that asked. Without it (the dev fixtures) the key is drawn disabled.
    */
   onDimensions?: (cause: Event) => void;
+  /** The leaf began or stopped holding words while too short (aegis F5): the check's words depend on it. */
+  onHoldChange?: () => void;
   /** How many cards are pinned in this session now: the too-short line names deciding one only when there is one (design `too_short.line`). */
   pinned?: () => number;
   /** True while show chat does NOT fold the board (held still with words or unsaved changes): the head's esc is then the pointer's only fold and never leaves the head (design widths_narrow.luna_final.H1). */
@@ -300,7 +302,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   /** too short with words held in an open text: no fold may take them (aegis C3_2; ruled: the kept-open guard) */
   const holdsWords = (): boolean => tooShort && !!boardField()?.value;
   /** A fold the person asked for in the leaf (Esc, the head's esc key): refused, and the held line said, while words are held. */
-  const foldAsk = (e: Event): void => (holdsWords() ? say(shortLine()) : o.onFold?.(e));
+  // (aegis F3: an out-of-date board can never store the words, and its line says "fold it": the fold goes ahead and
+  // the dock says the words are gone)
+  const foldAsk = (e: Event): void => (holdsWords() && inert !== 'out-of-date' ? say(shortLine()) : o.onFold?.(e));
   const shortLine = (): string => tooShortLine({ pinned: o.pinned?.() ?? 0, words: !!boardField()?.value });
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
@@ -715,6 +719,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       tooShortSpokeAt = performance.now();
     } else if (boardField()?.value) say(KEEP_COPY.wordsBack);
   }
+  let heldWas = false;
   let drawing = false;
   let again = false;
   function draw(): void {
@@ -737,6 +742,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       drawFoot();
       drawHead(state);
       fitHead();
+      // aegis F5: the check reads differently while words are held: the owner paints it again on a flip
+      const hw = holdsWords();
+      if (hw !== heldWas) {
+        heldWas = hw;
+        queueMicrotask(() => o.onHoldChange?.());
+      }
       drawRail(state);
       drawTray(state);
       drawNote(state);
@@ -955,7 +966,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // too short (aegis C3_1, C3_2): NO key reaches the open text (its words are held as they are), and a key that
     // would end the edit says why; the app's own shortcuts still pass. Link down and too short both: the link's line.
     if (tooShort && inert !== 'link-down') {
-      if (appShortcut(e) || ['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
+      // (aegis F4: only the app's chords pass, ⌘K, ⌘, ⌘N and ⌥B; a bare ` would type into the held text)
+      const chord = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['k', ',', 'n'].includes(e.key.toLowerCase());
+      const altB = e.code === 'KeyB' && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey;
+      if (chord || altB || ['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.key === 'Escape' || e.key === 'Tab' || e.key === 'Enter') say(shortLine());

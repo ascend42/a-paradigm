@@ -206,7 +206,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   function keptOpen(): boolean {
     if (!cur) return false;
     // too short with words in an open text: a fold would lose them (aegis C3_2; ruled: the same kept-open guard)
-    if (cur.leaf.holdsWords()) return true;
+    // (aegis F3: not an out-of-date board: it can never store the words and its line says "fold it")
+    if (cur.leaf.holdsWords() && !cur.session.status().readOnly) return true;
     const s = cur.session.status();
     return (s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0);
   }
@@ -242,9 +243,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       d.say(noticeLine(n), 'warn');
       return paint(session, leaf, session.status());
     }
-    // aegis C2.3: no line implies a check while there is none: plain `Reconnected` while unchecked or mismatched
-    if (n.about === 'link' && n.code === 'reconnected' && session.status().verified !== true) return leaf.say(KEEP_COPY.reconnected);
-    leaf.say(noticeLine(n));
+    leaf.say(noticeLine({ ...n, verified: session.status().verified }));
   }
 
   /** the principal of the connection the open session was made on (the link may be gone when its words are held) */
@@ -270,6 +269,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       cardFocused: d.cardFocused,
       ...(d.pinned ? { pinned: d.pinned } : {}),
       kept: () => keptOpen(),
+      onHoldChange: () => void (cur && cur.session.alive && paint(cur.session, cur.leaf, cur.session.status())),
       onFold: (cause) => void fold(cause),
       // the list opens only on the person's own press (written as every other trusted-event check here is: `!== true`)
       ...(d.dimensions
@@ -353,7 +353,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     // a fold is the person's own press or key, held still or not (Aegis L2)
     if (cause.isTrusted !== true) return;
     // too short with words held in an open text: refused, and the held line said again (⌥B, the head's esc key)
-    if (c.leaf.holdsWords()) return c.leaf.sayHeld();
+    if (c.leaf.holdsWords() && !c.session.status().readOnly) return c.leaf.sayHeld();
+    // aegis F3: out of date, the words can never be stored: the fold goes ahead and says they are gone
+    if (c.leaf.holdsWords()) sayHeldWordsGone(c);
     const s = c.session.status();
     if (s.link === 'down' || !d.sessions.linked) {
       // nothing can be sent: the leaf folds here and the dimension stays open in the log. What goes with it is READ

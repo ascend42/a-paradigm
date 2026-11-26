@@ -276,6 +276,8 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       SIZE(130, 'shrunk'), ...[...'xyz'].map((k) => ({ key: k, settle: 25 })), { key: 'Escape' }, { read: LOOK, as: 'held' },
       // ruled (C3_2): the head's esc key does not fold while the words are held; it says the held line again
       { press: '#preview-board .bd-head [title^="Fold"]' }, { read: LOOK, as: 'escKey' },
+      // aegis F3: out of date as well, the words can never be stored and the line says "fold it": the esc key folds
+      { read: '(globalThis.gnomonPreviewLeaf.setInert("out-of-date"), 1)', as: 'ood' }, { press: '#preview-board .bd-head [title^="Fold"]' }, { read: LOOK, as: 'escOod' }, { read: '(globalThis.gnomonPreviewLeaf.setInert(null), 1)', as: 'ood-off' },
       SIZE(400, 'back'), { read: LOOK, as: 'back' }, { at: [300, 40], press: true }, { wait: 500 }, { read: LOOK, as: 'committed' },
       // C3_5: a drag in hand when the board goes too short is put back and said
       { key: 'r' }, { hold: [[200, 60], [240, 90], [260, 110]] }, SIZE(130, 'mid-drag'), { release: [260, 110] }, { wait: 400 }, { read: LOOK, as: 'drag' },
@@ -296,6 +298,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(L('typing').field).toBe('hello');
     expect(L('held')).toMatchObject({ field: 'hello', line: 'No room to draw · your words are kept on this page', edits: L('typing').edits });
     expect(L('escKey')).toMatchObject({ folds: L('esc').folds, field: 'hello', line: 'No room to draw · your words are kept on this page' });
+    expect(L('escOod').folds).toBe(L('escKey').folds + 1);
     expect(L('back').field).toBe('hello');
     expect(L('back').line).toBe('Your words are back · click away to save them');
     expect(L('committed').edits).toBeGreaterThan(L('back').edits!);
