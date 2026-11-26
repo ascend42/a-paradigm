@@ -221,8 +221,10 @@ components:
       are refunded, a failed append never is; dimHash cached per fold (WeakMap);
       a cold repeat says inputUnknown; NEW_KEY_FIX for an undefined new:<key>;
       the op-id input is canonical JSON and measured first; read-only calls
-      never saveIdx; an agent may add inside another hand's frame (a change to
-      another hand's mark is still not-owner; a later pass widens it). I-3:
+      never saveIdx; an agent may add inside another hand's frame, and since S1.4
+      E0 may update, move or delete any mark (dimMayEdit in the bundled
+      dim-shape; every change attributed in the fold; playbook and descriptions
+      say so; the full teaching, act/undo markers and dim.undo land in E1). I-3:
       the kernel continues a resumed session's turn numbers (#supervisor), so
       the budget's "an older turn is refused" holds across resumes.
       State keys added: opens, turns. Tested in test/dimension-tools.test.ts

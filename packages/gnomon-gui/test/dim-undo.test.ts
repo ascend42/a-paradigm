@@ -170,8 +170,9 @@ describe('#gui-dim-undo planUndo (Aegis B3)', () => {
     // someone deleted the ellipse since
     const current = apply(apply(before, ops, 10), [{ type: 'delete', id: ULID(3) }], 11);
     expect(planUndo({ before, rows: [ops], current, actor: ME, mint: minter() })).toMatchObject({ ok: false, code: 'invalid', refusal: { code: 'id-missing', field: 'id' } });
-    // an agent may not undo by editing a person's mark
-    expect(planUndo({ before, rows: [ops], current: apply(before, ops, 10), actor: { cls: 'agent', principal: 'p', agent: 'a' }, mint: minter() })).toMatchObject({ ok: false, code: 'invalid', refusal: { code: 'not-owner' } });
+    // any well-formed hand may edit any mark (S1.4 E0): an agent's plan validates; an actor that is no hand does not
+    expect(planUndo({ before, rows: [ops], current: apply(before, ops, 10), actor: { cls: 'agent', principal: 'p', agent: 'a' }, mint: minter() })).toMatchObject({ ok: true });
+    expect(planUndo({ before, rows: [ops], current: apply(before, ops, 10), actor: { cls: 'agent', principal: 'p', agent: '' }, mint: minter() })).toMatchObject({ ok: false, code: 'invalid', refusal: { code: 'not-owner' } });
     expect(planUndo({ before, rows: [[{ type: 'delete', id: ULID(99) }]], current: before, actor: ME, mint: minter() })).toEqual({ ok: false, code: 'nothing' });
   });
 
