@@ -1355,6 +1355,11 @@ function dimViewOf(state) {
     const by = dimViewBy(n.by);
     const core = isCoreKind(n.node.kind);
     const out = { id, kind: dimKindName(n.node.kind), core, by };
+    if (n.changedBy !== void 0) out.changedBy = dimViewBy(n.changedBy);
+    if (n.otherBy !== void 0) out.otherBy = dimViewBy(n.otherBy);
+    if (n.wordsBy !== void 0) out.wordsBy = dimViewBy(n.wordsBy);
+    const rf = n.restoredFrom;
+    if (isPlainObject(rf) && viewId(own(rf, "id")) !== void 0) out.restoredFrom = { id: own(rf, "id"), by: dimViewBy(own(rf, "by")) };
     const keys = core ? DIM_NODE_KEYS[n.node.kind] : ["x", "y"];
     for (const k of keys) {
       if (k === "id" || k === "kind") continue;

@@ -1089,6 +1089,15 @@ export interface DimViewNode {
   /** false: a kind this version does not know; only id, kind, x, y and by are shown */
   core: boolean;
   by: DimBy;
+  /**
+   * Attribution (S1.4 edit-anything; Aegis G1, G5), each shown only when the fold holds it and each hand bounded by
+   * `dimViewBy`. Seqs are not shown. `restoredFrom.id` is shown only when it matches DIM_NODE_ID_PATTERN, else the
+   * whole entry is left out. None is hashed; no stored node field can collide (fields are DIM_NODE_KEYS only).
+   */
+  changedBy?: DimBy;
+  otherBy?: DimBy;
+  wordsBy?: DimBy;
+  restoredFrom?: { id: string; by: DimBy };
   [field: string]: unknown;
 }
 export interface DimView {
@@ -1179,7 +1188,8 @@ function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, 
 }
 
 /**
- * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`, each field only when its stored
+ * The view of a state. A core node shows its `DIM_NODE_KEYS` fields, `by` and, when the fold holds them, the
+ * attribution `changedBy`, `otherBy`, `wordsBy` and `restoredFrom` (every hand through `dimViewBy`), each field only when its stored
  * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
  * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
  * classes only. `by` is the BOUNDED one (`dimViewBy`): the legend counts the hand that is shown.
@@ -1200,6 +1210,11 @@ export function dimViewOf(state: DimState): DimView {
     const by = dimViewBy(n.by);
     const core = isCoreKind(n.node.kind);
     const out: DimViewNode = { id, kind: dimKindName(n.node.kind), core, by };
+    if (n.changedBy !== undefined) out.changedBy = dimViewBy(n.changedBy);
+    if (n.otherBy !== undefined) out.otherBy = dimViewBy(n.otherBy);
+    if (n.wordsBy !== undefined) out.wordsBy = dimViewBy(n.wordsBy);
+    const rf: unknown = n.restoredFrom;
+    if (isPlainObject(rf) && viewId(own(rf, 'id')) !== undefined) out.restoredFrom = { id: own(rf, 'id') as string, by: dimViewBy(own(rf, 'by')) };
     const keys = core ? DIM_NODE_KEYS[n.node.kind as DimCoreKind] : ['x', 'y'];
     for (const k of keys) {
       if (k === 'id' || k === 'kind') continue;
