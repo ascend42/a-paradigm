@@ -618,3 +618,48 @@ describe('#dimension-mod M4: a tool call writes two kinds only', () => {
     expect(w.log.fold(dim).attached).toEqual([A, B]);
   });
 });
+
+/** A 10,048-node board written straight into the log (157 human op rows), then a cold mod. */
+async function bigBoard(w: Rig): Promise<string> {
+  const dim = await board(w);
+  for (let r = 0; r < 157; r++) w.inject(DIM_KINDS.op, { v: 1, dim, ops: ops(64, 1000 + r * 64), relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } });
+  await w.restart();
+  return dim;
+}
+
+describe('#dimension-mod M3: cancel is honoured, so an agent cannot take the board down', () => {
+  it('a tool call held past the timeout is cancelled between log pages: no child restart, and a person\'s dim.op sent next succeeds', { timeout: 60_000 }, async () => {
+    const w = await toolRig({ callTimeoutMs: 1_500 });
+    const dim = await board(w);
+    w.log.pad(200_000); // the cold open needs 21 pages of the log
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await w.restart();
+    w.log.readDelayMs = 150;
+    const started = performance.now();
+    const err = await w.tool('dim-view', {}).then(
+      () => null,
+      (e: { modCode?: string; detail?: { honoured?: boolean } }) => e,
+    );
+    expect(err).toMatchObject({ modCode: 'TIMEOUT', detail: { honoured: true } });
+    expect(performance.now() - started).toBeLessThan(1_500 + 500);
+    expect(w.r.events.filter((e) => e.kind === 'mod.health' && (e.payload as { why?: string }).why === 'cancel-timeout')).toHaveLength(0);
+    w.log.readDelayMs = 0;
+    expect(await w.run('dim.op', { dim, ops: [rectOp(2)] })).toMatchObject({ ok: true, applied: 1 });
+  });
+
+  it('the worst accepted input on a 10,048-node board answers inside the 5 s timeout; 4,096 ids do not fit the 64 KiB call and are refused before the validator', { timeout: 120_000 }, async () => {
+    const w = await toolRig({ callTimeoutMs: 5_000 });
+    await bigBoard(w);
+    await w.tool('dim-view', { limit: 1 }); // the cold open of 157 rows is its own call
+    const moves = (per: number) => Array.from({ length: 64 }, (_, i) => ({ type: 'move', ids: Array.from({ length: per }, (_, j) => ulid(1000 + i * 64 + j)), dx: 1, dy: 1 }));
+    expect(await w.tool('dim-draw', { ops: moves(64) })).toMatchObject({ ok: false, code: 'call-too-large' });
+    // 64 moves of 32 ids (2,048 strings, about 62 KiB) is the most that fits one call
+    const started = performance.now();
+    const res = await w.tool('dim-draw', { ops: moves(32) });
+    const ms = performance.now() - started;
+    // every move names a person's marks: refused not-owner, by index, in one validation
+    expect(res.ok).toBe(false);
+    expect(new Set((res.refused as Array<{ code: string }>).map((r) => r.code))).toEqual(new Set(['not-owner']));
+    expect(ms).toBeLessThan(5_000);
+  });
+});

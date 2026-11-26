@@ -50,6 +50,8 @@ export interface FakeLog {
   rows: Array<ModAppendRow & { seq: number }>;
   /** every log.read params object the mod sent */
   reads: Array<Record<string, unknown>>;
+  /** every log.read answers after this many ms (a slow log, for the cancel tests) */
+  readDelayMs: number;
   /** set to make the next append(s) fail before anything is written */
   failAppends: number;
   /** set to make the next append(s) land in the log and then report an error to the mod */
@@ -80,6 +82,7 @@ export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): F
     rows: [],
     reads: [],
     failAppends: 0,
+    readDelayMs: 0,
     loseReplies: 0,
     pad: (n) => void (seq += n),
     inject: (kind, payload) => {
@@ -111,6 +114,7 @@ export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): F
       },
       callAs: async (_principal, verb, params) => {
         if (verb !== 'log.read') return {};
+        if (log.readDelayMs > 0) await new Promise((res) => setTimeout(res, log.readDelayMs));
         log.reads.push(params);
         const since = params.since === undefined ? 0 : (params.since as { logId: string; seq: number }).seq;
         if (params.since !== undefined && (params.since as { logId: string }).logId !== log.logId) throw new Error('cursor-epoch');
