@@ -920,6 +920,10 @@ components:
       - test/board-open.test.ts
   gui-dim-undo:
     description: >-
+      S1.4 E0: the inverse algorithm now lives in contracts (dimInvertRows);
+      invertDimOps / invertDimRows here wrap it, and planUndo keeps the B3 bounds
+      and all-or-nothing Cmd+Z validation unchanged. The mod's change-set undo
+      uses contracts planDimUndo (E1).
       #gui-dim-undo (boards S1.3 pass P3a, s1.3-draft point 6 undo; Aegis B3)
       - undo as ops; the engine's own history is bypassed. PURE.
       invertDimOps(before, ops, mint): add inverts to delete, update to an

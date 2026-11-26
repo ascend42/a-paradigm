@@ -9,8 +9,11 @@
  *  - READS ARE TOLERANT. Rows are permanent, so `foldDimRow` never refuses and never throws: unknown kinds and
  *    unknown fields are carried and hashed; op types v1 does not know leave the state unchanged and are counted.
  *  - WRITES ARE CLOSED. `validateDimOps` refuses by name an unknown kind, an unknown field, an out-of-range
- *    value, a colour that fails the palette check, a ref outside the allowlist, an edit of another hand's node
- *    by an agent, and any text that matches a secret rule (op rows cannot be deleted later).
+ *    value, a colour that fails the palette check, a ref outside the allowlist, an edit by an actor that is not a
+ *    well-formed hand (`dimMayEdit`), and any text that matches a secret rule (op rows cannot be deleted later).
+ *    Any well-formed hand may edit any mark, whoever drew it (S1.4 edit-anything); every change is attributed in
+ *    the fold (`changedBy`, `otherBy`, `wordsBy`, `restoredFrom`, outside the hash) and can be undone
+ *    (`planDimUndo`).
  *
  * `by` (who drew a node) is derived by the fold from the HOST-WRITTEN `payload.relayedFor` of the row that added
  * it. It is never stored on a node and never an op input. A row with no well-formed `relayedFor` folds as
@@ -229,11 +232,37 @@ export interface DimBy {
   principal: string;
   agent?: string;
 }
+/**
+ * One node of the fold. `by` is the hand that ADDED it and never changes. The optional attribution fields (S1.4
+ * edit-anything, Aegis rulings 2 and 4: G1, G5) are set ONLY by the fold's `applyOp` when an op actually applies;
+ * an add sets none of them but `restoredFrom`. They are OUTSIDE the hash (`dimCanonical` hashes `{by, node}`
+ * only), so "checked up to" vouches for content and adder, never for attribution: that is vouched for only by
+ * `dimAttrDigest`.
+ *  - `changedBy`, `changedSeq`, `changedHsid`: the newest applied update or move, by any hand.
+ *  - `otherBy`, `otherSeq`: the newest applied update or move by a hand that is not `by`. It survives a later
+ *    change by `by` itself, so "who changed what" never silently disappears.
+ *  - `wordsBy`, `wordsSeq` (G1): the newest applied update by a hand that is not `by` that wrote or cleared a
+ *    free-text field (`text`, `label`, `title`, `refs`). A later restyle by another hand does not move it.
+ *  - `otherBy` and `wordsBy` compare the editor with the ORIGINAL hand (`restoredFrom.by ?? by`, Aegis I-2), so
+ *    an undoer who re-added a mark and then rewrites it is still a hand other than the mark's own.
+ *  - On a re-add, `wordsBy` and `otherBy` are carried over from the deleted mark through the honoured restored
+ *    entry (Aegis I-1), so another hand's words never turn into the undoer's by a delete and an undo.
+ *  - `restoredFrom` (G5): on a node re-added by an undo, the old id and the ORIGINAL hand, read from the row's
+ *    undo marker through `dimUndoMarkOf` only (never from an op).
+ */
 export interface DimFoldNode {
   node: Record<string, unknown>;
   by: DimBy;
   hsid: string | null;
   addedSeq: number;
+  changedBy?: DimBy;
+  changedSeq?: number;
+  changedHsid?: string | null;
+  otherBy?: DimBy;
+  otherSeq?: number;
+  wordsBy?: DimBy;
+  wordsSeq?: number;
+  restoredFrom?: { id: string; by: DimBy };
 }
 export interface DimState {
   dim: string | null;
@@ -323,27 +352,64 @@ export function dimHsidOf(state: DimState, row: DimRow): string | null {
   return hsidOf(state.attached, row.payload);
 }
 
-/** Apply one op to the draft by the tolerant rules. Returns false when nothing was applied. */
-function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: number): boolean {
+/** Two hands are the same hand: the same class, principal and agent label. */
+function sameHand(a: DimBy, b: DimBy): boolean {
+  return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
+}
+
+/** The free-text fields of a node: writing or clearing one by another hand sets `wordsBy` (Aegis G1). */
+const WORDS_KEYS = new Set(['text', 'label', 'title', 'refs']);
+
+/** The attribution of an applied update or move (see `DimFoldNode`). */
+function changed(cur: DimFoldNode, node: Record<string, unknown>, by: DimBy, hsid: string | null, seq: number, words: boolean): DimFoldNode {
+  const out: DimFoldNode = { ...cur, node, changedBy: by, changedSeq: seq, changedHsid: hsid };
+  // the ORIGINAL hand (Aegis I-2): on a mark re-added by an undo, `by` is the undoer, not whose mark it was
+  const original = cur.restoredFrom?.by ?? cur.by;
+  if (!sameHand(by, original)) {
+    out.otherBy = by;
+    out.otherSeq = seq;
+    if (words) {
+      out.wordsBy = by;
+      out.wordsSeq = seq;
+    }
+  }
+  return out;
+}
+
+/**
+ * Apply one op to the draft by the tolerant rules. Returns false when nothing was applied. `restored` maps a
+ * re-added node's new id to what it was restored from (the row's honoured undo marker, `dimUndoMarkOf`).
+ */
+function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: number, restored?: ReadonlyMap<string, { id: string; by: DimBy; wordsBy?: DimBy; otherBy?: DimBy }>): boolean {
   if (!isPlainObject(op)) return false;
   switch (op.type) {
     case 'add': {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== 'string' || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      d.nodes.set(node.id, { node: copyJson(node) as Record<string, unknown>, by, hsid, addedSeq: seq });
+      const from = restored?.get(node.id);
+      const fresh: DimFoldNode = { node: copyJson(node) as Record<string, unknown>, by, hsid, addedSeq: seq };
+      if (from) {
+        // G5 and I-1: the original hand, and who had written into or changed the mark before it was deleted
+        fresh.restoredFrom = { id: from.id, by: from.by };
+        if (from.wordsBy) (fresh.wordsBy = from.wordsBy), (fresh.wordsSeq = seq);
+        if (from.otherBy) (fresh.otherBy = from.otherBy), (fresh.otherSeq = seq);
+      }
+      d.nodes.set(node.id, fresh);
       return true;
     }
     case 'update': {
       const cur = typeof op.id === 'string' ? d.nodes.get(op.id) : undefined;
       if (!cur || !isPlainObject(op.patch)) return false;
       const node = { ...cur.node };
+      let words = false;
       for (const k of Object.keys(op.patch)) {
         if (k === 'id' || k === 'kind' || DROPPED_KEYS.has(k)) continue;
         const v = op.patch[k];
         if (v === null) delete node[k];
         else if (v !== undefined) node[k] = copyJson(v);
+        if (v !== undefined && WORDS_KEYS.has(k)) words = true;
       }
-      d.nodes.set(op.id as string, { ...cur, node });
+      d.nodes.set(op.id as string, changed(cur, node, by, hsid, seq, words));
       return true;
     }
     case 'move': {
@@ -352,7 +418,7 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
       for (const id of op.ids) {
         const cur = typeof id === 'string' ? d.nodes.get(id) : undefined;
         if (!cur || typeof cur.node.x !== 'number' || typeof cur.node.y !== 'number') continue;
-        d.nodes.set(id as string, { ...cur, node: { ...cur.node, x: cur.node.x + (op.dx as number), y: cur.node.y + (op.dy as number) } });
+        d.nodes.set(id as string, changed(cur, { ...cur.node, x: cur.node.x + (op.dx as number), y: cur.node.y + (op.dy as number) }, by, hsid, seq, false));
         moved = true;
       }
       return moved;
@@ -406,8 +472,11 @@ function applyRow(d: Draft, row: DimRow): void {
   }
   const by = byOf(p);
   const hsid = hsidOf(d.attached, p);
+  // G5: a node this row re-adds through an undo carries what it was restored from, read by the one reader only
+  const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
+  const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by, ...(r.wordsBy ? { wordsBy: r.wordsBy } : {}), ...(r.otherBy ? { otherBy: r.otherBy } : {}) }])) : undefined;
   for (const op of p.ops) {
-    if (applyOp(d, op, by, hsid, d.seq)) d.ops += 1;
+    if (applyOp(d, op, by, hsid, d.seq, restored)) d.ops += 1;
     else d.unapplied += 1;
   }
 }
@@ -453,7 +522,10 @@ export function foldDim(rows: Iterable<DimRow>, upToSeq?: number, from: DimState
 /**
  * The hash input. `node` carries every field, known and carried through. `by` sits beside it, so a carried
  * field named `by` cannot collide. Left out: seq, addedSeq, connId, surface, hsid, attached, gone and the
- * counters, so the same ops replayed at other seqs hash the same. Strings are hashed as stored.
+ * counters, so the same ops replayed at other seqs hash the same. Strings are hashed as stored. Also left out
+ * (S1.4 edit-anything, Aegis ruling 2): the attribution fields `changedBy`, `changedSeq`, `changedHsid`,
+ * `otherBy`, `otherSeq`, `wordsBy`, `wordsSeq` and `restoredFrom`. The hash vouches for content and adder only;
+ * attribution is vouched for by `dimAttrDigest`.
  */
 export function dimCanonical(state: DimState): string {
   const nodes = [...state.nodes.entries()]
@@ -465,6 +537,43 @@ export function dimCanonical(state: DimState): string {
 /** `sha256:` + hex of `dimCanonical(state)`. */
 export function dimHash(state: DimState): string {
   return sha256Tagged(dimCanonical(state));
+}
+
+/** A hand as the digests read it: its three strings, or the unknown hand. Never throws. */
+function handKey(by: unknown): Record<string, string> | null {
+  if (by === undefined) return null;
+  if (!isPlainObject(by)) return { cls: 'unknown', principal: 'unknown' };
+  const cls = own(by, 'cls');
+  const principal = own(by, 'principal');
+  const agent = own(by, 'agent');
+  if (typeof cls !== 'string' || typeof principal !== 'string' || (agent !== undefined && typeof agent !== 'string')) return { cls: 'unknown', principal: 'unknown' };
+  return { cls, principal, ...(agent !== undefined ? { agent } : {}) };
+}
+
+/**
+ * The attribution digest (S1.4 edit-anything, Aegis G7): `sha256:` + hex over `(id, changedBy, otherBy, wordsBy,
+ * restoredFrom)` of every node that carries any of them, in id order. UNHASHED in the sense of the contract: it is
+ * not `dimHash`, not in the client API descriptor and moves no id. `dimHash` vouches for content and adder;
+ * this vouches for attribution: the mod and the page run the one fold, so two sides that fold the same rows with
+ * the same stamps answer the same digest, and a row whose stamp differs between them shows here while `dimHash`
+ * still matches. Seqs and `changedHsid` are left out (the same ops replayed at other seqs digest the same).
+ * Pure, never throws.
+ */
+export function dimAttrDigest(state: DimState): string {
+  const nodes: unknown[] = [];
+  try {
+    const ids = [...state.nodes.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const id of ids) {
+      const n = state.nodes.get(id)!;
+      const rf: unknown = n.restoredFrom;
+      const restored = isPlainObject(rf) ? { id: typeof own(rf, 'id') === 'string' ? own(rf, 'id') : null, by: handKey(own(rf, 'by')) } : null;
+      const entry = [id, handKey(n.changedBy), handKey(n.otherBy), handKey(n.wordsBy), restored];
+      if (entry.slice(1).some((x) => x !== null)) nodes.push(entry);
+    }
+  } catch {
+    return sha256Tagged(canonicalJson({ schema: 'dim-attr:v1', unreadable: true }));
+  }
+  return sha256Tagged(canonicalJson({ schema: 'dim-attr:v1', nodes }));
 }
 
 /* ── z order ──────────────────────────────────────────────────────────────── */
@@ -603,7 +712,7 @@ export const DIM_REFUSAL_FIXES: Readonly<Record<DimRefusalCode, string>> = Objec
   'id-bad': 'Use a 26-character ULID as the node id.',
   'id-exists': 'Mint a new id; an id is never reused, even after a delete.',
   'id-missing': 'Name a node that is on the board now; read the dimension again before editing.',
-  'not-owner': 'Edit only the marks you drew; draw a new mark beside the one you want to change.',
+  'not-owner': 'This board no longer refuses an edit for the hand that drew a mark; view the board again and retry.',
   'z-bad': 'Use an order key of 1 to 64 characters from 0-9, A-Z and a-z that does not end in 0.',
   'colour-bad': 'Use a named swatch for this role, or a custom colour that keeps clear of the reserved colours.',
   'ref-bad': 'Write the ref as scheme:id with an optional @rev, using only letters, digits and . _ / # $ ^ ! ~ -.',
@@ -702,7 +811,11 @@ const colourProblem = (field: string, c: Exclude<ContentColourCheck, { ok: true 
 
 /**
  * contrast_rule.pair, on the node as it would stand after the op: the line on its own fill, judged on the field
- * being written (the line when both are written). Skipped when either field already has a problem.
+ * being written (the line when both are written). Skipped when either field already has a problem, so a field
+ * gets one refusal. An update reaches here only after `editable` allowed the edit (a refused hand gets not-owner
+ * alone). Aegis P0b F2: the check sees the node as THIS batch leaves it; two hands writing one mark's line and fill
+ * in separate rows, each judged against the other's earlier value, can still store a failing pair. The paint-time
+ * recheck (`resolveContentPair`) is the backstop: that line draws as ink, and nothing is rewritten.
  */
 function pairProblems(kind: DimCoreKind, node: Record<string, unknown>, written: readonly string[], problems: readonly Problem[]): Problem[] {
   const field = written.includes('color') ? 'color' : written.includes('fill') ? 'fill' : null;
@@ -781,17 +894,30 @@ function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kin
   }
 }
 
-function owns(actor: DimActor, by: DimBy): boolean {
-  if (actor && actor.cls === 'human') return true;
-  return !!actor && actor.cls === 'agent' && by.cls === 'agent' && by.principal === actor.principal && NON_EMPTY(actor.agent) && by.agent === actor.agent;
+/**
+ * May this actor edit (update, move or delete) a core mark? S1.4 edit-anything (founder decision TD-2026-11-26-715;
+ * Aegis E0): ANY well-formed hand may edit ANY mark, whoever drew it. The hand that drew a node is no longer
+ * compared. Fails closed: true only for a human with a non-empty principal, or an agent with a non-empty principal
+ * AND a non-empty agent label; `null`, an unknown class, an empty principal, an agent with no label or a human
+ * that carries an `agent` key is false.
+ * The refusal for a false answer stays `not-owner` (the code is hashed in the client API descriptor, so it keeps its
+ * place in DIM_REFUSAL_CODES; no well-formed actor reaches it).
+ */
+export function dimMayEdit(actor: unknown): boolean {
+  if (!isPlainObject(actor)) return false;
+  const cls = own(actor, 'cls');
+  if (!NON_EMPTY(own(actor, 'principal'))) return false;
+  // a human hand carries no agent label, as the fold's `byOf` reads a stamp (Judge nit 7)
+  if (cls === 'human') return !Object.prototype.hasOwnProperty.call(actor, 'agent');
+  return cls === 'agent' && NON_EMPTY(own(actor, 'agent'));
 }
 
-/** An existing node an op may edit: live, of a core kind, and the actor's own when the actor is an agent. */
+/** An existing node an op may edit: live, of a core kind, and the actor a well-formed hand (`dimMayEdit`). */
 function editable(d: Draft, actor: DimActor, id: unknown, field: string): { cur: DimFoldNode; kind: DimCoreKind } | Problem {
   if (typeof id !== 'string' || !DIM_NODE_ID_PATTERN.test(id)) return { field, code: 'id-bad' };
   const cur = d.nodes.get(id);
   if (!cur) return { field, code: 'id-missing' };
-  if (!owns(actor, cur.by)) return { field, code: 'not-owner' };
+  if (!dimMayEdit(actor)) return { field, code: 'not-owner' };
   if (!isCoreKind(cur.node.kind)) return { field, code: 'kind-not-core' };
   return { cur, kind: cur.node.kind };
 }
@@ -992,6 +1118,7 @@ export function validateDimOps(state: DimState, ops: unknown, actor: DimActor, o
     const before = new Map(touched.map((id) => [id, joined(d.nodes.get(id)?.node)]));
     // the node as it would stand after this op, whether or not the op passes the other checks
     const trial = problems.length === 0 ? d : draftOf(d);
+    // the trial sets attribution on the running copy (or its own copy) only, never on the caller's state
     const applied = applyOp(trial, op, by, null, d.seq);
     if (seen.size === 0) {
       for (const id of touched) {
@@ -1029,15 +1156,25 @@ export function dimFallbackLabel(kind: unknown): string {
 /**
  * One node of a view. `core: true` does NOT mean the node is whole: a stored field that fails today's write check
  * is left out, a REQUIRED one included (a core node may come without `x`, `z`, `text`, `points`, `w` or `h`).
- * A reader must tolerate every field but `id`, `kind`, `core` and `by` being absent.
+ * A reader must tolerate every field but `id`, `kind`, `core` and `by` being absent. Any node, core or not, may
+ * also carry the attribution fields (`changedBy`, `otherBy`, `wordsBy`, `restoredFrom`; S1.4 E0).
  */
 export interface DimViewNode {
   /** always DIM_NODE_ID_PATTERN: a node stored under any other id is not in the view */
   id: string;
   kind: string;
-  /** false: a kind this version does not know; only id, kind, x, y and by are shown */
+  /** false: a kind this version does not know; only id, kind, x, y, by and the attribution fields are shown */
   core: boolean;
   by: DimBy;
+  /**
+   * Attribution (S1.4 edit-anything; Aegis G1, G5), each shown only when the fold holds it and each hand bounded by
+   * `dimViewBy`. Seqs are not shown. `restoredFrom.id` is shown only when it matches DIM_NODE_ID_PATTERN, else the
+   * whole entry is left out. None is hashed; no stored node field can collide (fields are DIM_NODE_KEYS only).
+   */
+  changedBy?: DimBy;
+  otherBy?: DimBy;
+  wordsBy?: DimBy;
+  restoredFrom?: { id: string; by: DimBy };
   [field: string]: unknown;
 }
 export interface DimView {
@@ -1105,6 +1242,8 @@ const VIEW_INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
  *    is left out.
  *  - `color`, `fill`: the current palette check; a token that fails it is left out (the renderer then draws ink
  *    or no fill, as `resolveContentColour` does).
+ *    Aegis P0b F3: each colour is checked ALONE here (by role, with the text floor for a text mark); the pair of a
+ *    line on its own fill is not, so the view may show a failing pair that the renderer paints with an ink line.
  *  - `text`, `label`, `title`, `rel`, `head`, `z`, every number and `points`: the type, length, range and pattern
  *    checks of the validator; an over-long string or a value of the wrong type is left out.
  *  - `parent`, `from`, `to`: the id pattern only. Whether the node they name is still on the board is the
@@ -1128,8 +1267,9 @@ function viewField(state: DimState, kind: DimCoreKind, id: string, key: string, 
 }
 
 /**
- * The view of a state. A core node shows its `DIM_NODE_KEYS` fields and `by`, each field only when its stored
- * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name,
+ * The view of a state. A core node shows its `DIM_NODE_KEYS` fields, `by` and, when the fold holds them, the
+ * attribution `changedBy`, `otherBy`, `wordsBy` and `restoredFrom` (every hand through `dimViewBy`), each field only when its stored
+ * value passes today's write check (`viewField`). Any other node shows only id, the pattern-checked kind name, its attribution,
  * x, y and `by`. Carried-through fields are left out entirely, and the legend is built from kind names and `by`
  * classes only. `by` is the BOUNDED one (`dimViewBy`): the legend counts the hand that is shown.
  *
@@ -1149,6 +1289,11 @@ export function dimViewOf(state: DimState): DimView {
     const by = dimViewBy(n.by);
     const core = isCoreKind(n.node.kind);
     const out: DimViewNode = { id, kind: dimKindName(n.node.kind), core, by };
+    if (n.changedBy !== undefined) out.changedBy = dimViewBy(n.changedBy);
+    if (n.otherBy !== undefined) out.otherBy = dimViewBy(n.otherBy);
+    if (n.wordsBy !== undefined) out.wordsBy = dimViewBy(n.wordsBy);
+    const rf: unknown = n.restoredFrom;
+    if (isPlainObject(rf) && viewId(own(rf, 'id')) !== undefined) out.restoredFrom = { id: own(rf, 'id') as string, by: dimViewBy(own(rf, 'by')) };
     const keys = core ? DIM_NODE_KEYS[n.node.kind as DimCoreKind] : ['x', 'y'];
     for (const k of keys) {
       if (k === 'id' || k === 'kind') continue;
@@ -1318,6 +1463,582 @@ export function dimRowBy(row: DimRow): DimBy {
     return dimViewBy(isPlainObject(row?.payload) ? byOf(row.payload) : UNKNOWN_BY);
   } catch {
     return { ...UNKNOWN_BY };
+  }
+}
+
+/* ── change-set and undo markers (S1.4 edit-anything; Aegis ruling 3; NOT in the client API descriptor) ── */
+
+/**
+ * Two payload keys an op row may carry beside `v`, `dim`, `ops` and `relayedFor`, written by the dimension mod
+ * only (E1): `act` (a person's action id) and `undo` (what an undo row undid). Neither is read by the fold's hash,
+ * and no op key, kind or refusal code is added for them. These readers are the ONE way to honour them; a marker
+ * they do not honour means nothing. Own keys only, pattern-checked, capped; never throw.
+ */
+/** A person's action id: a ULID, as a node id. */
+export const DIM_ACT_PATTERN = DIM_NODE_ID_PATTERN;
+/** At most this many ids (`undo.ids`) and restored entries (`undo.restored`) are honoured on one marker. */
+export const DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64 });
+/** The `<n>` of `turn:<hsid>/<n>`, as the mod's `toolActorOf` reads it. */
+const TURN_N = /^[1-9][0-9]{0,14}$/;
+const HSID_MAX = 128;
+
+/** An op row's payload and its stamp, or null (another kind, no payload). */
+function opPayloadOf(row: unknown): Record<string, unknown> | null {
+  if (!isPlainObject(row) || own(row, 'kind') !== DIM_KINDS.op) return null;
+  const p = own(row, 'payload');
+  return isPlainObject(p) ? p : null;
+}
+
+/** `turn` when it is exactly `turn:<hsid>/<n>` of this hsid, else null. */
+function turnOf(hsid: unknown, turn: unknown): string | null {
+  if (!NON_EMPTY(hsid) || hsid.length > HSID_MAX || typeof turn !== 'string') return null;
+  const prefix = `turn:${hsid}/`;
+  return turn.startsWith(prefix) && TURN_N.test(turn.slice(prefix.length)) ? turn : null;
+}
+
+/** A person's action of one op row. */
+export interface DimAct {
+  principal: string;
+  act: string;
+}
+/**
+ * The person's action an op row belongs to, or null. Honoured ONLY on a row stamped by a person on the Gnomon
+ * window: the stamp folds as the human hand, `surface: 'gui'`, and no `agent` key. An `act` on any other row (an
+ * agent's, a cli one, an unstamped one) is ignored. The identity is `(principal, act)`, never `act` alone: a second
+ * person reusing the first person's act id is another action.
+ */
+export function dimActOf(row: DimRow): DimAct | null {
+  try {
+    const p = opPayloadOf(row);
+    if (!p) return null;
+    const act = own(p, 'act');
+    if (typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+    const r = own(p, 'relayedFor');
+    if (!isPlainObject(r) || own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent')) return null;
+    const by = byOf(p);
+    return by.cls === 'human' ? { principal: by.principal, act } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The change-set (undo unit) of one op row: a person's action, or an agent session's turn. */
+export type DimChangeSet = { kind: 'act'; principal: string; act: string } | { kind: 'turn'; hsid: string; turn: string };
+/**
+ * The change-set an op row belongs to, or null (a row no undo can name). A person's set is `(principal, act)`
+ * (`dimActOf`). An agent's set is `(stamp.hsid, turn)`, honoured only on a row whose stamp folds as an agent hand and
+ * whose `turn` is exactly `turn:<stamp.hsid>/<n>`; an `act` on such a row is ignored.
+ */
+export function dimChangeSetOf(row: DimRow): DimChangeSet | null {
+  try {
+    const a = dimActOf(row);
+    if (a) return { kind: 'act', principal: a.principal, act: a.act };
+    const p = opPayloadOf(row);
+    if (!p || byOf(p).cls !== 'agent') return null;
+    const r = own(p, 'relayedFor') as Record<string, unknown>;
+    const hsid = own(r, 'hsid');
+    const turn = turnOf(hsid, own(r, 'turn'));
+    return turn ? { kind: 'turn', hsid: hsid as string, turn } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One honoured restored entry: the re-added node's new id, the id it was restored from, and the ORIGINAL hand. */
+export interface DimRestored {
+  newId: string;
+  oldId: string;
+  /** bounded by `dimViewBy`: a hand outside the view patterns is the unknown hand (fails closed, never human) */
+  by: DimBy;
+  /** Aegis I-1: the deleted mark's `wordsBy` and `otherBy`, carried to the re-add; each bounded by `dimViewBy` */
+  wordsBy?: DimBy;
+  otherBy?: DimBy;
+}
+export interface DimUndoMark {
+  of: DimChangeSet;
+  /** the scope the undo was asked for, when it was */
+  ids?: string[];
+  restored: DimRestored[];
+}
+/**
+ * The undo marker of an op row, or null. `undo: {of, ids?, restored?}`:
+ *  - the row must be an op row stamped by a person on the Gnomon window (`surface: 'gui'`, no `agent` key) or by an
+ *    agent (a stamp that folds as the agent hand); any other marker (a cli row, an unstamped row) is ignored;
+ *  - the marker's own keys are exactly `of`, `ids?` and `restored?`; any other key makes it null;
+ *  - `of` is honoured only in its two forms, with exactly these own keys: `{hsid, turn}` with `turn` exactly
+ *    `turn:<hsid>/<n>`, or `{principal, act}` with a non-empty principal and a ULID act; else the marker is null;
+ *  - `ids`, when present, is 1 to 64 distinct node ids, else the marker is null;
+ *  - `restored` is at most 64 entries (more: the marker is null); each entry `[newId, oldId, by, wordsBy?, otherBy?]`
+ *    (the last two `null` or left out when the deleted mark had none) is honoured only
+ *    when both are node ids, `newId` is the id of an `add` op IN THE SAME ROW, and no earlier entry named it. An
+ *    entry that fails is dropped by itself. `by` is bounded by `dimViewBy`.
+ * The fold reads `restored` through this reader only (`restoredFrom`); it never changes `by`.
+ */
+export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
+  try {
+    const p = opPayloadOf(row);
+    if (!p) return null;
+    // the stamp rule of `act` (Judge nit 7): a person on the Gnomon window (gui, no agent key), or an agent stamp
+    const hand = byOf(p);
+    const r = own(p, 'relayedFor');
+    if (hand.cls === 'unknown' || !isPlainObject(r)) return null;
+    if (hand.cls === 'human' && (own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent'))) return null;
+    const u = own(p, 'undo');
+    if (!isPlainObject(u)) return null;
+    for (const k of Object.keys(u)) if (k !== 'of' && k !== 'ids' && k !== 'restored') return null;
+    const o = own(u, 'of');
+    if (!isPlainObject(o)) return null;
+    const ok = Object.keys(o).sort().join(',');
+    let of: DimChangeSet;
+    if (ok === 'hsid,turn') {
+      const turn = turnOf(own(o, 'hsid'), own(o, 'turn'));
+      if (!turn) return null;
+      of = { kind: 'turn', hsid: own(o, 'hsid') as string, turn };
+    } else if (ok === 'act,principal') {
+      const principal = own(o, 'principal');
+      const act = own(o, 'act');
+      if (!NON_EMPTY(principal) || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+      of = { kind: 'act', principal, act };
+    } else return null;
+    const out: DimUndoMark = { of, restored: [] };
+    const ids = own(u, 'ids');
+    if (ids !== undefined) {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > DIM_UNDO_MARK_LIMITS.ids || new Set(ids).size !== ids.length) return null;
+      if (!ids.every((x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x))) return null;
+      out.ids = [...(ids as string[])];
+    }
+    const restored = own(u, 'restored');
+    if (restored !== undefined) {
+      if (!Array.isArray(restored) || restored.length > DIM_UNDO_MARK_LIMITS.restored) return null;
+      const ops = own(p, 'ops');
+      const added = new Set<string>();
+      if (Array.isArray(ops)) {
+        for (const op of ops) {
+          if (!isPlainObject(op) || own(op, 'type') !== 'add') continue;
+          const node = own(op, 'node');
+          const nid = isPlainObject(node) ? own(node, 'id') : undefined;
+          if (typeof nid === 'string') added.add(nid);
+        }
+      }
+      const seen = new Set<string>();
+      for (const e of restored) {
+        if (!Array.isArray(e) || e.length < 3 || e.length > 5) continue;
+        const [newId, oldId, by, wordsBy, otherBy] = e as unknown[];
+        if (typeof newId !== 'string' || typeof oldId !== 'string' || !DIM_NODE_ID_PATTERN.test(newId) || !DIM_NODE_ID_PATTERN.test(oldId)) continue;
+        if (!added.has(newId) || seen.has(newId) || newId === oldId) continue;
+        seen.add(newId);
+        out.restored.push({ newId, oldId, by: dimViewBy(by), ...(wordsBy != null ? { wordsBy: dimViewBy(wordsBy) } : {}), ...(otherBy != null ? { otherBy: dimViewBy(otherBy) } : {}) });
+      }
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/* ── the undo planner (S1.4 edit-anything; Aegis ruling 4, G3, G5; NOT in the client API descriptor) ── */
+
+const LINK_KEYS = ['from', 'to', 'parent'] as const;
+
+/**
+ * What happened to the board after the change-set's rows. Every entry holds the NEWEST seq at which a later row did
+ * it, so the planner asks "changed after THIS set row?" (Judge I-2: a row of another hand landing between two rows
+ * of the set wins over the earlier row's inverse). A row with no integer seq counts as after every set row.
+ */
+interface DimLater {
+  /** id → field → newest seq a later row changed it */
+  fields: Map<string, Map<string, number>>;
+  /** id → newest seq any later row updated, moved or deleted it */
+  touched: Map<string, number>;
+  /** id → newest seq a later row deleted it */
+  deleted: Map<string, number>;
+  /** old ids an undo already restored, whose re-add stands (a marker whose re-add failed counts for nothing) */
+  restoredOld: Set<string>;
+  /** marks a continuation row of THIS set (an earlier call's undo row) already undid: left out silently */
+  done: Set<string>;
+}
+
+const sameSet = (a: DimChangeSet, b: DimChangeSet): boolean =>
+  a.kind === 'act' ? b.kind === 'act' && a.principal === b.principal && a.act === b.act : b.kind === 'turn' && a.hsid === b.hsid && a.turn === b.turn;
+
+function laterOf(after: Iterable<DimRow>, current: DimState, setSeqs: ReadonlySet<number>, o: { of?: DimChangeSet; undoer?: DimBy; setDeleted?: ReadonlySet<string> } = {}): DimLater {
+  const of = o.of;
+  const out: DimLater = { fields: new Map(), touched: new Map(), deleted: new Map(), restoredOld: new Set(), done: new Set() };
+  // Aegis N-1: every honoured restored entry with its marker row's seq, judged AFTER the loop, when every later
+  // delete is known; `dels` holds the newest delete of each id by ANY row, continuation rows included
+  const entries: Array<{ newId: string; oldId: string; seq: number; continuation: boolean }> = [];
+  const dels = new Map<string, number>();
+  const newest = (m: Map<string, number>, id: string, seq: number): void => {
+    if (!(m.get(id)! >= seq)) m.set(id, seq);
+  };
+  const field = (id: unknown, k: string, seq: number): void => {
+    if (typeof id !== 'string') return;
+    newest(out.touched, id, seq);
+    let f = out.fields.get(id);
+    if (!f) out.fields.set(id, (f = new Map()));
+    if (!(f.get(k)! >= seq)) f.set(k, seq);
+  };
+  try {
+    for (const row of after) {
+      const p = opPayloadOf(row);
+      if (!p) continue;
+      const seq = Number.isSafeInteger(row.seq) ? row.seq : Number.POSITIVE_INFINITY;
+      if (setSeqs.has(seq)) continue; // a row of the set itself is never a later change
+      const ops = own(p, 'ops');
+      const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
+      if (Array.isArray(ops)) for (const op of ops) if (isPlainObject(op) && own(op, 'type') === 'delete' && typeof own(op, 'id') === 'string') newest(dels, own(op, 'id') as string, seq);
+      // Aegis N-2: a continuation is bound to the undoer's hand when the caller names it
+      const continuation = !!of && !!mark && sameSet(mark.of, of) && (!o.undoer || sameHand(byOf(p), o.undoer));
+      if (mark) for (const r of mark.restored) entries.push({ newId: r.newId, oldId: r.oldId, seq, continuation });
+      if (continuation && mark) {
+        // a continuation (Judge I-3): an earlier call of THIS undo. Its marks are done, never a conflict. A link
+        // re-point it wrote belongs to that re-add's mark only when it names a re-added node whose old id is one the
+        // SET deleted (Aegis N-2); its restored old ids are done only when the re-add stands (after the loop).
+        const fresh = new Map(mark.restored.map((r) => [r.newId, r.oldId]));
+        const ours = (v: unknown): boolean => typeof v === 'string' && fresh.has(v) && !!o.setDeleted?.has(fresh.get(v)!);
+        if (Array.isArray(ops)) {
+          for (const op of ops) {
+            if (!isPlainObject(op)) continue;
+            const type = own(op, 'type');
+            if (type === 'update' && isPlainObject(own(op, 'patch'))) {
+              const patch = own(op, 'patch') as Record<string, unknown>;
+              const repoint = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => (LINK_KEYS as readonly string[]).includes(k) && ours(patch[k]));
+              if (!repoint && typeof own(op, 'id') === 'string') out.done.add(own(op, 'id') as string);
+            } else if (type === 'move' && Array.isArray(own(op, 'ids'))) for (const id of own(op, 'ids') as unknown[]) (typeof id === 'string' && out.done.add(id));
+            else if (type === 'delete' && typeof own(op, 'id') === 'string') out.done.add(own(op, 'id') as string);
+          }
+        }
+        continue;
+      }
+      if (Array.isArray(ops)) {
+        for (const op of ops) {
+          if (!isPlainObject(op)) continue;
+          const type = own(op, 'type');
+          if (type === 'update' && isPlainObject(own(op, 'patch'))) for (const k of Object.keys(own(op, 'patch') as object)) field(own(op, 'id'), k, seq);
+          else if (type === 'move' && Array.isArray(own(op, 'ids'))) for (const id of own(op, 'ids') as unknown[]) (field(id, 'x', seq), field(id, 'y', seq));
+          else if (type === 'delete' && typeof own(op, 'id') === 'string') (newest(out.touched, own(op, 'id') as string, seq), newest(out.deleted, own(op, 'id') as string, seq));
+        }
+      }
+    }
+  } catch {
+    // rows that cannot be read add nothing more
+  }
+  // Judge nit 6 and Aegis N-1: a restored entry counts only when its re-add LANDED: it stands now as that restore,
+  // or it is gone now and a row AFTER the marker row deleted it. A marker whose re-add failed in the fold (an id
+  // clash, with a live id or with one deleted earlier) leaves its old id undoable.
+  for (const e of entries) {
+    const now = current.nodes.get(e.newId);
+    const landed = now ? now.restoredFrom?.id === e.oldId : current.gone.has(e.newId) && (dels.get(e.newId) ?? Number.NEGATIVE_INFINITY) > e.seq;
+    if (!landed) continue;
+    if (e.continuation) out.done.add(e.oldId);
+    else out.restoredOld.add(e.oldId);
+  }
+  for (const n of current.nodes.values()) if (n.restoredFrom && typeof n.restoredFrom.id === 'string') out.restoredOld.add(n.restoredFrom.id);
+  return out;
+}
+
+/**
+ * The state after one op, by the fold's own rules (a synthetic row with no seq, so the state's seq does not move).
+ * The synthetic row has no stamp, so a node an op of the SAME row adds folds with the unknown hand in the stepped
+ * state. That is harmless: the planner reads only a stepped node's content and presence; the hand, `restoredFrom`
+ * and attribution of a deleted node are read from the state before the set row (`row.before`), where the fold of
+ * the real, stamped rows put them, except for a node added and deleted inside one row (the unknown hand, which
+ * fails closed: the page dashes it).
+ */
+const undoStep = (state: DimState, op: unknown): DimState => foldDim([{ seq: Number.NaN, kind: DIM_KINDS.op, payload: { v: 1, dim: state.dim ?? '', ops: [op] } }], undefined, state);
+
+interface DimInverse {
+  /** in output order; `unit` groups the ops of one mark (a re-add with its link re-points is one unit) */
+  entries: Array<{ unit: string; op: DimOp }>;
+  /** unit of a re-add → [newId, oldId, the original hand] */
+  restored: Map<string, DimRestoredEntry>;
+  /** node id → why its inverse was left out */
+  skipped: Map<string, 'changed' | 'gone'>;
+}
+
+/**
+ * The inverse of rows, each against the state just before it, with one rename map across them all (the page's B3
+ * algorithm, moved here so the page and the mod share it). With `later` (the planner), an inverse that would undo a
+ * field a later row changed, or a node gone now, is left out and recorded in `skipped`.
+ */
+function invertCore(rows: ReadonlyArray<{ before: DimState; ops: readonly unknown[]; seq?: number }>, mint: () => string, current: DimState | undefined, o: { later?: DimLater; ids?: ReadonlySet<string> } = {}): DimInverse {
+  const adds: Array<{ tier: number; unit: string; op: DimOp }> = [];
+  const rest: Array<Array<{ unit: string; op: DimOp; repoint?: true }>> = [];
+  const renamed = new Map<string, string>();
+  const restored = new Map<string, DimRestoredEntry>();
+  const skipped = new Map<string, 'changed' | 'gone'>();
+  // per MARK, one reason: gone wins over changed (a mark deleted since is gone, whatever else changed it)
+  const skip = (id: string, why: 'changed' | 'gone'): void => {
+    if (!skipped.has(id) || why === 'gone') skipped.set(id, why);
+  };
+  const later = o.later;
+  const inScope = (id: unknown): boolean => !o.ids || (typeof id === 'string' && o.ids.has(id));
+  for (const row of rows) {
+    let state = row.before.dim === null ? { ...row.before, dim: '' } : row.before;
+    // "later" is measured from THIS set row (Judge I-2); a row with no seq is before every later row
+    const at = Number.isSafeInteger(row.seq) ? (row.seq as number) : Number.NEGATIVE_INFINITY;
+    const since = (m: ReadonlyMap<string, number> | undefined, id: string): boolean => (m?.get(id) ?? Number.NEGATIVE_INFINITY) > at;
+    const fieldSince = (id: string, k: string): boolean => (later?.fields.get(id)?.get(k) ?? Number.NEGATIVE_INFINITY) > at;
+    const done = (id: unknown): boolean => typeof id === 'string' && !!later?.done.has(id);
+    for (const op of row.ops) {
+      const inv: Array<{ unit: string; op: DimOp; repoint?: true }> = [];
+      if (isPlainObject(op)) {
+        if (op.type === 'add') {
+          const id = isPlainObject(op.node) ? op.node.id : undefined;
+          if (typeof id === 'string' && !state.nodes.has(id) && !state.gone.has(id) && inScope(id) && !done(id)) {
+            // a mark the set added and another hand deleted since is gone, not changed (Judge nit 5)
+            if (later && since(later.deleted, id)) skip(id, 'gone');
+            else if (later && since(later.touched, id)) skip(id, 'changed');
+            else inv.push({ unit: `n:${id}`, op: { type: 'delete', id } });
+          }
+        } else if (op.type === 'update') {
+          const cur = typeof op.id === 'string' ? state.nodes.get(op.id) : undefined;
+          if (cur && isPlainObject(op.patch) && inScope(op.id) && !done(op.id)) {
+            const patch: Record<string, unknown> = {};
+            for (const k of Object.keys(op.patch)) {
+              if (k === 'id' || k === 'kind' || DROPPED_KEYS.has(k) || op.patch[k] === undefined) continue;
+              if (later && fieldSince(op.id as string, k)) {
+                skip(op.id as string, 'changed');
+                continue;
+              }
+              const prior = own(cur.node, k);
+              patch[k] = prior === undefined ? null : copyJson(prior);
+            }
+            if (Object.keys(patch).length > 0) inv.push({ unit: `n:${op.id as string}`, op: { type: 'update', id: op.id as string, patch } });
+          }
+        } else if (op.type === 'move') {
+          let ids = Array.isArray(op.ids) ? op.ids.filter((id): id is string => typeof id === 'string' && state.nodes.has(id) && inScope(id) && !done(id)) : [];
+          if (later) {
+            ids = ids.filter((id) => {
+              const moved = fieldSince(id, 'x') || fieldSince(id, 'y');
+              if (moved) skip(id, 'changed');
+              return !moved;
+            });
+          }
+          if (ids.length > 0 && Number.isSafeInteger(op.dx) && Number.isSafeInteger(op.dy)) {
+            const dx = -(op.dx as number) || 0;
+            const dy = -(op.dy as number) || 0;
+            // the planner validates per mark, so its moves are one id each; the page keeps one move
+            if (later) for (const id of ids) inv.push({ unit: `n:${id}`, op: { type: 'move', ids: [id], dx, dy } });
+            else inv.push({ unit: `n:${ids[0]!}`, op: { type: 'move', ids, dx, dy } });
+          }
+        } else if (op.type === 'delete') {
+          const cur = typeof op.id === 'string' ? state.nodes.get(op.id) : undefined;
+          if (cur && inScope(op.id) && !done(op.id)) {
+            if (later?.restoredOld.has(op.id as string)) skip(op.id as string, 'changed');
+            else {
+              const id = mint();
+              // one unit per MARK: the re-add, its re-points and any earlier inverse of the same mark
+              const unit = `n:${op.id as string}`;
+              renamed.set(op.id as string, id);
+              // G5: the ORIGINAL hand: the restored-from hand of a mark that was itself restored, else its adder
+              // I-1: the deleted mark's words and other hand ride along, so the re-add keeps them
+              const entry: DimRestoredEntry = [id, op.id as string, cur.restoredFrom?.by ?? cur.by];
+              if (cur.wordsBy || cur.otherBy) entry.push(cur.wordsBy ?? null, cur.otherBy ?? null);
+              restored.set(unit, entry);
+              const kind = own(cur.node, 'kind');
+              adds.push({ tier: kind === 'frame' ? 0 : kind === 'arrow' ? 2 : 1, unit, op: { type: 'add', node: { ...(copyJson(cur.node) as Record<string, unknown>), id } as unknown as DimNode } });
+              // what pointed at it then, and still does now, points at the re-added node
+              for (const [otherId, other] of (current ?? state).nodes) {
+                if (otherId === op.id) continue;
+                const patch: Record<string, unknown> = {};
+                for (const k of LINK_KEYS) if (own(other.node, k) === op.id) patch[k] = id;
+                if (Object.keys(patch).length > 0) inv.push({ unit, op: { type: 'update', id: otherId, patch }, repoint: true });
+              }
+            }
+          }
+        }
+      }
+      rest.push(inv);
+      state = undoStep(state, op);
+    }
+  }
+  const name = (id: string): string => renamed.get(id) ?? id;
+  const entries: Array<{ unit: string; op: DimOp; repoint?: true }> = [...adds.sort((a, b) => a.tier - b.tier).map((a) => ({ unit: a.unit, op: a.op })), ...rest.reverse().flat()];
+  // an id that was deleted is gone for good: every mention of it becomes the re-added node's id
+  const readded = new Set(renamed.values());
+  const there = (id: string): boolean => !current || current.nodes.has(id) || readded.has(id);
+  const out: Array<{ unit: string; op: DimOp; repoint?: true }> = [];
+  for (const e of entries) {
+    const op = e.op;
+    if (op.type === 'add') {
+      const node = op.node as unknown as Record<string, unknown>;
+      for (const k of LINK_KEYS) {
+        if (typeof node[k] !== 'string') continue;
+        node[k] = name(node[k] as string);
+        if (!there(node[k] as string)) delete node[k];
+      }
+    } else if (op.type === 'update') {
+      op.id = name(op.id);
+      for (const k of LINK_KEYS) {
+        if (typeof op.patch[k] !== 'string') continue;
+        op.patch[k] = name(op.patch[k] as string);
+        if (!there(op.patch[k] as string)) op.patch[k] = null;
+      }
+    } else if (op.type === 'move') op.ids = [...new Set(op.ids.map(name))];
+    else if (op.type === 'delete') op.id = name(op.id);
+    // the planner: an inverse of a node that is gone now (deleted later by any hand) is left out
+    if (later && op.type !== 'add') {
+      const target = op.type === 'move' ? op.ids[0] : op.type === 'update' || op.type === 'delete' ? op.id : undefined;
+      if (target !== undefined && !there(target)) {
+        if (!e.repoint) skip(e.unit.slice(2), 'gone');
+        continue;
+      }
+    }
+    out.push(e);
+  }
+  return { entries: out, restored, skipped };
+}
+
+/**
+ * The page's inverse of several rows of ONE action (#gui-dim-undo, Aegis B3), each against the state just before
+ * that row, with one rename map across them all. Rows oldest first. Re-adds first (frames, then marks, then arrows),
+ * then the other inverses, last op first. Given `current`, a re-added node carries no link to a node gone since,
+ * and only a link that STILL names the old id is re-pointed. No conflict skipping: that is `planDimUndo`.
+ */
+export function dimInvertRows(rows: ReadonlyArray<{ before: DimState; ops: readonly unknown[] }>, mint: () => string, current?: DimState): DimOp[] {
+  return invertCore(rows, mint, current).entries.map((e) => e.op);
+}
+
+/** One restored entry as the mod writes it on the undo row: `[newId, oldId, by, wordsBy?, otherBy?]`. */
+export type DimRestoredEntry = [string, string, DimBy, (DimBy | null)?, (DimBy | null)?];
+
+/** What `planDimUndo` hands back. `ops` is always a batch `validateDimOps` accepted WHOLE as `actor`, or empty. */
+export interface DimUndoPlan {
+  ops: DimOp[];
+  /** `[newId, oldId, by, wordsBy?, otherBy?]` for every re-add in `ops`; `by` is the ORIGINAL hand (Aegis G5) */
+  restored: Array<DimRestoredEntry>;
+  /**
+   * Counted per MARK, each mark once (a mark both updated and deleted by the set is one mark). These are the
+   * inputs of the undo's answer line and of the page's notice (Luna's words, E-design): "N marks changed since were
+   * left as they are" is `changed + partial`; "removed since" is `gone`; "could not be restored" is `refused`.
+   *  - `changed`: left whole, because another hand changed it after the set (or it was already restored);
+   *  - `gone`: left, because it is not on the board now (deleted after the set by any hand);
+   *  - `refused`: left, because today's validator refused its inverse as the undoer (G3);
+   *  - `partial`: undone, but some of its fields were left because another hand changed them since (inside `applied`).
+   */
+  skipped: { changed: number; gone: number; refused: number; partial: number };
+  /** marks the plan changes (partial ones included) */
+  applied: number;
+  /** true when marks were left for a further call (one call holds at most DIM_LIMITS.opsPerRow ops) */
+  more: boolean;
+}
+
+/**
+ * Plan the undo of one change-set (S1.4 edit-anything, Arky §3.1, Aegis ruling 4). Pure; never throws.
+ *  - `rows`: the set's op lists, oldest first, each with the state just before it and its `seq`;
+ *  - `after`: EVERY op row that is not a row of the set and landed after the set's first row, any hand, oldest
+ *    first (rows between two rows of the set included: a field is "changed since" when a row after THAT set row
+ *    changed it, Judge I-2);
+ *  - `of`: the set being undone. A row in `after` whose honoured undo marker names it is an earlier call of this
+ *    undo (a continuation, `more`): its marks are done and never counted as conflicts (Judge I-3), when its re-adds
+ *    landed; with `undoer`, only a marker on a row of that hand is a continuation (Aegis N-2);
+ *  - `current`: the board now; `actor`: THE UNDOER (a person for `dim.undo`, the calling agent for `dim-undo`);
+ *  - `mint`: the caller's id minter. New ids are never taken from input or from a marker;
+ *  - `ids`: an optional scope (old ids), to undo one hand's change to some marks only.
+ * Field-level inverse: an update restores each field to its prior value, a move applies the negated delta, an add
+ * is deleted, a delete is re-added under a NEW id with links re-pointed only where a link still names the old id
+ * now, recorded in `restored` with the original hand and the mark's `wordsBy`/`otherBy`. LATER CHANGES WIN: a
+ * field any hand changed after its set row, a node touched after its add, a node gone now and a mark already
+ * restored are left as they are and counted, never a whole refusal.
+ * VALIDATION (G3): each mark's ops are validated as the undoer (cumulatively, in plan order, so a re-added arrow
+ * may cite a re-added node); a refused mark is dropped into `skipped.refused` (a restored text that now matches a
+ * secret rule, a colour that now fails the palette). The remainder is then validated whole against `current`; a
+ * mark that batch refuses is dropped too, at most twice; a batch never accepted whole is never handed back (the
+ * plan is then empty, every mark refused). Undo of an undo is the same call on the undo row's set.
+ */
+export function planDimUndo(o: {
+  rows: ReadonlyArray<{ before: DimState; ops: readonly unknown[]; seq?: number }>;
+  after: Iterable<DimRow>;
+  current: DimState;
+  actor: DimActor;
+  mint: () => string;
+  of?: DimChangeSet;
+  /** the undoer's hand as stamped on its rows: when given, only a marker on a row of THIS hand is a continuation */
+  undoer?: DimBy;
+  ids?: readonly string[];
+  scan?: (text: string) => readonly string[];
+}): DimUndoPlan {
+  const empty = (): DimUndoPlan => ({ ops: [], restored: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
+  try {
+    if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== 'function') return empty();
+    const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x): x is number => Number.isSafeInteger(x)));
+    const setDeleted = new Set<string>();
+    for (const r of o.rows) if (Array.isArray(r.ops)) for (const op of r.ops) if (isPlainObject(op) && op.type === 'delete' && typeof op.id === 'string') setDeleted.add(op.id);
+    const undoer = o.undoer !== undefined ? dimViewBy(o.undoer) : undefined;
+    const later = laterOf(o.after ?? [], o.current, setSeqs, { ...(o.of ? { of: o.of } : {}), ...(undoer ? { undoer } : {}), setDeleted });
+    const inv = invertCore(o.rows, o.mint, o.current, { later, ...(Array.isArray(o.ids) ? { ids: new Set(o.ids) } : {}) });
+    const order: string[] = [];
+    const units = new Map<string, DimOp[]>();
+    for (const e of inv.entries) {
+      let u = units.get(e.unit);
+      if (!u) (units.set(e.unit, (u = [])), order.push(e.unit));
+      u.push(e.op);
+    }
+    const refused = new Set<string>();
+    const opts = o.scan ? { scan: o.scan } : {};
+    const whole = (v: DimValidation, n: number): boolean => !v.secret && v.refused.length === 0 && v.ok.length === n;
+    // per mark, as the undoer, against the board as the accepted marks before it leave it
+    const accepted: string[] = [];
+    let s = o.current;
+    for (const u of order) {
+      const ops = units.get(u)!;
+      const v = validateDimOps(s, ops, o.actor, opts);
+      if (!whole(v, ops.length)) {
+        refused.add(u);
+        continue;
+      }
+      accepted.push(u);
+      for (const op of v.ok) s = undoStep(s, op);
+    }
+    // one call holds at most opsPerRow ops: whole marks up to it, the rest for a further call
+    let keep: string[] = [];
+    let n = 0;
+    let more = false;
+    for (const u of accepted) {
+      const c = units.get(u)!.length;
+      if (n + c > DIM_LIMITS.opsPerRow) {
+        more = true;
+        break;
+      }
+      keep.push(u);
+      n += c;
+    }
+    const deferred = new Set(accepted.filter((u) => !keep.includes(u)));
+    /** the per-mark counts, given the marks that land */
+    const tally = (landed: readonly string[]): DimUndoPlan['skipped'] & { applied: number } => {
+      const out = { changed: 0, gone: 0, refused: 0, partial: 0, applied: landed.length };
+      const lands = new Set(landed);
+      for (const u of refused) if (!lands.has(u)) out.refused += 1;
+      for (const [id, why] of inv.skipped) {
+        const u = `n:${id}`;
+        if (lands.has(u)) {
+          if (why === 'changed') out.partial += 1;
+        } else if (!refused.has(u) && !deferred.has(u)) out[why] += 1;
+      }
+      return out;
+    };
+    for (let round = 0; round < 2; round++) {
+      const set = new Set(keep);
+      const entries = inv.entries.filter((e) => set.has(e.unit));
+      const ops = entries.map((e) => e.op);
+      if (ops.length === 0) break;
+      const v = validateDimOps(o.current, ops, o.actor, opts);
+      if (whole(v, ops.length)) {
+        const { applied, ...skipped } = tally(keep);
+        return { ops: v.ok, restored: keep.flatMap((u) => (inv.restored.has(u) ? [inv.restored.get(u)!] : [])), skipped, applied, more };
+      }
+      // drop every mark the whole batch refused (by op index), then try once more
+      const bad = new Set(v.refused.map((r) => (r.index >= 0 && r.index < entries.length ? entries[r.index]!.unit : '*')));
+      if (bad.has('*')) break;
+      for (const u of bad) refused.add(u);
+      keep = keep.filter((u) => !bad.has(u));
+    }
+    for (const u of keep) refused.add(u);
+    const { applied: _none, ...skipped } = tally([]);
+    return { ops: [], restored: [], skipped, applied: 0, more };
+  } catch {
+    return empty();
   }
 }
 

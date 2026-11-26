@@ -283,6 +283,24 @@ components:
 
   contract-dim-shape:
     description: >-
+      S1.4 EDIT-ANYTHING (pass E0; TD-2026-11-26-715/-241/-310, Aegis
+      rulings 2-4): dimMayEdit(actor) replaces the owner rule (any human with a
+      principal or agent with principal and label may edit any core mark; fails
+      closed; not-owner kept in the hashed list, unused, fix reworded). The fold
+      records changedBy/changedSeq/changedHsid, otherBy/otherSeq, wordsBy/wordsSeq
+      (G1) and restoredFrom (G5) OUTSIDE dimCanonical, set only by applyOp when an
+      op applies; the view shows them through dimViewBy; dimAttrDigest (G7)
+      vouches for them (not in the descriptor). Readers dimActOf, dimChangeSetOf,
+      dimUndoMarkOf honour the mod-written act and undo row markers (own keys,
+      patterns, caps). planDimUndo: the shared field-level undo planner (later
+      changes win and are counted; re-add under a minted id with the original
+      hand; per-mark validation as the undoer, remainder whole at most twice);
+      dimInvertRows is the page's inverse, shared.
+      Review fixes: restored entry [newId, oldId, by, wordsBy?, otherBy?]
+      (I-1); otherBy/wordsBy against the original hand (I-2); planner rows
+      carry seqs (I-2), `of` marks continuations (I-3), per-mark counts with
+      `partial`. Tested in
+      test/dim-edit-anything.test.ts.
       dim-shape:v1 (Dimensions S1.2, spec §12.7; .paradigm/research/gnomon-canvas/
       s1.2-draft.md and its rulings): src/dim.ts. A dimension is the space; mediums
       (board, doodle) display things inside it; its truth is op rows appended by the
@@ -310,7 +328,8 @@ components:
       the op, refused on the field being written, the line when an add writes
       both; a contrast refusal's fix is contentContrastFix, a fixed sentence
       naming the offered swatch, not hashed, and DIM_REFUSAL_CODES did not move), a
-      dangling from / to / parent, an agent editing a mark it did not draw, an edit
+      dangling from / to / parent, an edit by an actor that is not a well-formed
+      hand (dimMayEdit; since S1.4 E0 any hand may edit any mark), an edit
       of a non-core node, more than 64 ops, and any secret match (whole batch
       refused; every string at any depth, plus for each touched node the strings as
       they would stand, joined and pairwise, so a credential split over two updates
