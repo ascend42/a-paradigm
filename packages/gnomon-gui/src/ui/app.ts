@@ -1979,6 +1979,7 @@ const boardDock = mountBoardDock({
   load: () => loadBoard(), // the engine chunk is fetched on the first open, never with the app
   theme: () => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day'),
   cardFocused: () => cardHasFocus(document),
+  pinned: () => $('pinned').querySelectorAll('.card').length,
   focused: () => focused,
   sessionInfo: (hsid) => {
     const s = store.sessions.get(hsid);

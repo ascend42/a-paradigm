@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
 import { DIM_FALLBACK_LEAD, dimKindName } from '@a-company/gnomon-contracts';
 // @ts-expect-error plain .mjs (the zero-dependency probe harness)
 import { embeddedBundle } from '../../gnomon/probes/p12-excalidraw-csp/harness.mjs';
-import { BOARD_MIN_HEIGHT, failedCause, keepParts, LEAF_COPY, leafStateOf, openedFrom, tabTitle } from '../src/core/board-leaf.js';
+import { railLayout, railNeed } from '../src/core/board-rail.js';
+import { BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, keepParts, LEAF_COPY, leafStateOf, openedFrom, tabTitle } from '../src/core/board-leaf.js';
 import { cardHasFocus } from '../src/ui/card-focus.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,7 +28,17 @@ describe('#gui-board states', () => {
     expect(leafStateOf({ ...base, cardFocused: true, marks: 0 })).toBe('yielded');
     expect(leafStateOf({ ...base, marks: 0 })).toBe('empty');
     expect(leafStateOf({ ...base, load: 'failed', cardFocused: true, boardHeight: 10 })).toBe('failed');
-    expect(BOARD_MIN_HEIGHT).toBe(148);
+    // design too_short.floor: ONE number, the tight rail's own need from the rail's model (it was a second constant, 148)
+    expect(BOARD_MIN_HEIGHT).toBe(140);
+    expect(BOARD_MIN_HEIGHT).toBe(railNeed(railLayout(0)));
+    expect(railLayout(BOARD_MIN_HEIGHT).tight).toBe(true);
+  });
+  it('design too_short.line: the dock\'s pinned count decides whether deciding a card is named; held words are said first', () => {
+    expect(tooShortLine({ pinned: 1, words: false })).toBe('No room to draw · decide a card or make the window taller');
+    expect(tooShortLine({ pinned: 0, words: false })).toBe('No room to draw · make the window taller');
+    expect(tooShortLine({ pinned: 2, words: true })).toBe('No room to draw · your words are kept on this page');
+    expect(tooShortLine({ pinned: 0, words: true })).not.toMatch(/saved/);
+    expect(TOO_SHORT_SPEAK_MS).toBe(1500);
   });
 });
 
@@ -36,7 +47,7 @@ describe('#gui-board copy (the design\'s words)', () => {
     expect(LEAF_COPY.medium).toBe('› board');
     expect(LEAF_COPY.loading).toBe('opening the board…');
     expect(LEAF_COPY.yielded).toBe('A card has the keys · click the board to draw');
-    expect(LEAF_COPY.tooShort).toBe('The window is too short to draw here · make it taller, or decide the pinned cards');
+    expect(LEAF_COPY.tooShort).toBe('No room to draw · decide a card or make the window taller');
     expect(LEAF_COPY.emptyTitle).toBe('Nothing drawn yet');
     expect(LEAF_COPY.emptyHint).toBe('N for a sticky · T to write · or pick a tool and draw.');
     expect(LEAF_COPY.failedTitle).toBe('The board didn’t open');

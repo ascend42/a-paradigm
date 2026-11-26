@@ -4,11 +4,18 @@
  * The board leaf's words and states (design component board-leaf). PURE: no DOM. Copy is the design's, verbatim;
  * the one line the design does not give (an image was refused) is marked.
  */
+import { railLayout, railNeed } from './board-rail.js';
+
 export type LeafLoad = 'loading' | 'ready' | 'failed';
 export type LeafState = 'loading' | 'failed' | 'too-short' | 'yielded' | 'empty' | 'open';
 
-/** Under this much board height the leaf cannot be drawn on (design `heights`). */
-export const BOARD_MIN_HEIGHT = 148;
+/**
+ * Under this much board height the leaf is too short to draw on (design `too_short.floor`): the tight rail's own
+ * need, ONE number from the rail's model (core/board-rail.ts), never a second constant. 140px.
+ */
+export const BOARD_MIN_HEIGHT = railNeed(railLayout(0));
+/** Under this much board the body is not drawn at all, too short or not: head, line, foot (design `too_short.shows`). */
+export const BOARD_BODY_MIN = 56;
 /** Under this the head drops '› board' (design `widths`; a container query in styles.css does it). */
 export const HEAD_MEDIUM_MIN = 520;
 /** Nothing but the head shows for this long while the chunk loads (no flash). */
@@ -29,7 +36,10 @@ export const LEAF_COPY = {
   dimensionsTitle: 'Dimensions in this project (/boards)',
   loading: 'opening the board…',
   yielded: 'A card has the keys · click the board to draw',
-  tooShort: 'The window is too short to draw here · make it taller, or decide the pinned cards',
+  // (design too_short.line: the dock passes the pinned count; a line never names a move that does nothing)
+  tooShort: 'No room to draw · decide a card or make the window taller',
+  tooShortNoCard: 'No room to draw · make the window taller',
+  tooShortWords: 'No room to draw · your words are kept on this page',
   emptyTitle: 'Nothing drawn yet',
   emptyHint: 'N for a sticky · T to write · or pick a tool and draw.',
   failedTitle: 'The board didn’t open',
@@ -164,6 +174,8 @@ export const KEEP_COPY = {
   wordsAndChangesGone: (n: number): string => `Your typed words and ${n === 1 ? 'one change' : `${n} changes`} were not saved`,
   changesGone: (n: number): string => (n === 1 ? 'One change on the board was not saved' : `${n} changes on the board were not saved`),
   cardWaits: 'A card needs you · finish the text on the board first',
+  // (aegis C3_5: a drag or a stroke in hand when the board went too short is put back, and said)
+  changeBack: 'That change wasn’t kept · the board is as it was',
   noBoard: 'This session has no board yet',
 } as const;
 /** The held-still line while the link is down: `Reconnecting` alone unless something of the person's is not saved. */
@@ -192,6 +204,10 @@ export function checkLine(s: { verified: boolean | null; checkedSeq: number | nu
 export const CHECK_COPY = { unchecked: 'Not checked yet' } as const;
 /** How the check reads: `bad` when the fold did not match (drawn in the failed colour), `none` while unchecked. */
 export const checkTone = (s: { verified: boolean | null; checkedSeq: number | null }): 'ok' | 'none' | 'bad' => (s.verified === null || s.checkedSeq === null ? 'none' : s.verified ? 'ok' : 'bad');
+/** The too-short line (design `too_short.line`): words held first, then whether a card is pinned to decide. */
+export const tooShortLine = (o: { pinned: number; words: boolean }): string => (o.words ? LEAF_COPY.tooShortWords : o.pinned > 0 ? LEAF_COPY.tooShort : LEAF_COPY.tooShortNoCard);
+/** The same line is spoken once per entry and never again within this long of the last time (aegis C3_6). */
+export const TOO_SHORT_SPEAK_MS = 1500;
 /** A save shows as `Saving…` only when it has lasted this long (a quick save never flickers the line). */
 export const KEEP_SLOW_MS = 600;
 

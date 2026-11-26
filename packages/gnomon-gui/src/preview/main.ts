@@ -85,7 +85,9 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       theme: PREVIEW.theme,
       load,
       cardFocused: () => cardHasFocus(document),
-      onFold: () => diag('board fold asked'),
+      // (the fixture counts its folds on the page, so a real-input test can see Esc fold a leaf that is too short)
+      onFold: () => void ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds = ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds ?? 0) + 1, diag('board fold asked')),
+      pinned: () => document.querySelectorAll('#pinned .card').length,
       // a copy, a paste: the leaf's own register over the fixture's fold; pasted ops go where the board's edits go
       view: () => fx.state(),
       onOps: (ops, cause) => send(ops, cause),
@@ -116,6 +118,7 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       },
     });
     (globalThis as { gnomonPreviewLeaf?: unknown }).gnomonPreviewLeaf = leaf;
+    (globalThis as { gnomonPreviewFixture?: unknown }).gnomonPreviewFixture = fx;
     // a state with no engine (loading, failed) is ready once it has drawn itself
     if (variant === 'loading' || variant === 'failed') setTimeout(done, 500);
   });

@@ -1957,4 +1957,7 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-foot .bd-check-w { flex: none; }
 .bd-foot .bd-check-n { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .bd-foot .bd-check.bad { color: var(--fail); }
-.bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }
+/* design too_short.shows: under the floor there is no rail and the board is SHOWN, held still, the canvas taking the
+   rail's 48px; the foot stays (its draw keys and the check). Under 56px of board the body is not drawn at all. */
+.bd-leaf.too-short .bd-rail, .bd-leaf.too-short .bd-tray { display: none; }
+.bd-leaf.no-body .bd-body { display: none; }

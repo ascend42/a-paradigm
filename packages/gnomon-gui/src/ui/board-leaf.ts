@@ -15,7 +15,7 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveCo
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -59,6 +59,8 @@ export interface BoardLeafOptions {
    * with the press that asked. Without it (the dev fixtures) the key is drawn disabled.
    */
   onDimensions?: (cause: Event) => void;
+  /** How many cards are pinned in this session now: the too-short line names deciding one only when there is one (design `too_short.line`). */
+  pinned?: () => number;
 }
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -272,8 +274,19 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let keepLine: string | null = null;
   let keepShown: string | null = null;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
-  /** the board takes no input: a card has the keys, or the board is held still */
-  const yielded = (): boolean => load === 'ready' && (o.cardFocused() || inert !== null);
+  /**
+   * Too short to draw on (design `too_short`, aegis C3_3): the board is SHOWN and held still for its own reason. Its
+   * own flag, never `inert` (that is the dock's one slot for the link and a mismatch): the head keys, the fold and
+   * the foot keep working. Set by `draw` from the board's height, so it follows every resize.
+   */
+  let tooShort = false;
+  let tooShortSpokeAt = -Infinity;
+  /** a trusted press on the board has not been released yet: a drag or a stroke in hand (aegis C3_5) */
+  let pressing = false;
+  /** the board takes no input: a card has the keys, the board is held still, or it is too short to draw on */
+  const yielded = (): boolean => load === 'ready' && (o.cardFocused() || inert !== null || tooShort);
+  /** the too-short line now: words held in an open text first, then whether a card is pinned */
+  const shortLine = (): string => tooShortLine({ pinned: o.pinned?.() ?? 0, words: !!boardField()?.value });
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
   // ── head and keep line ───────────────────────────────────────────────────
@@ -289,7 +302,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // Mika R2: a line that STATES something in the keep line's place draws in ink (marks missing, part of the board,
     // words waiting), as the refusals and the held-still lines do; opening, folding and saving pass by quietly
     const stated = keepShown !== null && keepShown !== KEEP_COPY.opening && keepShown !== KEEP_COPY.folding && keepShown !== KEEP_COPY.saving;
-    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert || stated ? ' bd-said-line' : ''}`;
+    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert || stated || state === 'too-short' ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
     // held still: its line stays for as long as it lasts, over anything else the keep line would say
     if (inert && state !== 'failed' && state !== 'loading') {
@@ -307,9 +320,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       return void keep.append(keep.title);
     }
     // one line, cut from its end with …; the whole text is always in title=
-    keep.title = state === 'loading' ? '' : state === 'too-short' ? LEAF_COPY.tooShort : state === 'yielded' ? LEAF_COPY.yielded : '';
+    keep.title = state === 'loading' ? '' : state === 'too-short' ? shortLine() : state === 'yielded' ? LEAF_COPY.yielded : '';
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
-    if (state === 'too-short') return void keep.append(LEAF_COPY.tooShort);
+    if (state === 'too-short') return void keep.append(shortLine());
     if (state === 'yielded') return void keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`);
     // the live loop's own state (a slow save, a board held in part) takes the keep line's place while it lasts
     if (keepShown) {
@@ -631,6 +644,25 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     draw();
   }
 
+  /**
+   * Into or out of too short. In: menus and the tray close, the line is spoken once (never again within 1.5s,
+   * aegis C3_6), and a drag in hand is said: the engine, yielded, puts it back (C3_5). An open text keeps its words
+   * in its field, held: no key reaches it and no blur commits it while too short (C3_2). Out: words still in their
+   * field are said to be back.
+   */
+  function shortChanged(now: boolean): void {
+    if (now === tooShort) return;
+    tooShort = now;
+    railKey = '';
+    if (now) {
+      trayOpen = false;
+      menu = null;
+      const line = pressing ? KEEP_COPY.changeBack : shortLine();
+      if (pressing) say(line);
+      else if (performance.now() - tooShortSpokeAt >= TOO_SHORT_SPEAK_MS) saidLine.textContent = line;
+      tooShortSpokeAt = performance.now();
+    } else if (boardField()?.value) say(KEEP_COPY.wordsBack);
+  }
   let drawing = false;
   let again = false;
   function draw(): void {
@@ -639,9 +671,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     drawing = true;
     try {
       const state = leafState();
-      // under the least height nothing of the body or the foot is drawn, in EVERY state (review B3: loading and
-      // failed used to draw the rail over the pinned card and the composer)
+      // under the floor there is no rail, in EVERY state (review B3: loading and failed used to draw the rail over the
+      // pinned card and the composer); the board is shown, held still, and the foot stays (design too_short.shows)
       el.classList.toggle('too-short', short());
+      el.classList.toggle('no-body', boardHeight() < BOARD_BODY_MIN);
+      shortChanged(load === 'ready' && short());
       el.dataset.state = state;
       // the failed note stands on the bare desk: nothing of a stopped engine is left showing
       boardHost.hidden = state === 'failed';
@@ -747,7 +781,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const s = st();
     // held still (the link is down, the fold is out of date) Esc folds the leaf at once: there is no tool to leave
     // and the held-still line tells the person to fold (a text being typed while down keeps its field: guardTypedKey)
-    if (e.key === 'Escape' && inert !== null && !o.cardFocused() && el.contains(active) && !(isField(active) && boardHost.contains(active))) return void o.onFold?.(e);
+    if (e.key === 'Escape' && (inert !== null || tooShort) && !o.cardFocused() && el.contains(active) && !(isField(active) && boardHost.contains(active))) return void o.onFold?.(e);
     // a field of the engine's own (a text being typed, a frame title being renamed) keeps every key
     if (isField(active) && boardHost.contains(active)) return;
     if (e.key === 'Escape' && !o.cardFocused() && el.contains(active) && !s?.editingText && (!s || s.tool === 'select')) {
@@ -761,7 +795,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // a letter still changed the tool, and Cmd+A selected every mark through the engine's own key handler, which
     // setYielded does not cover; its document-level listeners it does). The person may still LOOK AROUND: the zoom
     // keys pass, and Tab still leaves the board.
-    if (inert !== null) {
+    if (inert !== null || tooShort) {
       const looks = (e.metaKey || e.ctrlKey) && !e.altKey && ['+', '=', '-', '0'].includes(e.key);
       if (!looks) {
         if (e.key !== 'Tab' && !appShortcut(e) && boardHost.contains(active)) e.stopPropagation();
@@ -819,12 +853,14 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const WAKE_HOLD_MS = 500;
   let wakeUntil = 0;
   const onWake = (e: Event): void => {
-    // held still: a press does nothing at all (it does not wake the board either)
-    if (inert !== null) {
+    // held still: a press does nothing at all (it does not wake the board either); too short, it says the line again
+    if (inert !== null || tooShort) {
       e.preventDefault();
       e.stopPropagation();
+      if (inert === null && e.isTrusted) say(shortLine());
       return;
     }
+    if (e.isTrusted) pressing = true;
     if (!yielded()) {
       if (performance.now() < wakeUntil) {
         e.preventDefault();
@@ -840,10 +876,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     }
   };
   stage.addEventListener('pointerdown', onWake, true);
+  const released = (): void => void (pressing = false);
+  window.addEventListener('pointerup', released, true);
+  window.addEventListener('pointercancel', released, true);
   // and nothing else reaches the engine while yielded (review S4): a double-click, a wheel, a drop, a context menu
   const onHeld = (e: Event): void => {
     if (!yielded() && performance.now() >= wakeUntil) return;
-    if (e.type === 'wheel' && inert !== null && !o.cardFocused()) return; // held still: the wheel still pans and zooms
+    if (e.type === 'wheel' && (inert !== null || tooShort) && !o.cardFocused()) return; // held still: the wheel still pans and zooms
     e.preventDefault();
     e.stopPropagation();
   };
@@ -857,7 +896,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // the field stays open with its words. Esc, Cmd/Ctrl+Enter and Tab would end the edit; a blur would commit it.
   const boardField = (): HTMLTextAreaElement | null => boardHost.querySelector('textarea');
   const guardTypedKey = (e: KeyboardEvent): void => {
-    if (inert !== 'link-down' || e.target !== boardField()) return;
+    if (e.target !== boardField()) return;
+    // too short (aegis C3_1, C3_2): NO key reaches the open text (its words are held as they are), and a key that
+    // would end the edit says why; the app's own shortcuts still pass. Link down and too short both: the link's line.
+    if (tooShort && inert !== 'link-down') {
+      if (appShortcut(e) || ['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.key === 'Escape' || e.key === 'Tab' || e.key === 'Enter') say(shortLine());
+      return;
+    }
+    if (inert !== 'link-down') return;
     if (e.key !== 'Escape' && e.key !== 'Tab' && !(e.key === 'Enter' && (e.metaKey || e.ctrlKey))) return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -872,7 +921,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   el.addEventListener('cut', heldCopy, true);
   let going = false;
   const guardTypedBlur = (e: Event): void => {
-    if (going || inert !== 'link-down' || e.target !== boardField()) return;
+    if (going || (inert !== 'link-down' && !tooShort) || e.target !== boardField()) return;
     e.stopImmediatePropagation();
   };
   window.addEventListener('keydown', guardTypedKey, true);
@@ -976,6 +1025,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     },
     destroy() {
       window.removeEventListener('keydown', guardTypedKey, true);
+      window.removeEventListener('pointerup', released, true);
+      window.removeEventListener('pointercancel', released, true);
       clearTimeout(inertSaidTimer);
       // A text still open when the leaf goes: its field is ended first, so the engine takes its own window listeners
       // down with it (left up, the next press on ANY board ran the dead editor's submit and threw in a frame).

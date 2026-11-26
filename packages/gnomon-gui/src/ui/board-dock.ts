@@ -56,6 +56,8 @@ export interface BoardDockDeps {
   dimensions?: (event: Event) => void;
   /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
   turn?: () => void;
+  /** how many cards are pinned for the focused session: the leaf's too-short line names deciding one only when there is one */
+  pinned?: () => number;
   now?: () => number;
 }
 
@@ -248,6 +250,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       theme: d.theme(),
       load: d.load,
       cardFocused: d.cardFocused,
+      ...(d.pinned ? { pinned: d.pinned } : {}),
       onFold: (cause) => void fold(cause),
       // the list opens only on the person's own press (written as every other trusted-event check here is: `!== true`)
       ...(d.dimensions
