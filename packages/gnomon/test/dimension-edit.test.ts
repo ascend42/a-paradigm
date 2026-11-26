@@ -37,13 +37,13 @@ const agentOf = (hsid: string, turn = 1, agent = 'claude'): Record<string, strin
   turn: `turn:${hsid}/${turn}`,
 });
 
-async function editRig() {
+async function editRig(opts: { callTimeoutMs?: number; now?: () => number } = {}) {
   const r = modRig();
   cleanups.push(r.cleanup);
   installDimension(r);
-  const log = fakeLog();
+  const log = fakeLog(opts.now ? { now: opts.now } : {});
   const stateFile = path.join(hostDir(r.home, DIMENSION), 'state.db');
-  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: 30_000, focusRepo: (hsid) => REPOS[hsid] ?? null });
+  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: opts.callTimeoutMs ?? 30_000, focusRepo: (hsid) => REPOS[hsid] ?? null });
   cleanups.push(() => h.stopAll());
   await h.start(DIMENSION);
   const run = async (commandId: string, args: Record<string, unknown>, hsid: string | null = A, who: Record<string, unknown> = GUI): Promise<Res> =>
@@ -646,5 +646,139 @@ describe('#dimension-mod E1 item 8: Aegis conditions at the mod', () => {
     const chk = await w.run('dim.check', { dim });
     expect(chk.attr).toBe(dimAttrDigest(w.log.fold(dim)));
     expect(handsOf(await w.tool('dim-view', { dim }, agentOf(A, 3)), ulid(3))!.restoredFrom).toMatchObject({ id: ulid(1), by: { cls: 'agent', agent: 'claude' } });
+  });
+});
+
+describe('#dimension-mod E1 item 8: the pin rules at the model, on an explicit clock (Aegis G6, N1; the orchestrator\'s ruling)', () => {
+  const human = { cls: 'human', principal: HUMAN };
+  const stamp = (hsid: string, n: number) => ({ ...agentOf(hsid, n) });
+  type H = { sets: Map<string, { pinned: boolean }>; pins: string[] };
+  const setup = async () => {
+    const m = await loadModel();
+    const node = (id: string, by: unknown) => ({ node: { id, kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 }, by, hsid: A, addedSeq: 1 });
+    const nodes = new Map<string, unknown>([
+      [ulid(1), node(ulid(1), human)],
+      [ulid(2), node(ulid(2), { cls: 'agent', principal: agentOf(A).principal, agent: 'claude' })],
+    ]);
+    const state = { dim: dimId(1), title: 't', attached: [A, B], ended: false, nodes, gone: new Set(), seq: 1, ops: 0, unapplied: 0 };
+    const h = m.emptyHistory!('log:x') as H & Record<string, unknown>;
+    let seq = 10;
+    const note = (hsid: string, n: number, target: string, now: number) => m.noteHistoryRow!(h, state, { seq: ++seq, payload: { v: 1, dim: dimId(1), ops: [{ type: 'update', id: target, patch: { color: 'graphite' } }], relayedFor: stamp(hsid, n) } }, now);
+    const key = (hsid: string, n: number) => m.setKey!({ kind: 'turn', hsid, turn: `turn:${hsid}/${n}` }) as string;
+    return { m, h, note, key };
+  };
+  const NOW = 1_000_000_000;
+
+  it('a set that touched a person\'s marks is pinned with nobody present; an agent-on-agent set only while a person is present (or at their next command)', async () => {
+    const { m, h, note, key } = await setup();
+    note(B, 1, ulid(1), NOW); // B changes the person's mark: pinned, presence or not
+    note(B, 2, ulid(2), NOW); // B changes A's mark, nobody present: not pinned
+    expect([h.sets.get(key(B, 1))!.pinned, h.sets.get(key(B, 2))!.pinned]).toEqual([true, false]);
+    m.notePresence!(h, NOW + 1); // the person's next command pins it
+    expect(h.sets.get(key(B, 2))!.pinned).toBe(true);
+    note(B, 3, ulid(2), NOW + 2); // present now: pinned on landing
+    expect(h.sets.get(key(B, 3))!.pinned).toBe(true);
+    note(B, 4, ulid(2), NOW + 2 + 11 * 60 * 1000); // the person looked 11 minutes ago: not pinned (stated residual)
+    expect(h.sets.get(key(B, 4))!.pinned).toBe(false);
+  });
+
+  it('a ninth pin unpins the oldest, which stays held until normal eviction (N1); unpinSet releases one set only', async () => {
+    const { m, h, note, key } = await setup();
+    for (let t = 1; t <= 9; t++) note(B, t, ulid(1), NOW);
+    expect(h.pins).toHaveLength(8);
+    expect(h.sets.get(key(B, 1))!.pinned).toBe(false);
+    expect(h.sets.has(key(B, 1))).toBe(true);
+    for (let t = 1; t <= 40; t++) note(A, t, ulid(2), NOW + 20 * 60 * 1000); // A's own marks, nobody present
+    expect(h.sets.has(key(B, 1))).toBe(false);
+    for (let t = 2; t <= 9; t++) expect(h.sets.get(key(B, t))!.pinned).toBe(true);
+    expect(m.unpinSet!(h, key(B, 2))).toBe(true);
+    expect(m.unpinSet!(h, key(B, 2))).toBe(false);
+    expect(h.pins).toHaveLength(7);
+  });
+});
+
+describe('#dimension-mod E1 item 8: M3 with the history (Aegis G6 timing case)', () => {
+  it('32 checkpoints held across 8 loaded dimensions, one of 10,048 nodes: every draw while they are held, and the undo, answer inside the 5 s timeout', { timeout: 600_000 }, async () => {
+    // one board of 10,048 nodes (the M3 board) and seven of 64: 4 checkpoints each. Eight boards of 10,048 nodes in
+    // ONE log did not cold-open in this harness (measured: no answer in 120 s; a 1,000-row log page of them is about
+    // 7 MB; the cause is not traced, inferred to be the page size) - reported as an open residual
+    const w = await editRig({ callTimeoutMs: 5_000 });
+    let coldest = 0;
+    const gui = { principal: HUMAN, connId: GUI.connId, surface: 'gui' };
+    const dims: string[] = [];
+    for (let d = 1; d <= 8; d++) dims.push(await board(w, d));
+    for (const dim of dims) {
+      const rows = dim === dims[0] ? 157 : 1;
+      for (let r = 0; r < rows; r++) w.log.inject(DIM_KINDS.op, { v: 1, dim, ops: Array.from({ length: 64 }, (_, i) => rectOp(1000 + r * 64 + i)), relayedFor: gui });
+    }
+    await w.restart();
+    let slowest = 0;
+    const timed = async <T,>(f: () => Promise<T>): Promise<T> => {
+      const t0 = performance.now();
+      const out = await f();
+      slowest = Math.max(slowest, performance.now() - t0);
+      return out;
+    };
+    for (const dim of dims) {
+      const c0 = performance.now();
+      await w.tool('dim-view', { dim, limit: 1 }, agentOf(B, 1)); // the cold open
+      coldest = Math.max(coldest, performance.now() - c0);
+      for (let t = 1; t <= 4; t++) expect(await timed(() => draw(w, dim, B, 10 * dims.indexOf(dim) + t, [{ type: 'update', id: ulid(1000 + t), patch: { color: 'graphite' } }]))).toMatchObject({ ok: true });
+    }
+    // every one of the 8 folds is still loaded and holds its 4 checkpoints: the undo of the FIRST board's first set
+    const t0 = performance.now();
+    const u = await w.run('dim.undo', { dim: dims[0]!, of: turnOf(B, 1) });
+    const undoMs = performance.now() - t0;
+    expect(u).toMatchObject({ ok: true, applied: 1 });
+    expect(await timed(() => draw(w, dims[0]!, B, 99, [{ type: 'update', id: ulid(9000), patch: { color: 'graphite' } }]))).toMatchObject({ ok: true });
+    expect(slowest).toBeLessThan(5_000);
+    expect(undoMs).toBeLessThan(5_000);
+    // the measured numbers, for the E1 report, when asked for
+    if (process.env.E1_MEASURE) fs.appendFileSync(process.env.E1_MEASURE, `M3+history: slowest draw ${slowest.toFixed(0)} ms, undo ${undoMs.toFixed(0)} ms, slowest cold open ${coldest.toFixed(0)} ms\n`);
+  });
+});
+
+describe('#dimension-mod E1 item 8: a busy refusal mid-undo keeps the fold, and the continuation finishes (Arky §7 trap)', () => {
+  it('row 2 of an undo is refused APPEND_BUDGET: the answer says more, the fold is kept (no log read), and the next undo finishes with no mark twice', { timeout: 120_000 }, async () => {
+    let T = 0;
+    const w = await editRig({ now: () => T });
+    const dim = await board(w);
+    for (let k = 0; k < 3; k++) {
+      T += 2_000;
+      await w.run('dim.op', { dim, ops: [textOp(2 * k + 1, 'a'.repeat(4000)), textOp(2 * k + 2, 'b'.repeat(4000))] });
+    }
+    T += 2_000;
+    await draw(w, dim, B, 1, [1, 2, 3, 4, 5, 6].map((n) => ({ type: 'delete', id: ulid(n) })));
+    // a fresh window: 19 rows of the person's, so the undo's first row is the 20th and its second is refused
+    T += 2_000;
+    for (let i = 0; i < 19; i++) expect(await w.run('dim.op', { dim, ops: [rectOp(100 + i)] })).toMatchObject({ ok: true });
+    const u = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(u).toMatchObject({ ok: true, more: true });
+    const reads = w.log.reads.length;
+    expect(u.hash).toBe(dimHash(w.log.fold(dim)));
+    expect((await w.tool('dim-view', { dim }, agentOf(A, 2))).seq).toBe(w.log.fold(dim).seq);
+    expect(w.log.reads.length).toBe(reads); // the fold was kept: nothing was read again
+    T += 2_000;
+    const v = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(v).toMatchObject({ ok: true });
+    const back = [...w.log.fold(dim).nodes.values()].filter((n) => n.restoredFrom);
+    expect(back.map((n) => n.restoredFrom!.id).sort()).toEqual([1, 2, 3, 4, 5, 6].map((n) => ulid(n)));
+    // both calls are ONE change-set of the person: the continuation kept the first call's act
+    const acts = w.opRows().filter((r) => (r.payload as Record<string, unknown>).undo).map((r) => (r.payload as { act: string }).act);
+    expect(new Set(acts).size).toBe(1);
+  });
+});
+
+describe('#dimension-mod E1 item 8: source scan (Aegis G3): no op row is built from ops the validator did not accept', () => {
+  it('every opPayload in index.mjs is built from v.ok (dim.op, dim-draw) or from the undo plan, whose ops are planDimUndo\'s accepted batch', () => {
+    const src = fs.readFileSync(path.join(DIMENSION_TREE, 'index.mjs'), 'utf8');
+    const calls = src.split('\n').filter((l) => /opPayload\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    for (const l of calls) expect([l.trim(), /v\.ok|opPayload\(dim, ops, undefined, \{ act: o\.act, undo: marker\(ops\) \}\)/.test(l)]).toEqual([l.trim(), true]);
+    // the undo packer reads plan.ops only, and plan comes from planDimUndo alone
+    const core = src.slice(src.indexOf('async function undoCore('), src.indexOf('/** A draw that wrote no op row'));
+    expect(core.match(/const plan = planDimUndo\(/g)).toHaveLength(1);
+    expect(/plan\.ops\s*=|plan\.ops\.push|plan\.ops\.splice/.test(core)).toBe(false);
+    for (const m of core.matchAll(/payloadOf\(([^)]*)\)/g)) expect(['ops', 'ops, ', '[...cur, plan.ops[i]]'].includes(m[1]!.trim()) || m[1]!.includes('plan.ops')).toBe(true);
   });
 });
