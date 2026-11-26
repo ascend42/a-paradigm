@@ -88,6 +88,8 @@ export interface BoardLeaf {
   say(line: string): void;
   /** Held still: say the held line again (an Esc from outside the leaf that must not fold it). Nothing when not held. */
   sayHeld(): void;
+  /** Too short with words in an open text (design too_short, aegis C3_2): a fold now would lose them, so none folds it. */
+  holdsWords(): boolean;
   /** The height the board has now (the leaf less its head, keep line and foot): #gui-board-turn's room. */
   room(): number;
   /** Forget the copy register (the kernel link went down). */
@@ -286,6 +288,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   /** the board takes no input: a card has the keys, the board is held still, or it is too short to draw on */
   const yielded = (): boolean => load === 'ready' && (o.cardFocused() || inert !== null || tooShort);
   /** the too-short line now: words held in an open text first, then whether a card is pinned */
+  /** too short with words held in an open text: no fold may take them (aegis C3_2; ruled: the kept-open guard) */
+  const holdsWords = (): boolean => tooShort && !!boardField()?.value;
+  /** A fold the person asked for in the leaf (Esc, the head's esc key): refused, and the held line said, while words are held. */
+  const foldAsk = (e: Event): void => (holdsWords() ? say(shortLine()) : o.onFold?.(e));
   const shortLine = (): string => tooShortLine({ pinned: o.pinned?.() ?? 0, words: !!boardField()?.value });
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
@@ -781,7 +787,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const s = st();
     // held still (the link is down, the fold is out of date) Esc folds the leaf at once: there is no tool to leave
     // and the held-still line tells the person to fold (a text being typed while down keeps its field: guardTypedKey)
-    if (e.key === 'Escape' && (inert !== null || tooShort) && !o.cardFocused() && el.contains(active) && !(isField(active) && boardHost.contains(active))) return void o.onFold?.(e);
+    if (e.key === 'Escape' && (inert !== null || tooShort) && !o.cardFocused() && el.contains(active) && !(isField(active) && boardHost.contains(active))) return void foldAsk(e);
     // a field of the engine's own (a text being typed, a frame title being renamed) keeps every key
     if (isField(active) && boardHost.contains(active)) return;
     if (e.key === 'Escape' && !o.cardFocused() && el.contains(active) && !s?.editingText && (!s || s.tool === 'select')) {
@@ -932,7 +938,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (e.target instanceof HTMLTextAreaElement && boardHost.contains(e.target)) for (const fn of [...textOpen]) fn();
   }, true);
   headKey.addEventListener('click', (e) => (load === 'failed' ? start() : o.onDimensions?.(e)));
-  escKey.addEventListener('click', (e) => o.onFold?.(e));
+  escKey.addEventListener('click', foldAsk);
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
   // the rail key under the pointer and looped with the redraw's own refocus)
   const onFocus = (): void => void queueMicrotask(() => yielded() !== wasYielded && draw());
@@ -956,7 +962,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     room: () => boardHeight(),
     sayHeld() {
       if (inert) sayHeld(inertLine ?? INERT_COPY[inert]);
+      else if (holdsWords()) say(shortLine());
     },
+    holdsWords,
     forget,
     setInert(why) {
       if (why === inert) return;

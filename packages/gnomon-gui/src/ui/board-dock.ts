@@ -191,6 +191,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   /** held still (link down, out of date) with words or unsaved changes: Esc from outside and show chat never fold it */
   function keptOpen(): boolean {
     if (!cur) return false;
+    // too short with words in an open text: a fold would lose them (aegis C3_2; ruled: the same kept-open guard)
+    if (cur.leaf.holdsWords()) return true;
     const s = cur.session.status();
     return (s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0);
   }
@@ -327,6 +329,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     if (!c) return;
     // a fold is the person's own press or key, held still or not (Aegis L2)
     if (cause.isTrusted !== true) return;
+    // too short with words held in an open text: refused, and the held line said again (⌥B, the head's esc key)
+    if (c.leaf.holdsWords()) return c.leaf.sayHeld();
     const s = c.session.status();
     if (s.link === 'down' || !d.sessions.linked) {
       // nothing can be sent: the leaf folds here and the dimension stays open in the log. What goes with it is READ

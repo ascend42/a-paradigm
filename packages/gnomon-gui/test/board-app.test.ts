@@ -617,6 +617,31 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect((a.after as { active: string }).active).toMatch(/bd-turn-key/);
   }, 120_000);
 
+  it('P4b-4 too short in the app (aegis C3_1, C3_2 ruled, C3_4): a text open on the board when the pinned zone grows; keys typed across the change reach neither the text, a card nor the composer and focus stays; show chat and ⌥B do not fold the held words; a pending change still settles', async () => {
+    const SHORTEN = (on: boolean) => ({ read: `(() => { const p = document.getElementById('pinned'); const c = ${CUR}; if (${on}) p.style.paddingTop = Math.max(0, c.leaf.room() - 100) + 'px'; else p.style.paddingTop = ''; return 1; })()`, as: `short-${on}` });
+    const SEE = `(() => { const c = ${CUR}; const f = document.querySelector('.bd-host .bd-board textarea'); const k = ${A}.kernel; return { state: c ? c.leaf.state() : null, field: f ? f.value : null, focusIsField: !!f && document.activeElement === f, composer: document.getElementById('composer-text').value, approve: k.__approve.n, frames: k.__n.n, line: document.querySelector('.bd-host .bd-keep').textContent, open: !!c, pending: c ? c.session.status().pending : null, sameAsMod: c ? c.session.hash() === ${A}.mod.hash(c.session.dim) : null, rows: k.rows.filter((r) => String(r.event.kind).endsWith('dimension.op')).length }; })()`;
+    const see = (as: string) => ({ read: SEE, as });
+    const a = await real([
+      ...toIdle, ...typeBoard,
+      // C3_4: a change in flight when the board goes too short still settles and is stored
+      ...drawRect, SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short' && ${CUR}.session.status().pending === 0`, as: 'settled while too short', timeoutMs: 15_000 }, see('settled'), SHORTEN(false), { until: `${CUR}.leaf.state() !== 'too-short'`, as: 'room again' },
+      { press: '.bd-host [data-key="tool:text"]' }, { at: [200, 330], press: true }, { until: `!!document.querySelector('.bd-host .bd-board textarea')`, as: 'a text open' }, ...type('hello'), see('typing'),
+      SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short'`, as: 'too short' }, ...type('adyn'), { key: ' ' }, { key: 'Enter', text: '\r' }, { key: 'Escape' }, see('typed'),
+      { press: '#board-turn .bd-turn-key' }, { key: 'b', alt: true }, see('folds'),
+    ]);
+    expect(a.errors).toEqual([]);
+    type See = { state: string; field: string | null; focusIsField: boolean; composer: string; approve: number; frames: number; line: string; open: boolean; pending: number; sameAsMod: boolean; rows: number };
+    const S = (k: string): See => a[k] as See;
+    expect(S('settled')).toMatchObject({ state: 'too-short', pending: 0, sameAsMod: true });
+    expect(S('settled').rows).toBeGreaterThan(0);
+    expect(S('typing')).toMatchObject({ field: 'hello', focusIsField: true });
+    // C3_1: nothing typed in the change reached the text, a card or the composer, and focus did not move
+    expect(S('typed')).toMatchObject({ state: 'too-short', field: 'hello', focusIsField: true, composer: S('typing').composer, approve: S('typing').approve, frames: S('typing').frames });
+    expect(S('typed').line).toBe('No room to draw · your words are kept on this page');
+    // ruled C3_2: show chat and ⌥B refuse to fold while the words are held, and say so
+    expect(S('folds')).toMatchObject({ open: true, field: 'hello', frames: S('typing').frames, line: 'No room to draw · your words are kept on this page' });
+  }, 180_000);
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)

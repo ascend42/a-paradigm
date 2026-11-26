@@ -259,13 +259,14 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
   it('P4b-4 too short (REAL input, design too_short, aegis C3_1 to C3_6): the board is shown with no rail and the foot kept; no key reaches it; Esc folds; a press says the line; a text keeps its words; a drag in hand is said; crossing the floor speaks once', async () => {
     const SIZE = (room: number, as: string) => ({ await: `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const chrome = Math.round(host.getBoundingClientRect().height) - leaf.room(); host.style.height = (chrome + ${room}) + 'px'; await fr(); return leaf.room(); })()`, as });
     const LOOK = `(() => { const l = document.querySelector('#preview-board .bd-leaf'); const g = (q) => { const e = l.querySelector(q); const b = e.getBoundingClientRect(); return { shown: getComputedStyle(e).display !== 'none' && b.height > 0, h: Math.round(b.height) }; }; const f = l.querySelector('.bd-board textarea');
-      return { state: globalThis.gnomonPreviewLeaf.state(), rail: g('.bd-rail').shown, body: g('.bd-body'), foot: g('.bd-foot'), line: l.querySelector('.bd-keep').textContent, ink: l.querySelector('.bd-keep').classList.contains('bd-said-line'), spoken: l.querySelector('[role="status"]').textContent, tool: ${B}.state().tool, edits: globalThis.gnomonPreviewFixture ? globalThis.gnomonPreviewFixture.edits.length : null, folds: globalThis.gnomonPreviewFolds ?? 0, field: f ? f.value : null, inert: l.dataset.inert ?? '' }; })()`;
+      return { state: globalThis.gnomonPreviewLeaf.state(), rail: g('.bd-rail').shown, body: g('.bd-body'), foot: g('.bd-foot'), line: l.querySelector('.bd-keep').textContent, ink: l.querySelector('.bd-keep').classList.contains('bd-said-line'), spoken: l.querySelector('[role="status"]').textContent, tool: ${B}.state().tool, selected: ${B}.state().selected, edits: globalThis.gnomonPreviewFixture ? globalThis.gnomonPreviewFixture.edits.length : null, folds: globalThis.gnomonPreviewFolds ?? 0, field: f ? f.value : null, inert: l.dataset.inert ?? '', active: document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : null, inBoard: l.querySelector('.bd-board').contains(document.activeElement) }; })()`;
     const SPOKEN = { read: `(globalThis.__spoken = [], new MutationObserver(() => globalThis.__spoken.push(document.querySelector('#preview-board .bd-leaf [role="status"]').textContent)).observe(document.querySelector('#preview-board .bd-leaf [role="status"]'), { childList: true, characterData: true, subtree: true }), 1)`, as: 'observing' };
     const acted = (await real('open', [
       // (the keyboard is on the board first, as opening leaves it: the keys below must have somewhere to go)
       ERRORS, { read: `(${B}.focus(), document.querySelector('#preview-board .bd-board').contains(document.activeElement))`, as: 'focused' }, SIZE(130, 'room'), { read: LOOK, as: 'short' },
       // C3_1: a tool letter and a delete reach nothing; C3_3: a press on the board says the line again
-      { key: 'r' }, { key: 'Backspace' }, { at: [120, 40], press: true }, { read: LOOK, as: 'keys' },
+      // (⌘A is the engine's OWN key handler, which the engine's yield does not cover; a tool letter it already ignores)
+      { key: 'a', meta: true, commands: ['selectAll'] }, { key: 'r' }, { key: 'Backspace' }, { at: [120, 40], press: true }, { read: LOOK, as: 'keys' },
       // C3_6: crossing the floor back and forth (a turn strip row coming and going) speaks the line once
       SIZE(400, 'up'), { read: '(globalThis.__t = performance.now(), 1)', as: 't0' }, { until: 'performance.now() - globalThis.__t > 1600', as: 'the 1.5s since the last time the line was spoken' }, SPOKEN, SIZE(130, 'down1'), SIZE(400, 'up1'), SIZE(130, 'down2'), { read: 'globalThis.__spoken.filter(Boolean)', as: 'spoken' },
       // C3_3: Esc folds a board that is too short
@@ -273,17 +274,20 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       // C3_2: a text being typed keeps its words, held, while too short; they are said to be back when there is room
       SIZE(400, 'tall'), { key: 't' }, { at: [160, 120], press: true }, { wait: 300 }, ...[...'hello'].map((k) => ({ key: k, settle: 25 })), { read: LOOK, as: 'typing' },
       SIZE(130, 'shrunk'), ...[...'xyz'].map((k) => ({ key: k, settle: 25 })), { key: 'Escape' }, { read: LOOK, as: 'held' },
+      // ruled (C3_2): the head's esc key does not fold while the words are held; it says the held line again
+      { press: '#preview-board .bd-head [title^="Fold"]' }, { read: LOOK, as: 'escKey' },
       SIZE(400, 'back'), { read: LOOK, as: 'back' }, { at: [300, 40], press: true }, { wait: 500 }, { read: LOOK, as: 'committed' },
       // C3_5: a drag in hand when the board goes too short is put back and said
       { key: 'r' }, { hold: [[200, 60], [240, 90], [260, 110]] }, SIZE(130, 'mid-drag'), { release: [260, 110] }, { wait: 400 }, { read: LOOK, as: 'drag' },
       { read: 'globalThis.__errs', as: 'errors' },
     ], { width: 1024, height: 900 })) as Acted;
-    type Look = { state: string; rail: boolean; body: { shown: boolean; h: number }; foot: { shown: boolean; h: number }; line: string; ink: boolean; spoken: string; tool: string; edits: number | null; folds: number; field: string | null; inert: string };
+    type Look = { state: string; rail: boolean; body: { shown: boolean; h: number }; foot: { shown: boolean; h: number }; line: string; ink: boolean; spoken: string; tool: string; selected: number; edits: number | null; folds: number; field: string | null; inert: string };
     const L = (k: string): Look => acted[k] as Look;
     expect(acted.errors).toEqual([]);
     expect(L('short')).toMatchObject({ state: 'too-short', rail: false, body: { shown: true }, foot: { shown: true, h: 32 }, ink: true, inert: '' });
     expect(L('short').line).toMatch(/^No room to draw · /);
     expect(acted.focused).toBe(true);
+    expect(L('keys').selected).toBe(L('short').selected);
     expect(L('keys').tool).toBe(L('short').tool);
     expect(L('keys').edits).toBe(L('short').edits);
     expect(L('keys').spoken).toBe(L('short').line);
@@ -291,6 +295,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(L('esc').folds).toBe(1);
     expect(L('typing').field).toBe('hello');
     expect(L('held')).toMatchObject({ field: 'hello', line: 'No room to draw · your words are kept on this page', edits: L('typing').edits });
+    expect(L('escKey')).toMatchObject({ folds: L('esc').folds, field: 'hello', line: 'No room to draw · your words are kept on this page' });
     expect(L('back').field).toBe('hello');
     expect(L('back').line).toBe('Your words are back · click away to save them');
     expect(L('committed').edits).toBeGreaterThan(L('back').edits!);
