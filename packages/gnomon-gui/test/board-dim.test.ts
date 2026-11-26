@@ -517,7 +517,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
       { read: `document.querySelectorAll('#preview-board .bd-over .bd-seal').length`, as: 'sealsUnhovered' },
       { at: [300, 210], move: true }, { wait: 200 },
       { read: rect('#preview-board .bd-over .bd-seal'), as: 'sealAtRest' }, { read: rect('#preview-board .bd-stage'), as: 'stage' },
-      { read: `document.querySelector('#preview-board .bd-over .bd-hand-chip')?.textContent ?? null`, as: 'chip' },
+      { read: `document.querySelector('#preview-board .bd-over .chip')?.textContent ?? null`, as: 'chip' },
       // pan left by hand until the first point is out of view
       { press: '#preview-board [data-key="tool:hand"]' }, { drag: [[500, 380], [400, 380], [300, 380], [200, 380]] }, { wait: 250 },
       { read: `${B}.view().scrollX`, as: 'scrollX' },
@@ -530,8 +530,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
     expect(a.chip).toBe('arky');
     const stage = a.stage as number[];
     const rest = a.sealAtRest as number[];
-    // at rest: left of the first point (stage x 60), 2px clear of it, not on it
-    expect(rest[2]! - stage[0]!).toBeLessThanOrEqual(60 - 1);
+    // hovered (Mika R1): beside the first run, above the line (the run climbs from y 200 to 210; its middle is at y 205), never on the first point
+    expect(rest[3]! - stage[1]!).toBeLessThanOrEqual(204); // the line's upper edge at the run's middle (y 205, fine)
+    expect(rest[0]! - stage[0]! > 60 || rest[2]! - stage[0]! < 60 || rest[3]! - stage[1]! < 200).toBe(true);
     expect(a.scrollX as number).toBeLessThan(-100);
     const panned = a.sealPanned as number[];
     expect(a.seals).toBe(1);

@@ -243,6 +243,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       project: info.project,
       projectHue: info.hue,
       session: info.name,
+      // a hand's session in the selection line and the foot: the page's own name for it, never the fold's
+      sessionName: (hsid: string) => d.sessionInfo(hsid).name || null,
       how: o.how,
       time: `${two(t.getHours())}:${two(t.getMinutes())}`,
       theme: d.theme(),

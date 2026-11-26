@@ -27,6 +27,8 @@ export interface BoardLeafOptions {
   /** the project swatch's hue class (h0 … h5), as elsewhere in the console */
   projectHue?: string;
   session: string;
+  /** (design author-seal session_hint; Mika R5) the page's own name for a host session id, null when it does not know it */
+  sessionName?: (hsid: string) => string | null;
   more?: number;
   how: OpenedHow;
   agent?: string;
@@ -318,7 +320,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       return void keep.append(keepShown);
     }
     // one selected mark of another hand: its whole line takes the RESTING line's place only (design author-seal naming.selection)
-    selLine = handle && handle.isAlive() ? selectionLine(handle.marks()) : null;
+    selLine = handle && handle.isAlive() ? selectionLine(handle.marks(), o.sessionName) : null;
     keepResting = true;
     if (selLine) {
       keep.title = selLine;
@@ -564,7 +566,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(r);
       } else if (it.type === 'chip') {
         // the hand's name, a bidi-isolated text node cut at 24 characters; the name is the authority
-        const c = h('span', 'bd-hand-chip', {}, h('bdi', '', {}, handName(it.name)));
+        const c = h('span', 'chip', {}, h('bdi', '', {}, handName(it.name)));
         place(c, it.left, it.top - 9);
         kids.push(c);
       } else if (it.type === 'seal') {
@@ -600,7 +602,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
   function drawFoot(): void {
     const kids: Node[] = [];
-    for (const f of handle && handle.isAlive() ? footHands(handle.marks()) : [{ hand: 'you' as const, n: 0 }]) {
+    for (const f of handle && handle.isAlive() ? footHands(handle.marks(), o.sessionName) : [{ hand: 'you' as const, n: 0 }]) {
       if (f.hand === 'you') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin inline', { 'aria-hidden': 'true' }), ` you ${f.n}`));
       else if (f.hand === 'agent') {
         const name = h('bdi', '', { title: f.session ? `${f.name}, ${f.session}` : f.name }, handName(f.name));
@@ -693,7 +695,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       // change, and only while it shows the resting or selection line: a draw() or drawHead() here moved focus
       // during a fold (board-app Aegis L2)
       if (keepResting && handle?.isAlive()) {
-        const line = selectionLine(handle.marks());
+        const line = selectionLine(handle.marks(), o.sessionName);
         if (line !== null && line !== selLine) {
           selLine = line;
           keep.title = line;

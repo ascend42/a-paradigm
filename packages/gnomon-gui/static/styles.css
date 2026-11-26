@@ -1926,9 +1926,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-ring{position:absolute;width:6px;height:6px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--ink);background:var(--sheet);pointer-events:none}
 [data-theme="night"] .bd-ring{background:var(--ground)}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
-.bd-hand-chip{position:absolute;height:18px;line-height:16px;box-sizing:border-box;padding:0 4px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);font-family:var(--mono);font-size:var(--fs-label);white-space:nowrap;pointer-events:none}
-[data-theme="night"] .bd-hand-chip{background:var(--ground)}
 .bd-hand-s{color:var(--sec)}
+.bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}
+[data-theme="night"] .bd-over .chip{background:var(--ground)}
 .bd-stage > .bd-tray { position: absolute; left: 8px; top: 8px; z-index: 3; max-width: calc(100% - 16px); box-sizing: border-box; }
 .bd-tr { flex-wrap: wrap; }
 .bd-tr .bd-wn { font-size: var(--fs-label); color: var(--sec); margin-left: 4px; }

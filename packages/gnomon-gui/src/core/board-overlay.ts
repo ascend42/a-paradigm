@@ -148,8 +148,12 @@ const widthOf = (m: Pick<BoardMarkView, 'strokeWidth'>): number => (typeof m.str
  */
 export function tooSmall(m: Pick<BoardMarkView, 'kind' | 'width' | 'height' | 'strokeWidth'>, zoom: number): boolean {
   const open = m.kind === 'stroke' || m.kind === 'arrow';
-  const run = open ? Math.max(m.width, m.height) : Math.min(m.width, m.height);
-  return run < 10 * widthOf(m) || run * zoom < DASH_FLOOR_RUN_PX;
+  const run = (open ? Math.max(m.width, m.height) : Math.min(m.width, m.height)) * zoom;
+  // a frame's dash is 6 on, 4 off on the SCREEN whatever its weight (patch frame-edge-dashed)
+  if (m.kind === 'frame') return run < 20;
+  // (Mika L1) the period exactly as painted: 2w on, 3w off in board units, each part floored at 4px and 3px on the screen
+  const wz = widthOf(m) * zoom;
+  return run < 2 * (Math.max(2 * wz, 4) + Math.max(3 * wz, 3));
 }
 
 /**
@@ -157,7 +161,9 @@ export function tooSmall(m: Pick<BoardMarkView, 'kind' | 'width' | 'height' | 's
  * line, 5px off the middle of its first run, square to it, on its upper side (the left side for an upright run),
  * clamped into view. Never at the seal point, which is inside whatever an arrow starts from.
  */
-export function lineRingPoint(m: Pick<BoardMarkView, 'firstX' | 'firstY' | 'secondX' | 'secondY'>, view: BoardView): { left: number; top: number } {
+export function lineRingPoint(m: Pick<BoardMarkView, 'firstX' | 'firstY' | 'secondX' | 'secondY' | 'strokeWidth'>, view: BoardView, half: number = RING_HALF): { left: number; top: number } {
+  // (Mika R3) measured from the line's EDGE, not its centre: a marker's half width is 4px at 100%
+  const off = half + 2 + (widthOf(m) * view.zoom) / 2;
   const a = toScreen(view, m.firstX, m.firstY);
   const b = m.secondX !== undefined && m.secondY !== undefined ? toScreen(view, m.secondX, m.secondY) : a;
   const dx = b.left - a.left;
@@ -167,9 +173,11 @@ export function lineRingPoint(m: Pick<BoardMarkView, 'firstX' | 'firstY' | 'seco
   let ny = len === 0 ? -1 : dx / len;
   // the upper side; for an upright run (a normal with no up or down in it) the left side
   if (ny > 1e-9 || (Math.abs(ny) <= 1e-9 && nx > 0)) [nx, ny] = [-nx, -ny];
-  const at = { left: (a.left + b.left) / 2 + nx * RING_OFF, top: (a.top + b.top) / 2 + ny * RING_OFF };
-  return { left: Math.min(view.width - RING_HALF, Math.max(RING_HALF, at.left)), top: Math.min(view.height - RING_HALF, Math.max(RING_HALF, at.top)) };
+  const at = { left: (a.left + b.left) / 2 + nx * off, top: (a.top + b.top) / 2 + ny * off };
+  return { left: Math.min(view.width - half, Math.max(half, at.left)), top: Math.min(view.height - half, Math.max(half, at.top)) };
 }
+/** (Mika R1) where a hovered or selected stroke's or arrow's seal or hollow pin stands: beside its first run, as the ring, never on the line or inside the shape an arrow starts from. */
+export const lineSealPoint = (m: Pick<BoardMarkView, 'firstX' | 'firstY' | 'secondX' | 'secondY' | 'strokeWidth'>, view: BoardView, half: number): { left: number; top: number } => lineRingPoint(m, view, half);
 
 /** The on-screen height of a text mark's letters. */
 export const letterPx = (m: Pick<BoardMarkView, 'textSize'>, zoom: number): number => (typeof m.textSize === 'number' ? m.textSize : 13.5) * zoom * CAP_HEIGHT;
@@ -199,6 +207,11 @@ export interface OverlayOptions {
 
 /** The chip stands this far to the right of the centre of the seal or hollow pin it names. */
 export const CHIP_OFF = SEAL_HALF + 4;
+/** The system chip (static/styles.css .chip): mono 10.5 (advance 0.6em), 6px padding, 1px edge, 18px tall. */
+export const CHIP_ADVANCE = 6.3;
+export const chipWidth = (name: string): number => Math.ceil([...name].length * CHIP_ADVANCE + 2 * 6 + 2);
+/** (Mika L2) a SELECTED mark's seal or hollow pin stands clear of the engine's corner handles: right − 7, bottom + 7. */
+export const SELECTED_OFF = 7;
 
 /**
  * Everything the host draws over the marks, in paint order. `left`/`top` of a pin, hollow pin, seal or ring is the
@@ -212,14 +225,22 @@ export const CHIP_OFF = SEAL_HALF + 4;
 export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, opts: OverlayOptions = {}): OverlayItem[] {
   const out: OverlayItem[] = [];
   const low = view.zoom < LOW_ZOOM;
+  // (Mika R2) the chip is kept whole in view: past the right edge it stands to the LEFT of its seal; its top is clamped
+  const chip = (id: string, at: { left: number; top: number }, half: number, name: string): void => {
+    const shown = handName(name);
+    const w = chipWidth(shown);
+    const right = at.left + half + 4;
+    const left = right + w > view.width - 4 ? at.left - half - 4 - w : right;
+    out.push({ type: 'chip', id, left: Math.max(4, left), top: Math.min(view.height - 9, Math.max(9, at.top)), name });
+  };
   const named = (m: BoardMarkView, at: { left: number; top: number }, on: 'pin' | 'text' | 'mark', shown: boolean, half: number): void => {
     if (m.author.cls === 'agent') {
       const name = boardAgentName(m.author.name);
       out.push({ type: 'seal', id: m.id, ...at, seal: sealOf(m.author.id, name), name, on });
-      if (shown) out.push({ type: 'chip', id: m.id, left: at.left + Math.max(half, SEAL_HALF) + 4, top: at.top, name });
+      if (shown) chip(m.id, at, Math.max(half, SEAL_HALF), name);
     } else if (m.author.cls === 'unknown') {
       out.push({ type: 'hollow', id: m.id, ...at });
-      if (shown) out.push({ type: 'chip', id: m.id, left: at.left + PIN_HALF + 4, top: at.top, name: 'unknown hand' });
+      if (shown) chip(m.id, at, PIN_HALF, 'unknown hand');
     }
   };
   for (const m of marks) {
@@ -240,8 +261,10 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
         out.push({ type: 'textbox', id: m.id, form, left: box.left - TEXTBOX_PAD, top: box.top - TEXTBOX_TOP, width: box.width + 2 * TEXTBOX_PAD, height: box.height + TEXTBOX_TOP + TEXTBOX_PAD });
         named(m, { left: head.left, top: head.top - TEXTBOX_TOP }, 'text', shown, SEAL_HALF);
       } else if (form === 'tight') {
-        out.push({ type: 'textbox', id: m.id, form, left: box.left - TEXTBOX_TIGHT, top: box.top - TEXTBOX_TIGHT, width: box.width + 2 * TEXTBOX_TIGHT, height: box.height + 2 * TEXTBOX_TIGHT });
-        out.push({ type: 'ring', id: m.id, left: head.left, top: box.top - TEXTBOX_TIGHT });
+        // (Mika R4) 2px on the sides and the foot; the top gives the ring its half and 2px so it never touches a letter
+        const top = RING_HALF + 2;
+        out.push({ type: 'textbox', id: m.id, form, left: box.left - TEXTBOX_TIGHT, top: box.top - top, width: box.width + 2 * TEXTBOX_TIGHT, height: box.height + TEXTBOX_TIGHT + top });
+        out.push({ type: 'ring', id: m.id, left: head.left, top: box.top - top });
       } else {
         const y = box.top + box.height + 1;
         out.push({ type: 'textbox', id: m.id, form, left: box.left, top: y, width: Math.max(1, box.width), height: 1 });
@@ -250,7 +273,8 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
     } else if (hand !== 'you') {
       const line = m.kind === 'stroke' || m.kind === 'arrow';
       const pinHalf = hand === 'agent' ? SEAL_HALF : PIN_HALF;
-      if (shown) named(m, markSealPoint(m, view, pinHalf), 'mark', true, pinHalf);
+      const selectedAt = (): { left: number; top: number } => ({ left: box.left + box.width - SELECTED_OFF, top: box.top + box.height + SELECTED_OFF });
+      if (shown) named(m, line ? lineSealPoint(m, view, pinHalf) : m.selected && m.kind !== 'frame' ? selectedAt() : markSealPoint(m, view, pinHalf), 'mark', true, pinHalf);
       else if (low || tooSmall(m, view.zoom)) out.push({ type: 'ring', id: m.id, ...(line ? lineRingPoint(m, view) : markSealPoint(m, view, RING_HALF)) });
       else if (SEAL_ALWAYS.has(m.kind) || !ENGINE_DASHES.has(m.kind)) named(m, markSealPoint(m, view, pinHalf), 'mark', false, pinHalf);
     }
@@ -263,16 +287,25 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
  * naming.selection): '<name> · ◇ <session>' (the fold carries no time for a mark yet, so no 'hh:mm'). Null for any
  * other selection. The session is cut at 16 characters.
  */
-export function selectionLine(marks: readonly BoardMarkView[]): string | null {
+export function selectionLine(marks: readonly BoardMarkView[], sessionName?: SessionNameOf): string | null {
   const picked = marks.filter((m) => m.selected && !m.labelOf);
   if (picked.length !== 1) return null;
   const a = picked[0]!.author;
   if (a.cls === 'human') return null;
   const name = a.cls === 'agent' ? boardAgentName(a.name) : 'unknown hand';
-  const session = a.cls === 'agent' && a.session ? sessionShort(a.session) : null;
+  const session = a.cls === 'agent' && a.session ? sessionLabel(a.session, sessionName) : null;
   return session ? `${name} · ◇ ${session}` : name;
 }
 
+/** The page's own name for a host session id, or null when the page does not know that session (never from the fold). */
+export type SessionNameOf = (hsid: string) => string | null;
+/** The short id shown for a session this page does not know (design author-seal session_hint.unknown_session). */
+export const hsidShort = (hsid: string): string => sanitizeDisplayText(String(hsid)).text.replace(/[^A-Za-z0-9-]/g, '').slice(-8);
+/** (Mika R5) a session as a line or the foot shows it: its name, cut at 16, or its short id when the page does not know it. */
+export const sessionLabel = (hsid: string, sessionName?: SessionNameOf): string => {
+  const name = sessionName?.(hsid);
+  return name ? sessionShort(name) : hsidShort(hsid);
+};
 /** A session's name in any line: cut at 16 characters (design author-seal session_hint). */
 export const SESSION_MAX = 16;
 export const sessionShort = (session: string): string => {
@@ -290,7 +323,7 @@ export type FootHand = { hand: 'you'; n: number } | { hand: 'agent'; id: string;
  * principal plus agent (handKey), so two sessions' agents are two hands; when two agent hands would read the same
  * name, each carries its session (design author-seal session_hint), from the first of its marks.
  */
-export function footHands(marks: readonly BoardMarkView[]): FootHand[] {
+export function footHands(marks: readonly BoardMarkView[], sessionName?: SessionNameOf): FootHand[] {
   let you = 0;
   let unknown = 0;
   const agents = new Map<string, { name: string; n: number; session?: string }>();
@@ -308,7 +341,7 @@ export function footHands(marks: readonly BoardMarkView[]): FootHand[] {
   for (const a of agents.values()) names.set(a.name, (names.get(a.name) ?? 0) + 1);
   return [
     { hand: 'you', n: you },
-    ...[...agents].map(([id, a]) => ({ hand: 'agent' as const, id, name: a.name, n: a.n, seal: sealOf(id, a.name), ...((names.get(a.name) ?? 0) > 1 && a.session ? { session: sessionShort(a.session) } : {}) })),
+    ...[...agents].map(([id, a]) => ({ hand: 'agent' as const, id, name: a.name, n: a.n, seal: sealOf(id, a.name), ...((names.get(a.name) ?? 0) > 1 && a.session ? { session: sessionLabel(a.session, sessionName) } : {}) })),
     ...(unknown > 0 ? [{ hand: 'unknown' as const, n: unknown }] : []),
   ];
 }

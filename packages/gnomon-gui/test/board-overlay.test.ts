@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { BoardAuthor, BoardMarkView, BoardView } from '../src/core/board.js';
-import { boardAgentName, CHIP_OFF, ENGINE_DASHES, FRAME_NARROW, handKey, hoveredMark, letterPx, lineRingPoint, LOW_ZOOM, PIN_HALF, RING_OFF, SEAL_ALWAYS, selectionLine, sessionShort, tooSmall, footHands, handName, handOf, isScrap, markBox, markSealPoint, overlayItems, SEAL_GAP, SEAL_HALF, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
+import { boardAgentName, CHIP_OFF, chipWidth, hsidShort, lineSealPoint, SELECTED_OFF, sessionLabel, RING_HALF, ENGINE_DASHES, FRAME_NARROW, handKey, hoveredMark, letterPx, lineRingPoint, LOW_ZOOM, PIN_HALF, RING_OFF, SEAL_ALWAYS, selectionLine, sessionShort, tooSmall, footHands, handName, handOf, isScrap, markBox, markSealPoint, overlayItems, SEAL_GAP, SEAL_HALF, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
 import { sealOf } from '../src/core/board-seal.js';
 
 const VIEW: BoardView = { scrollX: 0, scrollY: 0, zoom: 1, width: 800, height: 600 };
@@ -46,13 +46,17 @@ describe('#gui-board the three hands', () => {
   it('ink drawn on the desk has no pin; an agent\'s shape or arrow shows its seal just off its first point only while selected', () => {
     expect(overlayItems([mark({ id: 'r', kind: 'rect' }), mark({ id: 'f', kind: 'frame' }), mark({ id: 't', kind: 'text' })], VIEW)).toEqual([]);
     expect(overlayItems([mark({ id: 'r', kind: 'arrow', author: ARKY, firstX: 130, firstY: 70 })], VIEW)).toEqual([]);
-    const at = markSealPoint(mark({ id: 'r', kind: 'arrow', firstX: 130, firstY: 70 }), VIEW);
-    // selected: the full seal and the name as a chip beside it (design author-seal naming)
+    // selected: the full seal BESIDE the first run (Mika R1: never inside the shape an arrow starts from), the name as a chip beside it
+    const at = lineSealPoint(mark({ id: 'r', kind: 'arrow', firstX: 130, firstY: 70 }), VIEW, SEAL_HALF);
     expect(overlayItems([mark({ id: 'r', kind: 'arrow', author: ARKY, firstX: 130, firstY: 70, selected: true })], VIEW)).toEqual([{ type: 'seal', id: 'r', ...at, seal: sealOf('arky', 'Arky'), name: 'Arky', on: 'mark' }, { type: 'chip', id: 'r', left: at.left + CHIP_OFF, top: at.top, name: 'Arky' }]);
     // the unknown hand's 8px pin stands its own half plus the gap off the mark: about half a seal's distance
     const pin = markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW, PIN_HALF);
     const seal = markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW);
-    expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY, selected: true })], VIEW)).toEqual([{ type: 'hollow', id: 'r', ...pin }, { type: 'chip', id: 'r', left: pin.left + PIN_HALF + 4, top: pin.top, name: 'unknown hand' }]);
+    // (Mika L2) a SELECTED shape's hollow pin stands clear of the engine's corner handles: right − 7, bottom + 7
+    const sel = { left: 100 + 120 - SELECTED_OFF, top: 50 + 80 + SELECTED_OFF };
+    expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY, selected: true })], VIEW)).toEqual([{ type: 'hollow', id: 'r', ...sel }, { type: 'chip', id: 'r', left: sel.left + PIN_HALF + 4, top: sel.top, name: 'unknown hand' }]);
+    // hovered (not selected) it stays at its seal point
+    expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY })], VIEW, { hovered: 'r' })[0]).toEqual({ type: 'hollow', id: 'r', ...pin });
     const first = { left: (mark({ id: 'r', kind: 'rect' }).firstX + VIEW.scrollX) * VIEW.zoom, top: (mark({ id: 'r', kind: 'rect' }).firstY + VIEW.scrollY) * VIEW.zoom };
     const far = (q: { left: number; top: number }): number => Math.hypot(q.left - first.left, q.top - first.top);
     expect(far(pin)).toBeCloseTo(PIN_HALF + SEAL_GAP, 5);
@@ -95,10 +99,9 @@ describe('#gui-board where a drawn mark\'s seal stands (review batch C1)', () =>
     expect(overlayItems([stroke({ author: ARKY })], view)).toEqual([]);
     const [seal] = overlayItems([stroke({ author: ARKY, selected: true })], view) as Array<{ type: string; left: number; top: number }>;
     expect(seal!.type).toBe('seal');
-    // 2px clear of the first point, on the far side from the second: the seal's rim, 11 from its centre, stops 2 short
-    expect(seal!.left).toBeCloseTo(200 - (SEAL_HALF + SEAL_GAP));
-    expect(seal!.top).toBeCloseTo(220);
-    expect(Math.hypot(seal!.left - 200, seal!.top - 220) - SEAL_HALF).toBeCloseTo(SEAL_GAP);
+    // (Mika R1) beside the middle of the first run (200..210 at y 220), on its upper side, its rim 2px clear of the line's edge
+    expect(seal!.left).toBeCloseTo(205);
+    expect(seal!.top).toBeCloseTo(220 - (SEAL_HALF + 2 + 1));
     // a 6px stroke is not hidden: the seal's box does not reach its first point
     const tiny = markSealPoint(stroke({ width: 6, height: 0, y: 220, secondX: 206, secondY: 220 }), view);
     expect(tiny.left + SEAL_HALF).toBeLessThanOrEqual(200 - SEAL_GAP + 1e-9);
@@ -196,10 +199,17 @@ describe('#gui-board S1.4 P4a: the ring, the too-small rule, the text forms, hov
   it('an arrow\'s and a stroke\'s ring stands 5px off the middle of its first run, square to it, on its upper side (left for an upright run)', () => {
     const v = at(1);
     expect(RING_OFF).toBe(5);
-    expect(lineRingPoint({ firstX: 100, firstY: 100, secondX: 140, secondY: 100 }, v)).toEqual({ left: 120, top: 95 });
-    expect(lineRingPoint({ firstX: 140, firstY: 100, secondX: 100, secondY: 100 }, v)).toEqual({ left: 120, top: 95 });
-    expect(lineRingPoint({ firstX: 100, firstY: 100, secondX: 100, secondY: 160 }, v)).toEqual({ left: 95, top: 130 });
-    expect(lineRingPoint({ firstX: 100, firstY: 160, secondX: 100, secondY: 100 }, v)).toEqual({ left: 95, top: 130 });
+    // fine (2 units): the edge is 1px off the centre at 100%, so the ring's centre is 6 off
+    expect(lineRingPoint({ firstX: 100, firstY: 100, secondX: 140, secondY: 100 }, v)).toEqual({ left: 120, top: 94 });
+    expect(lineRingPoint({ firstX: 140, firstY: 100, secondX: 100, secondY: 100 }, v)).toEqual({ left: 120, top: 94 });
+    expect(lineRingPoint({ firstX: 100, firstY: 100, secondX: 100, secondY: 160 }, v)).toEqual({ left: 94, top: 130 });
+    expect(lineRingPoint({ firstX: 100, firstY: 160, secondX: 100, secondY: 100 }, v)).toEqual({ left: 94, top: 130 });
+    // (Mika R3) a marker (8 units): 4px of line, then the ring's half and 2px: clear of the line at 100% and at 40%
+    for (const z of [1, 0.4]) {
+      const r = lineRingPoint({ firstX: 100, firstY: 100, secondX: 200, secondY: 100, strokeWidth: 8 }, at(z));
+      const lineTop = 100 * z - (8 * z) / 2;
+      expect(lineTop - (r.top + RING_HALF), `zoom ${z}`).toBeCloseTo(2);
+    }
   });
   it('agent text is never an empty box and never neither form: box at 50% and over, tight under, a rule under 4px letters, PER MARK (Aegis ruling 2)', () => {
     const t = (textSize: number): BoardMarkView => mark({ id: 't', kind: 'text', author: ARKY, textSize });
@@ -234,7 +244,12 @@ describe('#gui-board S1.4 P4a: the ring, the too-small rule, the text forms, hov
   });
   it('one selected mark of another hand: the whole line \'<name> · ◇ <session>\'; several, or yours: no line', () => {
     const claude: BoardAuthor = { cls: 'agent', id: handKey('p:gnomon/s1', 'claude'), name: 'claude', principal: 'p:gnomon/s1', session: 'a-very-long-session-name-here' };
-    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })])).toBe(`claude · ◇ ${sessionShort('a-very-long-session-name-here')}`);
+    // (Mika R5) the page's NAME for the session, cut at 16; a session the page does not know: its short id
+    const names = (h: string): string | null => (h === 'a-very-long-session-name-here' ? 'Totals are off by a cent' : null);
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })], names)).toBe(`claude · ◇ ${sessionShort('Totals are off by a cent')}`);
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })])).toBe(`claude · ◇ ${hsidShort('a-very-long-session-name-here')}`);
+    expect(hsidShort('a-very-long-session-name-here')).toBe('ame-here');
+    expect(sessionLabel('h1', () => 'fix-auth')).toBe('fix-auth');
     expect([...sessionShort('a-very-long-session-name-here')]).toHaveLength(16);
     expect(selectionLine([mark({ id: 'a', kind: 'rect', author: NOBODY, selected: true })])).toBe('unknown hand');
     expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true }), mark({ id: 'b', kind: 'rect', author: claude, selected: true })])).toBe(null);
@@ -245,12 +260,48 @@ describe('#gui-board S1.4 P4a: the ring, the too-small rule, the text forms, hov
     expect(handKey('p:a', 'bclaude')).not.toBe(handKey('p:ab', 'claude'));
     const c1: BoardAuthor = { cls: 'agent', id: handKey('p:a', 'claude'), name: 'claude', session: 'fix-auth' };
     const c2: BoardAuthor = { cls: 'agent', id: handKey('p:b', 'claude'), name: 'claude', session: 'billing-ui' };
-    const feet = footHands([mark({ id: '1', kind: 'rect', author: c1 }), mark({ id: '2', kind: 'rect', author: c2 }), mark({ id: '3', kind: 'rect', author: c1 })]);
+    const feet = footHands([mark({ id: '1', kind: 'rect', author: c1 }), mark({ id: '2', kind: 'rect', author: c2 }), mark({ id: '3', kind: 'rect', author: c1 })], (h) => h);
     expect(feet.map((f) => (f.hand === 'agent' ? `${f.name}:${f.session}:${f.n}` : f.hand))).toEqual(['you', 'claude:fix-auth:2', 'claude:billing-ui:1']);
     // seals differ by input (cut or bead may still collide: the session's name is what tells them apart)
     const [, f1, f2] = feet as Array<{ seal: { cut: string; bead: number } }>;
     expect(f1!.seal).not.toBe(f2!.seal);
     // one Claude alone: no hint
     expect((footHands([mark({ id: '1', kind: 'rect', author: c1 })])[1] as { session?: string }).session).toBeUndefined();
+  });
+});
+
+describe('#gui-board S1.4 P4a after Mika\'s review (R2, R4, L1)', () => {
+  const at = (zoom: number, width = 800): BoardView => ({ scrollX: 0, scrollY: 0, zoom, width, height: 600 });
+  it('R2: the chip is kept whole in view: near the right edge it stands to the left of its seal', () => {
+    const long = { cls: 'agent' as const, id: 'x', name: 'a-very-long-agent-name-that-runs-to-48-characters' };
+    const m = mark({ id: 'r', kind: 'rect', author: long, x: 700, y: 100, width: 80, height: 40, firstX: 700, firstY: 100, selected: false });
+    const items = overlayItems([m], at(1), { hovered: 'r' });
+    const seal = items.find((i) => i.type === 'seal') as { left: number };
+    const chip = items.find((i) => i.type === 'chip') as { left: number; name: string };
+    const w = chipWidth(handName(chip.name));
+    expect(chip.left + w).toBeLessThanOrEqual(800 - 4);
+    expect(chip.left + w).toBeLessThanOrEqual(seal.left);
+    // with room it stays on the right
+    const near = overlayItems([{ ...m, x: 100, firstX: 100 }], at(1), { hovered: 'r' }).find((i) => i.type === 'chip') as { left: number };
+    expect(near.left).toBeGreaterThan(100);
+  });
+  it('R4: under 50% the tight box gives the ring its half and 2px above the letters; 2px on the sides and foot', () => {
+    const t = mark({ id: 't', kind: 'text', author: ARKY, textSize: 13.5, x: 100, y: 100, width: 100, height: 20 });
+    const items = overlayItems([t], at(0.41));
+    const box = items.find((i) => i.type === 'textbox') as { top: number; left: number; height: number; form: string };
+    const ring = items.find((i) => i.type === 'ring') as { top: number };
+    expect(box.form).toBe('tight');
+    const lettersTop = 100 * 0.41;
+    expect(lettersTop - (ring.top + RING_HALF)).toBeCloseTo(2);
+    expect(box.left).toBeCloseTo(100 * 0.41 - 2);
+    expect(box.top + box.height).toBeCloseTo((100 + 20) * 0.41 + 2);
+  });
+  it('L1: the too-small run is two periods AS PAINTED, floors included; a frame\'s is 20px on the screen', () => {
+    const s = (len: number, w = 2): BoardMarkView => mark({ id: 's', kind: 'stroke', width: len, height: 0, strokeWidth: w });
+    // fine at 75%: max(3,4) + max(4.5,3) = 8.5px a period, so a run under 17px (22.6 units) rings
+    expect(tooSmall(s(22), 0.75)).toBe(true);
+    expect(tooSmall(s(23), 0.75)).toBe(false);
+    expect(tooSmall(mark({ id: 'f', kind: 'frame', width: 100, height: 79 }), 0.25)).toBe(true);
+    expect(tooSmall(mark({ id: 'f', kind: 'frame', width: 100, height: 80 }), 0.25)).toBe(false);
   });
 });
