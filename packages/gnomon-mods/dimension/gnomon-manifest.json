@@ -3,7 +3,7 @@
   "kind": "mod",
   "publisher": "gnomon",
   "name": "dimension",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "abi": "mod-abi:v1",
   "description": "Dimensions (spec §12.7): the one writer of dimension rows. Every op is checked by dim-shape:v1 before it is appended. A person on the Gnomon window draws through the commands; an attached session's agent reads with dim-view and, while the person lets it, draws with dim-draw.",
   "provides": {

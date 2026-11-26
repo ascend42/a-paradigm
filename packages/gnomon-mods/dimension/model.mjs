@@ -15,6 +15,7 @@ import {
   DIM_ROW_VERSION,
   DIM_VIEW_PRINCIPAL_PATTERN,
   DIM_Z_PATTERN,
+  dimAttrDigest,
   dimGrantDefault,
   dimHash,
   dimViewOf,
@@ -368,16 +369,68 @@ function decodeAux(aux) {
   return { grants, oids };
 }
 
+/** Keyframe format. v3 (S1.4 E1) adds each node's attribution; a v1 or v2 keyframe is ignored and rebuilt from the log. */
+export const KEYFRAME_VERSION = 3;
+
+/**
+ * A node's attribution as a keyframe item holds it (S1.4 E1; Aegis P5 gate): `null` when the fold holds none, else
+ * an object of own keys only, each present only when the fold holds it: `cb`/`cs`/`ch` (changedBy, changedSeq,
+ * changedHsid), `ob`/`os` (otherBy, otherSeq), `wb`/`ws` (wordsBy, wordsSeq) and `rf` ([id, by], restoredFrom).
+ */
+function attrOf(n) {
+  const a = {};
+  if (n.changedBy !== undefined) (a.cb = n.changedBy), (a.cs = n.changedSeq ?? 0), (a.ch = n.changedHsid ?? null);
+  if (n.otherBy !== undefined) (a.ob = n.otherBy), (a.os = n.otherSeq ?? 0);
+  if (n.wordsBy !== undefined) (a.wb = n.wordsBy), (a.ws = n.wordsSeq ?? 0);
+  if (n.restoredFrom !== undefined) a.rf = [n.restoredFrom.id, n.restoredFrom.by];
+  return Object.keys(a).length > 0 ? a : null;
+}
+const ATTR_KEYS = ['cb', 'cs', 'ch', 'ob', 'os', 'wb', 'ws', 'rf'];
+const seqOk = (v) => Number.isSafeInteger(v) && v >= 0;
+/** The fold fields of a keyframe item's attribution, `{}` for `null`, or `null` when anything about it is wrong. */
+function attrFrom(v) {
+  if (v === null) return {};
+  const a = plain(v);
+  if (!a || Object.keys(a).length === 0 || !Object.keys(a).every((k) => ATTR_KEYS.includes(k))) return null;
+  const out = {};
+  const pair = (byKey, seqKey, byField, seqField) => {
+    const has = Object.hasOwn(a, byKey);
+    if (has !== Object.hasOwn(a, seqKey)) return false;
+    if (!has) return true;
+    const by = byOk(a[byKey]);
+    if (!by || !seqOk(a[seqKey])) return false;
+    out[byField] = by;
+    out[seqField] = a[seqKey];
+    return true;
+  };
+  if (!pair('cb', 'cs', 'changedBy', 'changedSeq') || !pair('ob', 'os', 'otherBy', 'otherSeq') || !pair('wb', 'ws', 'wordsBy', 'wordsSeq')) return null;
+  if (Object.hasOwn(a, 'ch') !== Object.hasOwn(a, 'cb')) return null;
+  if (Object.hasOwn(a, 'ch')) {
+    if (!(a.ch === null || typeof a.ch === 'string')) return null;
+    out.changedHsid = a.ch;
+  }
+  if (Object.hasOwn(a, 'rf')) {
+    const rf = a.rf;
+    const by = Array.isArray(rf) && rf.length === 2 && typeof rf[0] === 'string' ? byOk(rf[1]) : null;
+    if (!by) return null;
+    out.restoredFrom = { id: rf[0], by };
+  }
+  return out;
+}
+
 /**
  * A state as a keyframe: a head and chunks of at most KEYFRAME_CHUNK_BYTES each. `hash` is the published
  * `dimHash`; `sum` covers every stored field, the log id included, so a damaged chunk or head is found. `null` above KEYFRAME_MAX_BYTES.
  * Keyframe `v: 2` (S1.4): the head also carries `aux`, the write grants (`[hsid, write, seq]`) and the op-id memo
  * (`[oid, applied, seq]`, the newest MEMO_CAP). Both are covered by `sum` and so by the log id: a grant's high-water
  * seq is a seq of ONE log, and a keyframe written for another log is refused whole, grants included.
+ * Keyframe `v: 3` (S1.4 E1): a node item is `['n', id, node, by, hsid, addedSeq, attr]` (`attrOf`), so the sum, and
+ * so the log id, covers attribution too; the head carries `attr` (`dimAttrDigest`) beside `hash`, and a decoded
+ * state must answer both, so a keyframe whose attribution does not match its own digest is refused whole.
  */
 export function encodeKeyframe(state, log, aux) {
   const items = [];
-  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq]);
+  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq, attrOf(n)]);
   for (const id of state.gone) items.push(['g', id]);
   const chunks = [];
   let cur = [];
@@ -397,21 +450,22 @@ export function encodeKeyframe(state, log, aux) {
   }
   if (cur.length > 0) chunks.push(cur);
   const meta = { dim: state.dim, title: state.title, attached: [...state.attached], ended: state.ended, ops: state.ops, unapplied: state.unapplied };
-  const head = { v: 2, log, seq: state.seq, hash: dimHash(state), n: chunks.length, bytes: total, meta, aux: encodeAux(aux) };
+  const head = { v: KEYFRAME_VERSION, log, seq: state.seq, hash: dimHash(state), attr: dimAttrDigest(state), n: chunks.length, bytes: total, meta, aux: encodeAux(aux) };
   return { head: { ...head, sum: sumOf(JSON.stringify([head, chunks])) }, chunks };
 }
 
 /**
  * What a stored keyframe holds, `{ state, grants, oids }`, or `null` when anything about it is wrong (it is then
  * ignored and rebuilt from the log). A `v: 1` keyframe (S1.3) carries no grants and no memo: it is ignored, never
- * read as "no grant rows".
+ * read as "no grant rows". A `v: 2` keyframe (S1.4 P2) carries no attribution: it is ignored too, never read as
+ * "nobody changed anything" (the view, `attr` and the undo planner's `restoredFrom` would all misattribute).
  */
 export function decodeKeyframe(headIn, chunks, dim, log) {
   try {
     const h = plain(headIn);
     // a keyframe is a fold of ONE log's rows: another log's seqs mean nothing here (Aegis S1.3 L1)
     if (!h || typeof log !== 'string' || own(h, 'log') !== log) return null;
-    if (own(h, 'v') !== 2 || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
+    if (own(h, 'v') !== KEYFRAME_VERSION || !Number.isSafeInteger(own(h, 'seq')) || typeof own(h, 'hash') !== 'string' || typeof own(h, 'attr') !== 'string' || typeof own(h, 'sum') !== 'string') return null;
     const m = plain(own(h, 'meta'));
     if (!m || own(m, 'dim') !== dim || typeof own(m, 'title') !== 'string' || typeof own(m, 'ended') !== 'boolean') return null;
     const attached = own(m, 'attached');
@@ -419,7 +473,7 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
     if (!Array.isArray(chunks) || chunks.length !== own(h, 'n')) return null;
     const aux = decodeAux(own(h, 'aux'));
     if (!aux) return null;
-    const head = { v: 2, log, seq: h.seq, hash: h.hash, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied }, aux: encodeAux(aux) };
+    const head = { v: KEYFRAME_VERSION, log, seq: h.seq, hash: h.hash, attr: h.attr, n: h.n, bytes: own(h, 'bytes'), meta: { dim: m.dim, title: m.title, attached: [...attached], ended: m.ended, ops: m.ops, unapplied: m.unapplied }, aux: encodeAux(aux) };
     if (sumOf(JSON.stringify([head, chunks])) !== h.sum) return null;
     const nodes = new Map();
     const gone = new Set();
@@ -430,13 +484,16 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
         if (it[0] === 'g') gone.add(it[1]);
         else if (it[0] === 'n') {
           const by = byOk(it[3]);
-          if (!plain(it[2]) || !by || !(it[4] === null || typeof it[4] === 'string') || !Number.isSafeInteger(it[5])) return null;
-          nodes.set(it[1], { node: it[2], by, hsid: it[4], addedSeq: it[5] });
+          if (it.length !== 7 || !plain(it[2]) || !by || !(it[4] === null || typeof it[4] === 'string') || !Number.isSafeInteger(it[5])) return null;
+          const attr = attrFrom(it[6]);
+          if (attr === null) return null;
+          nodes.set(it[1], { node: it[2], by, hsid: it[4], addedSeq: it[5], ...attr });
         } else return null;
       }
     }
     const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
-    return dimHash(state) === h.hash ? { state, grants: aux.grants, oids: aux.oids } : null;
+    // the content and adder by the published hash, the attribution by the published digest (Aegis G7, P5 gate)
+    return dimHash(state) === h.hash && dimAttrDigest(state) === h.attr ? { state, grants: aux.grants, oids: aux.oids } : null;
   } catch {
     return null;
   }

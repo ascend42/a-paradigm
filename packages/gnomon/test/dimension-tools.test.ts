@@ -170,7 +170,7 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
     ]);
   });
 
-  it('the keyframe (v 2) carries the grant map and op-id memo, is bound to its log id, and a v 1 keyframe is ignored, never read as "no grants"', async () => {
+  it('the keyframe (v 3 since S1.4 E1) carries the grant map and op-id memo, is bound to its log id, and a v 1 keyframe is ignored, never read as "no grants"', async () => {
     const m = await loadModel();
     const state: DimState = { dim: 'dim:x', title: 't', attached: [A, B], ended: false, nodes: new Map(), gone: new Set(), seq: 9, ops: 0, unapplied: 0 };
     const grants = new Map([
@@ -179,7 +179,7 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
     ]);
     const oids = new Map([['0123456789abcdef', { applied: 3, seq: 9 }]]);
     const enc = m.encodeKeyframe!(state, 'log:a', { grants, oids }) as { head: Record<string, unknown>; chunks: unknown[] };
-    expect(enc.head.v).toBe(2);
+    expect(enc.head.v).toBe(3);
     const dec = m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as { state: DimState; grants: Map<string, unknown>; oids: Map<string, unknown> };
     expect(dimHash(dec.state)).toBe(dimHash(state));
     expect([...dec.grants.entries()]).toEqual([...grants.entries()]);
@@ -201,7 +201,7 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
     const dim = await board(w);
     await w.run('dim.grant', { dim, write: true }, B);
     const head = w.state()[`kf:${dim.slice(4)}`] as { v: number; aux: { grants: unknown[] } };
-    expect(head.v).toBe(2);
+    expect(head.v).toBe(3);
     expect(head.aux.grants).toEqual([[B, true, w.rowsOf(DIM_AUX_KINDS.grant)[0]!.seq]]);
     await w.restart();
     const re = await w.run('dim.open', { dim, opened: 'menu' });
