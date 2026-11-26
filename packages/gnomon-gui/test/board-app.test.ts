@@ -715,6 +715,24 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(b.opened).toBe('plan B');
   }, 300_000);
 
+  it('aegis re-check of F2: in the COMMAND palette ArrowDown moves the highlight with the selection, and Enter runs the command that is highlighted', async () => {
+    const SEL = `(() => { const rows = [...document.querySelectorAll('#palette-list [data-id]')]; return { ids: rows.map((r) => r.dataset.id), sel: rows.findIndex((r) => r.classList.contains('sel')) }; })()`;
+    const a = await real([
+      { key: 'k', meta: true }, { until: `!document.getElementById('palette').hidden`, as: 'the palette open' }, ...type('theme'), { read: SEL, as: 's0' },
+      { key: 'ArrowDown' }, { read: SEL, as: 's1' }, { key: 'Enter' }, { until: `document.getElementById('palette').hidden`, as: 'the command ran' },
+      { read: `document.documentElement.dataset.theme ?? null`, as: 'theme' },
+    ]);
+    expect(a.errors).toEqual([]);
+    const s0 = a.s0 as { ids: string[]; sel: number };
+    const s1 = a.s1 as { ids: string[]; sel: number };
+    expect(s0.ids.length).toBeGreaterThanOrEqual(2);
+    expect(s0.sel).toBe(0);
+    expect(s1.sel).toBe(1);
+    const chosen = s1.ids[1]!;
+    expect(chosen).toMatch(/^theme\./);
+    expect(a.theme).toBe(chosen.slice('theme.'.length));
+  }, 120_000);
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)

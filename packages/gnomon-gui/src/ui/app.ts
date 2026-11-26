@@ -4624,10 +4624,15 @@ function wire(): void {
     paintPalette();
   });
   $('palette-input').addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') palSel = Math.min(palSel + 1, (palDims ?? palItems).length - 1);
-    else if (e.key === 'ArrowUp') palSel = Math.max(palSel - 1, 0);
-    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && palDims) palSelDim = palDims[palSel]?.dim ?? null;
-    else if (e.key === 'Enter' && palDims) {
+    // (one else-chain: the arrows of BOTH palettes reach the preventDefault and the repaint below; the Dimensions
+    // list also keeps its selection by dim, aegis F2 and its re-check)
+    if (e.key === 'ArrowDown') {
+      palSel = Math.min(palSel + 1, (palDims ?? palItems).length - 1);
+      if (palDims) palSelDim = palDims[palSel]?.dim ?? null;
+    } else if (e.key === 'ArrowUp') {
+      palSel = Math.max(palSel - 1, 0);
+      if (palDims) palSelDim = palDims[palSel]?.dim ?? null;
+    } else if (e.key === 'Enter' && palDims) {
       // a row of the Dimensions list opens on THIS press (attach then open when it is not this session's)
       const row = palDims[palSel];
       e.preventDefault();
