@@ -5,8 +5,9 @@
  * @a-company/gnomon-contracts), the mod runtime `serveMod` (runtime.ts, also
  * built as the single vendorable file dist/runtime.js) and the example mod
  * (example/hello). M1.11 slice 1. Slice 2: the fixture/golden test harness,
- * `gnomon mod new|types|test` scaffolding, link/dev tooling and the
- * per-session `gnomon-mods` MCP bridge (writes `inject.receipt`).
+ * `gnomon mod new|types|test` scaffolding and link/dev tooling. The per-session
+ * `gnomon-mods` bridge is NOT here: the kernel answers it (#mod-tool-bridge,
+ * packages/gnomon/src/kernel/modhost/mcp-bridge.ts, Dimensions S1.4).
  */
 export { MOD_ABI_V1, MOD_ABI_ID, MOD_ABI_RPCS, MOD_ABI_LIFECYCLE, MOD_ABI_DESCRIPTOR, MOD_EFFECTS, MOD_BLOCK_LIMITS, KIT_V1_BLOCKS } from '@a-company/gnomon-contracts';
 export type { ModEffect, RelayedFor, ToolRelayedFor, ModRpcDescriptor } from '@a-company/gnomon-contracts';

@@ -56,6 +56,7 @@ import {
   type ProvisionEvent,
   type ProvisionOutcome,
 } from '../kernel/identity/index.js';
+import { isReservedPrincipalName } from '../kernel/identity/registry.js';
 import { daemonState, resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import { bundledHelperPath, helperPathFor } from '../kernel/lifecycle/app-bundle.js';
 
@@ -110,7 +111,7 @@ export function defaultHelperPath(metaUrl: string = import.meta.url): string {
 
 export function sanitizeName(s: string): string {
   const n = s.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[^a-z0-9]+/, '').slice(0, 64);
-  return PRINCIPAL_NAME_PATTERN.test(n) ? n : 'founder';
+  return PRINCIPAL_NAME_PATTERN.test(n) && !isReservedPrincipalName(n) ? n : 'founder';
 }
 
 export function sanitizeHost(s: string): string {
@@ -151,6 +152,7 @@ function parse(argv: readonly string[]): InitArgs | string {
     } else if (a === '--name') {
       const n = v();
       if (!n || !PRINCIPAL_NAME_PATTERN.test(n)) return '--name must match [a-z0-9][a-z0-9._-]{0,63}';
+      if (isReservedPrincipalName(n)) return `--name ${n} is reserved for the kernel; choose another`;
       out.name = n;
     } else if (a === '--host') {
       const n = v();

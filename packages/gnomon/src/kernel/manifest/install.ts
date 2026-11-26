@@ -176,6 +176,15 @@ export function isSupersededPin(packageHash: string): boolean {
 export function isRetiredPin(packageHash: string): boolean {
   return RETIRED_FIRST_PARTY_PINS.has(packageHash);
 }
+/**
+ * Is this package hash one of the kernel's CURRENT first-party pins (S1.4, #mod-tool-bridge; Aegis A7, I1)? A
+ * superseded pin and a historical format-1 pin keep their first-party TIER, so an old install still loads, and a
+ * retired pin is refused everywhere; none of the three is current. THE one definition: a tool is offered to an
+ * agent only from a tree at a current pin, so an older first-party tree with tools is not drawable after a fix.
+ */
+export function isCurrentFirstPartyPin(packageHash: string): boolean {
+  return isFirstPartyPin(packageHash) && !isSupersededPin(packageHash) && !isRetiredPin(packageHash) && !isHistoricalFirstPartyPin(packageHash);
+}
 /** The ONE prior `modAbiId` listed for a superseded pin, or null. */
 export function supersededPriorModAbiId(packageHash: string): string | null {
   return SUPERSEDED_FIRST_PARTY_PINS.get(packageHash) ?? null;

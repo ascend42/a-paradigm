@@ -195,6 +195,8 @@ process.stdin.on('data', (c) => {
       if (mode.permissionAsk.hold) continue;
       perm.turnDone = () => {
         out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: perm.denied.splice(0), result: 'ok' });
+        // permissionAsk.afterResult: lines written AFTER the turn's result (a background sub-agent finishing late)
+        for (const l of mode.permissionAsk.afterResult ?? []) out(l);
       };
       finishPerm();
       continue;

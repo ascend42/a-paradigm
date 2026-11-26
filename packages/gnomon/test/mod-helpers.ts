@@ -17,6 +17,7 @@ import { noEvents } from '../src/kernel/manifest/refusal.js';
 import { snapshotFolder } from '../src/kernel/manifest/snapshot.js';
 import { createModHostForTest, decideInstallCard, mintTestPresence } from '../src/kernel/testing.js';
 import type { ModHostOptions, ModHostSeams } from '../src/kernel/modhost/host.js';
+import { createModBridge, type ModBridge, type ModBridgeOptions, type ModBridgeSeams } from '../src/kernel/modhost/mcp-bridge.js';
 import { PKG_ROOT } from './helpers.js';
 
 export const SDK_RUNTIME = path.resolve(PKG_ROOT, '..', 'gnomon-mod-sdk', 'dist', 'runtime.js');
@@ -151,6 +152,12 @@ export function installFirstParty(r: Rig, m: ManifestV2 = firstPartyProbeManifes
   if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: read.manifestHash, capabilities: [...caps] });
   appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
   return name;
+}
+
+/** createModBridge with the test seams (`allow`, `currentPin`) taken out of one options object, as the tests write it. */
+export function testModBridge(o: ModBridgeOptions & ModBridgeSeams): ModBridge {
+  const { allow, currentPin, ...rest } = o;
+  return createModBridge(rest, { ...(allow ? { allow } : {}), ...(currentPin ? { currentPin } : {}) });
 }
 
 export function host(r: Rig, seams: ModHostSeams = {}, over: Partial<ModHostOptions> = {}) {
