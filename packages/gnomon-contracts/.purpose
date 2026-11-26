@@ -283,6 +283,10 @@ components:
 
   contract-dim-shape:
     description: >-
+      S1.4 E1 (Aegis, defence in depth): the fold keeps goneBy (the original
+      hand of each deleted id, outside the hash and the digest); a restored
+      entry gives restoredFrom only for an old id deleted before that row with
+      that same hand (test/dim-edit-anything.test.ts, the G5 chain and Q-b).
       S1.4 EDIT-ANYTHING (pass E0; TD-2026-11-26-715/-241/-310, Aegis
       rulings 2-4): dimMayEdit(actor) replaces the owner rule (any human with a
       principal or agent with principal and label may edit any core mark; fails
