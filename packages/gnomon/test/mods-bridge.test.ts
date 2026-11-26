@@ -14,7 +14,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PRINCIPAL_KINDS } from '@a-company/gnomon-contracts';
 import { readDeskMods } from '../src/kernel/desk/mcp-passthrough.js';
 import { deviceRowFor, RESERVED_PRINCIPAL_NAMES, resolveRegistryText } from '../src/kernel/identity/registry.js';
-import { mintReadToken, readTokensPath, resolveReadTokensText } from '../src/kernel/identity/read-token.js';
 import { historicalFirstPartyPins, isHistoricalFirstPartyPin } from '../src/kernel/manifest/grants.js';
 import { firstPartyPins, isCurrentFirstPartyPin as pinRuleOfInstall, isFirstPartyPin, isRetiredPin, isSupersededPin, retiredPins, supersededPins } from '../src/kernel/manifest/install.js';
 import { writePause } from '../src/kernel/modhost/control.js';
@@ -633,16 +632,7 @@ describe('#mod-tool-bridge: the receipt principal is reserved (Aegis A2)', () =>
     const resolved = resolveRegistryText(`${lineOf(forged)}\n`, r.auth);
     expect(resolved.devices.size).toBe(0);
     expect(resolved.rejected).toEqual([{ line: 1, reason: 'principal-reserved' }]);
-    // a read token: the mint THROWS, and a hand-signed mint row for the name is rejected by the reader
-    expect(() => mintReadToken(r.home, r.auth, { principalId: `p:${ns}/mods-mcp` })).toThrow(TypeError);
-    expect(fs.existsSync(readTokensPath(r.home))).toBe(false);
-    const minted = mintReadToken(r.home, r.auth, { principalId: `p:${ns}/founder` });
-    const goodRow = (JSON.parse(fs.readFileSync(readTokensPath(r.home), 'utf8').trim()) as { row: Record<string, unknown> }).row;
-    expect(goodRow.principalId).toBe(minted.principalId);
-    const forgedToken = { ...goodRow, tokenId: 'rtk:01HZZZZZZZZZZZZZZZZZZZZZZZ', principalId: `p:${ns}/mods-mcp` };
-    const tokens = resolveReadTokensText(`${lineOf(goodRow)}\n${lineOf(forgedToken)}\n`, r.auth);
-    expect([...tokens.tokens.values()].map((t) => t.principalId)).toEqual([`p:${ns}/founder`]);
-    expect(tokens.rejected).toEqual([{ line: 2, reason: 'principal' }]);
+    // a read token: test/mods-bridge-reserved.test.ts (it mints into a home with POSIX key-file modes, darwin and linux)
     // a session principal is p:<ns>/s-<16 chars> and a mod's is p:<ns>/mod-<id>: neither form can be the name
     expect(/^s-/.test(MOD_BRIDGE_PRINCIPAL_NAME) || /^mod-/.test(MOD_BRIDGE_PRINCIPAL_NAME)).toBe(false);
     for (const cls of ['human', 'agent', 'mod', 'voice'] as const) {
