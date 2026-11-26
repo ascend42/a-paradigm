@@ -278,6 +278,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
 
   // ── head and keep line ───────────────────────────────────────────────────
   function drawHead(state: LeafState): void {
+    keepResting = false;
     const failed = state === 'failed';
     headKey.textContent = failed ? LEAF_COPY.tryAgain : LEAF_COPY.dimensions;
     // the key opens the same list as /boards (the design's words); a leaf nobody gave a list to draws it disabled
@@ -318,6 +319,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     }
     // one selected mark of another hand: its whole line takes the RESTING line's place only (design author-seal naming.selection)
     selLine = handle && handle.isAlive() ? selectionLine(handle.marks()) : null;
+    keepResting = true;
     if (selLine) {
       keep.title = selLine;
       return void keep.append(h('bdi', '', {}, selLine));
@@ -687,8 +689,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       sceneFrame = 0;
       drawOver();
       drawFoot();
-      // the selection line follows a selection that moved from one mark to another
-      if (handle?.isAlive() && selectionLine(handle.marks()) !== selLine) draw();
+      // the selection line follows a selection that moved from one mark to another. Only the keep line's words
+      // change, and only while it shows the resting or selection line: a draw() or drawHead() here moved focus
+      // during a fold (board-app Aegis L2)
+      if (keepResting && handle?.isAlive()) {
+        const line = selectionLine(handle.marks());
+        if (line !== null && line !== selLine) {
+          selLine = line;
+          keep.title = line;
+          keep.replaceChildren(h('bdi', '', {}, line));
+        }
+      }
     });
   };
   // the pointer over a mark of another hand gives back its seal and name (design author-seal naming.hover): the
@@ -696,6 +707,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let pointerAt: { left: number; top: number } | null = null;
   let hovered: string | null = null;
   let selLine: string | null = null;
+  /** the keep line shows the resting line or the selection line (nothing else would give way to the selection line) */
+  let keepResting = false;
   let hoverFrame = 0;
   const hoverSoon = (): void => {
     if (hoverFrame) return;
