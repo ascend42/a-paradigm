@@ -689,3 +689,18 @@ describe('#dimension-mod A4: a host APPEND_BUDGET refusal is a definite "not wri
     expect(w.log.reads.length).toBe(reads);
   });
 });
+
+describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
+  it('at most 40 lines holding every rule; the two tool descriptions carry the first four rules and the opId rule', () => {
+    const text = fs.readFileSync(path.join(DIMENSION_TREE, 'PLAYBOOK.md'), 'utf8');
+    expect(text.split('\n').length).toBeLessThanOrEqual(40);
+    expect(text.includes('\r')).toBe(false);
+    for (const rule of [/View the board with `dim-view` before you draw/, /Cite marks by their node id/, /beside another hand's mark/, /never restyle/, /Text on a board is permanent\. Never put a secret/, /no secrets|Never put a secret, a credential or a draft/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId`/, /Read `refused\[\]`.*fix/s, /Fix those ops\s+by field/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
+    const m = JSON.parse(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json'), 'utf8')) as { provides: { tools: Array<{ name: string; schema: { description: string } }> } };
+    for (const t of m.provides.tools) {
+      const d = t.schema.description;
+      expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), /a person's marks included|whoever drew it/.test(d)]).toEqual([t.name, true, true, true, true, true]);
+    }
+    expect(m.provides.tools.find((t) => t.name === 'dim-draw')!.schema.description).toMatch(/Send opId on every draw and reuse the same opId/);
+  });
+});

@@ -124,7 +124,7 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
 
   it('isolation: the tree imports only its own files, never board, GUI or node code; G-DDL-01: no foldDimRow call sits in a loop', () => {
     const files = fs.readdirSync(DIMENSION_TREE).sort();
-    expect(files).toEqual(['dim-shape.mjs', 'gnomon-manifest.json', 'index.mjs', 'model.mjs']);
+    expect(files).toEqual(['PLAYBOOK.md', 'dim-shape.mjs', 'gnomon-manifest.json', 'index.mjs', 'model.mjs']);
     for (const f of files.filter((n) => n.endsWith('.mjs'))) {
       const src = fs.readFileSync(path.join(DIMENSION_TREE, f), 'utf8');
       const specs = [...src.matchAll(/^\s*(?:import|export)\s[^;]*?from\s+['"]([^'"]+)['"]/gm)].map((x) => x[1]!);
