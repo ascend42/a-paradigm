@@ -3082,4 +3082,8 @@ components:
 # with who (agent, self, person, unknown); a refused check stays due; resize/rotate/typing/restyle read 'changing'.
 # Not built (recorded): the '+<k> ▾' hands menu: with two agents at a 1024 window or three at 1440 a key is still
 # clipped (a todo test pins it). Held words of a text whose mark another hand removed are NOT kept (aegis N-4, stated).
+# Round 2 (Mika F1-a, F1-b, F3-a; Aegis F-1, F-2): the not-running note gives way first, then sessions are cut, then
+# the shared name goes on every hand showing a session at once, then sessions from the last hand back; a hand whose
+# words went carries them in title=. The 4ch count slot is only for 'you' and keyed hands. An unsure key is settled
+# only by a grant row for its session later than its send point, or an answer at or after it.
 # Tests: test/dim-grant.test.ts, test/board-grant-key.test.ts.
