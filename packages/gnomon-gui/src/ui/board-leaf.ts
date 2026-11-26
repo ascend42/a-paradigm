@@ -433,7 +433,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (tray.hidden) return void (trayKey = '');
     const style = s!.style;
     // the tray is rebuilt only when what it shows has changed: a focus move must not replace a field being typed in
-    const key = JSON.stringify([style, s!.tool === 'stroke', theme]);
+    const key = JSON.stringify([style, s!.tool, theme]);
     if (key === trayKey) return;
     trayKey = key;
     // each row is ONE tab stop; the arrow keys move within it (design content-tray: a radiogroup per row)
@@ -491,7 +491,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       answer.replaceChildren();
       if (!hexText.trim()) return;
       // one well per role the colour passes for: "use as line", "use as fill". Nothing is applied until one is pressed.
-      const entries = (['line', 'fill'] as const).map((role) => ({ role, c: customEntry(hexText, role) }));
+      // judged as the tool would draw it: a text mark's colour at the text floor, each colour against the other
+      const drawsFill = s!.tool === 'rect' || s!.tool === 'ellipse' || s!.tool === 'sticky';
+      const fillNow = s!.tool === 'sticky' ? (style.fill ?? CONTENT_DEFAULTS.stickyFill) : drawsFill ? style.fill : null;
+      const ctx = (role: 'line' | 'fill') => ({ text: s!.tool === 'text', other: role === 'line' ? fillNow : drawsFill ? style.line : null });
+      const entries = (['line', 'fill'] as const).map((role) => ({ role, c: customEntry(hexText, role, ctx(role)) }));
       const passing = entries.filter((e) => e.c.ok);
       for (const { role, c } of passing) {
         if (!c.ok) continue;

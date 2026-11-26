@@ -4,9 +4,10 @@
  * The content tray's model (design component content-tray): which wells each row offers, and what a typed custom
  * colour becomes. PURE: no DOM. Every colour question goes to the ONE shared check in gnomon-contracts
  * (`contentColourCheck`): a colour that fails is refused with the nearest named swatch offered, never applied and
- * never stepped towards a passing one (Aegis ruling 3).
+ * never stepped towards a passing one (Aegis ruling 3). The same row serves the contrast refusals of
+ * content_palette.contrast_rule, with their own words and their own offered swatch.
  */
-import { CONTENT_MIN_DISTANCE, CONTENT_NEUTRALS, CONTENT_RESERVED_COLOURS, CONTENT_SWATCHES, colourDistanceQSq, contentColourCheck, LAB_QUANTUM, nightOf, type ContentRole } from '@a-company/gnomon-contracts';
+import { CONTENT_MIN_DISTANCE, CONTENT_NEUTRALS, CONTENT_RESERVED_COLOURS, CONTENT_SWATCHES, colourDistanceQSq, contentColourCheck, contentContrastWords, contentPairCheck, LAB_QUANTUM, nightOf, type ContentRole } from '@a-company/gnomon-contracts';
 import type { BoardWeight } from './board.js';
 
 /** line: ink, graphite, then the hues that have a line value (lemon has none). */
@@ -36,19 +37,36 @@ function nearestReserved(hex: string, theme: 'day' | 'night'): { name: string; d
 }
 
 /**
+ * What the colour is drawn on: `text` when the tool draws a text mark (its colour is read as words: the 4.5
+ * floor), and `other`, the mark's other colour as the tool would draw it (the fill when a line is typed, the line
+ * when a fill is typed), against which contrast_rule.pair judges the typed one.
+ */
+export interface CustomContext {
+  text?: boolean;
+  other?: string | null;
+}
+
+/**
  * What a typed hex becomes for `role`. Passing: the storable token, its night values and the line the tray prints
  * ('custom · at night #… as a line, #… as a fill'). Failing: nothing to store; why in plain words, and the nearest
  * named swatch to offer ('✕ not used · <why>', then one quiet key 'Use <swatch>').
  */
-export function customEntry(text: string, role: ContentRole): CustomEntry {
+export function customEntry(text: string, role: ContentRole, ctx: CustomContext = {}): CustomEntry {
   const m = /^#?([0-9A-Fa-f]{6})$/.exec(text.trim());
   if (!m) return { ok: false, why: 'six hex digits make a colour, like #00897B', offer: null, line: '✕ not used · six hex digits make a colour, like #00897B' };
   const hex = `#${m[1]!.toUpperCase()}`;
   const token = `custom:${hex}`;
-  const check = contentColourCheck(token, role);
+  const use = { text: role === 'line' && !!ctx.text };
+  const alone = contentColourCheck(token, role, use);
+  const check = alone.ok && ctx.other ? (role === 'line' ? contentPairCheck(token, ctx.other, 'line', use) : contentPairCheck(ctx.other, token, 'fill', use)) : alone;
   if (check.ok) {
     const night = { line: nightOf(hex, 'line'), fill: nightOf(hex, 'fill') };
     return { ok: true, token, hex, night, line: `custom · at night ${night.line} as a line, ${night.fill} as a fill` };
+  }
+  // the contrast rule: its own words, ' at night' when only the night value fails, and its own offer
+  if (check.why) {
+    const why = contentContrastWords(check.why, !!check.night);
+    return { ok: false, why, offer: check.offer, line: `✕ not used · ${why}` };
   }
   const day = nearestReserved(hex, 'day');
   const night = nearestReserved(nightOf(hex, role), 'night');

@@ -24,7 +24,7 @@
 import { CONTENT_DEFAULTS, CONTENT_SWATCH_NAME_PATTERN, DIM_CORE_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, dimZPlace, isContentColour } from '@a-company/gnomon-contracts';
 import type { DimCoreKind, DimFoldNode, DimNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_WEIGHTS, type BoardTheme } from '../core/board.js';
-import { fillColour, lineColour } from './normal.js';
+import { fillColour, lineColour, paintOf } from './normal.js';
 
 /** Injected by the handle, which mints the ULIDs: a stable two-way id table. */
 export interface DimMapIds {
@@ -168,14 +168,14 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
   const kind = node.kind;
   const color = own(node, 'color');
   const fill = own(node, 'fill');
-  const tokens = { line: isContentColour(color, 'line') ? color : CONTENT_DEFAULTS.line, fill: FILL_KINDS.has(kind) && isContentColour(fill, 'fill') ? fill : null };
+  const tokens = { line: isContentColour(color, 'line', { text: kind === 'text' }) ? color : CONTENT_DEFAULTS.line, fill: FILL_KINDS.has(kind) && isContentColour(fill, 'fill') ? fill : null };
   const weight = own(node, 'weight');
   const rot = own(node, 'rot');
   let mid: [number, number] | null = null;
   const main: EngineElement = {
     id, type: KIND_TYPE[kind], x: x0, y: y0, width: 0, height: 0,
     angle: num(rot) ? (rot / 1800) * Math.PI : 0,
-    strokeColor: lineColour(tokens.line, theme), backgroundColor: fillColour(tokens.fill, theme),
+    ...paintOf(KIND_TYPE[kind], tokens.line, tokens.fill, theme),
     strokeWidth: kind === 'text' || kind === 'frame' ? BOARD_WEIGHTS.fine : (WEIGHT_WIDTHS[(weight === 2 || weight === 3 ? weight : 1) - 1] as number),
     strokeStyle,
     frameId: kind === 'frame' ? null : frameId,

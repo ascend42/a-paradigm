@@ -32,7 +32,7 @@ describe('#gui-board custom colour', () => {
   it('a passing colour becomes a storable token with its night values printed (the specimen\'s line)', () => {
     const c = customEntry('#00897b', 'line');
     expect(c).toEqual({ ok: true, token: 'custom:#00897B', hex: '#00897B', night: { line: nightOf('#00897B', 'line'), fill: nightOf('#00897B', 'fill') }, line: 'custom · at night #47B3A4 as a line, #0F5950 as a fill' });
-    expect(customEntry('00897B', 'fill').ok).toBe(true); // the # may be left out
+    expect(customEntry('808080', 'fill').ok).toBe(true); // the # may be left out (#00897B is too dark a fill: ink on it 4.24)
   });
 
   it.each([
@@ -61,9 +61,33 @@ describe('#gui-board custom colour', () => {
 
   it('a colour the night theme reserves says so; a fill that would hide the ink says that', () => {
     const night = ['#FF7A66', '#FFC15A', '#A79CFF'].map((h) => customEntry(h, 'line')).filter((c) => !c.ok);
-    for (const c of night) expect(c.line).toMatch(/^✕ not used · (at night this is|that is) (the failed colour|the warning colour|the knot colour|a project colour)$/);
+    // a light day value that keeps clear of the reserved colours is refused by the contrast rule instead, in its words
+    for (const c of night) expect(c.line).toMatch(/^✕ not used · ((at night this is|that is) (the failed colour|the warning colour|the knot colour|a project colour)|too faint to see on the board)$/);
     const guard = customEntry('#111111', 'fill');
     expect(guard).toMatchObject({ ok: false, why: 'as a fill it would hide the ink drawn on it', offer: null });
+  });
+
+  it('contrast_rule: the refusal row says why in the record\'s words and offers one swatch that works', () => {
+    // a line too faint for the board; neutral, and not exempt
+    expect(customEntry('#F8F5EE', 'line')).toEqual({ ok: false, why: 'too faint to see on the board', offer: 'sky', line: '✕ not used · too faint to see on the board' });
+    // a fair line is an unfair paragraph: the text tool holds it to 4.5
+    expect(customEntry('#767676', 'line').ok).toBe(true);
+    expect(customEntry('#767676', 'line', { text: true })).toEqual({ ok: false, why: 'too faint to read as words', offer: 'graphite', line: '✕ not used · too faint to read as words' });
+    expect(customEntry('#686868', 'line', { text: true }).ok).toBe(true);
+    // a fill the ink would be too faint on
+    expect(customEntry('#404040', 'fill')).toMatchObject({ ok: false, why: 'words would be too faint on it', line: '✕ not used · words would be too faint on it' });
+    // orange passes as a fill and not as a line
+    expect([customEntry('#FF8800', 'fill').ok, customEntry('#FF8800', 'line').ok]).toEqual([true, false]);
+    // the pair, against the mark's other colour as the tool would draw it: 'Use ink' or 'Use paper'
+    expect(customEntry('#858585', 'line', { other: 'cobalt' })).toEqual({ ok: false, why: "it would not show against this mark's fill", offer: 'ink', line: "✕ not used · it would not show against this mark's fill" });
+    expect(customEntry('#858585', 'line', { other: 'lemon' }).ok).toBe(true);
+    expect(customEntry('#22EE66', 'fill', { other: 'custom:#CC0066' })).toEqual({ ok: false, why: "this mark's line would not show against it at night", offer: 'paper', line: "✕ not used · this mark's line would not show against it at night" });
+    expect(customEntry('#22EE66', 'fill', { other: 'ink' }).ok).toBe(true);
+    // every offer passes, so pressing it always applies
+    for (const [hex, role, ctx] of [['#F8F5EE', 'line', {}], ['#767676', 'line', { text: true }], ['#404040', 'fill', {}]] as const) {
+      const c = customEntry(hex, role, ctx);
+      expect(!c.ok && contentColourCheck(c.offer, role, ctx).ok).toBe(true);
+    }
   });
 
   it('what is not six hex digits is not a colour, in plain words', () => {

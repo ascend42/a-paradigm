@@ -106,7 +106,11 @@ components:
       with the key-edge token; src/board/skin.css dresses the surface and
       the text being typed. Every mark carries its content-palette tokens in
       customData.gnomon and is painted with resolveContentColour for the
-      active theme (setTheme repaints all marks); the canvas is transparent
+      active theme (setTheme repaints all marks); S1.4 P0b: board/normal.ts
+      paintOf rechecks the pair at paint (resolveContentPair; a text mark's
+      colour at the text floor; a failing line draws as ink, a failing fill as
+      none, a failing pair's line as ink; nothing stored is rewritten), used by
+      normalOf, dim-map and the restyle; the canvas is transparent
       so the host's ground shows, and exportPng fills the host's --ground.
       The handle: add, count, setTool (select, sticky, text, rect, ellipse,
       arrow, frame, stroke, hand; anything else throws), setStyle (line, fill
@@ -156,7 +160,10 @@ components:
       railLayout folding at 472 and 408 and then one tool per row),
       core/board-tray.ts (wells from the palette's names; customEntry
       through contentColourCheck, a refusal offers the nearest swatch and
-      stores nothing), core/board-overlay.ts (screen transform, pins, seals,
+      stores nothing; S1.4 P0b: customEntry takes the tool's context, the text
+      floor for the text tool and the mark's other colour for the pair, and a
+      contrast refusal uses CONTENT_CONTRAST_WORDS with ' at night' and its
+      own offer, 'Use ink' or 'Use paper' for a pair), core/board-overlay.ts (screen transform, pins, seals,
       the box round a text that is not yours, stub words, the hands foot),
       core/board-leaf.ts (states and the design's copy). ui/board-leaf.ts
       draws them (head, keep line, rail, tray, overlay, notes, foot) and

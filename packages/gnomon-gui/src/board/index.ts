@@ -26,7 +26,7 @@ import type { DimFoldNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
 import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
 import { dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
-import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, fillColour, lineColour, normalOf, offNormal } from './normal.js';
+import { BOARD_FONT_ID, BOARD_FONT_SIZE, BOARD_TYPES, FILLABLE, fillColour, lineColour, normalOf, offNormal, paintOf } from './normal.js';
 import { fitStroke } from './simplify.js';
 import { applySkin, gnomonBoardRuns, gnomonBoardSkin, onBoardRefusal, setBoardYielded } from './skin.js';
 
@@ -1150,8 +1150,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
             const stamp: Stamp = { ...old, ...(next.line !== undefined && !label ? { line: next.line } : {}), ...(next.fill !== undefined && FILLABLE.has(el.type) ? { fill: next.fill ?? (old.kind === 'sticky' ? CONTENT_DEFAULTS.stickyFill : null) } : {}) };
             restyled = true;
             return changed(el, {
-              strokeColor: lineColour(stamp.line, theme),
-              backgroundColor: fillColour(FILLABLE.has(el.type) ? stamp.fill : null, theme),
+              ...paintOf(el.type, stamp.line, stamp.fill, theme),
               ...(next.weight !== undefined && el.type !== 'text' && el.type !== 'frame' ? { strokeWidth: BOARD_WEIGHTS[next.weight === 'marker' && el.type !== 'freedraw' ? 'bold' : next.weight] } : {}),
               customData: { ...el.customData, gnomon: { line: stamp.line, fill: stamp.fill } },
             });

@@ -195,6 +195,30 @@ describe('#gui-dim-map forward: dimToElements', () => {
   });
 });
 
+describe('#gui-dim-map contrast_rule at paint (S1.4 P0b)', () => {
+  it('a stored row whose colour now fails paints as ink or no fill, a failing pair paints its line as ink, and no op rewrites it', () => {
+    // rows the validator would refuse today: stored before the rule (the fold accepts them)
+    const s = fold(opRow(2, [
+      add({ id: ULID(1), kind: 'text', x: 0, y: 0, z: 'V', text: 'a fair line, a faint paragraph', color: 'custom:#767676' }),
+      add({ id: ULID(2), kind: 'rect', x: 0, y: 0, z: 'W', w: 10, h: 10, color: 'custom:#858585', fill: 'cobalt' }),
+      add({ id: ULID(3), kind: 'rect', x: 0, y: 0, z: 'X', w: 10, h: 10, color: 'custom:#FF8800', fill: 'custom:#404040' }),
+    ]));
+    expect(validateDimOps(emptyDimState(), [{ type: 'add', node: { ...s.nodes.get(ULID(2))!.node } }], ME).refused.map((r) => `${r.code}@${r.field}`)).toEqual(['colour-bad@color']);
+    for (const theme of ['day', 'night'] as const) {
+      const ink = theme === 'day' ? '#16150F' : '#E8F4F0';
+      const els = dimToElements(s, theme, idTable());
+      expect(els[0]!.strokeColor).toBe(ink);
+      expect([els[1]!.strokeColor, els[1]!.backgroundColor]).toEqual([ink, theme === 'day' ? '#CDDFFE' : '#2F3D56']);
+      expect([els[2]!.strokeColor, els[2]!.backgroundColor]).toEqual([ink, 'transparent']);
+      // the stored tokens of the pair stay on the element; the row is not rewritten
+      expect(els[1]!.customData).toEqual({ gnomon: { line: 'custom:#858585', fill: 'cobalt' } });
+    }
+    const ids = idTable();
+    expect(elementsToOps(s, dimToElements(s, 'day', ids), ids, { line: 'ink', fill: null })).toEqual([]);
+    expect([...s.nodes.values()].map((n) => n.node.color)).toEqual(['custom:#767676', 'custom:#858585', 'custom:#FF8800']);
+  });
+});
+
 describe('#gui-dim-map reverse: elementsToOps', () => {
   it('golden round trip: state → elements → ops against an empty state reproduces the nodes, in the same order, up to ids and order keys', () => {
     const state = fold(opRow(2, CORE_NODES.map(add)));
