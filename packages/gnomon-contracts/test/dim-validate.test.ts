@@ -43,7 +43,7 @@ describe('G-DDL-11: closed writes', () => {
       { ...rect(12), kind: 'ellipse', fill: 'paper' },
       { ...rect(13), kind: 'diamond', fill: 'custom:#1e90ff' },
       { id: id(14), kind: 'arrow', x: 0, y: 0, z: 'F', points: [0, 0, 1, 1], head: 'both', from: id(2), to: id(11), rel: 'leads-to', label: 'x' },
-      { id: id(15), kind: 'text', x: 0, y: 0, z: 'G', text: 't', size: 4, w: 100, color: 'custom:#1E90FF' },
+      { id: id(15), kind: 'text', x: 0, y: 0, z: 'G', text: 't', size: 4, w: 100, color: 'custom:#686868' },
       { id: id(16), kind: 'frame', x: -1_000_000_000, y: 1_000_000_000, z: 'H', w: 1, h: 1_000_000_000, title: 'F' },
     ];
     expect(nodes.map((n) => n.kind)).toEqual([...DIM_CORE_KINDS]);

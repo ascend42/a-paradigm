@@ -9,9 +9,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-  CONTENT_EDGE_ON_FILL_MIN_RATIO, CONTENT_FILL_GUARD_TOKENS, CONTENT_MIN_DISTANCE, CONTENT_NEUTRALS, CONTENT_PALETTE_V1, CONTENT_RESERVED_COLOURS, CONTENT_RESERVED_EXCEPTIONS, CONTENT_SWATCH_NAME_PATTERN,
+  CONTENT_CONTRAST_FLOORS, CONTENT_CONTRAST_SURFACES, CONTENT_CONTRAST_WORDS, CONTENT_EDGE_ON_FILL_MIN_RATIO, CONTENT_FILL_GUARD_TOKENS, CONTENT_MIN_DISTANCE, CONTENT_NEUTRALS, CONTENT_PALETTE_V1, CONTENT_RESERVED_COLOURS, CONTENT_RESERVED_EXCEPTIONS, CONTENT_SWATCH_NAME_PATTERN,
   CONTENT_SWATCH_NAMES, CONTENT_SWATCHES, CONTENT_THEME_TOKENS, CUSTOM_COLOUR_PATTERN, LAB_QUANTUM, NIGHT_TRANSFORM, SRGB_LINEAR,
-  colourDistanceQSq, coloursClear, contentColourCheck, contentPaletteProblems, contrastRatio, customColourPasses, isContentColour, isNeutralColour, nearestSwatch, nightOf, oklabQ, resolveContentColour,
+  colourDistanceQSq, coloursClear, contentColourCheck, contentContrastFix, contentContrastWords, contentPairCheck, contrastClears, resolveContentPair, contentPaletteProblems, contrastRatio, customColourPasses, isContentColour, isNeutralColour, nearestSwatch, nightOf, oklabQ, resolveContentColour,
 } from '../src/content-palette.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -123,7 +123,8 @@ describe('content-palette:v1 tables', () => {
 
 describe('the shared check (validator and picker)', () => {
   // Luna's vectors: value, verdict, worst distance and where, the swatch offered (line / fill), night values
-  const vectors: Array<{ v: string; pass: boolean; worst?: [string, 'day' | 'line' | 'fill']; offer?: [string, string]; night?: [string, string] }> = [
+  // `pass` is the distance rule; `final` is the shared check (distance and contrast) as [line, fill] when it differs
+  const vectors: Array<{ v: string; pass: boolean; final?: [boolean, boolean]; worst?: [string, 'day' | 'line' | 'fill']; offer?: [string, string]; night?: [string, string] }> = [
     { v: '#C08A73', pass: false, worst: ['0.000', 'day'], offer: ['raspberry', 'raspberry'] },
     { v: '#B4382A', pass: false, worst: ['0.000', 'day'], offer: ['raspberry', 'raspberry'] },
     { v: '#5B4FD6', pass: false, worst: ['0.000', 'day'], offer: ['cobalt', 'cobalt'] },
@@ -132,20 +133,21 @@ describe('the shared check (validator and picker)', () => {
     { v: '#8A2BE2', pass: false, worst: ['0.050', 'line'], offer: ['orchid', 'orchid'] },
     { v: '#7B3FA0', pass: false, worst: ['0.059', 'line'], offer: ['orchid', 'orchid'] },
     { v: '#6D4C41', pass: false, worst: ['0.033', 'line'], offer: ['sky', 'cobalt'] },
-    { v: '#FFF59D', pass: true, worst: ['0.066', 'day'] },
-    { v: '#FF8800', pass: true, worst: ['0.079', 'line'], night: ['#E38230', '#6A4225'] },
-    { v: '#1E90FF', pass: true, worst: ['0.096', 'line'], night: ['#54A1F9', '#304F72'] },
-    { v: '#00897B', pass: true, worst: ['0.103', 'day'], night: ['#47B3A4', '#0F5950'] },
-    { v: '#FFD700', pass: true, worst: ['0.128', 'day'], night: ['#BA9C00', '#4C400B'] },
-    { v: '#808080', pass: true, night: ['#9E9E9E', '#4D4D4D'] },
+    { v: '#FFF59D', pass: true, final: [false, true], worst: ['0.066', 'day'] },
+    { v: '#FF8800', pass: true, final: [false, true], worst: ['0.079', 'line'], night: ['#E38230', '#6A4225'] },
+    { v: '#1E90FF', pass: true, final: [false, true], worst: ['0.096', 'line'], night: ['#54A1F9', '#304F72'] },
+    { v: '#00897B', pass: true, final: [true, false], worst: ['0.103', 'day'], night: ['#47B3A4', '#0F5950'] },
+    { v: '#FFD700', pass: true, final: [false, true], worst: ['0.128', 'day'], night: ['#BA9C00', '#4C400B'] },
+    { v: '#808080', pass: true, final: [true, true], night: ['#9E9E9E', '#4D4D4D'] },
   ];
 
   it("Luna's vectors, including the 0.059 fail and the 0.066 pass", () => {
     for (const t of vectors) {
       for (const role of ['line', 'fill'] as const) {
         expect([t.v, role, customColourPasses(t.v, role)]).toEqual([t.v, role, t.pass]);
-        expect(contentColourCheck(`custom:${t.v}`, role).ok).toBe(t.pass);
-        expect(contentColourCheck(`custom:${t.v.toLowerCase()}`, role).ok).toBe(t.pass);
+        const want = t.pass && (t.final ? t.final[role === 'line' ? 0 : 1] : true);
+        expect([t.v, role, contentColourCheck(`custom:${t.v}`, role).ok]).toEqual([t.v, role, want]);
+        expect(contentColourCheck(`custom:${t.v.toLowerCase()}`, role).ok).toBe(want);
       }
       if (t.worst) {
         const d = t.worst[1] === 'day' ? worst(t.v, 'day') : worst(nightOf(t.v, t.worst[1]), 'night');
@@ -221,8 +223,8 @@ describe('the resolver (renderer): total, never trusts a stored row', () => {
   });
 
   it('a passing custom colour is drawn as stored by day and transformed at night', () => {
-    expect(resolveContentColour('custom:#1e90ff', 'line', 'day')).toBe('#1E90FF');
-    expect(resolveContentColour('custom:#1e90ff', 'line', 'night')).toBe('#54A1F9');
+    expect(resolveContentColour('custom:#00897b', 'line', 'day')).toBe('#00897B');
+    expect(resolveContentColour('custom:#00897b', 'line', 'night')).toBe('#47B3A4');
     expect(resolveContentColour('custom:#1E90FF', 'fill', 'night')).toBe('#304F72');
   });
 
@@ -391,5 +393,144 @@ describe('one implementation', () => {
     } finally {
       fs.rmSync(fake, { recursive: true, force: true });
     }
+  });
+});
+
+describe('contrast_rule (Luna 2026-11-25, Aegis S1.2 nit 6)', () => {
+  const surfaces = { day: ['#EDE8DC', '#F8F5EE'], night: ['#0F1116', '#171A21'] };
+
+  it('the floors, the surfaces and the words are the record', () => {
+    expect(CONTENT_CONTRAST_FLOORS).toEqual({ line: 3, text: 4.5, fillText: 4.5 });
+    expect(CONTENT_CONTRAST_SURFACES).toEqual(['surface.ground', 'surface.sheet']);
+    for (const theme of ['day', 'night'] as const) expect(CONTENT_CONTRAST_SURFACES.map((k) => CONTENT_THEME_TOKENS[theme][k])).toEqual(surfaces[theme]);
+    expect(CONTENT_CONTRAST_WORDS).toEqual({
+      'faint-line': 'too faint to see on the board',
+      'faint-text': 'too faint to read as words',
+      'faint-fill': 'words would be too faint on it',
+      'pair-line': "it would not show against this mark's fill",
+      'pair-fill': "this mark's line would not show against it",
+    });
+    expect(contentContrastWords('pair-line', true)).toBe("it would not show against this mark's fill at night");
+    expect(contentContrastWords('faint-text', false)).toBe('too faint to read as words');
+    expect(contentContrastFix('faint-line', false, 'sky')).toBe('Too faint to see on the board: use sky, or a custom colour with at least 3:1 against the board in both themes.');
+    expect(contentContrastFix('pair-fill', true, 'paper')).toBe("This mark's line would not show against it at night: use paper, or a fill with at least 3:1 against the line in both themes.");
+  });
+
+  it('the ratio is compared as integers with no rounding up', () => {
+    expect(contrastClears('#000000', '#FFFFFF', 21)).toBe(true);
+    expect(contrastClears('#696969', '#EDE8DC', 4.5)).toBe(false); // 4.49
+    expect(contrastRatio('#696969', '#EDE8DC').toFixed(2)).toBe('4.49');
+    expect(contrastClears('#686868', '#EDE8DC', 4.5)).toBe(true); // 4.56
+    expect(contrastClears('#868686', '#EDE8DC', 3)).toBe(false); // 2.98
+    expect(contrastClears('#858585', '#EDE8DC', 3)).toBe(true); // 3.02
+    // a night pair that prints as 3.00 and is under it: refused
+    const l = nightOf('#4466CC', 'line');
+    const f = nightOf('#00EE00', 'fill');
+    expect(contrastRatio(l, f).toFixed(2)).toBe('3.00');
+    expect(contrastRatio(l, f)).toBeLessThan(3);
+    expect(contrastClears(l, f, 3)).toBe(false);
+    expect(contrastClears('nope', '#FFFFFF', 1)).toBe(false);
+  });
+
+  // the record's test_vectors, each with its measured ratio
+  const roleVectors: Array<{ v: string; use: 'line' | 'text' | 'fill'; pass: boolean; ratio?: [string, string, string] }> = [
+    { v: '#F8F5EE', use: 'line', pass: false, ratio: ['#F8F5EE', '#F8F5EE', '1.00'] },
+    { v: '#868686', use: 'line', pass: false, ratio: ['#868686', '#EDE8DC', '2.98'] },
+    { v: '#858585', use: 'line', pass: true, ratio: ['#858585', '#EDE8DC', '3.02'] },
+    { v: '#858585', use: 'text', pass: false },
+    { v: '#767676', use: 'line', pass: true, ratio: ['#767676', '#EDE8DC', '3.72'] },
+    { v: '#767676', use: 'text', pass: false, ratio: ['#767676', '#F8F5EE', '4.17'] },
+    { v: '#696969', use: 'text', pass: false, ratio: ['#696969', '#EDE8DC', '4.49'] },
+    { v: '#686868', use: 'text', pass: true, ratio: ['#686868', '#EDE8DC', '4.56'] },
+    { v: '#00897B', use: 'line', pass: true, ratio: ['#00897B', '#EDE8DC', '3.53'] },
+    { v: '#00897B', use: 'text', pass: false },
+    { v: '#00897B', use: 'fill', pass: false, ratio: ['#16150F', '#00897B', '4.24'] },
+    { v: '#1E90FF', use: 'line', pass: false, ratio: ['#1E90FF', '#EDE8DC', '2.65'] },
+    { v: '#1E90FF', use: 'fill', pass: true, ratio: ['#16150F', '#1E90FF', '5.65'] },
+    { v: '#FF8800', use: 'line', pass: false, ratio: ['#FF8800', '#EDE8DC', '1.96'] },
+    { v: '#FF8800', use: 'fill', pass: true, ratio: ['#16150F', '#FF8800', '7.64'] },
+    { v: '#FFD700', use: 'line', pass: false },
+    { v: '#FFD700', use: 'fill', pass: true },
+    { v: '#404040', use: 'fill', pass: false, ratio: ['#16150F', '#404040', '1.76'] },
+    { v: '#767676', use: 'fill', pass: false, ratio: ['#16150F', '#767676', '4.03'] },
+    { v: '#808080', use: 'line', pass: true, ratio: ['#808080', '#EDE8DC', '3.23'] },
+    { v: '#808080', use: 'text', pass: false },
+    { v: '#808080', use: 'fill', pass: true, ratio: ['#16150F', '#808080', '4.63'] },
+  ];
+
+  it("the record's vectors, by role, with the refusal's words and offer", () => {
+    for (const t of roleVectors) {
+      const role = t.use === 'fill' ? 'fill' : 'line';
+      const use = { text: t.use === 'text' };
+      const c = contentColourCheck(`custom:${t.v}`, role, use);
+      expect([t.v, t.use, c.ok]).toEqual([t.v, t.use, t.pass]);
+      expect(contentColourCheck(`custom:${t.v.toLowerCase()}`, role, use).ok).toBe(t.pass);
+      if (t.ratio) expect([t.v, t.use, contrastRatio(t.ratio[0], t.ratio[1]).toFixed(2)]).toEqual([t.v, t.use, t.ratio[2]]);
+      if (!c.ok) {
+        expect([t.v, t.use, c.why, c.night]).toEqual([t.v, t.use, t.use === 'fill' ? 'faint-fill' : t.use === 'text' ? 'faint-text' : 'faint-line', false]);
+        // the offer is a named token of the role, and it passes every part
+        expect(contentColourCheck(c.offer, role, use).ok).toBe(true);
+      }
+    }
+    // night ink on the night transform of #808080 as a fill: 7.50
+    expect(contrastRatio('#E8F4F0', nightOf('#808080', 'fill')).toFixed(2)).toBe('7.50');
+    // neutral, and not exempt: #F8F5EE passes the distance rule as a line and fails the floor
+    expect(isNeutralColour('#F8F5EE') && customColourPasses('#F8F5EE', 'line')).toBe(true);
+    expect(contentColourCheck('custom:#F8F5EE', 'line')).toEqual({ ok: false, offer: 'sky', why: 'faint-line', night: false });
+    // the consequence the record names: orange, gold and dodger blue pass as fills and not as lines
+    for (const v of ['#FF8800', '#FFD700', '#1E90FF']) expect([v, isContentColour(`custom:${v}`, 'fill'), isContentColour(`custom:${v}`, 'line')]).toEqual([v, true, false]);
+  });
+
+  it('every named swatch passes every part, in both themes', () => {
+    const lines = CONTENT_SWATCH_NAMES.filter((n) => isContentColour(n, 'line'));
+    const fills = CONTENT_SWATCH_NAMES.filter((n) => isContentColour(n, 'fill'));
+    expect(lines).toEqual(['ink', 'graphite', 'leaf', 'sky', 'cobalt', 'orchid', 'raspberry']);
+    expect(fills).toEqual(['paper', 'lemon', 'leaf', 'sky', 'cobalt', 'orchid', 'raspberry']);
+    for (const n of lines) {
+      expect([n, contentColourCheck(n, 'line', { text: true }).ok]).toEqual([n, true]);
+      for (const theme of ['day', 'night'] as const) for (const s of surfaces[theme]) expect(contrastRatio(resolveContentColour(n, 'line', theme)!, s)).toBeGreaterThanOrEqual(4.5);
+      for (const f of fills) for (const field of ['line', 'fill'] as const) expect([n, f, contentPairCheck(n, f, field).ok]).toEqual([n, f, true]);
+    }
+    for (const f of fills) for (const theme of ['day', 'night'] as const) expect(contrastRatio(CONTENT_THEME_TOKENS[theme]['text.primary'], resolveContentColour(f, 'fill', theme)!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the pair: a line on its own fill, judged on the field being written', () => {
+    // each passes alone, the pair does not (2.74 by day)
+    expect(isContentColour('custom:#858585', 'line') && isContentColour('cobalt', 'fill')).toBe(true);
+    expect(contrastRatio('#858585', '#CDDFFE').toFixed(2)).toBe('2.74');
+    expect(contentPairCheck('custom:#858585', 'cobalt', 'line')).toEqual({ ok: false, offer: 'ink', why: 'pair-line', night: false });
+    expect(contentPairCheck('custom:#858585', 'cobalt', 'fill')).toEqual({ ok: false, offer: 'paper', why: 'pair-fill', night: false });
+    expect(contrastRatio('#858585', '#F3F287').toFixed(2)).toBe('3.14');
+    expect(contentPairCheck('custom:#858585', 'lemon', 'line').ok).toBe(true);
+    expect(contrastRatio('#00897B', '#CDDFFE').toFixed(2)).toBe('3.20');
+    expect(contentPairCheck('custom:#00897B', 'cobalt', 'line').ok).toBe(true);
+    // the validator's own night vector, replacing the record's 'sampled at 2.83': passes by day, fails at night
+    const [l, f] = ['#CC0066', '#22EE66'];
+    expect(isContentColour(`custom:${l}`, 'line') && isContentColour(`custom:${f}`, 'fill')).toBe(true);
+    expect(contrastRatio(l, f).toFixed(2)).toBe('3.59');
+    expect(contrastRatio(nightOf(l, 'line'), nightOf(f, 'fill')).toFixed(2)).toBe('2.82');
+    expect(contentPairCheck(`custom:${l}`, `custom:${f}`, 'fill')).toEqual({ ok: false, offer: 'paper', why: 'pair-fill', night: true });
+    // the offers always pass
+    expect(contentPairCheck('ink', `custom:${f}`, 'line').ok && contentPairCheck(`custom:${l}`, 'paper', 'fill').ok).toBe(true);
+    expect(contentPairCheck('ink', 'cobalt', 'line').ok && contentPairCheck('custom:#858585', 'paper', 'fill').ok).toBe(true);
+    // no fill, or a token that fails alone: no pair is judged here
+    for (const none of [null, undefined]) expect(contentPairCheck('custom:#858585', none, 'line').ok).toBe(true);
+    expect(contentPairCheck('custom:#FF8800', 'cobalt', 'line').ok).toBe(true);
+  });
+
+  it('at paint: a stored colour that now fails draws as ink or no fill, a failing pair draws its line as ink; nothing is rewritten', () => {
+    // stored before the rule: an orange line, a faint fill, a text colour that is a fair line
+    expect(resolveContentColour('custom:#FF8800', 'line', 'day')).toBe('#16150F');
+    expect(resolveContentColour('custom:#FF8800', 'line', 'night')).toBe('#E8F4F0');
+    expect(resolveContentColour('custom:#404040', 'fill', 'day')).toBeNull();
+    expect(resolveContentColour('custom:#767676', 'line', 'day')).toBe('#767676');
+    expect(resolveContentColour('custom:#767676', 'line', 'day', { text: true })).toBe('#16150F');
+    expect(resolveContentPair('custom:#858585', 'cobalt', 'day')).toEqual({ line: '#16150F', fill: '#CDDFFE' });
+    expect(resolveContentPair('custom:#858585', 'lemon', 'day')).toEqual({ line: '#858585', fill: '#F3F287' });
+    expect(resolveContentPair('custom:#CC0066', 'custom:#22EE66', 'night')).toEqual({ line: '#E8F4F0', fill: nightOf('#22EE66', 'fill') });
+    // the rule is both themes, so a pair that fails at night is a failing pair by day too (as a single colour is)
+    expect(resolveContentPair('custom:#CC0066', 'custom:#22EE66', 'day')).toEqual({ line: '#16150F', fill: '#22EE66' });
+    expect(resolveContentPair('custom:#858585', null, 'day')).toEqual({ line: '#858585', fill: null });
+    expect(resolveContentPair('custom:#858585', 'custom:#404040', 'day')).toEqual({ line: '#858585', fill: null });
   });
 });
