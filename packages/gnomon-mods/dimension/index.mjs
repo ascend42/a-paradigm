@@ -25,6 +25,8 @@ import {
   COUNT_ROWS_PER_TURN,
   COUNT_ROW_RESERVE,
   MEMO_CAP,
+  NEW_KEY_FIX,
+  REPEAT_UNKNOWN_FIX,
   ROW_MAX_VISITED,
   TURNS_CAP,
   countPayload,
@@ -118,6 +120,17 @@ const loaded = new Map();
  */
 const selections = new Map();
 const SELECTION_DIMS = 64;
+
+/** F2: the hash of a fold, computed once per fold object (a fold is replaced, never mutated, when a row lands). */
+const hashes = new WeakMap();
+function hashOf(state) {
+  let h = hashes.get(state);
+  if (h === undefined) {
+    h = dimHash(state);
+    hashes.set(state, h);
+  }
+  return h;
+}
 
 const ulidOf = (dim) => dim.slice(4);
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
@@ -456,7 +469,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       // the row is in the log but the index could not take it: the next command adopts the dimension from the log
       return refusal('unavailable');
     }
-    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: dimHash(fresh.state), grants: grantList(fresh) };
+    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), grants: grantList(fresh) };
   }
 
   // every other path needs a known dimension of the caller's repo
@@ -503,7 +516,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     // a reopen: no title (the first start row named the dimension), and any title sent is not read
     const seq = await write(DIM_KINDS.start, startPayload(a.dim, a.hsid, a.opened));
     if (typeof seq === 'number') await noteOpen(host, a.hsid, a.dim);
-    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: dimHash(entry.state), grants: grantList(entry) } : seq;
+    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), grants: grantList(entry) } : seq;
   }
 
   if (commandId === 'dim.grant') {
@@ -518,12 +531,12 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   }
 
   if (commandId === 'dim.close') {
-    if (state.ended) return { ok: true, already: true, dim: a.dim, seq: state.seq, ops: state.ops, nodes: state.nodes.size, hash: dimHash(state) };
+    if (state.ended) return { ok: true, already: true, dim: a.dim, seq: state.seq, ops: state.ops, nodes: state.nodes.size, hash: hashOf(state) };
     const payload = endPayload(state);
     const seq = await write(DIM_KINDS.end, payload);
     if (typeof seq !== 'number') return seq;
     await saveKeyframe(host, a.dim, entry);
-    return { ok: true, already: false, dim: a.dim, seq, ops: payload.ops, nodes: payload.nodes, hash: dimHash(entry.state) };
+    return { ok: true, already: false, dim: a.dim, seq, ops: payload.ops, nodes: payload.nodes, hash: hashOf(entry.state) };
   }
 
   if (commandId === 'dim.select') {
@@ -547,7 +560,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       return refusal('unavailable');
     }
     if (entry.dirty) await saveIdx(host, a.dim, entry);
-    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: dimHash(entry.state) };
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state) };
   }
 
   if (commandId !== 'dim.op') return refusal('command-unknown');
@@ -564,7 +577,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   entry.sinceKf += v.ok.length;
   if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
   // the hash of the fold at this seq: the page compares its own fold there (S1.4 §5)
-  return { ok: true, dim: a.dim, seq, hash: dimHash(entry.state), applied: v.ok.length, refused: v.refused };
+  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), applied: v.ok.length, refused: v.refused };
 }
 
 /* ── the two agent tools (S1.4 §2) ────────────────────────────────────────── */
@@ -663,7 +676,7 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
     if (memo) return memo.input === input ? { ...memo.answer, budgetLeft: budgetLeft(turns, actor), repeat: true } : refusal('op-id-reused');
     // an oid found in the rows never appends again (after a restart the input is unknown: a repeat, A8)
     const seen = entry.oids.get(oid);
-    if (seen) return { ok: true, dim, seq: entry.state.seq, hash: dimHash(entry.state), applied: seen.applied, created: [], refused: [], budgetLeft: budgetLeft(turns, actor), repeat: true };
+    if (seen) return { ok: true, dim, seq: entry.state.seq, hash: hashOf(entry.state), applied: seen.applied, created: [], refused: [], budgetLeft: budgetLeft(turns, actor), repeat: true, inputUnknown: true, fix: REPEAT_UNKNOWN_FIX };
   }
   const left = budgetLeft(turns, actor);
   if (left === 0) return refusal('turn-budget', { budgetLeft: 0 });
@@ -673,7 +686,7 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   const sugar = resolveSugar(entry.state, a.ops, mintUlid);
   // ONE validation of the whole batch (C5): a secret anywhere refuses everything before the first append
   const v = validateDimOps(entry.state, sugar.ops, { cls: 'agent', principal: actor.principal, agent: actor.agent });
-  const refused = v.refused.map((r) => refusedEntry(r.index, r.field, r.code));
+  const refused = v.refused.map((r) => refusedEntry(r.index, r.field, r.code, sugar.unresolved.get(r.index)?.has(r.field) ? NEW_KEY_FIX : undefined));
   if (v.secret) return finishRefused(host, dim, entry, actor, refused, 'secret');
   const bad = new Set(v.refused.map((r) => r.index));
   const okIdx = [];
@@ -751,7 +764,7 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   }
   await countRow(host, dim, entry, actor, refused);
   if (applied === 0) return refusal(stop ?? 'ops-refused', { dim, refused, budgetLeft: budgetLeft(turns, actor) });
-  const answer = { ok: true, dim, seq: entry.state.seq, hash: dimHash(entry.state), applied, created, refused, budgetLeft: budgetLeft(turns, actor) };
+  const answer = { ok: true, dim, seq: entry.state.seq, hash: hashOf(entry.state), applied, created, refused, budgetLeft: budgetLeft(turns, actor) };
   if (oid !== undefined) {
     let m = answers.get(dim);
     if (!m) {
@@ -789,7 +802,7 @@ async function countRow(host, dim, entry, actor, refused) {
 async function viewTool(host, dim, entry, actor, a, cancelled) {
   const state = entry.state;
   const sel = selections.get(dim)?.get(actor.hsid) ?? [];
-  const base = { hash: dimHash(state), mayDraw: !state.ended && dimMayDraw(state, entry.grants, actor.hsid), budgetLeft: budgetLeft(turns, actor), selection: [...sel], limit: a.limit };
+  const base = { hash: hashOf(state), mayDraw: !state.ended && dimMayDraw(state, entry.grants, actor.hsid), budgetLeft: budgetLeft(turns, actor), selection: [...sel], limit: a.limit };
   if (a.since === undefined) return viewAnswer(state, base);
   if (a.since > state.seq) return viewAnswer(state, { ...base, changes: 'reset' });
   if (a.since === state.seq) return viewAnswer(state, { ...base, changes: [], touched: new Set() });

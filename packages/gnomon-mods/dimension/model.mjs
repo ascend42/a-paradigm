@@ -655,10 +655,17 @@ export function resolveSugar(state, ops, mint) {
   }
   const out = [];
   const created = new Map();
-  const link = (target, src) => {
+  // index → fields that name a new:<key> this call did not define before them (F4: their refusal says so)
+  const unresolved = new Map();
+  const miss = (i, f) => {
+    if (!unresolved.has(i)) unresolved.set(i, new Set());
+    unresolved.get(i).add(f);
+  };
+  const link = (target, src, i) => {
     for (const f of ['from', 'to', 'parent']) {
       const v = own(src, f);
       if (typeof v === 'string' && keys.has(v)) setOwn(target, f, keys.get(v));
+      else if (typeof v === 'string' && v.startsWith('new:')) miss(i, f);
     }
   };
   for (let i = 0; i < ops.length; i++) {
@@ -670,6 +677,7 @@ export function resolveSugar(state, ops, mint) {
       const n = copyOwn(node);
       const id = own(node, 'id');
       let key;
+      if (typeof id === 'string' && id.startsWith('new:') && (!NEW_KEY.test(id) || keys.has(id))) miss(i, 'id');
       if (id === undefined || (typeof id === 'string' && NEW_KEY.test(id) && !keys.has(id))) {
         const m = mint();
         if (id !== undefined) {
@@ -684,20 +692,24 @@ export function resolveSugar(state, ops, mint) {
         setOwn(n, 'z', placed);
         top = placed;
       } else if (typeof z === 'string' && DIM_Z_PATTERN.test(z) && (top === null || z > top)) top = z;
-      link(n, node);
+      link(n, node, i);
       const op = copyOwn(o);
       setOwn(op, 'node', n);
       out.push(op);
       if (typeof own(n, 'id') === 'string') created.set(i, { ...(key !== undefined ? { key } : {}), id: own(n, 'id') });
     } else if (patch) {
       const p = copyOwn(patch);
-      link(p, patch);
+      link(p, patch, i);
       const op = copyOwn(o);
       setOwn(op, 'patch', p);
       out.push(op);
-    } else out.push(ops[i]);
+    } else {
+      if (o && (type === 'update' || type === 'delete') && typeof own(o, 'id') === 'string' && own(o, 'id').startsWith('new:')) miss(i, 'id');
+      if (o && type === 'move' && Array.isArray(own(o, 'ids')) && own(o, 'ids').some((x) => typeof x === 'string' && x.startsWith('new:'))) miss(i, 'ids');
+      out.push(ops[i]);
+    }
   }
-  return { ops: out, created };
+  return { ops: out, created, unresolved };
 }
 
 /**
@@ -751,6 +763,11 @@ export function countPayload(dim, refused) {
 }
 
 /** A refusal entry of a draw: exactly `{index, field, code, fix}` from the closed lists (no rule, no swatch, no input). */
-export function refusedEntry(index, field, code) {
-  return { index, field: DIM_FIELDS.includes(field) ? field : 'unknown', code, fix: fixFor(code) };
+export function refusedEntry(index, field, code, fix) {
+  return { index, field: DIM_FIELDS.includes(field) ? field : 'unknown', code, fix: fix ?? fixFor(code) };
 }
+
+/** F4: the fix of an op that names a new:<key> the call did not define before it (a fixed sentence, no input). */
+export const NEW_KEY_FIX = 'Define this new:<key> in an earlier add of the same call (key: a-z and 0-9, up to 16), use it only as from, to or parent, or use the id an earlier answer gave in created[].';
+/** F3: a repeat answered from the rows after a restart: the ops sent now were never compared. */
+export const REPEAT_UNKNOWN_FIX = 'This opId was already used on this board before a restart, so these ops were not compared and nothing was written. Use dim-view to see the board, and send new ops under a new opId.';

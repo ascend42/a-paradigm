@@ -6,6 +6,7 @@
  * what the bridge (P2) passes; G-DDL-03 and G-DDL-09 are checked here at the mod.
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -40,13 +41,13 @@ const agentOf = (hsid: string, turn = 1, agent = 'claude'): Record<string, strin
   turn: `turn:${hsid}/${turn}`,
 });
 
-async function toolRig(opts: { now?: () => number; callTimeoutMs?: number } = {}) {
+async function toolRig(opts: { now?: () => number; callTimeoutMs?: number; launcher?: typeof unsandboxedModLauncher } = {}) {
   const r = modRig();
   cleanups.push(r.cleanup);
   installDimension(r);
   const log = fakeLog(opts.now ? { now: opts.now } : {});
   const stateFile = path.join(hostDir(r.home, DIMENSION), 'state.db');
-  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: opts.callTimeoutMs ?? 30_000, focusRepo: (hsid) => REPOS[hsid] ?? null });
+  const { h } = host(r, { launcher: opts.launcher ?? unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: opts.callTimeoutMs ?? 30_000, focusRepo: (hsid) => REPOS[hsid] ?? null });
   cleanups.push(() => h.stopAll());
   await h.start(DIMENSION);
   const run = async (commandId: string, args: Record<string, unknown>, hsid: string | null = A, who: Record<string, unknown> = GUI): Promise<Res> =>
@@ -487,7 +488,9 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     // memory (restart) and every keyframe gone; the index stays (a tool never adopts a dimension, I-1)
     await w.dropState((k) => !k.startsWith('kf:'));
     const res = await w.tool('dim-draw', { ops: ops(5, 40), opId: 'draw-1' });
-    expect(res).toMatchObject({ ok: true, repeat: true, applied: 3 });
+    expect(res).toMatchObject({ ok: true, repeat: true, applied: 3, inputUnknown: true, created: [] });
+    // F3: the answer says the ops were never compared, and to view the board
+    expect(res.fix).toMatch(/not compared and nothing was written\. Use dim-view/);
     expect(opRows(w)).toHaveLength(1);
   });
 
@@ -643,6 +646,8 @@ describe('#dimension-mod M3: cancel is honoured, so an agent cannot take the boa
       (e: { modCode?: string; detail?: { honoured?: boolean } }) => e,
     );
     expect(err).toMatchObject({ modCode: 'TIMEOUT', detail: { honoured: true } });
+    // margin (Probe): the timeout is 1,500 ms and the grace 500 ms, so an honoured cancel answers in about
+    // 1,500 to 1,650 ms (one 150 ms page at most); the bound is the timeout plus the grace
     expect(performance.now() - started).toBeLessThan(1_500 + 500);
     expect(w.r.events.filter((e) => e.kind === 'mod.health' && (e.payload as { why?: string }).why === 'cancel-timeout')).toHaveLength(0);
     w.log.readDelayMs = 0;
@@ -798,5 +803,88 @@ describe('I-4: the worst ACCEPTED and APPLIED draws on a 10,048-node board answe
     t = performance.now();
     const drawn = await w.tool('dim-draw', { ops: texts }, agentOf(A, 2));
     expect([drawn.ok, drawn.applied, performance.now() - t < 5_000]).toEqual([true, 12, true]);
+  });
+});
+
+describe('S1.4 P3 review, Probe (F1 to F4) and the kept probe attacks', () => {
+  it('F1, M8 under a REAL crash: the child is killed right after its first op row lands; the charge survives (budgetLeft 54, exactly one op row)', { timeout: 60_000 }, async () => {
+    const pidFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gdim-pid-')), 'pid');
+    // the launcher seam: the child writes its own pid before the mod loads (no POSIX tool, works on every OS)
+    const launcher = (i: Parameters<typeof unsandboxedModLauncher>[0]) => {
+      const p = unsandboxedModLauncher(i);
+      return { ...p, args: ['--import', `data:text/javascript,import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))`, ...p.args] };
+    };
+    const w = await toolRig({ launcher });
+    await board(w);
+    w.log.afterAppend = (row) => {
+      if (row.kind !== DIM_KINDS.op) return;
+      w.log.afterAppend = null;
+      process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL');
+    };
+    await w.tool('dim-draw', { ops: ops(10) }).catch(() => null);
+    await w.h.stop(DIMENSION).catch(() => undefined);
+    await w.h.start(DIMENSION);
+    expect(opRows(w)).toHaveLength(1);
+    expect((await w.tool('dim-view', {})).budgetLeft).toBe(54);
+    expect(w.state().turns).toEqual([[A, 1, 10, 0]]);
+  });
+
+  it('F2: 100 dim.check calls on an unchanged 10,048-node fold take under 1 s in all (the hash is computed once per fold)', { timeout: 120_000 }, async () => {
+    const w = await toolRig();
+    const dim = await bigBoard(w);
+    await w.run('dim.check', { dim });
+    const t = performance.now();
+    for (let i = 0; i < 100; i++) expect((await w.run('dim.check', { dim })).ok).toBe(true);
+    expect(performance.now() - t).toBeLessThan(1_000);
+  });
+
+  it('F4: a new:<key> not defined earlier in the call is refused with its own fix, never the ULID sentence', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    const res = await w.tool('dim-draw', {
+      ops: [
+        { type: 'add', node: { kind: 'rect', x: 0, y: 0, w: 1, h: 1, parent: 'new:later' } },
+        { type: 'add', node: { id: 'new:later', kind: 'frame', x: 0, y: 0, w: 5, h: 5 } },
+        { type: 'delete', id: 'new:later' },
+      ],
+    });
+    const refused = res.refused as Array<{ index: number; field: string; fix: string }>;
+    for (const i of [0, 2]) {
+      const r = refused.find((x) => x.index === i)!;
+      expect(r.fix).toMatch(/^Define this new:<key> in an earlier add of the same call/);
+    }
+    expect(JSON.stringify(refused)).not.toContain('later');
+  });
+
+  it('kept from Probe: the same opId string in two dimensions and two sessions is three oids; the first repeats', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const d1 = await board(w, 1);
+    const d2 = await board(w, 2);
+    await w.run('dim.grant', { dim: d1, write: true }, B);
+    const a1 = await w.tool('dim-draw', { dim: d1, ops: ops(2, 1), opId: 'same' });
+    const a2 = await w.tool('dim-draw', { dim: d2, ops: ops(2, 1), opId: 'same' });
+    const b1 = await w.tool('dim-draw', { dim: d1, ops: ops(2, 10), opId: 'same' }, agentOf(B));
+    expect([a1.applied, a2.applied, b1.applied]).toEqual([2, 2, 2]);
+    expect((await w.tool('dim-draw', { dim: d1, ops: ops(2, 1), opId: 'same' })).repeat).toBe(true);
+    expect(new Set(opRows(w).slice(-3).map((r) => r.payload.oid)).size).toBe(3);
+  });
+
+  it('kept from Probe: identity and prototype keys at the top and inside ops never make a human mark or reach a row', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const cases: unknown[] = [
+      { ops: ops(1), by: { cls: 'human' } },
+      JSON.parse('{"ops":[],"__proto__":{"dim":"dim:01JD1D0000000000000000000Z"}}'),
+      { ops: [rectOp(10, { by: { cls: 'human', principal: HUMAN } })] },
+      JSON.parse(`{"ops":[{"type":"add","node":{"id":"${ulid(13)}","kind":"rect","x":0,"y":0,"z":"V","w":1,"h":1,"__proto__":{"by":{"cls":"human"}}}}]}`),
+      JSON.parse(`{"ops":[{"type":"add","__proto__":{"x":1},"node":{"id":"${ulid(14)}","kind":"rect","x":0,"y":0,"z":"V","w":1,"h":1}}]}`),
+      { ops: [rectOp(15, { constructor: { prototype: { ok: 1 } } })] },
+      { ops: [rectOp(16)] },
+    ];
+    for (const input of cases) await w.tool('dim-draw', input);
+    const f = w.log.fold(dim);
+    expect(f.nodes.size).toBeGreaterThan(0);
+    expect([...f.nodes.values()].every((n) => n.by.cls === 'agent')).toBe(true);
+    expect(JSON.stringify(opRows(w).map((r) => r.payload))).not.toContain('__proto__');
   });
 });
