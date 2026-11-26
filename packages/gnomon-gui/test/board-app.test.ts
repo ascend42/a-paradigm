@@ -645,11 +645,21 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)
-      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 15_000 }, { wait: 400 }, facts('shown'),
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 15_000 }, { until: `document.getElementById('board-turn').hidden`, as: 'the strip gone', timeoutMs: 15_000 }, facts('shown'),
     ]);
     expect(a.errors).toEqual([]);
     expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
   }, 120_000);
+
+  it('T-2026-11-26-001 (under CPU throttling, as on CI): the second press of a fast double press on show chat lands where the strip was, after the fold, and focus stays in the chat', async () => {
+    // the cause, traced: at 6x the second press arrives after the fold, on the page's header (no focus there), and its
+    // mousedown blurred the chat to BODY. A person's fast double press does the same: fixed in the product (app.ts showChatAt)
+    const a = await real([
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 30_000 }, { until: `document.getElementById('board-turn').hidden`, as: 'the strip gone', timeoutMs: 30_000 }, facts('shown'),
+    ], { cpuThrottle: 6 });
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
+  }, 240_000);
 
   it('#gui-board-turn (Mika 3): a size change inside the leaf alone (the pane and the feed keep theirs) re-reads the room: under 300px the strip goes to one row', async () => {
     const ROWS = `(() => { const c = ${CUR}; return { rows: document.querySelectorAll('#board-turn .bd-turn-r').length, room: c.leaf.room() + document.getElementById('board-turn').offsetHeight }; })()`;

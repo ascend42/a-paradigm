@@ -877,7 +877,21 @@ function paintBoardTurnNow(): void {
  * Show chat (and the strip's working key) after the board folded: the chat at its latest row with focus in it, the
  * #jump-latest path. The working key also leaves its turn's steps unfolded and puts focus on that key in the chat.
  */
+/**
+ * T-2026-11-26-001: the press after show chat's fold (a fast double press) lands where the strip WAS, on page chrome
+ * that takes no focus, and a mousedown there moved focus off the chat to BODY. For the length of a double-click after
+ * the chat takes focus, a press on something that takes no focus leaves focus where show chat put it.
+ */
+const SHOW_CHAT_HOLD_MS = 500;
+let showChatHeldUntil = 0;
+document.addEventListener('mousedown', (e) => {
+  if (performance.now() >= showChatHeldUntil) return;
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || t.closest('button, a[href], input, textarea, select, [tabindex], [contenteditable]')) return;
+  e.preventDefault(); // (the default of a mousedown is the focus move; the press itself still happens)
+}, true);
 function showChatAt(workKey: string | null): void {
+  showChatHeldUntil = performance.now() + SHOW_CHAT_HOLD_MS;
   if (workKey) expandedActs.add(stepsFoldKey(workKey));
   if (workKey) remountItem(workKey);
   follow.jump();
