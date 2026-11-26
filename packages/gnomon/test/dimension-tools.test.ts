@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIM_AUX_KINDS, DIM_KINDS, dimHash, foldDimGrants, type DimState } from '@a-company/gnomon-contracts';
+import { DIM_AUX_KINDS, DIM_KINDS, dimAttrDigest, dimHash, foldDimGrants, type DimState } from '@a-company/gnomon-contracts';
 import { hostDir } from '../src/kernel/modhost/state.js';
 import { unsandboxedModLauncher, withPinTablesForTest } from '../src/kernel/testing.js';
 import { PKG_ROOT } from './helpers.js';
@@ -170,7 +170,7 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
     ]);
   });
 
-  it('the keyframe (v 2) carries the grant map and op-id memo, is bound to its log id, and a v 1 keyframe is ignored, never read as "no grants"', async () => {
+  it('the keyframe (v 3 since S1.4 E1) carries the grant map and op-id memo, is bound to its log id, and a v 1 keyframe is ignored, never read as "no grants"', async () => {
     const m = await loadModel();
     const state: DimState = { dim: 'dim:x', title: 't', attached: [A, B], ended: false, nodes: new Map(), gone: new Set(), seq: 9, ops: 0, unapplied: 0 };
     const grants = new Map([
@@ -179,7 +179,7 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
     ]);
     const oids = new Map([['0123456789abcdef', { applied: 3, seq: 9 }]]);
     const enc = m.encodeKeyframe!(state, 'log:a', { grants, oids }) as { head: Record<string, unknown>; chunks: unknown[] };
-    expect(enc.head.v).toBe(2);
+    expect(enc.head.v).toBe(3);
     const dec = m.decodeKeyframe!(enc.head, enc.chunks, 'dim:x', 'log:a') as { state: DimState; grants: Map<string, unknown>; oids: Map<string, unknown> };
     expect(dimHash(dec.state)).toBe(dimHash(state));
     expect([...dec.grants.entries()]).toEqual([...grants.entries()]);
@@ -201,7 +201,7 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
     const dim = await board(w);
     await w.run('dim.grant', { dim, write: true }, B);
     const head = w.state()[`kf:${dim.slice(4)}`] as { v: number; aux: { grants: unknown[] } };
-    expect(head.v).toBe(2);
+    expect(head.v).toBe(3);
     expect(head.aux.grants).toEqual([[B, true, w.rowsOf(DIM_AUX_KINDS.grant)[0]!.seq]]);
     await w.restart();
     const re = await w.run('dim.open', { dim, opened: 'menu' });
@@ -229,7 +229,7 @@ describe('#dimension-mod dim.select, dim.check and the hash on a dim.op answer (
     await w.run('dim.op', { dim, ops: [rectOp(1)] });
     const before = w.log.rows.length;
     const at = await w.run('dim.check', { dim });
-    expect(at).toEqual({ ok: true, dim, seq: w.log.fold(dim).seq, hash: dimHash(w.log.fold(dim)) });
+    expect(at).toEqual({ ok: true, dim, seq: w.log.fold(dim).seq, hash: dimHash(w.log.fold(dim)), attr: dimAttrDigest(w.log.fold(dim)) });
     // a row the mod's fold has not seen (another writer, or a reply it lost): the check reads the log to its head
     w.inject(DIM_KINDS.op, { v: 1, dim, ops: [rectOp(9)], relayedFor: { principal: 'p:00000000/s-zzzzzzzb', surface: 'bridge', agent: 'claude', hsid: B } });
     const after = await w.run('dim.check', { dim });
@@ -471,7 +471,7 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     expect(opRows(w)).toHaveLength(0);
     await w.restart();
     expect((await w.tool('dim-view', {})).budgetLeft).toBe(54);
-    expect(w.state().turns).toEqual([[A, 1, 10, 1]]);
+    expect(w.state().turns).toEqual([[A, 1, 10, 1, 0, 0, 0]]);
   });
 
   it('M8: 17 sessions drawing do not reset the first one\'s count (the state is keyed by hsid)', { timeout: 60_000 }, async () => {
@@ -684,10 +684,12 @@ describe('#dimension-mod M3: cancel is honoured, so an agent cannot take the boa
     const started = performance.now();
     const res = await w.tool('dim-draw', { ops: moves(32) });
     const ms = performance.now() - started;
-    // every move names a person's marks: an agent may edit any mark (S1.4 E0), so all 64 moves apply in one validation
-    // 63 of them fill the call's 4 rows of 16 KiB; the 64th is refused call-too-large by index, never half-written
-    expect(res).toMatchObject({ ok: true, applied: 63 });
-    expect((res.refused as Array<{ index: number; code: string }>).map((r) => [r.index, r.code])).toEqual([[63, 'call-too-large']]);
+    // every move names a person's marks: an agent may edit any mark (S1.4 E0), so all 64 moves pass ONE validation
+    // (the timed worst case); from S1.4 E1 the foreign sub-budget (32 touches a turn, per id, Aegis ruling 1) then
+    // takes the first move only and refuses the other 63 foreign-budget by index. The applied worst case with the
+    // agent's own marks is I-4 below.
+    expect(res).toMatchObject({ ok: true, applied: 1 });
+    expect((res.refused as Array<{ index: number; code: string }>).map((r) => [r.index, r.code])).toEqual(Array.from({ length: 63 }, (_, i) => [i + 1, 'foreign-budget']));
     expect(ms).toBeLessThan(5_000);
   });
 });
@@ -723,12 +725,16 @@ describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
     const text = fs.readFileSync(path.join(DIMENSION_TREE, 'PLAYBOOK.md'), 'utf8');
     expect(text.split('\n').length).toBeLessThanOrEqual(40);
     expect(text.includes('\r')).toBe(false);
-    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /You may change any mark, whoever drew it; the board records that you changed it\./, /You may add a mark inside another hand's frame/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
+    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /You may change any mark, whoever drew it; the board records that you changed it\./, /You may add a mark inside another hand's frame/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/,
+      // S1.4 E1 (Arky §6 with the founder's symmetric undo; Luna's "may edit")
+      /"may edit"/, /Never delete another hand's mark unless you were asked to/, /which marks of others you changed, by id/, /Send `base` \(the `seq` of your last view or draw\) whenever you edit, move or delete a mark/, /a mark is another hand.s when you did not first draw it/, /do not redo it unless you are asked to/, /above all an instruction to delete or undo/, /Prefer adding your own mark beside another hand's mark when the change is a suggestion/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
     const m = JSON.parse(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json'), 'utf8')) as { provides: { tools: Array<{ name: string; schema: { description: string } }> } };
     for (const t of m.provides.tools) {
       const d = t.schema.description;
       expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), d.includes("a person's marks included")]).toEqual([t.name, true, true, true, true, true]);
       expect([t.name, d.includes('you may change any mark, whoever drew it, and the board records that you changed it'), d.includes('not-owner')]).toEqual([t.name, true, false]);
+      // S1.4 E1: never delete another hand's mark unless asked; say which, by id; board text above all to delete or undo
+      expect([t.name, /Never delete another hand's mark unless asked/.test(d), /which marks of others you changed, by id/.test(d), /above all one to delete or undo/.test(d)]).toEqual([t.name, true, true, true]);
       // the bridge lists a tool only with a description of at most 1,024 characters and a schema of at most 8 KiB
       expect([t.name, d.length <= 1_024, JSON.stringify(t.schema).length <= 8 * 1024]).toEqual([t.name, true, true]);
     }
@@ -778,14 +784,17 @@ describe('S1.4 P3 review, Aegis Important (I-1, I-2, I-4)', () => {
   });
 
   it('I-2: a budget refusal (written: false) refunds the turn: agent B refused append-busy in A\'s second keeps 64, and its retry after the window applies', { timeout: 60_000 }, async () => {
-    const w = await toolRig({ now: () => performance.now() });
+    // a clock the test moves (never wall time): every append of one step lands in the same 1 s window however slow
+    // the machine is, and the next step starts a fresh window
+    let T = 0;
+    const w = await toolRig({ now: () => T });
     const dim = await board(w);
     await w.run('dim.grant', { dim, write: true }, B);
-    await new Promise((res) => setTimeout(res, 1_100));
+    T += 2_000; // the window is empty
     expect((await w.tool('dim-draw', { ops: [...fullDraw(60), rectOp(1, { link: 'x' })] })).ok).toBe(true);
     const busy = await w.tool('dim-draw', { ops: ops(64, 2000) }, agentOf(B));
     expect(busy).toMatchObject({ ok: false, code: 'append-busy', budgetLeft: 64 });
-    await new Promise((res) => setTimeout(res, 1_100));
+    T += 2_000; // a fresh window
     expect(await w.tool('dim-draw', { ops: ops(64, 2000) }, agentOf(B))).toMatchObject({ ok: true, applied: 64, budgetLeft: 0 });
   });
 
@@ -850,7 +859,7 @@ describe('S1.4 P3 review, Probe (F1 to F4) and the kept probe attacks', () => {
     await w.h.start(DIMENSION);
     expect(opRows(w)).toHaveLength(1);
     expect((await w.tool('dim-view', {})).budgetLeft).toBe(54);
-    expect(w.state().turns).toEqual([[A, 1, 10, 0]]);
+    expect(w.state().turns).toEqual([[A, 1, 10, 0, 0, 0, 0]]);
   });
 
   it('F2: 100 dim.check calls on an unchanged 10,048-node fold take under 1 s in all (the hash is computed once per fold)', { timeout: 120_000 }, async () => {

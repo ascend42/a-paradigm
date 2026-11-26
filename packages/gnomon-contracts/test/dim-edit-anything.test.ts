@@ -420,12 +420,13 @@ describe('E0 review group A: attribution is not laundered through undo (Aegis I-
     const of = { hsid: 'h1', turn: 'turn:h1/1' };
     // an agent re-added the person's mark, then rewrites it: the words sign names the agent
     seq = 0;
-    const a = [start(), row(claude, [{ type: 'add', node: text(10, 'person words') }], { undo: { of, restored: [[id(10), id(1), handOf(human)]] } }), row(claude, [{ type: 'update', id: id(10), patch: { text: 'agent words' } }])];
+    // (S1.4 E1: a restored entry is honoured only for an id deleted before, with that mark's own hand)
+    const a = [start(), row(human, [{ type: 'add', node: text(1, 'person words') }]), row(claude, [{ type: 'delete', id: id(1) }]), row(claude, [{ type: 'add', node: text(10, 'person words') }], { undo: { of, restored: [[id(10), id(1), handOf(human)]] } }), row(claude, [{ type: 'update', id: id(10), patch: { text: 'agent words' } }])];
     const na = foldDim(a).nodes.get(id(10))!;
     expect([na.by, na.wordsBy, na.otherBy]).toEqual([handOf(claude), handOf(claude), handOf(claude)]);
     // the person re-added an agent's mark, then rewrites it: the person's words are named, never under the agent's seal
     seq = 0;
-    const b = [start(), row(human, [{ type: 'add', node: text(10, 'agent words') }], { undo: { of, restored: [[id(10), id(1), handOf(kit)]] } }), row(human, [{ type: 'update', id: id(10), patch: { text: 'person words' } }])];
+    const b = [start(), row(kit, [{ type: 'add', node: text(1, 'agent words') }]), row(human, [{ type: 'delete', id: id(1) }]), row(human, [{ type: 'add', node: text(10, 'agent words') }], { undo: { of, restored: [[id(10), id(1), handOf(kit)]] } }), row(human, [{ type: 'update', id: id(10), patch: { text: 'person words' } }])];
     const nb = foldDim(b).nodes.get(id(10))!;
     expect([nb.by, nb.restoredFrom!.by, nb.wordsBy]).toEqual([handOf(human), handOf(kit), handOf(human)]);
   });
@@ -601,5 +602,47 @@ describe('E0 re-check: the restored rule judges every marker after the loop, and
     const p = planDimUndo({ rows: rowsOf(all, set), after: [cont], current: foldDim(all), actor: human, mint: minter(70), of: TURN, undoer: handOf(human) });
     // the arrow's link edit is that row's own change: the arrow is done, its from is not overwritten back to 1
     expect(p.ops.some((op) => op.type === 'update' && op.id === id(4))).toBe(false);
+  });
+});
+
+describe('S1.4 E1 (Aegis, defence in depth): a restored entry is honoured only for an id deleted before, with that mark\'s own hand', () => {
+  const of = { hsid: 'h1', turn: 'turn:h1/1' };
+  const readd = (a: DimActor, oldId: number, hand: DimBy, newId = 10) => row(a, [{ type: 'add', node: text(newId, 'words') }], { undo: { of, restored: [[id(newId), id(oldId), hand]] } });
+
+  it('an old id that is live, or was never on the board, leaves no restoredFrom', () => {
+    seq = 0;
+    const live = foldDim([start(), row(human, [{ type: 'add', node: text(1, 'mine') }]), readd(claude, 1, handOf(human))]);
+    expect(live.nodes.get(id(10))!.restoredFrom).toBeUndefined();
+    seq = 0;
+    const never = foldDim([start(), readd(claude, 7, handOf(human))]);
+    expect(never.nodes.get(id(10))!.restoredFrom).toBeUndefined();
+    // the honoured case, for contrast: deleted before, the same hand
+    seq = 0;
+    const ok = foldDim([start(), row(human, [{ type: 'add', node: text(1, 'mine') }]), row(claude, [{ type: 'delete', id: id(1) }]), readd(claude, 1, handOf(human))]);
+    expect(ok.nodes.get(id(10))!.restoredFrom).toEqual({ id: id(1), by: handOf(human) });
+    expect(ok.goneBy!.get(id(1))).toEqual(handOf(human));
+  });
+
+  it('an entry naming another hand than the deleted mark\'s original hand leaves no restoredFrom (Q-b: an agent\'s add never gets the person\'s look)', () => {
+    seq = 0;
+    const rows = [start(), row(kit, [{ type: 'add', node: text(1, 'kit words') }]), row(claude, [{ type: 'delete', id: id(1) }]), readd(claude, 1, handOf(human))];
+    const s = foldDim(rows);
+    const n = s.nodes.get(id(10))!;
+    expect([n.by, n.restoredFrom]).toEqual([handOf(claude), undefined]);
+  });
+
+  it('G5 forged-marker chain: a forged human restoredFrom on an agent\'s add, then a delete and a person\'s undo of it: the re-add carries the agent, never the person', () => {
+    seq = 0;
+    // the forged row (written directly, as a mod bug would): claims the person drew a mark that was never deleted
+    const rows = [start(), row(human, [{ type: 'add', node: text(2, 'mine') }]), readd(claude, 2, handOf(human), 10), row(claude, [{ type: 'delete', id: id(10) }], {}, 'h1')];
+    const before = foldDim(rows.slice(0, 3));
+    expect(before.nodes.get(id(10))!.restoredFrom).toBeUndefined();
+    const current = foldDim(rows);
+    let n = 60;
+    const plan = planDimUndo({ rows: [{ before, ops: (rows[3]!.payload as { ops: unknown[] }).ops, seq: rows[3]!.seq }], after: [], current, actor: human, undoer: handOf(human), mint: () => id(n++), of });
+    expect(plan.restored).toEqual([[id(60), id(10), handOf(claude)]]);
+    const undone = foldDim([...rows, row(human, plan.ops, { undo: { of, restored: plan.restored } })]);
+    const back = undone.nodes.get(id(60))!;
+    expect([back.by, back.restoredFrom]).toEqual([handOf(human), { id: id(10), by: handOf(claude) }]);
   });
 });

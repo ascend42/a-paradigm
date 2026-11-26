@@ -1,7 +1,7 @@
 // #dimension-mod (spec §12.7; first-party, mod-abi:v1; id `gnomon.dimension`).
 // A dimension is a list of op rows in the kernel log. This mod is the ONLY writer of those rows: it validates
 // every op with the published `dim-shape:v1` validator and appends through the host, which stamps who acted.
-// Runs under #mod-host from its pinned snapshot and imports nothing outside this folder. The seven commands act
+// Runs under #mod-host from its pinned snapshot and imports nothing outside this folder. The nine commands act
 // for a person on the Gnomon window and for nobody else; the two tools (S1.4) act for an attached session's agent,
 // identified by the host-written relayedFor alone, and append only op and draw.refused rows. It ships no view.
 //
@@ -12,7 +12,7 @@
 //  - every check, the 512 cap and the row-size check included, runs BEFORE the append;
 //  - mod state and the in-memory fold change only AFTER the append returned a seq;
 //  - a refusal is a code and a fixed sentence, never input.
-import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimHash, dimMayDraw, dimOpOid, dimRowBy, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, validateDimOps } from './dim-shape.mjs';
+import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, dimOpOid, dimRowBy, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, planDimUndo, validateDimOps } from './dim-shape.mjs';
 import {
   ATTACH_CAP,
   DIM_CAP,
@@ -30,7 +30,10 @@ import {
   ROW_MAX_VISITED,
   TURNS_CAP,
   countPayload,
+  changedSince,
   encodeTurns,
+  foreignCharge,
+  foreignLeft,
   canonicalText,
   measure,
   packRows,
@@ -58,10 +61,22 @@ import {
   plain,
   readArgs,
   refusal,
+  rowBytes,
   rowProblem,
   stampOf,
   startPayload,
   titleFor,
+  UNDO_ENTRIES_MAX,
+  catchUpCuts,
+  keyframeSets,
+  emptyHistory,
+  evictSet,
+  noteHistoryRow,
+  notePresence,
+  ofOf,
+  setKey,
+  setRowsOf,
+  unpinSet,
 } from './model.mjs';
 
 const ABI = 'mod-abi:v1';
@@ -131,6 +146,17 @@ function hashOf(state) {
     hashes.set(state, h);
   }
   return h;
+}
+
+/** G7: the attribution digest of a fold, computed once per fold object, beside its hash. */
+const attrs = new WeakMap();
+function attrDigestOf(state) {
+  let d = attrs.get(state);
+  if (d === undefined) {
+    d = dimAttrDigest(state);
+    attrs.set(state, d);
+  }
+  return d;
 }
 
 const ulidOf = (dim) => dim.slice(4);
@@ -228,7 +254,7 @@ async function readKeyframe(host, dim) {
  * 40,960,000 scanned rows; past that the open is refused `unavailable`), and every dimension row among them is
  * read. Returns the state, and the repo scope and seq of the first start row seen (for an adoption).
  */
-async function foldFromLog(host, dim, from, since, cancelled) {
+async function foldFromLog(host, dim, from, since, cancelled, onOp, keys) {
   let state = from.state;
   let grants = from.grants;
   const oids = new Map(from.oids);
@@ -260,10 +286,17 @@ async function foldFromLog(host, dim, from, since, cancelled) {
         continue;
       }
       if (ev.kind === DIM_KINDS.op) noteOid(oids, payload, r.seq);
+      // a cold open notes the change-sets it folded: a set whose rows straddle the open is never undone in part
+      if (keys && ev.kind === DIM_KINDS.op) {
+        const cs = dimChangeSetOf({ seq: r.seq, kind: ev.kind, payload });
+        if (cs) keys.add(setKey(cs));
+      }
       batch.push({ seq: r.seq, kind: ev.kind, payload });
     }
-    // ONE linear fold per page, continuing the last (never a fold per row: that copies the state per row)
-    if (batch.length > 0) state = foldDim(batch, undefined, state);
+    // ONE linear fold per page, continuing the last (never a fold per row: that copies the state per row). A catch-up
+    // (`onOp`: rows of a loaded fold the mod did not answer for) folds the page in stretches and notes its op rows
+    if (batch.length > 0 && !onOp) state = foldDim(batch, undefined, state);
+    else if (batch.length > 0) state = onOp(state, batch);
     if (grantRows.length > 0) grants = foldDimGrants(grantRows, dim, grants);
     if (own(page, 'caughtUp') === true) return { state, grants, oids, first, last };
     if (!Number.isSafeInteger(next) || next <= at) throw new Error('no progress');
@@ -278,11 +311,14 @@ async function foldFromLog(host, dim, from, since, cancelled) {
  * folded and the index is healed. A dimension whose rows are in the log but whose index is missing (or was written
  * for another log) is ADOPTED from its first start row and that row's host-stamped repo scope (L2).
  */
-async function load(host, dim, cancelled) {
+async function load(host, dim, cancelled, admit) {
   const hit = loaded.get(dim);
   if (hit) {
-    loaded.delete(dim);
-    loaded.set(dim, hit);
+    // a caller the board does not admit moves nothing in the cache, not even the use order (Aegis R-1)
+    if (!admit || admit(hit)) {
+      loaded.delete(dim);
+      loaded.set(dim, hit);
+    }
     return hit;
   }
   const id = ulidOf(dim);
@@ -292,15 +328,23 @@ async function load(host, dim, cancelled) {
     const kf = await readKeyframe(host, dim);
     const usable = kf && kf.state.seq >= idx.firstSeq ? kf : null;
     const from = usable ?? { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() };
-    const { state, grants, oids, last } = await foldFromLog(host, dim, from, usable ? usable.state.seq : idx.firstSeq - 1, cancelled);
+    // the sets the keyframe's history held, then the ones the rows after it carry (Aegis I-2)
+    const keys = new Set(usable?.sets ?? []);
+    const { state, grants, oids, last } = await foldFromLog(host, dim, from, usable ? usable.state.seq : idx.firstSeq - 1, cancelled, undefined, keys);
     // the fold must have reached at least the row the index names: anything less means rows are missing
     if (last < idx.lastSeq || state.dim !== dim) throw new Error('fold short');
-    const entry = { idx: { ...idx, lastSeq: last }, state, grants, oids, sinceKf: 0, dirty: last !== idx.lastSeq };
-    remember(dim, entry);
+    const entry = { idx: { ...idx, lastSeq: last }, state, grants, oids, sinceKf: 0, dirty: last !== idx.lastSeq, hist: emptyHistory(logId, keys) };
+    // Aegis I-1 (E1 review): a caller the board does not admit (an unattached tool session) reads it, but it never
+    // enters the loaded list, so it can push out no other board and its pins
+    if (!admit || admit(entry)) remember(dim, entry);
     return entry;
   }
+  // a TOOL never adopts (Aegis R-1): adoption writes the index and drops a keyframe, so only a person's command
+  // does it; the tool path (the one that passes `admit`) answers dim-unknown before any log read
+  if (admit) return null;
   // no usable index: look for the dimension in the log before anyone may create it again
-  const { state, grants, oids, first, last } = await foldFromLog(host, dim, { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() }, 0, cancelled);
+  const keys = new Set();
+  const { state, grants, oids, first, last } = await foldFromLog(host, dim, { state: emptyDimState(dim), grants: emptyDimGrants(), oids: new Map() }, 0, cancelled, undefined, keys);
   if (state.seq === 0 || first === null) return null;
   if (typeof first.repo !== 'string' || !REPO.test(first.repo)) throw new Error('start row without a repo scope');
   if (!dims.includes(id)) {
@@ -313,8 +357,8 @@ async function load(host, dim, cancelled) {
   // a keyframe under this id predates the adoption: it is not this fold's
   await dropKeyframe(host, id);
   kfs = kfs.filter((e) => e.id !== id);
-  const entry = { idx: { repo: first.repo, firstSeq: first.seq, lastSeq: last, title: state.title, log: logId }, state, grants, oids, sinceKf: 0, dirty: true };
-  remember(dim, entry);
+  const entry = { idx: { repo: first.repo, firstSeq: first.seq, lastSeq: last, title: state.title, log: logId }, state, grants, oids, sinceKf: 0, dirty: true, hist: emptyHistory(logId, keys) };
+  if (!admit || admit(entry)) remember(dim, entry);
   return entry;
 }
 
@@ -337,7 +381,7 @@ const grantList = (entry) => entry.state.attached.map((hsid) => ({ hsid, write: 
  * writer, so this normally reads one short page). `cancelled` is checked between pages.
  */
 async function catchUp(host, dim, entry, cancelled) {
-  const out = await foldFromLog(host, dim, entry, entry.idx.lastSeq, cancelled);
+  const out = await foldFromLog(host, dim, entry, entry.idx.lastSeq, cancelled, (state, batch) => noteCaughtUp(entry, state, batch));
   entry.state = out.state;
   entry.grants = out.grants;
   entry.oids = out.oids;
@@ -350,7 +394,65 @@ async function catchUp(host, dim, entry, cancelled) {
 function remember(dim, entry) {
   loaded.delete(dim);
   loaded.set(dim, entry);
-  while (loaded.size > LOADED_MAX) loaded.delete(loaded.keys().next().value);
+  // past LOADED_MAX the least recently used board with NO pinned set goes first (Aegis I-1); only when every board
+  // holds a pin does the least recently used one go (the mod-wide entries cap still applies)
+  while (loaded.size > LOADED_MAX) {
+    let out = null;
+    for (const [k, e] of loaded) if (k !== dim && !(e.hist && e.hist.pins.length > 0)) {
+      out = k;
+      break;
+    }
+    loaded.delete(out ?? loaded.keys().next().value);
+  }
+}
+
+/**
+ * Note an op row that landed in the entry's history (checkpoints and ring, memory only; S1.4 E1, Aegis G6), then
+ * hold the whole mod inside UNDO_ENTRIES_MAX checkpoint entries: the oldest unpinned set of any loaded dimension
+ * goes first, then the oldest pinned one. `row.payload` carries its stamp.
+ */
+function noteRow(entry, before, row, after) {
+  if (!entry.hist || entry.hist.log !== logId) entry.hist = emptyHistory(logId);
+  noteHistoryRow(entry.hist, before, row, Date.now(), after);
+  let total = 0;
+  for (const e of loaded.values()) if (e.hist) total += e.hist.entries;
+  if (!loaded.has(entry.state.dim)) total += entry.hist.entries;
+  while (total > UNDO_ENTRIES_MAX) {
+    let pick = null;
+    for (const pinned of [false, true]) {
+      for (const e of new Set([...loaded.values(), entry])) {
+        if (!e.hist) continue;
+        for (const st of e.hist.sets.values()) if (st.pinned === pinned && (pick === null || st.firstSeq < pick.st.firstSeq)) pick = { e, st };
+      }
+      if (pick) break;
+    }
+    if (!pick) break;
+    total -= pick.st.before.nodes.size + pick.st.before.gone.size;
+    evictSet(pick.e.hist, pick.st.key);
+  }
+}
+
+/**
+ * A catch-up page into a loaded fold (rows the mod did not answer for): folded in stretches that each start at a row
+ * opening a new change-set (that stretch's start state is the set's checkpoint), one linear fold per stretch, and
+ * every op row noted in the history. Returns the state after the page.
+ */
+function noteCaughtUp(entry, state, batch) {
+  if (!entry.hist || entry.hist.log !== logId) entry.hist = emptyHistory(logId);
+  const { cuts, straddle } = catchUpCuts(entry.hist, batch);
+  for (const k of straddle) entry.hist.before.add(k);
+  let start = 0;
+  const stretch = (end) => {
+    if (end <= start) return;
+    const part = batch.slice(start, end);
+    const before = state;
+    state = foldDim(part, undefined, state);
+    for (const row of part) if (row.kind === DIM_KINDS.op) noteRow(entry, before, { seq: row.seq, payload: row.payload }, state);
+    start = end;
+  };
+  for (let i = 0; i < batch.length; i++) if (cuts.has(i)) stretch(i);
+  stretch(batch.length);
+  return state;
 }
 
 /** Write the index entry; a failure is remembered and retried on the next command (the fold in memory is right). */
@@ -376,7 +478,7 @@ async function dropKeyframe(host, id) {
 async function saveKeyframe(host, dim, entry) {
   const id = ulidOf(dim);
   try {
-    const enc = encodeKeyframe(entry.state, logId, { grants: entry.grants, oids: entry.oids });
+    const enc = encodeKeyframe(entry.state, logId, { grants: entry.grants, oids: entry.oids, sets: keyframeSets(entry.hist) });
     entry.sinceKf = 0;
     if (!enc) return;
     const old = plain(await host.get(`kf:${id}`));
@@ -441,7 +543,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     return refusal('unavailable');
   }
   // a read-only command (dim.select, dim.check) cannot set state: the index heals on the next writing command
-  if (entry && entry.dirty && commandId !== 'dim.select' && commandId !== 'dim.check') await saveIdx(host, a.dim, entry);
+  if (entry && entry.dirty && commandId !== 'dim.select' && commandId !== 'dim.check' && commandId !== 'dim.seen') await saveIdx(host, a.dim, entry);
 
   if (commandId === 'dim.open' && !entry) {
     // a new dimension: this session's repo owns it, and this session is its first attached one
@@ -453,7 +555,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     const seq = await append(host, DIM_KINDS.start, payload);
     if (seq === BUSY) return refusal('append-busy');
     if (seq === null) return refusal('append-failed');
-    const fresh = { idx: { repo: a.repo, firstSeq: seq, lastSeq: seq, title: t.title, log: logId }, state: landed(emptyDimState(a.dim), DIM_KINDS.start, payload, stamp, seq), grants: emptyDimGrants(), oids: new Map(), sinceKf: 0, dirty: false };
+    const fresh = { idx: { repo: a.repo, firstSeq: seq, lastSeq: seq, title: t.title, log: logId }, state: landed(emptyDimState(a.dim), DIM_KINDS.start, payload, stamp, seq), grants: emptyDimGrants(), oids: new Map(), sinceKf: 0, dirty: false, hist: emptyHistory(logId) };
     try {
       // a keyframe left under this id is another dimension's fold (L1)
       await dropKeyframe(host, ulidOf(a.dim));
@@ -471,12 +573,14 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       // the row is in the log but the index could not take it: the next command adopts the dimension from the log
       return refusal('unavailable');
     }
-    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), grants: grantList(fresh) };
+    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), attr: attrDigestOf(fresh.state), grants: grantList(fresh) };
   }
 
   // every other path needs a known dimension of the caller's repo
   if (!entry) return refusal('dim-unknown');
   if (entry.idx.repo !== a.repo) return refusal('repo-mismatch');
+  // a person's command for this board: they have it open (agent-on-agent sets are pinned while they do, G6)
+  if (entry.hist) notePresence(entry.hist, Date.now());
   const state = entry.state;
   const attached = state.attached.includes(a.hsid);
 
@@ -493,7 +597,11 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     }
     // a grant row is outside the published fold: it moves the grant fold, through the same shared function
     if (kind === DIM_AUX_KINDS.grant) entry.grants = foldDimGrants([{ seq, kind, payload: { ...payload, relayedFor: stamp } }], a.dim, entry.grants);
-    else entry.state = landed(entry.state, kind, payload, stamp, seq);
+    else {
+      const before = entry.state;
+      entry.state = landed(entry.state, kind, payload, stamp, seq);
+      if (kind === DIM_KINDS.op) noteRow(entry, before, { seq, payload: { ...payload, relayedFor: stamp } });
+    }
     entry.idx = { ...entry.idx, lastSeq: seq };
     await saveIdx(host, a.dim, entry);
     return seq;
@@ -518,7 +626,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     // a reopen: no title (the first start row named the dimension), and any title sent is not read
     const seq = await write(DIM_KINDS.start, startPayload(a.dim, a.hsid, a.opened));
     if (typeof seq === 'number') await noteOpen(host, a.hsid, a.dim);
-    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), grants: grantList(entry) } : seq;
+    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), grants: grantList(entry) } : seq;
   }
 
   if (commandId === 'dim.grant') {
@@ -561,7 +669,60 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       loaded.delete(a.dim);
       return refusal('unavailable');
     }
-    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state) };
+    // G7: the attribution digest beside the hash; the page compares both at this hash point
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state) };
+  }
+
+  if (commandId === 'dim.seen') {
+    // Aegis S1 to S3: a person on the window (actorOf above: human, gui, no agent; never a tool, never a loop
+    // session) dismisses ONE standing notice. `of` must name a set this mod holds pinned for this board; anything
+    // else is a no-op refusal. Nothing is written: the pin is memory only.
+    if (!entry.hist || !unpinSet(entry.hist, setKey(a.of))) return refusal('not-pinned');
+    return { ok: true, dim: a.dim, released: true };
+  }
+
+  if (commandId === 'dim.undo') {
+    if (state.ended) return refusal('dim-ended');
+    // a turn is named by its session, which must be attached here (it need not be live)
+    if (a.of.kind === 'turn' && !state.attached.includes(a.of.hsid)) return refusal('undo-set-bad');
+    try {
+      await catchUp(host, a.dim, entry);
+    } catch {
+      loaded.delete(a.dim);
+      return refusal('unavailable');
+    }
+    if (a.base !== undefined && a.base > entry.state.seq) return refusal('args-bad');
+    // the person's own act: a continuation of their earlier call of this undo keeps its act, else a fresh one
+    // (minted here, never the page's: Aegis ruling 3), so one undo is one change-set of the person in its own right
+    // Judge I-2, Aegis I-5: the act is reused ONLY for the continuation of this person's own call that answered
+    // `more` for this set and this scope; every other undo is an action of its own
+    const pk = setKey(a.of);
+    const pend = entry.hist?.pending.get(pk);
+    const scope = JSON.stringify(a.ids ?? null);
+    const act = pend && pend.principal === actor.principal && pend.ids === scope ? pend.act : mintUlid();
+    const out = await undoCore(host, a.dim, entry, {
+      cs: a.of,
+      ...(a.ids ? { ids: a.ids } : {}),
+      actor,
+      undoer: { cls: 'human', principal: actor.principal },
+      stamp,
+      act,
+      appendRow: (payload) => append(host, DIM_KINDS.op, payload),
+    });
+    if (out.code) {
+      if (out.code !== 'append-busy') entry.hist?.pending.delete(pk);
+      return refusal(out.code, out.extra);
+    }
+    if (out.more) entry.hist.pending.set(pk, { act, principal: actor.principal, ids: scope });
+    else entry.hist.pending.delete(pk);
+    // the person pressed this set's notice: its pin is released (Aegis G6), but only by an undo of the WHOLE set
+    // that finished (Aegis I-3, Judge nit): a per-mark undo (`ids`) or an answer with `more` keeps it standing.
+    // A whole-set undo with no `more` releases it even when some marks were skipped (changed since, gone,
+    // refused): the answer's `skipped` says which (Aegis N-b)
+    if (!a.ids && !out.more) unpinSet(entry.hist, setKey(a.of));
+    await saveIdx(host, a.dim, entry);
+    if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), applied: out.applied, skipped: out.skipped, ...(out.more ? { more: true } : {}) };
   }
 
   if (commandId !== 'dim.op') return refusal('command-unknown');
@@ -572,13 +733,13 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   // a secret anywhere, or nothing accepted: no row at all
   if (v.secret) return refusal('secret', { refused: v.refused });
   if (v.ok.length === 0) return refusal('ops-refused', { refused: v.refused });
-  // the row is built from the validator's own copies only
-  const seq = await write(DIM_KINDS.op, opPayload(a.dim, v.ok));
+  // the row is built from the validator's own copies only; `act` is the pattern-checked arg (readArgs), never input as is
+  const seq = await write(DIM_KINDS.op, opPayload(a.dim, v.ok, undefined, a.act !== undefined ? { act: a.act } : undefined));
   if (typeof seq !== 'number') return seq;
   entry.sinceKf += v.ok.length;
   if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
   // the hash of the fold at this seq: the page compares its own fold there (S1.4 §5)
-  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), applied: v.ok.length, refused: v.refused };
+  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), applied: v.ok.length, refused: v.refused };
 }
 
 /* ── the two agent tools (S1.4 §2) ────────────────────────────────────────── */
@@ -608,7 +769,8 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   if (!dims.includes(ulidOf(dim))) return refusal('dim-unknown');
   let entry;
   try {
-    entry = await load(host, dim, cancelled);
+    // attach is checked BEFORE the board enters the loaded list (Aegis I-1)
+    entry = await load(host, dim, cancelled, (e) => e.state.attached.includes(actor.hsid));
   } catch {
     return refusal(cancelled() ? 'cancelled' : 'unavailable');
   }
@@ -620,6 +782,34 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   if (name === 'dim-view') return viewTool(host, dim, entry, actor, a, cancelled);
   return drawTool(host, dim, entry, actor, a, toolStampOf(relayedFor), cancelled);
 }
+
+/**
+ * Aegis ruling 5 (named from the agent's own view): the change-sets a `dim-view` changes answer listed to each hsid,
+ * the newest SHOWN_SETS per hsid, per dimension. MEMORY ONLY. E2's `dim-undo` reads it (`shownTo`).
+ */
+const SHOWN_SETS = 32;
+const shown = new Map();
+function noteShown(dim, hsid, entries) {
+  let byHsid = shown.get(dim);
+  if (!byHsid) {
+    while (shown.size >= SELECTION_DIMS) shown.delete(shown.keys().next().value);
+    shown.set(dim, (byHsid = new Map()));
+  }
+  let list = byHsid.get(hsid) ?? [];
+  for (const e of entries) {
+    if (!e.set) continue;
+    const k = setKey(readOfKnown(e.set));
+    list = [...list.filter((x) => x !== k), k];
+  }
+  byHsid.delete(hsid);
+  byHsid.set(hsid, list.slice(-SHOWN_SETS));
+  while (byHsid.size > OPENS_CAP) byHsid.delete(byHsid.keys().next().value);
+}
+/** Was this change-set listed to this hsid on this board (one of its last SHOWN_SETS)? */
+function shownTo(dim, hsid, cs) {
+  return !!shown.get(dim)?.get(hsid)?.includes(setKey(cs));
+}
+const readOfKnown = (of) => (Object.hasOwn(of, 'act') ? { kind: 'act', principal: of.principal, act: of.act } : { kind: 'turn', hsid: of.hsid, turn: of.turn });
 
 /** dim → oid → {input, answer}: the last ANSWERS_CAP draws with an opId, in memory (A8) */
 const answers = new Map();
@@ -648,13 +838,17 @@ async function appendTool(host, kind, payload) {
   return append(host, kind, payload);
 }
 
-/** Charge the turn budget (M8): the state write comes BEFORE the first row, and is never refunded. */
-async function charge(host, actor, n, counts) {
+/**
+ * Charge the turn budget (M8) and, from S1.4 E1, the foreign sub-budgets `f` (Aegis ruling 1): the state write
+ * comes BEFORE the first row; only rows the host definitely did not write are refunded (I-2).
+ */
+async function charge(host, actor, n, counts, f) {
   const t = turns.get(actor.hsid);
   const same = t && t.turn === actor.turn;
   const next = new Map(turns);
   next.delete(actor.hsid);
-  next.set(actor.hsid, { turn: actor.turn, used: (same ? t.used : 0) + n, counts: (same ? t.counts : 0) + counts });
+  const was = (k) => (same ? (t[k] ?? 0) : 0);
+  next.set(actor.hsid, { turn: actor.turn, used: was('used') + n, counts: was('counts') + counts, foreign: was('foreign') + (f?.touch ?? 0), fdel: was('fdel') + (f?.del ?? 0), fwords: was('fwords') + (f?.words ?? 0) });
   // the least recently charged session goes first (stated residual: a 257th session drawing resets the oldest)
   while (next.size > TURNS_CAP) next.delete(next.keys().next().value);
   await host.set('turns', encodeTurns(next));
@@ -686,26 +880,52 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   }
   const left = budgetLeft(turns, actor);
   if (left === 0) return refusal('turn-budget', { budgetLeft: 0 });
+  // F4, Aegis ruling 6: `base` is the seq of the caller's view; a base past the board's head is no view of it
+  if (a.base !== undefined && a.base > entry.state.seq) return refusal('args-bad');
   if (a.ops.length > DIM_LIMITS.opsPerRow) return finishRefused(host, dim, entry, actor, [refusedEntry(-1, 'ops', 'too-many-ops')], 'ops-refused');
   const sugar = resolveSugar(entry.state, a.ops, mintUlid);
+  // changed-since (per op, before validation): those ops are left out of the batch; the rest is validated as one
+  const kept = [];
+  const stale = [];
+  for (let i = 0; i < sugar.ops.length; i++) (a.base !== undefined && changedSince(entry.state, sugar.ops[i], a.base) ? stale : kept).push(i);
   // ONE validation of the whole batch (C5): a secret anywhere refuses everything before the first append
-  const v = validateDimOps(entry.state, sugar.ops, { cls: 'agent', principal: actor.principal, agent: actor.agent });
+  const v = validateDimOps(entry.state, kept.map((i) => sugar.ops[i]), { cls: 'agent', principal: actor.principal, agent: actor.agent });
+  const at = (r) => (r.index >= 0 && r.index < kept.length ? kept[r.index] : -1);
   // the validator's own fix is kept: a contrast refusal's sentence names its offered swatch (Aegis P0b F1)
-  const refused = v.refused.map((r) => refusedEntry(r.index, r.field, r.code, sugar.unresolved.get(r.index)?.has(r.field) ? NEW_KEY_FIX : r.fix));
+  const refused = v.refused.map((r) => refusedEntry(at(r), r.field, r.code, sugar.unresolved.get(at(r))?.has(r.field) ? NEW_KEY_FIX : r.fix));
+  // the field a stale op is refused on: a move names its marks in `ids`, an update or delete in `id`
+  for (const i of stale) refused.push(refusedEntry(i, own(plain(sugar.ops[i]) ?? {}, 'type') === 'move' ? 'ids' : 'id', 'changed-since'));
   if (v.secret) return finishRefused(host, dim, entry, actor, refused, 'secret');
   const bad = new Set(v.refused.map((r) => r.index));
   const okIdx = [];
-  for (let i = 0; i < sugar.ops.length && !bad.has(-1); i++) if (!bad.has(i)) okIdx.push(i);
+  for (let i = 0; i < kept.length && !bad.has(-1); i++) if (!bad.has(i)) okIdx.push(kept[i]);
   if (okIdx.length !== v.ok.length) return finishRefused(host, dim, entry, actor, refused, 'ops-refused');
-  // the budget: the first `left` accepted ops, the rest refused turn-budget
-  for (const i of okIdx.slice(left)) refused.push(refusedEntry(i, 'op', 'turn-budget'));
-  const take = Math.min(left, okIdx.length);
+  // the budgets: the turn's 64 ops, and per id the foreign touches, deletes and words (Aegis ruling 1). The first
+  // accepted ops that fit all four; from the first that does not, it and every later op are refused
+  const fl = foreignLeft(turns, actor);
+  const hand = { cls: 'agent', principal: actor.principal, agent: actor.agent };
+  const fc = v.ok.map((op) => foreignCharge(entry.state, op, hand));
+  let take = 0;
+  const sum = { touch: 0, del: 0, words: 0 };
+  let over = null;
+  for (; take < okIdx.length; take++) {
+    const c = fc[take];
+    if (take >= left) over = 'turn-budget';
+    else if (sum.touch + c.touch > fl.touch || sum.del + c.del > fl.del || sum.words + c.words > fl.words) over = 'foreign-budget';
+    if (over) break;
+    sum.touch += c.touch;
+    sum.del += c.del;
+    sum.words += c.words;
+  }
+  for (const i of okIdx.slice(take)) refused.push(refusedEntry(i, 'op', over));
   const packed = packRows(dim, v.ok.slice(0, take), oid, stamp, CALL_BYTES - COUNT_ROW_RESERVE);
   for (const j of okIdx.slice(packed.cut, take)) refused.push(refusedEntry(j, 'op', 'call-too-large'));
   const planned = packed.cut;
-  if (planned === 0) return finishRefused(host, dim, entry, actor, refused, 'ops-refused');
+  if (planned === 0) return finishRefused(host, dim, entry, actor, refused, refused.length > 0 && refused.every((r) => r.code === 'changed-since') ? 'changed-since' : 'ops-refused');
+  const chargeOf = (from, to) => fc.slice(from, to).reduce((x, c) => ({ touch: x.touch + c.touch, del: x.del + c.del, words: x.words + c.words }), { touch: 0, del: 0, words: 0 });
   try {
-    await charge(host, actor, planned, 0);
+    // charged BEFORE the append (M8): the ops and, per id, the foreign sub-budgets
+    await charge(host, actor, planned, 0, chargeOf(0, planned));
   } catch {
     return refusal('unavailable');
   }
@@ -715,6 +935,7 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   // I-2: ops of rows the host DEFINITELY did not write (a budget refusal, or rows never tried after a definite
   // stop) go back to the turn's budget; an unknown or failed append is never refunded (M8)
   let refund = 0;
+  const refundF = { touch: 0, del: 0, words: 0 };
   for (let r = 0; r < packed.rows.length; r++) {
     const pos = packed.rows[r];
     if (stop === null && cancelled()) stop = 'cancelled';
@@ -738,7 +959,9 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
         unknown = true; // this row may have landed: never refunded
         loaded.delete(dim);
       } else {
+        const before = entry.state;
         entry.state = landed(entry.state, DIM_KINDS.op, payload, stamp, seq);
+        noteRow(entry, before, { seq, payload: { ...payload, relayedFor: stamp } });
         entry.idx = { ...entry.idx, lastSeq: seq };
         if (oid !== undefined) noteOid(entry.oids, payload, seq);
         entry.sinceKf += pos.length;
@@ -751,12 +974,15 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
     }
     if (stop !== null) {
       for (const j of pos) refused.push(refusedEntry(okIdx[j], 'op', stop));
-      if (!unknown) refund += pos.length;
+      if (!unknown) {
+        refund += pos.length;
+        for (const j of pos) (refundF.touch += fc[j].touch), (refundF.del += fc[j].del), (refundF.words += fc[j].words);
+      }
     }
   }
   if (refund > 0) {
     try {
-      await charge(host, actor, -refund, 0);
+      await charge(host, actor, -refund, 0, { touch: -refundF.touch, del: -refundF.del, words: -refundF.words });
     } catch {
       /* the overcount stands (M8: never an undercount) */
     }
@@ -783,8 +1009,121 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   return answer;
 }
 
+/**
+ * THE UNDO CORE (S1.4 E1; Arky §3.3; Aegis rulings 3 and 4, G3, G5): shared by the person's `dim.undo` and, in
+ * E2, the agent's `dim-undo`. Plans the undo of one HELD change-set with the published `planDimUndo` as `o.actor`
+ * (the undoer: never "as a human" for a tool), per-node validated (G3), against the newest fold; packs the plan into
+ * at most CALL_ROWS rows inside the call's bytes, each row carrying `act` and the mod-built `undo` marker (its
+ * restored entries only for the re-adds IN that row, as `dimUndoMarkOf` honours them); appends them through
+ * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.fit(planOps)` (E2: charges
+ * the turn and foreign budgets) answers how many of the plan's ops may be sent, after planning and before the first
+ * append; `o.between()` (E2: the grant re-check, M9) runs before each row after the first and stops the rest when
+ * it answers true. The rest answers `more`; `planned` and `landed` are the plan's op indices packed and written.
+ * Returns `{applied, skipped, more}` or `{code, extra?}`. Never charges a turn: the caller does, before the append.
+ */
+async function undoCore(host, dim, entry, o) {
+  const held = entry.hist ? setRowsOf(entry.hist, setKey(o.cs)) : null;
+  // outside the window, after a restart, or a set whose rows straddle a reload: never a plan built on another state
+  if (!held || held.rows.length === 0) return { code: 'undo-expired' };
+  const plan = planDimUndo({ rows: held.rows, after: held.after, current: entry.state, actor: o.actor, undoer: o.undoer, mint: mintUlid, of: o.cs, ...(o.ids ? { ids: o.ids } : {}) });
+  if (plan.ops.length === 0) return { code: 'undo-nothing', extra: { skipped: plan.skipped } };
+  const marker = (ops) => {
+    const added = new Set(ops.filter((op) => op.type === 'add').map((op) => op.node.id));
+    const restored = plan.restored.filter((e) => added.has(e[0])).map((e) => (e.length > 3 ? [e[0], e[1], e[2], e[3] ?? null, e[4] ?? null] : [e[0], e[1], e[2]]));
+    return { of: ofOf(o.cs), ...(o.ids ? { ids: [...o.ids] } : {}), ...(restored.length > 0 ? { restored } : {}) };
+  };
+  const payloadOf = (ops) => opPayload(dim, ops, undefined, { act: o.act, undo: marker(ops) });
+  // pack: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside CALL_BYTES
+  const rows = [];
+  let cur = [];
+  let curIx = [];
+  const rowIx = [];
+  let used = 0;
+  let curBytes = 0;
+  let i = 0;
+  // Judge I-5 (E2-readiness): the caller's `fit(planOps)` runs after planning and before the first append and
+  // answers how many of the plan's ops may be sent (E2 charges its turn and foreign budgets inside it)
+  let limit = plan.ops.length;
+  if (o.fit) {
+    const n = await o.fit(plan.ops);
+    limit = Number.isSafeInteger(n) ? Math.max(0, Math.min(n, plan.ops.length)) : 0;
+    if (limit === 0) return { code: o.fitCode ?? 'undo-nothing', extra: { skipped: plan.skipped }, planned: [], landed: [] };
+  }
+  // Aegis I-4: an op that cannot fit a row even ALONE (a near-limit re-add with its marker) is left out with every
+  // later op that names the id it would add, counted in skipped.refused; packing goes on
+  const dropped = new Set();
+  let unfit = 0;
+  const names = (op) => (op.type === 'add' ? false : op.type === 'move' ? op.ids.some((x) => dropped.has(x)) : dropped.has(op.id) || (op.type === 'update' && Object.values(op.patch).some((v) => typeof v === 'string' && dropped.has(v))));
+  while (i < limit) {
+    const op = plan.ops[i];
+    if (names(op)) {
+      i++;
+      continue;
+    }
+    const b = rowBytes(payloadOf([...cur, op]), o.stamp);
+    if (b !== null && used + b <= CALL_BYTES) {
+      cur.push(op);
+      curIx.push(i);
+      curBytes = b;
+      i++;
+      continue;
+    }
+    if (cur.length === 0 && (b === null || rowBytes(payloadOf([op]), o.stamp) === null)) {
+      if (op.type === 'add') dropped.add(op.node.id);
+      unfit++;
+      i++;
+      continue;
+    }
+    if (cur.length === 0 || rows.length + 1 >= CALL_ROWS) break;
+    rows.push(cur);
+    rowIx.push(curIx);
+    used += curBytes;
+    cur = [];
+    curIx = [];
+    curBytes = 0;
+  }
+  if (cur.length > 0) (rows.push(cur), rowIx.push(curIx));
+  const planned = rowIx.flat();
+  const landedIx = [];
+  let more = plan.more || i < plan.ops.length;
+  const skipped = { ...plan.skipped, refused: plan.skipped.refused + unfit };
+  if (rows.length === 0) return unfit > 0 ? { code: 'undo-nothing', extra: { skipped } } : { code: 'row-too-large' };
+  const landedIds = new Set();
+  let landedRows = 0;
+  for (let r = 0; r < rows.length; r++) {
+    const ops = rows[r];
+    // Judge I-5: E2's grant re-check between rows (M9); a stop leaves the rest for a further call
+    if (r > 0 && o.between && (await o.between())) {
+      more = true;
+      break;
+    }
+    const payload = payloadOf(ops);
+    const seq = await o.appendRow(payload);
+    if (seq === BUSY || seq === null) {
+      // a budget refusal wrote nothing (the fold is kept, A4); anything else may have landed: the fold is forgotten
+      if (seq === null) loaded.delete(dim);
+      if (landedRows === 0) return { code: seq === BUSY ? 'append-busy' : 'append-failed', planned, landed: [] };
+      more = true;
+      break;
+    }
+    const before = entry.state;
+    entry.state = landed(entry.state, DIM_KINDS.op, payload, o.stamp, seq);
+    noteRow(entry, before, { seq, payload: { ...payload, relayedFor: o.stamp } });
+    entry.idx = { ...entry.idx, lastSeq: seq };
+    entry.sinceKf += ops.length;
+    landedRows++;
+    landedIx.push(...rowIx[r]);
+    for (const op of ops) landedIds.add(op.type === 'move' ? op.ids[0] : op.type === 'add' ? op.node.id : op.id);
+  }
+  // per mark: the plan's own counts when every row landed, else the marks the landed rows reached
+  const whole = landedRows === rows.length && i === plan.ops.length;
+  // `planned` and `landed` are indices into the plan's ops (E2 refunds what was charged and never sent)
+  return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more, planned, landed: landedIx };
+}
+
 /** A draw that wrote no op row: its count row, then the refusal. */
 async function finishRefused(host, dim, entry, actor, refused, code) {
+  refused.sort((x, y) => x.index - y.index);
   await countRow(host, dim, entry, actor, refused);
   return refusal(code, { dim, refused, budgetLeft: budgetLeft(turns, actor) });
 }
@@ -826,6 +1165,7 @@ async function viewTool(host, dim, entry, actor, a, cancelled) {
     }
     const ch = changesOf(mine, dimRowBy);
     if (!ch) return viewAnswer(state, { ...base, changes: 'reset' });
+    noteShown(dim, actor.hsid, ch.entries);
     return viewAnswer(state, { ...base, changes: ch.entries, touched: ch.touched });
   } catch {
     return viewAnswer(state, { ...base, changes: 'reset' });

@@ -3,6 +3,7 @@
  * card path into a mod rig, an in-memory log behind the real mod bridge (clamp, stamp and budgets included), and
  * small builders for ids and ops. The mod itself always runs as a real child from its pinned snapshot.
  */
+import { PAGE_MAX_BYTES } from '../src/kernel/socket/log-read.js';
 import path from 'node:path';
 import { DIM_KINDS, foldDim, type DimRow, type DimState } from '@a-company/gnomon-contracts';
 import { installPresenceBinding, readStaged, stageInstall } from '../src/kernel/manifest/install.js';
@@ -63,6 +64,8 @@ export interface FakeLog {
   /** called after each of the mod's appends lands (before its reply), with the row */
   afterAppend: ((row: ModAppendRow & { seq: number }) => void) | null;
   kernelCall: ModKernelCall;
+  /** the log.read the mod's kernel calls are answered by (one page), for the harness's own tests */
+  readPage(params: Record<string, unknown>): Promise<unknown>;
   /** the rows as a human reader's fold sees them */
   dimRows(): DimRow[];
   fold(dim: string): DimState;
@@ -73,10 +76,11 @@ export interface FakeLog {
  * checks, budgets on a clock that moves a second per append) and `log.read` pages the way socket/log-read.ts
  * does for a mod (cursor `since`, `until`, `kinds`, `limit`, rows as `{seq, view: 'full', event}`).
  */
-export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): FakeLog {
+export function fakeLog(opts: { pageScan?: number; pageBytes?: number; now?: () => number } = {}): FakeLog {
   let seq = 0;
   let clock = 0;
   const pageScan = opts.pageScan ?? 10_000;
+  const pageBytes = opts.pageBytes ?? PAGE_MAX_BYTES;
   const log: FakeLog = {
     logId: FAKE_LOG_ID,
     rows: [],
@@ -92,6 +96,7 @@ export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): F
     },
     afterAppend: null,
     kernelCall: undefined as unknown as ModKernelCall,
+    readPage: async () => ({}),
     dimRows: () => log.rows.map((r) => ({ seq: r.seq, kind: r.kind, payload: r.payload })),
     fold: (dim) => foldDim(log.dimRows().filter((r) => (r.payload as { dim?: string }).dim === dim)),
   };
@@ -112,8 +117,12 @@ export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): F
         }
         return { seq: mine };
       },
-      callAs: async (_principal, verb, params) => {
-        if (verb !== 'log.read') return {};
+      callAs: async (_principal, verb, params) => (verb === 'log.read' ? log.readPage(params as Record<string, unknown>) : {}),
+    },
+    { now: opts.now ?? (() => (clock += 1_000)) },
+  );
+  log.readPage = async (params) => {
+      {
         if (log.readDelayMs > 0) await new Promise((res) => setTimeout(res, log.readDelayMs));
         log.reads.push(params);
         const since = params.since === undefined ? 0 : (params.since as { logId: string; seq: number }).seq;
@@ -124,20 +133,28 @@ export function fakeLog(opts: { pageScan?: number; now?: () => number } = {}): F
         const out: unknown[] = [];
         let next = since;
         const stop = Math.min(until, since + pageScan);
+        // a page holds at most PAGE_MAX_BYTES of rows, as socket/log-read.ts: the row that crosses it ends the page,
+        // and `next` is the last row scanned (Probe F2)
+        let bytes = 0;
+        let full = false;
         for (const r of log.rows) {
           if (r.seq <= since) continue;
           if (r.seq > stop || out.length >= limit) break;
           next = r.seq;
           if (kinds && !kinds.includes(r.kind)) continue;
-          out.push({ seq: r.seq, view: 'full', event: { kind: r.kind, principal: r.principal, payload: r.payload, ...(r.scope ? { scope: r.scope } : {}) } });
+          const row = { seq: r.seq, view: 'full', event: { kind: r.kind, principal: r.principal, payload: r.payload, ...(r.scope ? { scope: r.scope } : {}) } };
+          out.push(row);
+          bytes += Buffer.byteLength(JSON.stringify(row));
+          if (bytes >= pageBytes) {
+            full = true;
+            break;
+          }
         }
-        if (out.length < limit) next = Math.max(next, stop);
+        if (out.length < limit && !full) next = Math.max(next, stop);
         return { rows: out, next, cursor: { logId: log.logId, seq: next }, logId: log.logId, head: seq, caughtUp: next >= seq, projection: 'mod', withheld: 0 };
-      },
-    },
-    // the default clock moves a second per append, so the row budgets never bind; a test of the budgets passes a
-    // real-window clock (opts.now), or it would pass vacuously
-    { now: opts.now ?? (() => (clock += 1_000)) },
-  );
+      }
+  };
+  // (the default clock above moves a second per append, so the row budgets never bind; a test of the budgets
+  // passes a real-window clock, opts.now, or it would pass vacuously)
   return log;
 }

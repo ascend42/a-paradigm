@@ -154,11 +154,27 @@ components:
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   dimension-mod:
     description: >-
-      #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3; first-party) -
+      #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3, S1.4 E1; first-party, 1.2.0) -
       packages/gnomon-mods/dimension, id gnomon.dimension: the ONE writer of
-      dimension rows. Seven commands, each declaring effects (dim.open,
-      dim.attach, dim.op, dim.close, dim.grant read+write; dim.select,
-      dim.check read); the four modns.gnomon.dimension.* kinds and the two
+      dimension rows. Nine commands, each declaring effects (dim.open,
+      dim.attach, dim.op, dim.close, dim.grant, dim.undo read+write; dim.select,
+      dim.check, dim.seen read). S1.4 E1 (edit-anything): dim.op takes a
+      ULID act; undo/restored/of are refused on every args and input surface
+      and only the mod writes markers; per-fold history in memory (checkpoint
+      per change-set, 512-row ring, 32 sets and 8 pins per board, 1,000,000
+      checkpoint entries per mod, dropped with the fold); pins for sets that
+      touched a person's marks or undid a person's action, and agent-on-agent
+      sets while a person is present (a gui command within 10 min); dim.seen
+      releases one pinned set; dim.undo plans with planDimUndo as the person,
+      packs at most 4 rows with a mod-minted act and the undo marker, answers
+      {ok, seq, hash, attr, applied, skipped, more?}, never charged
+      (undoCore shared with E2); dim-draw base and changed-since; foreign
+      sub-budgets per id (32 touches, 16 deletes, 16 words a turn) charged
+      before the append; attr beside hash on dim.check and dim.op; dim-view
+      changes carry set and undo, attribution compact (hands indices) within
+      one bridge-escaped answer budget (240 KiB); keyframe v3 carries attribution, goneBy
+      and the history's set keys (v1/v2 ignored). Tests: test/dimension-edit.test.ts.
+      It declares the four modns.gnomon.dimension.* kinds and the two
       auxiliary ones (grant, draw.refused); tools dim-view (read) and dim-draw
       (read, write) for an attached session's agent (S1.4: see below); no view, keybinding,
       offer, capability or egress. model.mjs is pure: actorOf (a human only
