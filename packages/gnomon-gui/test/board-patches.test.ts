@@ -136,8 +136,9 @@ describe('#gui-board build report (a real build of the pinned engine)', () => {
   }, 120_000);
 
   it('the hosts stripped from the minified chunk are exactly the pinned list (a new host in a bump is seen here)', () => {
+    // (libraries.excalidraw.com left with the Library components, patch library-components-stubbed, S1.4 P4a)
     expect(Object.keys(report.hosts).sort()).toEqual([
-      'discord.gg', 'docs.excalidraw.com', 'embed.reddit.com', 'giphy.com', 'gist.github.com', 'github.com', 'libraries.excalidraw.com', 'mermaid.js.org',
+      'discord.gg', 'docs.excalidraw.com', 'embed.reddit.com', 'giphy.com', 'gist.github.com', 'github.com', 'mermaid.js.org',
       'platform.twitter.com', 'player.vimeo.com', 'plus.excalidraw.com', 'react.dev', 'reddit.com', 'twitter.com', 'www.figma.com', 'www.youtube.com', 'x.com', 'youtube.com',
     ]);
   });
@@ -188,3 +189,36 @@ describe('#gui-board build report (a real build of the pinned engine)', () => {
     for (const [n, b] of files) expect(again.get(n)!.equals(b), n).toBe(true);
   }, 120_000);
 });
+
+describe('#gui-board S1.4 P4a: the Library is out of the bytes', () => {
+  it('the shipped chunk holds no Library unit, item grid or menu, and the one innerHTML writer of the unit is gone', async () => {
+    const { buildBoard } = (await import('../scripts/board-build.mjs')) as { buildBoard: () => Promise<{ files: Map<string, Uint8Array> }> };
+    const { files } = await buildBoard();
+    const js = Buffer.from(files.get('board/board.js')!).toString('utf8');
+    for (const word of ['library-unit', 'library-menu-items-container', 'library-menu', 'layer-ui__library', 'libraries.excalidraw.com']) expect(js.includes(word), word).toBe(false);
+    expect(js.includes('h.innerHTML=c.outerHTML')).toBe(false);
+  }, 120_000);
+});
+
+describe('#gui-board dash-runs patches: a dashed STROKE runs on across sub-paths; a fill never joins them (Aegis)', () => {
+  // the patched method alone, run against a recording context (test-only Function: nothing here ships)
+  const patched = (): ((ctx: unknown, drawing: unknown) => void) => {
+    let text = installed('roughjs/bin/canvas.js').toString('utf8');
+    for (const q of (PATCHES as Patch[]).filter((x) => x.file === 'roughjs/bin/canvas.js')) text = applyPatch(q, text) as string;
+    const body = /_drawToContext\(ctx, drawing, fixedDecimals, rule = 'nonzero'\) \{([\s\S]*?)\n {4}\}\n/.exec(text)![1]!;
+    return new Function('ctx', 'drawing', 'fixedDecimals', 'rule', body) as (ctx: unknown, drawing: unknown) => void;
+  };
+  const run = (type: string, dash: number[]): number => {
+    let moves = 0;
+    const ctx = { beginPath() {}, moveTo() { moves++; }, lineTo() {}, bezierCurveTo() {}, stroke() {}, fill() {}, getLineDash: () => dash };
+    const ops = [{ op: 'move', data: [0, 0] }, { op: 'lineTo', data: [10, 0] }, { op: 'move', data: [10, 0] }, { op: 'lineTo', data: [20, 0] }];
+    patched()(ctx, { type, ops });
+    return moves;
+  };
+  it('a dashed path joins at a shared point; a solid path and any fill keep every move', () => {
+    expect(run('path', [4, 6])).toBe(1);
+    expect(run('path', [])).toBe(2);
+    expect(run('fillPath', [4, 6])).toBe(2);
+  });
+});
+
