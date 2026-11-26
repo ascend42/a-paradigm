@@ -87,7 +87,9 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       theme: PREVIEW.theme,
       load,
       cardFocused: () => cardHasFocus(document),
-      onFold: () => diag('board fold asked'),
+      // (the fixture counts its folds on the page, so a real-input test can see Esc fold a leaf that is too short)
+      onFold: () => void ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds = ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds ?? 0) + 1, diag('board fold asked')),
+      pinned: () => document.querySelectorAll('#pinned .card').length,
       // a copy, a paste: the leaf's own register over the fixture's fold; pasted ops go where the board's edits go
       view: () => fx.state(),
       onOps: (ops, cause) => send(ops, cause),
@@ -118,6 +120,7 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       },
     });
     (globalThis as { gnomonPreviewLeaf?: unknown }).gnomonPreviewLeaf = leaf;
+    (globalThis as { gnomonPreviewFixture?: unknown }).gnomonPreviewFixture = fx;
     // a state with no engine (loading, failed) is ready once it has drawn itself
     if (variant === 'loading' || variant === 'failed') setTimeout(done, 500);
   });
@@ -197,13 +200,13 @@ async function openLiveBoard(host: HTMLElement, key: PreviewKey, load: () => Pro
         if (!c.notice) return;
         live.notices.push(c.notice);
         // (the loss of the link is said by the held-still line itself, for as long as it lasts)
-        if (!(c.notice.about === 'link' && c.notice.code === 'link-down')) leaf.say(noticeLine(c.notice));
+        if (!(c.notice.about === 'link' && c.notice.code === 'link-down')) leaf.say(noticeLine({ ...c.notice, verified: session.status().verified }));
       });
       // what the session was told before the leaf existed (what a reconnect lost, or that it is back)
       const told = session.lastNotice();
       if (told) {
         live.notices.push(told);
-        leaf.say(noticeLine(told));
+        leaf.say(noticeLine({ ...told, verified: session.status().verified }));
       }
     });
   // a reconnect destroys the session and its leaf: the new session gets a new leaf

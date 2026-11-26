@@ -24,6 +24,35 @@ description: >-
 components:
   gui-board:
     description: >-
+      P4b-4 (design-foot, components.board-rail.fold and board-leaf.too_short):
+      a chosen folded tool is a guest in the displaced tool's row, so the
+      rail's need is the unchosen layout's (railNeed, railDrawGroups); the
+      tight rail keeps its graduations; a leaf menu that scrolls is cut half a
+      row into a row (menuCutHeight). Too short is BOARD_MIN_HEIGHT =
+      railNeed(tight) = 140px and is its OWN held-still flag (never setInert):
+      no rail, the board shown, the foot kept, no key reaching the engine or an
+      open text (its words held in the field, never committed while short),
+      Esc and the head keys working, the line ('No room to draw · ...' by the
+      dock's pinned count) spoken once per entry, a drag in hand said. Under
+      56px of board the body is not drawn.
+      The check (design board-leaf.check, aegis C1/C2): DimStore.rowsAfter
+      gives k; core/board-leaf.ts checkLine is the ONE wording for the foot
+      and the palette's open-board row ('open here · <check>'); no log row on
+      the face, the rows in title=; the foot shows it only when its longest
+      wording and 16px fit after the hands; unchecked and not in the foot the
+      line under the head leads 'not checked yet · '; the out-of-date fact is
+      --fail at 500; Reconnected says nothing of saving while unchecked.
+      Keep words (design keep_words): quiet readouts lower case, stated lines
+      sentences in ink with contractions; precedence out of date, link down,
+      too short, yielded, missing marks, passing states, the keep line.
+      The narrow head (design widths_narrow): fitHead puts the glyph and esc
+      back, measures the title, and drops the glyph, then esc (under 340px,
+      only while show chat folds: the dock's kept), title cut last.
+      Review fixes (aegis F1 to F7, mika 1 to 3): no leave takes held words
+      silently (carry refuses, a switch says them); the palette's Dimensions
+      list freezes its order and keeps its selection by dim; an out-of-date
+      board folds with held words; the lead follows the fact on the
+      missing-marks lines; data-check-place is set at mount.
       #gui-board (spec §12.7 "The GUI hosts the canvas directly", §11.2 rule
       6; boards S1.0, s1-build-plan §2) - the board engine as a LAZY chunk of
       the pinned bundle. src/board/index.ts is the only module that imports

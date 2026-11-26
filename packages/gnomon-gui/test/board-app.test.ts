@@ -106,7 +106,7 @@ describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the ker
     // POSITIVE CONTROL: the same scan finds a string that IS shipped, in the app and in the board chunk, so a "no"
     // below is a real no (the files are there, decoded, and searchable)
     expect([...bundle.keys()]).toEqual(expect.arrayContaining(['app.js', 'board/board.js']));
-    expect(has('app.js', 'Not checked yet')).toBe(true);
+    expect(has('app.js', 'not checked yet')).toBe(true);
     expect(has('app.js', 'Dimensions in this project (/boards)')).toBe(true);
     expect(has('board/board.js', 'excalidraw')).toBe(true);
     let scanned = 0;
@@ -157,17 +157,17 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(f('opened').title).toMatch(/^Totals are off by a cent/);
     expect(f('opened').line).toMatch(/opened from \/board/);
     expect(f('opened').active).toMatch(/excalidraw/);
-    // never a bare "verified": the check reads "checked up to" the point the mod vouched for
-    expect(f('opened').check).toMatch(/^Checked up to change \d+/);
+    // never a bare "verified" and no log row on the face (design check.words): a new board has no mark to check yet
+    expect(f('opened').check).toBe('nothing to check yet');
     expect(f('drawn')).toMatchObject({ rows: ['session.start:command', 'op:add'], frames: 2, nodes: 1, marks: 1, pending: 0, keep: 'saved', sameAsMod: true, drift: 0 });
     // the check does not vouch for the row after its point
-    expect(f('drawn').check).toMatch(/^Checked up to change \d+ of \d+$/);
+    expect(f('drawn').check).toBe('checked up to 1 change ago');
     // P4b-3: the check is READ ON THE LEAF, whole, at the foot's right end (it was a hover title on the head's 8px glyph)
     expect(f('opened').chk).toMatchObject({ text: f('opened').check, bad: false, whole: true, title: null });
     expect(f('drawn').chk).toMatchObject({ text: f('drawn').check, bad: false, whole: true });
-    expect(f('drawn').chk!.text).toMatch(/^Checked up to change \d+ of \d+$/);
+    expect(f('drawn').chk!.text).toBe('checked up to 1 change ago');
     expect(f('reopened').chk).toMatchObject({ bad: false, whole: true });
-    expect(f('reopened').chk!.text).toMatch(/^Checked up to change \d+$/);
+    expect(f('reopened').chk!.text).toBe('checked up to the last change');
     // Esc folds: dim.close, the leaf goes, the edge tab `<title> · board` shows, focus returns
     expect(f('folded')).toMatchObject({ open: false, rows: ['session.start:command', 'op:add', 'session.end'], frames: 3 });
     expect(f('folded').tab).toMatch(/^Totals are off by a cen… · board$/);
@@ -617,14 +617,165 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect((a.after as { active: string }).active).toMatch(/bd-turn-key/);
   }, 120_000);
 
+  it('P4b-4 too short in the app (aegis C3_1, C3_2 ruled, C3_4): a text open on the board when the pinned zone grows; keys typed across the change reach neither the text, a card nor the composer and focus stays; show chat and ⌥B do not fold the held words; a pending change still settles', async () => {
+    const SHORTEN = (on: boolean) => ({ read: `(() => { const p = document.getElementById('pinned'); const c = ${CUR}; if (${on}) p.style.paddingTop = Math.max(0, c.leaf.room() - 100) + 'px'; else p.style.paddingTop = ''; return 1; })()`, as: `short-${on}` });
+    const SEE = `(() => { const c = ${CUR}; const f = document.querySelector('.bd-host .bd-board textarea'); const k = ${A}.kernel; return { state: c ? c.leaf.state() : null, field: f ? f.value : null, focusIsField: !!f && document.activeElement === f, composer: document.getElementById('composer-text').value, approve: k.__approve.n, frames: k.__n.n, line: document.querySelector('.bd-host .bd-keep').textContent, open: !!c, pending: c ? c.session.status().pending : null, sameAsMod: c ? c.session.hash() === ${A}.mod.hash(c.session.dim) : null, rows: k.rows.filter((r) => String(r.event.kind).endsWith('dimension.op')).length }; })()`;
+    const see = (as: string) => ({ read: SEE, as });
+    const a = await real([
+      ...toIdle, ...typeBoard,
+      // C3_4: a change in flight when the board goes too short still settles and is stored
+      ...drawRect, SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short' && ${CUR}.session.status().pending === 0`, as: 'settled while too short', timeoutMs: 15_000 }, see('settled'), SHORTEN(false), { until: `${CUR}.leaf.state() !== 'too-short'`, as: 'room again' },
+      { press: '.bd-host [data-key="tool:text"]' }, { at: [200, 330], press: true }, { until: `!!document.querySelector('.bd-host .bd-board textarea')`, as: 'a text open' }, ...type('hello'), see('typing'),
+      SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short'`, as: 'too short' }, ...type('adyn`'), { key: ' ' }, { key: 'Enter', text: '\r' }, { key: 'Escape' }, see('typed'),
+      // aegis F5: the check is painted again when the words become held (C1.4: never "the last change" with words held)
+      { read: `${CUR}.leaf.el.dataset.check`, as: 'checkHeld' },
+      // aegis re-check of F4: on a Mac only ⌘ passes; Ctrl+K reaches neither the held text nor the palette; ⌘K does
+      { key: 'k', ctrl: true }, { read: `({ palette: !document.getElementById('palette').hidden, field: (document.querySelector('.bd-host .bd-board textarea') || {}).value ?? null })`, as: 'ctrlK' },
+      { key: 'k', meta: true }, { read: `({ palette: !document.getElementById('palette').hidden })`, as: 'metaK' }, { key: 'Escape' }, { until: `document.getElementById('palette').hidden`, as: 'the palette closed' },
+      { press: '#board-turn .bd-turn-key' }, { key: 'b', alt: true }, see('folds'),
+    ]);
+    expect(a.errors).toEqual([]);
+    type See = { state: string; field: string | null; focusIsField: boolean; composer: string; approve: number; frames: number; line: string; open: boolean; pending: number; sameAsMod: boolean; rows: number };
+    const S = (k: string): See => a[k] as See;
+    expect(S('settled')).toMatchObject({ state: 'too-short', pending: 0, sameAsMod: true });
+    expect(S('settled').rows).toBeGreaterThan(0);
+    expect(S('typing')).toMatchObject({ field: 'hello', focusIsField: true });
+    // C3_1: nothing typed in the change reached the text, a card or the composer, and focus did not move
+    expect(S('typed')).toMatchObject({ state: 'too-short', field: 'hello', focusIsField: true, composer: S('typing').composer, approve: S('typing').approve, frames: S('typing').frames });
+    expect(S('typed').line).toBe('No room to draw · your words are kept on this page');
+    expect(a.checkHeld).toBe('checked up to an older change');
+    // ruled C3_2: show chat and ⌥B refuse to fold while the words are held, and say so
+    expect(a.ctrlK).toEqual({ palette: false, field: 'hello' });
+    expect(a.metaK).toEqual({ palette: true });
+    expect(S('folds')).toMatchObject({ open: true, field: 'hello', frames: S('typing').frames, line: 'No room to draw · your words are kept on this page' });
+  }, 180_000);
+
+  it('aegis C2.2 (design check.signs.unchecked): a session resumed after the link comes back keeps this page\'s check (DimSessions holds it across the rebuild), so the unchecked state does not persist there; the lead stands exactly while the check is null', async () => {
+    const LEAD = `(() => { const c = ${CUR}; if (!c) return null; const s = c.session.status(); return { verified: s.verified, checkedSeq: s.checkedSeq, phase: s.phase, line: c.leaf.el.querySelector('.bd-keep').textContent, inFoot: c.leaf.checkShown(), place: c.leaf.el.dataset.checkPlace ?? null }; })()`;
+    const narrow = { read: `(document.querySelector('.bd-host').style.width = '240px', 1)`, as: 'narrow' };
+    const a = await real([
+      ...typeBoard, ...drawRect, narrow, { wait: 300 }, { read: LEAD, as: 'before' },
+      { read: `(${A}.down(), 1)`, as: 'down' }, { until: `${CUR} && ${CUR}.session.status().link === 'down'`, as: 'the link down' },
+      { press: '#reconnect-btn' }, { until: `!!${CUR} && ${CUR}.session.status().link === 'up' && ${CUR}.leaf.state() !== 'loading'`, as: 'resumed', timeoutMs: 20_000 }, narrow, { until: `!/^Reconnected/.test(${CUR}.leaf.el.querySelector('.bd-keep').textContent)`, as: 'the said Reconnected line gone', timeoutMs: 15_000 }, { read: LEAD, as: 'resumed' },
+      { read: `(${CUR}.leaf.setCheck('not checked yet', 'none', { open: true }), ${CUR}.leaf.el.querySelector('.bd-keep').textContent)`, as: 'forced' },
+    ]);
+    expect(a.errors).toEqual([]);
+    type L = { verified: boolean | null; checkedSeq: number | null; phase: string; line: string; inFoot: boolean; place: string | null };
+    expect((a.before as L).verified).toBe(true);
+    expect((a.before as L).line).not.toMatch(/^not checked yet · /);
+    const r = a.resumed as L;
+    // FOUND (C2.2's risk, answered by the build): the rebuilt session reads the page's own map of answered hashes, so a
+    // resumed board is checked at once and no unchecked state persists across a reconnect
+    expect(r).toMatchObject({ verified: true, phase: 'open', inFoot: false });
+    expect(r.checkedSeq).toBe((a.before as L).checkedSeq);
+    expect(r.line).not.toMatch(/^not checked yet · /);
+    // and the lead is tied to the check alone: the same resumed leaf told it has no check leads at once
+    expect(a.forced as string).toMatch(/^not checked yet · /);
+  }, 180_000);
+
+  describe('aegis F1: words held by a too-short board are never thrown away silently by a leave that is not a fold', () => {
+    const SHORT = `(() => { const p = document.getElementById('pinned'); const c = ${CUR}; p.style.paddingTop = Math.max(0, c.leaf.room() - 100) + 'px'; return 1; })()`;
+    const SEEF1 = `(() => { const c = ${CUR}; const f = document.querySelector('.bd-host .bd-board textarea'); return { open: !!c, title: c ? c.leaf.el.querySelector('.title').textContent : null, field: f ? f.value : null, line: c ? c.leaf.el.querySelector('.bd-keep').textContent : null, toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent), hsid: c ? c.session.hsid : null }; })()`;
+    const holdHello = [{ press: '.bd-host [data-key="tool:text"]' }, { at: [200, 330], press: true }, { until: `!!document.querySelector('.bd-host .bd-board textarea')`, as: 'a text open' }, ...type('hello'), { read: SHORT, as: 'short' }, { until: `${CUR}.leaf.state() === 'too-short' && ${CUR}.leaf.holdsWords()`, as: 'words held while too short' }];
+    it('a session switch (which cannot be refused) says the words are gone, by their first characters', async () => {
+      const other = `(() => { const r = [...document.querySelectorAll('#session-list .session-row[data-hsid]')].find((x) => !x.classList.contains('active')); if (!r) return null; r.id = 'f1-other'; return r.dataset.hsid; })()`;
+      const a = await real([...toIdle, ...typeBoard, ...holdHello, { read: other, as: 'other' }, { read: `(globalThis.__oldF1 = ${CUR}.session, 1)`, as: 'old' }, { press: '#f1-other' }, { until: `!${CUR}`, as: 'the leaf left (the switch says what it lost as it goes)', timeoutMs: 15_000 }, { read: SEEF1, as: 'after' },
+        { until: `!globalThis.__oldF1.alive`, as: 'the left session settled and went', timeoutMs: 15_000 },
+        { read: `${A}.kernel.rows.filter((r) => String(r.event.kind).endsWith('dimension.op')).flatMap((r) => (r.event.payload.ops || []).filter((o) => o.node && typeof o.node.text === 'string' && o.node.text.includes('hello')).map((o) => o.node.text))`, as: 'stored' }]);
+      expect(a.errors).toEqual([]);
+      expect(a.other).toBeTruthy();
+      const toasts = (a.after as { toasts: string[] }).toasts;
+      expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
+      // aegis re-check: the toast is never false: once the leave has settled no text with the words was stored
+      expect(a.stored).toEqual([]);
+    }, 180_000);
+    it('aegis re-check (F1 gap a): an end the kernel drives (the reset of a cursor epoch) reads the held words before the leaf goes, and says them', async () => {
+      const a = await real([...toIdle, ...typeBoard, ...holdHello, { read: `(${A}.board.sessions.reset(), 1)`, as: 'reset' }, { until: `!${CUR}`, as: 'the leaf gone' }, { read: SEEF1, as: 'after' }]);
+      expect(a.errors).toEqual([]);
+      const toasts = (a.after as { toasts: string[] }).toasts;
+      expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
+    }, 180_000);
+    it('a pick of another board in the Dimensions list (/boards) is refused and says the held line; the words stay', async () => {
+      const a = await real([
+        ...toIdle, ...typeBoard, ...foldByEsc, { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 },
+        ...holdHello, { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'the list' },
+        { read: `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent)`, as: 'rows' }, { key: 'ArrowDown' }, { key: 'Enter' }, { wait: 300 }, { read: SEEF1, as: 'after' },
+      ]);
+      expect(a.errors).toEqual([]);
+      expect((a.rows as string[])[1]).not.toMatch(/plan B/);
+      expect(a.after).toMatchObject({ open: true, title: 'plan B', field: 'hello', line: 'No room to draw · your words are kept on this page' });
+      expect((a.after as { toasts: string[] }).toasts.filter((t) => /weren.t saved/.test(t))).toEqual([]);
+    }, 240_000);
+  });
+
+  it('aegis F2: the open Dimensions list keeps its order and its selection by dim: an agent row that would re-sort it does not change what Enter opens', async () => {
+    // a row of the dimension mod on `dim`, as an agent's attach would be written (the principal and scope of the log's last dimension row)
+    const agentRow = (dimExpr: string) => ({ read: `(() => { const k = ${A}.kernel; const last = k.rows.filter((r) => String(r.event.kind).startsWith('modns.gnomon.dimension.')).pop(); const dim = ${dimExpr}; const id = '01JF2AGENT' + String(k.rows.length).padStart(16, '0'); return k.append('modns.gnomon.dimension.op', { v: 1, dim, ops: [{ type: 'add', node: { id, kind: 'rect', x: 40, y: 40, z: 'V' + k.rows.length, w: 30, h: 20 } }], relayedFor: last.event.payload.relayedFor }, undefined, { principal: last.event.principal, scope: last.event.scope }); })()`, as: `agent-${dimExpr.length}-${Math.random()}` });
+    const ROWS = `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => ({ dim: r.dataset.dim, title: r.querySelector('.pal-title').textContent, sel: r.classList.contains('sel') }))`;
+    const b = await real([
+      ...toIdle, ...typeBoard, ...foldByEsc,
+      { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 }, { read: `${CUR}.session.dim`, as: 'dimB' }, ...foldByEsc,
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 1' }, { key: 'ArrowDown' }, { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent !== 'plan B'`, as: 'A open', timeoutMs: 30_000 }, { read: `${CUR}.session.dim`, as: 'dimA' },
+      agentRow(`${JSON.stringify('')} || [...${A}.board.dock.rows()].find((r) => r.title === 'plan B').dim`),
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 2' }, { read: ROWS, as: 'before' },
+      // the person is on plan B's row (the first); an agent then writes on the open board A: it would re-sort A first
+      agentRow(`${CUR}.session.dim`), { until: `(${A}.board.dock.rows()[0] || {}).dim === ${CUR}.session.dim && ${CUR}.session.view().nodes.size > 0`, as: 'rows() re-sorted by the agent row, and the open board drew it' }, { read: ROWS, as: 'after' },
+      { key: 'Enter' }, { until: `document.getElementById('palette').hidden && !!${CUR} && ${CUR}.leaf.state() !== 'loading'`, as: 'what Enter opened is up', timeoutMs: 20_000 }, { read: `${CUR}.leaf.el.querySelector('.title').textContent`, as: 'opened' },
+    ]);
+    expect(b.errors).toEqual([]);
+    type Row = { dim: string; title: string; sel: boolean };
+    expect((b.before as Row[])[0]).toMatchObject({ title: 'plan B', sel: true });
+    expect((b.after as Row[]).map((r) => r.dim)).toEqual((b.before as Row[]).map((r) => r.dim));
+    expect((b.after as Row[]).find((r) => r.sel)!.title).toBe('plan B');
+    expect(b.opened).toBe('plan B');
+  }, 300_000);
+
+  it('aegis re-check of F2: in the COMMAND palette ArrowDown moves the highlight with the selection, and Enter runs the command that is highlighted', async () => {
+    const SEL = `(() => { const rows = [...document.querySelectorAll('#palette-list [data-id]')]; return { ids: rows.map((r) => r.dataset.id), sel: rows.findIndex((r) => r.classList.contains('sel')) }; })()`;
+    const a = await real([
+      { key: 'k', meta: true }, { until: `!document.getElementById('palette').hidden`, as: 'the palette open' }, ...type('theme'), { read: SEL, as: 's0' },
+      { key: 'ArrowDown' }, { read: SEL, as: 's1' }, { key: 'Enter' }, { until: `document.getElementById('palette').hidden`, as: 'the command ran' },
+      { read: `document.documentElement.dataset.theme ?? null`, as: 'theme' },
+    ]);
+    expect(a.errors).toEqual([]);
+    const s0 = a.s0 as { ids: string[]; sel: number };
+    const s1 = a.s1 as { ids: string[]; sel: number };
+    expect(s0.ids.length).toBeGreaterThanOrEqual(2);
+    expect(s0.sel).toBe(0);
+    expect(s1.sel).toBe(1);
+    const chosen = s1.ids[1]!;
+    expect(chosen).toMatch(/^theme\./);
+    expect(a.theme).toBe(chosen.slice('theme.'.length));
+  }, 120_000);
+
+  it('aegis F6, the dock half: an out-of-date board whose link then goes keeps "fold it" under its head and holds no words for later', async () => {
+    const a = await real([
+      { read: `(${A}.mod.wrongHashNext = true, 1)`, as: 'lie' }, ...typeBoard, { until: `${CUR}.session.status().readOnly === true`, as: 'out of date', timeoutMs: 15_000 }, facts('ood'),
+      { read: `(${A}.down(), 1)`, as: 'down' }, { until: `${CUR} && ${CUR}.session.status().link === 'down'`, as: 'the link down' }, facts('both'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'ood')).toMatchObject({ inert: 'out-of-date', line: 'This board is out of date · fold it and open it again' });
+    expect(fa(a, 'both')).toMatchObject({ inert: 'out-of-date', link: 'down', line: 'This board is out of date · fold it and open it again' });
+  }, 120_000);
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)
-      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 15_000 }, { wait: 400 }, facts('shown'),
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 15_000 }, { until: `document.getElementById('board-turn').hidden`, as: 'the strip gone', timeoutMs: 15_000 }, facts('shown'),
     ]);
     expect(a.errors).toEqual([]);
     expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
   }, 120_000);
+
+  it('T-2026-11-26-001 (under CPU throttling, as on CI): the second press of a fast double press on show chat lands where the strip was, after the fold, and focus stays in the chat', async () => {
+    // the cause, traced: at 6x the second press arrives after the fold, on the page's header (no focus there), and its
+    // mousedown blurred the chat to BODY. A person's fast double press does the same: fixed in the product (app.ts showChatAt)
+    const a = await real([
+      ...typeBoard, { press: '#board-turn .bd-turn-key', settle: 0 }, { press: '#board-turn .bd-turn-key' }, { until: `!${CUR}`, as: 'the board folded', timeoutMs: 30_000 }, { until: `document.getElementById('board-turn').hidden`, as: 'the strip gone', timeoutMs: 30_000 }, facts('shown'),
+    ], { cpuThrottle: 6 });
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'shown')).toMatchObject({ open: false, active: 'viewport' });
+  }, 240_000);
 
   it('#gui-board-turn (Mika 3): a size change inside the leaf alone (the pane and the feed keep theirs) re-reads the room: under 300px the strip goes to one row', async () => {
     const ROWS = `(() => { const c = ${CUR}; return { rows: document.querySelectorAll('#board-turn .bd-turn-r').length, room: c.leaf.room() + document.getElementById('board-turn').offsetHeight }; })()`;
@@ -846,29 +997,40 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
   }, 120_000);
 
   const toDecide = [{ key: 'k', meta: true }, { wait: 200 }, ...type('Layout: Decide'), { wait: 200 }, { key: 'Enter' }, { wait: 500 }];
-  it('Mika R1: in the narrowest leaf (Decide at 1024, 303px) a check too long for the foot is never clipped: it ends in an ellipsis with its whole words in title=, `you` stays whole, and a fold that did not match keeps the words "Did not match" whole', async () => {
-    const FOOT = `(() => { const l = document.querySelector('.bd-host .bd-leaf'); const foot = l.querySelector('.bd-foot'); const c = foot.querySelector('.bd-check'); const you = foot.querySelector('.bd-hand'); const fb = foot.getBoundingClientRect(); const cb = c.getBoundingClientRect(); const w = c.querySelector('.bd-check-w'); const n = c.querySelector('.bd-check-n');
-      return { leafW: Math.round(l.getBoundingClientRect().width), overflow: foot.scrollWidth - foot.clientWidth, rightPad: Math.round(fb.right - cb.right), insideFoot: cb.right <= fb.right + 0.5 && cb.left >= fb.left, cut: c.scrollWidth > c.clientWidth + 1 || (!!n && n.scrollWidth > n.clientWidth + 1), ellipsis: getComputedStyle(n || c).textOverflow, title: c.title, text: c.textContent, youWhole: you.scrollWidth <= you.clientWidth + 1 && you.getBoundingClientRect().right <= cb.left + 0.5, youText: you.textContent.trim(),
-        words: w ? { text: w.textContent, whole: w.scrollWidth <= w.clientWidth + 1 && w.getBoundingClientRect().width > 60 && w.getBoundingClientRect().right <= fb.right } : null }; })()`;
-    const set = (line: string, tone: string) => ({ read: `(${CUR}.leaf.setCheck(${JSON.stringify(line)}, ${JSON.stringify(tone)}), 1)`, as: `set-${tone}-${line.length}` });
-    const LONG = 'Checked up to change 1234567 of 1234568';
-    const BAD = 'Did not match at change 123456789012345678';
-    const a = await real([...toDecide, ...typeBoard, { read: FOOT, as: 'real' }, set(LONG, 'ok'), { wait: 150 }, { read: FOOT, as: 'long' }, set(BAD, 'bad'), { wait: 150 }, { read: FOOT, as: 'bad' }], { fixture: 'always-scopes', width: 1024, height: 768 });
-    expect(a.errors).toEqual([]);
-    type F = { leafW: number; overflow: number; rightPad: number; insideFoot: boolean; cut: boolean; ellipsis: string; title: string; text: string; youWhole: boolean; youText: string; words: { text: string; whole: boolean } | null };
-    const r = a.real as F;
-    const long = a.long as F;
-    const bad = a.bad as F;
-    expect(r.leafW).toBeLessThanOrEqual(304);
-    // the real check of this board fits whole, and says its whole words in title= as well
-    expect(r).toMatchObject({ overflow: 0, insideFoot: true, cut: false, youWhole: true, rightPad: 14 });
-    expect(r.title).toBe(r.text);
-    // too long for the foot: it gives way with an ellipsis inside the foot; nothing runs out of it unseen
-    expect(long, 'a long check in the 303px leaf').toMatchObject({ overflow: 0, insideFoot: true, cut: true, ellipsis: 'ellipsis', title: LONG, youWhole: true, rightPad: 14 });
-    expect(long.youText).toMatch(/^you \d+$/);
-    // did not match: the words are whole and read without hover; only the number side gives way
-    expect(bad, 'a mismatch in the 303px leaf').toMatchObject({ overflow: 0, insideFoot: true, title: BAD, youWhole: true, words: { text: 'Did not match', whole: true } });
-  }, 120_000);
+  it('design check.place and signs (aegis C1.7, C2.1, C2.2, C2.5): the hands alone decide whether the check is in the foot, at 303, 424 and 680px, whatever it says; unchecked and not in the foot, the line under the head leads with "not checked yet"; the mismatch fact is --fail at 500; the palette row carries the check', async () => {
+    const WORDS = ['checked up to the last change', 'checked up to 999+ changes ago', 'nothing to check yet', 'not checked yet', 'doesn’t match the saved board'];
+    const PLACE = `(async () => { const c = ${CUR}; const l = c.leaf.el; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const out = {};
+      for (const w of ${JSON.stringify(WORDS)}) { c.leaf.setCheck(w, w === 'not checked yet' ? 'none' : w.startsWith('doesn') ? 'bad' : 'ok', { title: 'log row 79; this board’s latest is row 81', open: true }); await fr();
+        const k = l.querySelector('.bd-foot .bd-check'); out[w] = { shown: c.leaf.checkShown(), drawn: !!k, whole: !k || k.scrollWidth <= k.clientWidth + 1, title: k ? k.title : null, lead: l.querySelector('.bd-keep').textContent.startsWith('not checked yet · ') }; }
+      return { width: Math.round(l.getBoundingClientRect().width), out }; })()`;
+    const at680 = { read: `(document.querySelector('.bd-host').style.width = '680px', 1)`, as: 'w680' };
+    const rows = { read: `${A}.board.dock.rows().filter((r) => r.check).map((r) => r.check)`, as: 'rows' };
+    const narrow = await real([...toDecide, ...typeBoard, { await: PLACE, as: 'place' }, rows], { fixture: 'always-scopes', width: 1024, height: 768 });
+    const desk = await real([...typeBoard, { await: PLACE, as: 'place' }, at680, { wait: 300 }, { await: PLACE, as: 'wide' }, { read: `(document.querySelector('.bd-host').style.width = '240px', 1)`, as: 'w240' }, { wait: 300 }, { await: PLACE, as: 'tight' }], { width: 1024, height: 768 });
+    expect(narrow.errors).toEqual([]);
+    expect(desk.errors).toEqual([]);
+    type P = { width: number; out: Record<string, { shown: boolean; drawn: boolean; whole: boolean; title: string | null; lead: boolean }> };
+    // (240px is under the supported 300: the foot there has no room for the check, which proves the other side of the rule)
+    for (const [name, p] of [['303', narrow.place], ['424', desk.place], ['680', desk.wide], ['240', desk.tight]] as const) {
+      const q = p as P;
+      const shown = new Set(Object.values(q.out).map((v) => v.shown));
+      expect(shown.size, `${name} (${q.width}px): the check's presence changed with its words`).toBe(1);
+      for (const [w, v] of Object.entries(q.out)) {
+        expect(v.drawn, `${name} ${w}`).toBe(v.shown);
+        expect(v.whole, `${name} ${w}: cut`).toBe(true);
+        if (v.drawn) expect(v.title, `${name} ${w}`).toBe('log row 79; this board’s latest is row 81');
+        // C2.2: the lead only for the unchecked board whose check is not in the foot
+        expect(v.lead, `${name} ${w}: the lead`).toBe(w === 'not checked yet' && !v.shown);
+      }
+    }
+    expect((narrow.place as P).width).toBeLessThanOrEqual(304);
+    expect(Object.values((desk.place as P).out)[0]!.shown).toBe(true);
+    expect(Object.values((desk.tight as P).out)[0]!.shown).toBe(false);
+    expect((desk.tight as P).out['not checked yet']!.lead).toBe(true);
+    // C2.5: the second home ships with the rule: the open board's row in the palette's list holds the check
+    expect(narrow.rows).toHaveLength(1);
+    expect((narrow.rows as string[])[0]).toMatch(/^(nothing to check yet|checked up to |not checked yet)/);
+  }, 180_000);
 
   it('Mika R2: a line that states something in the keep line\'s place (marks missing, part of the board, words waiting) draws in ink; opening, folding and saving stay quiet', async () => {
     const LINE = `(() => { const k = document.querySelector('.bd-host .bd-keep'); return { text: k.textContent, ink: k.classList.contains('bd-said-line'), colour: getComputedStyle(k).color }; })()`;
@@ -891,6 +1053,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const lie = `(${A}.mod.wrongHashNext = true, 1)`;
     const a = await real([
       { read: lie, as: 'lie' }, ...typeBoard, facts('opened'),
+      { read: `(() => { const f = document.querySelector('.bd-host .bd-keep .bd-fail-fact'); const probe = document.createElement('span'); probe.style.color = 'var(--fail)'; document.body.append(probe); const fail = getComputedStyle(probe).color; probe.remove(); return f ? { text: f.textContent, colour: getComputedStyle(f).color, fail, weight: getComputedStyle(f).fontWeight, rest: getComputedStyle(f.parentElement).color } : null; })()`, as: 'fact' },
       { read: `(() => { const k = ${A}.kernel; k.__before = k.__n.n; return 1; })()`, as: 'm' },
       { press: '.bd-host [data-key="tool:rect"]' }, { drag: [[250, 200], [290, 225], [330, 250]] }, { wait: 400 }, ...type('nt'), { at: [200, 330], press: true }, ...type('zz'), { key: 'Delete' }, { wait: 400 }, facts('poked'),
       { key: 'Escape' }, { wait: 900 }, facts('folded'),
@@ -898,7 +1061,12 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     expect(f('opened')).toMatchObject({ open: true, inert: 'out-of-date', line: 'This board is out of date · fold it and open it again' });
-    expect(f('opened').check).toMatch(/^Did not match at change \d+$/);
+    expect(f('opened').check).toBe('doesn’t match the saved board');
+    // design check.signs.mismatch: the FACT in --fail at 500, the rest in ink
+    const fact = a.fact as { text: string; colour: string; fail: string; weight: string; rest: string };
+    expect(fact).toMatchObject({ text: 'This board is out of date', weight: '500' });
+    expect(fact.colour).toBe(fact.fail);
+    expect(fact.rest).not.toBe(fact.fail);
     // the foot says it in the failed colour, whole; what to do about it is the line under the head
     expect(f('opened').chk).toMatchObject({ text: f('opened').check, bad: true, whole: true });
     // real input on the held-still board: no mark, no row, no command left the page
@@ -952,8 +1120,10 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(a.errors).toEqual([]);
     // P4b-3: wherever the leaf draws its foot, the check stands whole in it beside the hands (the 424px leaf included)
     if (a.state !== 'too-short') {
-      expect(fa(a, 'f').chk, `the check at ${width}×${height}`).toMatchObject({ bad: false, whole: true });
-      expect(fa(a, 'f').chk!.text).toMatch(/^Checked up to change \d+/);
+      // design check.place: in the foot WHOLE when it fits after the hands, else not at all (never cut)
+      const chk = fa(a, 'f').chk;
+      if (chk) expect(chk, `the check at ${width}×${height}`).toMatchObject({ bad: false, whole: true });
+      expect(fa(a, 'f').check).toMatch(/^(nothing to check yet|checked up to )/);
     }
     type R = { x: number; y: number; r: number; b: number } | null;
     const r = a.rects as { leaf: R; turn: R; turnRows: number; roomWithout: number | null; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };

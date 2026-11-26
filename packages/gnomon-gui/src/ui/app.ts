@@ -874,10 +874,24 @@ function paintBoardTurnNow(): void {
   liveTicker.sync(hasLive(items) || strip.live());
 }
 /**
+ * T-2026-11-26-001: the press after show chat's fold (a fast double press) lands where the strip WAS, on page chrome
+ * that takes no focus, and a mousedown there moved focus off the chat to BODY. For the length of a double-click after
+ * the chat takes focus, a press on something that takes no focus leaves focus where show chat put it.
+ */
+const SHOW_CHAT_HOLD_MS = 500;
+let showChatHeldUntil = 0;
+document.addEventListener('mousedown', (e) => {
+  if (performance.now() >= showChatHeldUntil) return;
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || t.closest('button, a[href], input, textarea, select, [tabindex], [contenteditable]')) return;
+  e.preventDefault(); // (the default of a mousedown is the focus move; the press itself still happens)
+}, true);
+/**
  * Show chat (and the strip's working key) after the board folded: the chat at its latest row with focus in it, the
  * #jump-latest path. The working key also leaves its turn's steps unfolded and puts focus on that key in the chat.
  */
 function showChatAt(workKey: string | null): void {
+  showChatHeldUntil = performance.now() + SHOW_CHAT_HOLD_MS;
   if (workKey) expandedActs.add(stepsFoldKey(workKey));
   if (workKey) remountItem(workKey);
   follow.jump();
@@ -1979,6 +1993,9 @@ const boardDock = mountBoardDock({
   load: () => loadBoard(), // the engine chunk is fetched on the first open, never with the app
   theme: () => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day'),
   cardFocused: () => cardHasFocus(document),
+  pinned: () => $('pinned').querySelectorAll('.card').length,
+  // the open board's row in the palette's Dimensions list changes its words in place while the list is open (aegis C2.4)
+  checkChanged: () => void (palDims && !$('palette').hidden && paintPalette()),
   focused: () => focused,
   sessionInfo: (hsid) => {
     const s = store.sessions.get(hsid);
@@ -3947,6 +3964,13 @@ let palSel = 0;
 let palItems: Command[] = [];
 /** #gui-board-dock: the palette as the Dimensions list (`/boards`, ⌘K "Dimensions: list"); null is the command palette */
 let palDims: DimensionRow[] | null = null;
+/**
+ * Aegis F2: the Dimensions list's order is FROZEN while it is open (the first paint's order, joined by dim; a new
+ * dimension joins at the end), and the selection is kept by dim, never by index: an agent's row re-sorts `rows()` by
+ * `lastSeq`, and an index would make Enter open (and attach this session to) another board.
+ */
+let palOrder: string[] | null = null;
+let palSelDim: string | null = null;
 function openDimensions(): void {
   palSel = 0;
   openPalette('', true);
@@ -3956,6 +3980,8 @@ let palOpener: HTMLElement | null = null;
 function openPalette(prefix = '', dims = false): void {
   closeAppMenu();
   palDims = dims ? [] : null;
+  palOrder = null;
+  palSelDim = null;
   $<HTMLInputElement>('palette-input').setAttribute('aria-label', dims ? 'Dimensions' : 'command');
   $<HTMLInputElement>('palette-input').placeholder = dims ? 'find a dimension' : 'command or verb';
   if ($('palette').hidden) palOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -3969,6 +3995,8 @@ function openPalette(prefix = '', dims = false): void {
 function closePalette(): void {
   if ($('palette').hidden) return;
   palDims = null;
+  palOrder = null;
+  palSelDim = null;
   $('palette').hidden = true;
   const back = palOpener;
   palOpener = null;
@@ -3978,12 +4006,18 @@ function paintPalette(): void {
   if (palDims) {
     // the Dimensions list in the palette's pattern: this repo's dimensions, newest first; a press opens one
     const q = $<HTMLInputElement>('palette-input').value.trim().toLowerCase();
-    palDims = boardDock.rows().filter((r) => !q || r.title.toLowerCase().includes(q));
-    palSel = Math.min(palSel, Math.max(0, palDims.length - 1));
+    const fresh = boardDock.rows();
+    if (!palOrder) palOrder = fresh.map((r) => r.dim);
+    for (const r of fresh) if (!palOrder.includes(r.dim)) palOrder.push(r.dim);
+    const at = (dim: string): number => palOrder!.indexOf(dim);
+    palDims = fresh.sort((a, b) => at(a.dim) - at(b.dim)).filter((r) => !q || r.title.toLowerCase().includes(q));
+    const kept = palSelDim ? palDims.findIndex((r) => r.dim === palSelDim) : -1;
+    palSel = kept >= 0 ? kept : Math.min(palSel, Math.max(0, palDims.length - 1));
+    palSelDim = palDims[palSel]?.dim ?? null;
     const list = $('palette-list');
     clear(list);
     list.appendChild(h(doc, 'div', { class: 'menu-h', role: 'presentation' }, 'Dimensions') as unknown as HTMLElement);
-    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim }, h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: 'pal-kbd' }, [r.time, ...r.notes].filter(Boolean).join(' · '))) as unknown as HTMLElement));
+    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim }, h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: 'pal-kbd' }, [...(r.check ? ['open here', r.check] : []), r.time, ...r.notes].filter(Boolean).join(' · '))) as unknown as HTMLElement));
     // none at all, or none that match what was typed: two different things, said as what they are
     if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? 'This session has no dimensions yet · /board opens one' : 'Open a session first')) as unknown as HTMLElement);
     return;
@@ -4586,12 +4620,19 @@ function wire(): void {
   });
   $('palette-input').addEventListener('input', () => {
     palSel = 0;
+    palSelDim = null;
     paintPalette();
   });
   $('palette-input').addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') palSel = Math.min(palSel + 1, (palDims ?? palItems).length - 1);
-    else if (e.key === 'ArrowUp') palSel = Math.max(palSel - 1, 0);
-    else if (e.key === 'Enter' && palDims) {
+    // (one else-chain: the arrows of BOTH palettes reach the preventDefault and the repaint below; the Dimensions
+    // list also keeps its selection by dim, aegis F2 and its re-check)
+    if (e.key === 'ArrowDown') {
+      palSel = Math.min(palSel + 1, (palDims ?? palItems).length - 1);
+      if (palDims) palSelDim = palDims[palSel]?.dim ?? null;
+    } else if (e.key === 'ArrowUp') {
+      palSel = Math.max(palSel - 1, 0);
+      if (palDims) palSelDim = palDims[palSel]?.dim ?? null;
+    } else if (e.key === 'Enter' && palDims) {
       // a row of the Dimensions list opens on THIS press (attach then open when it is not this session's)
       const row = palDims[palSel];
       e.preventDefault();

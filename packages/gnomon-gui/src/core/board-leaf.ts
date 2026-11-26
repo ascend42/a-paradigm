@@ -5,11 +5,18 @@
  * the one line the design does not give (an image was refused) is marked.
  */
 import { contentContrastWords, type ContentContrastWhy } from '@a-company/gnomon-contracts';
+import { railLayout, railNeed } from './board-rail.js';
+
 export type LeafLoad = 'loading' | 'ready' | 'failed';
 export type LeafState = 'loading' | 'failed' | 'too-short' | 'yielded' | 'empty' | 'open';
 
-/** Under this much board height the leaf cannot be drawn on (design `heights`). */
-export const BOARD_MIN_HEIGHT = 148;
+/**
+ * Under this much board height the leaf is too short to draw on (design `too_short.floor`): the tight rail's own
+ * need, ONE number from the rail's model (core/board-rail.ts), never a second constant. 140px.
+ */
+export const BOARD_MIN_HEIGHT = railNeed(railLayout(0));
+/** Under this much board the body is not drawn at all, too short or not: head, line, foot (design `too_short.shows`). */
+export const BOARD_BODY_MIN = 56;
 /** Under this the head drops '› board' (design `widths`; a container query in styles.css does it). */
 export const HEAD_MEDIUM_MIN = 520;
 /** Nothing but the head shows for this long while the chunk loads (no flash). */
@@ -30,7 +37,10 @@ export const LEAF_COPY = {
   dimensionsTitle: 'Dimensions in this project (/boards)',
   loading: 'opening the board…',
   yielded: 'A card has the keys · click the board to draw',
-  tooShort: 'The window is too short to draw here · make it taller, or decide the pinned cards',
+  // (design too_short.line: the dock passes the pinned count; a line never names a move that does nothing)
+  tooShort: 'No room to draw · decide a card or make the window taller',
+  tooShortNoCard: 'No room to draw · make the window taller',
+  tooShortWords: 'No room to draw · your words are kept on this page',
   emptyTitle: 'Nothing drawn yet',
   emptyHint: 'N for a sticky · T to write · or pick a tool and draw.',
   failedTitle: 'The board didn’t open',
@@ -78,11 +88,12 @@ export const CLIP_COPY = {
  * proposed for Luna: the pass that mounts the leaf in the app owns the keep line's words. Plain words only: a
  * notice's `code`, `field` and `why` are never shown. Every line fits the leaf at a 1024 window.
  */
-export function noticeLine(n: { about: string; code: string; lost: number; why?: string | null }): string {
+export function noticeLine(n: { about: string; code: string; lost: number; why?: string | null; verified?: boolean | null }): string {
   if (n.code === 'link-down' && n.about !== 'link') return 'The link is down · that change wasn’t saved';
   if (n.code === 'redo-unavailable') return 'Redo isn’t on the board yet';
   if (n.code === 'undo-nothing') return 'Nothing to undo';
-  if (n.code === 'reconnected') return 'Reconnected · everything here is saved';
+  // (design check.signs.never_implied, aegis C2.3 and F7: "everything here is saved" only for a board that is checked)
+  if (n.code === 'reconnected') return n.verified === true ? 'Reconnected · everything here is saved' : KEEP_COPY.reconnected;
   if (n.about === 'link' && n.code === 'link-down') return INERT_COPY['link-down'];
   if (n.code === 'out-of-date') return INERT_COPY['out-of-date'];
   if (n.code === 'closing') return 'The board is folding · that change wasn’t made';
@@ -133,25 +144,28 @@ export type LeafInert = keyof typeof INERT_COPY;
 export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number }): string | null {
   // (`not-saved` is the live loop's word for "pending while the link is down": it is never said without that)
   if (s.link === 'down' || s.keep === 'not-saved') return linkDownLine(s);
+  // (design keep_words.precedence: the lines about missing marks, 5, outrank the passing states, 6)
+  if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
+  if (s.partial) return KEEP_COPY.partial;
   if (s.phase === 'opening') return KEEP_COPY.opening;
   if (s.phase === 'closing') return KEEP_COPY.folding;
   if (s.keep === 'saving') return KEEP_COPY.saving;
-  if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
-  if (s.partial) return KEEP_COPY.partial;
   return null;
 }
 /**
- * The words of the keep line's own states (boards S1.3 P4b-3: the words this pass ships). The design record gives the
- * keep line itself and the yielded and too-short lines; it is silent on every line here, so each is the plainest
- * wording that fits the leaf at a 1024 window (about 59 characters), FOR LUNA to rule.
+ * The words of the keep line's own states (design board-leaf.keep_words, design-foot). ONE rule of case and colour: a
+ * QUIET readout is lower case in --sec (opening, folding, saving); a STATED line is a sentence in ink (.bd-said-line).
+ * Contractions throughout, with the typographic apostrophe. A stated line's fact is before ' · ' and at most 40
+ * characters, so it survives the cut in a 303px leaf.
  */
 export const KEEP_COPY = {
-  opening: 'Opening…',
-  folding: 'Folding…',
-  saving: 'Saving…',
+  // (keep_words.one_wording: the first open reads the same words from the head's first draw: LEAF_COPY.loading)
+  opening: 'opening the board…',
+  folding: 'folding the board…',
+  saving: 'saving…',
   notSavedDown: 'Not saved · reconnecting',
-  dropped: 'Part of this board could not be held · marks are missing',
-  partial: 'Earlier marks are not shown · this is part of the board',
+  dropped: 'Some marks may be missing here · the saved board has them',
+  partial: 'Earlier marks aren’t shown here · the saved board has them',
   wordsHeld: 'Not connected · your words are kept on this page only',
   wordsHeldBack: 'Reconnecting · your words are kept on this page only',
   notConnected: 'Not connected',
@@ -159,15 +173,23 @@ export const KEEP_COPY = {
   // (kept up for as long as the words are held; Mika's wording cut to fit the leaf at a 1024 window)
   wordsWait: 'Your words are waiting · T, then click, gets them back',
   wordsBack: 'Your words are back · click away to save them',
-  wordsGone: 'The words you were typing were not saved',
+  wordsGone: 'The words you were typing weren’t saved',
+  // (aegis F1: a session switch cannot be refused; the words that went are named by their first characters)
+  wordsGoneWith: (words: string): string => {
+    // (aegis re-check: whitespace collapsed, so a newline in the words never breaks the toast's one line)
+    const w = [...String(words).replace(/\s+/g, ' ').trim()];
+    return `The words you were typing weren’t saved · “${w.length > 24 ? `${w.slice(0, 23).join('')}…` : w.join('')}”`;
+  },
   reconnected: 'Reconnected',
   copyDown: 'Nothing was copied · copy it again once reconnected',
   foldedDown: 'Folded while reconnecting · unsaved changes were dropped',
   reopens: 'That board was folded · opening it starts it again',
   noSession: 'Open a session first',
-  wordsAndChangesGone: (n: number): string => `Your typed words and ${n === 1 ? 'one change' : `${n} changes`} were not saved`,
-  changesGone: (n: number): string => (n === 1 ? 'One change on the board was not saved' : `${n} changes on the board were not saved`),
+  wordsAndChangesGone: (n: number): string => `Your words and ${n === 1 ? 'one change' : `${n} changes`} weren’t saved`,
+  changesGone: (n: number): string => (n === 1 ? 'One change on the board wasn’t saved' : `${n} changes on the board weren’t saved`),
   cardWaits: 'A card needs you · finish the text on the board first',
+  // (aegis C3_5: a drag or a stroke in hand when the board went too short is put back, and said)
+  changeBack: 'That change wasn’t kept · the board is as it was',
   noBoard: 'This session has no board yet',
 } as const;
 /** The held-still line while the link is down: `Reconnecting` alone unless something of the person's is not saved. */
@@ -179,23 +201,63 @@ export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pendin
   if (s.pending > 0 || s.keep === 'not-saved' || (o.unsaved ?? 0) > 0) return coming ? KEEP_COPY.notSavedDown : KEEP_COPY.notSavedOff;
   return coming ? INERT_COPY['link-down'] : KEEP_COPY.notConnected;
 }
-/**
- * The check display (Aegis, final): what the fold was compared with, in plain words. Never a bare "verified": the
- * mod vouches for a POINT, so the line reads "checked up to" it; `verified: null` is unchecked.
- */
-export function checkLine(s: { verified: boolean | null; checkedSeq: number | null; seq: number }): string {
-  if (s.verified === null || s.checkedSeq === null) return CHECK_COPY.unchecked;
-  // (what to do about it is the held-still line's, in the keep line's place: `INERT_COPY['out-of-date']`)
-  if (s.verified === false) return `Did not match at change ${s.checkedSeq}`;
-  return s.checkedSeq < s.seq ? `Checked up to change ${s.checkedSeq} of ${s.seq}` : `Checked up to change ${s.checkedSeq}`;
+/** The check's words (design board-leaf.check.words): no row number on the face; quiet, lower case. */
+export const CHECK_COPY = {
+  latest: 'checked up to the last change',
+  behind: (k: number): string => `checked up to ${k > 999 ? '999+' : k} ${k === 1 ? 'change' : 'changes'} ago`,
+  older: 'checked up to an older change',
+  empty: 'nothing to check yet',
+  unchecked: 'not checked yet',
+  mismatch: 'doesn’t match the saved board',
+} as const;
+/** The longest wording (design check.place: 189px at 10.5): the foot's probe measures this, whatever the check says now. */
+export const CHECK_LONGEST = CHECK_COPY.behind(1000);
+/** The gap the check needs after the hands (design check.place). */
+export const CHECK_GAP = 16;
+export interface CheckInput {
+  verified: boolean | null;
+  checkedSeq: number | null;
+  /** the dimension's latest seq as the fold holds it */
+  seq: number;
+  /** this dimension's held rows above `checkedSeq` (DimStore.rowsAfter) */
+  after: number;
+  /** the held rows include one that makes, changes or removes a mark */
+  marks: boolean;
+  /** the page holds only part of the dimension */
+  partial: boolean;
+  /** the person's changes not stored yet (pending and unsaved) */
+  unstored: number;
+  /** typed words are held on the page */
+  words: boolean;
 }
 /**
- * Where the check shows (boards S1.3 P4b-3; not in the design record, FOR LUNA): the right end of the leaf's foot,
- * in the foot's own style, always whole (the hands give way to it). It was a hover title on the head's glyph.
+ * The check (design board-leaf.check, aegis C1.1 to C1.6): what this page's fold was compared with, in the person's
+ * terms. ONE function for the foot and the Dimensions row (C2.4). Precedence: mismatch, not checked, then a partly
+ * held board (only the older-change form, C1.6), then empty, then latest or behind. "the last change" only when the
+ * check is at the latest row with nothing of the person's unstored and no held words (C1.3, C1.4).
  */
-export const CHECK_COPY = { unchecked: 'Not checked yet' } as const;
+export function checkLine(s: CheckInput): string {
+  if (s.verified === false) return CHECK_COPY.mismatch;
+  if (s.verified === null || s.checkedSeq === null) return CHECK_COPY.unchecked;
+  if (s.partial) return CHECK_COPY.older;
+  if (!s.marks) return CHECK_COPY.empty;
+  if (s.unstored > 0 || s.words) return CHECK_COPY.older;
+  if (s.checkedSeq === s.seq && s.after === 0) return CHECK_COPY.latest;
+  return s.after > 0 ? CHECK_COPY.behind(s.after) : CHECK_COPY.older;
+}
+/** The check's title= (aegis C1.7): the log's row numbers, said as the log's. Empty while unchecked. */
+export const checkTitle = (s: { checkedSeq: number | null; seq: number }): string => (s.checkedSeq === null ? '' : `log row ${s.checkedSeq}; this board’s latest is row ${s.seq}`);
 /** How the check reads: `bad` when the fold did not match (drawn in the failed colour), `none` while unchecked. */
 export const checkTone = (s: { verified: boolean | null; checkedSeq: number | null }): 'ok' | 'none' | 'bad' => (s.verified === null || s.checkedSeq === null ? 'none' : s.verified ? 'ok' : 'bad');
+/** The lead of the line under the head while open and unchecked and the check is not in the foot (design check.signs.unchecked). */
+export const UNCHECKED_LEAD = { quiet: 'not checked yet · ', stated: 'Not checked yet · ' } as const;
+/** The out-of-date line's fact, drawn in --fail at 500 (design check.signs.mismatch). */
+export const OUT_OF_DATE_FACT = 'This board is out of date';
+
+/** The too-short line (design `too_short.line`): words held first, then whether a card is pinned to decide. */
+export const tooShortLine = (o: { pinned: number; words: boolean }): string => (o.words ? LEAF_COPY.tooShortWords : o.pinned > 0 ? LEAF_COPY.tooShort : LEAF_COPY.tooShortNoCard);
+/** The same line is spoken once per entry and never again within this long of the last time (aegis C3_6). */
+export const TOO_SHORT_SPEAK_MS = 1500;
 /** A save shows as `Saving…` only when it has lasted this long (a quick save never flickers the line). */
 export const KEEP_SLOW_MS = 600;
 
@@ -213,8 +275,8 @@ export function failedCause(error: unknown, afterMount: boolean): string {
   const m = error instanceof Error ? error.message : String(error ?? '');
   if (afterMount) return 'The drawing engine stopped. Your marks are saved as they were made.';
   if (/in time/.test(m)) return 'It took too long to load.';
-  if (/stylesheet|did not load|did not export|text face/.test(m)) return 'A part of it did not load.';
-  return 'The drawing engine did not start.';
+  if (/stylesheet|did not load|did not export|text face/.test(m)) return 'A part of it didn’t load.';
+  return 'The drawing engine didn’t start.';
 }
 
 /** A dimension title in the edge tab: cut at 24 characters with … (the whole title stays in title=). */

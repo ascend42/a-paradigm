@@ -91,13 +91,32 @@ export interface RailLayout {
   visible: BoardTool[];
   /** tools in the ⋯ menu, top down ([] means no ⋯ key) */
   folded: BoardTool[];
-  /** the shortest rail: no graduations, no ticks and no spacer, only its keys */
+  /** the shortest rail: no ticks and no spacer (its graduations stay: design `fold.tight`) */
   tight: boolean;
+  /**
+   * A chosen folded tool standing in the last slot (design `fold.guest_tick`): `tool` stands in the row of `for`, the
+   * tool it displaced, inside that group's ticks. It brings no tick of its own, so the rail's need is the need of the
+   * unchosen layout. Absent when every visible tool is in its own place.
+   */
+  guest?: { tool: BoardTool; for: BoardTool };
+}
+
+/** The visible tools as the unchosen layout has them: a guest is counted as the tool whose row it stands in. */
+export const railOwnTools = (l: RailLayout): BoardTool[] => l.visible.map((t) => (l.guest && t === l.guest.tool ? l.guest.for : t));
+/**
+ * The rail's groups as drawn, top down: the groups of the unchosen layout, with a guest in the row of the tool it
+ * displaced. A tick is drawn between two of these and never before a guest (design `fold.guest_tick`).
+ */
+export function railDrawGroups(l: RailLayout): BoardTool[][] {
+  const own = railOwnTools(l);
+  return RAIL_GROUPS.map((g) => g.filter((t) => own.includes(t)).map((t) => (l.guest && t === l.guest.for ? l.guest.tool : t))).filter((g) => g.length > 0);
 }
 
 /** The height a rail drawn as `l` takes: every row, tick and gap of it, and its padding. */
 export function railNeed(l: RailLayout): number {
-  const groups = RAIL_GROUPS.filter((g) => g.some((t) => l.visible.includes(t))).length;
+  // the groups of the UNCHOSEN layout: a guest stands inside the displaced tool's group and adds no tick
+  const own = railOwnTools(l);
+  const groups = RAIL_GROUPS.filter((g) => g.some((t) => own.includes(t))).length;
   const rows = l.visible.length + (l.folded.length ? 1 : 0) + 1 + (l.hand ? 1 : 0) + (l.zoomKeys ? 2 : 0) + 1;
   const ticks = l.tight ? 0 : groups; // one between groups, and one before line-and-fill
   const spacer = l.tight ? 0 : 1;
@@ -108,9 +127,10 @@ export function railNeed(l: RailLayout): number {
 /** The rail with `slots` tool keys and the rest in ⋯: a folded tool that is chosen takes the last visible slot. */
 function folded(slots: number, chosen: BoardTool, tight: boolean): RailLayout {
   const all = RAIL_GROUPS.flat();
-  let visible = all.slice(0, slots);
-  if (all.includes(chosen) && !visible.includes(chosen)) visible = [...visible.slice(0, -1), chosen];
-  return { zoomKeys: false, hand: false, visible, folded: [...all.filter((t) => !visible.includes(t)), 'hand'], tight };
+  const own = all.slice(0, slots);
+  if (!all.includes(chosen) || own.includes(chosen)) return { zoomKeys: false, hand: false, visible: own, folded: [...all.filter((t) => !own.includes(t)), 'hand'], tight };
+  const visible = [...own.slice(0, -1), chosen];
+  return { zoomKeys: false, hand: false, visible, folded: [...all.filter((t) => !visible.includes(t)), 'hand'], tight, guest: { tool: chosen, for: own[own.length - 1]! } };
 }
 
 /**
@@ -120,10 +140,9 @@ function folded(slots: number, chosen: BoardTool, tight: boolean): RailLayout {
  * (the design's always-visible set, with ⋯, line-and-fill and the percent). A folded tool that is chosen takes the
  * last visible tool slot.
  *
- * BELOW THE DESIGN'S FLOOR (not in the record, for Luna): the always-visible set needs more than the 148px a board
- * may have (`heights`), and the rail used to run over the foot there. So the same fold goes on, Text and then Sticky,
- * and last the graduations and the spacer go (`tight`): Select (or the chosen tool), ⋯, line-and-fill and the percent
- * fit the least board the leaf draws. Every letter still works and every tool is in ⋯.
+ * Under 230px (design `fold.steps`) the same fold goes on, Text and then Sticky, and last the ticks and the spacer go
+ * (`tight`, 140px): Select (or the chosen tool), ⋯, line-and-fill and the percent. The graduations stay. Every letter
+ * still works and every tool is in ⋯. A chosen tool never changes the need: it swaps exactly one key.
  */
 export function railLayout(height: number, chosen: BoardTool = 'select'): RailLayout {
   const all = RAIL_GROUPS.flat();
@@ -138,3 +157,18 @@ export function railLayout(height: number, chosen: BoardTool = 'select'): RailLa
 
 /** `100%` for the percent key. */
 export const zoomPercent = (zoom: number): string => `${Math.round(zoom * 100)}%`;
+
+/**
+ * The height of a leaf menu that scrolls (design `menus_scroll`): the cut passes THROUGH A LINE OF TEXT, never
+ * between two rows, so a cut row always says there is more. `first` is the distance from the menu's top edge to its
+ * first row's top (its border and padding), `pitch` a row and the gap after it, `rows` how many rows it holds, and
+ * `tail` what of the cut row shows: half a row for one-line rows (14px of 28), 30px for the Dimensions list's
+ * two-line rows (through the second line). Null when the whole menu fits `room` (it does not scroll).
+ */
+export function menuCutHeight(m: { room: number; natural: number; first: number; pitch: number; rows: number; tail: number }): number | null {
+  if (m.natural <= m.room) return null;
+  const whole = Math.max(0, Math.min(m.rows - 1, Math.floor((m.room - m.first - m.tail) / m.pitch)));
+  return m.first + whole * m.pitch + m.tail;
+}
+/** what of a cut one-line menu row shows (half of a 28px row) and of a cut two-line Dimensions row (design `menus_scroll`) */
+export const MENU_CUT_TAIL = { oneLine: 14, twoLine: 30 } as const;

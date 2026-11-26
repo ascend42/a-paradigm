@@ -19,7 +19,8 @@
  *  - No sizes in markup: the host's height and the tab's top are CSSOM properties.
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
-import { checkLine, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
+import { DIM_KINDS } from '@a-company/gnomon-contracts';
+import { checkLine, checkTitle, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf } from './board-leaf.js';
@@ -56,6 +57,10 @@ export interface BoardDockDeps {
   dimensions?: (event: Event) => void;
   /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
   turn?: () => void;
+  /** the open board's check changed (its row in the palette's Dimensions list is painted again while it is open, aegis C2.4) */
+  checkChanged?: () => void;
+  /** how many cards are pinned for the focused session: the leaf's too-short line names deciding one only when there is one */
+  pinned?: () => number;
   now?: () => number;
 }
 
@@ -177,18 +182,33 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     }
   }
 
+  /** The open board's check, from this page's session (aegis C4.4): ONE `checkLine` for the foot and the list row (C2.4). */
+  function checkOf(session: DimSession, s: DimSessionStatus): string {
+    const words = (!!held && held.dim === session.dim) || session.alive && !!cur && cur.session === session && cur.leaf.holdsWords();
+    return checkLine({ ...s, after: s.checkedSeq === null ? 0 : store.rowsAfter(session.dim, s.checkedSeq), marks: store.rows(session.dim).some((r) => r.kind === DIM_KINDS.op), unstored: session.unsaved, words });
+  }
+  let lastCheck = '';
   function paint(session: DimSession, leaf: BoardLeaf, s: DimSessionStatus): void {
     const words = !!held && held.dim === session.dim;
     leaf.setTitle(s.title);
     // words that are waiting are said for AS LONG AS they are held (a six-second line was gone before it was read)
     leaf.setKeep(words && s.link === 'up' ? KEEP_COPY.wordsWait : keepStateLine(s));
-    leaf.setCheck(checkLine(s), checkTone(s));
+    const check = checkOf(session, s);
+    leaf.setCheck(check, checkTone(s), { title: checkTitle(s), open: s.phase === 'open' });
+    if (check !== lastCheck) {
+      lastCheck = check;
+      d.checkChanged?.();
+    }
     leaf.el.dataset.words = words ? 'held' : '';
-    if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
+    // (aegis F6, the dock half: an out-of-date board keeps its own line, "fold it", and promises no words back)
+    if (s.link === 'down' && !s.readOnly) leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
   }
   /** held still (link down, out of date) with words or unsaved changes: Esc from outside and show chat never fold it */
   function keptOpen(): boolean {
     if (!cur) return false;
+    // too short with words in an open text: a fold would lose them (aegis C3_2; ruled: the same kept-open guard)
+    // (aegis F3: not an out-of-date board: it can never store the words and its line says "fold it")
+    if (cur.leaf.holdsWords() && !cur.session.status().readOnly) return true;
     const s = cur.session.status();
     return (s.link === 'down' || s.readOnly) && ((!!held && held.dim === cur.session.dim) || cur.session.unsaved > 0);
   }
@@ -204,7 +224,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   function tell(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): void {
     if (n.about === 'link' && n.code === 'link-down') {
       // the link went: what was being typed is held in page memory (the held-still line says so while it lasts)
-      const words = leaf.typed();
+      // (an out-of-date board can never store them: nothing is held for a rebuilt board to give back, aegis F6)
+      const words = session.status().readOnly ? null : leaf.typed();
       const principal = heldPrincipal;
       held = words && principal ? { dim: session.dim, principal, words } : null;
       return paint(session, leaf, session.status());
@@ -224,7 +245,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       d.say(noticeLine(n), 'warn');
       return paint(session, leaf, session.status());
     }
-    leaf.say(noticeLine(n));
+    leaf.say(noticeLine({ ...n, verified: session.status().verified }));
   }
 
   /** the principal of the connection the open session was made on (the link may be gone when its words are held) */
@@ -250,6 +271,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       theme: d.theme(),
       load: d.load,
       cardFocused: d.cardFocused,
+      ...(d.pinned ? { pinned: d.pinned } : {}),
+      kept: () => keptOpen(),
+      onHoldChange: () => void (cur && cur.session.alive && paint(cur.session, cur.leaf, cur.session.status())),
       onFold: (cause) => void fold(cause),
       // the list opens only on the person's own press (written as every other trusted-event check here is: `!== true`)
       ...(d.dimensions
@@ -288,7 +312,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     ];
     // words typed on while the link is down are still held (the field stays open under the reconnecting line)
     const onInput = (): void => {
-      if (!session.alive || session.status().link !== 'down' || !heldPrincipal) return;
+      if (!session.alive || session.status().link !== 'down' || session.status().readOnly || !heldPrincipal) return;
       const words = leaf.typed();
       if (words) held = { dim: session.dim, principal: heldPrincipal, words };
     };
@@ -311,9 +335,16 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   }
 
   /** The leaf is gone (its session destroyed it, or is about to): the dock's own part. */
+  /** Words held by a too-short board that a leave is about to take: said by their first characters, never silently (aegis F1). */
+  function sayHeldWordsGone(c: { leaf: BoardLeaf }): boolean {
+    const words = c.leaf.holdsWords() ? c.leaf.typed() : null;
+    if (words) d.say(KEEP_COPY.wordsGoneWith(words), 'warn');
+    return !!words;
+  }
   function drop(): void {
     const c = cur;
     if (!c) return;
+    sayHeldWordsGone(c);
     cur = null;
     for (const f of c.off.splice(0)) f();
     if (c.session.alive) c.session.destroy('switch');
@@ -326,6 +357,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     if (!c) return;
     // a fold is the person's own press or key, held still or not (Aegis L2)
     if (cause.isTrusted !== true) return;
+    // too short with words held in an open text: refused, and the held line said again (⌥B, the head's esc key)
+    if (c.leaf.holdsWords() && !c.session.status().readOnly) return c.leaf.sayHeld();
+    // aegis F3: out of date, the words can never be stored: the fold goes ahead and says they are gone
+    if (c.leaf.holdsWords()) sayHeldWordsGone(c);
     const s = c.session.status();
     if (s.link === 'down' || !d.sessions.linked) {
       // nothing can be sent: the leaf folds here and the dimension stays open in the log. What goes with it is READ
@@ -358,6 +393,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       return;
     }
     if (e.type !== 'destroyed') return;
+    // aegis F1 gap a: an end the dock did not start (a reset on a cursor epoch, a session that is gone) took words a
+    // too-short board held: said by their first characters (a fold, a switch and a drop say it themselves; a link
+    // end keeps them in page memory)
+    if (cur && cur.session === e.session && e.why !== 'fold' && e.why !== 'switch' && e.why !== 'link' && e.session.heldWords) d.say(KEEP_COPY.wordsGoneWith(e.session.heldWords), 'warn');
     if (e.why !== 'link' && held && held.dim === e.session.dim) dropWords();
     if (e.why === 'link' && !e.session.openedOk) {
       // still opening when the link went: it is not resumed, though its open may have landed. The list shows it.
@@ -389,6 +428,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     if (!hsid) return;
     if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn');
     if (cur && cur.session.dim === plan.dim) return void cur.leaf.handle()?.focus();
+    // aegis F1: opening another board (a list row, ⌘K, /board, the menu) would take words held by a too-short board:
+    // refused, and the held line said again, as a fold is
+    if (cur && cur.leaf.holdsWords()) return cur.leaf.sayHeld();
     if (cur) {
       // one leaf: the open dimension is left first, and what it lost is said
       const old = cur.session;
@@ -425,7 +467,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     rows() {
       const hsid = d.focused();
-      return dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
+      const rows = dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
+      // the check's second home (design check.place, aegis C2.5): the open board's row says 'open here · <the check>'
+      const c = cur && cur.session.alive ? cur : null;
+      return c ? rows.map((r) => (r.dim === c.session.dim ? { ...r, check: checkOf(c.session, c.session.status()) } : r)) : rows;
     },
     choose(dim, event) {
       const l = listingOf(dim);
@@ -462,10 +507,15 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       const c = cur;
       if (c && c.session.hsid !== d.focused()) {
         // the leaf follows the session: this one is left (what is pending gets a moment to settle), and the loss is said
+        // (a switch cannot be refused: words held by a too-short board are said by their first characters, aegis F1)
+        const said = sayHeldWordsGone(c);
+        // the words were said gone: the field is emptied BEFORE the host hides, so the blur commits nothing
+        if (said) c.leaf.clearTyped();
         cur = null;
         for (const f of c.off.splice(0)) f();
         host.hidden = true;
-        dropWords();
+        // (words held by the link too: the excerpt above is the one toast said)
+        dropWords(!said);
         void c.session.leave().then((lost) => {
           if (lost > 0) d.say(lost > 1 ? `${lost} changes on the board weren’t saved` : 'One change on the board wasn’t saved', 'warn');
           paintTab();
