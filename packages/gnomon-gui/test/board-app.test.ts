@@ -743,6 +743,16 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(a.theme).toBe(chosen.slice('theme.'.length));
   }, 120_000);
 
+  it('aegis F6, the dock half: an out-of-date board whose link then goes keeps "fold it" under its head and holds no words for later', async () => {
+    const a = await real([
+      { read: `(${A}.mod.wrongHashNext = true, 1)`, as: 'lie' }, ...typeBoard, { until: `${CUR}.session.status().readOnly === true`, as: 'out of date', timeoutMs: 15_000 }, facts('ood'),
+      { read: `(${A}.down(), 1)`, as: 'down' }, { until: `${CUR} && ${CUR}.session.status().link === 'down'`, as: 'the link down' }, facts('both'),
+    ]);
+    expect(a.errors).toEqual([]);
+    expect(fa(a, 'ood')).toMatchObject({ inert: 'out-of-date', line: 'This board is out of date · fold it and open it again' });
+    expect(fa(a, 'both')).toMatchObject({ inert: 'out-of-date', link: 'down', line: 'This board is out of date · fold it and open it again' });
+  }, 120_000);
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)

@@ -200,7 +200,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       d.checkChanged?.();
     }
     leaf.el.dataset.words = words ? 'held' : '';
-    if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
+    // (aegis F6, the dock half: an out-of-date board keeps its own line, "fold it", and promises no words back)
+    if (s.link === 'down' && !s.readOnly) leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
   }
   /** held still (link down, out of date) with words or unsaved changes: Esc from outside and show chat never fold it */
   function keptOpen(): boolean {
@@ -223,7 +224,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   function tell(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): void {
     if (n.about === 'link' && n.code === 'link-down') {
       // the link went: what was being typed is held in page memory (the held-still line says so while it lasts)
-      const words = leaf.typed();
+      // (an out-of-date board can never store them: nothing is held for a rebuilt board to give back, aegis F6)
+      const words = session.status().readOnly ? null : leaf.typed();
       const principal = heldPrincipal;
       held = words && principal ? { dim: session.dim, principal, words } : null;
       return paint(session, leaf, session.status());
@@ -308,7 +310,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     ];
     // words typed on while the link is down are still held (the field stays open under the reconnecting line)
     const onInput = (): void => {
-      if (!session.alive || session.status().link !== 'down' || !heldPrincipal) return;
+      if (!session.alive || session.status().link !== 'down' || session.status().readOnly || !heldPrincipal) return;
       const words = leaf.typed();
       if (words) held = { dim: session.dim, principal: heldPrincipal, words };
     };
