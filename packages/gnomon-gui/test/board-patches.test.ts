@@ -136,8 +136,9 @@ describe('#gui-board build report (a real build of the pinned engine)', () => {
   }, 120_000);
 
   it('the hosts stripped from the minified chunk are exactly the pinned list (a new host in a bump is seen here)', () => {
+    // (libraries.excalidraw.com left with the Library components, patch library-components-stubbed, S1.4 P4a)
     expect(Object.keys(report.hosts).sort()).toEqual([
-      'discord.gg', 'docs.excalidraw.com', 'embed.reddit.com', 'giphy.com', 'gist.github.com', 'github.com', 'libraries.excalidraw.com', 'mermaid.js.org',
+      'discord.gg', 'docs.excalidraw.com', 'embed.reddit.com', 'giphy.com', 'gist.github.com', 'github.com', 'mermaid.js.org',
       'platform.twitter.com', 'player.vimeo.com', 'plus.excalidraw.com', 'react.dev', 'reddit.com', 'twitter.com', 'www.figma.com', 'www.youtube.com', 'x.com', 'youtube.com',
     ]);
   });
@@ -186,5 +187,15 @@ describe('#gui-board build report (a real build of the pinned engine)', () => {
     const again = ((await buildBoard()) as { files: Map<string, Buffer> }).files;
     expect([...again.keys()].sort()).toEqual([...files.keys()].sort());
     for (const [n, b] of files) expect(again.get(n)!.equals(b), n).toBe(true);
+  }, 120_000);
+});
+
+describe('#gui-board S1.4 P4a: the Library is out of the bytes', () => {
+  it('the shipped chunk holds no Library unit, item grid or menu, and the one innerHTML writer of the unit is gone', async () => {
+    const { buildBoard } = (await import('../scripts/board-build.mjs')) as { buildBoard: () => Promise<{ files: Map<string, Uint8Array> }> };
+    const { files } = await buildBoard();
+    const js = Buffer.from(files.get('board/board.js')!).toString('utf8');
+    for (const word of ['library-unit', 'library-menu-items-container', 'library-menu', 'layer-ui__library', 'libraries.excalidraw.com']) expect(js.includes(word), word).toBe(false);
+    expect(js.includes('h.innerHTML=c.outerHTML')).toBe(false);
   }, 120_000);
 });

@@ -21,6 +21,7 @@ export const ENGINE_FILES = Object.freeze({
   'index.css': 'e72092760bae272ebe075bdadaff7f82909d318c5d819313185b19e99be31e49',
   'chunk-K2UTITRG.js': '72b54e8e9b3c17c69f1dd5e40203bfaed62313bc611b86ecb8a1625a12562e51',
   'chunk-ZUYEQ4TG.js': '810dbb85e738f382cdd82e080185029a5ba30c17d3ba0df587e0e6d92e04d952',
+  'roughjs/bin/canvas.js': 'c1c0682f085ee5cc1f705899f7016604612f9d030684c8562f84bcb22b176cf4',
 });
 
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -202,6 +203,14 @@ export const PATCHES = Object.freeze([
     replace: '',
     expect: 1,
   },
+  {
+    id: 'library-components-stubbed',
+    file: 'index.js',
+    why: 'S1.4 P4a: the Library components (the library unit that writes SVG previews with innerHTML, the item grid, the menu and the sidebar panel) are taken out of the BYTES, not only out of the tree: the span from the unit\'s imports to the panel is replaced by the one atom other code reads (the menu-open flag) and a panel that renders nothing',
+    find: /import\{memo as DS,useEffect as PS,useRef as RS,useState as NS\}from"react";[\s\S]*?(?=import\{jsx as Wa,jsxs as ik\}from"react\/jsx-runtime";)/g,
+    replace: 'var Ni=ye(!1),fw=()=>null;',
+    expect: 1,
+  },
   // ── S1.1 reskin: what the engine draws (chunk-K2UTITRG.js is the scene renderer) ──────────────────────────────
   {
     id: 'image-tool-removed',
@@ -225,6 +234,22 @@ export const PATCHES = Object.freeze([
     why: 'a freehand stroke is as wide as its weight says (the engine drew it 4.25 times wider and tapered: Marker was a slab about 36px thick and fine thinned out; Mika, S1.1 pass A finding 6)',
     find: 'size:e.strokeWidth*4.25,thinning:.6,',
     replace: 'size:e.strokeWidth,thinning:0,',
+    expect: 1,
+  },
+  {
+    id: 'dash-two-three',
+    file: 'chunk-K2UTITRG.js',
+    why: 'S1.4 P4a (design author-seal strokes.agent): the ONE dash function of the engine is 2 times the weight on and 3 times off in board units (fine 4 6, bold 8 12, marker 16 24), with the engine\'s round caps; it was [8, 8 + width]',
+    find: 'var Cm=e=>[8,8+e],',
+    replace: 'var Cm=e=>[2*e,3*e],',
+    expect: 1,
+  },
+  {
+    id: 'frame-edge-dashed',
+    file: 'chunk-K2UTITRG.js',
+    why: 'S1.4 P4a (design author-seal strokes.agent-frame): a frame the host does not vouch for (the handle sets its strokeStyle from the stamped author, never from input) has ONE edge and it is dashed, 6 on 4 off on the screen, drawn at the engine\'s single frame-outline paint site, which knows the zoom; nothing is laid over a solid edge',
+    find: 'o.strokeStyle=Pe.strokeColor,yd(e)&&(o.strokeStyle=a.theme===ke.LIGHT?"#7affd7":"#1d8264"),Pe.radius',
+    replace: 'o.strokeStyle=Pe.strokeColor,e.strokeStyle==="dashed"&&o.setLineDash([6/a.zoom.value,4/a.zoom.value]),yd(e)&&(o.strokeStyle=a.theme===ke.LIGHT?"#7affd7":"#1d8264"),Pe.radius',
     expect: 1,
   },
   {
@@ -568,6 +593,14 @@ export const PATCHES = Object.freeze([
     why: 'the two red guide literals leave with their use',
     find: 'var c5="#ff6b6b",d5="#ff0000",G1=1,',
     replace: 'var G1=1,',
+    expect: 1,
+  },
+  {
+    id: 'dash-screen-floor',
+    file: 'roughjs/bin/canvas.js',
+    why: 'S1.4 P4a (design author-seal strokes.too-small, the screen floor): a dash is never under 4px on and 3px off on the SCREEN. The engine caches shapes without the zoom, so the floor is applied where the dash is painted, from the canvas transform (its scale over the device pixel ratio is the zoom the element canvas was drawn at)',
+    find: 'ctx.setLineDash(o.strokeLineDash);',
+    replace: '{ const t = ctx.getTransform(), k = Math.hypot(t.a, t.b) / ((typeof window === "object" && window.devicePixelRatio) || 1) || 1, d = o.strokeLineDash; ctx.setLineDash(d.length === 2 && (d[0] * k < 4 || d[1] * k < 3) ? [Math.max(d[0], 4 / k), Math.max(d[1], 3 / k)] : d); }',
     expect: 1,
   },
   {
