@@ -30,7 +30,10 @@ import {
   ROW_MAX_VISITED,
   TURNS_CAP,
   countPayload,
+  changedSince,
   encodeTurns,
+  foreignCharge,
+  foreignLeft,
   canonicalText,
   measure,
   packRows,
@@ -774,13 +777,17 @@ async function appendTool(host, kind, payload) {
   return append(host, kind, payload);
 }
 
-/** Charge the turn budget (M8): the state write comes BEFORE the first row, and is never refunded. */
-async function charge(host, actor, n, counts) {
+/**
+ * Charge the turn budget (M8) and, from S1.4 E1, the foreign sub-budgets `f` (Aegis ruling 1): the state write
+ * comes BEFORE the first row; only rows the host definitely did not write are refunded (I-2).
+ */
+async function charge(host, actor, n, counts, f) {
   const t = turns.get(actor.hsid);
   const same = t && t.turn === actor.turn;
   const next = new Map(turns);
   next.delete(actor.hsid);
-  next.set(actor.hsid, { turn: actor.turn, used: (same ? t.used : 0) + n, counts: (same ? t.counts : 0) + counts });
+  const was = (k) => (same ? (t[k] ?? 0) : 0);
+  next.set(actor.hsid, { turn: actor.turn, used: was('used') + n, counts: was('counts') + counts, foreign: was('foreign') + (f?.touch ?? 0), fdel: was('fdel') + (f?.del ?? 0), fwords: was('fwords') + (f?.words ?? 0) });
   // the least recently charged session goes first (stated residual: a 257th session drawing resets the oldest)
   while (next.size > TURNS_CAP) next.delete(next.keys().next().value);
   await host.set('turns', encodeTurns(next));
@@ -812,25 +819,50 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   }
   const left = budgetLeft(turns, actor);
   if (left === 0) return refusal('turn-budget', { budgetLeft: 0 });
+  // F4, Aegis ruling 6: `base` is the seq of the caller's view; a base past the board's head is no view of it
+  if (a.base !== undefined && a.base > entry.state.seq) return refusal('args-bad');
   if (a.ops.length > DIM_LIMITS.opsPerRow) return finishRefused(host, dim, entry, actor, [refusedEntry(-1, 'ops', 'too-many-ops')], 'ops-refused');
   const sugar = resolveSugar(entry.state, a.ops, mintUlid);
+  // changed-since (per op, before validation): those ops are left out of the batch; the rest is validated as one
+  const kept = [];
+  const stale = [];
+  for (let i = 0; i < sugar.ops.length; i++) (a.base !== undefined && changedSince(entry.state, sugar.ops[i], a.base) ? stale : kept).push(i);
   // ONE validation of the whole batch (C5): a secret anywhere refuses everything before the first append
-  const v = validateDimOps(entry.state, sugar.ops, { cls: 'agent', principal: actor.principal, agent: actor.agent });
-  const refused = v.refused.map((r) => refusedEntry(r.index, r.field, r.code, sugar.unresolved.get(r.index)?.has(r.field) ? NEW_KEY_FIX : undefined));
+  const v = validateDimOps(entry.state, kept.map((i) => sugar.ops[i]), { cls: 'agent', principal: actor.principal, agent: actor.agent });
+  const at = (r) => (r.index >= 0 && r.index < kept.length ? kept[r.index] : -1);
+  const refused = v.refused.map((r) => refusedEntry(at(r), r.field, r.code, sugar.unresolved.get(at(r))?.has(r.field) ? NEW_KEY_FIX : undefined));
+  for (const i of stale) refused.push(refusedEntry(i, 'id', 'changed-since'));
   if (v.secret) return finishRefused(host, dim, entry, actor, refused, 'secret');
   const bad = new Set(v.refused.map((r) => r.index));
   const okIdx = [];
-  for (let i = 0; i < sugar.ops.length && !bad.has(-1); i++) if (!bad.has(i)) okIdx.push(i);
+  for (let i = 0; i < kept.length && !bad.has(-1); i++) if (!bad.has(i)) okIdx.push(kept[i]);
   if (okIdx.length !== v.ok.length) return finishRefused(host, dim, entry, actor, refused, 'ops-refused');
-  // the budget: the first `left` accepted ops, the rest refused turn-budget
-  for (const i of okIdx.slice(left)) refused.push(refusedEntry(i, 'op', 'turn-budget'));
-  const take = Math.min(left, okIdx.length);
+  // the budgets: the turn's 64 ops, and per id the foreign touches, deletes and words (Aegis ruling 1). The first
+  // accepted ops that fit all four; from the first that does not, it and every later op are refused
+  const fl = foreignLeft(turns, actor);
+  const hand = { cls: 'agent', principal: actor.principal, agent: actor.agent };
+  const fc = v.ok.map((op) => foreignCharge(entry.state, op, hand));
+  let take = 0;
+  const sum = { touch: 0, del: 0, words: 0 };
+  let over = null;
+  for (; take < okIdx.length; take++) {
+    const c = fc[take];
+    if (take >= left) over = 'turn-budget';
+    else if (sum.touch + c.touch > fl.touch || sum.del + c.del > fl.del || sum.words + c.words > fl.words) over = 'foreign-budget';
+    if (over) break;
+    sum.touch += c.touch;
+    sum.del += c.del;
+    sum.words += c.words;
+  }
+  for (const i of okIdx.slice(take)) refused.push(refusedEntry(i, 'op', over));
   const packed = packRows(dim, v.ok.slice(0, take), oid, stamp, CALL_BYTES - COUNT_ROW_RESERVE);
   for (const j of okIdx.slice(packed.cut, take)) refused.push(refusedEntry(j, 'op', 'call-too-large'));
   const planned = packed.cut;
-  if (planned === 0) return finishRefused(host, dim, entry, actor, refused, 'ops-refused');
+  if (planned === 0) return finishRefused(host, dim, entry, actor, refused, refused.length > 0 && refused.every((r) => r.code === 'changed-since') ? 'changed-since' : 'ops-refused');
+  const chargeOf = (from, to) => fc.slice(from, to).reduce((x, c) => ({ touch: x.touch + c.touch, del: x.del + c.del, words: x.words + c.words }), { touch: 0, del: 0, words: 0 });
   try {
-    await charge(host, actor, planned, 0);
+    // charged BEFORE the append (M8): the ops and, per id, the foreign sub-budgets
+    await charge(host, actor, planned, 0, chargeOf(0, planned));
   } catch {
     return refusal('unavailable');
   }
@@ -840,6 +872,7 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   // I-2: ops of rows the host DEFINITELY did not write (a budget refusal, or rows never tried after a definite
   // stop) go back to the turn's budget; an unknown or failed append is never refunded (M8)
   let refund = 0;
+  const refundF = { touch: 0, del: 0, words: 0 };
   for (let r = 0; r < packed.rows.length; r++) {
     const pos = packed.rows[r];
     if (stop === null && cancelled()) stop = 'cancelled';
@@ -878,12 +911,15 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
     }
     if (stop !== null) {
       for (const j of pos) refused.push(refusedEntry(okIdx[j], 'op', stop));
-      if (!unknown) refund += pos.length;
+      if (!unknown) {
+        refund += pos.length;
+        for (const j of pos) (refundF.touch += fc[j].touch), (refundF.del += fc[j].del), (refundF.words += fc[j].words);
+      }
     }
   }
   if (refund > 0) {
     try {
-      await charge(host, actor, -refund, 0);
+      await charge(host, actor, -refund, 0, { touch: -refundF.touch, del: -refundF.del, words: -refundF.words });
     } catch {
       /* the overcount stands (M8: never an undercount) */
     }
@@ -984,6 +1020,7 @@ async function undoCore(host, dim, entry, o) {
 
 /** A draw that wrote no op row: its count row, then the refusal. */
 async function finishRefused(host, dim, entry, actor, refused, code) {
+  refused.sort((x, y) => x.index - y.index);
   await countRow(host, dim, entry, actor, refused);
   return refusal(code, { dim, refused, budgetLeft: budgetLeft(turns, actor) });
 }

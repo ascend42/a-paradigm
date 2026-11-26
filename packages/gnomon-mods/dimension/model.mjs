@@ -39,6 +39,15 @@ export const MEMO_CAP = 256;
 export const ANSWERS_CAP = 32;
 /** S1.4 C5 / Aegis M8: accepted ops one session may draw in one turn, across calls, rows and dimensions. */
 export const TURN_OPS = 64;
+/**
+ * S1.4 E1 (Aegis ruling 1, F8): marks of OTHER hands one session may touch in one turn, counted PER ID (a move's
+ * ids each count), charged before the append like TURN_OPS. Of them at most TURN_FOREIGN_DELETES deletes and at
+ * most TURN_FOREIGN_WORDS updates that set or clear text, label, title or refs. "Other hand": the mark's original
+ * hand (`restoredFrom.by`, else `by`) is not the caller's.
+ */
+export const TURN_FOREIGN = 32;
+export const TURN_FOREIGN_DELETES = 16;
+export const TURN_FOREIGN_WORDS = 16;
 /** Sessions the `turns` state key holds; the least recently charged one is evicted (stated residual). */
 export const TURNS_CAP = 256;
 /** `opens`: sessions whose last opened dimension is remembered (the tools' default `dim`). */
@@ -590,7 +599,7 @@ export function toolActorOf(relayedFor) {
 
 export const TOOL_INPUT = Object.freeze({
   'dim-view': Object.freeze(['dim', 'since', 'limit']),
-  'dim-draw': Object.freeze(['dim', 'ops', 'opId']),
+  'dim-draw': Object.freeze(['dim', 'ops', 'opId', 'base']),
 });
 
 /**
@@ -625,6 +634,10 @@ export function readToolInput(tool, input) {
   if (!Array.isArray(ops)) return { code: 'args-bad' };
   out.ops = ops;
   if (opId !== undefined) out.opId = opId;
+  // S1.4 E1 (F4, Aegis ruling 6): optional; the seq of the caller's view. Checked per id against the fold.
+  const base = own(a, 'base');
+  if (base !== undefined && (!Number.isSafeInteger(base) || base < 0)) return { code: 'args-bad' };
+  if (base !== undefined) out.base = base;
   return { args: out };
 }
 
@@ -639,16 +652,69 @@ export function budgetLeft(turns, actor) {
   return Math.max(0, TURN_OPS - t.used);
 }
 
-/** The `turns` state key as a list `[hsid, turn, used, countRows]` (never an object keyed by hsid), and back. */
+/** The foreign sub-budgets this session has left in this turn (as `budgetLeft`). */
+export function foreignLeft(turns, actor) {
+  const t = turns.get(actor.hsid);
+  const full = { touch: TURN_FOREIGN, del: TURN_FOREIGN_DELETES, words: TURN_FOREIGN_WORDS };
+  if (!t || actor.turn > t.turn) return full;
+  if (actor.turn < t.turn) return { touch: 0, del: 0, words: 0 };
+  return { touch: Math.max(0, TURN_FOREIGN - (t.foreign ?? 0)), del: Math.max(0, TURN_FOREIGN_DELETES - (t.fdel ?? 0)), words: Math.max(0, TURN_FOREIGN_WORDS - (t.fwords ?? 0)) };
+}
+
+const WORDS_FIELDS = ['text', 'label', 'title', 'refs'];
+/**
+ * What one accepted op charges to the foreign sub-budgets, from the state BEFORE the call (a mark this call adds
+ * is the caller's own): `{touch, del, words}`, per id.
+ */
+export function foreignCharge(state, op, hand) {
+  const out = { touch: 0, del: 0, words: 0 };
+  const o = plain(op);
+  if (!o) return out;
+  const type = own(o, 'type');
+  const ids = type === 'move' && Array.isArray(own(o, 'ids')) ? o.ids : type === 'update' || type === 'delete' ? [own(o, 'id')] : [];
+  for (const id of ids) {
+    const n = typeof id === 'string' ? state.nodes.get(id) : undefined;
+    if (!n) continue;
+    const original = n.restoredFrom?.by ?? n.by;
+    if (original.cls === hand.cls && original.principal === hand.principal && original.agent === hand.agent) continue;
+    out.touch += 1;
+    if (type === 'delete') out.del += 1;
+    const patch = type === 'update' ? plain(own(o, 'patch')) : null;
+    if (patch && Object.keys(patch).some((k) => WORDS_FIELDS.includes(k))) out.words += 1;
+  }
+  return out;
+}
+
+/**
+ * F4 / Aegis ruling 6: an update, move or delete of a mark changed or (re-)added after `base` is refused
+ * `changed-since`, per op (a move: when any of its ids is). Read from the fold's own seqs, O(1) per id.
+ */
+export function changedSince(state, op, base) {
+  const o = plain(op);
+  if (!o) return false;
+  const type = own(o, 'type');
+  const ids = type === 'move' && Array.isArray(own(o, 'ids')) ? o.ids : type === 'update' || type === 'delete' ? [own(o, 'id')] : [];
+  for (const id of ids) {
+    const n = typeof id === 'string' ? state.nodes.get(id) : undefined;
+    if (n && Math.max(n.addedSeq ?? 0, n.changedSeq ?? 0) > base) return true;
+  }
+  return false;
+}
+
+/**
+ * The `turns` state key as a list `[hsid, turn, used, countRows, foreign, foreignDeletes, foreignWords]` (never an
+ * object keyed by hsid), and back. The S1.4 P2 four-element form still decodes (no foreign use yet).
+ */
 export function encodeTurns(turns) {
-  return [...turns].map(([h, t]) => [h, t.turn, t.used, t.counts]);
+  return [...turns].map(([h, t]) => [h, t.turn, t.used, t.counts, t.foreign ?? 0, t.fdel ?? 0, t.fwords ?? 0]);
 }
 export function decodeTurns(v) {
   const out = new Map();
   if (!Array.isArray(v)) return out;
   for (const e of v.slice(-TURNS_CAP)) {
-    if (!Array.isArray(e) || e.length !== 4 || !nonEmpty(e[0], 128) || !Number.isSafeInteger(e[1]) || !Number.isSafeInteger(e[2]) || !Number.isSafeInteger(e[3])) continue;
-    out.set(e[0], { turn: e[1], used: Math.min(Math.max(e[2], 0), TURN_OPS), counts: Math.max(e[3], 0) });
+    if (!Array.isArray(e) || (e.length !== 4 && e.length !== 7) || !nonEmpty(e[0], 128) || !e.slice(1).every((x) => Number.isSafeInteger(x))) continue;
+    const f = e.length === 7 ? e : [0, 0, 0, 0, 0, 0, 0];
+    out.set(e[0], { turn: e[1], used: Math.min(Math.max(e[2], 0), TURN_OPS), counts: Math.max(e[3], 0), foreign: Math.min(Math.max(f[4], 0), TURN_FOREIGN), fdel: Math.min(Math.max(f[5], 0), TURN_FOREIGN_DELETES), fwords: Math.min(Math.max(f[6], 0), TURN_FOREIGN_WORDS) });
   }
   return out;
 }

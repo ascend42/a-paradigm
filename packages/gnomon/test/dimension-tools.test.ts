@@ -461,7 +461,7 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     expect(opRows(w)).toHaveLength(0);
     await w.restart();
     expect((await w.tool('dim-view', {})).budgetLeft).toBe(54);
-    expect(w.state().turns).toEqual([[A, 1, 10, 1]]);
+    expect(w.state().turns).toEqual([[A, 1, 10, 1, 0, 0, 0]]);
   });
 
   it('M8: 17 sessions drawing do not reset the first one\'s count (the state is keyed by hsid)', { timeout: 60_000 }, async () => {
@@ -674,10 +674,12 @@ describe('#dimension-mod M3: cancel is honoured, so an agent cannot take the boa
     const started = performance.now();
     const res = await w.tool('dim-draw', { ops: moves(32) });
     const ms = performance.now() - started;
-    // every move names a person's marks: an agent may edit any mark (S1.4 E0), so all 64 moves apply in one validation
-    // 63 of them fill the call's 4 rows of 16 KiB; the 64th is refused call-too-large by index, never half-written
-    expect(res).toMatchObject({ ok: true, applied: 63 });
-    expect((res.refused as Array<{ index: number; code: string }>).map((r) => [r.index, r.code])).toEqual([[63, 'call-too-large']]);
+    // every move names a person's marks: an agent may edit any mark (S1.4 E0), so all 64 moves pass ONE validation
+    // (the timed worst case); from S1.4 E1 the foreign sub-budget (32 touches a turn, per id, Aegis ruling 1) then
+    // takes the first move only and refuses the other 63 foreign-budget by index. The applied worst case with the
+    // agent's own marks is I-4 below.
+    expect(res).toMatchObject({ ok: true, applied: 1 });
+    expect((res.refused as Array<{ index: number; code: string }>).map((r) => [r.index, r.code])).toEqual(Array.from({ length: 63 }, (_, i) => [i + 1, 'foreign-budget']));
     expect(ms).toBeLessThan(5_000);
   });
 });
@@ -840,7 +842,7 @@ describe('S1.4 P3 review, Probe (F1 to F4) and the kept probe attacks', () => {
     await w.h.start(DIMENSION);
     expect(opRows(w)).toHaveLength(1);
     expect((await w.tool('dim-view', {})).budgetLeft).toBe(54);
-    expect(w.state().turns).toEqual([[A, 1, 10, 0]]);
+    expect(w.state().turns).toEqual([[A, 1, 10, 0, 0, 0, 0]]);
   });
 
   it('F2: 100 dim.check calls on an unchanged 10,048-node fold take under 1 s in all (the hash is computed once per fold)', { timeout: 120_000 }, async () => {

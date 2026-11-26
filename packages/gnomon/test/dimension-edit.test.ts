@@ -429,3 +429,80 @@ describe('#dimension-mod E1: a catch-up notes rows the mod did not answer for', 
     expect(u.hash).toBe(dimHash(w.log.fold(dim)));
   });
 });
+
+describe('#dimension-mod E1 item 5: base and changed-since; the foreign sub-budgets per id (Aegis rulings 1 and 6; G-DDL-03)', () => {
+  /** a board with n person marks */
+  const marks = async (w: Rig, dim: string, n: number) => {
+    for (let k = 0; k < n; k += 64) await w.run('dim.op', { dim, ops: Array.from({ length: Math.min(64, n - k) }, (_, i) => rectOp(k + i + 1, { x: 0, y: 0 })) });
+  };
+  const left = (w: Rig, hsid: string) => (w.state().turns as unknown[][]).find((e) => e[0] === hsid)!;
+
+  it('the 33rd foreign touch is refused foreign-budget; a move of 40 foreign ids is charged 40 (refused whole); own marks are free', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await marks(w, dim, 64);
+    // own marks: no foreign charge
+    await draw(w, dim, B, 1, [rectOp(200), { type: 'update', id: ulid(200), patch: { color: 'graphite' } }]);
+    // a move of 40 of the person's marks: 40 > 32, refused whole, nothing charged
+    const m40 = await draw(w, dim, B, 1, [{ type: 'move', ids: Array.from({ length: 40 }, (_, i) => ulid(i + 1)), dx: 1, dy: 0 }]);
+    expect(m40).toMatchObject({ ok: false });
+    expect((m40.refused as Array<{ code: string }>)[0]!.code).toBe('foreign-budget');
+    // 20 + 12 = 32 fit; the 33rd does not
+    expect(await draw(w, dim, B, 1, [{ type: 'move', ids: Array.from({ length: 20 }, (_, i) => ulid(i + 1)), dx: 1, dy: 0 }])).toMatchObject({ ok: true, applied: 1 });
+    const r = await draw(w, dim, B, 1, Array.from({ length: 13 }, (_, i) => ({ type: 'update', id: ulid(30 + i), patch: { color: 'graphite' } })));
+    expect(r).toMatchObject({ ok: true, applied: 12 });
+    expect(r.refused).toEqual([{ index: 12, field: 'op', code: 'foreign-budget', fix: expect.any(String) }]);
+    expect(left(w, B).slice(4)).toEqual([32, 0, 0]);
+    // a new turn starts again
+    expect(await draw(w, dim, B, 2, [{ type: 'update', id: ulid(60), patch: { color: 'graphite' } }])).toMatchObject({ ok: true, applied: 1 });
+  });
+
+  it('the 17th foreign delete and the 17th foreign words update are refused; another agent\'s marks are foreign too', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await marks(w, dim, 40);
+    const d = await draw(w, dim, B, 1, Array.from({ length: 17 }, (_, i) => ({ type: 'delete', id: ulid(i + 1) })));
+    expect(d).toMatchObject({ ok: true, applied: 16 });
+    expect((d.refused as Array<{ index: number; code: string }>).map((x) => [x.index, x.code])).toEqual([[16, 'foreign-budget']]);
+    const t = await draw(w, dim, A, 1, Array.from({ length: 17 }, (_, i) => ({ type: 'update', id: ulid(20 + i), patch: { label: `w${i}` } })));
+    expect(t).toMatchObject({ ok: true, applied: 16 });
+    // agent A's own marks are foreign to agent B
+    await draw(w, dim, A, 2, [rectOp(300)]);
+    await draw(w, dim, B, 3, [{ type: 'update', id: ulid(300), patch: { color: 'graphite' } }]);
+    expect(left(w, B).slice(1, 7)).toEqual([3, 1, 0, 1, 0, 0]);
+  });
+
+  it('a stale base refuses only the ops on marks changed since; a fresh base passes; base past the head is args-bad; a re-added mark counts from its add', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2), rectOp(3)] });
+    const view = await w.tool('dim-view', { dim }, agentOf(B));
+    const base = view.seq as number;
+    await w.run('dim.op', { dim, ops: [{ type: 'update', id: ulid(2), patch: { color: 'leaf' } }] });
+    const r = await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }, { type: 'update', id: ulid(2), patch: { color: 'graphite' } }, { type: 'move', ids: [ulid(3), ulid(2)], dx: 1, dy: 1 }], );
+    expect(r).toMatchObject({ ok: true, applied: 3 }); // no base: last writer wins
+    const stale = await w.tool('dim-draw', { dim, base, ops: [{ type: 'update', id: ulid(1), patch: { color: 'leaf' } }, { type: 'delete', id: ulid(3) }] }, agentOf(B, 2));
+    expect(stale).toMatchObject({ ok: false, code: 'changed-since' });
+    const mixed = await w.tool('dim-draw', { dim, base: w.log.fold(dim).seq, ops: [{ type: 'update', id: ulid(1), patch: { color: 'leaf' } }] }, agentOf(B, 2));
+    expect(mixed).toMatchObject({ ok: true, applied: 1 });
+    expect(await w.tool('dim-draw', { dim, base: 99_999, ops: [rectOp(9)] }, agentOf(B, 2))).toMatchObject({ ok: false, code: 'args-bad' });
+    for (const b of [-1, 1.5, '3', null]) expect(await w.tool('dim-draw', { dim, base: b, ops: [rectOp(9)] }, agentOf(B, 2))).toMatchObject({ ok: false, code: 'args-bad' });
+    // the person deletes a mark and undoes the delete: the new id counts from its add
+    await w.run('dim.op', { dim, ops: [{ type: 'delete', id: ulid(1) }], act: ulid(1, '01JDAC') });
+    const seen = w.log.fold(dim).seq;
+    await w.run('dim.undo', { dim, of: { principal: HUMAN, act: ulid(1, '01JDAC') } });
+    const back = [...w.log.fold(dim).nodes.entries()].find(([, n]) => n.restoredFrom?.id === ulid(1))![0];
+    const re = await w.tool('dim-draw', { dim, base: seen, ops: [{ type: 'update', id: back, patch: { color: 'graphite' } }, rectOp(10)] }, agentOf(B, 3));
+    expect(re).toMatchObject({ ok: true, applied: 1 });
+    expect((re.refused as Array<{ index: number; code: string }>).map((x) => [x.index, x.code])).toEqual([[0, 'changed-since']]);
+  });
+
+  it('the turns state key: the 7-element form round-trips and the S1.4 P2 four-element form still decodes (no foreign use)', async () => {
+    const m = await loadModel();
+    // the tolerant decode: the S1.4 P2 four-element form still reads, with no foreign use
+    const t = m.decodeTurns!([[A, 3, 10, 1], [B, 2, 5, 0, 7, 2, 1], [A, 'x']]) as Map<string, Record<string, number>>;
+    expect(t.get(A)).toMatchObject({ turn: 3, used: 10, foreign: 0, fdel: 0, fwords: 0 });
+    expect(t.get(B)).toMatchObject({ turn: 2, used: 5, foreign: 7, fdel: 2, fwords: 1 });
+    expect(m.encodeTurns!(t)).toEqual([[A, 3, 10, 1, 0, 0, 0], [B, 2, 5, 0, 7, 2, 1]]);
+  });
+});
