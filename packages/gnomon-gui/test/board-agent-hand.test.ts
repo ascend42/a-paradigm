@@ -114,6 +114,30 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
     }
   }, 120_000);
 
+  it('M1 (Mika): the matrix tick at fine, bold and MARKER weight is dashed for an agent and the unknown hand (patches dash-runs-*: the dash runs on across a polyline\'s short runs)', async () => {
+    const TICK = [0, 0, 6, 9, 13, 15, 22, 12, 34, -2, 46, -18, 58, -30];
+    const r = await scripted(`
+      const TICK = ${JSON.stringify(TICK)};
+      const out = {};
+      for (const hand of ['you', 'arky', null]) for (const weight of [1, 2, 3]) {
+        board.render(globalThis.gnomonPreviewState([{ hand, marks: [{ kind: 'stroke', x: 600, y: 400, points: TICK, weight }] }]));
+        await zoomTo(1);
+        await centreOn(630, 385);
+        // along every run of the tick, through its middle
+        let gaps = 0, n = 0;
+        for (let i = 0; i + 3 < TICK.length; i += 2) { const q = runs([0,0,0,0,0,0,0,0,0,0, ...along([600 + TICK[i], 400 + TICK[i + 1]], [600 + TICK[i + 2], 400 + TICK[i + 3]]), 0,0,0,0,0,0,0,0,0,0]); n += q.n; }
+        const all = []; for (let i = 0; i + 3 < TICK.length; i += 2) all.push(...along([600 + TICK[i], 400 + TICK[i + 1]], [600 + TICK[i + 2], 400 + TICK[i + 3]]));
+        const offs = all.filter((v) => v >= 0 && v < 60).length;
+        out[(hand ?? 'unknown') + '@' + weight] = { samples: all.length, offs };
+      }
+      return out;`);
+    for (const [key, v] of Object.entries(r as Record<string, { samples: number; offs: number }>)) {
+      // (the person's freehand tick is smoothed, so a straight sample between its points leaves it at the corners: it is
+      // not measured here; that the person's marks are solid is PROOF 1)
+      if (!key.startsWith('you@')) expect(v.offs, `${key}: gaps along the tick`).toBeGreaterThan(5);
+    }
+  }, 120_000);
+
   it('PROOF 2: an agent\'s frame has one edge, dashed on all four sides at 25%, 100% and 400%; the person\'s is solid', async () => {
     const r = await scripted(`
       const out = {};

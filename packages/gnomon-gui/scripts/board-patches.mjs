@@ -604,6 +604,51 @@ export const PATCHES = Object.freeze([
     expect: 1,
   },
   {
+    id: 'dash-runs-continue',
+    file: 'roughjs/bin/canvas.js',
+    why: 'S1.4 P4a (Mika M1): rough draws a polyline as one sub-path PER SEGMENT, and the canvas restarts a dash at every sub-path, so on a line of short runs (an agent marker tick) every run was one long dash and the mark painted solid. While a dash is set, a move to the point the path already stands on is skipped, so the dash runs on along the whole line; solid paths are drawn exactly as before',
+    find: `                case 'move':
+                    ctx.moveTo(data[0], data[1]);
+                    break;`,
+    replace: `                case 'move':
+                    if (ctx.getLineDash().length > 0 && item.op === 'move' && at && Math.abs(at[0] - data[0]) < 0.01 && Math.abs(at[1] - data[1]) < 0.01) break;
+                    ctx.moveTo(data[0], data[1]);
+                    at = [data[0], data[1]];
+                    break;`,
+    expect: 1,
+  },
+  {
+    id: 'dash-runs-track',
+    file: 'roughjs/bin/canvas.js',
+    why: 'S1.4 P4a (Mika M1): the point the path stands on, for dash-runs-continue: kept after every curve and line',
+    find: `                case 'bcurveTo':
+                    ctx.bezierCurveTo(data[0], data[1], data[2], data[3], data[4], data[5]);
+                    break;
+                case 'lineTo':
+                    ctx.lineTo(data[0], data[1]);
+                    break;`,
+    replace: `                case 'bcurveTo':
+                    ctx.bezierCurveTo(data[0], data[1], data[2], data[3], data[4], data[5]);
+                    at = [data[4], data[5]];
+                    break;
+                case 'lineTo':
+                    ctx.lineTo(data[0], data[1]);
+                    at = [data[0], data[1]];
+                    break;`,
+    expect: 1,
+  },
+  {
+    id: 'dash-runs-start',
+    file: 'roughjs/bin/canvas.js',
+    why: 'S1.4 P4a (Mika M1): each drawing starts with no point to continue from (dash-runs-continue)',
+    find: `        ctx.beginPath();
+        for (const item of drawing.ops) {`,
+    replace: `        ctx.beginPath();
+        let at = null;
+        for (const item of drawing.ops) {`,
+    expect: 1,
+  },
+  {
     id: 'lodash-debounce-root',
     file: 'lodash.debounce/index.js',
     why: 'the global lookup ends in Function("return this")(): eval-class source, replaced by globalThis',
