@@ -808,7 +808,8 @@ function sameHand(a, b) {
 var WORDS_KEYS = /* @__PURE__ */ new Set(["text", "label", "title", "refs"]);
 function changed(cur, node, by, hsid, seq, words) {
   const out = { ...cur, node, changedBy: by, changedSeq: seq, changedHsid: hsid };
-  if (!sameHand(by, cur.by)) {
+  const original = cur.restoredFrom?.by ?? cur.by;
+  if (!sameHand(by, original)) {
     out.otherBy = by;
     out.otherSeq = seq;
     if (words) {
@@ -825,7 +826,13 @@ function applyOp(d, op, by, hsid, seq, restored) {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== "string" || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
       const from = restored?.get(node.id);
-      d.nodes.set(node.id, { node: copyJson(node), by, hsid, addedSeq: seq, ...from ? { restoredFrom: from } : {} });
+      const fresh = { node: copyJson(node), by, hsid, addedSeq: seq };
+      if (from) {
+        fresh.restoredFrom = { id: from.id, by: from.by };
+        if (from.wordsBy) fresh.wordsBy = from.wordsBy, fresh.wordsSeq = seq;
+        if (from.otherBy) fresh.otherBy = from.otherBy, fresh.otherSeq = seq;
+      }
+      d.nodes.set(node.id, fresh);
       return true;
     }
     case "update": {
@@ -903,7 +910,7 @@ function applyRow(d, row) {
   const by = byOf(p);
   const hsid = hsidOf(d.attached, p);
   const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
-  const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by }])) : void 0;
+  const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by, ...r.wordsBy ? { wordsBy: r.wordsBy } : {}, ...r.otherBy ? { otherBy: r.otherBy } : {} }])) : void 0;
   for (const op of p.ops) {
     if (applyOp(d, op, by, hsid, d.seq, restored)) d.ops += 1;
     else d.unapplied += 1;
@@ -1556,12 +1563,12 @@ function dimUndoMarkOf(row) {
       }
       const seen = /* @__PURE__ */ new Set();
       for (const e of restored) {
-        if (!Array.isArray(e) || e.length !== 3) continue;
-        const [newId, oldId, by] = e;
+        if (!Array.isArray(e) || e.length < 3 || e.length > 5) continue;
+        const [newId, oldId, by, wordsBy, otherBy] = e;
         if (typeof newId !== "string" || typeof oldId !== "string" || !DIM_NODE_ID_PATTERN.test(newId) || !DIM_NODE_ID_PATTERN.test(oldId)) continue;
         if (!added.has(newId) || seen.has(newId) || newId === oldId) continue;
         seen.add(newId);
-        out.restored.push({ newId, oldId, by: dimViewBy(by) });
+        out.restored.push({ newId, oldId, by: dimViewBy(by), ...wordsBy != null ? { wordsBy: dimViewBy(wordsBy) } : {}, ...otherBy != null ? { otherBy: dimViewBy(otherBy) } : {} });
       }
     }
     return out;
@@ -1663,7 +1670,9 @@ function invertCore(rows, mint, current, o = {}) {
               const id = mint();
               const unit = `r:${op.id}`;
               renamed.set(op.id, id);
-              restored.set(unit, [id, op.id, cur.restoredFrom?.by ?? cur.by]);
+              const entry = [id, op.id, cur.restoredFrom?.by ?? cur.by];
+              if (cur.wordsBy || cur.otherBy) entry.push(cur.wordsBy ?? null, cur.otherBy ?? null);
+              restored.set(unit, entry);
               const kind = own(cur.node, "kind");
               adds.push({ tier: kind === "frame" ? 0 : kind === "arrow" ? 2 : 1, unit, op: { type: "add", node: { ...copyJson(cur.node), id } } });
               for (const [otherId, other] of (current ?? state).nodes) {

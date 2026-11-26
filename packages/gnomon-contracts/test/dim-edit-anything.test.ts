@@ -388,3 +388,45 @@ describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
     expect(planDimUndo({ rows: null as unknown as [], after: [], current: foldDim(base), actor: human, mint: minter() }).ops).toEqual([]);
   });
 });
+
+describe('E0 review group A: attribution is not laundered through undo (Aegis I-1, I-2)', () => {
+  const minter = (from = 60): (() => string) => {
+    let n = from;
+    return () => id(n++);
+  };
+  const markOf = (p: { ops: unknown[]; restored: unknown[] }, of: Record<string, unknown>): Record<string, unknown> => ({ undo: { of, restored: p.restored } });
+
+  it('I-1: the person adds a note, agent A rewrites it, agent B deletes it, the person undoes B: the re-add keeps wordsBy A', () => {
+    seq = 0;
+    const rows = [start(), row(human, [{ type: 'add', node: text(1, 'my note') }]), row(claude, [{ type: 'update', id: id(1), patch: { text: 'A words' } }])];
+    const set = [row(kit, [{ type: 'delete', id: id(1) }], {}, 'h2')];
+    const all = [...rows, ...set];
+    const p = planDimUndo({ rows: set.map((r) => ({ before: foldDim(all.filter((x) => x.seq < r.seq)), ops: (r.payload as { ops: unknown[] }).ops })), after: [], current: foldDim(all), actor: human, mint: minter() });
+    expect(p.restored).toEqual([[id(60), id(1), handOf(human), handOf(claude), handOf(claude)]]);
+    const undo = row(human, p.ops, markOf(p, { hsid: 'h2', turn: 'turn:h2/1' }));
+    const s = foldDim([...all, undo]);
+    const n = s.nodes.get(id(60))!;
+    expect([n.by, n.restoredFrom, n.wordsBy, n.otherBy]).toEqual([handOf(human), { id: id(1), by: handOf(human) }, handOf(claude), handOf(claude)]);
+    const v = dimViewOf(s).nodes.find((x) => x.id === id(60))!;
+    expect([v.wordsBy, v.otherBy]).toEqual([handOf(claude), handOf(claude)]);
+    // the reader bounds the carried hands, and a 3-entry marker carries none
+    const hostile = row(human, [{ type: 'add', node: text(61, 'x') }], { undo: { of: { hsid: 'h2', turn: 'turn:h2/1' }, restored: [[id(61), id(1), handOf(human), { cls: 'agent', principal: 'bad principal', agent: 'a' }, null]] } });
+    const r = dimUndoMarkOf(hostile)!.restored[0]!;
+    expect([r.wordsBy, 'otherBy' in r]).toEqual([{ cls: 'unknown', principal: 'unknown' }, false]);
+    expect(dimUndoMarkOf(row(human, [{ type: 'add', node: text(62, 'x') }], { undo: { of: { hsid: 'h2', turn: 'turn:h2/1' }, restored: [[id(62), id(1), handOf(human), null, null, null]] } }))!.restored).toEqual([]);
+  });
+
+  it('I-2: otherBy and wordsBy compare the editor with the ORIGINAL hand, both directions', () => {
+    const of = { hsid: 'h1', turn: 'turn:h1/1' };
+    // an agent re-added the person's mark, then rewrites it: the words sign names the agent
+    seq = 0;
+    const a = [start(), row(claude, [{ type: 'add', node: text(10, 'person words') }], { undo: { of, restored: [[id(10), id(1), handOf(human)]] } }), row(claude, [{ type: 'update', id: id(10), patch: { text: 'agent words' } }])];
+    const na = foldDim(a).nodes.get(id(10))!;
+    expect([na.by, na.wordsBy, na.otherBy]).toEqual([handOf(claude), handOf(claude), handOf(claude)]);
+    // the person re-added an agent's mark, then rewrites it: the person's words are named, never under the agent's seal
+    seq = 0;
+    const b = [start(), row(human, [{ type: 'add', node: text(10, 'agent words') }], { undo: { of, restored: [[id(10), id(1), handOf(kit)]] } }), row(human, [{ type: 'update', id: id(10), patch: { text: 'person words' } }])];
+    const nb = foldDim(b).nodes.get(id(10))!;
+    expect([nb.by, nb.restoredFrom!.by, nb.wordsBy]).toEqual([handOf(human), handOf(kit), handOf(human)]);
+  });
+});
