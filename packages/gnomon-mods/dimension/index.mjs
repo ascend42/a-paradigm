@@ -34,6 +34,7 @@ import {
   encodeTurns,
   foreignCharge,
   foreignLeft,
+  undoForeignCharge,
   canonicalText,
   measure,
   packRows,
@@ -86,7 +87,7 @@ const KINDS = [DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end];
 // the log pages of a fold also read the grant kind: without it every grant would vanish at a cold open
 const PAGE_KINDS = [...KINDS, DIM_AUX_KINDS.grant];
 const OID = /^[0-9a-f]{16}$/;
-const TOOLS = ['dim-view', 'dim-draw'];
+const TOOLS = ['dim-view', 'dim-draw', 'dim-undo'];
 const PAGE_ROWS = 1000;
 /** pages one cold open may read; the kernel scans at most 10,000 log rows per page */
 const MAX_PAGES = 4096;
@@ -742,7 +743,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), applied: v.ok.length, refused: v.refused };
 }
 
-/* ── the two agent tools (S1.4 §2) ────────────────────────────────────────── */
+/* ── the three agent tools (S1.4 §2; dim-undo from E2) ────────────────────────────────────────── */
 
 /**
  * `dim-view` and `dim-draw`. Identity is the host-written `relayedFor` alone; input is hostile (closed shape, own
@@ -776,10 +777,11 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   }
   if (!entry) return refusal('dim-unknown');
   // dim-view is read-only (no state.set): only a draw heals the index
-  if (entry.dirty && name === 'dim-draw') await saveIdx(host, dim, entry);
+  if (entry.dirty && name !== 'dim-view') await saveIdx(host, dim, entry);
   // attach is the only door (C6): no grant is needed to view, but an unattached session sees nothing
   if (!entry.state.attached.includes(actor.hsid)) return refusal('not-attached');
   if (name === 'dim-view') return viewTool(host, dim, entry, actor, a, cancelled);
+  if (name === 'dim-undo') return undoTool(host, dim, entry, actor, a, toolStampOf(relayedFor), cancelled);
   return drawTool(host, dim, entry, actor, a, toolStampOf(relayedFor), cancelled);
 }
 
@@ -996,16 +998,150 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   await countRow(host, dim, entry, actor, refused);
   if (applied === 0) return refusal(stop ?? 'ops-refused', { dim, refused, budgetLeft: budgetLeft(turns, actor) });
   const answer = { ok: true, dim, seq: entry.state.seq, hash: hashOf(entry.state), applied, created, refused, budgetLeft: budgetLeft(turns, actor) };
-  if (oid !== undefined) {
-    let m = answers.get(dim);
-    if (!m) {
-      while (answers.size >= 64) answers.delete(answers.keys().next().value);
-      m = new Map();
-      answers.set(dim, m);
-    }
-    m.set(oid, { input, answer });
-    while (m.size > ANSWERS_CAP) m.delete(m.keys().next().value);
+  if (oid !== undefined) memoAnswer(dim, oid, input, answer);
+  return answer;
+}
+
+/**
+ * Aegis E2 (one person set per turn): hsid → {turn, key}, the person's change-set (an `act` set) this session's
+ * agent undid in its current turn. MEMORY ONLY: a restart forgets it, and with it every history (`undo-expired`).
+ */
+const personUndos = new Map();
+
+/** The op-id memo's answer store, shared by dim-draw and dim-undo (A8; S1.4 §3.5). */
+function memoAnswer(dim, oid, input, answer) {
+  let m = answers.get(dim);
+  if (!m) {
+    while (answers.size >= 64) answers.delete(answers.keys().next().value);
+    m = new Map();
+    answers.set(dim, m);
   }
+  m.set(oid, { input, answer });
+  while (m.size > ANSWERS_CAP) m.delete(m.keys().next().value);
+}
+
+/**
+ * `dim-undo` (S1.4 E2; Arky §3.3; Aegis rulings 5 and E2, the founder's ruling of 2026-11-26: undo is symmetric, so
+ * an agent may undo its own turn, another agent's and a person's action). Order: actor, input, dimension, attached
+ * (runTool); ended; GRANT; THEN the op-id memo (the same memo as dim-draw); then the set checks (named from this
+ * hsid's own view, Aegis ruling 5; one person set per turn); THEN the budget. The undoer is the calling agent, never
+ * "as a human". Every op the undo writes is charged to the turn and, per id against each mark's original hand, to
+ * the foreign sub-budgets INSIDE `fit`, before the first append (M8); ops past a budget are not sent and answer
+ * `more`. Only ops definitely not written are refunded. The grant is asked again before each later row (M9).
+ */
+async function undoTool(host, dim, entry, actor, a, stamp, cancelled) {
+  if (entry.state.ended) return refusal('dim-ended');
+  if (!dimMayDraw(entry.state, entry.grants, actor.hsid)) return refusal('write-not-granted');
+  const oid = a.opId !== undefined ? dimOpOid(actor.hsid, dim, a.opId) : undefined;
+  if (oid === null) return refusal('op-id-bad');
+  let input = null;
+  if (oid !== undefined) {
+    // an object, never an array: no draw's ops (always an array) can share this input hash
+    input = sumOf(canonicalText({ undo: { of: ofOf(a.of), ids: a.ids ?? null } }));
+    const memo = answers.get(dim)?.get(oid);
+    if (memo) return memo.input === input ? { ...memo.answer, budgetLeft: budgetLeft(turns, actor), repeat: true } : refusal('op-id-reused');
+    const seen = entry.oids.get(oid);
+    if (seen) return { ok: true, dim, seq: entry.state.seq, hash: hashOf(entry.state), applied: seen.applied, budgetLeft: budgetLeft(turns, actor), repeat: true, inputUnknown: true, fix: REPEAT_UNKNOWN_FIX };
+  }
+  // Aegis ruling 5: only a set a dim-view changes answer listed to THIS hsid on this board (stops blind or
+  // remembered ids; not proof against a planted id the agent was also shown)
+  if (!shownTo(dim, actor.hsid, a.of)) return refusal('undo-set-bad');
+  if (a.of.kind === 'turn' && !entry.state.attached.includes(a.of.hsid)) return refusal('undo-set-bad');
+  // Aegis E2: at most one person's change-set per agent turn (a further call for the SAME set, after `more`, is fine)
+  const key = setKey(a.of);
+  const pu = personUndos.get(actor.hsid);
+  if (a.of.kind === 'act' && pu && pu.turn === actor.turn && pu.key !== key) return refusal('undo-not-allowed', { budgetLeft: budgetLeft(turns, actor) });
+  const left = budgetLeft(turns, actor);
+  if (left === 0) return refusal('turn-budget', { budgetLeft: 0 });
+  try {
+    await catchUp(host, dim, entry, cancelled);
+  } catch {
+    loaded.delete(dim);
+    return refusal(cancelled() ? 'cancelled' : 'unavailable');
+  }
+  if (entry.state.ended) return refusal('dim-ended');
+  if (!dimMayDraw(entry.state, entry.grants, actor.hsid)) return refusal('write-not-granted');
+  const hand = { cls: 'agent', principal: actor.principal, agent: actor.agent };
+  let fc = [];
+  let charged = 0;
+  const o = {
+    cs: a.of,
+    ...(a.ids ? { ids: a.ids } : {}),
+    actor: hand,
+    undoer: hand,
+    stamp,
+    act: undefined,
+    appendRow: (payload) => appendTool(host, DIM_KINDS.op, payload),
+    // M8: the plan's ops are charged here, after planning and BEFORE the first append; the first ops that fit the
+    // turn's ops and the foreign touches, deletes and words go, from the first that does not none goes
+    fit: async (planOps, restored) => {
+      const fl = foreignLeft(turns, actor);
+      fc = planOps.map((op) => undoForeignCharge(entry.state, op, hand, restored));
+      const sum = { touch: 0, del: 0, words: 0 };
+      let take = 0;
+      let over = null;
+      for (; take < planOps.length; take++) {
+        const c = fc[take];
+        if (take >= left) over = 'turn-budget';
+        else if (sum.touch + c.touch > fl.touch || sum.del + c.del > fl.del || sum.words + c.words > fl.words) over = 'foreign-budget';
+        if (over) break;
+        sum.touch += c.touch;
+        sum.del += c.del;
+        sum.words += c.words;
+      }
+      if (take === 0) {
+        o.fitCode = over ?? 'undo-nothing';
+        return 0;
+      }
+      try {
+        await charge(host, actor, take, 0, sum);
+      } catch {
+        o.fitCode = 'unavailable';
+        return 0;
+      }
+      charged = take;
+      if (a.of.kind === 'act') personUndos.set(actor.hsid, { turn: actor.turn, key });
+      while (personUndos.size > TURNS_CAP) personUndos.delete(personUndos.keys().next().value);
+      return take;
+    },
+    // M9: revocation (or a close) takes effect at the next row; a cancel stops there too
+    between: async () => {
+      if (cancelled()) return true;
+      try {
+        await catchUp(host, dim, entry, cancelled);
+      } catch {
+        return true;
+      }
+      return entry.state.ended || !dimMayDraw(entry.state, entry.grants, actor.hsid);
+    },
+  };
+  const out = await undoCore(host, dim, entry, o);
+  // I-2: refund what was charged and DEFINITELY not written (never sent, or refused by the host's budget); an op of
+  // a row whose append failed unknown is never refunded (M8: an overcount, never an undercount)
+  if (charged > 0) {
+    const kept = new Set([...(out.landed ?? []), ...(out.unknown ?? [])]);
+    let n = 0;
+    const f = { touch: 0, del: 0, words: 0 };
+    for (let j = 0; j < charged; j++) {
+      if (kept.has(j)) continue;
+      n++;
+      f.touch += fc[j].touch;
+      f.del += fc[j].del;
+      f.words += fc[j].words;
+    }
+    if (n > 0) {
+      try {
+        await charge(host, actor, -n, 0, { touch: -f.touch, del: -f.del, words: -f.words });
+      } catch {
+        /* the overcount stands (M8) */
+      }
+    }
+  }
+  if (out.code) return refusal(out.code, { ...(out.extra ?? {}), budgetLeft: budgetLeft(turns, actor) });
+  await saveIdx(host, dim, entry);
+  if (entry.sinceKf >= KEYFRAME_EVERY_OPS && !cancelled()) await saveKeyframe(host, dim, entry);
+  const answer = { ok: true, dim, seq: entry.state.seq, hash: hashOf(entry.state), applied: out.applied, skipped: out.skipped, ...(out.more ? { more: true } : {}), budgetLeft: budgetLeft(turns, actor) };
+  if (oid !== undefined) memoAnswer(dim, oid, input, answer);
   return answer;
 }
 
@@ -1015,10 +1151,11 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
  * (the undoer: never "as a human" for a tool), per-node validated (G3), against the newest fold; packs the plan into
  * at most CALL_ROWS rows inside the call's bytes, each row carrying `act` and the mod-built `undo` marker (its
  * restored entries only for the re-adds IN that row, as `dimUndoMarkOf` honours them); appends them through
- * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.fit(planOps)` (E2: charges
+ * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.fit(planOps, restored)` (E2: charges
  * the turn and foreign budgets) answers how many of the plan's ops may be sent, after planning and before the first
  * append; `o.between()` (E2: the grant re-check, M9) runs before each row after the first and stops the rest when
- * it answers true. The rest answers `more`; `planned` and `landed` are the plan's op indices packed and written.
+ * it answers true. The rest answers `more`; `planned` and `landed` are the plan's op indices packed and written,
+ * `unknown` those of a row whose append failed without a definite "not written" (never refunded, M8).
  * Returns `{applied, skipped, more}` or `{code, extra?}`. Never charges a turn: the caller does, before the append.
  */
 async function undoCore(host, dim, entry, o) {
@@ -1045,7 +1182,7 @@ async function undoCore(host, dim, entry, o) {
   // answers how many of the plan's ops may be sent (E2 charges its turn and foreign budgets inside it)
   let limit = plan.ops.length;
   if (o.fit) {
-    const n = await o.fit(plan.ops);
+    const n = await o.fit(plan.ops, plan.restored);
     limit = Number.isSafeInteger(n) ? Math.max(0, Math.min(n, plan.ops.length)) : 0;
     if (limit === 0) return { code: o.fitCode ?? 'undo-nothing', extra: { skipped: plan.skipped }, planned: [], landed: [] };
   }
@@ -1089,6 +1226,7 @@ async function undoCore(host, dim, entry, o) {
   const skipped = { ...plan.skipped, refused: plan.skipped.refused + unfit };
   if (rows.length === 0) return unfit > 0 ? { code: 'undo-nothing', extra: { skipped } } : { code: 'row-too-large' };
   const landedIds = new Set();
+  const unknownIx = [];
   let landedRows = 0;
   for (let r = 0; r < rows.length; r++) {
     const ops = rows[r];
@@ -1102,7 +1240,10 @@ async function undoCore(host, dim, entry, o) {
     if (seq === BUSY || seq === null) {
       // a budget refusal wrote nothing (the fold is kept, A4); anything else may have landed: the fold is forgotten
       if (seq === null) loaded.delete(dim);
-      if (landedRows === 0) return { code: seq === BUSY ? 'append-busy' : 'append-failed', planned, landed: [] };
+      // `unknown`: the ops of a row whose append answered neither a seq nor a budget refusal (it may have landed)
+      const unknown = seq === null ? [...rowIx[r]] : [];
+      if (landedRows === 0) return { code: seq === BUSY ? 'append-busy' : 'append-failed', planned, landed: [], unknown };
+      unknownIx.push(...unknown);
       more = true;
       break;
     }
@@ -1118,7 +1259,7 @@ async function undoCore(host, dim, entry, o) {
   // per mark: the plan's own counts when every row landed, else the marks the landed rows reached
   const whole = landedRows === rows.length && i === plan.ops.length;
   // `planned` and `landed` are indices into the plan's ops (E2 refunds what was charged and never sent)
-  return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more, planned, landed: landedIx };
+  return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more, planned, landed: landedIx, unknown: unknownIx };
 }
 
 /** A draw that wrote no op row: its count row, then the refusal. */

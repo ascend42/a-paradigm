@@ -617,6 +617,8 @@ export function toolActorOf(relayedFor) {
 export const TOOL_INPUT = Object.freeze({
   'dim-view': Object.freeze(['dim', 'since', 'limit']),
   'dim-draw': Object.freeze(['dim', 'ops', 'opId', 'base']),
+  // S1.4 E2: the agent's undo of one change-set it was shown (`of`, as a dim-view changes entry's `set` names it)
+  'dim-undo': Object.freeze(['dim', 'of', 'ids', 'opId']),
 });
 
 /**
@@ -647,6 +649,19 @@ export function readToolInput(tool, input) {
   }
   const opId = own(a, 'opId');
   if (opId !== undefined && (typeof opId !== 'string' || !DIM_OP_ID_PATTERN.test(opId))) return { code: 'op-id-bad' };
+  if (tool === 'dim-undo') {
+    // `of` is read exactly as dim.undo reads it (readOf: own keys, the two forms only); `ids` as dim.undo's scope
+    const of = readOf(own(a, 'of'));
+    if (!of) return { code: 'args-bad' };
+    out.of = of;
+    const ids = own(a, 'ids');
+    if (ids !== undefined) {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > SELECT_MAX || new Set(ids).size !== ids.length || !ids.every((x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x))) return { code: 'args-bad' };
+      out.ids = [...ids];
+    }
+    if (opId !== undefined) out.opId = opId;
+    return { args: out };
+  }
   const ops = own(a, 'ops');
   if (!Array.isArray(ops)) return { code: 'args-bad' };
   out.ops = ops;
@@ -699,6 +714,22 @@ export function foreignCharge(state, op, hand) {
     const patch = type === 'update' ? plain(own(o, 'patch')) : null;
     if (patch && Object.keys(patch).some((k) => WORDS_FIELDS.includes(k))) out.words += 1;
   }
+  return out;
+}
+
+/**
+ * What one op of an agent's undo plan (S1.4 E2, `dim-undo`) charges to the foreign sub-budgets, per id against each
+ * mark's ORIGINAL hand: as `foreignCharge` for an update, move or delete (a re-point of 5 foreign arrows is 5), and
+ * a re-add of a deleted mark of another hand (its `restored` entry's hand) is one foreign touch too.
+ */
+export function undoForeignCharge(state, op, hand, restored) {
+  const out = foreignCharge(state, op, hand);
+  const o = plain(op);
+  if (!o || own(o, 'type') !== 'add') return out;
+  const id = own(plain(own(o, 'node')) ?? {}, 'id');
+  const e = Array.isArray(restored) ? restored.find((x) => x[0] === id) : undefined;
+  const by = e ? plain(e[2]) : null;
+  if (by && !(by.cls === hand.cls && by.principal === hand.principal && by.agent === hand.agent)) out.touch += 1;
   return out;
 }
 
