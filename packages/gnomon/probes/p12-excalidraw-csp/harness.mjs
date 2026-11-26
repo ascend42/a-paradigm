@@ -1048,16 +1048,16 @@ export function runProblems(r, known) {
 export const MISS = { exited: 'the browser exited before the page reported', 'never-requested': 'the browser never asked for the page', 'no-report': 'the page loaded and sent nothing' };
 
 /** The row of one page that reported. `mode` is 'pinned' (/pinned.html, the pinned bytes) or 'probe' (/, the probe build). */
-export function pageRow(mode, { report, wallMs, pageRequestedMs }, requests) {
+export function pageRow(mode, { report, wallMs, pageRequestedMs, handoff }, requests) {
   const v = report.violations ?? [];
-  const common = { mode, wallMs, pageRequestedMs, stage: report.stage, mounted: report.mounted === true, engine: report.engine, sentAt: report.sentAt, watchdogMs: report.watchdogMs, phaseAt: report.phaseAt, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, fix: report.fix, pasteTrouble: report.pasteTrouble, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests };
+  const common = { mode, wallMs, pageRequestedMs, ...(handoff ? { handoff } : {}), stage: report.stage, mounted: report.mounted === true, engine: report.engine, sentAt: report.sentAt, watchdogMs: report.watchdogMs, phaseAt: report.phaseAt, afterAdd: report.afterAdd, afterAddSettled: report.afterAddSettled, alive: report.alive, aliveAfterUnmount: report.aliveAfterUnmount, deadHandle: report.deadHandle, fix: report.fix, pasteTrouble: report.pasteTrouble, png: report.png, violationCount: v.length, violations: aggregate(v), errors: report.errors ?? [], rejections: report.rejections ?? [], requests };
   if (mode === 'pinned') return { ...common, syntheticDraw: report.syntheticDraw };
   return { ...common, visibility: report.visibility, ms: { module: report.tModule ?? null, mounted: report.tMounted ?? null }, captureRefused: report.captureRefused, afterPointerRect: report.afterPointerRect, afterPointerStroke: report.afterPointerStroke, finalCount: report.finalCount, cursors: report.cursors, hostView: report.hostView, toolState: report.toolState, refusedTools: report.refusedTools, selectedAfterClick: report.selectedAfterClick, commandPalette: report.commandPalette, libraryDrop: report.libraryDrop, imageTool: report.imageTool, toolKeys: report.toolKeys, stockNodes: report.stockNodes, canvasFonts: report.canvasFontsEnd ?? report.canvasFonts, fontFaces: report.fontFaces, dpr: report.dpr, edge: report.edge, zoom: report.zoom, style: report.style, skin: report.skin, colours: report.colours, matrix: report.matrix, zoom400: report.zoom400, edits: report.edits, undoKeys: report.undoKeys, handleKeys: report.handleKeys, narrow: report.narrow, stateEvents: report.stateEvents, libraryTrigger: report.libraryTrigger, libraryOpen: report.libraryOpen, userAgent: report.userAgent };
 }
 
 /** The row of one page that sent no report: never clean (runProblems), and it says why (runPage's `miss`). */
-export function missRow(mode, { runId, wallMs, launcherTail, miss, exit, pageRequestedMs, lateReport }, requests) {
-  return { mode, runId, wallMs, error: NO_REPORT, miss, exit, pageRequestedMs, launcherTail, requests, ...(lateReport ? { lateReport: lateOf(lateReport) } : {}) };
+export function missRow(mode, { runId, wallMs, launcherTail, miss, exit, pageRequestedMs, handoff, lateReport }, requests) {
+  return { mode, runId, wallMs, error: NO_REPORT, miss, exit, pageRequestedMs, launcherTail, requests, ...(handoff ? { handoff } : {}), ...(lateReport ? { lateReport: lateOf(lateReport) } : {}) };
 }
 
 /** What the result keeps of a report that came after its page's wait gave up: everything runProblems judges. */
