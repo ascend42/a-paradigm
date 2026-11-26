@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { BoardAuthor, BoardMarkView, BoardView } from '../src/core/board.js';
-import { boardAgentName, CHIP_OFF, chipWidth, hsidShort, lineSealPoint, SELECTED_OFF, sessionLabel, RING_HALF, ENGINE_DASHES, FRAME_NARROW, handKey, hoveredMark, letterPx, lineRingPoint, LOW_ZOOM, PIN_HALF, RING_OFF, SEAL_ALWAYS, selectionLine, sessionShort, tooSmall, footHands, handName, handOf, isScrap, markBox, markSealPoint, overlayItems, SEAL_GAP, SEAL_HALF, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
+import { boardAgentName, CHIP_OFF, chipWidth, hsidShort, lineSealPoint, SELECTED_BELOW, SELECTED_OFF, sessionLabel, RING_HALF, ENGINE_DASHES, FRAME_NARROW, handKey, hoveredMark, letterPx, lineRingPoint, LOW_ZOOM, PIN_HALF, RING_OFF, SEAL_ALWAYS, selectionLine, sessionShort, tooSmall, footHands, handName, handOf, isScrap, markBox, markSealPoint, overlayItems, SEAL_GAP, SEAL_HALF, TEXTBOX_PAD, TEXTBOX_TOP, toScreen } from '../src/core/board-overlay.js';
 import { sealOf } from '../src/core/board-seal.js';
 
 const VIEW: BoardView = { scrollX: 0, scrollY: 0, zoom: 1, width: 800, height: 600 };
@@ -52,8 +52,9 @@ describe('#gui-board the three hands', () => {
     // the unknown hand's 8px pin stands its own half plus the gap off the mark: about half a seal's distance
     const pin = markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW, PIN_HALF);
     const seal = markSealPoint(mark({ id: 'r', kind: 'rect' }), VIEW);
-    // (Mika L2) a SELECTED shape's hollow pin stands clear of the engine's corner handles: right − 7, bottom + 7
-    const sel = { left: 100 + 120 - SELECTED_OFF, top: 50 + 80 + SELECTED_OFF };
+    // (Mika L2a) a SELECTED shape's hollow pin stands clear of the engine's bottom-right handle by 2px
+    const sel = { left: 100 + 120 - SELECTED_OFF, top: 50 + 80 + SELECTED_BELOW };
+    expect(SELECTED_BELOW).toBe(4 + 8 / 2 + 2 + 9);
     expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY, selected: true })], VIEW)).toEqual([{ type: 'hollow', id: 'r', ...sel }, { type: 'chip', id: 'r', left: sel.left + PIN_HALF + 4, top: sel.top, name: 'unknown hand' }]);
     // hovered (not selected) it stays at its seal point
     expect(overlayItems([mark({ id: 'r', kind: 'rect', author: NOBODY })], VIEW, { hovered: 'r' })[0]).toEqual({ type: 'hollow', id: 'r', ...pin });

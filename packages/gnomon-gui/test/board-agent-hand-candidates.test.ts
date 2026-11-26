@@ -94,11 +94,25 @@ CASES['marker-under-80-100'] = { marks: [{ hand: 'arky', marks: [{ kind: 'stroke
 // Mika's missing goldens: a stroke hovered (R1), a long name at the board's right edge (R2), one agent mark selected with its keep line (R5)
 for (const z of [1, 0.4]) CASES[`hover-stroke-${z * 100}`] = { marks: [{ hand: 'arky', marks: [{ kind: 'stroke', x: 600, y: 400, points: [0, 0, 60, -10, 120, 20, 180, 0], weight: 3 }] }], zoom: z, at: [690, 400], hover: [690, 405] };
 CASES['long-name-edge-100'] = { marks: [{ hand: 'a-very-long-agent-name-that-runs-to-48-characters', marks: [{ kind: 'rect', x: 600, y: 400, w: 100, h: 60 }] }], zoom: 1, at: [400, 430], hover: [650, 430], edge: true };
-CASES['selected-keep-line-100'] = { marks: [{ hand: 'arky', marks: [{ kind: 'rect', x: 600, y: 400, w: 120, h: 70 }] }], zoom: 1, at: [660, 435], select: true };
+CASES['selected-keep-line-100'] = { marks: [{ hand: 'arky', marks: [{ kind: 'rect', x: 600, y: 400, w: 120, h: 70 }] }], zoom: 1, at: [660, 435], select: true }; // the preview resolves the fixture's hsid to 'Totals are off by a cent'
 CASES['box-20x10-25'] = { marks: [{ hand: 'arky', marks: [{ kind: 'rect', x: 640, y: 380, w: 20, h: 10 }] }], zoom: 0.25, at: [650, 385] };
 
+/** The page script of one case: render, zoom, centre, then the edge pan, the selection and the pointer it asks for. */
+const caseScript = (c: (typeof CASES)[string]): string => `
+      board.render(globalThis.gnomonPreviewState(${JSON.stringify(c.marks)}));
+      const got = await zoomTo(${c.zoom});
+      await centreOn(${c.at[0]}, ${c.at[1]});
+      ${c.edge ? `{ const v = board.view(); const sx = (${c.at[0]} + v.scrollX) * v.zoom; const c2 = document.querySelector('#preview-board canvas.interactive'); const b = c2.getBoundingClientRect(); c2.dispatchEvent(new WheelEvent('wheel', { deltaX: -(v.width - 30 - (700 + v.scrollX) * v.zoom), deltaY: 0, clientX: b.left + 10, clientY: b.top + 10, bubbles: true, cancelable: true })); await settle(); }` : ''}
+      ${c.select ? `board.select([board.marks().find((m) => !m.labelOf).node]); await settle();` : ''}
+      ${c.hover ? `{ const v = board.view(); const host = document.querySelector('#preview-board .bd-board'); const b = host.getBoundingClientRect(); host.dispatchEvent(new PointerEvent('pointermove', { clientX: b.left + (${c.hover[0]} + v.scrollX) * v.zoom, clientY: b.top + (${c.hover[1]} + v.scrollY) * v.zoom, bubbles: true })); await settle(); }` : ''}
+      return { zoom: got, chips: document.querySelectorAll('#preview-board .bd-over .chip').length, keep: document.querySelector('#preview-board .bd-keep')?.textContent ?? '' };`;
+
 /** Promoted after Mika's review (s1.4-p4a-mika-review.md): compared against test/goldens/agent/ on every local run. */
-export const PROMOTED: readonly string[] = Object.freeze(['stroke-100', 'stroke-400', 'frame-25', 'frame-100', 'frame-400', 'text-25', 'text-100', 'text-400', 'text-boundary-40', 'mix-49', 'mix-50', 'box-14px-100', 'box-20x10-25']);
+export const PROMOTED: readonly string[] = Object.freeze([
+  'stroke-100', 'stroke-400', 'frame-25', 'frame-100', 'frame-400', 'text-25', 'text-100', 'text-400', 'text-boundary-40', 'mix-49', 'mix-50', 'box-14px-100', 'box-20x10-25',
+  // Mika's re-look after R1 to R4
+  'stroke-25', 'marker-under-80-100', 'text-boundary-41', 'hover-stroke-100', 'hover-stroke-40', 'long-name-edge-100',
+]);
 const GOLDEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'goldens', 'agent');
 
 const chrome = findChrome() as string | null;
@@ -111,10 +125,7 @@ describe.skipIf(!!process.env.CI || !process.env.GNOMON_BROWSER_TESTS || !!proce
   it.each(PROMOTED.flatMap((k) => (['day', 'night'] as const).map((t) => [k, t] as const)))('%s %s matches its golden', async (name, theme) => {
     const c = CASES[name]!;
     const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'open', theme, 'empty'), ...SIZE, script: `${HELPERS}
-      board.render(globalThis.gnomonPreviewState(${JSON.stringify(c.marks)}));
-      const got = await zoomTo(${c.zoom});
-      await centreOn(${c.at[0]}, ${c.at[1]});
-      return { zoom: got };` })) as { png: Buffer };
+${caseScript(c)}` })) as { png: Buffer };
     expect(differingShare(decodePng(readFileSync(path.join(GOLDEN, `agent-${name}-${theme}.png`))) as Png, decodePng(r.png) as Png), name).toBeLessThanOrEqual(TOLERANCE.share);
   }, 120_000);
 });
@@ -129,15 +140,9 @@ describe.skipIf(!process.env.GNOMON_P4A_CANDIDATES || !chrome)('#gui-board S1.4 
   it.each(Object.keys(CASES).flatMap((k) => (['day', 'night'] as const).map((t) => [k, t] as const)))('%s %s', async (name, theme) => {
     const c = CASES[name]!;
     const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'open', theme, 'empty'), ...SIZE, script: `${HELPERS}
-      board.render(globalThis.gnomonPreviewState(${JSON.stringify(c.marks)}));
-      const got = await zoomTo(${c.zoom});
-      await centreOn(${c.at[0]}, ${c.at[1]});
-      ${c.edge ? `{ const v = board.view(); const sx = (${c.at[0]} + v.scrollX) * v.zoom; const c2 = document.querySelector('#preview-board canvas.interactive'); const b = c2.getBoundingClientRect(); c2.dispatchEvent(new WheelEvent('wheel', { deltaX: -(v.width - 30 - (700 + v.scrollX) * v.zoom), deltaY: 0, clientX: b.left + 10, clientY: b.top + 10, bubbles: true, cancelable: true })); await settle(); }` : ''}
-      ${c.select ? `board.select([board.marks().find((m) => !m.labelOf).node]); await settle();` : ''}
-      ${c.hover ? `{ const v = board.view(); const host = document.querySelector('#preview-board .bd-board'); const b = host.getBoundingClientRect(); host.dispatchEvent(new PointerEvent('pointermove', { clientX: b.left + (${c.hover[0]} + v.scrollX) * v.zoom, clientY: b.top + (${c.hover[1]} + v.scrollY) * v.zoom, bubbles: true })); await settle(); }` : ''}
-      return { zoom: got, chips: document.querySelectorAll('#preview-board .bd-over .chip').length, keep: document.querySelector('#preview-board .bd-keep')?.textContent ?? '' };` })) as { png: Buffer; scripted: { zoom: number; chips: number; keep: string } };
+${caseScript(c)}` })) as { png: Buffer; scripted: { zoom: number; chips: number; keep: string } };
     if (c.hover) expect(r.scripted.chips, name).toBe(1);
-    if (c.select) expect(r.scripted.keep, name).toMatch(/^arky · ◇ /);
+    if (c.select) expect(r.scripted.keep, name).toBe(`arky · ◇ Totals are off …`);
     expect(Math.abs(r.scripted.zoom - c.zoom)).toBeLessThan(0.011);
     writeFileSync(path.join(OUT, `agent-${name}-${theme}.png`), r.png);
   }, 120_000);

@@ -210,8 +210,19 @@ export const CHIP_OFF = SEAL_HALF + 4;
 /** The system chip (static/styles.css .chip): mono 10.5 (advance 0.6em), 6px padding, 1px edge, 18px tall. */
 export const CHIP_ADVANCE = 6.3;
 export const chipWidth = (name: string): number => Math.ceil([...name].length * CHIP_ADVANCE + 2 * 6 + 2);
-/** (Mika L2) a SELECTED mark's seal or hollow pin stands clear of the engine's corner handles: right − 7, bottom + 7. */
+/** The engine's transform handles (excalidraw 0.18.1 chunk-K2UTITRG.js: `Qp={mouse:8,…}` and the handle margin `l=4` of its handle layout). */
+export const ENGINE_HANDLE_SIZE = 8;
+export const ENGINE_HANDLE_MARGIN = 4;
+/** (Mika L2a) how far below a selected box the engine's selection padding and its handle's half reach. */
+export const ENGINE_HANDLE_REACH = ENGINE_HANDLE_MARGIN + ENGINE_HANDLE_SIZE / 2;
+/** The chip is 18px tall: its half. */
+export const CHIP_HALF = 9;
+/**
+ * (Mika L2, L2a) a SELECTED shape's seal or hollow pin, and its chip, stand clear of the engine's bottom-right resize
+ * handle by 2px: 7px in from the right edge, and below the box by the handle's reach, 2px and the chip's half.
+ */
 export const SELECTED_OFF = 7;
+export const SELECTED_BELOW = ENGINE_HANDLE_REACH + 2 + CHIP_HALF;
 
 /**
  * Everything the host draws over the marks, in paint order. `left`/`top` of a pin, hollow pin, seal or ring is the
@@ -273,7 +284,7 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
     } else if (hand !== 'you') {
       const line = m.kind === 'stroke' || m.kind === 'arrow';
       const pinHalf = hand === 'agent' ? SEAL_HALF : PIN_HALF;
-      const selectedAt = (): { left: number; top: number } => ({ left: box.left + box.width - SELECTED_OFF, top: box.top + box.height + SELECTED_OFF });
+      const selectedAt = (): { left: number; top: number } => ({ left: box.left + box.width - SELECTED_OFF, top: box.top + box.height + SELECTED_BELOW });
       if (shown) named(m, line ? lineSealPoint(m, view, pinHalf) : m.selected && m.kind !== 'frame' ? selectedAt() : markSealPoint(m, view, pinHalf), 'mark', true, pinHalf);
       else if (low || tooSmall(m, view.zoom)) out.push({ type: 'ring', id: m.id, ...(line ? lineRingPoint(m, view) : markSealPoint(m, view, RING_HALF)) });
       else if (SEAL_ALWAYS.has(m.kind) || !ENGINE_DASHES.has(m.kind)) named(m, markSealPoint(m, view, pinHalf), 'mark', false, pinHalf);

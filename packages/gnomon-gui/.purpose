@@ -3015,4 +3015,7 @@ components:
 # ring, too-small, text forms, hoveredMark, selectionLine and the foot's session hint (core/board-overlay.ts), and four
 # counted patches (dash-two-three, frame-edge-dashed, dash-screen-floor, library-components-stubbed). Real-engine
 # proofs: test/board-agent-hand.test.ts. No new symbol ids.
-
+# Known gap (S1.4 P4a, Mika L3): on a 1x display an agent frame's vertical sides at 25% land on a half pixel (2.14:1
+# day, 2.45:1 night, under 3:1); fix before Windows or 1x support. Noted, no change (L4): between 41% and 49% a lone
+# side dash can stand beside a text's first and last letters. The rough dash now runs on across a polyline's short
+# runs (patches dash-runs-*), and a restored mark is drawn in the non-human of its two hands (dimHandOf).
