@@ -89,4 +89,20 @@ describe('#gui-board the normal form of a mark', () => {
     // a token that fails the palette's check draws as ink and as no fill, never as its own value
     expect(normalOf({ type: 'rectangle' }, { line: 'custom:#B4382A', fill: 'custom:#B4382A' }, 'day')).toMatchObject({ strokeColor: CONTENT_THEME_TOKENS.day['text.primary'], backgroundColor: 'transparent' });
   });
+
+  it('contrast_rule at paint: a stored colour that now fails is rechecked, never trusted, and never rewritten', () => {
+    const ink = (theme: 'day' | 'night'): string => CONTENT_THEME_TOKENS[theme]['text.primary'];
+    for (const theme of ['day', 'night'] as const) {
+      // a line under the floor draws as ink; a fill the ink would be faint on draws as none
+      expect(normalOf({ type: 'rectangle' }, { line: 'custom:#FF8800', fill: 'custom:#404040' }, theme)).toMatchObject({ strokeColor: ink(theme), backgroundColor: 'transparent' });
+      // a fair line on a shape is a faint text colour: the text mark draws it as ink
+      expect(normalOf({ type: 'arrow' }, { line: 'custom:#767676', fill: null }, theme).strokeColor).toBe(resolveContentColour('custom:#767676', 'line', theme));
+      expect(normalOf({ type: 'text' }, { line: 'custom:#767676', fill: null }, theme).strokeColor).toBe(ink(theme));
+      // a pair that fails draws its line as ink and keeps its fill
+      expect(normalOf({ type: 'rectangle' }, { line: 'custom:#858585', fill: 'cobalt' }, theme)).toMatchObject({ strokeColor: ink(theme), backgroundColor: resolveContentColour('cobalt', 'fill', theme) });
+      expect(normalOf({ type: 'rectangle' }, { line: 'custom:#858585', fill: 'lemon' }, theme)).toMatchObject({ strokeColor: resolveContentColour('custom:#858585', 'line', theme), backgroundColor: resolveContentColour('lemon', 'fill', theme) });
+      // an unfilled type has no pair: its line is its own
+      expect(normalOf({ type: 'arrow' }, { line: 'custom:#858585', fill: 'cobalt' }, theme).strokeColor).toBe(resolveContentColour('custom:#858585', 'line', theme));
+    }
+  });
 });

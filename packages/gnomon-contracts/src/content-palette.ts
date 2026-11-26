@@ -13,8 +13,13 @@
  * One behaviour per layer (Aegis ruling 3):
  *  - the write validator and the picker call `contentColourCheck`: a failing colour is refused, never stored,
  *    never stepped towards a passing one;
- *  - the renderer calls `resolveContentColour`, which is total and never trusts a stored row: a token that fails
- *    the CURRENT check draws as ink (line role) or as no fill (fill role). The row is never rewritten.
+ *  - the renderer calls `resolveContentColour` (and `resolveContentPair` for a mark's line on its fill), which is
+ *    total and never trusts a stored row: a token that fails the CURRENT check draws as ink (line role) or as no
+ *    fill (fill role), and a failing pair draws its line as ink. The row is never rewritten.
+ *
+ * The check is two rules (design `content_palette.contrast_rule`, Luna 2026-11-25 on Aegis S1.2 nit 6): the
+ * DISTANCE rule (below) and the CONTRAST rule, the WCAG 2 ratio from the same linearisation table, compared as
+ * integers with no rounding up, a day value on the day surfaces and its night transform on the night surfaces.
  *
  * The metric is the Euclidean distance in OKLab. This file holds the ONLY implementation in the repo (a test
  * asserts no second copy of the matrices exists): sRGB is linearised from a literal 256-entry table, Lab is
@@ -39,8 +44,8 @@ const HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 /** The theme tokens the palette reads (copied from `foundations.color`; the palette test compares them). */
 export const CONTENT_THEME_TOKENS = deepFreeze({
-  day: { 'text.primary': '#16150F', 'text.secondary': '#5A5850', 'surface.sheet': '#F8F5EE', 'line.key-edge': '#2A2925' },
-  night: { 'text.primary': '#E8F4F0', 'text.secondary': '#86998F', 'surface.sheet': '#171A21', 'line.key-edge': '#C9DCD6' },
+  day: { 'text.primary': '#16150F', 'text.secondary': '#5A5850', 'surface.ground': '#EDE8DC', 'surface.sheet': '#F8F5EE', 'line.key-edge': '#2A2925' },
+  night: { 'text.primary': '#E8F4F0', 'text.secondary': '#86998F', 'surface.ground': '#0F1116', 'surface.sheet': '#171A21', 'line.key-edge': '#C9DCD6' },
 } as const);
 export type ContentThemeToken = keyof (typeof CONTENT_THEME_TOKENS)['day'];
 
@@ -100,8 +105,16 @@ export const CONTENT_FILL_GUARD_TOKENS: readonly ContentThemeToken[] = Object.fr
 export const CONTENT_MIN_DISTANCE = 0.06;
 /** A colour with OKLCH chroma under this is a neutral. Exempt from the distance rule as a LINE only. */
 export const CONTENT_NEUTRAL_CHROMA = 0.02;
-/** An agent mark's dashed edge needs at least this WCAG ratio against its own fill (checked where it is drawn). */
+/** A mark's line needs at least this WCAG ratio against its own fill, in both themes (contrast_rule.pair). */
 export const CONTENT_EDGE_ON_FILL_MIN_RATIO = 3;
+/**
+ * The contrast floors of `content_palette.contrast_rule` (Luna 2026-11-25, Aegis S1.2 nit 6). A line clears
+ * `line` against the ground AND the sheet of each theme; the colour of a TEXT mark clears `text` against both; a
+ * fill keeps `fillText` for its theme's `text.primary`; the pair is `CONTENT_EDGE_ON_FILL_MIN_RATIO`.
+ */
+export const CONTENT_CONTRAST_FLOORS = deepFreeze({ line: 3, text: 4.5, fillText: 4.5 } as const);
+/** The surfaces a line is drawn on: the desk and paper of each theme. */
+export const CONTENT_CONTRAST_SURFACES: readonly ContentThemeToken[] = Object.freeze(['surface.ground', 'surface.sheet'] as const);
 
 /** The fixed night transform, by role: L' = clamp(lFrom − L, lMin, lMax), C' = min(C, cMax), hue kept. */
 export const NIGHT_TRANSFORM = deepFreeze({
@@ -298,6 +311,29 @@ export function contrastRatio(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+/** Relative luminance is quantised to this many integer steps per unit before a contrast compare. */
+export const LUMINANCE_QUANTUM = 1_000_000;
+const LUM_OFFSET_Q = 0.05 * LUMINANCE_QUANTUM;
+
+function luminanceOf(hex: string): number | null {
+  const rgb = rgbOf(hex);
+  return rgb ? 0.2126 * SRGB_LINEAR[rgb[0]]! + 0.7152 * SRGB_LINEAR[rgb[1]]! + 0.0722 * SRGB_LINEAR[rgb[2]]! : null;
+}
+
+/**
+ * True when the WCAG 2 ratio of `a` and `b` is at least `floor`, compared as integers with NO rounding up
+ * (contrast_rule.ratio: 4.499 fails 4.5). The lighter luminance is quantised down and the darker up, so the
+ * integer ratio is never above the true one; the floor is compared in tenths. False when either is malformed.
+ */
+export function contrastClears(a: string, b: string, floor: number): boolean {
+  const x = luminanceOf(a);
+  const y = luminanceOf(b);
+  if (x === null || y === null) return false;
+  const hi = Math.floor(Math.max(x, y) * LUMINANCE_QUANTUM) + LUM_OFFSET_Q;
+  const lo = Math.ceil(Math.min(x, y) * LUMINANCE_QUANTUM) + LUM_OFFSET_Q;
+  return hi * 10 >= Math.round(floor * 10) * lo;
+}
+
 /* ── the check (validator and picker) ─────────────────────────────────────── */
 
 function clearOfReserved(hex: string, theme: ContentTheme): boolean {
@@ -348,44 +384,165 @@ export function nearestSwatch(hex: string, role: ContentRole): string | null {
   return best;
 }
 
-export type ContentColourCheck = { ok: true } | { ok: false; offer: string | null };
+/**
+ * Why a colour was refused by the contrast rule (contrast_rule.refusal). A distance-rule or token refusal
+ * carries no `why`: the picker words those itself.
+ *  - `faint-line`: a line under 3:1 on the ground or the sheet;
+ *  - `faint-text`: the colour of a text mark under 4.5:1 on either;
+ *  - `faint-fill`: `text.primary` under 4.5:1 on the fill;
+ *  - `pair-line`: the line being written under 3:1 on the mark's fill;
+ *  - `pair-fill`: the fill being written under 3:1 for the mark's line.
+ */
+export const CONTENT_CONTRAST_WHYS = ['faint-line', 'faint-text', 'faint-fill', 'pair-line', 'pair-fill'] as const;
+export type ContentContrastWhy = (typeof CONTENT_CONTRAST_WHYS)[number];
+
+/** The plain words of each refusal, as the tray shows them after '✕ not used · ' (content-tray custom-refused). */
+export const CONTENT_CONTRAST_WORDS: Readonly<Record<ContentContrastWhy, string>> = deepFreeze({
+  'faint-line': 'too faint to see on the board',
+  'faint-text': 'too faint to read as words',
+  'faint-fill': 'words would be too faint on it',
+  'pair-line': "it would not show against this mark's fill",
+  'pair-fill': "this mark's line would not show against it",
+});
+
+/** ' at night' is added when only the night value fails. */
+export const contentContrastWords = (why: ContentContrastWhy, night: boolean): string => `${CONTENT_CONTRAST_WORDS[why]}${night ? ' at night' : ''}`;
+
+/**
+ * The fixed fix sentence an agent's tool gets for a contrast refusal. Built only from the words above and a
+ * swatch NAME from the closed list, never from input.
+ */
+export function contentContrastFix(why: ContentContrastWhy, night: boolean, swatch: string): string {
+  const said = contentContrastWords(why, night);
+  const head = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+  const tail: Record<ContentContrastWhy, string> = {
+    'faint-line': 'or a custom colour with at least 3:1 against the board in both themes',
+    'faint-text': 'or a custom colour with at least 4.5:1 against the board in both themes',
+    'faint-fill': "or a custom fill that keeps at least 4.5:1 for the board's ink in both themes",
+    'pair-line': 'or a line with at least 3:1 against the fill in both themes',
+    'pair-fill': 'or a fill with at least 3:1 against the line in both themes',
+  };
+  return `${head}: use ${swatch}, ${tail[why]}.`;
+}
+
+export type ContentColourCheck = { ok: true } | { ok: false; offer: string | null; why?: ContentContrastWhy; night?: boolean };
+
+/** How a colour is used: `text` is a line colour on a text mark, read as words (contrast_rule.line). */
+export interface ContentUse {
+  text?: boolean;
+}
+
+/** The day value and the night value of a token in a role, or `null` when it is not a storable token there. */
+function valuesOf(token: unknown, role: ContentRole): { day: string; night: string } | null {
+  if (typeof token !== 'string') return null;
+  const neutral = Object.prototype.hasOwnProperty.call(CONTENT_NEUTRALS, token) ? CONTENT_NEUTRALS[token] : undefined;
+  if (neutral) return neutral.role === role ? { day: CONTENT_THEME_TOKENS.day[neutral.token], night: CONTENT_THEME_TOKENS.night[neutral.token] } : null;
+  const swatch = CONTENT_SWATCHES.find((s) => s.name === token);
+  if (swatch) {
+    const day = swatch.day[role];
+    const night = swatch.night[role];
+    return day && night ? { day, night } : null;
+  }
+  if (!CUSTOM_COLOUR_PATTERN.test(token)) return null;
+  const hex = token.slice('custom:'.length).toUpperCase();
+  return { day: hex, night: nightOf(hex, role) };
+}
+
+/** Does a value pass the contrast floor of its role in one theme? */
+function contrastInTheme(value: string, role: ContentRole, use: ContentUse, theme: ContentTheme): boolean {
+  const t = CONTENT_THEME_TOKENS[theme];
+  if (role === 'fill') return contrastClears(t['text.primary'], value, CONTENT_CONTRAST_FLOORS.fillText);
+  const floor = use.text ? CONTENT_CONTRAST_FLOORS.text : CONTENT_CONTRAST_FLOORS.line;
+  return CONTENT_CONTRAST_SURFACES.every((k) => contrastClears(value, t[k], floor));
+}
+
+/**
+ * The named token nearest a day value for a role, neutrals included (ink and graphite for a line, paper for a
+ * fill): the swatch a contrast refusal offers. Every named token passes every part of the contrast rule.
+ */
+function nearestNamed(hex: string, role: ContentRole): string {
+  let best = role === 'line' ? 'ink' : 'paper';
+  let bestD = Infinity;
+  for (const [name, n] of Object.entries(CONTENT_NEUTRALS)) {
+    if (n.role !== role) continue;
+    const d = colourDistanceQSq(hex, CONTENT_THEME_TOKENS.day[n.token]);
+    if (d < bestD) [best, bestD] = [name, d];
+  }
+  for (const s of CONTENT_SWATCHES) {
+    const v = s.day[role];
+    if (!v) continue;
+    const d = colourDistanceQSq(hex, v);
+    if (d < bestD) [best, bestD] = [s.name, d];
+  }
+  return best;
+}
 
 /**
  * THE shared check (write validator and picker). A token is a storable name with that role, or
- * `custom:#rrggbb` whose value passes `customColourPasses`. A failure may offer a named swatch; it never
- * substitutes one.
+ * `custom:#rrggbb` whose value passes `customColourPasses` (the distance rule). A token that passes that must
+ * then clear the contrast floor of its role (contrast_rule.line, .neutral_line, .fill), its day value on the day
+ * surfaces AND its night value on the night surfaces. A failure may offer a named swatch; it never substitutes one.
  */
-export function contentColourCheck(token: unknown, role: ContentRole): ContentColourCheck {
+export function contentColourCheck(token: unknown, role: ContentRole, use: ContentUse = {}): ContentColourCheck {
   if (typeof token !== 'string') return { ok: false, offer: null };
-  const neutral = Object.prototype.hasOwnProperty.call(CONTENT_NEUTRALS, token) ? CONTENT_NEUTRALS[token] : undefined;
-  if (neutral) return neutral.role === role ? { ok: true } : { ok: false, offer: null };
-  const swatch = CONTENT_SWATCHES.find((s) => s.name === token);
-  if (swatch) return swatch.day[role] ? { ok: true } : { ok: false, offer: null };
-  if (!CUSTOM_COLOUR_PATTERN.test(token)) return { ok: false, offer: null };
-  const hex = token.slice('custom:'.length);
-  return customColourPasses(hex, role) ? { ok: true } : { ok: false, offer: nearestSwatch(hex, role) };
+  const custom = CUSTOM_COLOUR_PATTERN.test(token);
+  const v = valuesOf(token, role);
+  if (!v) return { ok: false, offer: null };
+  if (custom && !customColourPasses(v.day, role)) return { ok: false, offer: nearestSwatch(v.day, role) };
+  const day = contrastInTheme(v.day, role, use, 'day');
+  const night = contrastInTheme(v.night, role, use, 'night');
+  if (day && night) return { ok: true };
+  const why: ContentContrastWhy = role === 'fill' ? 'faint-fill' : use.text ? 'faint-text' : 'faint-line';
+  return { ok: false, offer: nearestNamed(v.day, role), why, night: day };
 }
 
-export function isContentColour(v: unknown, role: ContentRole): v is string {
-  return contentColourCheck(v, role).ok;
+export function isContentColour(v: unknown, role: ContentRole, use: ContentUse = {}): v is string {
+  return contentColourCheck(v, role, use).ok;
+}
+
+/**
+ * contrast_rule.pair: the line of a mark against its own fill, at least 3:1 in both themes (day line on day
+ * fill; night line on night fill). `field` is the one being written; it is judged against the other as it will
+ * stand after the op. Only a pair whose two tokens each pass alone is judged here (a token that fails alone is
+ * refused by `contentColourCheck`); a missing fill (`null` or `undefined`) has no pair. The offer is `ink` for
+ * a line and `paper` for a fill, which always pass against a passing other colour.
+ */
+export function contentPairCheck(line: unknown, fill: unknown, field: ContentRole, use: ContentUse = {}): ContentColourCheck {
+  if (fill === null || fill === undefined) return { ok: true };
+  if (!contentColourCheck(line, 'line', use).ok || !contentColourCheck(fill, 'fill').ok) return { ok: true };
+  const l = valuesOf(line, 'line')!;
+  const f = valuesOf(fill, 'fill')!;
+  const day = contrastClears(l.day, f.day, CONTENT_EDGE_ON_FILL_MIN_RATIO);
+  const night = contrastClears(l.night, f.night, CONTENT_EDGE_ON_FILL_MIN_RATIO);
+  if (day && night) return { ok: true };
+  return field === 'line' ? { ok: false, offer: 'ink', why: 'pair-line', night: day } : { ok: false, offer: 'paper', why: 'pair-fill', night: day };
 }
 
 /* ── the resolver (renderer) ──────────────────────────────────────────────── */
 
 /**
- * The colour to paint for a stored token. Total, and it re-runs the CURRENT check: a token that fails it (a
- * reserved value that moved after the row was written, an unknown name, a non-string) resolves to the theme's
- * ink for a line and to `null` (no fill) for a fill. It never steps towards a passing colour.
+ * The colour to paint for a stored token. Total, and it re-runs the CURRENT check, contrast included: a token
+ * that fails it (a reserved value that moved after the row was written, a colour stored before the contrast rule,
+ * an unknown name, a non-string) resolves to the theme's ink for a line and to `null` (no fill) for a fill. It
+ * never steps towards a passing colour, and the row is never rewritten.
  */
-export function resolveContentColour(token: unknown, role: ContentRole, theme: ContentTheme): string | null {
+export function resolveContentColour(token: unknown, role: ContentRole, theme: ContentTheme, use: ContentUse = {}): string | null {
   const fallback = role === 'line' ? CONTENT_THEME_TOKENS[theme]['text.primary'] : null;
-  if (typeof token !== 'string' || !contentColourCheck(token, role).ok) return fallback;
-  const neutral = Object.prototype.hasOwnProperty.call(CONTENT_NEUTRALS, token) ? CONTENT_NEUTRALS[token] : undefined;
-  if (neutral) return CONTENT_THEME_TOKENS[theme][neutral.token];
-  const swatch = CONTENT_SWATCHES.find((s) => s.name === token);
-  if (swatch) return swatch[theme][role] ?? fallback;
-  const hex = token.slice('custom:'.length).toUpperCase();
-  return theme === 'day' ? hex : nightOf(hex, role);
+  if (!contentColourCheck(token, role, use).ok) return fallback;
+  const v = valuesOf(token, role);
+  return v ? v[theme] : fallback;
+}
+
+/**
+ * A mark's line and fill as painted (contrast_rule.pair, at paint): each resolved by `resolveContentColour`, and
+ * a stored pair that fails draws its line as ink. Ink on a passing fill is 4.5:1 or better, so the edge shows.
+ */
+export function resolveContentPair(line: unknown, fill: unknown, theme: ContentTheme, use: ContentUse = {}): { line: string; fill: string | null } {
+  const ink = CONTENT_THEME_TOKENS[theme]['text.primary'];
+  const paintedLine = resolveContentColour(line, 'line', theme, use) ?? ink;
+  const paintedFill = fill === null || fill === undefined ? null : resolveContentColour(fill, 'fill', theme);
+  if (paintedFill === null || contentPairCheck(line, fill, 'line', use).ok) return { line: paintedLine, fill: paintedFill };
+  return { line: ink, fill: paintedFill };
 }
 
 /* ── table validation ─────────────────────────────────────────────────────── */
@@ -430,5 +587,13 @@ export function contentPaletteProblems(): string[] {
       if (role === 'fill' && (!clearOfFillGuards(day, 'day') || !clearOfFillGuards(night, 'night'))) out.push(`swatch ${s.name} fill: too close to ink or the key edge`);
     }
   }
+  // contrast_rule: every named token passes every part, so a refusal can always offer one
+  const named = (role: ContentRole): string[] => CONTENT_SWATCH_NAMES.filter((n) => valuesOf(n, role) !== null);
+  for (const n of named('line')) {
+    if (!contentColourCheck(n, 'line').ok) out.push(`named ${n}: under the line floor`);
+    if (!contentColourCheck(n, 'line', { text: true }).ok) out.push(`named ${n}: under the text floor`);
+    for (const f of named('fill')) if (!contentPairCheck(n, f, 'line').ok) out.push(`named ${n} on ${f}: under the edge-on-fill floor`);
+  }
+  for (const f of named('fill')) if (!contentColourCheck(f, 'fill').ok) out.push(`named ${f}: under the fill floor`);
   return out;
 }

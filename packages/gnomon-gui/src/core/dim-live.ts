@@ -356,7 +356,8 @@ export class DimLive {
     for (let i = 0; i < ops.length; i += DIM_LIMITS.opsPerRow) {
       const v = validateDimOps(state, ops.slice(i, i + DIM_LIMITS.opsPerRow), this.#d.me);
       const first = v.refused[0];
-      if (first && !notice) notice = { code: first.code, field: first.field, why: first.rule ?? null, lost: 0 };
+      // a contrast refusal's reason travels as a closed word (`pair-line`, `faint-fill:night`), never as input
+      if (first && !notice) notice = { code: first.code, field: first.field, why: first.rule ?? (first.contrast ? `${first.contrast.why}${first.contrast.night ? ':night' : ''}` : null), lost: 0 };
       if (v.secret) {
         ok = [];
         break;

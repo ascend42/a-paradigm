@@ -19,7 +19,7 @@ import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, kee
 import { footHands, handName, hoveredMark, overlayItems, selectionLine } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
-import { customEntry, MARKER_OFF_TITLE, TRAY_FILL, TRAY_LINE, TRAY_WEIGHTS, wellName } from '../core/board-tray.js';
+import { customEntry, heldRefusals, MARKER_OFF_TITLE, TRAY_FILL, trayRefusalLine, TRAY_LINE, TRAY_WEIGHTS, wellName, type CustomContext } from '../core/board-tray.js';
 
 export interface BoardLeafOptions {
   title: string;
@@ -156,6 +156,8 @@ export function sealElement(seal: Seal, name: string, cls = ''): SVGElement {
   return svg('svg', { class: `bd-seal ${cls}`.trim(), viewBox: SEAL_VIEWBOX, width: 22, height: 22, role: 'img', 'aria-label': name }, cut, svg('text', { x: SEAL_CENTRE, y: sealLetterBaseline(seal.cut), 'text-anchor': 'middle' }, seal.letter), svg('circle', { class: 'sl-bead', cx: bead.x, cy: bead.y, r: SEAL_BEAD_RADIUS }));
 }
 
+/** the marks that carry a fill (a label is never one) */
+const FILL_MARKS: ReadonlySet<string> = new Set(['sticky', 'rect', 'ellipse', 'diamond']);
 const place = (e: HTMLElement | SVGElement, left: number, top: number): void => void (e.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`);
 const isField = (n: Element | null): boolean => !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA');
 
@@ -246,6 +248,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const saidLine = h('span', 'sr-only', { role: 'status', 'aria-live': 'polite' });
   const over = h('div', 'bd-over', { 'aria-hidden': 'true' });
   const tray = h('div', 'bd-tray', { role: 'group', 'aria-label': 'Line and fill', hidden: true });
+  // Mika P0b P1: a key that takes focus in the tray is scrolled into the tray's view, so focus is never hidden
+  tray.addEventListener('focusin', (e) => (e.target as HTMLElement).scrollIntoView?.({ block: 'nearest', inline: 'nearest' }));
   const note = h('div', 'bd-scrap bd-note', { hidden: true });
   const stage = h('div', 'bd-stage', {}, boardHost, over, tray, note);
   const foot = h('div', 'bd-foot', { 'aria-label': 'Hands on this board' });
@@ -368,7 +372,39 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     }
     return m;
   }
+  /**
+   * The contexts a colour is judged in for `tool` (Mika P0b S1, S2): the text floor for the text tool or a selected
+   * text mark; the pair against the colour the tool draws with (`chosen`: no mark yet) or against each selected
+   * mark's other colour. `fill` is null when the tool draws no fill.
+   */
+  function trayContexts(tool: BoardTool, style: { line: string; fill: string | null }): { line: CustomContext; fill: CustomContext | null } {
+    if (tool === 'select') {
+      const sel = handle && handle.isAlive() ? handle.marks().filter((m) => m.selected && !m.labelOf) : [];
+      const fillable = sel.filter((m) => FILL_MARKS.has(m.kind));
+      return { line: { text: sel.some((m) => m.kind === 'text'), others: fillable.map((m) => m.fill) }, fill: { others: fillable.map((m) => m.line) } };
+    }
+    const drawsFill = tool === 'rect' || tool === 'ellipse' || tool === 'sticky';
+    const fillNow = tool === 'sticky' ? (style.fill ?? CONTENT_DEFAULTS.stickyFill) : drawsFill ? style.fill : null;
+    return { line: { text: tool === 'text', other: fillNow, chosen: true }, fill: drawsFill ? { other: style.line, chosen: true } : null };
+  }
+  /** the tool the person chose while the held style would be refused by it: switched to once a passing colour is chosen */
+  let pendingTool: BoardTool | null = null;
   function chooseTool(tool: BoardTool): void {
+    const s = st();
+    // Mika P0b S1: a held style the tool would refuse is said BEFORE the first mark, so typed words are never lost.
+    // The tool waits; the tray opens on the refusal with its offered key. No colour is substituted.
+    if (s && (tool === 'text' || tool === 'rect' || tool === 'ellipse' || tool === 'sticky')) {
+      const held = heldRefusals(s.style, trayContexts(tool, s.style));
+      if (held.length) {
+        pendingTool = tool;
+        trayOpen = true;
+        trayKey = '';
+        draw();
+        tray.querySelector<HTMLElement>('[data-key^="held:"]')?.focus();
+        return;
+      }
+    }
+    pendingTool = null;
     handle?.setTool(tool);
     handle?.focus();
   }
@@ -443,7 +479,14 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (tray.hidden) return void (trayKey = '');
     const style = s!.style;
     // the tray is rebuilt only when what it shows has changed: a focus move must not replace a field being typed in
-    const key = JSON.stringify([style, s!.tool === 'stroke', theme]);
+    const ctxs = trayContexts(s!.tool, style);
+    // what is selected, for the shown wells and the pair (Mika P0b S2): one shared value per role, else the style
+    const sel = s!.tool === 'select' && handle && handle.isAlive() ? handle.marks().filter((m) => m.selected && !m.labelOf) : [];
+    const shared = <T,>(xs: T[]): T | undefined => (xs.length && xs.every((x) => x === xs[0]) ? xs[0] : undefined);
+    const shownLine = shared(sel.map((m) => m.line)) ?? style.line;
+    const fillSel = sel.filter((m) => FILL_MARKS.has(m.kind));
+    const shownFill = fillSel.length ? (shared(fillSel.map((m) => m.fill)) ?? style.fill) : style.fill;
+    const key = JSON.stringify([style, s!.tool, theme, pendingTool, sel.map((m) => [m.kind, m.line, m.fill])]);
     if (key === trayKey) return;
     trayKey = key;
     // each row is ONE tab stop; the arrow keys move within it (design content-tray: a radiogroup per row)
@@ -501,7 +544,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       answer.replaceChildren();
       if (!hexText.trim()) return;
       // one well per role the colour passes for: "use as line", "use as fill". Nothing is applied until one is pressed.
-      const entries = (['line', 'fill'] as const).map((role) => ({ role, c: customEntry(hexText, role) }));
+      // judged as the tool would draw it, or against the selection (trayContexts)
+      const entries = (['line', 'fill'] as const).map((role) => ({ role, c: customEntry(hexText, role, (role === 'line' ? ctxs.line : ctxs.fill) ?? {}) }));
       const passing = entries.filter((e) => e.c.ok);
       for (const { role, c } of passing) {
         if (!c.ok) continue;
@@ -517,12 +561,18 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       const first = passing[0]?.c;
       if (first?.ok) custom.append(h('span', 'meta', {}, `custom · at night ${passing.map(({ role, c }) => (c.ok ? `${c.night[role]} as a ${role}` : '')).join(', ')}`));
       // a role the colour fails for: nothing is applied and nothing is substituted; the nearest swatch is an offer
-      for (const { role, c } of entries) {
+      // Mika P0b S3, C1: refused for both roles for ONE reason, it is said once; otherwise each role is said with its
+      // own reason and its own key, the role after 'not used' ('✕ not used as a fill · <why>')
+      const failing = entries.filter((e) => !e.c.ok);
+      const once = failing.length === 2 && !failing[0]!.c.ok && !failing[1]!.c.ok && failing[0]!.c.why === failing[1]!.c.why && failing[0]!.c.offer === failing[1]!.c.offer;
+      for (const { role, c } of once ? failing.slice(0, 1) : failing) {
         if (c.ok) continue;
-        answer.append(h('span', 'bd-refuse', {}, passing.length && !c.line.includes(`as a ${role}`) ? `${c.line} as a ${role}` : c.line));
+        // a why that already names its role (the distance rule's 'as a fill it would hide …') is not named twice
+        const named = !once && !c.why.includes(`as a ${role}`);
+        answer.append(h('span', 'bd-refuse', {}, named ? trayRefusalLine(c.why, role) : c.line));
         if (c.offer) {
           const offer = c.offer;
-          const b = h('button', 'key quiet', { type: 'button', 'data-key': `offer:${role}` }, passing.length ? `Use ${offer} as the ${role}` : `Use ${offer}`);
+          const b = h('button', 'key quiet', { type: 'button', 'data-key': `offer:${role}` }, named ? `Use ${offer} as the ${role}` : `Use ${offer}`);
           b.addEventListener('click', (e) => {
             hexText = '';
             trayKey = '';
@@ -531,14 +581,33 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
           });
           answer.append(b);
         }
-        if (!passing.length) break; // refused for both roles: say it once
       }
     };
     field.addEventListener('input', read);
     // the control that had focus keeps it through the rebuild (review B2: choosing a well dropped focus to the body,
     // so Esc no longer closed the tray and the tool letters did nothing)
     const focused = tray.contains(document.activeElement) ? (document.activeElement as HTMLElement).getAttribute('data-key') : null;
-    tray.replaceChildren(wells('line', TRAY_LINE, style.line), wells('fill', TRAY_FILL, style.fill), weight, custom, answer);
+    // the held style as the waiting tool would draw it (Mika P0b S1): its refusal and its own key, before any mark
+    const held = h('div', 'bd-refuse-row', { role: 'status' });
+    for (const r of pendingTool ? heldRefusals(style, trayContexts(pendingTool, style)) : []) {
+      held.append(h('span', 'bd-refuse', {}, r.line));
+      if (!r.offer) continue;
+      const offer = r.offer;
+      const b = h('button', 'key quiet', { type: 'button', 'data-key': `held:${r.role}` }, `Use ${offer} as the ${r.role}`);
+      b.addEventListener('click', (e) => {
+        handle?.setStyle(r.role === 'line' ? { line: offer } : { fill: offer }, e);
+        const next = pendingTool;
+        const now = st();
+        if (next && now && heldRefusals(now.style, trayContexts(next, now.style)).length === 0) {
+          pendingTool = null;
+          handle?.setTool(next);
+        }
+        trayKey = '';
+        draw();
+      });
+      held.append(b);
+    }
+    tray.replaceChildren(wells('line', TRAY_LINE, shownLine), wells('fill', TRAY_FILL, shownFill), weight, custom, answer, ...(held.childElementCount ? [held] : []));
     read();
     if (focused) {
       const again = tray.querySelector<HTMLElement>(`[data-key="${focused}"]`) ?? tray.querySelector<HTMLElement>('[tabindex="0"]');

@@ -8,7 +8,7 @@
  * A person cannot make a dashed, rough, hachured, translucent, rounded or linked mark by any route: the stroke is
  * solid unless the HOST says another hand drew it, and every other look is fixed.
  */
-import { CONTENT_DEFAULTS, CONTENT_THEME_TOKENS, resolveContentColour } from '@a-company/gnomon-contracts';
+import { CONTENT_DEFAULTS, CONTENT_THEME_TOKENS, resolveContentColour, resolveContentPair } from '@a-company/gnomon-contracts';
 import { BOARD_WEIGHTS, type BoardAuthor, type BoardTheme } from '../core/board.js';
 
 /**
@@ -36,6 +36,15 @@ export const nearestWeight = (w: number): number => WEIGHTS.reduce((best, x) => 
 export const strokeStyleOf = (by: BoardAuthor | undefined): 'solid' | 'dashed' => (by && by.cls !== 'human' ? 'dashed' : 'solid');
 export const lineColour = (token: unknown, theme: BoardTheme): string => resolveContentColour(token, 'line', theme) ?? CONTENT_THEME_TOKENS[theme]['text.primary'];
 export const fillColour = (token: unknown, theme: BoardTheme): string => (token === null ? null : resolveContentColour(token, 'fill', theme)) ?? 'transparent';
+/**
+ * A mark's two colours as painted (content_palette.contrast_rule, at paint): the stored tokens are rechecked and
+ * never trusted. A text mark's colour is held to the text floor; a line that fails draws as ink, a fill that
+ * fails as none, and a line that fails against its own fill as ink. Nothing stored is rewritten.
+ */
+export function paintOf(type: string, line: unknown, fill: unknown, theme: BoardTheme): { strokeColor: string; backgroundColor: string } {
+  const p = resolveContentPair(line, FILLABLE.has(type) ? fill : null, theme, { text: type === 'text' });
+  return { strokeColor: p.line, backgroundColor: p.fill ?? 'transparent' };
+}
 
 /**
  * What a mark is painted from. `line` and `fill` are content-palette tokens kept on the element (the palette checks
@@ -55,8 +64,7 @@ export interface MarkStamp {
 /** The properties an element of a board type must have, for its stamp (none: default ink, no fill, yours) and theme. */
 export function normalOf(el: { type: string; strokeWidth?: number; startArrowhead?: unknown; endArrowhead?: unknown }, stamp: MarkStamp | null, theme: BoardTheme): Record<string, unknown> {
   return {
-    strokeColor: lineColour(stamp?.line ?? CONTENT_DEFAULTS.line, theme),
-    backgroundColor: fillColour(stamp && FILLABLE.has(el.type) ? stamp.fill : null, theme),
+    ...paintOf(el.type, stamp?.line ?? CONTENT_DEFAULTS.line, stamp ? stamp.fill : null, theme),
     strokeStyle: strokeStyleOf(stamp?.by),
     roughness: 0,
     fillStyle: 'solid',
