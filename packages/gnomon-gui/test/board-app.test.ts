@@ -642,6 +642,29 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(S('folds')).toMatchObject({ open: true, field: 'hello', frames: S('typing').frames, line: 'No room to draw · your words are kept on this page' });
   }, 180_000);
 
+  it('aegis C2.2 (design check.signs.unchecked): a session resumed after the link comes back keeps this page\'s check (DimSessions holds it across the rebuild), so the unchecked state does not persist there; the lead stands exactly while the check is null', async () => {
+    const LEAD = `(() => { const c = ${CUR}; if (!c) return null; const s = c.session.status(); return { verified: s.verified, checkedSeq: s.checkedSeq, phase: s.phase, line: c.leaf.el.querySelector('.bd-keep').textContent, inFoot: c.leaf.checkShown(), place: c.leaf.el.dataset.checkPlace ?? null }; })()`;
+    const narrow = { read: `(document.querySelector('.bd-host').style.width = '240px', 1)`, as: 'narrow' };
+    const a = await real([
+      ...typeBoard, ...drawRect, narrow, { wait: 300 }, { read: LEAD, as: 'before' },
+      { read: `(${A}.down(), 1)`, as: 'down' }, { until: `${CUR} && ${CUR}.session.status().link === 'down'`, as: 'the link down' },
+      { press: '#reconnect-btn' }, { until: `!!${CUR} && ${CUR}.session.status().link === 'up' && ${CUR}.leaf.state() !== 'loading'`, as: 'resumed', timeoutMs: 20_000 }, narrow, { until: `!/^Reconnected/.test(${CUR}.leaf.el.querySelector('.bd-keep').textContent)`, as: 'the said Reconnected line gone', timeoutMs: 15_000 }, { read: LEAD, as: 'resumed' },
+      { read: `(${CUR}.leaf.setCheck('not checked yet', 'none', { open: true }), ${CUR}.leaf.el.querySelector('.bd-keep').textContent)`, as: 'forced' },
+    ]);
+    expect(a.errors).toEqual([]);
+    type L = { verified: boolean | null; checkedSeq: number | null; phase: string; line: string; inFoot: boolean; place: string | null };
+    expect((a.before as L).verified).toBe(true);
+    expect((a.before as L).line).not.toMatch(/^not checked yet · /);
+    const r = a.resumed as L;
+    // FOUND (C2.2's risk, answered by the build): the rebuilt session reads the page's own map of answered hashes, so a
+    // resumed board is checked at once and no unchecked state persists across a reconnect
+    expect(r).toMatchObject({ verified: true, phase: 'open', inFoot: false });
+    expect(r.checkedSeq).toBe((a.before as L).checkedSeq);
+    expect(r.line).not.toMatch(/^not checked yet · /);
+    // and the lead is tied to the check alone: the same resumed leaf told it has no check leads at once
+    expect(a.forced as string).toMatch(/^not checked yet · /);
+  }, 180_000);
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)
