@@ -311,7 +311,7 @@ async function foldFromLog(host, dim, from, since, cancelled, onOp, keys) {
  * folded and the index is healed. A dimension whose rows are in the log but whose index is missing (or was written
  * for another log) is ADOPTED from its first start row and that row's host-stamped repo scope (L2).
  */
-async function load(host, dim, cancelled) {
+async function load(host, dim, cancelled, admit) {
   const hit = loaded.get(dim);
   if (hit) {
     loaded.delete(dim);
@@ -330,7 +330,9 @@ async function load(host, dim, cancelled) {
     // the fold must have reached at least the row the index names: anything less means rows are missing
     if (last < idx.lastSeq || state.dim !== dim) throw new Error('fold short');
     const entry = { idx: { ...idx, lastSeq: last }, state, grants, oids, sinceKf: 0, dirty: last !== idx.lastSeq, hist: emptyHistory(logId, keys) };
-    remember(dim, entry);
+    // Aegis I-1 (E1 review): a caller the board does not admit (an unattached tool session) reads it, but it never
+    // enters the loaded list, so it can push out no other board and its pins
+    if (!admit || admit(entry)) remember(dim, entry);
     return entry;
   }
   // no usable index: look for the dimension in the log before anyone may create it again
@@ -385,7 +387,16 @@ async function catchUp(host, dim, entry, cancelled) {
 function remember(dim, entry) {
   loaded.delete(dim);
   loaded.set(dim, entry);
-  while (loaded.size > LOADED_MAX) loaded.delete(loaded.keys().next().value);
+  // past LOADED_MAX the least recently used board with NO pinned set goes first (Aegis I-1); only when every board
+  // holds a pin does the least recently used one go (the mod-wide entries cap still applies)
+  while (loaded.size > LOADED_MAX) {
+    let out = null;
+    for (const [k, e] of loaded) if (k !== dim && !(e.hist && e.hist.pins.length > 0)) {
+      out = k;
+      break;
+    }
+    loaded.delete(out ?? loaded.keys().next().value);
+  }
 }
 
 /**
@@ -687,8 +698,9 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       appendRow: (payload) => append(host, DIM_KINDS.op, payload),
     });
     if (out.code) return refusal(out.code, out.extra);
-    // the person pressed this set's notice: its pin is released (Aegis G6)
-    unpinSet(entry.hist, setKey(a.of));
+    // the person pressed this set's notice: its pin is released (Aegis G6), but only by an undo of the WHOLE set
+    // that finished (Aegis I-3, Judge nit): a per-mark undo (`ids`) or an answer with `more` keeps it standing
+    if (!a.ids && !out.more) unpinSet(entry.hist, setKey(a.of));
     await saveIdx(host, a.dim, entry);
     if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
     return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrOf(entry.state), applied: out.applied, skipped: out.skipped, ...(out.more ? { more: true } : {}) };
@@ -738,7 +750,8 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
   if (!dims.includes(ulidOf(dim))) return refusal('dim-unknown');
   let entry;
   try {
-    entry = await load(host, dim, cancelled);
+    // attach is checked BEFORE the board enters the loaded list (Aegis I-1)
+    entry = await load(host, dim, cancelled, (e) => e.state.attached.includes(actor.hsid));
   } catch {
     return refusal(cancelled() ? 'cancelled' : 'unavailable');
   }

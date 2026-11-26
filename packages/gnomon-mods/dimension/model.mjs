@@ -1117,16 +1117,23 @@ export function noteHistoryRow(h, before, row, now, after) {
  * ninth pin unpins the oldest pinned set (it stays undoable until normal eviction, N1).
  */
 function offerPin(h, set, now) {
-  if (set.pinned) return;
+  // a set released once (pushed out by a newer pin, or dismissed) is never pinned again (Judge I-1: no churn)
+  if (set.pinned || set.released) return;
   const present = now - h.presentAt <= PRESENCE_MS;
   const want = set.human || set.undidPerson || (set.cs.kind === 'turn' && set.other && present);
   if (set.cs.kind === 'turn' && set.other && present) set.offered = true;
   if (!want) return;
   set.pinned = true;
   h.pins.push(set.key);
+  // Probe F1: over the cap, the oldest pin that is NOT a person's (touched no person's mark, undid no person's
+  // action) goes first; a person's pin is pushed out only by another person's pin
+  const personal = (s) => s.human || s.undidPerson;
   while (h.pins.length > UNDO_PINS) {
-    const old = h.sets.get(h.pins.shift());
-    if (old) old.pinned = false;
+    let i = h.pins.findIndex((k) => !personal(h.sets.get(k)));
+    if (i < 0) i = 0; // every pin is a person's: the oldest goes (the new one is a person's too, or it was taken)
+    const [k] = h.pins.splice(i, 1);
+    const old = h.sets.get(k);
+    if (old) (old.pinned = false), (old.released = true);
   }
 }
 
@@ -1142,6 +1149,7 @@ export function unpinSet(h, key) {
   if (!set || !set.pinned) return false;
   set.pinned = false;
   set.offered = true;
+  set.released = true;
   h.pins = h.pins.filter((k) => k !== key);
   return true;
 }

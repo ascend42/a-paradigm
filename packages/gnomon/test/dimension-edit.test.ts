@@ -782,3 +782,86 @@ describe('#dimension-mod E1 item 8: source scan (Aegis G3): no op row is built f
     for (const m of core.matchAll(/payloadOf\(([^)]*)\)/g)) expect(['ops', 'ops, ', '[...cur, plan.ops[i]]'].includes(m[1]!.trim()) || m[1]!.includes('plan.ops')).toBe(true);
   });
 });
+
+describe('E1 review group A: pins and the loaded-board cache (Aegis I-1, I-3; Probe F1; Judge I-1)', () => {
+  const human = { cls: 'human', principal: HUMAN };
+  type PinSet = { pinned: boolean; released?: boolean };
+  type H = { sets: Map<string, PinSet>; pins: string[] };
+  const NOW = 1_000_000_000;
+  const setup = async () => {
+    const m = await loadModel();
+    const node = (id: string, by: unknown) => ({ node: { id, kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 }, by, hsid: A, addedSeq: 1 });
+    const nodes = new Map<string, unknown>([
+      [ulid(1), node(ulid(1), human)],
+      [ulid(2), node(ulid(2), { cls: 'agent', principal: agentOf(A).principal, agent: 'claude' })],
+    ]);
+    const state = { dim: dimId(1), title: 't', attached: [A, B], ended: false, nodes, gone: new Set(), seq: 1, ops: 0, unapplied: 0 };
+    const h = m.emptyHistory!('log:x') as H & Record<string, unknown>;
+    let seq = 10;
+    const note = (hsid: string, n: number, target: string, now: number) => m.noteHistoryRow!(h, state, { seq: ++seq, payload: { v: 1, dim: dimId(1), ops: [{ type: 'update', id: target, patch: { color: 'graphite' } }], relayedFor: { ...agentOf(hsid, n) } } }, now);
+    const key = (hsid: string, n: number) => m.setKey!({ kind: 'turn', hsid, turn: `turn:${hsid}/${n}` }) as string;
+    return { m, h, note, key };
+  };
+
+  it('Probe F1: agent-on-agent pins never push out a person\'s pin; a person\'s pin goes only for another person\'s', async () => {
+    const { m, h, note, key } = await setup();
+    for (let t = 1; t <= 8; t++) note(B, t, ulid(1), NOW); // eight sets that touched the person's mark
+    m.notePresence!(h, NOW);
+    for (let t = 1; t <= 5; t++) note(A, 100 + t, ulid(2), NOW); // A's own mark: no other hand
+    for (let t = 1; t <= 5; t++) note(B, 200 + t, ulid(2), NOW); // B changes A's mark while the person is present
+    for (let t = 1; t <= 8; t++) expect([t, h.sets.get(key(B, t))!.pinned]).toEqual([t, true]);
+    expect(h.sets.get(key(B, 201))!.pinned).toBe(false);
+    note(B, 9, ulid(1), NOW); // a ninth person's set pushes out the oldest person's pin
+    expect([h.sets.get(key(B, 1))!.pinned, h.sets.get(key(B, 9))!.pinned]).toEqual([false, true]);
+  });
+
+  it('Judge I-1: a pushed-out set is never re-pinned by a later notePresence or a later row of its own', async () => {
+    const { m, h, note, key } = await setup();
+    for (let t = 1; t <= 9; t++) note(B, t, ulid(2), NOW); // agent-on-agent, nobody present: none pinned
+    expect(h.pins).toHaveLength(0);
+    m.notePresence!(h, NOW + 1);
+    const pins = [...h.pins];
+    expect(pins).toHaveLength(8);
+    m.notePresence!(h, NOW + 2);
+    m.notePresence!(h, NOW + 3);
+    expect(h.pins).toEqual(pins);
+    // nine person-touching sets: the first is pushed out; a later row of it does not pin it again
+    const g = await setup();
+    for (let t = 1; t <= 9; t++) g.note(B, t, ulid(1), NOW);
+    g.note(B, 1, ulid(1), NOW);
+    expect(g.h.sets.get(g.key(B, 1))!.pinned).toBe(false);
+    expect(g.h.pins).not.toContain(g.key(B, 1));
+  });
+
+  it('Aegis I-3: an undo scoped by ids keeps the set pinned; 40 later turns then leave it undoable', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }, { type: 'update', id: ulid(2), patch: { color: 'graphite' } }]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1), ids: [ulid(1)] })).toMatchObject({ ok: true, applied: 1 });
+    for (let i = 0; i < 40; i++) await draw(w, dim, A, 10 + i, [rectOp(3000 + i)]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 1 });
+  });
+
+  it('Aegis I-1: an unattached session\'s views never enter the loaded list; views of 8 other boards leave a person\'s pinned set undoable', { timeout: 180_000 }, async () => {
+    const w = await editRig();
+    const others: string[] = [];
+    for (let d = 2; d <= 9; d++) {
+      const dim = dimId(d);
+      expect(await w.run('dim.open', { dim, title: `B${d}`, opened: 'command' })).toMatchObject({ ok: true });
+      others.push(dim);
+    }
+    await w.restart();
+    const dim = await board(w, 1);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await draw(w, dim, B, 1, [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }]);
+    // B is attached to none of the others: refused, and none of them is loaded (A's view then reads the log)
+    for (const o of others) expect(await w.tool('dim-view', { dim: o }, agentOf(B, 2))).toMatchObject({ ok: false, code: 'not-attached' });
+    const reads = w.log.reads.length;
+    await w.tool('dim-view', { dim: others[7] }, agentOf(A, 2)); // the newest of B's refused views
+    expect(w.log.reads.length).toBeGreaterThan(reads);
+    // A views all eight (attached): the cache is full, and the board with a pin is the one kept
+    for (const o of others) expect(await w.tool('dim-view', { dim: o }, agentOf(A, 3))).toMatchObject({ v: 1 });
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 1 });
+  });
+});
