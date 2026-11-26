@@ -16,7 +16,7 @@ import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
 import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
-import { footHands, handName, overlayItems } from '../core/board-overlay.js';
+import { footHands, handName, hoveredMark, overlayItems, selectionLine } from '../core/board-overlay.js';
 import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
 import { customEntry, MARKER_OFF_TITLE, TRAY_FILL, TRAY_LINE, TRAY_WEIGHTS, wellName } from '../core/board-tray.js';
@@ -316,6 +316,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       keep.title = keepShown;
       return void keep.append(keepShown);
     }
+    // one selected mark of another hand: its whole line takes the RESTING line's place only (design author-seal naming.selection)
+    selLine = handle && handle.isAlive() ? selectionLine(handle.marks()) : null;
+    if (selLine) {
+      keep.title = selLine;
+      return void keep.append(h('bdi', '', {}, selLine));
+    }
     const k = keepParts(o);
     const text = `dimension in ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`;
     keep.title = text;
@@ -541,17 +547,30 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   function drawOver(): void {
     if (!handle || !handle.isAlive()) return void over.replaceChildren();
     const kids: Array<HTMLElement | SVGElement> = [];
-    for (const it of overlayItems(handle.marks(), handle.view())) {
+    const marks = handle.marks();
+    const view = handle.view();
+    hovered = hoveredMark(marks, view, pointerAt);
+    for (const it of overlayItems(marks, view, { hovered, theme })) {
       if (it.type === 'pin' || it.type === 'hollow') {
-        const p = h('span', `bd-pin${it.type === 'hollow' ? ' unk' : ''}`);
+        const p = h('span', `bd-pin${it.type === 'hollow' ? ' unk' : ''}${it.type === 'pin' && it.low ? ' low' : ''}`);
         place(p, it.left - 4, it.top - 4);
         kids.push(p);
+      } else if (it.type === 'ring') {
+        // the seal's rim with everything taken out: no letter, no name, no title, no pointer (design author-seal seal.ring)
+        const r = h('span', 'bd-ring');
+        place(r, it.left - 3, it.top - 3);
+        kids.push(r);
+      } else if (it.type === 'chip') {
+        // the hand's name, a bidi-isolated text node cut at 24 characters; the name is the authority
+        const c = h('span', 'bd-hand-chip', {}, h('bdi', '', {}, handName(it.name)));
+        place(c, it.left, it.top - 9);
+        kids.push(c);
       } else if (it.type === 'seal') {
         const s = sealElement(it.seal, it.name);
         place(s, it.left - 11, it.top - 11);
         kids.push(s);
       } else if (it.type === 'textbox') {
-        const b = h('div', 'bd-textbox');
+        const b = h('div', `bd-textbox${it.form === 'box' ? '' : ` ${it.form}`}`);
         place(b, it.left, it.top);
         b.style.width = `${Math.round(it.width)}px`;
         b.style.height = `${Math.round(it.height)}px`;
@@ -582,8 +601,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     for (const f of handle && handle.isAlive() ? footHands(handle.marks()) : [{ hand: 'you' as const, n: 0 }]) {
       if (f.hand === 'you') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin inline', { 'aria-hidden': 'true' }), ` you ${f.n}`));
       else if (f.hand === 'agent') {
-        const name = h('bdi', '', { title: f.name }, handName(f.name));
-        kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.name), ' ', name, ` ${f.n}`));
+        const name = h('bdi', '', { title: f.session ? `${f.name}, ${f.session}` : f.name }, handName(f.name));
+        // two agent hands that would read the same: each carries its session, ◇ and the name cut at 16 (session_hint)
+        const hint = f.session ? [' ', h('span', 'bd-hand-s', { title: f.session }, '◇ ', h('bdi', '', {}, f.session))] : [];
+        kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ` ${f.n}`));
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
     // the check (what this page's fold was compared with) is at the foot's right end and is never cut
@@ -666,8 +687,32 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       sceneFrame = 0;
       drawOver();
       drawFoot();
+      // the selection line follows a selection that moved from one mark to another
+      if (handle?.isAlive() && selectionLine(handle.marks()) !== selLine) draw();
     });
   };
+  // the pointer over a mark of another hand gives back its seal and name (design author-seal naming.hover): the
+  // host reads the pointer's place and nothing else; listening is passive and never stops an event
+  let pointerAt: { left: number; top: number } | null = null;
+  let hovered: string | null = null;
+  let selLine: string | null = null;
+  let hoverFrame = 0;
+  const hoverSoon = (): void => {
+    if (hoverFrame) return;
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = 0;
+      if (handle?.isAlive() && hoveredMark(handle.marks(), handle.view(), pointerAt) !== hovered) drawOver();
+    });
+  };
+  boardHost.addEventListener('pointermove', (e) => {
+    const b = boardHost.getBoundingClientRect();
+    pointerAt = { left: e.clientX - b.left, top: e.clientY - b.top };
+    hoverSoon();
+  }, { passive: true });
+  boardHost.addEventListener('pointerleave', () => {
+    pointerAt = null;
+    hoverSoon();
+  }, { passive: true });
 
   // ── loading the engine ───────────────────────────────────────────────────
   function fail(error: unknown, afterMount: boolean): void {

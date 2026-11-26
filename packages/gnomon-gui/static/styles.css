@@ -1920,6 +1920,15 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-over > * { position: absolute; left: 0; top: 0; margin: 0; }
 .bd-over .bd-stub { max-width: none; overflow: hidden; background-color: transparent; border-color: transparent; box-shadow: none; }
 .bd-over .bd-textbox { box-sizing: border-box; border: 1px dashed var(--ink2); }
+/* S1.4 P4a (design author-seal strokes.low-zoom, seal.ring, naming): under 50% the text box stands tight to the
+   letters; under 4px letters it is a dashed rule under them. The ring is the seal's rim with everything taken out. */
+.bd-over .bd-textbox.rule { border: 0; border-top: 1px dashed var(--ink2); height: 1px; }
+.bd-ring{position:absolute;width:6px;height:6px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--ink);background:var(--sheet);pointer-events:none}
+[data-theme="night"] .bd-ring{background:var(--ground)}
+[data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
+.bd-hand-chip{position:absolute;height:18px;line-height:16px;box-sizing:border-box;padding:0 4px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);font-family:var(--mono);font-size:var(--fs-label);white-space:nowrap;pointer-events:none}
+[data-theme="night"] .bd-hand-chip{background:var(--ground)}
+.bd-hand-s{color:var(--sec)}
 .bd-stage > .bd-tray { position: absolute; left: 8px; top: 8px; z-index: 3; max-width: calc(100% - 16px); box-sizing: border-box; }
 .bd-tr { flex-wrap: wrap; }
 .bd-tr .bd-wn { font-size: var(--fs-label); color: var(--sec); margin-left: 4px; }
