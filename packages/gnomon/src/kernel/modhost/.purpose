@@ -349,8 +349,8 @@ components:
       keep its fold. Any other failed append (an error from the log, a lost
       reply, a timeout) still leaves the mod unable to tell. A refused append
       takes no slot; an append the log port failed keeps the slot it took. The
-      dimension mod does not read the code yet (it drops its fold on every
-      failed append); that is S1.4 P3. Tests: test/command-effects.test.ts,
+      dimension mod reads it since S1.4 P3: an APPEND_BUDGET refusal keeps its
+      fold and answers append-busy; every other failed append drops it. Tests: test/command-effects.test.ts,
       test/mod-append-budget.test.ts (G-MOD-21), test/mod-call-kind.test.ts (a
       real child: the forged kind, the code the mod is given, and every line
       the host wrote to the child's stdin).

@@ -1,12 +1,13 @@
 // #dimension-mod (spec §12.7; first-party, mod-abi:v1; id `gnomon.dimension`).
 // A dimension is a list of op rows in the kernel log. This mod is the ONLY writer of those rows: it validates
 // every op with the published `dim-shape:v1` validator and appends through the host, which stamps who acted.
-// Runs under #mod-host from its pinned snapshot and imports nothing outside this folder. S1.3 is human-only:
-// the four commands write for a person on the Gnomon window and for nobody else; the two tools exist so the
-// commands have a `write` effect, and answer `not-available` until agents draw (S1.4). It ships no view.
+// Runs under #mod-host from its pinned snapshot and imports nothing outside this folder. The seven commands act
+// for a person on the Gnomon window and for nobody else; the two tools (S1.4) act for an attached session's agent,
+// identified by the host-written relayedFor alone, and append only op and draw.refused rows. It ships no view.
 //
 // Rules held here (Aegis S1.3 B2):
 //  - identity comes from the host-written `relayedFor` and the host-composed `args.hsid` / `args.repo` only;
+//  - tool input is hostile: a closed shape read by own keys; the model's opId reaches no row, only its hash;
 //  - args are read against a closed shape, field by field (model.mjs readArgs): never spread, never assigned;
 //  - every check, the 512 cap and the row-size check included, runs BEFORE the append;
 //  - mod state and the in-memory fold change only AFTER the append returned a seq;

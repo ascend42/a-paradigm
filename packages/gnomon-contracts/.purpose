@@ -360,7 +360,13 @@ components:
       colour, an over-long string or a wrong type is left out, and parent, from
       and to are shown on the id pattern alone. DIM_AUX_KINDS
       (modns.gnomon.dimension.grant, modns.gnomon.dimension.draw.refused): fixed
-      names, not in DIM_KINDS, not hashed, ignored by the fold; no writer yet.
+      names, not in DIM_KINDS, not hashed, ignored by the fold; written only by
+      the dimension mod (S1.4 P3). dimOpOid(hsid, dim, opId) (16 hex of
+      sha256 over hsid, 0x00, dim, 0x00, opId; null outside the forms; Aegis
+      A8), DIM_OP_ID_PATTERN and dimRowBy(row) (the bounded hand of a row) are
+      exported for the tools, outside the descriptor
+      (test/dim-tools.test.ts, which also holds that a session principal built
+      as the kernel builds it matches DIM_VIEW_PRINCIPAL_PATTERN).
       The ONE write-grant fold (Aegis S1.4 M4, M9), shared by the mod and the
       page through dim-shape.mjs: foldDimGrants(rows, dim, from),
       dimGrantDefault(state, hsid) (first attached on, later attached off) and
