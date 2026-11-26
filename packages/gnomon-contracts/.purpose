@@ -295,7 +295,11 @@ components:
       patterns, caps). planDimUndo: the shared field-level undo planner (later
       changes win and are counted; re-add under a minted id with the original
       hand; per-mark validation as the undoer, remainder whole at most twice);
-      dimInvertRows is the page's inverse, shared. Tested in
+      dimInvertRows is the page's inverse, shared.
+      Review fixes: restored entry [newId, oldId, by, wordsBy?, otherBy?]
+      (I-1); otherBy/wordsBy against the original hand (I-2); planner rows
+      carry seqs (I-2), `of` marks continuations (I-3), per-mark counts with
+      `partial`. Tested in
       test/dim-edit-anything.test.ts.
       dim-shape:v1 (Dimensions S1.2, spec §12.7; .paradigm/research/gnomon-canvas/
       s1.2-draft.md and its rulings): src/dim.ts. A dimension is the space; mediums
