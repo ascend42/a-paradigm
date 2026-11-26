@@ -1430,6 +1430,8 @@ body:has(.transcript.bd-open) #reconnect { align-items: flex-end; padding-top: 0
 .bd-turn .tail.fail { color: var(--fail); }
 .bd-turn .tail.quiet, .bd-turn .tail.more { color: var(--sec); }
 .bd-turn .tail.needs { color: var(--ink); }
+/* S1.4 P4b (luna_s14.drew): the drew tail reads on from the reply as what the agent did: 11.5 --ink2, weight 400 */
+.bd-turn .tail.drew { color: var(--ink2); font-weight: 400; }
 .bd-turn-turn.refused { color: var(--fail); }
 .bd-turn-turn.tight-1 [data-drop="1"], .bd-turn-turn.tight-2 [data-drop="2"], .bd-turn-turn.tight-2 .tail.first .tsep, .bd-turn-turn.tight-3 [data-drop="3"] { display: none; }
 .bd-turn-key { flex: none; margin-left: auto; }
@@ -1857,7 +1859,7 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-yield{color:var(--ink);font-weight:500} .bd-yield-m{color:var(--ink)}
 .bd-body{display:flex;min-height:0}
 .bd-stage{position:relative;flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
-.bd-foot{display:flex;overflow:hidden;gap:16px;align-items:center;padding:0 14px;box-sizing:border-box;height:32px;flex:0 0 32px;font-size:var(--fs-label);color:var(--sec);border-top:1px dashed var(--rule)}
+.bd-foot{display:flex;overflow-x:clip;overflow-y:visible;gap:16px;align-items:center;padding:0 14px;box-sizing:border-box;height:32px;flex:0 0 32px;font-size:var(--fs-label);color:var(--sec);border-top:1px dashed var(--rule)}
 .bd-hand{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 /* the rail: a graduated strip of the sheet; keys are the system's segment keys */
 .bd-rail{flex:0 0 48px;width:48px;display:flex;flex-direction:column;gap:4px;padding:8px 0;border-right:1px solid var(--rule); background:repeating-linear-gradient(to bottom,var(--sec) 0 1px,transparent 1px 8px) left top/4px 100% no-repeat,var(--sheet)}
@@ -1966,6 +1968,19 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-foot .bd-check-probe { position: absolute; visibility: hidden; margin: 0; }
 .bd-foot .bd-hand:first-child { flex: none; }
 .bd-foot .bd-check.bad { color: var(--fail); }
+/* S1.4 P4b (design board-leaf.hands_foot, components.draw-grant): every count sits in a fixed slot 4 characters wide,
+   so a count going from 9 to 1 000 leaves every key's box where it was; the key stands 8px after its count; its width
+   is held at its longest words ('may not edit', 12ch) plus the glyph slot, so a press never moves the next hand's key */
+.bd-foot .bd-count { display: inline-block; width: 4ch; font-variant-numeric: tabular-nums; }
+.bd-foot .bd-hand-keyed { flex: none; }
+.key.quiet.bd-grant { display: inline-flex; align-items: center; gap: 6px; box-sizing: content-box; height: var(--key-h); min-height: var(--key-h); padding: 0 8px; margin-left: 2px; min-width: calc(12ch + 24px); justify-content: flex-start; font-size: var(--fs-control); font-weight: 400; color: var(--ink2); white-space: nowrap; }
+.bd-grant .bd-grant-g { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 12px; }
+.bd-grant .bd-grant-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 4 2; }
+.bd-grant .bd-grant-g .spin { width: 9px; height: 9px; box-sizing: border-box; border: 1.5px solid var(--rule); border-top-color: var(--key-edge); border-radius: 50%; animation: turn-spin 0.9s linear infinite; }
+[data-motion="reduced"] .bd-grant .bd-grant-g .spin { animation: none; }
+@media (prefers-reduced-motion: reduce) { .bd-grant .bd-grant-g .spin { animation: none; } }
+.key.quiet.bd-grant[aria-disabled="true"] { color: var(--sec); font-weight: 400; border-color: var(--rule); cursor: default; }
+.bd-turn-turn.tight-4 [data-drop="4"], .bd-turn-turn.tight-5 [data-drop="5"] { display: none; }
 /* design check.signs.mismatch: the out-of-date line's fact in --fail at 500, the rest in ink */
 .bd-keep .bd-fail-fact { color: var(--fail); font-weight: 500; }
 /* design too_short.shows: under the floor there is no rail and the board is SHOWN, held still, the canvas taking the

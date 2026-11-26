@@ -15,10 +15,11 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveCo
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { CHECK_GAP, CHECK_LONGEST, OUT_OF_DATE_FACT, UNCHECKED_LEAD, BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
-import { footHands, handName, hoveredMark, overlayItems, selectionLine } from '../core/board-overlay.js';
+import { CHECK_GAP, CHECK_LONGEST, countSlot, GRANT_COPY, OUT_OF_DATE_FACT, UNCHECKED_LEAD, BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { boardAgentName, footHands, handName, hoveredMark, overlayItems, selectionLine } from '../core/board-overlay.js';
+import { DIM_GRANT_QUIET_MS } from '../core/dim-session.js';
 import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
-import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
+import { sealOf, SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
 import { customEntry, heldRefusals, MARKER_OFF_TITLE, TRAY_FILL, trayRefusalLine, TRAY_LINE, TRAY_WEIGHTS, wellName, type CustomContext } from '../core/board-tray.js';
 
 export interface BoardLeafOptions {
@@ -65,6 +66,14 @@ export interface BoardLeafOptions {
   onHoldChange?: () => void;
   /** How many cards are pinned in this session now: the too-short line names deciding one only when there is one (design `too_short.line`). */
   pinned?: () => number;
+  /**
+   * S1.4 P4b: the draw keys of the hands foot (design components.draw-grant), one per ATTACHED session in attach
+   * order, as the live loop last confirmed them (core/dim-session.ts grantKeys) with each hand's name. Without it
+   * the foot draws no key.
+   */
+  grants?: () => LeafGrant[];
+  /** A press on a draw key: the TRUSTED pointer, or Space / Enter on the key itself (never anything else). */
+  onGrant?: (hsid: string, cause: Event) => void;
   /** True while show chat does NOT fold the board (held still with words or unsaved changes): the head's esc is then the pointer's only fold and never leaves the head (design widths_narrow.luna_final.H1). */
   kept?: () => boolean;
 }
@@ -83,8 +92,26 @@ function mintNodeId(): string {
   return head + tail;
 }
 
+/** One draw key as the leaf draws it: core/dim-session.ts DimGrantKey plus the hand's name (and a local model's flag). */
+export interface LeafGrant {
+  hsid: string;
+  write: boolean;
+  state: 'live' | 'pending' | 'busy' | 'down' | 'unknown' | 'idle';
+  since: number | null;
+  /** 'Claude', or the hand's own name once it has marks here */
+  name: string;
+  /** the session's name, shown when two hands would read the same (author-seal session_hint) */
+  session?: string | null;
+  /** a local model session: its hand reads "can't draw on a board yet" and has no key (draw-grant no-key) */
+  local?: boolean;
+}
+
 export interface BoardLeaf {
   el: HTMLElement;
+  /** S1.4 P4b: one line to a screen reader only (the polite status line), never the keep line: the arrival line, a confirmed grant */
+  speak(line: string): void;
+  /** S1.4 P4b: draw the foot again (the grants changed) */
+  drawFoot(): void;
   handle(): BoardHandle | null;
   state(): LeafState;
   setTheme(theme: BoardTheme): void;
@@ -746,24 +773,133 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (state === 'empty') note.replaceChildren(pin, h('p', 'bd-en-t', {}, LEAF_COPY.emptyTitle), h('p', '', {}, LEAF_COPY.emptyHint));
     else note.replaceChildren(pin, h('p', 'bd-en-t', {}, LEAF_COPY.failedTitle), h('p', '', {}, cause), h('p', '', {}, LEAF_COPY.failedNext));
   }
+  /** S1.4 P4b: one hand per attached session, each with ITS key; the elements are kept, so a redraw never moves focus */
+  const grantEls = new Map<string, { hand: HTMLElement; count: HTMLElement; key: HTMLButtonElement | null; sig: string }>();
+  let grantQuietTimer: ReturnType<typeof setTimeout> | null = null;
+  function grantKey(g: LeafGrant): HTMLButtonElement {
+    const key = h('button', 'key quiet bd-grant', { type: 'button', 'data-grant': g.hsid });
+    // a press is the pointer's own click, or Space / Enter on the key itself; both arrive as the key's click
+    key.addEventListener('click', (e) => {
+      if (e.isTrusted !== true || key.getAttribute('aria-disabled') === 'true') return;
+      o.onGrant?.(g.hsid, e);
+    });
+    return key;
+  }
+  function paintKey(key: HTMLButtonElement, g: LeafGrant, now: number): void {
+    const words = g.write ? GRANT_COPY.on : GRANT_COPY.off;
+    const name = g.session ? `${g.name} in ${g.session}` : g.name;
+    const quiet = g.since !== null && now - g.since < DIM_GRANT_QUIET_MS;
+    // under 300 ms nothing changes (no flash); past it every key takes the disabled look and the pressed one the working mark
+    const working = g.state === 'pending' && !quiet;
+    const disabled = g.state === 'down' || g.state === 'unknown' || g.state === 'idle' || (g.state === 'busy' && !quiet) || working;
+    const label = g.state === 'down' ? GRANT_COPY.titleDown : g.state === 'idle' ? GRANT_COPY.titleIdle(name, words) : g.state === 'unknown' ? GRANT_COPY.titleUnknown(name) : g.state === 'pending' || g.state === 'busy' ? GRANT_COPY.titlePending(name, words) : g.write ? GRANT_COPY.titleOn(name) : GRANT_COPY.titleOff(name);
+    const sig = `${words}|${label}|${disabled}|${working}`;
+    if (key.dataset.sig === sig) return;
+    key.dataset.sig = sig;
+    key.setAttribute('aria-label', label);
+    if (disabled) key.setAttribute('aria-disabled', 'true');
+    else key.removeAttribute('aria-disabled');
+    if (working) key.setAttribute('aria-busy', 'true');
+    else key.removeAttribute('aria-busy');
+    key.dataset.state = g.write ? 'on' : 'off';
+    const glyph = h('span', 'bd-grant-g', { 'aria-hidden': 'true' });
+    if (working) glyph.append(h('span', 'spin'));
+    else if (g.write) {
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 18 12');
+      svg.setAttribute('width', '18');
+      svg.setAttribute('height', '12');
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', 'M1 6.25H17');
+      path.setAttribute('class', 'bd-grant-line');
+      svg.append(path);
+      glyph.append(svg);
+    }
+    // the pointer's tip on the words, so a screen reader is not told the sentence twice (mika)
+    key.replaceChildren(glyph, h('span', 'bd-grant-w', { title: label }, words));
+  }
+  /** Children in order, moving nothing that is already where it goes (a focused key is never detached). */
+  function syncKids(parent: HTMLElement, kids: readonly Node[]): void {
+    const want = new Set(kids);
+    for (const c of [...parent.childNodes]) if (!want.has(c)) parent.removeChild(c);
+    for (let i = 0; i < kids.length; i++) {
+      const at = parent.childNodes[i];
+      if (at !== kids[i]) parent.insertBefore(kids[i]!, at ?? null);
+    }
+    while (parent.childNodes.length > kids.length) parent.removeChild(parent.lastChild!);
+  }
   function drawFoot(): void {
     const kids: Node[] = [];
-    for (const f of handle && handle.isAlive() ? footHands(handle.marks(), o.sessionName) : [{ hand: 'you' as const, n: 0 }]) {
-      if (f.hand === 'you') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin inline', { 'aria-hidden': 'true' }), ` you ${f.n}`));
-      else if (f.hand === 'agent') {
+    const marks = handle && handle.isAlive() ? handle.marks() : [];
+    const hands = handle && handle.isAlive() ? footHands(marks, o.sessionName) : [{ hand: 'you' as const, n: 0 }];
+    const grants = o.grants?.() ?? [];
+    const now = Date.now();
+    const slot = (n: number): HTMLElement => h('span', 'bd-count', n > 999 ? { title: String(n) } : {}, countSlot(n));
+    // the hands of attached sessions, from their marks (a hand is its session's when its marks name that session)
+    const byHsid = new Map<string, { id: string; name: string; n: number }>();
+    for (const m of marks) {
+      if (m.labelOf || m.author.cls !== 'agent' || !m.author.session) continue;
+      const a = byHsid.get(m.author.session) ?? { id: m.author.id, name: boardAgentName(m.author.name), n: 0 };
+      a.n++;
+      byHsid.set(m.author.session, a);
+    }
+    const keyed = new Set<string>();
+    for (const f of hands) {
+      if (f.hand === 'you') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin inline', { 'aria-hidden': 'true' }), ' you ', slot(f.n)));
+    }
+    const live = new Set<string>();
+    for (const g of grants) {
+      live.add(g.hsid);
+      const mine = byHsid.get(g.hsid);
+      if (mine) keyed.add(mine.id);
+      const name = mine?.name ?? g.name;
+      const full = g.session ? `${name}, ${g.session}` : name;
+      const sig = `${full}|${mine?.id ?? g.hsid}|${g.local ? 'local' : 'key'}`;
+      let e = grantEls.get(g.hsid);
+      if (!e || e.sig !== sig) {
+        const count = h('span', 'bd-count');
+        const hint = g.session ? [' ', h('span', 'bd-hand-s', { title: g.session }, '◇ ', h('bdi', '', {}, g.session))] : [];
+        const key = g.local ? null : (e?.key ?? grantKey(g));
+        const hand = h('span', 'bd-hand bd-hand-keyed', {}, sealElement(sealOf(mine?.id ?? g.hsid, name), full), ' ', h('bdi', '', { title: full }, handName(name)), ...hint, ' ', count, ...(g.local ? [h('span', 'bd-hand-s', {}, ` · ${GRANT_COPY.noKey}`)] : key ? [key] : []));
+        e = { hand, count, key, sig };
+        grantEls.set(g.hsid, e);
+      }
+      const n = mine?.n ?? 0;
+      const text = countSlot(n);
+      if (e.count.textContent !== text) e.count.textContent = text;
+      if (n > 999) e.count.title = String(n);
+      else e.count.removeAttribute('title');
+      if (e.key) paintKey(e.key, { ...g, name }, now);
+      kids.push(e.hand);
+    }
+    // a hand whose key went (its session detached) takes focus with it to the board, never to another key (aegis)
+    for (const [hsid, e] of [...grantEls]) {
+      if (live.has(hsid)) continue;
+      const had = !!e.key && document.activeElement === e.key;
+      grantEls.delete(hsid);
+      if (had) queueMicrotask(() => handle?.focus());
+    }
+    for (const f of hands) {
+      if (f.hand === 'agent' && !keyed.has(f.id)) {
         const name = h('bdi', '', { title: f.session ? `${f.name}, ${f.session}` : f.name }, handName(f.name));
         // two agent hands that would read the same: each carries its session, ◇ and the name cut at 16 (session_hint)
         const hint = f.session ? [' ', h('span', 'bd-hand-s', { title: f.session }, '◇ ', h('bdi', '', {}, f.session))] : [];
-        kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ` ${f.n}`));
-      } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
+        kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ' ', slot(f.n)));
+      } else if (f.hand === 'unknown') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} `, slot(f.n)));
     }
-    foot.replaceChildren(...kids);
-    // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
+    syncKids(foot, kids);
+    // a pending change past its quiet: drawn again then
+    const pend = grants.find((g) => g.since !== null && now - g.since < DIM_GRANT_QUIET_MS);
+    if (pend && grantQuietTimer === null) grantQuietTimer = setTimeout(() => ((grantQuietTimer = null), drawFoot()), DIM_GRANT_QUIET_MS - (now - pend.since!) + 5);
+    // hands that do not fit become '+<k> more', with every hand in title=; 'you' and every hand with a key stay
+    // (a draw key is never put out of reach: design hands_foot.overflow; the '+<k> ▾' menu is not built yet)
+    const cuttable = kids.filter((k) => !(k as HTMLElement).classList?.contains('bd-hand-keyed'));
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
-    while (foot.scrollWidth > foot.clientWidth && kids.length - cut > 1) {
+    while (foot.scrollWidth > foot.clientWidth && cuttable.length - cut > 1) {
       cut++;
-      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`));
+      const gone = new Set(cuttable.slice(cuttable.length - cut));
+      syncKids(foot, [...kids.filter((k) => !gone.has(k)), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`)]);
     }
     // The check: decided by THE HANDS ALONE (design check.place). It is in the foot when its LONGEST wording and its
     // gap fit after the hands, whatever it says now; never cut, no short form. Measured with the foot's own paint.
@@ -1160,6 +1296,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   start();
   return {
     el,
+    speak(line) {
+      // a polite line only: the keep line stays the person's own (design said.arrival)
+      saidLine.textContent = line;
+    },
+    drawFoot: () => drawFoot(),
     handle: () => handle,
     state: leafState,
     setTheme(next) {

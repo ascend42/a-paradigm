@@ -562,6 +562,13 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           }
           for (const id of [...rendered.keys()]) if (!inTarget.has(id)) rendered.delete(id);
           for (const id of [...seen.keys()]) if (!inTarget.has(id)) seen.delete(id);
+          // S1.4 P4b: a mark in hand that this state no longer holds was removed by another hand mid-gesture
+          for (const id of held) {
+            const nodeId = nodeByEngine.get(id);
+            if (nodeId === undefined) continue;
+            if (state.nodes.has(nodeId)) goneHeld.delete(id);
+            else if (prev.nodes.has(nodeId) || goneHeld.has(id)) goneHeld.set(id, nodeId);
+          }
           prev = state;
           // the id table keeps only what the state or the scene still holds
           const present = new Set(all().map((el) => el.id));
@@ -581,6 +588,9 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
 
       // ── edits: the scene diffed against `prev`, once a gesture has ended ──
       const editListeners = new Set<(ops: DimOp[], cause: Event | null) => void>();
+      const goneListeners = new Set<(r: { what: 'gone'; id: string; change: 'moving' | 'changing' }) => void>();
+      /** S1.4 P4b: engine id → node id of marks held in a gesture that a render showed were removed by another hand */
+      const goneHeld = new Map<string, string>();
       const undoListeners = new Set<(event: KeyboardEvent, redo: boolean) => void>();
       /** A new freehand stroke is fitted to the size a row may carry before it is read (src/board/simplify.ts). */
       const fitNewStrokes = (): void => {
@@ -731,6 +741,18 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           if (!isDirty(el) || untouched.has(el.id) || !reach.has(el.id) || tooLong.has(el.id)) continue;
           mine.add(el.type === 'text' && typeof el.containerId === 'string' ? el.containerId : el.id);
         }
+        // S1.4 P4b: a held mark another hand removed during the gesture yields NO op (it is never added back as the
+        // person's); the drop reports it as gone, once, and the render below takes it off the board
+        const goneNow: string[] = [];
+        for (const [engineId, nodeId] of goneHeld) {
+          if (prev.nodes.has(nodeId)) continue;
+          if (mine.delete(engineId) || reach.has(engineId)) goneNow.push(nodeId);
+        }
+        goneHeld.clear();
+        if (goneNow.length > 0) {
+          const change = cause && cause.type === 'pointerup' && !typing ? 'moving' : 'changing';
+          for (const id of goneNow) for (const l of [...goneListeners]) l({ what: 'gone', id, change });
+        }
         // a mark in hand is compared with the node it was DRAWN from, so a remote change that landed during the
         // gesture is not undone by the drop: the ops are the person's own delta, applied on top of the newest state
         let basis = prev;
@@ -764,11 +786,15 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         stickyDrawn.clear();
         api.history.clear();
         // a change that maps to no op (a text opened and left as it was) is put back
-        if (ops.length === 0) return putBack();
+        if (ops.length === 0) {
+          putBack();
+          if (goneNow.length > 0 && dead === null) renderNow(prev);
+          return;
+        }
         putBacks = 0;
         for (const l of [...editListeners]) l(ops, why);
         // a refused text is put back as the state has it (the listener may not have rendered)
-        if (cutBack && dead === null) renderNow(prev);
+        if ((cutBack || goneNow.length > 0) && dead === null) renderNow(prev);
       };
       const queueFlush = (): void => {
         if (flushQueued || dead !== null) return;
@@ -1119,6 +1145,10 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           editListeners.add(listener);
           return () => void editListeners.delete(listener);
         },
+        onGone(listener) {
+          goneListeners.add(listener);
+          return () => void goneListeners.delete(listener);
+        },
         onUndoKey(listener) {
           undoListeners.add(listener);
           return () => void undoListeners.delete(listener);
@@ -1283,6 +1313,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           refusedListeners.clear();
           editListeners.clear();
           undoListeners.clear();
+          goneListeners.clear();
           root.unmount();
           unguard();
         },

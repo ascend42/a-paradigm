@@ -25,7 +25,7 @@ import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
 import { loadBoard, type BoardModule } from '../core/board.js';
 import type { DimOp, LogRow } from '@a-company/gnomon-contracts';
 import { boardFixture, FIXTURE_DIM, fixtureRows, fixtureState } from './board-fixture.js';
-import { mountBoardLeaf, type BoardLeaf } from '../ui/board-leaf.js';
+import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from '../ui/board-leaf.js';
 import { cardHasFocus } from '../ui/card-focus.js';
 
 // DEV ONLY: every CSP refusal on a preview page goes to the preview server's /diag (GET /diag lists them), so a
@@ -90,6 +90,10 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       // (the fixture counts its folds on the page, so a real-input test can see Esc fold a leaf that is too short)
       onFold: () => void ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds = ((globalThis as { gnomonPreviewFolds?: number }).gnomonPreviewFolds ?? 0) + 1, diag('board fold asked')),
       pinned: () => document.querySelectorAll('#pinned .card').length,
+      // S1.4 P4b DEV: the draw keys the fixture says (`gnomonPreviewGrants`, a list of LeafGrant), and the presses
+      // that reached the leaf's owner (`gnomonPreviewGrantPresses`), so a real-input test sees what a press sends
+      grants: () => ((globalThis as { gnomonPreviewGrants?: LeafGrant[] }).gnomonPreviewGrants ?? []),
+      onGrant: (hsid, cause) => void ((globalThis as { gnomonPreviewGrantPresses?: unknown[] }).gnomonPreviewGrantPresses ??= []).push({ hsid, type: cause.type, trusted: cause.isTrusted }),
       // a copy, a paste: the leaf's own register over the fixture's fold; pasted ops go where the board's edits go
       view: () => fx.state(),
       onOps: (ops, cause) => send(ops, cause),

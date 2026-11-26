@@ -282,3 +282,72 @@ export function failedCause(error: unknown, afterMount: boolean): string {
 /** A dimension title in the edge tab: cut at 24 characters with … (the whole title stays in title=). */
 export const TAB_TITLE_MAX = 24;
 export const tabTitle = (title: string): string => ([...title].length > TAB_TITLE_MAX ? `${[...title].slice(0, TAB_TITLE_MAX - 1).join('')}…` : title);
+
+// ── S1.4 P4b: the draw key, the said lines of an agent's hand (design draw-grant, board-leaf.said) ──────────────
+
+/**
+ * The draw key's words (design components.draw-grant.words, with edit_anything of E-design, 2026-11-26, which wins
+ * where it differs: the face reads "may edit" since a grant lets an agent add, change and remove any mark).
+ * Lines the record does not have are WORKING lines, listed for Luna: `titleIdle`, `titleUnknown`, `removedByPerson`
+ * and `removedByUnknown`.
+ */
+export const GRANT_COPY = Object.freeze({
+  on: 'may edit',
+  off: 'may not edit',
+  titleOn: (name: string): string => `${name} may draw on this board and change or remove any mark, yours included · press to stop it`,
+  titleOff: (name: string): string => `${name} may not draw, change or remove marks on this board · press to let it`,
+  titlePending: (name: string, words: string): string => `${name} ${words} on this board · saving the change`,
+  titleDown: 'Not connected · this can’t be changed until the board is back',
+  /** WORKING LINE (Luna): a session that is not live can be neither granted nor revoked (Aegis, P3 review) */
+  titleIdle: (name: string, words: string): string => `${name} ${words} on this board · its session is not running, so this can’t be changed now`,
+  /** WORKING LINE (Luna): the grant map has not arrived yet (opening) */
+  titleUnknown: (name: string): string => `${name} · the board has not said yet who may edit`,
+  spokenOn: (name: string): string => `${name} may edit this board: it can change and remove any mark`,
+  spokenOff: (name: string): string => `${name} may not edit this board`,
+  refusedOn: (name: string): string => `Not changed · ${name} may still edit`,
+  refusedOff: (name: string): string => `Not changed · ${name} still may not edit`,
+  noKey: 'can’t draw on a board yet',
+});
+
+/** A count in the foot's fixed 4-character slot (design hands_foot.order, aegis): over 999 reads '999+'. */
+export const countSlot = (n: number): string => (n > 999 ? '999+' : String(n));
+
+/** What an agent turn did on this board (counted from its rows). */
+export interface HandMarks {
+  added: number;
+  changed: number;
+  removed: number;
+}
+
+const marksWord = (n: number): string => (n === 1 ? '1 mark' : `${n} marks`);
+
+/**
+ * The arrival line (design board-leaf.said.arrival): ONE line per agent turn, spoken only. 'Claude added 3 marks',
+ * 'Claude added 3 marks, changed 2 and removed 1', 'Claude changed 2 marks'. A part that is zero is left out; null
+ * when nothing landed.
+ */
+export function arrivalLine(name: string, m: HandMarks): string | null {
+  const parts: Array<[string, number]> = (
+    [
+      ['added', m.added],
+      ['changed', m.changed],
+      ['removed', m.removed],
+    ] as Array<[string, number]>
+  ).filter(([, n]) => n > 0);
+  if (parts.length === 0) return null;
+  const [lead, ...rest] = parts;
+  const head = `${name} ${lead![0]} ${marksWord(lead![1])}`;
+  if (rest.length === 0) return head;
+  const tail = rest.map(([w, n]) => `${w} ${n}`);
+  return rest.length === 1 ? `${head} and ${tail[0]}` : `${head}, ${tail.slice(0, -1).join(', ')} and ${tail[tail.length - 1]}`;
+}
+
+/**
+ * The removed-mid-drag line (design board-leaf.said.removed): 'Claude removed the mark you were moving', or '… you
+ * were changing' for a resize, a restyle or a text edit. `name` null: a person or the unknown hand removed it
+ * (WORKING LINES, listed for Luna).
+ */
+export function removedLine(name: string | null, change: 'moving' | 'changing', who: 'agent' | 'person' | 'unknown' = name ? 'agent' : 'person'): string {
+  if (who === 'agent' && name) return `${name} removed the mark you were ${change}`;
+  return who === 'unknown' ? `An unknown hand removed the mark you were ${change}` : `The mark you were ${change} was removed on another page`;
+}

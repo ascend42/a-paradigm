@@ -20,10 +20,11 @@
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { DIM_KINDS } from '@a-company/gnomon-contracts';
-import { checkLine, checkTitle, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
+import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle } from '../core/board-leaf.js';
+import { boardAgentName, sessionShort } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
-import { mountBoardLeaf, type BoardLeaf } from './board-leaf.js';
+import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
 
 export interface BoardDockDeps {
   /** the centre column (`#pane-transcript`) and the chat inside it (`.feed`): the leaf covers from the pane's top to the feed's bottom */
@@ -57,6 +58,8 @@ export interface BoardDockDeps {
   dimensions?: (event: Event) => void;
   /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
   turn?: () => void;
+  /** S1.4 P4b: who answers in a session: a local model's hand has no draw key (design draw-grant no-key). Default Claude. */
+  localModel?: (hsid: string) => boolean;
   /** the open board's check changed (its row in the palette's Dimensions list is painted again while it is open, aegis C2.4) */
   checkChanged?: () => void;
   /** how many cards are pinned for the focused session: the leaf's too-short line names deciding one only when there is one */
@@ -220,8 +223,48 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     return true;
   }
 
+  /** S1.4 P4b: a session's hand as the foot and the said lines name it: 'Claude', with its session when two would read the same. */
+  function handNameOf(session: DimSession, hsid: string, label: string | null = null): string {
+    const name = label ? boardAgentName(label) : 'Claude';
+    const attached = session.grantKeys().map((k) => k.hsid);
+    const same = attached.filter((h) => h !== hsid && !(d.localModel?.(h) ?? false)).length > 0;
+    const where = same ? sessionShort(d.sessionInfo(hsid).name) : '';
+    return where ? `${name} in ${where}` : name;
+  }
+  function grantsOf(session: DimSession): LeafGrant[] {
+    const keys = session.grantKeys();
+    const two = keys.filter((k) => !(d.localModel?.(k.hsid) ?? false)).length > 1;
+    return keys.map((k) => {
+      const local = d.localModel?.(k.hsid) ?? false;
+      return { ...k, name: local ? 'local model' : 'Claude', ...(two && !local ? { session: sessionShort(d.sessionInfo(k.hsid).name) } : {}), ...(local ? { local: true } : {}) };
+    });
+  }
+  /** S1.4 P4b: the lines of an agent's hand and of the draw key (design board-leaf.said, draw-grant.words). True when said. */
+  function tellHand(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): boolean {
+    if (n.about === 'grant') {
+      const name = handNameOf(session, n.hsid ?? '');
+      leaf.drawFoot();
+      if (n.code === 'grant-refused') leaf.say(n.write ? GRANT_COPY.refusedOn(name) : GRANT_COPY.refusedOff(name));
+      else leaf.speak(n.write ? GRANT_COPY.spokenOn(name) : GRANT_COPY.spokenOff(name));
+      return true;
+    }
+    if (n.about !== 'hand') return false;
+    if (n.code === 'arrived' && n.marks) {
+      // spoken only: the keep line stays the person's own; sighted, the marks, the count and the strip's tail say it
+      const line = arrivalLine(handNameOf(session, n.hsid ?? '', n.agent ?? null), n.marks);
+      if (line) leaf.speak(line);
+      return true;
+    }
+    if (n.code === 'gone') {
+      leaf.say(removedLine(n.agent ? handNameOf(session, n.byHsid ?? '', n.agent) : null, n.change ?? 'moving', n.agent ? 'agent' : 'person'));
+      return true;
+    }
+    return true;
+  }
+
   /** One notice of the session, said once, in the leaf's words. */
   function tell(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): void {
+    if (tellHand(session, leaf, n)) return;
     if (n.about === 'link' && n.code === 'link-down') {
       // the link went: what was being typed is held in page memory (the held-still line says so while it lasts)
       // (an out-of-date board can never store them: nothing is held for a rebuilt board to give back, aegis F6)
@@ -285,6 +328,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
           }
         : {}),
       ...session.leafOptions(),
+      // S1.4 P4b: the draw keys; a press goes to the one sender with its own trusted event (the session drops the rest)
+      grants: () => (session.alive ? grantsOf(session) : []),
+      onGrant: (hsid, cause) => void session.grant(hsid, cause),
       onReady: (handle) => {
         session.attachHandle(handle);
         // opening moves focus to the board, so the letters on the empty note work at once; never off a focused card
@@ -296,6 +342,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       session.onChange((c) => {
         if (!session.alive) return;
         paint(session, leaf, c.status);
+        leaf.drawFoot();
         if (c.notice) tell(session, leaf, c.notice);
       }),
       // held words go back ONLY into a text the person opens on this dimension, for the same principal, link up
@@ -318,6 +365,22 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     };
     leaf.el.addEventListener('input', onInput, true);
     off.push(() => leaf.el.removeEventListener('input', onInput, true));
+    // S1.4 P4b: the person's own press or key on the BOARD carries the hash point an agent turn left due (dim.check),
+    // and a selection it changed (dim.select, lowest priority); a key in the foot or the head carries neither
+    const onPress = (e: Event): void => {
+      if (e.isTrusted !== true || !session.alive) return;
+      const t = e.target as Element | null;
+      if (!t || typeof t.closest !== 'function' || !t.closest('.bd-board')) return;
+      session.touch(e);
+      requestAnimationFrame(() => {
+        const hd = leaf.handle();
+        if (!session.alive || !hd || !hd.isAlive()) return;
+        session.select(hd.marks().filter((m) => m.selected && !m.labelOf && m.node !== null).map((m) => m.node as string), e);
+      });
+    };
+    leaf.el.addEventListener('pointerup', onPress, true);
+    leaf.el.addEventListener('keydown', onPress, true);
+    off.push(() => (leaf.el.removeEventListener('pointerup', onPress, true), leaf.el.removeEventListener('keydown', onPress, true)));
     // Mika 3 (review of PR #120): the board's own area changes size inside the leaf (its head and keep line settle,
     // the engine mounts) while the pane and the feed do not: watched too, so the strip's row count is never read
     // from a height that was stale when the board opened
