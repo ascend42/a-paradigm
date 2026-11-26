@@ -9,8 +9,11 @@
  *  - READS ARE TOLERANT. Rows are permanent, so `foldDimRow` never refuses and never throws: unknown kinds and
  *    unknown fields are carried and hashed; op types v1 does not know leave the state unchanged and are counted.
  *  - WRITES ARE CLOSED. `validateDimOps` refuses by name an unknown kind, an unknown field, an out-of-range
- *    value, a colour that fails the palette check, a ref outside the allowlist, an edit of another hand's node
- *    by an agent, and any text that matches a secret rule (op rows cannot be deleted later).
+ *    value, a colour that fails the palette check, a ref outside the allowlist, an edit by an actor that is not a
+ *    well-formed hand (`dimMayEdit`), and any text that matches a secret rule (op rows cannot be deleted later).
+ *    Any well-formed hand may edit any mark, whoever drew it (S1.4 edit-anything); every change is attributed in
+ *    the fold (`changedBy`, `otherBy`, `wordsBy`, `restoredFrom`, outside the hash) and can be undone
+ *    (`planDimUndo`).
  *
  * `by` (who drew a node) is derived by the fold from the HOST-WRITTEN `payload.relayedFor` of the row that added
  * it. It is never stored on a node and never an op input. A row with no well-formed `relayedFor` folds as
@@ -603,7 +606,7 @@ export const DIM_REFUSAL_FIXES: Readonly<Record<DimRefusalCode, string>> = Objec
   'id-bad': 'Use a 26-character ULID as the node id.',
   'id-exists': 'Mint a new id; an id is never reused, even after a delete.',
   'id-missing': 'Name a node that is on the board now; read the dimension again before editing.',
-  'not-owner': 'Edit only the marks you drew; draw a new mark beside the one you want to change.',
+  'not-owner': 'This board no longer refuses an edit for the hand that drew a mark; view the board again and retry.',
   'z-bad': 'Use an order key of 1 to 64 characters from 0-9, A-Z and a-z that does not end in 0.',
   'colour-bad': 'Use a named swatch for this role, or a custom colour that keeps clear of the reserved colours.',
   'ref-bad': 'Write the ref as scheme:id with an optional @rev, using only letters, digits and . _ / # $ ^ ! ~ -.',
@@ -767,17 +770,28 @@ function checkField(d: { readonly nodes: ReadonlyMap<string, DimFoldNode> }, kin
   }
 }
 
-function owns(actor: DimActor, by: DimBy): boolean {
-  if (actor && actor.cls === 'human') return true;
-  return !!actor && actor.cls === 'agent' && by.cls === 'agent' && by.principal === actor.principal && NON_EMPTY(actor.agent) && by.agent === actor.agent;
+/**
+ * May this actor edit (update, move or delete) a core mark? S1.4 edit-anything (founder decision TD-2026-11-26-715;
+ * Aegis E0): ANY well-formed hand may edit ANY mark, whoever drew it. The hand that drew a node is no longer
+ * compared. Fails closed: true only for a human with a non-empty principal, or an agent with a non-empty principal
+ * AND a non-empty agent label; `null`, an unknown class, an empty principal or an agent with no label is false.
+ * The refusal for a false answer stays `not-owner` (the code is hashed in the client API descriptor, so it keeps its
+ * place in DIM_REFUSAL_CODES; no well-formed actor reaches it).
+ */
+export function dimMayEdit(actor: unknown): boolean {
+  if (!isPlainObject(actor)) return false;
+  const cls = own(actor, 'cls');
+  if (!NON_EMPTY(own(actor, 'principal'))) return false;
+  if (cls === 'human') return true;
+  return cls === 'agent' && NON_EMPTY(own(actor, 'agent'));
 }
 
-/** An existing node an op may edit: live, of a core kind, and the actor's own when the actor is an agent. */
+/** An existing node an op may edit: live, of a core kind, and the actor a well-formed hand (`dimMayEdit`). */
 function editable(d: Draft, actor: DimActor, id: unknown, field: string): { cur: DimFoldNode; kind: DimCoreKind } | Problem {
   if (typeof id !== 'string' || !DIM_NODE_ID_PATTERN.test(id)) return { field, code: 'id-bad' };
   const cur = d.nodes.get(id);
   if (!cur) return { field, code: 'id-missing' };
-  if (!owns(actor, cur.by)) return { field, code: 'not-owner' };
+  if (!dimMayEdit(actor)) return { field, code: 'not-owner' };
   if (!isCoreKind(cur.node.kind)) return { field, code: 'kind-not-core' };
   return { cur, kind: cur.node.kind };
 }

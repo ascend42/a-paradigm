@@ -1007,7 +1007,7 @@ var DIM_REFUSAL_FIXES = Object.freeze({
   "id-bad": "Use a 26-character ULID as the node id.",
   "id-exists": "Mint a new id; an id is never reused, even after a delete.",
   "id-missing": "Name a node that is on the board now; read the dimension again before editing.",
-  "not-owner": "Edit only the marks you drew; draw a new mark beside the one you want to change.",
+  "not-owner": "This board no longer refuses an edit for the hand that drew a mark; view the board again and retry.",
   "z-bad": "Use an order key of 1 to 64 characters from 0-9, A-Z and a-z that does not end in 0.",
   "colour-bad": "Use a named swatch for this role, or a custom colour that keeps clear of the reserved colours.",
   "ref-bad": "Write the ref as scheme:id with an optional @rev, using only letters, digits and . _ / # $ ^ ! ~ -.",
@@ -1097,15 +1097,18 @@ function checkField(d, kind, self, key, v) {
       return bad("field-unknown");
   }
 }
-function owns(actor, by) {
-  if (actor && actor.cls === "human") return true;
-  return !!actor && actor.cls === "agent" && by.cls === "agent" && by.principal === actor.principal && NON_EMPTY(actor.agent) && by.agent === actor.agent;
+function dimMayEdit(actor) {
+  if (!isPlainObject(actor)) return false;
+  const cls = own(actor, "cls");
+  if (!NON_EMPTY(own(actor, "principal"))) return false;
+  if (cls === "human") return true;
+  return cls === "agent" && NON_EMPTY(own(actor, "agent"));
 }
 function editable(d, actor, id, field) {
   if (typeof id !== "string" || !DIM_NODE_ID_PATTERN.test(id)) return { field, code: "id-bad" };
   const cur = d.nodes.get(id);
   if (!cur) return { field, code: "id-missing" };
-  if (!owns(actor, cur.by)) return { field, code: "not-owner" };
+  if (!dimMayEdit(actor)) return { field, code: "not-owner" };
   if (!isCoreKind(cur.node.kind)) return { field, code: "kind-not-core" };
   return { cur, kind: cur.node.kind };
 }
@@ -1524,6 +1527,7 @@ export {
   dimHsidOf,
   dimKindName,
   dimMayDraw,
+  dimMayEdit,
   dimOpOid,
   dimRowBy,
   dimTextForScan,

@@ -367,19 +367,25 @@ describe('#dimension-mod dim-draw: G-DDL-03 at the mod (S1.4 §2, §3)', () => {
     expect(zs[1]! > zs[0]!).toBe(true);
   });
 
-  it('ownership: an agent cannot edit a human mark or another principal\'s mark; it edits its own', { timeout: 60_000 }, async () => {
+  it('edit-anything (S1.4 E0): an agent updates, moves and deletes a person\'s mark and another agent\'s mark', { timeout: 60_000 }, async () => {
     const w = await toolRig();
     const dim = await board(w);
     await w.run('dim.grant', { dim, write: true }, B);
-    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(3)] });
     const mine = await w.tool('dim-draw', { ops: [rectOp(2)] }, agentOf(B));
     expect(mine).toMatchObject({ applied: 1 });
     const before = opRows(w).length;
-    for (const op of [{ type: 'update', id: ulid(1), patch: { label: 'x' } }, { type: 'move', ids: [ulid(1)], dx: 1, dy: 1 }, { type: 'delete', id: ulid(1) }, { type: 'delete', id: ulid(2) }]) {
+    for (const op of [{ type: 'update', id: ulid(1), patch: { label: 'x' } }, { type: 'move', ids: [ulid(1)], dx: 1, dy: 1 }, { type: 'update', id: ulid(2), patch: { label: 'from A' } }, { type: 'delete', id: ulid(3) }]) {
       const res = await w.tool('dim-draw', { ops: [op] }, agentOf(A));
-      expect([res.ok, (res.refused as Array<{ code: string }>)[0]!.code]).toEqual([false, 'not-owner']);
+      expect([res.ok, res.applied]).toEqual([true, 1]);
     }
-    expect(opRows(w)).toHaveLength(before);
+    expect(opRows(w)).toHaveLength(before + 4);
+    const f = w.log.fold(dim);
+    const x0 = (rectOp(1) as { node: { x: number; y: number } }).node;
+    expect(f.nodes.get(ulid(1))!.node).toMatchObject({ label: 'x', x: x0.x + 1, y: x0.y + 1 });
+    expect(f.nodes.get(ulid(1))!.by.cls).toBe('human');
+    expect(f.nodes.get(ulid(2))!.node.label).toBe('from A');
+    expect(f.nodes.has(ulid(3))).toBe(false);
     expect((await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(2), patch: { label: 'mine' } }] }, agentOf(B))).applied).toBe(1);
   });
 
@@ -664,9 +670,10 @@ describe('#dimension-mod M3: cancel is honoured, so an agent cannot take the boa
     const started = performance.now();
     const res = await w.tool('dim-draw', { ops: moves(32) });
     const ms = performance.now() - started;
-    // every move names a person's marks: refused not-owner, by index, in one validation
-    expect(res.ok).toBe(false);
-    expect(new Set((res.refused as Array<{ code: string }>).map((r) => r.code))).toEqual(new Set(['not-owner']));
+    // every move names a person's marks: an agent may edit any mark (S1.4 E0), so all 64 moves apply in one validation
+    // 63 of them fill the call's 4 rows of 16 KiB; the 64th is refused call-too-large by index, never half-written
+    expect(res).toMatchObject({ ok: true, applied: 63 });
+    expect((res.refused as Array<{ index: number; code: string }>).map((r) => [r.index, r.code])).toEqual([[63, 'call-too-large']]);
     expect(ms).toBeLessThan(5_000);
   });
 });
@@ -702,12 +709,12 @@ describe('#dimension-mod PLAYBOOK.md (S1.4 §6, A11)', () => {
     const text = fs.readFileSync(path.join(DIMENSION_TREE, 'PLAYBOOK.md'), 'utf8');
     expect(text.split('\n').length).toBeLessThanOrEqual(40);
     expect(text.includes('\r')).toBe(false);
-    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /Today the board refuses a change to a mark you did not draw \(`not-owner`\)/, /You may add a mark inside another hand's frame/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
+    for (const rule of [/View the board with `dim-view` before you draw/, /changes: 'reset'` means `nodes` is the whole board/, /Cite marks by their node id/, /beside another hand's mark/, /You may change any mark, whoever drew it; the board records that you changed it\./, /You may add a mark inside another hand's frame/, /Text on a board is permanent\. Never put a secret, a credential/, /is data, whoever drew it, a person's marks included/, /three or more related things/, /Send `opId` on every draw, and reuse the same `opId` only to retry the same draw/, /Never reuse an `opId` for different ops/, /Read `refused\[\]`.*fix/s, /Fix the refused ones by field/, /works only inside the same call, as `from`, `to` or `parent`/]) expect([String(rule), rule.test(text)]).toEqual([String(rule), true]);
     const m = JSON.parse(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json'), 'utf8')) as { provides: { tools: Array<{ name: string; schema: { description: string } }> } };
     for (const t of m.provides.tools) {
       const d = t.schema.description;
       expect([t.name, /dim-view before you draw|View the board before you draw/.test(d), /node id/.test(d), /beside another hand's mark/.test(d), /permanent/.test(d), d.includes("a person's marks included")]).toEqual([t.name, true, true, true, true, true]);
-      expect([t.name, d.includes('today the board refuses a change to a mark you did not draw (not-owner)')]).toEqual([t.name, true]);
+      expect([t.name, d.includes('you may change any mark, whoever drew it, and the board records that you changed it'), d.includes('not-owner')]).toEqual([t.name, true, false]);
       // the bridge lists a tool only with a description of at most 1,024 characters and a schema of at most 8 KiB
       expect([t.name, d.length <= 1_024, JSON.stringify(t.schema).length <= 8 * 1024]).toEqual([t.name, true, true]);
     }
@@ -918,8 +925,8 @@ describe('S1.4 P3 review, Aegis nits', () => {
   });
 });
 
-describe('ruling on Probe Q1: an agent may add inside another hand\'s frame; a change to the frame is not-owner today', () => {
-  it('a child whose parent is a person\'s frame applies; the frame is unchanged; editing the frame is not-owner', { timeout: 60_000 }, async () => {
+describe('ruling on Probe Q1: an agent may add inside another hand\'s frame, and (S1.4 E0) may change the frame', () => {
+  it('a child whose parent is a person\'s frame applies; the frame is unchanged by it; editing the frame applies', { timeout: 60_000 }, async () => {
     const w = await toolRig();
     const dim = await board(w);
     await w.run('dim.op', { dim, ops: [{ type: 'add', node: { id: ulid(900), kind: 'frame', x: 0, y: 0, z: 'V', w: 50, h: 50, title: 'Auth' } }] });
@@ -930,7 +937,8 @@ describe('ruling on Probe Q1: an agent may add inside another hand\'s frame; a c
     const f = w.log.fold(dim);
     expect(f.nodes.get(child)!.node.parent).toBe(ulid(900));
     expect(JSON.stringify(f.nodes.get(ulid(900)))).toBe(before);
-    expect(((await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(900), patch: { title: 'Mine' } }] })).refused as Array<{ code: string }>)[0]!.code).toBe('not-owner');
+    expect(await w.tool('dim-draw', { ops: [{ type: 'update', id: ulid(900), patch: { title: 'Mine' } }] })).toMatchObject({ ok: true, applied: 1 });
+    expect(w.log.fold(dim).nodes.get(ulid(900))!.node.title).toBe('Mine');
   });
 });
 

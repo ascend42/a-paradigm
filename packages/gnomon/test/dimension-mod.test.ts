@@ -150,13 +150,15 @@ describe('#dimension-mod model: actorOf, apply, titleProblem, grantDefault (pure
     for (const rf of [undefined, null, 'gui', [], {}, { principal: HUMAN }, { principal: HUMAN, surface: 'cli' }, { principal: HUMAN, surface: 'bridge', agent: 'kit' }, { principal: HUMAN, surface: 'gui', agent: 'kit' }, { principal: '', surface: 'gui' }, { principal: 7, surface: 'gui' }, { surface: 'gui' }, Object.create({ principal: HUMAN, surface: 'gui' }), JSON.parse(`{"__proto__":{"principal":"${HUMAN}","surface":"gui"}}`)]) expect([rf, m.actorOf!(rf)]).toEqual([rf, null]);
   });
 
-  it('apply is the one entry: not-owner is reachable only for an agent actor (so never through dim.op in S1.3), and a secret yields nothing to append', async () => {
+  it('apply is the one entry: any well-formed hand edits any mark (S1.4 E0), not-owner only for a malformed actor, and a secret yields nothing to append', async () => {
     const m = await load();
     const human = { cls: 'human', principal: HUMAN };
     const base = (m.apply!(emptyDimState('dim:x'), [rectOp(1)], human) as { ok: unknown[]; next: DimState }).next;
     expect(base.nodes.size).toBe(1);
     const agent = m.apply!(base, [{ type: 'delete', id: ulid(1) }], { cls: 'agent', principal: 'p:00000000/s-1', agent: 'kit' }) as { ok: unknown[]; refused: Array<{ code: string }>; next: DimState };
-    expect([agent.ok, agent.refused.map((r) => r.code), agent.next === base]).toEqual([[], ['not-owner'], true]);
+    expect([agent.ok.length, agent.refused, agent.next.nodes.has(ulid(1))]).toEqual([1, [], false]);
+    const nameless = m.apply!(base, [{ type: 'delete', id: ulid(1) }], { cls: 'agent', principal: 'p:00000000/s-1', agent: '' }) as { ok: unknown[]; refused: Array<{ code: string }>; next: DimState };
+    expect([nameless.ok, nameless.refused.map((r) => r.code), nameless.next === base]).toEqual([[], ['not-owner'], true]);
     const secret = m.apply!(base, [rectOp(2), rectOp(3, { label: 'password = hunter2hunter2' })], human) as { ok: unknown[]; secret: boolean; next: DimState };
     expect([secret.ok, secret.secret, secret.next === base]).toEqual([[], true, true]);
     expect((m.apply!(base, [rectOp(2)], null) as { ok: unknown[] }).ok).toEqual([]);
