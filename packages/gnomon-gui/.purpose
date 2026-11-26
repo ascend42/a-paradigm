@@ -543,6 +543,7 @@ components:
       - test/board-hardening.test.ts
       - test/board-dim.test.ts
       - test/board-simplify.test.ts
+      - test/board-grant-key.test.ts
   gui-dim-map:
     description: >-
       #gui-dim-map (boards S1.3 pass P3a, s1.3-draft point 5; conditions C4
@@ -615,6 +616,7 @@ components:
     oracles: [G-DDL-01]
     tests:
       - test/dim-store.test.ts
+      - test/dim-grant.test.ts
   gui-gesture:
     description: >-
       #gui-gesture (boards S1.3 pass P3a, s1.3-draft point 2; Aegis A1;
@@ -791,6 +793,7 @@ components:
       - test/dim-session.test.ts
       - test/dim-session-live.test.ts
       - ../gnomon/test/dimension-dogfood.test.ts
+      - test/dim-grant.test.ts
   gui-board-dock:
     description: >-
       #gui-board-dock (boards S1.3 pass P4b-1, s1.3-draft point 7; design
@@ -907,6 +910,7 @@ components:
     tests:
       - test/board-turn.test.ts
       - test/board-app.test.ts
+      - test/dim-grant.test.ts
   gui-wire-row:
     description: >-
       wireRowOf (core/store.ts; Aegis L1, review of PR #120) - a row read
@@ -3056,3 +3060,20 @@ components:
 # side dash can stand beside a text's first and last letters. The rough dash now runs on across a polyline's short
 # runs (patches dash-runs-*), and a restored mark is drawn in the non-human of its two hands (dimHandOf).
 # Known gap (S1.4 P4a, Mika L5): an agent stroke's last point can fall in a gap of its dash, so its end is not drawn.
+
+# S1.4 P4b "GUI live" (no new symbol ids). #gui-dim-store folds grant rows through the shared foldDimGrants (never into
+# the published rows) and counts an agent's tool-surface op rows per turn ref in `causes` (turnMarks). #gui-dim-session:
+# grantKeys() and grant(hsid, cause) (the draw key: an explicit write target from what the board last confirmed,
+# focus {hsid: target}; a press while pending, link-down, held, before the grant map arrived or for a session that is
+# not live is dropped, never queued; the map arrives with the dim.open answer or, for a session resumed after a
+# reconnect, with the backlog read before connect), select(ids, cause) (dim.select: lowest priority, latest wins,
+# dropped while an edit batch waits, own hsid only), touch(cause) (the hash point after an agent turn: dim.check rides
+# on the person's NEXT trusted press, because every GUI mod.command needs a gesture stamp; once per turn; hash and attr
+# recorded, attr only recorded), dim.op ok answers are hash points too, turnEnded (one `arrived` notice per agent turn)
+# and gone(id) (the remover from recent foreign deletes). DimSessions.drewFor(hsid) gives #gui-board-turn the tail
+# ' · drew N on the board' from rows of the latest ended turn (drop levels 4 ' on the board' and 5 'stopped: ').
+# #gui-board: onGone, a held mark another hand removed yields no op at the drop. The leaf (#gui-board, ui/board-leaf.ts)
+# draws one hand per attached session with its draw key ('may edit' / 'may not edit', E-design edit_anything) and
+# 4ch count slots, keeping key elements so nothing but a press focuses a key; #gui-board-dock says the lines.
+# Not built (recorded): the '+<k> ▾' hands menu and the name/session give-way order of hands_foot.overflow; a key past
+# the foot's width is clipped (seen in the 560px shots). Tests: test/dim-grant.test.ts, test/board-grant-key.test.ts.
