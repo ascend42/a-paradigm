@@ -102,11 +102,20 @@ export function dimIsAgentStroke(n: DimFoldNode | undefined): boolean {
   return !!n && own(n.node, 'kind') === 'stroke' && drawable(n.node) && (dimHandOf(n) as { cls?: unknown } | undefined)?.cls !== 'human';
 }
 /**
- * The hand a mark is DRAWN in: its original hand when an undo re-added it (`restoredFrom.by`, S1.4 E0, Aegis G5;
- * read by the fold from the row's undo marker, never from a node field), else the stamped `by`. So an agent's mark a
- * person deleted and undid stays the agent's: dashed, with the agent's seal.
+ * The hand a mark is DRAWN in (S1.4 E0; Aegis ruling on P4a). A mark an undo re-added has two hands: the row's
+ * stamped `by` and its original `restoredFrom.by` (read by the fold from the row's undo marker, never from a node
+ * field). It is drawn as the person's ONLY when both are human; otherwise in the hand that is not: `by` when `by` is
+ * not human, else `restoredFrom.by`. An unknown hand on either side is never human. So an agent's mark a person
+ * deleted and undid stays the agent's, and a person's mark an agent deleted and undid is drawn as the agent's: never
+ * solid while any hand in it is not the person's.
  */
-export const dimHandOf = (n: DimFoldNode): DimFoldNode['by'] => n.restoredFrom?.by ?? n.by;
+export function dimHandOf(n: DimFoldNode): DimFoldNode['by'] {
+  const rf = n.restoredFrom?.by;
+  if (rf === undefined) return n.by;
+  const human = (b: unknown): boolean => (b as { cls?: unknown } | undefined)?.cls === 'human';
+  if (human(n.by) && human(rf)) return n.by;
+  return !human(n.by) ? n.by : rf;
+}
 const FILL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond']);
 const LABEL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond', 'arrow']);
 const LABEL_TYPES: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow']);

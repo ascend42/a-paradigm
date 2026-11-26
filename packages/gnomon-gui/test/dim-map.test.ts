@@ -6,8 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, emptyDimState, foldDim, validateDimOps } from '@a-company/gnomon-contracts';
-import type { DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
-import { DIM_AGENT_STROKE_TYPE, DIM_ENGINE_KEYS, dimIsAgentStroke, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
+import type { DimFoldNode, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
+import { DIM_AGENT_STROKE_TYPE, DIM_ENGINE_KEYS, dimHandOf, dimIsAgentStroke, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps } from '../src/board/dim-map.js';
 import type { DimMapIds, EngineElement } from '../src/board/dim-map.js';
 import { BOARD_TYPES, FILLABLE, isBoardType, normalOf, offNormal } from '../src/board/normal.js';
 import { fixtureRows } from '../src/preview/board-fixture.js';
@@ -588,5 +588,42 @@ describe('#gui-dim-map S1.4 P4a: an agent\'s stroke is the engine\'s dashed line
       expect(offNormal({ type: 'line' }, stamp, 'day')).toBe(true);
     }
     expect(BOARD_TYPES.has('line')).toBe(false);
+  });
+});
+
+describe('#gui-dim-map the drawn hand of a mark an undo re-added (Aegis ruling on P4a: human only when BOTH hands are)', () => {
+  const HUMAN = { cls: 'human' as const, principal: 'p:preview/matt' };
+  const AGENT = { cls: 'agent' as const, principal: 'p:gnomon/s1', agent: 'claude' };
+  const UNKNOWN = { cls: 'unknown' as const, principal: 'unknown' };
+  const node = (by: unknown, rf?: unknown): DimFoldNode => ({ node: { id: 'n', kind: 'stroke', x: 0, y: 0, z: 'a', points: [0, 0, 50, 0] }, by, hsid: 'h1', addedSeq: 1, ...(rf ? { restoredFrom: { id: 'old', by: rf } } : {}) }) as unknown as DimFoldNode;
+  const ids: DimMapIds = { nodeOf: (e) => e, engineOf: (n) => n };
+  const drawn = (n: DimFoldNode): { type: string; style: string } => {
+    const st = { ...emptyDimState(), nodes: new Map([['n', n]]) } as unknown as DimState;
+    const el = dimToElements(st, 'day', ids)[0]!;
+    return { type: el.type, style: el.strokeStyle };
+  };
+  it('by agent + restoredFrom human: dashed, an agent stroke, and the hand is the agent from by', () => {
+    const n = node(AGENT, HUMAN);
+    expect(drawn(n)).toEqual({ type: 'line', style: 'dashed' });
+    expect(dimIsAgentStroke(n)).toBe(true);
+    expect(dimHandOf(n)).toBe(AGENT);
+  });
+  it('by human + restoredFrom agent: dashed, in the agent\'s hand (its seal)', () => {
+    const n = node(HUMAN, AGENT);
+    expect(drawn(n)).toEqual({ type: 'line', style: 'dashed' });
+    expect(dimIsAgentStroke(n)).toBe(true);
+    expect(dimHandOf(n)).toBe(AGENT);
+  });
+  it('both human: solid, freehand, the person\'s', () => {
+    const n = node(HUMAN, { ...HUMAN });
+    expect(drawn(n)).toEqual({ type: 'freedraw', style: 'solid' });
+    expect(dimIsAgentStroke(n)).toBe(false);
+    expect((dimHandOf(n) as { cls: string }).cls).toBe('human');
+  });
+  it('an unknown hand on either side: dashed, never human', () => {
+    for (const n of [node(UNKNOWN, HUMAN), node(HUMAN, UNKNOWN), node(UNKNOWN, AGENT), node(AGENT, UNKNOWN)]) {
+      expect(drawn(n).style).toBe('dashed');
+      expect((dimHandOf(n) as { cls: string }).cls).not.toBe('human');
+    }
   });
 });
