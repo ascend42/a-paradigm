@@ -888,3 +888,29 @@ describe('S1.4 P3 review, Probe (F1 to F4) and the kept probe attacks', () => {
     expect(JSON.stringify(opRows(w).map((r) => r.payload))).not.toContain('__proto__');
   });
 });
+
+describe('S1.4 P3 review, Aegis nits', () => {
+  it('the op-id input hash is canonical: the same ops in another key order repeat, never op-id-reused', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    await board(w);
+    expect((await w.tool('dim-draw', { ops: [{ type: 'add', node: { id: ulid(1), kind: 'rect', x: 1, y: 2, z: 'V', w: 3, h: 4 } }], opId: 'k' })).applied).toBe(1);
+    const again = await w.tool('dim-draw', { opId: 'k', ops: [{ node: { h: 4, w: 3, z: 'V', y: 2, x: 1, kind: 'rect', id: ulid(1) }, type: 'add' }] });
+    expect(again).toMatchObject({ ok: true, repeat: true });
+  });
+
+  it('dim-view, dim.check and dim.select never call state.set (a read-only call that tried would be refused and heal nothing)', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    // a row the index has not seen makes the entry dirty at the next cold open
+    w.inject(DIM_KINDS.op, { v: 1, dim, ops: [rectOp(5)], relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } });
+    await w.restart();
+    await w.tool('dim-view', {});
+    await w.run('dim.check', { dim });
+    await w.run('dim.select', { dim, ids: [ulid(5)] });
+    w.h.flushRefused();
+    expect(w.r.events.filter((e) => e.kind === 'mod.effect.refused')).toEqual([]);
+    // the next writing command heals the index
+    expect((await w.run('dim.op', { dim, ops: [rectOp(6)] })).ok).toBe(true);
+    expect((w.state()[`idx:${dim.slice(4)}`] as { lastSeq: number }).lastSeq).toBe(w.log.fold(dim).seq);
+  });
+});

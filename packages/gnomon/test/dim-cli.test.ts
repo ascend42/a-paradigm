@@ -53,8 +53,8 @@ describe('gnomon dim replay (S1.3; Aegis: replay output is stripped of control c
     expect(lines.head).toContainEqual(['title', 'Plan[31mfake']);
     expect(lines.head).toContainEqual(['hash', dimHash(foldDim(rows))]);
     expect(lines.marks.some((m) => m.includes('by human (p:00000000/founder)') && m.includes('line oneREFUSED'))).toBe(true);
-    // an agent label outside DIM_AGENT_LABEL_PATTERN is shown as the unknown hand (dimViewOf bounds `by`, S1.4)
-    expect(lines.marks.some((m) => m.includes('(fallback)') && m.includes('by unknown hand'))).toBe(true);
+    // a person's forensic replay: the valid principal is shown, the agent label outside its pattern is not
+    expect(lines.marks.some((m) => m.includes('(fallback)') && m.includes(`by agent (label not shown) (${AGENT.principal})`))).toBe(true);
     expect(text.includes('kit')).toBe(false);
     expect(lines.marks.some((m) => m.includes('by unknown hand'))).toBe(true);
     expect(text.includes('carried')).toBe(false);

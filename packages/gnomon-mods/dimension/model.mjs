@@ -771,3 +771,13 @@ export function refusedEntry(index, field, code, fix) {
 export const NEW_KEY_FIX = 'Define this new:<key> in an earlier add of the same call (key: a-z and 0-9, up to 16), use it only as from, to or parent, or use the id an earlier answer gave in created[].';
 /** F3: a repeat answered from the rows after a restart: the ops sent now were never compared. */
 export const REPEAT_UNKNOWN_FIX = 'This opId was already used on this board before a restart, so these ops were not compared and nothing was written. Use dim-view to see the board, and send new ops under a new opId.';
+
+/** JSON with every object's keys sorted (the op-id memo's input; the caller measured the value first). */
+export function canonicalText(v) {
+  if (Array.isArray(v)) return `[${v.map((x) => (x === undefined ? 'null' : canonicalText(x))).join(',')}]`;
+  if (v !== null && typeof v === 'object') {
+    const keys = Object.keys(v).filter((k) => v[k] !== undefined).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalText(v[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v) ?? 'null';
+}

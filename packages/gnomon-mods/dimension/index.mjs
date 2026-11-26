@@ -31,6 +31,7 @@ import {
   TURNS_CAP,
   countPayload,
   encodeTurns,
+  canonicalText,
   measure,
   packRows,
   refusedEntry,
@@ -439,7 +440,8 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   } catch {
     return refusal('unavailable');
   }
-  if (entry && entry.dirty) await saveIdx(host, a.dim, entry);
+  // a read-only command (dim.select, dim.check) cannot set state: the index heals on the next writing command
+  if (entry && entry.dirty && commandId !== 'dim.select' && commandId !== 'dim.check') await saveIdx(host, a.dim, entry);
 
   if (commandId === 'dim.open' && !entry) {
     // a new dimension: this session's repo owns it, and this session is its first attached one
@@ -559,7 +561,6 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       loaded.delete(a.dim);
       return refusal('unavailable');
     }
-    if (entry.dirty) await saveIdx(host, a.dim, entry);
     return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state) };
   }
 
@@ -612,7 +613,8 @@ async function runTool(name, rawInput, relayedFor, callId, cancelled) {
     return refusal(cancelled() ? 'cancelled' : 'unavailable');
   }
   if (!entry) return refusal('dim-unknown');
-  if (entry.dirty) await saveIdx(host, dim, entry);
+  // dim-view is read-only (no state.set): only a draw heals the index
+  if (entry.dirty && name === 'dim-draw') await saveIdx(host, dim, entry);
   // attach is the only door (C6): no grant is needed to view, but an unattached session sees nothing
   if (!entry.state.attached.includes(actor.hsid)) return refusal('not-attached');
   if (name === 'dim-view') return viewTool(host, dim, entry, actor, a, cancelled);
@@ -665,10 +667,14 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   if (!dimMayDraw(entry.state, entry.grants, actor.hsid)) return refusal('write-not-granted');
   const oid = a.opId !== undefined ? dimOpOid(actor.hsid, dim, a.opId) : undefined;
   if (oid === null) return refusal('op-id-bad');
+  // size before anything reads the ops (the memo's input hash included): the whole call within the per-call bytes
+  // and 4 rows of values
+  if (measure(a.ops, CALL_BYTES, ROW_MAX_VISITED * CALL_ROWS) === null) return refusal('call-too-large', { budgetLeft: budgetLeft(turns, actor) });
   let input = null;
   if (oid !== undefined) {
     try {
-      input = sumOf(JSON.stringify(a.ops));
+      // canonical (sorted keys): the same ops in another key order are the same draw, never op-id-reused
+      input = sumOf(canonicalText(a.ops));
     } catch {
       return refusal('args-bad');
     }
@@ -680,8 +686,6 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   }
   const left = budgetLeft(turns, actor);
   if (left === 0) return refusal('turn-budget', { budgetLeft: 0 });
-  // size before the validator reads anything: the whole call within the per-call bytes and 4 rows of values
-  if (measure(a.ops, CALL_BYTES, ROW_MAX_VISITED * CALL_ROWS) === null) return refusal('call-too-large', { budgetLeft: left });
   if (a.ops.length > DIM_LIMITS.opsPerRow) return finishRefused(host, dim, entry, actor, [refusedEntry(-1, 'ops', 'too-many-ops')], 'ops-refused');
   const sugar = resolveSugar(entry.state, a.ops, mintUlid);
   // ONE validation of the whole batch (C5): a secret anywhere refuses everything before the first append

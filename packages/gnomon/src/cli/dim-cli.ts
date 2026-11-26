@@ -18,7 +18,7 @@
  * format and line-separator characters first (Aegis S1.3), so a mark can never forge a line or steer a terminal.
  */
 import * as path from 'node:path';
-import { DIM_ID_PATTERN, DIM_KINDS, dimHash, dimViewOf, emptyDimState, foldDim, type DimBy, type DimRow, type DimState } from '@a-company/gnomon-contracts';
+import { DIM_AGENT_LABEL_PATTERN, DIM_ID_PATTERN, DIM_KINDS, DIM_VIEW_PRINCIPAL_PATTERN, dimHash, dimViewOf, emptyDimState, foldDim, type DimBy, type DimRow, type DimState } from '@a-company/gnomon-contracts';
 import { readKernelPubs } from '../kernel/identity/index.js';
 import { kernelPrincipalOf, resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import { KeyRing, verifyLog } from '../kernel/log/index.js';
@@ -76,6 +76,14 @@ export function replayDim(rows: Iterable<DimRow>, dim: string, to?: number): Dim
 }
 
 const handText = (by: DimBy): string => (by.cls === 'agent' ? `agent ${by.agent ?? ''} (${by.principal})` : by.cls === 'human' ? `human (${by.principal})` : 'unknown hand');
+/**
+ * The hand a person's FORENSIC replay shows: the stored `by`, not the agent-facing bounded one. A principal in its
+ * pattern is shown even when the agent label is not; such a label is never printed ("label not shown").
+ */
+function replayHand(stored: DimBy | undefined, bounded: DimBy): string {
+  if (!stored || bounded.cls !== 'unknown' || stored.cls !== 'agent' || typeof stored.principal !== 'string' || !DIM_VIEW_PRINCIPAL_PATTERN.test(stored.principal)) return handText(bounded);
+  return typeof stored.agent === 'string' && DIM_AGENT_LABEL_PATTERN.test(stored.agent) ? handText(stored) : `agent (label not shown) (${stored.principal})`;
+}
 const WORDS = ['text', 'label', 'title'] as const;
 
 /** The replay as text lines. Every value is stripped of control characters; a line break exists only between lines. */
@@ -94,7 +102,7 @@ export function replayLines(state: DimState): { head: Array<readonly [string, st
   const marks = view.nodes.map((n) => {
     const words = WORDS.map((k) => (typeof n[k] === 'string' ? `${k} ${JSON.stringify(stripControl(n[k] as string))}` : '')).filter(Boolean).join(' ');
     const at = typeof n.x === 'number' && typeof n.y === 'number' ? `${n.x},${n.y}` : '-';
-    return stripControl(`${n.id}  ${n.kind}${n.core ? '' : ' (fallback)'}  at ${at}  by ${handText(n.by)}${words ? `  ${words}` : ''}`);
+    return stripControl(`${n.id}  ${n.kind}${n.core ? '' : ' (fallback)'}  at ${at}  by ${replayHand(state.nodes.get(n.id)?.by, n.by)}${words ? `  ${words}` : ''}`);
   });
   return { head, marks };
 }
