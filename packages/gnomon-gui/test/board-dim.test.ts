@@ -434,10 +434,10 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
   // ── review batch B: strokes ──
   const INK = (x: number, y: number): string => `document.querySelector('#preview-board canvas.static').getContext('2d').getImageData(${x}, ${y}, 1, 1).data[3]`;
 
-  it('B1, B4: a stroke rendered from the fold reaches its last point, and a stored stroke of one point is a dot that stays', async () => {
+  it.each(['you', 'arky'])('B1, B4: a stroke rendered from the fold reaches its last point, and a stored stroke of one point is a dot that stays (%s)', async (hand) => {
     const LINE = fixtureId(920), DOT = fixtureId(921);
     const a = await real([
-      { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${LINE}', kind: 'stroke', x: 460, y: 300, z: 'za', points: [0, 0, 50, 0, 100, 0], weight: 3 } }, { type: 'add', node: { id: '${DOT}', kind: 'stroke', x: 460, y: 360, z: 'zb', points: [0, 0], weight: 3 } }], 'arky')), 1)`, as: 'r' }, { wait: 300 },
+      { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${LINE}', kind: 'stroke', x: 460, y: 300, z: 'za', points: [0, 0, 50, 0, 100, 0], weight: 3 } }, { type: 'add', node: { id: '${DOT}', kind: 'stroke', x: 460, y: 360, z: 'zb', points: [0, 0], weight: 3 } }], ${hand === 'you' ? 'undefined' : "'arky'"})), 1)`, as: 'r' }, { wait: 300 },
       { read: INK(510, 300), as: 'middle' }, { read: INK(557, 300), as: 'nearEnd' }, { read: INK(575, 300), as: 'past' },
       { read: INK(460, 360), as: 'dot' },
       { read: `${B}.marks().filter((m) => m.node === '${DOT}').length`, as: 'dotShown' },
@@ -513,14 +513,21 @@ describe.skipIf(!!process.env.CI || !chrome)('the board handle on a folded dimen
     const rect = (q: string): string => `(() => { const e = document.querySelector(${JSON.stringify(q)}); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]; })()`;
     const a = await real([
       { read: `(${B}.render(${D}.apply([{ type: 'add', node: { id: '${S}', kind: 'stroke', x: 60, y: 200, z: 'za', points: [0, 0, 200, 10, 400, 0, 700, 30] } }], 'arky')), 1)`, as: 'r' }, { wait: 250 },
+      // S1.4 P4a: an agent's stroke is dashed by the engine, so its seal is on demand: at rest there is none; hovered, there is
+      { read: `document.querySelectorAll('#preview-board .bd-over .bd-seal').length`, as: 'sealsUnhovered' },
+      { at: [300, 210], move: true }, { wait: 200 },
       { read: rect('#preview-board .bd-over .bd-seal'), as: 'sealAtRest' }, { read: rect('#preview-board .bd-stage'), as: 'stage' },
+      { read: `document.querySelector('#preview-board .bd-over .bd-hand-chip')?.textContent ?? null`, as: 'chip' },
       // pan left by hand until the first point is out of view
       { press: '#preview-board [data-key="tool:hand"]' }, { drag: [[500, 380], [400, 380], [300, 380], [200, 380]] }, { wait: 250 },
       { read: `${B}.view().scrollX`, as: 'scrollX' },
+      { press: '#preview-board [data-key="tool:select"]' }, { at: [300, 210], move: true }, { wait: 200 },
       { read: rect('#preview-board .bd-over .bd-seal'), as: 'sealPanned' }, { read: `document.querySelectorAll('#preview-board .bd-over .bd-seal').length`, as: 'seals' },
       { read: COUNT, as: 'edits' },
     ], 'empty');
     expect(a.errors).toEqual([]);
+    expect(a.sealsUnhovered).toBe(0);
+    expect(a.chip).toBe('arky');
     const stage = a.stage as number[];
     const rest = a.sealAtRest as number[];
     // at rest: left of the first point (stage x 60), 2px clear of it, not on it

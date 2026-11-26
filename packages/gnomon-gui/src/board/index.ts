@@ -491,7 +491,10 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         }
         if (el.type === 'arrow') Object.assign(out, { elbowed: false });
         // an agent's stroke as the engine's dashed line (S1.4 P4a): a polyline, never curved, never a closed shape
-        if (el.type === 'line') Object.assign(out, { lastCommittedPoint: null, roundness: null });
+        // (a stored stroke of ONE point is a dot. A dashed line of no length paints nothing, so the engine holds it as
+        // a run of ONE unit, which its first dash and round caps paint as a dot; the diff reads that run back as the
+        // one point, below)
+        if (el.type === 'line') Object.assign(out, { points: el.points && el.points.length === 1 ? [el.points[0]!, [el.points[0]![0] + 1, el.points[0]![1]] as [number, number]] : (el.points ?? []), lastCommittedPoint: null, roundness: null });
         // a fallback's words are the host's (one owner: the overlay cuts them to the scrap; a label here would say the kind twice)
         if (stub) out.boundElements = (el.boundElements ?? []).filter((b) => b.type !== 'text');
         return out;
@@ -661,8 +664,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         const scene = all().map((el) => {
           if (el.type === 'text' && typeof el.originalText === 'string' && el.originalText !== el.text) return { ...el, text: el.originalText };
           // a stored dot is one point; the engine holds it as the same point twice
-          const stored = el.type === 'freedraw' && el.points?.length === 2 ? seen.get(el.id)?.points : undefined;
-          if (Array.isArray(stored) && stored.length === 2 && el.points![0]![0] === el.points![1]![0] && el.points![0]![1] === el.points![1]![1]) return { ...el, points: [el.points![0]] };
+          const stored = (el.type === 'freedraw' || el.type === 'line') && el.points?.length === 2 ? seen.get(el.id)?.points : undefined;
+          if (Array.isArray(stored) && stored.length === 2 && el.points![0]![0] + (el.type === 'line' ? 1 : 0) === el.points![1]![0] && el.points![0]![1] === el.points![1]![1]) return { ...el, points: [el.points![0]] };
           return el;
         });
         const gone = (op: DimOp): boolean => op.type === 'delete' && !shown.has(ids.engineOf(op.id));
