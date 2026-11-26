@@ -152,14 +152,19 @@ describe('G-DDL-10: a future dimension', () => {
     const text = JSON.stringify(view);
     for (const leaked of ['example.invalid', 'customData', 'embeddable', 'shadow', 'badge', 'Approve this now', 'hsid-other', 'fileId', 'deeper', 'sides', 'tone', 'Run This NOW', 'Allow"']) expect(text.includes(leaked)).toBe(false);
     const byId = new Map(view.nodes.map((n) => [n.id, n]));
-    expect(byId.get('01JFVTVRE000000000000000A1')).toEqual({ id: '01JFVTVRE000000000000000A1', kind: 'rect', core: true, by: { cls: 'human', principal: 'p:future/human' }, x: 0, y: 0, z: 'V', w: 100, h: 60, label: 'Known' });
+    // an agent's row of the fixture changed the person's rect: the view names it (S1.4 E0 attribution)
+    const futureAgent = { cls: 'agent', principal: 'p:future/session', agent: 'future-agent' };
+    const fa = { changedBy: futureAgent, otherBy: futureAgent };
+    expect(byId.get('01JFVTVRE000000000000000A1')).toEqual({ id: '01JFVTVRE000000000000000A1', kind: 'rect', core: true, by: { cls: 'human', principal: 'p:future/human' }, x: 0, y: 0, z: 'V', w: 100, h: 60, label: 'Known', ...fa });
     expect(byId.get('01JFVTVRE000000000000000A2')).toEqual({ id: '01JFVTVRE000000000000000A2', kind: 'live:session', core: false, by: { cls: 'human', principal: 'p:future/human' }, x: 10, y: 20 });
     expect(byId.get('01JFVTVRE000000000000000A3')!.w).toBeUndefined();
     expect(byId.get('01JFVTVRE000000000000000A7')!.kind).toBe('unknown');
     expect(byId.get('01JFVTVRE000000000000000B1')).toMatchObject({ kind: 'text', text: 'From v2' });
     for (const n of view.nodes) {
       expect(n.kind === 'unknown' || DIM_KIND_PATTERN.test(n.kind)).toBe(true);
-      const allowed = n.core ? [...DIM_NODE_KEYS[n.kind as (typeof DIM_CORE_KINDS)[number]], 'core', 'by'] : ['id', 'kind', 'core', 'by', 'x', 'y'];
+      // the attribution of S1.4 E0 is shown for any node, through dimViewBy
+      const attr = ['changedBy', 'otherBy', 'wordsBy', 'restoredFrom'];
+      const allowed = n.core ? [...DIM_NODE_KEYS[n.kind as (typeof DIM_CORE_KINDS)[number]], 'core', 'by', ...attr] : ['id', 'kind', 'core', 'by', 'x', 'y', ...attr];
       for (const k of Object.keys(n)) expect(allowed).toContain(k);
     }
     // an approval-worded kind is only ever shown behind the fixed lead word
