@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Gnomon board, S1.4 P4a: an agent's hand.** An agent's stroke is the engine's dashed `line` (only for an engine id the fold maps to a non-human stroke; every other `line` is removed); an agent's frame edge is dashed by a counted patch; the dash is 2w on 3w off with a 4px/3px screen floor; under 50% seals become 6px rings; short runs ring at every zoom; agent text keeps a box, a tight box or a dashed rule per mark; hover and selection name the hand; two Claudes in one board carry their session. The Library components are out of the board chunk's bytes.
+
 **What Paradigm says about itself in the first hour is now true.** A teaching audit found the product telling newcomers things that were wrong: a generated CLAUDE.md that said the stop hook blocks when its checks are off by default, setup that ended without a first thing to do, commands that did not exist, and stale names and versions.
 
 ### Added
