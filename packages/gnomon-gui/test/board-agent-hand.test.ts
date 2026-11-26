@@ -13,7 +13,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findChrome, leafUrl, shootLeaf } from '../scripts/board-leaf-shots.mjs';
 // @ts-expect-error plain .mjs dev script (no types)
 import { startPreview } from '../scripts/preview.mjs';
-import { fixtureId } from '../src/preview/board-fixture.js';
+import { boardFixture, fixtureId } from '../src/preview/board-fixture.js';
+import { planUndo } from '../src/core/dim-undo.js';
 
 const SIZE = { width: 1440, height: 900 };
 const B = 'globalThis.gnomonPreviewBoard';
@@ -36,6 +37,18 @@ const HELPERS = `
     }
     await settle();
     return board.view().zoom;
+  };
+  /** pan (a plain wheel, which the engine reads as a scroll) until scene point (x, y) is at the middle of the view */
+  const centreOn = async (x, y) => {
+    for (let i = 0; i < 4; i++) {
+      const v = board.view(); const sx = (x + v.scrollX) * v.zoom; const sy = (y + v.scrollY) * v.zoom;
+      const dx = sx - v.width / 2; const dy = sy - v.height / 2;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) break;
+      const c = document.querySelector('#preview-board canvas.interactive') ?? canvas();
+      const b = c.getBoundingClientRect();
+      c.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, clientX: b.left + b.width / 2, clientY: b.top + b.height / 2, bubbles: true, cancelable: true }));
+      await settle();
+    }
   };
   const canvas = () => document.querySelector('#preview-board canvas.static');
   const dpr = () => window.devicePixelRatio || 1;
@@ -105,37 +118,31 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
     const r = await scripted(`
       const out = {};
       for (const hand of ['you', 'arky']) {
-        await zoomTo(1);
-        const v = board.view();
-        const fx = Math.round(v.width / 2 - v.scrollX) - 100, fy = Math.round(v.height / 2 - v.scrollY) - 70;
-        board.render(globalThis.gnomonPreviewState([{ hand, marks: [{ kind: 'frame', x: fx, y: fy, w: 200, h: 140, title: 'plan' }] }]));
         for (const z of [0.25, 1, 4]) {
+          // the frame fits the 790 by 445 leaf at each zoom: 400 by 280 at 25% and 100%, 160 by 90 at 400%
+          const [w, hh] = z === 4 ? [160, 90] : [400, 280];
+          const fx = 600, fy = 330;
+          board.render(globalThis.gnomonPreviewState([{ hand, marks: [{ kind: 'frame', x: fx, y: fy, w, h: hh, title: 'plan' }] }]));
           const got = await zoomTo(z);
-          const sides = { top: along([fx, fy], [fx + 200, fy]), right: along([fx + 200, fy], [fx + 200, fy + 140]), bottom: along([fx + 200, fy + 140], [fx, fy + 140]), left: along([fx, fy + 140], [fx, fy]) };
+          await centreOn(fx + w / 2, fy + hh / 2);
+          const sides = { top: along([fx, fy], [fx + w, fy]), right: along([fx + w, fy], [fx + w, fy + hh]), bottom: along([fx + w, fy + hh], [fx, fy + hh]), left: along([fx, fy + hh], [fx, fy]) };
           out[hand + '@' + z] = { zoom: got, ...Object.fromEntries(Object.entries(sides).map(([k, v]) => [k, runs(v)])) };
         }
       }
       return out;`);
-    const seenDashed = new Set<string>();
     for (const [key, row] of Object.entries(r as Record<string, Record<string, { n: number; gaps: number } | number>>)) {
       const [hand, z] = key.split('@');
       expect(Math.abs((row.zoom as number) - Number(z)), `${key} reached its zoom`).toBeLessThan(0.011);
       for (const side of ['top', 'right', 'bottom', 'left']) {
         const s = row[side] as { n: number; gaps: number };
-        if (s.n < 30) continue; // a side too short at 25% to count
         if (hand === 'you') expect(s.gaps, `${key} ${side}`).toBe(0);
         // 6 on, 4 off on the SCREEN at every zoom: a period of 10px
-        else expect(s.gaps, `${key} ${side} (${s.n}px)`).toBeGreaterThanOrEqual(Math.floor(s.n / 10) - 2);
+        else expect(s.gaps, `${key} ${side} (${s.n}px)`).toBeGreaterThanOrEqual(Math.max(1, Math.floor(s.n / 10) - 2));
       }
-      // an agent's frame: at least two sides in view and long enough to count at every zoom (all four at 100%)
-      const counted = ['top', 'right', 'bottom', 'left'].filter((k) => (row[k] as { n: number }).n >= 30).length;
-      // (at 400% the zoom steps leave the frame out of view: not measured there yet, said in the P4a report)
-      if (hand === 'arky' && z !== '4') expect(counted, key).toBeGreaterThanOrEqual(1);
-      if (hand === 'arky') for (const k of ['top', 'right', 'bottom', 'left']) if ((row[k] as { n: number }).n >= 30) seenDashed.add(k);
+      // the frame panned to the middle of the view: all four sides in view and long enough to count, at every zoom
+      for (const k of ['top', 'right', 'bottom', 'left']) expect((row[k] as { n: number }).n, `${key} ${k} in view`).toBeGreaterThanOrEqual(z === '0.25' ? 40 : 200);
     }
-    // the sides in view were each measured dashed (all four in one view: open, said in the P4a report)
-    console.log('PROOF2 sides measured dashed', [...seenDashed].sort().join(','));
-    expect(seenDashed.size).toBeGreaterThanOrEqual(1);
+
   }, 180_000);
 
   it('PROOF 3: the screen floor: at 25% an agent stroke\'s dash keeps a period of 7px or more on the screen (unfloored it is 2.5px and closes)', async () => {
@@ -159,6 +166,13 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
   it('Aegis: no new node ever comes from a `line`: the l key, an alt-drag duplicate of an agent stroke, engine clipboard JSON holding a line, an undo that restores one', async () => {
     const S = fixtureId(940);
     const json = JSON.stringify({ type: 'excalidraw/clipboard', elements: [{ id: 'pasted-line', type: 'line', x: 10, y: 10, width: 80, height: 0, points: [[0, 0], [80, 0]], strokeStyle: 'dashed', strokeColor: '#000', strokeWidth: 2, version: 1 }], files: {} });
+    // the inverse the app's undo (core/dim-undo.ts planUndo, wired in DimLive; the preview leaf only records the key)
+    // makes of the person's delete of the agent's stroke
+    const fx = boardFixture('empty');
+    const before = fx.apply([{ type: 'add', node: { id: S, kind: 'stroke', x: 200, y: 200, z: 'za', points: [0, 0, 300, 0] } } as never], 'arky');
+    const after = fx.apply([{ type: 'delete', id: S }], 'you');
+    const plan = planUndo({ before, rows: [[{ type: 'delete', id: S }]], current: after, actor: { cls: 'human', principal: 'p:preview/matt' }, mint: () => fixtureId(941) }) as { ok: boolean; ops?: unknown[] };
+    expect(plan.ok).toBe(true);
     const lines = `${B}.marks().filter((m) => !m.labelOf && m.kind === 'stroke').map((m) => m.author.cls + (m.node ? '' : ':new')).sort().join(' ')`;
     const adds = `${D}.edits.flatMap((e) => e.ops).filter((o) => o.type === 'add').map((o) => o.node.kind)`;
     const acted = ((await shootLeaf({
@@ -176,8 +190,13 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
         { at: [700, 650], press: true }, { paste: json }, { wait: 300 },
         { read: lines, as: 'afterPaste' }, { read: `${D}.edits.flatMap((e) => e.ops).filter((o) => o.type === 'add').map((o) => o.node.kind + ':' + (o.node.kind === 'text' ? o.node.text.startsWith('{') : ''))`, as: 'addsAfterPaste' },
         // delete the agent stroke, then undo: the host re-adds it as the person's (dim-undo, stated); never a line without its agent
-        { at: [300, 200], press: true }, { key: 'Delete' }, { wait: 250 }, { read: lines, as: 'afterDelete' }, { key: 'z', meta: process.platform === 'darwin', ctrl: process.platform !== 'darwin' }, { wait: 400 },
-        { read: lines, as: 'afterUndo' }, { read: 'globalThis.__said', as: 'said' }, { read: `${B}.drift()`, as: 'drift' },
+        { read: `(${B}.select(['${S}']), 1)`, as: 'sel' }, { wait: 250 }, { read: `(${B}.focus(), ${B}.state().selected)`, as: 'selected' },
+        { key: 'Delete' }, { wait: 300 }, { read: lines, as: 'afterDelete' }, { read: `[...${D}.state().nodes.values()].filter((n) => n.node.kind === 'stroke').map((n) => n.by.cls).join(' ')`, as: 'foldAfterDelete' }, { key: 'z', meta: process.platform === 'darwin', ctrl: process.platform !== 'darwin' }, { wait: 400 },
+        { read: `${D}.undoKeys ? ${D}.undoKeys.length : globalThis.gnomonPreviewDim.undoKeys?.length ?? -1`, as: 'undoKeys' },
+        // the undo's ops, applied as the person's (as the app's sender does), and rendered
+        { read: `(${B}.render(${D}.apply(${JSON.stringify(plan.ops)}, 'you')), 1)`, as: 'undone' }, { wait: 300 },
+        { read: lines, as: 'afterUndo' }, { read: `[...${D}.state().nodes.values()].filter((n) => n.node.kind === 'stroke').map((n) => n.by.cls).join(' ')`, as: 'foldAfterUndo' },
+        { read: `${B}.marks().filter((m) => !m.labelOf && m.kind === 'stroke').map((m) => m.node === '${S}')`, as: 'sameIdAfterUndo' }, { read: 'globalThis.__said', as: 'said' }, { read: `${B}.drift()`, as: 'drift' },
       ],
     })) as { acted: Record<string, unknown> }).acted;
     // the l key draws nothing that stays, and nothing is added
@@ -190,9 +209,16 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
     expect(acted.afterPaste).toBe('agent');
     for (const a of acted.addsAfterPaste as string[]) expect(a).toBe('text:true');
     // after the undo: no agent line stands without its node; a restored stroke is the person's, so freehand and solid
-    // (if the press did not take the thin dashed line, nothing was deleted and the agent stroke simply stands)
-    if (acted.afterDelete === '') expect(['', 'human'].includes(acted.afterUndo as string), String(acted.afterUndo)).toBe(true);
-    else expect(acted.afterUndo).toBe('agent');
+    // the delete really took the agent's stroke (selected by id through the handle)
+    expect(acted.selected).toBe(1);
+    expect(acted.afterDelete).toBe('');
+    expect(acted.foldAfterDelete).toBe('');
+    // TODAY's dim-undo re-adds it under a NEW id as the person's: a freehand, solid stroke, never a line without its
+    // agent. Pass E0 (contracts) changes the shared undo planner so a re-add keeps its original hand: when it lands,
+    // this becomes 'agent' (a dashed line again) and the new-id check stays
+    expect(acted.afterUndo).toBe('human');
+    expect(acted.foldAfterUndo).toBe('human');
+    expect(acted.sameIdAfterUndo).toEqual([false]);
     expect((acted.said as string[]).filter((x) => !x.endsWith(':line'))).toEqual([]);
     expect(acted.drift).toEqual([]);
   }, 120_000);
