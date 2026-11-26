@@ -199,3 +199,26 @@ describe('#gui-board S1.4 P4a: the Library is out of the bytes', () => {
     expect(js.includes('h.innerHTML=c.outerHTML')).toBe(false);
   }, 120_000);
 });
+
+describe('#gui-board dash-runs patches: a dashed STROKE runs on across sub-paths; a fill never joins them (Aegis)', () => {
+  // the patched method alone, run against a recording context (test-only Function: nothing here ships)
+  const patched = (): ((ctx: unknown, drawing: unknown) => void) => {
+    let text = installed('roughjs/bin/canvas.js').toString('utf8');
+    for (const q of (PATCHES as Patch[]).filter((x) => x.file === 'roughjs/bin/canvas.js')) text = applyPatch(q, text) as string;
+    const body = /_drawToContext\(ctx, drawing, fixedDecimals, rule = 'nonzero'\) \{([\s\S]*?)\n {4}\}\n/.exec(text)![1]!;
+    return new Function('ctx', 'drawing', 'fixedDecimals', 'rule', body) as (ctx: unknown, drawing: unknown) => void;
+  };
+  const run = (type: string, dash: number[]): number => {
+    let moves = 0;
+    const ctx = { beginPath() {}, moveTo() { moves++; }, lineTo() {}, bezierCurveTo() {}, stroke() {}, fill() {}, getLineDash: () => dash };
+    const ops = [{ op: 'move', data: [0, 0] }, { op: 'lineTo', data: [10, 0] }, { op: 'move', data: [10, 0] }, { op: 'lineTo', data: [20, 0] }];
+    patched()(ctx, { type, ops });
+    return moves;
+  };
+  it('a dashed path joins at a shared point; a solid path and any fill keep every move', () => {
+    expect(run('path', [4, 6])).toBe(1);
+    expect(run('path', [])).toBe(2);
+    expect(run('fillPath', [4, 6])).toBe(2);
+  });
+});
+

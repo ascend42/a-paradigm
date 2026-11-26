@@ -142,7 +142,7 @@ describe.skipIf(!process.env.GNOMON_P4A_CANDIDATES || !chrome)('#gui-board S1.4 
     const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'open', theme, 'empty'), ...SIZE, script: `${HELPERS}
 ${caseScript(c)}` })) as { png: Buffer; scripted: { zoom: number; chips: number; keep: string } };
     if (c.hover) expect(r.scripted.chips, name).toBe(1);
-    if (c.select) expect(r.scripted.keep, name).toBe(`arky · ◇ Totals are off …`);
+    if (c.select) expect(r.scripted.keep, name).toBe(`arky · ◇ Totals are off…`);
     expect(Math.abs(r.scripted.zoom - c.zoom)).toBeLessThan(0.011);
     writeFileSync(path.join(OUT, `agent-${name}-${theme}.png`), r.png);
   }, 120_000);

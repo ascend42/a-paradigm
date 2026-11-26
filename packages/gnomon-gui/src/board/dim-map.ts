@@ -110,8 +110,9 @@ export function dimIsAgentStroke(n: DimFoldNode | undefined): boolean {
  * solid while any hand in it is not the person's.
  */
 export function dimHandOf(n: DimFoldNode): DimFoldNode['by'] {
-  const rf = n.restoredFrom?.by;
-  if (rf === undefined) return n.by;
+  // (Aegis) the restore's PRESENCE decides: a restore whose hand is missing counts as the unknown hand, never `by`
+  if (n.restoredFrom === undefined || n.restoredFrom === null) return n.by;
+  const rf = (n.restoredFrom.by as { cls?: unknown } | undefined)?.cls !== undefined ? n.restoredFrom.by : ({ cls: 'unknown', principal: 'unknown' } as DimFoldNode['by']);
   const human = (b: unknown): boolean => (b as { cls?: unknown } | undefined)?.cls === 'human';
   if (human(n.by) && human(rf)) return n.by;
   return !human(n.by) ? n.by : rf;

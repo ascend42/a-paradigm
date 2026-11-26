@@ -321,7 +321,7 @@ export const sessionLabel = (hsid: string, sessionName?: SessionNameOf): string 
 export const SESSION_MAX = 16;
 export const sessionShort = (session: string): string => {
   const clean = sanitizeDisplayText(String(session)).text.replace(/\s+/g, ' ').trim();
-  return [...clean].length > SESSION_MAX ? `${[...clean].slice(0, SESSION_MAX - 1).join('')}…` : clean;
+  return [...clean].length > SESSION_MAX ? `${[...clean].slice(0, SESSION_MAX - 1).join('').trimEnd()}…` : clean;
 };
 
 export { handKey } from './board.js';
@@ -359,4 +359,4 @@ export function footHands(marks: readonly BoardMarkView[], sessionName?: Session
 
 /** The longest name shown beside a seal (a bidi-isolated text node; the whole name stays in title=). */
 export const HAND_NAME_MAX = 24;
-export const handName = (name: string): string => ([...name].length > HAND_NAME_MAX ? `${[...name].slice(0, HAND_NAME_MAX - 1).join('')}…` : name);
+export const handName = (name: string): string => ([...name].length > HAND_NAME_MAX ? `${[...name].slice(0, HAND_NAME_MAX - 1).join('').trimEnd()}…` : name);

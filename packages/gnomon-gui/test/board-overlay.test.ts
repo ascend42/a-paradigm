@@ -306,3 +306,12 @@ describe('#gui-board S1.4 P4a after Mika\'s review (R2, R4, L1)', () => {
     expect(tooSmall(mark({ id: 'f', kind: 'frame', width: 100, height: 80 }), 0.25)).toBe(false);
   });
 });
+
+describe('#gui-board a cut name has no space before its ellipsis (Mika C1)', () => {
+  it('sessionShort and handName trim the end before the …', () => {
+    expect(sessionShort('Totals are off by a cent')).toBe('Totals are off…');
+    expect(handName('an agent name that is cut here and more')).toBe('an agent name that is c…');
+    expect(handName('abcdefghijklmnopqrstuv wxyz')).toBe('abcdefghijklmnopqrstuv…');
+  });
+});
+

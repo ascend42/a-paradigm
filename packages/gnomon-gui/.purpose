@@ -3019,3 +3019,4 @@ components:
 # day, 2.45:1 night, under 3:1); fix before Windows or 1x support. Noted, no change (L4): between 41% and 49% a lone
 # side dash can stand beside a text's first and last letters. The rough dash now runs on across a polyline's short
 # runs (patches dash-runs-*), and a restored mark is drawn in the non-human of its two hands (dimHandOf).
+# Known gap (S1.4 P4a, Mika L5): an agent stroke's last point can fall in a gap of its dash, so its end is not drawn.

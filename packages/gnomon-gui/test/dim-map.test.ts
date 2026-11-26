@@ -627,3 +627,12 @@ describe('#gui-dim-map the drawn hand of a mark an undo re-added (Aegis ruling o
     }
   });
 });
+
+describe('#gui-dim-map a restore whose hand is missing (Aegis hardening)', () => {
+  it('a present restoredFrom with no hand counts as the unknown hand: never by, never human', () => {
+    const n = { node: { id: 'n', kind: 'stroke', x: 0, y: 0, z: 'a', points: [0, 0, 50, 0] }, by: { cls: 'human', principal: 'p:preview/matt' }, hsid: 'h1', addedSeq: 1, restoredFrom: { id: 'old' } } as unknown as DimFoldNode;
+    expect((dimHandOf(n) as { cls: string }).cls).toBe('unknown');
+    expect(dimIsAgentStroke(n)).toBe(true);
+  });
+});
+

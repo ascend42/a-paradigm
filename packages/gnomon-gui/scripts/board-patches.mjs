@@ -606,12 +606,12 @@ export const PATCHES = Object.freeze([
   {
     id: 'dash-runs-continue',
     file: 'roughjs/bin/canvas.js',
-    why: 'S1.4 P4a (Mika M1): rough draws a polyline as one sub-path PER SEGMENT, and the canvas restarts a dash at every sub-path, so on a line of short runs (an agent marker tick) every run was one long dash and the mark painted solid. While a dash is set, a move to the point the path already stands on is skipped, so the dash runs on along the whole line; solid paths are drawn exactly as before',
+    why: 'S1.4 P4a (Mika M1): rough draws a polyline as one sub-path PER SEGMENT, and the canvas restarts a dash at every sub-path, so on a line of short runs (an agent marker tick) every run was one long dash and the mark painted solid. While a dash is set, on a stroked path (never a fill: Aegis), a move to the point the path already stands on is skipped, so the dash runs on along the whole line; solid paths are drawn exactly as before',
     find: `                case 'move':
                     ctx.moveTo(data[0], data[1]);
                     break;`,
     replace: `                case 'move':
-                    if (ctx.getLineDash().length > 0 && item.op === 'move' && at && Math.abs(at[0] - data[0]) < 0.01 && Math.abs(at[1] - data[1]) < 0.01) break;
+                    if (drawing.type === 'path' && ctx.getLineDash().length > 0 && item.op === 'move' && at && Math.abs(at[0] - data[0]) < 0.01 && Math.abs(at[1] - data[1]) < 0.01) break;
                     ctx.moveTo(data[0], data[1]);
                     at = [data[0], data[1]];
                     break;`,
