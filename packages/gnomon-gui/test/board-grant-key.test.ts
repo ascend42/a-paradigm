@@ -111,7 +111,7 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the remo
       { read: 'globalThis.__gone', as: 'gone' },
       { read: 'globalThis.gnomonPreviewDim.edits.map((e) => e.ops.map((o) => o.type))', as: 'edits' },
       { read: `${B}.count()`, as: 'count' },
-    ], { shot: 'removed-mid-drag-day' });
+    ]);
     const node = (a.nodes as string[])[0]!;
     expect(node).toBeTruthy();
     expect(a.gone).toEqual([{ what: 'gone', id: node, change: 'moving' }]);
@@ -119,19 +119,96 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the remo
     expect(a.count).toBe(0);
   }, 180_000);
 
+  const footFit = `(() => { const f = document.querySelector('.bd-foot').getBoundingClientRect(); return [...document.querySelectorAll('.bd-foot .bd-grant')].map((k) => { const b = k.getBoundingClientRect(); return { right: Math.round(b.right * 10) / 10, height: b.height, inside: b.right <= f.right - 14 + 0.5 }; }); })()`;
+  const named = (a: string, b: string) => [one(true, 'live', { session: a }), { ...one(false, 'live', { session: b }), hsid: B2 }];
+
+  it('aegis I-1: a HELD Enter on a draw key presses it once, not once per auto-repeat', async () => {
+    const a = await real([
+      { read: grants([one(true)]), as: 'set' },
+      { press: key(A) }, { wait: 150 }, { read: `${presses}.length`, as: 'one' },
+      { key: 'Enter', text: '\r', held: 6 }, { wait: 200 }, { read: `${presses}.length`, as: 'held' },
+    ]);
+    expect(a.one).toBe(1);
+    expect(a.held).toBe(2);
+  }, 180_000);
+
+  it('mika F1 / aegis I-5: no key is clipped: at 1280 and at 560 with two named hands every key ends inside the foot; mika F2: the key is 28px', async () => {
+    for (const width of [1280, 560]) {
+      const a = await real([{ read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(named('Totals are off by a cent', 'billing-ui follow-up')), as: 'set' }, { wait: 400 }, { read: footFit, as: 'fit' }, { read: `[...document.querySelectorAll('.bd-foot .bd-hand-keyed bdi')].map((b) => b.hidden ? null : b.textContent)`, as: 'names' }], { width, shot: `giveway-${width}` });
+      const fit = a.fit as Array<{ right: number; height: number; inside: boolean }>;
+      expect(fit).toHaveLength(2);
+      for (const k of fit) {
+        expect(k.inside, `${width}: a key past the foot's edge (${JSON.stringify(a.fit)}, names ${JSON.stringify(a.names)})`).toBe(true);
+        expect(k.height).toBe(28);
+      }
+    }
+  }, 240_000);
+  it('mika F3, F4, F7, F8, F10: count to key is 8px; a not-running key says so; the no-key line has no leading space; the same line spoken twice is announced twice; a busy key keeps its own sentence', async () => {
+    const a = await real([
+      { read: `(${B}.render(${marks(1)}), 1)`, as: 'r' },
+      { read: grants([one(true, 'busy'), { ...one(false, 'idle'), hsid: B2 }, { ...one(false), hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZC', name: 'local model', local: true }]), as: 'set' }, { wait: 300 },
+      { read: `document.querySelector('.bd-foot [data-grant="${A}"]').getAttribute('aria-label')`, as: 'busyName' },
+      { read: `(() => { const h = document.querySelector('.bd-foot [data-hand="${A}"]'); const c = h.querySelector('.bd-count'); const k = h.querySelector('.bd-grant'); const r = document.createRange(); r.selectNodeContents(c); return Math.round(k.getBoundingClientRect().left - r.getBoundingClientRect().right); })()`, as: 'gap' },
+      { read: `[...document.querySelectorAll('.bd-foot .bd-hand-note')].filter((n) => !n.hidden).map((n) => n.textContent)`, as: 'notes' },
+      { read: `(globalThis.__said = [], new MutationObserver(() => { const t = document.querySelector('.bd-leaf .sr-only[role=status]').textContent; globalThis.__said.push(t); }).observe(document.querySelector('.bd-leaf .sr-only[role=status]'), { childList: true, characterData: true, subtree: true }), ${LEAF}.speak('Claude added 3 marks'), 1)`, as: 's1' }, { wait: 200 },
+      { read: `(${LEAF}.speak('Claude added 3 marks'), 1)`, as: 's2' }, { wait: 200 }, { read: 'globalThis.__said', as: 'said' },
+    ]);
+    expect(a.busyName).toBe('Claude may draw on this board and change or remove any mark, yours included · press to stop it');
+    expect(a.gap).toBe(8);
+    expect(a.notes).toEqual(['· not running', '· can’t draw on a board yet']);
+    // cleared, then set on the next frame: a live region hears the same words a second time
+    expect(a.said).toEqual(['Claude added 3 marks', '', 'Claude added 3 marks']);
+  }, 180_000);
+  it.todo('two agents at a 1024 window and three agents at 1440: the +<k> menu (a later S1.4 pass) keeps every key in reach');
+
+  it('aegis I-4: a first mark of the session (another label) moves no key and drops no focus; a second Claude attaching keeps focus on the key', async () => {
+    const mark = `globalThis.gnomonPreviewState([{ hand: 'arky', hsid: '${A}', marks: [{ kind: 'rect', x: 300, y: 200, w: 60, h: 40 }] }])`;
+    const a = await real([
+      { read: grants([one(true)]), as: 'set' }, { wait: 200 },
+      { press: key(A) }, { wait: 150 }, { read: box(A), as: 'before' },
+      { read: `(${B}.render(${mark}), 1)`, as: 'landed' }, { wait: 500 }, { read: box(A), as: 'after' }, { read: active, as: 'focus1' },
+      { read: `document.querySelector('.bd-foot [data-hand="${A}"] .bd-count').textContent`, as: 'count' },
+      { read: grants([one(true, 'live', { session: 'one' }), { ...one(false, 'live', { session: 'two' }), hsid: B2 }]), as: 'attach' }, { wait: 300 }, { read: active, as: 'focus2' },
+    ]);
+    expect(a.count).toBe('1');
+    expect(a.after).toEqual(a.before);
+    expect(a.focus1).toBe(`key:${A}`);
+    expect(a.focus2).toBe(`key:${A}`);
+  }, 180_000);
+
+  it('mika F5: a mark another hand removes while it is being RESIZED is said as "changing"', async () => {
+    const STATE = `globalThis.gnomonPreviewState([{ hand: 'arky', marks: [{ kind: 'rect', x: 200, y: 160, w: 160, h: 100 }] }])`;
+    const a = await real([
+      { read: `(globalThis.__gone = [], ${B}.onGone((r) => globalThis.__gone.push(r)), globalThis.gnomonPreviewDim.held = true, ${B}.render(${STATE}), 1)`, as: 'set' }, { wait: 500 },
+      { at: [201, 210], press: true }, { wait: 200 },
+      { hold: [[365, 265], [380, 280], [400, 300]] },
+      { read: `(${B}.render(globalThis.gnomonPreviewState([])), 1)`, as: 'deleted' }, { wait: 150 },
+      { release: [410, 310] }, { wait: 600 },
+      { read: 'globalThis.__gone.map((r) => r.change)', as: 'gone' },
+      { read: `document.querySelector('.bd-keep').textContent`, as: 'line' },
+    ]);
+    expect(a.gone).toEqual(['changing']);
+    expect(a.line).toContain('removed the mark you were changing');
+  }, 180_000);
+
   it.skipIf(!SHOTS)('shots for Mika: the draw key\'s states, day and night, at 1280 and in a narrow leaf', async () => {
-    const two = [one(true), { ...one(false), hsid: B2 }];
+    const S1 = { session: 'Totals are off…' };
+    const S2 = { session: 'billing-ui' };
     const states: Array<[string, unknown[]]> = [
-      ['on-off', two],
-      ['pending', [{ ...one(true, 'pending'), since: 0 }, { ...one(false, 'busy', { hsid: B2 }), since: 0 }]],
-      ['link-down', [one(true, 'down'), { ...one(false, 'down'), hsid: B2 }]],
-      ['idle-unknown', [one(true, 'idle'), { ...one(false, 'unknown'), hsid: B2 }]],
-      ['two-claudes', [one(true, 'live', { session: 'billing-ui' }), { ...one(false, 'live', { session: 'Totals are off…' }), hsid: B2 }]],
-      ['local', [one(true), { ...one(false), hsid: B2, name: 'local model', local: true }]],
+      ['on-off', [one(true, 'live', S1), { ...one(false, 'live', S2), hsid: B2 }]],
+      ['pending', [{ ...one(true, 'pending', S1), since: 0 }, { ...one(false, 'busy', S2), hsid: B2, since: 0 }]],
+      ['link-down', [one(true, 'down', S1), { ...one(false, 'down', S2), hsid: B2 }]],
+      ['idle-unknown', [one(true, 'idle', S1), { ...one(false, 'unknown', S2), hsid: B2 }]],
+      ['two-claudes', [one(true, 'live', S1), { ...one(false, 'live', S2), hsid: B2 }]],
+      ['one-local', [one(true), { ...one(false), hsid: B2, name: 'local model', local: true }]],
     ];
     for (const theme of ['day', 'night'] as const)
-      for (const width of [1280, 560])
+      for (const width of [1024, 1280, 560])
         for (const [name, list] of states)
-          await real([{ read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(list), as: 'set' }, { read: `(${LEAF}.speak('Claude added 3 marks'), 1)`, as: 's' }, { wait: 500 }], { theme, width, shot: `${name}-${theme}-${width}` });
+          await real([{ read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(list), as: 'set' }, { wait: 500 }], { theme, width, shot: `${name}-${theme}-${width}` });
+    // the removed line in the leaf (the preview says the handle's gone report as the dock does)
+    const STATE = `globalThis.gnomonPreviewState([{ hand: 'arky', marks: [{ kind: 'rect', x: 200, y: 160, w: 160, h: 100 }] }])`;
+    for (const theme of ['day', 'night'] as const)
+      await real([{ read: `(globalThis.gnomonPreviewDim.held = true, ${B}.render(${STATE}), 1)`, as: 'set' }, { read: grants([one(true, 'live', S1)]), as: 'g' }, { wait: 400 }, { hold: [[201, 210], [240, 240]] }, { read: `(${B}.render(globalThis.gnomonPreviewState([])), 1)`, as: 'd' }, { wait: 150 }, { release: [260, 250] }, { wait: 500 }], { theme, shot: `removed-line-${theme}-1280` });
   }, 600_000);
 });

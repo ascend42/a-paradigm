@@ -11,10 +11,10 @@ import { DIM_KINDS, foldDim, type DimOp, type DimRow, type DimState } from '@a-c
 
 export const FIXTURE_DIM = 'dim:01JF1XTVRE000000000000000D';
 const HUMAN = { principal: 'p:preview/matt', connId: 'conn:preview', surface: 'gui' };
-const agent = (id: string): Record<string, unknown> => ({ principal: `p:preview/${id}`, connId: 'conn:preview', surface: 'bridge', agent: id });
+const agent = (id: string, hsid?: string): Record<string, unknown> => ({ principal: `p:preview/${id}`, connId: 'conn:preview', surface: 'bridge', agent: id, ...(hsid ? { hsid } : {}) });
 /** null: a row with no host stamp, which folds as the unknown hand */
 export type FixtureHand = 'you' | 'arky' | 'luna' | 'quill' | null;
-const stampOf = (hand: FixtureHand): Record<string, unknown> => (hand === null ? {} : { relayedFor: hand === 'you' ? HUMAN : agent(hand) });
+const stampOf = (hand: FixtureHand, hsid?: string): Record<string, unknown> => (hand === null ? {} : { relayedFor: hand === 'you' ? HUMAN : agent(hand, hsid) });
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 /** A fixed, well-formed node id for the n-th fixture mark. */
@@ -24,7 +24,8 @@ const Z = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 export const fixtureZ = (n: number): string => `${Z[Math.floor(n / Z.length)]}${Z[n % Z.length]}`;
 
 type Mark = Record<string, unknown> & { kind: string; x: number; y: number };
-interface Group { hand: FixtureHand; marks: Mark[] }
+/** `hsid` (S1.4 P4b): the session an agent hand's rows are stamped with (the foot names a keyed hand by it) */
+interface Group { hand: FixtureHand; marks: Mark[]; hsid?: string }
 
 /** The sample's frame is its first mark: the marks drawn inside it say so, as the board would store them. */
 const IN = { parent: fixtureId(0) };
@@ -112,7 +113,7 @@ function rowsOf(groups: Group[]): DimRow[] {
   let n = 0;
   for (const g of groups) {
     const ops = g.marks.map((m) => ({ type: 'add', node: { id: fixtureId(n), z: fixtureZ(n++), ...m } }));
-    rows.push({ seq: rows.length + 1, kind: DIM_KINDS.op, payload: { v: 1, dim: FIXTURE_DIM, ops, ...stampOf(g.hand) } });
+    rows.push({ seq: rows.length + 1, kind: DIM_KINDS.op, payload: { v: 1, dim: FIXTURE_DIM, ops, ...stampOf(g.hand, g.hsid) } });
   }
   return rows;
 }

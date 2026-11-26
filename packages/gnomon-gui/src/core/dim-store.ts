@@ -58,13 +58,16 @@ interface TurnEntry {
   agent: string;
 }
 /** An op row written through a TOOL surface (the bridge, voice) by an agent: the host's stamp, own keys only. */
-function agentStampOf(payload: Record<string, unknown>): { agent: string } | null {
+function agentStampOf(payload: Record<string, unknown>): { agent: string; turn: string | null; hsid: string | null } | null {
   const r = Object.prototype.hasOwnProperty.call(payload, 'relayedFor') ? payload.relayedFor : undefined;
   if (!isPlainObject(r)) return null;
   const agent = Object.prototype.hasOwnProperty.call(r, 'agent') ? r.agent : undefined;
   const surface = Object.prototype.hasOwnProperty.call(r, 'surface') ? r.surface : undefined;
-  if (typeof agent !== 'string' || agent.length === 0 || (surface !== 'bridge' && surface !== 'voice')) return null;
-  return { agent };
+  // (aegis N-7: the bridge's own label pattern; anything else is no agent the page will name)
+  if (typeof agent !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(agent) || (surface !== 'bridge' && surface !== 'voice')) return null;
+  const turn = Object.prototype.hasOwnProperty.call(r, 'turn') ? r.turn : undefined;
+  const hsid = Object.prototype.hasOwnProperty.call(r, 'hsid') ? r.hsid : undefined;
+  return { agent, turn: typeof turn === 'string' ? turn : null, hsid: typeof hsid === 'string' ? hsid : null };
 }
 
 /** One dimension as a list shows it. */
@@ -211,8 +214,9 @@ export class DimStore {
   #countTurn(dim: string, row: DimRow): void {
     const p = row.payload as Record<string, unknown>;
     const who = agentStampOf(p);
-    if (!who || !Array.isArray(row.causes)) return;
-    const ref = row.causes.find((c) => parseTurnRef(c) !== null);
+    if (!who || (!Array.isArray(row.causes) && who.turn === null)) return;
+    // aegis N-8: the host-stamped turn when the stamp has one; else a cause whose session is the stamp's own
+    const ref = who.turn !== null && parseTurnRef(who.turn) ? who.turn : (row.causes ?? []).find((c) => { const t = parseTurnRef(c); return t !== null && (who.hsid === null || t.hsid === who.hsid); });
     const t = ref !== undefined ? parseTurnRef(ref) : null;
     const ops = Object.prototype.hasOwnProperty.call(p, 'ops') ? p.ops : undefined;
     if (!t || !Array.isArray(ops)) return;

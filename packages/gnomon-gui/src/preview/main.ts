@@ -16,7 +16,7 @@ import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey }
 import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
 import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
 import { followLog, GnomonClient } from '../core/client.js';
-import { keepStateLine, noticeLine } from '../core/board-leaf.js';
+import { keepStateLine, noticeLine, removedLine } from '../core/board-leaf.js';
 import { DimSessions, type DimSession } from '../core/dim-session.js';
 import { DimStore } from '../core/dim-store.js';
 import { GuiStore } from '../core/store.js';
@@ -100,6 +100,8 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       onReady: (handle) => {
         // the fixture's stand-in for the live loop: an edit becomes a row of yours and the fold is rendered back
         handle.render(fx.state());
+        // S1.4 P4b DEV (mika): a held mark another hand removed is said in the leaf's own line, as the dock says it
+        handle.onGone?.((r) => (globalThis as { gnomonPreviewLeaf?: BoardLeaf }).gnomonPreviewLeaf?.say(removedLine('Claude', r.change)));
         send = (ops, cause) => {
           fx.edits.push({ ops, cause: cause ? cause.type : null });
           if (!fx.held) handle.render(fx.apply(ops));

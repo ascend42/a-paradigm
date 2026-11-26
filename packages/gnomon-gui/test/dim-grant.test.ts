@@ -31,7 +31,7 @@ interface Call {
 }
 
 /** A fake client and a tiny mod: open answers the grant map (M9), grant appends a grant row, check answers the fold. */
-function world(o: { live?: (hsid: string) => boolean; attached?: string[] } = {}) {
+function world(o: { live?: (hsid: string) => boolean; attached?: string[]; grantRowLater?: boolean } = {}) {
   const store = new DimStore();
   const calls: Call[] = [];
   const sessions = new DimSessions({ store, ...(o.live ? { live: o.live } : {}), mint: (() => { let n = 5000; return () => ULID(n++); })() });
@@ -55,11 +55,21 @@ function world(o: { live?: (hsid: string) => boolean; attached?: string[] } = {}
       return c.resolve({ result: { ok: true, already: false, dim: DIM, seq: r.seq } });
     }
     if (c.commandId === 'dim.open') {
-      const r = store.has(DIM) ? append(DIM_KINDS.start, { dim: DIM, attached: store.stateAt(DIM).attached, opened: 'command' }) : append(DIM_KINDS.start, { dim: DIM, title: 'Plan', attached: o.attached ?? [A], opened: 'command' });
-      return c.resolve({ result: { ok: true, created: true, dim: DIM, seq: r.seq, hash: dimHash(store.stateAt(DIM)), attr: dimAttrDigest(store.stateAt(DIM)), grants: grantList() } });
+      const existed = store.has(DIM);
+      const r = existed ? append(DIM_KINDS.start, { dim: DIM, attached: store.stateAt(DIM).attached, opened: 'command' }) : append(DIM_KINDS.start, { dim: DIM, title: 'Plan', attached: o.attached ?? [A], opened: 'command' });
+      return c.resolve({ result: { ok: true, created: !existed, dim: DIM, seq: r.seq, hash: dimHash(store.stateAt(DIM)), attr: dimAttrDigest(store.stateAt(DIM)), grants: grantList() } });
     }
     if (c.commandId === 'dim.grant') {
-      const r = append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: (c.args.focus as { hsid: string }).hsid, write: c.args.write });
+      const target = (c.args.focus as { hsid: string }).hsid;
+      if (o.grantRowLater) {
+        // aegis I-2: the answer arrives BEFORE its own row
+        const at = ++seq;
+        const list = grantList().map((g) => (g.hsid === target ? { ...g, write: c.args.write as boolean } : g));
+        c.resolve({ result: { ok: true, dim: DIM, seq: at, grants: list } });
+        setTimeout(() => sessions.apply([{ seq: at, kind: DIM_AUX_KINDS.grant, payload: { v: 1, dim: DIM, hsid: target, write: c.args.write, relayedFor: gui() } }]), 500);
+        return;
+      }
+      const r = append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: target, write: c.args.write });
       return c.resolve({ result: { ok: true, dim: DIM, seq: r.seq, grants: grantList() } });
     }
     if (c.commandId === 'dim.check') return c.resolve({ result: { ok: true, dim: DIM, seq: store.stateAt(DIM).seq, hash: dimHash(store.stateAt(DIM)), attr: dimAttrDigest(store.stateAt(DIM)) } });
@@ -87,7 +97,7 @@ function world(o: { live?: (hsid: string) => boolean; attached?: string[] } = {}
     store, sessions, calls, append, agentOp, result, answer, gui,
     hold: (): void => void (auto = false),
     free: (): void => void (auto = true),
-    reconnect: (): DimSession[] => sessions.connect({ client: client() as never, principal: ME, connId: 'conn:B' }),
+    reconnect: (backlog = true): DimSession[] => sessions.connect({ client: client() as never, principal: ME, connId: 'conn:B' }, { backlog }),
     of: (id: string) => calls.filter((c) => c.commandId === id),
   };
 }
@@ -363,10 +373,120 @@ describe('S1.4 P4b words and parsing', () => {
     expect([GRANT_COPY.on, GRANT_COPY.off]).toEqual(['may edit', 'may not edit']);
     expect(GRANT_COPY.off.length).toBeLessThanOrEqual(12);
     expect([countSlot(9), countSlot(999), countSlot(1000)]).toEqual(['9', '999', '999+']);
+    // orchestrator rulings on the words (for Luna): 'may edit this board', never 'may edit on this board'
+    expect(GRANT_COPY.titleIdle('Claude', true)).toBe('Claude may edit this board · its session isn’t running, so this can’t be changed now');
+    expect(GRANT_COPY.titleIdle('Claude', false)).toBe('Claude may not edit this board · its session isn’t running, so this can’t be changed now');
+    expect(GRANT_COPY.titlePending('Claude', GRANT_COPY.on)).toBe('Claude may edit this board · saving the change');
     for (const w of [GRANT_COPY.titleOn('Claude'), GRANT_COPY.titleOff('Claude'), GRANT_COPY.titleDown, GRANT_COPY.spokenOn('Claude')]) expect(w).not.toMatch(/\b(Allow|Deny|Approve|Trust|Grant|Always|permission|access)\b/);
   });
   it('a turn ref is the kernel\'s turnId and nothing else', () => {
     expect(parseTurnRef(turn(A, 3))).toEqual({ hsid: A, n: 3 });
     for (const bad of ['turn:/1', `turn:${A}/0`, `turn:${A}/x`, `${A}/1`, 7, null]) expect(parseTurnRef(bad)).toBeNull();
+  });
+});
+
+describe('S1.4 P4b review fixes (Aegis I-2, I-3, I-6, I-7, N-1, N-3, N-7, N-8, N-9)', () => {
+  it('I-2: an answer that arrives BEFORE its own row holds until a later row; the key never flips back to the old rows', async () => {
+    const w = world({ grantRowLater: true });
+    const { s } = await opened(w);
+    s.grant(A, press());
+    await flush(DIM_SEND_LIMITS.gapMs);
+    // answered, its row not yet here: the answer says off, and an unrelated row in between does not undo it
+    expect(s.grantKeys()[0]).toMatchObject({ write: false, state: 'live' });
+    w.agentOp(A, 1, []);
+    expect(s.grantKeys()[0]!.write).toBe(false);
+    await flush(600);
+    expect(s.grantKeys()[0]!.write).toBe(false);
+  });
+
+  it('I-3 and N-3: an unanswered change is said as not known and the key stays disabled until a row says; a flip from another page is spoken', async () => {
+    const w = world({ attached: [A, B] });
+    const { s, n } = await opened(w);
+    w.hold();
+    s.grant(B, press());
+    await flush(DIM_GRANT_QUIET_MS + 8000 + DIM_SEND_LIMITS.gapMs);
+    expect(n.at(-1)).toMatchObject({ about: 'grant', code: 'grant-unsure', hsid: B });
+    expect(s.grantKeys().find((k) => k.hsid === B)!.state).toBe('unsure');
+    expect(s.grant(B, press())).toBe(false);
+    // the row lands: the key shows it and takes a press again
+    w.append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: B, write: true });
+    expect(s.grantKeys().find((k) => k.hsid === B)).toMatchObject({ write: true, state: 'live' });
+    // another page stops A: spoken once
+    w.append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: A, write: false }, w.gui('conn:other'));
+    expect(n.filter((x) => x.code === 'grant-off' && x.hsid === A && x.why === 'elsewhere')).toHaveLength(1);
+    // N-3: the LATE answer of the timed-out flight does not end a newer flight for the same session
+    w.free();
+    s.grant(B, press());
+    w.hold();
+    await flush(DIM_SEND_LIMITS.gapMs);
+  });
+
+  it('I-6: a reconnect whose backlog read failed does not enable the keys', async () => {
+    const w = world();
+    await opened(w);
+    w.sessions.linkDown();
+    const [back] = w.reconnect(false);
+    expect(back!.grantKeys()[0]!.state).toBe('unknown');
+    expect(back!.grant(A, press())).toBe(false);
+  });
+
+  it('I-7: every delete is recorded with who made it; an add of the id forgets it', async () => {
+    const w = world();
+    const { n, h } = await opened(w);
+    const last = (): DimSessionNotice => n.filter((x) => x.code === 'gone').at(-1)!;
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [{ type: 'delete', id: ULID(1) }] }, w.gui('conn:other'));
+    h.gone(ULID(1));
+    expect(last()).toMatchObject({ who: 'self' });
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [{ type: 'delete', id: ULID(2) }] }, { principal: 'p:00000000/someone', connId: 'c', surface: 'gui' });
+    h.gone(ULID(2));
+    expect(last()).toMatchObject({ who: 'person' });
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [{ type: 'delete', id: ULID(3) }] }, {});
+    h.gone(ULID(3));
+    expect(last()).toMatchObject({ who: 'unknown' });
+    w.agentOp(A, 1, [{ type: 'delete', id: ULID(4) } as never]);
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [rect(4)] });
+    h.gone(ULID(4));
+    expect(last()).toMatchObject({ who: 'unknown', agent: null });
+    expect(removedLine(null, 'moving', 'self')).toBe('The mark you were moving was removed on another of your pages');
+    expect(removedLine(null, 'changing', 'unknown')).toBe('An unknown hand removed the mark you were changing');
+  });
+
+  it('N-1: a refused check leaves the point due for the next press', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    w.agentOp(A, 1, [rect(1)]);
+    w.result(A, 1);
+    w.hold();
+    s.touch(press('pointerup'));
+    await flush(DIM_SEND_LIMITS.gapMs);
+    w.of('dim.check')[0]!.resolve({ result: { ok: false, code: 'unavailable' } });
+    await flush();
+    expect(s.status().checkDue).toBe(true);
+  });
+
+  it('N-7 and N-8: a label outside the bridge pattern is no agent; a cause naming another session is not counted', async () => {
+    const w = world();
+    await opened(w);
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [rect(1)] }, { principal: 'p:x/s', surface: 'bridge', agent: 'Claude\u202e', hsid: A }, [turn(A, 1)]);
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [rect(2)] }, { principal: 'p:x/s', surface: 'bridge', agent: 'claude', hsid: A }, [turn(B, 1)]);
+    w.result(A, 1);
+    w.result(B, 1);
+    expect(w.sessions.drewFor(A)).toBeNull();
+    expect(w.sessions.drewFor(B)).toBeNull();
+    // the host-stamped turn wins over causes
+    w.append(DIM_KINDS.op, { dim: DIM, ops: [rect(3)] }, { principal: 'p:x/s', surface: 'bridge', agent: 'claude', hsid: A, turn: turn(A, 2) }, [turn(B, 2)]);
+    w.result(A, 2);
+    expect(w.sessions.drewFor(A)).toEqual({ added: 1, changed: 0, removed: 0 });
+  });
+
+  it('N-9: the default grant is said on the first attach only, never on a reopen', async () => {
+    const w = world();
+    w.append(DIM_KINDS.start, { dim: DIM, title: 'Plan', attached: [A], opened: 'command' });
+    const s = w.sessions.open({ dim: DIM, hsid: A, opened: 'menu' }, press('click'));
+    const n: DimSessionNotice[] = [];
+    s.onChange((c) => void (c.notice && n.push(c.notice)));
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    expect(s.status().phase).toBe('open');
+    expect(n.filter((x) => x.code === 'grant-default')).toEqual([]);
   });
 });

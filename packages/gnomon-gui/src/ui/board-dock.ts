@@ -21,7 +21,7 @@
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { DIM_KINDS } from '@a-company/gnomon-contracts';
 import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle } from '../core/board-leaf.js';
-import { boardAgentName, sessionShort } from '../core/board-overlay.js';
+import { boardAgentName, handName, sessionShort } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
@@ -225,7 +225,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
 
   /** S1.4 P4b: a session's hand as the foot and the said lines name it: 'Claude', with its session when two would read the same. */
   function handNameOf(session: DimSession, hsid: string, label: string | null = null): string {
-    const name = label ? boardAgentName(label) : 'Claude';
+    // (aegis N-7: a label is shown through the board's own name rules and cut as every hand's name is)
+    const name = label ? handName(boardAgentName(label)) : 'Claude';
     const attached = session.grantKeys().map((k) => k.hsid);
     const same = attached.filter((h) => h !== hsid && !(d.localModel?.(h) ?? false)).length > 0;
     const where = same ? sessionShort(d.sessionInfo(hsid).name) : '';
@@ -245,6 +246,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       const name = handNameOf(session, n.hsid ?? '');
       leaf.drawFoot();
       if (n.code === 'grant-refused') leaf.say(n.write ? GRANT_COPY.refusedOn(name) : GRANT_COPY.refusedOff(name));
+      else if (n.code === 'grant-unsure') leaf.say(GRANT_COPY.unsure(name));
       else leaf.speak(n.write ? GRANT_COPY.spokenOn(name) : GRANT_COPY.spokenOff(name));
       return true;
     }
@@ -256,7 +258,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       return true;
     }
     if (n.code === 'gone') {
-      leaf.say(removedLine(n.agent ? handNameOf(session, n.byHsid ?? '', n.agent) : null, n.change ?? 'moving', n.agent ? 'agent' : 'person'));
+      const who = n.who ?? 'unknown';
+      leaf.say(removedLine(who === 'agent' && n.agent ? handNameOf(session, n.byHsid ?? '', n.agent) : null, n.change ?? 'moving', who === 'agent' && !n.agent ? 'unknown' : who));
       return true;
     }
     return true;

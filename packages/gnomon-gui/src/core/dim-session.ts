@@ -136,6 +136,8 @@ export interface DimSessionsDeps {
 
 /** S1.4 P4b: a pending grant shows its working look only after this long (design draw-grant state-notes.pending). */
 export const DIM_GRANT_QUIET_MS = 300;
+/** An agent label the page shows (the bridge's own pattern, MOD_BRIDGE_LIMITS.agentLabel; aegis N-7). */
+export const DIM_AGENT_LABEL = /^[a-z][a-z0-9-]{0,31}$/;
 
 /**
  * One attached session's draw key, as data (design components.draw-grant). `write` is what the BOARD last confirmed
@@ -145,12 +147,13 @@ export const DIM_GRANT_QUIET_MS = 300;
  *  - `busy`: another key's change is in flight (every key takes the disabled look past DIM_GRANT_QUIET_MS);
  *  - `down`: held still by the link or a mismatch (both states take the disabled look);
  *  - `unknown`: the grant map has not arrived yet (opening): disabled, the words are the default's;
- *  - `idle`: the session is not live, so it can be neither granted nor revoked: disabled.
+ *  - `idle`: the session is not live, so it can be neither granted nor revoked: disabled;
+ *  - `unsure`: this page's change was never answered (aegis I-3): disabled until a grant row or an answer arrives.
  */
 export interface DimGrantKey {
   hsid: string;
   write: boolean;
-  state: 'live' | 'pending' | 'busy' | 'down' | 'unknown' | 'idle';
+  state: 'live' | 'pending' | 'busy' | 'down' | 'unknown' | 'idle' | 'unsure';
   /** when the pending change left (for the 300 ms quiet), or null */
   since: number | null;
 }
@@ -207,6 +210,8 @@ export interface DimSessionNotice extends DimNotice {
   byHsid?: string | null;
   marks?: DimTurnMarks;
   change?: 'moving' | 'changing';
+  /** `gone`: who removed it (aegis I-7): an agent, the person on another of their pages, another person, or unknown */
+  who?: 'agent' | 'self' | 'person' | 'unknown';
 }
 
 export interface DimSessionChange {
@@ -316,11 +321,16 @@ export class DimSession {
    * S1.4 P4b (Aegis M9): the grant map the MOD last answered (`dim.open`, `dim.grant`) and the highest row seq the
    * store had then; the rows win once the store holds a later row. Null until an answer.
    */
-  #grantAnswer: { rowsAt: number; map: Map<string, boolean> } | null = null;
+  #grantAnswer: { seq: number; rowsAt: number; map: Map<string, boolean> } | null = null;
+  /** aegis I-3: the session whose change this page never saw answered; its key waits for a row or an answer */
+  #unsure: string | null = null;
+  /** what each key last SHOWED as confirmed: a flip that comes from rows (another page) is spoken (aegis I-3) */
+  readonly #shown = new Map<string, boolean>();
   /** the grant map has arrived on this connection (the open answer; for a resumed session, the backlog read before it) */
   #grantsReady = false;
   /** the one grant change in flight, or null: a press while it is in flight is DROPPED */
-  #grantFlight: { hsid: string; target: boolean; since: number } | null = null;
+  #grantFlight: { hsid: string; target: boolean; since: number; id: number } | null = null;
+  #grantFlights = 0;
   #grantTimer: unknown = null;
   /** the attr digest the mod answered at its last hash point (recorded only: an attr-only mismatch is E3's line) */
   #attr: { seq: number; attr: string } | null = null;
@@ -331,10 +341,10 @@ export class DimSession {
   #selectNext: { ids: string[]; g: Gesture } | null = null;
   #selectSent: string | null = '[]';
   /** recent DELETES by another hand: node id → who (agent label and session, or null for a person / unknown) */
-  readonly #removedBy = new Map<string, { agent: string | null; hsid: string | null }>();
+  readonly #removedBy = new Map<string, { who: 'agent' | 'self' | 'person' | 'unknown'; agent: string | null; hsid: string | null }>();
 
   /** @internal made by `DimSessions.open` / `resume` only */
-  constructor(x: Internals, o: { dim: string; hsid: string; link: DimLink | null }, start: { resume: true } | { resume: false; gesture: Gesture | null; args: Record<string, unknown>; attach: boolean }) {
+  constructor(x: Internals, o: { dim: string; hsid: string; link: DimLink | null; backlog?: boolean }, start: { resume: true } | { resume: false; gesture: Gesture | null; args: Record<string, unknown>; attach: boolean }) {
     this.#x = x;
     this.dim = o.dim;
     this.hsid = o.hsid;
@@ -358,7 +368,8 @@ export class DimSession {
       this.#opened = Promise.resolve(true);
       // a resumed session is built once the backlog is read (ui/app.ts connect): the grant rows written while the
       // link was down, by another connection too, are in the store now, so the map has arrived (Aegis ruling 3)
-      this.#grantsReady = o.link !== null;
+      this.#grantsReady = o.link !== null && o.backlog !== false;
+      this.#noteShown();
       this.#check();
     } else {
       this.#phase = 'opening';
@@ -450,7 +461,9 @@ export class DimSession {
       this.#openOk = true;
       // Aegis D1: a session that holds the grant by default is told so ONCE, after the board confirmed it (never
       // sent with the attach: attaching sends no grant)
-      if (!before && this.#grantsReady && this.#effectiveWrite(this.hsid)) this.#emit({ about: 'grant', code: 'grant-default', field: 'write', why: null, lost: 0, hsid: this.hsid, write: true });
+      this.#noteShown();
+      // (aegis N-9: said only when this open made the dimension, the first attach; never on a reopen)
+      if (!before && r.created === true && this.#grantsReady && this.#effectiveWrite(this.hsid)) this.#emit({ about: 'grant', code: 'grant-default', field: 'write', why: null, lost: 0, hsid: this.hsid, write: true });
       this.#check();
       this.#emit(null);
       return true;
@@ -709,17 +722,25 @@ export class DimSession {
   #takeGrants(r: Record<string, unknown>): void {
     const list = r.grants;
     if (!Array.isArray(list)) return;
+    const seq = Number.isSafeInteger(r.seq) ? (r.seq as number) : 0;
+    // aegis I-2: an answer older than the one held is not taken; the answer stands until a row LATER than its own
+    // seq (it may arrive before its own row)
+    if (this.#grantAnswer && seq < this.#grantAnswer.seq) return;
     const map = new Map<string, boolean>();
     for (const g of list) if (isPlainObject(g) && typeof g.hsid === 'string' && typeof g.write === 'boolean') map.set(g.hsid, g.write);
-    this.#grantAnswer = { rowsAt: this.#x.deps.store.lastSeqOf(this.dim), map };
+    this.#grantAnswer = { seq, rowsAt: Math.max(this.#x.deps.store.lastSeqOf(this.dim), seq), map };
+    this.#unsure = null;
     if (this.#x.link() !== null) this.#grantsReady = true;
   }
 
-  /** What the board last confirmed for `hsid`: the mod's answer until the store holds a later row, then the rows. */
+  /** What the board last confirmed for `hsid`: the mod's answer, then any grant row later than it. */
   #effectiveWrite(hsid: string): boolean {
     const store = this.#x.deps.store;
     const a = this.#grantAnswer;
-    if (a && store.lastSeqOf(this.dim) <= a.rowsAt) return a.map.get(hsid) ?? false;
+    // aegis I-2: the answer's map, with only the grant rows LATER than the answer folded over it (the answer may
+    // arrive before its own row; an op row in between changes no grant)
+    const row = store.grants(this.dim).get(hsid);
+    if (a && a.map.has(hsid) && !(row && row.seq > a.seq)) return a.map.get(hsid)!;
     return dimMayDraw(store.stateAt(this.dim), store.grants(this.dim), hsid);
   }
 
@@ -739,7 +760,7 @@ export class DimSession {
     const f = this.#grantFlight;
     return st.attached.map((hsid) => {
       const write = this.#effectiveWrite(hsid);
-      const state: DimGrantKey['state'] = down ? 'down' : !this.#grantsReady || this.#phase !== 'open' ? 'unknown' : !this.#x.deps.live(hsid) ? 'idle' : f && f.hsid === hsid ? 'pending' : f ? 'busy' : 'live';
+      const state: DimGrantKey['state'] = down ? 'down' : !this.#grantsReady || this.#phase !== 'open' ? 'unknown' : !this.#x.deps.live(hsid) ? 'idle' : f && f.hsid === hsid ? 'pending' : this.#unsure === hsid ? 'unsure' : f ? 'busy' : 'live';
       return { hsid, write, state, since: f ? f.since : null };
     });
   }
@@ -759,7 +780,8 @@ export class DimSession {
     if (!g) return false;
     const target = !key.write;
     const d = this.#x.deps;
-    this.#grantFlight = { hsid, target, since: d.now() };
+    const flight = { hsid, target, since: d.now(), id: ++this.#grantFlights };
+    this.#grantFlight = flight;
     // the 300 ms quiet: the working look is drawn only once the change is slow
     if (this.#grantTimer !== null) d.clearTimer(this.#grantTimer);
     this.#grantTimer = d.setTimer(() => {
@@ -769,14 +791,19 @@ export class DimSession {
       // a board that never answers: the key goes back to what the rows say, said once (never left pending)
       this.#grantTimer = d.setTimer(() => {
         this.#grantTimer = null;
-        done(false, 'no-answer');
+        if (this.#dead || this.#grantFlight !== flight) return;
+        // aegis I-3: not known whether it changed; the key stays disabled until a row or an answer says
+        this.#grantFlight = null;
+        this.#unsure = hsid;
+        this.#emit({ about: 'grant', code: 'grant-unsure', field: 'write', why: 'no-answer', lost: 0, hsid, write: this.#effectiveWrite(hsid) });
       }, DIM_LIVE_TIMEOUT_MS);
     }, DIM_GRANT_QUIET_MS);
     const done = (ok: boolean, why: string | null): void => {
       if (this.#dead) return;
-      const was = this.#grantFlight;
-      if (!was || was.hsid !== hsid) return;
+      // (aegis N-3: the flight's identity, not its session: a later press for the same session is another flight)
+      if (this.#grantFlight !== flight) return;
       this.#grantFlight = null;
+      this.#shown.set(hsid, this.#effectiveWrite(hsid));
       if (this.#grantTimer !== null) d.clearTimer(this.#grantTimer);
       this.#grantTimer = null;
       if (ok) this.#emit({ about: 'grant', code: this.#effectiveWrite(hsid) ? 'grant-on' : 'grant-off', field: 'write', why: null, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
@@ -786,7 +813,12 @@ export class DimSession {
     void this.#command(g, 'dim.grant', { write: target }, false, null, hsid)
       .then((r) => {
         if (isPlainObject(r) && r.ok === true) {
+          // a late answer still says what the board holds (it ends an unsure key)
           this.#takeGrants(r);
+          if (this.#grantFlight !== flight && !this.#dead) {
+            this.#noteShown();
+            return this.#emit(null);
+          }
           return done(true, null);
         }
         done(false, refusalCodeOf(r));
@@ -839,15 +871,42 @@ export class DimSession {
     const g = gestureOf(cause, Date.now());
     if (!g) return;
     this.#checkDue = false;
+    // aegis N-1: a refused or failed check leaves the point due, for the next press
+    const again = (): void => void (!this.#dead && (this.#checkDue = true));
     void this.#command(g, 'dim.check', {})
       .then((r) => {
-        if (this.#dead || !isPlainObject(r) || r.ok !== true || !Number.isSafeInteger(r.seq) || typeof r.hash !== 'string') return;
+        if (this.#dead) return;
+        if (!isPlainObject(r) || r.ok !== true || !Number.isSafeInteger(r.seq) || typeof r.hash !== 'string') return again();
         this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
         this.#hashPoint(r);
         this.#check();
         this.#emit(null);
       })
-      .catch(() => undefined);
+      .catch(again);
+  }
+
+  /** Remember what each key shows as confirmed now (no line: this page's own open, answer or press). */
+  #noteShown(): void {
+    for (const hsid of this.#x.deps.store.stateAt(this.dim).attached) this.#shown.set(hsid, this.#effectiveWrite(hsid));
+  }
+
+  /**
+   * @internal grant rows of this board arrived. An unsure key is settled; a key whose confirmed state flipped by a
+   * row that is not this page's own change in flight is SPOKEN once (aegis I-3: another page stopped an agent).
+   */
+  grantRows(): void {
+    if (this.#dead) return;
+    this.#unsure = null;
+    if (this.#grantsReady) {
+      for (const hsid of this.#x.deps.store.stateAt(this.dim).attached) {
+        const now = this.#effectiveWrite(hsid);
+        const was = this.#shown.get(hsid);
+        this.#shown.set(hsid, now);
+        if (was === undefined || was === now || this.#grantFlight?.hsid === hsid) continue;
+        this.#emit({ about: 'grant', code: now ? 'grant-on' : 'grant-off', field: 'write', why: 'elsewhere', lost: 0, hsid, write: now });
+      }
+    }
+    this.#emit(null);
   }
 
   /** @internal an agent turn closed (its `turn.result` row came): one arrival line, and its hash point is due */
@@ -867,19 +926,25 @@ export class DimSession {
     }
   }
 
-  /** A row of this board: a delete by another hand is remembered, so a removed-mid-drag can name who removed it. */
+  /**
+   * A row of this board: EVERY delete is remembered with who made it (aegis I-7): an agent (a tool surface and a
+   * well-formed label), the person on another of their pages (`self`), another person, or `unknown` (no stamp). An
+   * add of that id (a restore) forgets it.
+   */
   #noteRemover(row: { kind: string; payload: unknown }): void {
     const p = isPlainObject(row.payload) ? row.payload : null;
     if (!p || !Array.isArray(p.ops)) return;
     const r = isPlainObject(p.relayedFor) ? p.relayedFor : null;
-    const agent = r && typeof r.agent === 'string' ? r.agent : null;
-    // mine (this page's principal on the GUI, no agent) is not another hand
-    if (!agent && r && r.principal === this.#me.principal && r.surface === 'gui') return;
+    const surface = r ? r.surface : undefined;
+    const label = r && (surface === 'bridge' || surface === 'voice') && typeof r.agent === 'string' && DIM_AGENT_LABEL.test(r.agent) ? r.agent : null;
+    const who: 'agent' | 'self' | 'person' | 'unknown' = label ? 'agent' : !r || typeof r.principal !== 'string' || r.agent !== undefined ? 'unknown' : r.principal === this.#me.principal ? 'self' : surface === 'gui' ? 'person' : 'unknown';
     const hsid = r && typeof r.hsid === 'string' ? r.hsid : null;
     for (const op of p.ops) {
-      if (!isPlainObject(op) || op.type !== 'delete' || typeof op.id !== 'string') continue;
+      if (!isPlainObject(op)) continue;
+      if (op.type === 'add' && isPlainObject(op.node) && typeof op.node.id === 'string') this.#removedBy.delete(op.node.id);
+      if (op.type !== 'delete' || typeof op.id !== 'string') continue;
       this.#removedBy.delete(op.id);
-      this.#removedBy.set(op.id, { agent, hsid });
+      this.#removedBy.set(op.id, { who, agent: label, hsid });
       if (this.#removedBy.size > 256) this.#removedBy.delete(this.#removedBy.keys().next().value as string);
     }
   }
@@ -891,7 +956,7 @@ export class DimSession {
   gone(id: string, change: 'moving' | 'changing' = 'moving'): void {
     if (this.#dead) return;
     const by = this.#removedBy.get(id) ?? null;
-    this.#emit({ about: 'hand', code: 'gone', field: 'ops', why: null, lost: 0, agent: by ? by.agent : null, byHsid: by ? by.hsid : null, change });
+    this.#emit({ about: 'hand', code: 'gone', field: 'ops', why: null, lost: 0, who: by ? by.who : 'unknown', agent: by ? by.agent : null, byHsid: by ? by.hsid : null, change });
   }
 
   /** Cmd/Ctrl+Z in the board, with its own keydown. */
@@ -1070,7 +1135,7 @@ export class DimSessions {
    * The connection is up: `link.client` is the new `GnomonClient`. Every session that was open is DESTROYED and
    * built again as a resumed one (no command is sent); the new sessions are returned, and told as `rebuilt`.
    */
-  connect(link: DimLink): DimSession[] {
+  connect(link: DimLink, o: { backlog?: boolean } = {}): DimSession[] {
     this.#link = link;
     const out: DimSession[] = [];
     for (const old of [...this.#sessions.values()]) {
@@ -1079,7 +1144,7 @@ export class DimSessions {
       const was = old.openedOk;
       old.destroy('link');
       if (!was) continue;
-      const session = this.resume({ dim, hsid });
+      const session = this.resume({ dim, hsid, backlog: o.backlog !== false });
       session.startView = old.lastView;
       // the link is back: said once on the new session, with what was pending and went with the old connection
       session.note({ about: 'link', code: old.lost > 0 ? 'not-saved' : 'reconnected', field: 'ops', why: null, lost: old.lost });
@@ -1114,7 +1179,7 @@ export class DimSessions {
     const fresh = store.apply(flat);
     for (const [dim, added] of fresh) this.#sessions.get(dim)?.rows(added);
     // a grant row moved a board's grant map: its keys are drawn again (a pending press ends on the answer or here)
-    for (const dim of store.grantsMoved()) if (!fresh.has(dim)) this.#sessions.get(dim)?.rows([]);
+    for (const dim of store.grantsMoved()) this.#sessions.get(dim)?.grantRows();
     // an agent turn ended (S1.4 P4b): what it did on each open board is said once, and its hash point is due
     for (const r of flat) {
       if (!isPlainObject(r) || r.kind !== 'turn.result' || !isPlainObject(r.payload)) continue;
@@ -1182,10 +1247,11 @@ export class DimSessions {
   }
 
   /** A session for a dimension that is already open in the log (after a reconnect): nothing is sent. */
-  resume(o: { dim: string; hsid: string }): DimSession {
+  resume(o: { dim: string; hsid: string; backlog?: boolean }): DimSession {
     const have = this.#sessions.get(o.dim);
     if (have) return have;
-    return this.#add(new DimSession(this.#x, { dim: o.dim, hsid: o.hsid, link: this.#link }, { resume: true }));
+    // aegis I-6: a session resumed on a connection whose backlog read FAILED has no grant map: its keys stay disabled
+    return this.#add(new DimSession(this.#x, { dim: o.dim, hsid: o.hsid, link: this.#link, backlog: o.backlog !== false }, { resume: true }));
   }
 
   #add(s: DimSession): DimSession {

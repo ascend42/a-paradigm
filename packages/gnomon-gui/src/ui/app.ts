@@ -2183,14 +2183,17 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
   paintVoice();
+  // aegis I-6: only a backlog read to its end gives the rebuilt boards their grant map
+  let backlog = true;
   try {
     await subscribe(c);
   } catch (err) {
+    backlog = false;
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', 'fail');
   }
   // the backlog is read: the sessions get THIS socket's client object itself (a gesture stamp is numbered per client
   // object), and an open dimension is rebuilt from the log as it now stands. Never for a socket that already closed.
-  if (client === c) dimSessions.connect({ client: c, principal: out.session.principal, connId: out.session.connId });
+  if (client === c) dimSessions.connect({ client: c, principal: out.session.principal, connId: out.session.connId }, { backlog });
   boardDock.repaint();
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
   offerLiveSince = store.head; // #gui-offer-slip: a slip shown after this slides in

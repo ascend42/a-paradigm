@@ -325,6 +325,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       /** The person is no longer acting: nothing stays armed for a later engine change. */
       const disarm = (): void => {
         touched = false;
+        reshaped = false;
         cause = null;
         handled.clear();
       };
@@ -371,6 +372,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       const seen = new Map<string, Record<string, unknown>>();
       /** The text being typed, as it was when it was opened: a text opened and left as it was is not an edit. */
       let typing: { id: string; containerId: string | null; text: string } | null = null;
+      /** S1.4 P4b (mika F5, aegis N-5): the gesture resized, rotated, typed into or restyled a mark, latched until its report */
+      let reshaped = false;
       /** Elements the engine changed around a text that was opened and not changed (its box refitted): not the person's. */
       const untouched = new Set<string>();
       /** Only an event the browser itself made is a person's input (`isTrusted`). A probe build alone also honours the mount option: see the define. */
@@ -750,7 +753,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
         }
         goneHeld.clear();
         if (goneNow.length > 0) {
-          const change = cause && cause.type === 'pointerup' && !typing ? 'moving' : 'changing';
+          const change = typing || reshaped ? 'changing' : 'moving';
           for (const id of goneNow) for (const l of [...goneListeners]) l({ what: 'gone', id, change });
         }
         // a mark in hand is compared with the node it was DRAWN from, so a remote change that landed during the
@@ -840,6 +843,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           typing = null;
         }
         if (touched) note(appState as never);
+        if (touched && (appState.isResizing === true || appState.isRotating === true || appState.editingTextElement != null)) reshaped = true;
         if (repaint) queueMicrotask(recolourAll);
         announce();
         sceneChanged();
@@ -1171,6 +1175,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           announce();
         },
         setStyle(next: Partial<BoardStyle>, by: Event | null = null) {
+          if (by) reshaped = true;
           live();
           if (next.line !== undefined) {
             const c = contentColourCheck(next.line, 'line');
