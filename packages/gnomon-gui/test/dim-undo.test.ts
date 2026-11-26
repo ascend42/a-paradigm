@@ -217,3 +217,23 @@ describe('#gui-dim-undo planUndo (Aegis B3)', () => {
     expect(quiet.ok && quiet.ops[1]).toEqual({ type: 'update', id: ULID(4), patch: { from: ULID(500) } });
   });
 });
+
+describe('#gui-dim-undo the page never writes an undo marker (Aegis ruling on P4a)', () => {
+  it('no plan, and no op in it, carries an own `undo` key: even undoing a delete of an AGENT\'s mark (E3 routes that through the mod\'s dim.undo)', () => {
+    const withAgent = foldDim([opRow(3, [{ type: 'add', node: { id: ULID(9), kind: 'stroke', x: 0, y: 0, z: 'Z', points: [0, 0, 40, 0] } }], AGENT)], undefined, base());
+    for (const id of [ULID(9), ULID(3)]) {
+      const del: DimOp[] = [{ type: 'delete', id }];
+      const after = apply(withAgent, del, 20);
+      const plan = planUndo({ before: withAgent, rows: [del], current: after, actor: ME, mint: minter() });
+      expect(plan.ok, id).toBe(true);
+      expect(Object.prototype.hasOwnProperty.call(plan, 'undo')).toBe(false);
+      for (const op of (plan as { ops: DimOp[] }).ops) {
+        expect(Object.prototype.hasOwnProperty.call(op, 'undo'), JSON.stringify(op)).toBe(false);
+        if (op.type === 'add') expect(Object.prototype.hasOwnProperty.call(op.node, 'undo')).toBe(false);
+      }
+      // and it re-adds under a new id, as the person's row (the fold sets no restoredFrom without a marker)
+      const back = apply(after, (plan as { ops: DimOp[] }).ops, 21);
+      expect([...back.nodes.values()].every((n) => n.restoredFrom === undefined)).toBe(true);
+    }
+  });
+});

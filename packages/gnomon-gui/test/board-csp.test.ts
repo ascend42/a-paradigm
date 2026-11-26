@@ -81,7 +81,7 @@ describe.skipIf(!!process.env.CI)('G-DDL-06 the shipped board under the unchange
     if (wanted.length === 0) console.warn('G-DDL-06: no Chromium-family browser or WKWebView on this machine; the engine runs did not happen here'); // eslint-disable-line no-console
   });
 
-  it.skipIf(wanted.length === 0)('no CSP refusal across load, draw, the tool walk, select-then-Library and PNG export', async () => {
+  it.skipIf(wanted.length === 0)('no CSP refusal across load, draw, the tool walk, select-then-the-Library-is-absent and PNG export', async () => {
     const out = (await runBoardUnderCsp({ engines: wanted, runs: 1, timeoutMs: 90_000 })) as { csp: string; engines: Record<string, EngineRow> };
     expect(out.csp).not.toMatch(/unsafe|data:/);
     expect(Object.keys(out.engines).sort()).toEqual(wanted.map((e) => e.name).sort());
@@ -104,6 +104,11 @@ describe.skipIf(!!process.env.CI)('G-DDL-06 the shipped board under the unchange
       // the eraser and laser (whose cursors were data: URLs) are no longer tools: the handle refuses them
       expect(r.refusedTools?.eraser, name).toBe('refused');
       expect(r.refusedTools?.laser, name).toBe('refused');
+      // S1.4 P4a: the Library is out of the bytes (patch library-components-stubbed). The walk's Library step now
+      // proves it cannot be opened at all: no trigger to press, and no Library panel or grid after the press and the
+      // command palette (the engine's own way to the Library) were tried
+      expect(r.libraryTrigger, `${name}: a Library key on the page`).toBe(false);
+      expect(r.libraryOpen, `${name}: a Library panel opened`).toBe(false);
       expect(e.clean, name).toBe(true);
       // G-DDL-07, live half (boards S1.1), on the same run: one launch per engine
       checkLiveReskin(name, e.family, r as LiveRun);

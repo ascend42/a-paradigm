@@ -326,7 +326,13 @@ components:
       vector published in the client API descriptor (G-DDL-04). WRITES ARE CLOSED:
       validateDimOps refuses by name (DIM_REFUSAL_CODES, one fixed `fix` sentence per
       code, input never echoed) an unknown or non-core kind, an unknown field, a
-      wrong type or range, a failing colour (colour-bad, may name a swatch), a
+      wrong type or range, a failing colour (colour-bad, may name a swatch; S1.4
+      P0b: color and fill are checked by role and contrast, a text mark's color at
+      the text floor, and the line on its own fill as the node would stand after
+      the op, refused on the field being written, the line when an add writes
+      both; a contrast refusal's fix is contentContrastFix, a fixed sentence
+      naming the offered swatch, not hashed, and DIM_REFUSAL_CODES did not move;
+      the refusal carries contrast {why, night}, a closed word the GUI names), a
       dangling from / to / parent, an edit by an actor that is not a well-formed
       hand (dimMayEdit; since S1.4 E0 any hand may edit any mark), an edit
       of a non-core node, more than 64 ops, and any secret match (whole batch
@@ -463,15 +469,25 @@ components:
       with no exemption (custom:#16150F as a fill is refused). contentPaletteProblems
       validates the tables; contrastRatio is the WCAG 2 ratio from the same table.
       Pure, no DOM, no node:*.
+      CONTRAST RULE (S1.4 P0b, design content_palette.contrast_rule, Luna
+      2026-11-25 on Aegis S1.2 nit 6): contrastClears is the WCAG 2 ratio from the
+      same table, luminance quantised (LUMINANCE_QUANTUM; the lighter down, the
+      darker up) and compared as integers with no rounding up (4.499 fails 4.5).
+      A day value on the day surfaces AND its night transform on the night
+      surfaces. CONTENT_CONTRAST_FLOORS: a line 3.0 against surface.ground and
+      surface.sheet, the colour of a TEXT mark 4.5 (contentColourCheck's third
+      argument {text: true}), a fill keeps 4.5 for text.primary; a neutral line is
+      exempt from the distance rule only. contentPairCheck: a mark's line on its
+      own fill 3.0 in both themes, judged on the field being written (offer ink for
+      a line, paper for a fill). A contrast refusal carries why (faint-line,
+      faint-text, faint-fill, pair-line, pair-fill) and night (only the night value
+      fails); CONTENT_CONTRAST_WORDS are the tray's words and contentContrastFix
+      the agent's fixed sentence. resolveContentPair is the paint-time recheck (a
+      failing pair draws its line as ink). Every named token passes every part
+      (contentPaletteProblems checks it). Consequence: orange #FF8800, gold #FFD700
+      and #1E90FF pass as fills and not as lines.
       DEFERRED, tracked here: to S1.3, running the vectors and the swatch night
-      table in Chrome and WKWebView (they run in Node only today). NOT BUILT in
-      S1.4 P0, waiting for a design ruling (Aegis S1.2 nit 6): a contrast floor
-      for a custom LINE colour (custom:#F8F5EE passes as a line today and is 1.00
-      on the day sheet) and enforcement of CONTENT_EDGE_ON_FILL_MIN_RATIO (a
-      constant only; custom:#404040 passes as a fill and ink on it is 1.76 by
-      day). Open: the ratio and the surface for the line floor (the nit says the
-      sheet, the design record measures on the ground), and where and for whom
-      the edge-on-fill rule is enforced.
+      table in Chrome and WKWebView (they run in Node only today).
     path: src/content-palette.ts
     type: module
     tags: [gnomon, contracts, dimension, colour, paradigm-8]

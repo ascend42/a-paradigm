@@ -4,6 +4,7 @@
  * The board leaf's words and states (design component board-leaf). PURE: no DOM. Copy is the design's, verbatim;
  * the one line the design does not give (an image was refused) is marked.
  */
+import { contentContrastWords, type ContentContrastWhy } from '@a-company/gnomon-contracts';
 export type LeafLoad = 'loading' | 'ready' | 'failed';
 export type LeafState = 'loading' | 'failed' | 'too-short' | 'yielded' | 'empty' | 'open';
 
@@ -106,6 +107,9 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'not-sent' || n.code === 'gesture-refused') return 'That change wasn’t sent · do it again';
   // (a command that left and was never answered may have been written: the line does not say it was not)
   if (n.code === 'timeout' || n.code === 'no-answer') return n.lost > 1 ? `${n.lost} changes may not be saved · fold and reopen to check` : 'That change may not be saved · fold and reopen to check';
+  // a colour the contrast rule refused: the line says which part, in the tray's own words (Mika P0b S2)
+  const contrast = n.code === 'colour-bad' && typeof n.why === 'string' ? /^(faint-line|faint-text|faint-fill|pair-line|pair-fill)(:night)?$/.exec(n.why) : null;
+  if (contrast) return `That colour wasn’t kept · ${contentContrastWords(contrast[1] as ContentContrastWhy, !!contrast[2])}`;
   return n.lost > 1 ? `${n.lost} changes weren’t kept · the board is as it was` : 'That change wasn’t kept · the board is as it was';
 }
 

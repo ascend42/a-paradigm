@@ -883,7 +883,8 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   // ONE validation of the whole batch (C5): a secret anywhere refuses everything before the first append
   const v = validateDimOps(entry.state, kept.map((i) => sugar.ops[i]), { cls: 'agent', principal: actor.principal, agent: actor.agent });
   const at = (r) => (r.index >= 0 && r.index < kept.length ? kept[r.index] : -1);
-  const refused = v.refused.map((r) => refusedEntry(at(r), r.field, r.code, sugar.unresolved.get(at(r))?.has(r.field) ? NEW_KEY_FIX : undefined));
+  // the validator's own fix is kept: a contrast refusal's sentence names its offered swatch (Aegis P0b F1)
+  const refused = v.refused.map((r) => refusedEntry(at(r), r.field, r.code, sugar.unresolved.get(at(r))?.has(r.field) ? NEW_KEY_FIX : r.fix));
   // the field a stale op is refused on: a move names its marks in `ids`, an update or delete in `id`
   for (const i of stale) refused.push(refusedEntry(i, own(plain(sugar.ops[i]) ?? {}, 'type') === 'move' ? 'ids' : 'id', 'changed-since'));
   if (v.secret) return finishRefused(host, dim, entry, actor, refused, 'secret');

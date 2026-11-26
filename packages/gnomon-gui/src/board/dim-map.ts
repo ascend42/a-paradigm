@@ -24,7 +24,7 @@
 import { CONTENT_DEFAULTS, CONTENT_SWATCH_NAME_PATTERN, DIM_CORE_KINDS, DIM_LIMITS, DIM_Z_PATTERN, dimFallbackLabel, dimZCompare, dimZPlace, isContentColour } from '@a-company/gnomon-contracts';
 import type { DimCoreKind, DimFoldNode, DimNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_WEIGHTS, type BoardTheme } from '../core/board.js';
-import { fillColour, lineColour } from './normal.js';
+import { fillColour, lineColour, paintOf } from './normal.js';
 
 /** Injected by the handle, which mints the ULIDs: a stable two-way id table. */
 export interface DimMapIds {
@@ -88,7 +88,35 @@ export interface DimMapStyle {
  * through normalOf and reading it back yields no op.
  */
 const KIND_TYPE: Readonly<Record<DimCoreKind, string>> = { stroke: 'freedraw', rect: 'rectangle', ellipse: 'ellipse', diamond: 'diamond', arrow: 'arrow', text: 'text', frame: 'frame' };
-const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map(DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k]));
+/**
+ * S1.4 P4a (design author-seal strokes.agent-stroke; Aegis, S1.4 draft question 6): the engine type of a stroke a
+ * hand that is NOT the person's drew. The engine dashes a `line` along its whole length and cannot dash a freehand
+ * stroke (a filled outline), so the map alone chooses `line`, from the stamped author, for that node only. The node
+ * stays kind `stroke`. A `line` element reads back as a stroke ONLY when its engine id is such a node of the state
+ * it was rendered from (`elementsToOps`); every other `line` is no mark and never yields a node.
+ */
+export const DIM_AGENT_STROKE_TYPE = 'line';
+const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map([...DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k] as const), [DIM_AGENT_STROKE_TYPE, 'stroke'] as const]);
+/** True when a folded node is a stroke drawn as the engine's dashed `line`: a drawable stroke whose `by` is not human (fails closed). */
+export function dimIsAgentStroke(n: DimFoldNode | undefined): boolean {
+  return !!n && own(n.node, 'kind') === 'stroke' && drawable(n.node) && (dimHandOf(n) as { cls?: unknown } | undefined)?.cls !== 'human';
+}
+/**
+ * The hand a mark is DRAWN in (S1.4 E0; Aegis ruling on P4a). A mark an undo re-added has two hands: the row's
+ * stamped `by` and its original `restoredFrom.by` (read by the fold from the row's undo marker, never from a node
+ * field). It is drawn as the person's ONLY when both are human; otherwise in the hand that is not: `by` when `by` is
+ * not human, else `restoredFrom.by`. An unknown hand on either side is never human. So an agent's mark a person
+ * deleted and undid stays the agent's, and a person's mark an agent deleted and undid is drawn as the agent's: never
+ * solid while any hand in it is not the person's.
+ */
+export function dimHandOf(n: DimFoldNode): DimFoldNode['by'] {
+  // (Aegis) the restore's PRESENCE decides: a restore whose hand is missing counts as the unknown hand, never `by`
+  if (n.restoredFrom === undefined || n.restoredFrom === null) return n.by;
+  const rf = (n.restoredFrom.by as { cls?: unknown } | undefined)?.cls !== undefined ? n.restoredFrom.by : ({ cls: 'unknown', principal: 'unknown' } as DimFoldNode['by']);
+  const human = (b: unknown): boolean => (b as { cls?: unknown } | undefined)?.cls === 'human';
+  if (human(n.by) && human(rf)) return n.by;
+  return !human(n.by) ? n.by : rf;
+}
 const FILL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond']);
 const LABEL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond', 'arrow']);
 const LABEL_TYPES: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow']);
@@ -143,7 +171,7 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
   const node = n.node;
   const id = ids.engineOf(nodeId);
   // fails closed: solid only for a hand the fold calls human; a missing `by` or a class this build does not know is dashed
-  const strokeStyle = (n.by as { cls?: unknown } | undefined)?.cls === 'human' ? 'solid' : 'dashed';
+  const strokeStyle = (dimHandOf(n) as { cls?: unknown } | undefined)?.cls === 'human' ? 'solid' : 'dashed';
   const x0 = num(own(node, 'x')) ? Math.round(own(node, 'x') as number) : 0;
   const y0 = num(own(node, 'y')) ? Math.round(own(node, 'y') as number) : 0;
   const parentId = own(node, 'parent');
@@ -168,14 +196,14 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
   const kind = node.kind;
   const color = own(node, 'color');
   const fill = own(node, 'fill');
-  const tokens = { line: isContentColour(color, 'line') ? color : CONTENT_DEFAULTS.line, fill: FILL_KINDS.has(kind) && isContentColour(fill, 'fill') ? fill : null };
+  const tokens = { line: isContentColour(color, 'line', { text: kind === 'text' }) ? color : CONTENT_DEFAULTS.line, fill: FILL_KINDS.has(kind) && isContentColour(fill, 'fill') ? fill : null };
   const weight = own(node, 'weight');
   const rot = own(node, 'rot');
   let mid: [number, number] | null = null;
   const main: EngineElement = {
-    id, type: KIND_TYPE[kind], x: x0, y: y0, width: 0, height: 0,
+    id, type: kind === 'stroke' && strokeStyle === 'dashed' ? DIM_AGENT_STROKE_TYPE : KIND_TYPE[kind], x: x0, y: y0, width: 0, height: 0,
     angle: num(rot) ? (rot / 1800) * Math.PI : 0,
-    strokeColor: lineColour(tokens.line, theme), backgroundColor: fillColour(tokens.fill, theme),
+    ...paintOf(KIND_TYPE[kind], tokens.line, tokens.fill, theme),
     strokeWidth: kind === 'text' || kind === 'frame' ? BOARD_WEIGHTS.fine : (WEIGHT_WIDTHS[(weight === 2 || weight === 3 ? weight : 1) - 1] as number),
     strokeStyle,
     frameId: kind === 'frame' ? null : frameId,
@@ -363,6 +391,8 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
   const mains = new Map<string, EngineElementIn>();
   const labels = new Map<string, string>();
   const order: EngineElementIn[] = [];
+  const agentLines = new Set<string>();
+  for (const [nodeId, n] of prev.nodes) if (dimIsAgentStroke(n)) agentLines.add(ids.engineOf(nodeId));
   // a text is a label only of a live mark that can carry one; a `containerId` naming nothing is no container
   const carriers = new Set<string>();
   for (const el of elements) if (el && !el.isDeleted && typeof el.id === 'string' && LABEL_TYPES.has(el.type)) carriers.add(el.id);
@@ -373,6 +403,8 @@ export function elementsToOps(prev: DimState, elements: readonly EngineElementIn
       continue;
     }
     if (!TYPE_KIND.has(el.type) || mains.has(el.id)) continue;
+    // a `line` is a mark only where the rendered state has an agent's (or an unknown hand's) stroke under that very id
+    if (el.type === DIM_AGENT_STROKE_TYPE && !agentLines.has(el.id)) continue;
     mains.set(el.id, el);
     order.push(el);
   }

@@ -240,7 +240,7 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:b9127f5f0596e275dd3b4e4735ca83b84289581bf840b406be4b6f028590844b');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:834c7a96c6a56c196137968ab44fad98fd9e0142b7ee1f390a8cee74f9b87583');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
@@ -312,7 +312,7 @@ describe('G-WEB-08 bundle pin', () => {
       // fails here and is read before it ships. `dangerouslySetInnerHTML:` counts props PASSED (0: the 13 bare
       // mentions are React's own prop handling); Gnomon's board code hands the engine no HTML.
       const sinks = { innerHTML: (s.match(/\.innerHTML\b/g) ?? []).length, outerHTML: (s.match(/\.outerHTML\b/g) ?? []).length, insertAdjacentHTML: (s.match(/insertAdjacentHTML/g) ?? []).length, dangerouslySetInnerHTMLProp: (s.match(/dangerouslySetInnerHTML:/g) ?? []).length };
-      if (n === 'board/board.js') expect(sinks, n).toEqual({ innerHTML: 7, outerHTML: 5, insertAdjacentHTML: 0, dangerouslySetInnerHTMLProp: 0 });
+      if (n === 'board/board.js') expect(sinks, n).toEqual({ innerHTML: 4, outerHTML: 3, insertAdjacentHTML: 0, dangerouslySetInnerHTMLProp: 0 }); // S1.4 P4a: the Library unit's sinks left with library-components-stubbed
       else expect(s, n).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }
