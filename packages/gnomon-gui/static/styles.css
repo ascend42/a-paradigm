@@ -1933,8 +1933,8 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-menu .bd-mi kbd { white-space: nowrap; margin-left: auto; font: inherit; font-size: var(--fs-label); color: var(--sec); }
 .bd-rail.yielded { background: var(--sheet); }
 .bd-rail.yielded kbd { visibility: hidden; }
-/* T-2026-11-25-004: the shortest rail (core/board-rail.ts `tight`) is its keys alone: no graduations, ticks or spacer */
-.bd-rail.tight { background: var(--sheet); }
+/* design-foot (mika S1): the shortest rail (core/board-rail.ts `tight`) drops its ticks and spacer and KEEPS its
+   graduations (the rail's own background): a bare strip is the yielded rail's look */
 /* Mika R3: the head and the keep line never give way either. A board that lost height in ONE step squeezed the keep
    line under the old, taller rail; the leaf then read its room from the squeezed line and kept a rail too tall for it. */
 .bd-leaf > .bd-head, .bd-leaf > .bd-keep { flex: none; }

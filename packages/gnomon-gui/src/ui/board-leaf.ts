@@ -17,7 +17,7 @@ import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, Board
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
 import { BOARD_MIN_HEIGHT, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
-import { RAIL_GROUPS, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
+import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
 import { customEntry, MARKER_OFF_TITLE, TRAY_FILL, TRAY_LINE, TRAY_WEIGHTS, wellName } from '../core/board-tray.js';
 
@@ -375,9 +375,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     railKey = key;
     const kids: Node[] = [];
     let first = true;
-    for (const group of RAIL_GROUPS) {
-      const all = group.filter((t) => lay.visible.includes(t));
-      if (all.length === 0) continue;
+    // the groups of the unchosen layout: a chosen folded tool stands in the row of the tool it displaced, inside that
+    // group's ticks, and no tick is drawn before it (design `fold.guest_tick`)
+    for (const all of railDrawGroups(lay)) {
       if (!first && !lay.tight) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
       first = false;
       for (const t of all) kids.push(row(off ? '' : railTool(t).letter, toolKey(railTool(t), s, off)));
@@ -417,7 +417,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (!m) return;
     const room = stage.getBoundingClientRect();
     const edge = 4;
-    m.style.maxHeight = `${Math.max(0, Math.floor(room.height - 2 * edge))}px`;
+    const avail = Math.max(0, Math.floor(room.height - 2 * edge));
+    // a menu taller than its room is cut THROUGH a row (design `menus_scroll`): whole rows and half of the next
+    m.style.maxHeight = '';
+    const items = [...m.querySelectorAll<HTMLElement>('.bd-mi')];
+    const cut = items.length > 1 ? menuCutHeight({ room: avail, natural: m.offsetHeight, first: items[0]!.offsetTop + m.clientTop, pitch: items[1]!.offsetTop - items[0]!.offsetTop, rows: items.length, tail: MENU_CUT_TAIL.oneLine }) : null;
+    // (the cut row's half shows INSIDE the border: the bottom border is added to the border-box height)
+    m.style.maxHeight = `${cut === null ? avail : cut + (m.offsetHeight - m.clientHeight - m.clientTop)}px`;
     const box = m.getBoundingClientRect();
     const over = room.top + edge - box.top;
     if (over > 0) m.style.bottom = `${-Math.ceil(over)}px`;

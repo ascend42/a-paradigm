@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOARD_TOOLS } from '../src/core/board.js';
 import { BOARD_MIN_HEIGHT } from '../src/core/board-leaf.js';
-import { RAIL_GROUPS, RAIL_HEIGHT, RAIL_TOOLS, railKeyAction, railLayout, railNeed, railTitle, railTool, zoomPercent } from '../src/core/board-rail.js';
+import { MENU_CUT_TAIL, menuCutHeight, RAIL_GROUPS, RAIL_HEIGHT, RAIL_TOOLS, railDrawGroups, railKeyAction, railLayout, railNeed, railOwnTools, railTitle, railTool, zoomPercent } from '../src/core/board-rail.js';
 
 const ON = { boardFocused: true, editingText: false, cardFocused: false };
 
@@ -109,12 +109,15 @@ describe('#gui-board rail folding (design short_windows)', () => {
   });
 
   it('a folded tool that is chosen takes the last visible tool slot, and never adds a row', () => {
-    expect(railLayout(304, 'stroke')).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'stroke'], folded: ['rect', 'ellipse', 'arrow', 'frame', 'hand'], tight: false });
-    // (Stroke is its own group: its tick costs 9px more than Ellipse did, so the specimen's 304 holds one tool fewer)
-    expect(railLayout(312, 'stroke')).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'rect', 'stroke'], folded: ['ellipse', 'arrow', 'frame', 'hand'], tight: false });
+    // (design fold.guest_tick: a guest stands in the displaced tool's row and brings no tick, so the specimen's 304
+    // holds the same five slots with Stroke chosen as with nothing chosen; it used to hold one fewer)
+    expect(railLayout(304, 'stroke')).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'rect', 'stroke'], folded: ['ellipse', 'arrow', 'frame', 'hand'], tight: false, guest: { tool: 'stroke', for: 'ellipse' } });
     // (it used to be APPENDED when the last visible tool could not fold: a seventh row that ran over the foot)
     expect(railLayout(239, 'frame').visible).toEqual(['select', 'sticky', 'frame']);
-    expect(railLayout(232, 'frame').visible).toEqual(['select', 'frame']);
+    // (from 230 to 238px a guest from another group used to cost both Sticky and Text)
+    expect(railLayout(232, 'frame').visible).toEqual(['select', 'sticky', 'frame']);
+    expect(railLayout(230, 'frame').visible).toEqual(['select', 'sticky', 'frame']);
+    expect(railLayout(304).guest).toBeUndefined();
     expect(railLayout(BOARD_MIN_HEIGHT, 'frame')).toMatchObject({ visible: ['frame'], tight: true });
     expect(railLayout(BOARD_MIN_HEIGHT, 'frame').folded).toContain('select');
     for (const h of [407, 350, 304, 260, 232, 200, 160, BOARD_MIN_HEIGHT]) for (const t of all) {
@@ -123,6 +126,32 @@ describe('#gui-board rail folding (design short_windows)', () => {
       expect([...l.visible, ...l.folded].sort(), `${h} ${t}`).toEqual([...all, 'hand'].sort());
       expect(l.visible.length, `${h} ${t}: a chosen tool never adds a row`).toBeLessThanOrEqual(railLayout(h).visible.length);
     }
+  });
+
+  it('design fold.guest_tick: a chosen tool never changes the rail\'s need or its number of slots, and no tick is drawn before a guest', () => {
+    for (let h = 0; h <= 480; h++) for (const t of [...all, 'hand'] as const) {
+      const l = railLayout(h, t);
+      expect(railNeed(l), `${h} ${t}`).toBe(railNeed(railLayout(h)));
+      expect(l.visible.length, `${h} ${t}`).toBe(railLayout(h).visible.length);
+      // the drawn groups are the unchosen layout's: the guest is inside the displaced tool's group
+      expect(railDrawGroups(l).map((g) => g.length), `${h} ${t}`).toEqual(railDrawGroups(railLayout(h)).map((g) => g.length));
+      if (l.guest) expect(railOwnTools(l), `${h} ${t}`).toEqual(railLayout(h).visible);
+    }
+    expect(railDrawGroups(railLayout(230, 'frame'))).toEqual([['select'], ['sticky', 'frame']]);
+  });
+
+  it('design menus_scroll: a menu that scrolls is cut through a row: whole rows and half a row (one-line), whole rows and 30px (two-line); none when it fits', () => {
+    // a 4px padding and a 1px border before the first row; 28px rows 2px apart
+    const m = { first: 5, pitch: 30, rows: 8, natural: 5 + 8 * 28 + 7 * 2 + 5 };
+    expect(menuCutHeight({ ...m, room: 400, tail: MENU_CUT_TAIL.oneLine })).toBeNull();
+    for (let room = 40; room < m.natural; room++) {
+      const hgt = menuCutHeight({ ...m, room, tail: MENU_CUT_TAIL.oneLine })!;
+      expect(hgt, `${room}`).toBeLessThanOrEqual(room);
+      expect((hgt - 5 - 14) % 30, `${room}: the cut is not half a row`).toBe(0);
+      expect(hgt + 30, `${room}: one more row would have fit`).toBeGreaterThan(room);
+    }
+    expect(menuCutHeight({ ...m, room: 182, tail: MENU_CUT_TAIL.oneLine })).toBe(5 + 5 * 30 + 14);
+    expect(menuCutHeight({ first: 5, pitch: 44, rows: 50, natural: 2000, room: 300, tail: MENU_CUT_TAIL.twoLine })).toBe(5 + 6 * 44 + 30);
   });
 
   it('the percent key prints whole percents', () => {

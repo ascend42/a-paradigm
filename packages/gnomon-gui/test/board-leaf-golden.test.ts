@@ -225,6 +225,36 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(acted.picked).toBe('sticky');
   }, 300_000);
 
+  it('P4b-4 rail (real paint, design fold.guest_tick, fold.tight, menus_scroll): a guest swaps one key and moves no row; the tight rail keeps its graduations; a scrolling menu is cut through a row; rows never wrap', async () => {
+    const RAIL = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const hd = ${B}; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const full = Math.round(host.getBoundingClientRect().height); const chrome = full - leaf.room(); const rail = () => host.querySelector('.bd-rail');
+      const tops = () => [...rail().children].map((k) => Math.round(k.getBoundingClientRect().top)); const ticks = () => rail().querySelectorAll('.bd-brk').length;
+      host.style.height = (chrome + 230) + 'px'; await fr(); hd.setTool('select'); await fr(); const own = { tops: tops(), ticks: ticks(), tools: [...rail().querySelectorAll('[data-tool]')].map((t) => t.dataset.tool) };
+      hd.setTool('frame'); await fr(); const guest = { tops: tops(), ticks: ticks(), tools: [...rail().querySelectorAll('[data-tool]')].map((t) => t.dataset.tool) };
+      hd.setTool('select'); host.style.height = (chrome + 150) + 'px'; await fr(); const tight = { tight: rail().classList.contains('tight'), bg: getComputedStyle(rail()).backgroundImage };
+      host.style.height = (chrome + 190) + 'px'; await fr(); return { own, guest, tight }; })()`;
+    const MENU = `(() => { const m = document.querySelector('#preview-board .bd-menu'); if (!m) return null; const b = m.getBoundingClientRect(); const inner = { top: b.top + m.clientTop, bottom: b.top + m.clientTop + m.clientHeight };
+      const items = [...m.querySelectorAll('.bd-mi')].map((i) => { const r = i.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(r.bottom, inner.bottom) - Math.max(r.top, inner.top))); });
+      return { scrolls: m.scrollHeight > m.clientHeight + 1, shown: items, wrap: [...m.querySelectorAll('.bd-mi, .bd-mi kbd')].map((e) => getComputedStyle(e).whiteSpace) }; })()`;
+    const acted = (await real('open', [ERRORS, { await: RAIL, as: 'rail' }, { press: '#preview-board [data-key="more"]' }, { read: MENU, as: 'menu' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    const r = acted.rail as { own: { tops: number[]; ticks: number; tools: string[] }; guest: { tops: number[]; ticks: number; tools: string[] }; tight: { tight: boolean; bg: string } };
+    expect(r.own.tools).toEqual(['select', 'sticky', 'text']);
+    // the guest takes Text's row, inside Sticky's group: no tick of its own, and Sticky stays (it cost both before)
+    expect(r.guest.tools).toEqual(['select', 'sticky', 'frame']);
+    expect(r.guest.ticks).toBe(r.own.ticks);
+    expect(r.guest.tops).toEqual(r.own.tops);
+    expect(r.tight.tight).toBe(true);
+    expect(r.tight.bg).toMatch(/repeating-linear-gradient/);
+    const m = acted.menu as { scrolls: boolean; shown: number[]; wrap: string[] };
+    expect(m.scrolls).toBe(true);
+    // every row is whole or not shown, but ONE: the cut row, half of it showing (14px of 28)
+    const cut = m.shown.filter((n) => n > 0 && n < 28);
+    expect(cut).toEqual([14]);
+    expect(m.shown.indexOf(14)).toBe(m.shown.filter((n) => n === 28).length);
+    expect(new Set(m.wrap)).toEqual(new Set(['nowrap']));
+  }, 300_000);
+
   it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {
     const acted = await real('open', [
       { press: '#preview-board [data-key="percent"]' },
