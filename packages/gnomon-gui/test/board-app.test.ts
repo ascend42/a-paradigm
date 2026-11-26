@@ -106,7 +106,7 @@ describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the ker
     // POSITIVE CONTROL: the same scan finds a string that IS shipped, in the app and in the board chunk, so a "no"
     // below is a real no (the files are there, decoded, and searchable)
     expect([...bundle.keys()]).toEqual(expect.arrayContaining(['app.js', 'board/board.js']));
-    expect(has('app.js', 'Not checked yet')).toBe(true);
+    expect(has('app.js', 'not checked yet')).toBe(true);
     expect(has('app.js', 'Dimensions in this project (/boards)')).toBe(true);
     expect(has('board/board.js', 'excalidraw')).toBe(true);
     let scanned = 0;
@@ -157,17 +157,17 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(f('opened').title).toMatch(/^Totals are off by a cent/);
     expect(f('opened').line).toMatch(/opened from \/board/);
     expect(f('opened').active).toMatch(/excalidraw/);
-    // never a bare "verified": the check reads "checked up to" the point the mod vouched for
-    expect(f('opened').check).toMatch(/^Checked up to change \d+/);
+    // never a bare "verified" and no log row on the face (design check.words): a new board has no mark to check yet
+    expect(f('opened').check).toBe('nothing to check yet');
     expect(f('drawn')).toMatchObject({ rows: ['session.start:command', 'op:add'], frames: 2, nodes: 1, marks: 1, pending: 0, keep: 'saved', sameAsMod: true, drift: 0 });
     // the check does not vouch for the row after its point
-    expect(f('drawn').check).toMatch(/^Checked up to change \d+ of \d+$/);
+    expect(f('drawn').check).toBe('checked up to 1 change ago');
     // P4b-3: the check is READ ON THE LEAF, whole, at the foot's right end (it was a hover title on the head's 8px glyph)
     expect(f('opened').chk).toMatchObject({ text: f('opened').check, bad: false, whole: true, title: null });
     expect(f('drawn').chk).toMatchObject({ text: f('drawn').check, bad: false, whole: true });
-    expect(f('drawn').chk!.text).toMatch(/^Checked up to change \d+ of \d+$/);
+    expect(f('drawn').chk!.text).toBe('checked up to 1 change ago');
     expect(f('reopened').chk).toMatchObject({ bad: false, whole: true });
-    expect(f('reopened').chk!.text).toMatch(/^Checked up to change \d+$/);
+    expect(f('reopened').chk!.text).toBe('checked up to the last change');
     // Esc folds: dim.close, the leaf goes, the edge tab `<title> · board` shows, focus returns
     expect(f('folded')).toMatchObject({ open: false, rows: ['session.start:command', 'op:add', 'session.end'], frames: 3 });
     expect(f('folded').tab).toMatch(/^Totals are off by a cen… · board$/);
@@ -871,29 +871,40 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
   }, 120_000);
 
   const toDecide = [{ key: 'k', meta: true }, { wait: 200 }, ...type('Layout: Decide'), { wait: 200 }, { key: 'Enter' }, { wait: 500 }];
-  it('Mika R1: in the narrowest leaf (Decide at 1024, 303px) a check too long for the foot is never clipped: it ends in an ellipsis with its whole words in title=, `you` stays whole, and a fold that did not match keeps the words "Did not match" whole', async () => {
-    const FOOT = `(() => { const l = document.querySelector('.bd-host .bd-leaf'); const foot = l.querySelector('.bd-foot'); const c = foot.querySelector('.bd-check'); const you = foot.querySelector('.bd-hand'); const fb = foot.getBoundingClientRect(); const cb = c.getBoundingClientRect(); const w = c.querySelector('.bd-check-w'); const n = c.querySelector('.bd-check-n');
-      return { leafW: Math.round(l.getBoundingClientRect().width), overflow: foot.scrollWidth - foot.clientWidth, rightPad: Math.round(fb.right - cb.right), insideFoot: cb.right <= fb.right + 0.5 && cb.left >= fb.left, cut: c.scrollWidth > c.clientWidth + 1 || (!!n && n.scrollWidth > n.clientWidth + 1), ellipsis: getComputedStyle(n || c).textOverflow, title: c.title, text: c.textContent, youWhole: you.scrollWidth <= you.clientWidth + 1 && you.getBoundingClientRect().right <= cb.left + 0.5, youText: you.textContent.trim(),
-        words: w ? { text: w.textContent, whole: w.scrollWidth <= w.clientWidth + 1 && w.getBoundingClientRect().width > 60 && w.getBoundingClientRect().right <= fb.right } : null }; })()`;
-    const set = (line: string, tone: string) => ({ read: `(${CUR}.leaf.setCheck(${JSON.stringify(line)}, ${JSON.stringify(tone)}), 1)`, as: `set-${tone}-${line.length}` });
-    const LONG = 'Checked up to change 1234567 of 1234568';
-    const BAD = 'Did not match at change 123456789012345678';
-    const a = await real([...toDecide, ...typeBoard, { read: FOOT, as: 'real' }, set(LONG, 'ok'), { wait: 150 }, { read: FOOT, as: 'long' }, set(BAD, 'bad'), { wait: 150 }, { read: FOOT, as: 'bad' }], { fixture: 'always-scopes', width: 1024, height: 768 });
-    expect(a.errors).toEqual([]);
-    type F = { leafW: number; overflow: number; rightPad: number; insideFoot: boolean; cut: boolean; ellipsis: string; title: string; text: string; youWhole: boolean; youText: string; words: { text: string; whole: boolean } | null };
-    const r = a.real as F;
-    const long = a.long as F;
-    const bad = a.bad as F;
-    expect(r.leafW).toBeLessThanOrEqual(304);
-    // the real check of this board fits whole, and says its whole words in title= as well
-    expect(r).toMatchObject({ overflow: 0, insideFoot: true, cut: false, youWhole: true, rightPad: 14 });
-    expect(r.title).toBe(r.text);
-    // too long for the foot: it gives way with an ellipsis inside the foot; nothing runs out of it unseen
-    expect(long, 'a long check in the 303px leaf').toMatchObject({ overflow: 0, insideFoot: true, cut: true, ellipsis: 'ellipsis', title: LONG, youWhole: true, rightPad: 14 });
-    expect(long.youText).toMatch(/^you \d+$/);
-    // did not match: the words are whole and read without hover; only the number side gives way
-    expect(bad, 'a mismatch in the 303px leaf').toMatchObject({ overflow: 0, insideFoot: true, title: BAD, youWhole: true, words: { text: 'Did not match', whole: true } });
-  }, 120_000);
+  it('design check.place and signs (aegis C1.7, C2.1, C2.2, C2.5): the hands alone decide whether the check is in the foot, at 303, 424 and 680px, whatever it says; unchecked and not in the foot, the line under the head leads with "not checked yet"; the mismatch fact is --fail at 500; the palette row carries the check', async () => {
+    const WORDS = ['checked up to the last change', 'checked up to 999+ changes ago', 'nothing to check yet', 'not checked yet', 'doesn’t match the saved board'];
+    const PLACE = `(async () => { const c = ${CUR}; const l = c.leaf.el; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const out = {};
+      for (const w of ${JSON.stringify(WORDS)}) { c.leaf.setCheck(w, w === 'not checked yet' ? 'none' : w.startsWith('doesn') ? 'bad' : 'ok', { title: 'log row 79; this board’s latest is row 81', open: true }); await fr();
+        const k = l.querySelector('.bd-foot .bd-check'); out[w] = { shown: c.leaf.checkShown(), drawn: !!k, whole: !k || k.scrollWidth <= k.clientWidth + 1, title: k ? k.title : null, lead: l.querySelector('.bd-keep').textContent.startsWith('not checked yet · ') }; }
+      return { width: Math.round(l.getBoundingClientRect().width), out }; })()`;
+    const at680 = { read: `(document.querySelector('.bd-host').style.width = '680px', 1)`, as: 'w680' };
+    const rows = { read: `${A}.board.dock.rows().filter((r) => r.check).map((r) => r.check)`, as: 'rows' };
+    const narrow = await real([...toDecide, ...typeBoard, { await: PLACE, as: 'place' }, rows], { fixture: 'always-scopes', width: 1024, height: 768 });
+    const desk = await real([...typeBoard, { await: PLACE, as: 'place' }, at680, { wait: 300 }, { await: PLACE, as: 'wide' }, { read: `(document.querySelector('.bd-host').style.width = '240px', 1)`, as: 'w240' }, { wait: 300 }, { await: PLACE, as: 'tight' }], { width: 1024, height: 768 });
+    expect(narrow.errors).toEqual([]);
+    expect(desk.errors).toEqual([]);
+    type P = { width: number; out: Record<string, { shown: boolean; drawn: boolean; whole: boolean; title: string | null; lead: boolean }> };
+    // (240px is under the supported 300: the foot there has no room for the check, which proves the other side of the rule)
+    for (const [name, p] of [['303', narrow.place], ['424', desk.place], ['680', desk.wide], ['240', desk.tight]] as const) {
+      const q = p as P;
+      const shown = new Set(Object.values(q.out).map((v) => v.shown));
+      expect(shown.size, `${name} (${q.width}px): the check's presence changed with its words`).toBe(1);
+      for (const [w, v] of Object.entries(q.out)) {
+        expect(v.drawn, `${name} ${w}`).toBe(v.shown);
+        expect(v.whole, `${name} ${w}: cut`).toBe(true);
+        if (v.drawn) expect(v.title, `${name} ${w}`).toBe('log row 79; this board’s latest is row 81');
+        // C2.2: the lead only for the unchecked board whose check is not in the foot
+        expect(v.lead, `${name} ${w}: the lead`).toBe(w === 'not checked yet' && !v.shown);
+      }
+    }
+    expect((narrow.place as P).width).toBeLessThanOrEqual(304);
+    expect(Object.values((desk.place as P).out)[0]!.shown).toBe(true);
+    expect(Object.values((desk.tight as P).out)[0]!.shown).toBe(false);
+    expect((desk.tight as P).out['not checked yet']!.lead).toBe(true);
+    // C2.5: the second home ships with the rule: the open board's row in the palette's list holds the check
+    expect(narrow.rows).toHaveLength(1);
+    expect((narrow.rows as string[])[0]).toMatch(/^(nothing to check yet|checked up to |not checked yet)/);
+  }, 180_000);
 
   it('Mika R2: a line that states something in the keep line\'s place (marks missing, part of the board, words waiting) draws in ink; opening, folding and saving stay quiet', async () => {
     const LINE = `(() => { const k = document.querySelector('.bd-host .bd-keep'); return { text: k.textContent, ink: k.classList.contains('bd-said-line'), colour: getComputedStyle(k).color }; })()`;
@@ -916,6 +927,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const lie = `(${A}.mod.wrongHashNext = true, 1)`;
     const a = await real([
       { read: lie, as: 'lie' }, ...typeBoard, facts('opened'),
+      { read: `(() => { const f = document.querySelector('.bd-host .bd-keep .bd-fail-fact'); const probe = document.createElement('span'); probe.style.color = 'var(--fail)'; document.body.append(probe); const fail = getComputedStyle(probe).color; probe.remove(); return f ? { text: f.textContent, colour: getComputedStyle(f).color, fail, weight: getComputedStyle(f).fontWeight, rest: getComputedStyle(f.parentElement).color } : null; })()`, as: 'fact' },
       { read: `(() => { const k = ${A}.kernel; k.__before = k.__n.n; return 1; })()`, as: 'm' },
       { press: '.bd-host [data-key="tool:rect"]' }, { drag: [[250, 200], [290, 225], [330, 250]] }, { wait: 400 }, ...type('nt'), { at: [200, 330], press: true }, ...type('zz'), { key: 'Delete' }, { wait: 400 }, facts('poked'),
       { key: 'Escape' }, { wait: 900 }, facts('folded'),
@@ -923,7 +935,12 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     expect(f('opened')).toMatchObject({ open: true, inert: 'out-of-date', line: 'This board is out of date · fold it and open it again' });
-    expect(f('opened').check).toMatch(/^Did not match at change \d+$/);
+    expect(f('opened').check).toBe('doesn’t match the saved board');
+    // design check.signs.mismatch: the FACT in --fail at 500, the rest in ink
+    const fact = a.fact as { text: string; colour: string; fail: string; weight: string; rest: string };
+    expect(fact).toMatchObject({ text: 'This board is out of date', weight: '500' });
+    expect(fact.colour).toBe(fact.fail);
+    expect(fact.rest).not.toBe(fact.fail);
     // the foot says it in the failed colour, whole; what to do about it is the line under the head
     expect(f('opened').chk).toMatchObject({ text: f('opened').check, bad: true, whole: true });
     // real input on the held-still board: no mark, no row, no command left the page
@@ -977,8 +994,10 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(a.errors).toEqual([]);
     // P4b-3: wherever the leaf draws its foot, the check stands whole in it beside the hands (the 424px leaf included)
     if (a.state !== 'too-short') {
-      expect(fa(a, 'f').chk, `the check at ${width}×${height}`).toMatchObject({ bad: false, whole: true });
-      expect(fa(a, 'f').chk!.text).toMatch(/^Checked up to change \d+/);
+      // design check.place: in the foot WHOLE when it fits after the hands, else not at all (never cut)
+      const chk = fa(a, 'f').chk;
+      if (chk) expect(chk, `the check at ${width}×${height}`).toMatchObject({ bad: false, whole: true });
+      expect(fa(a, 'f').check).toMatch(/^(nothing to check yet|checked up to )/);
     }
     type R = { x: number; y: number; r: number; b: number } | null;
     const r = a.rects as { leaf: R; turn: R; turnRows: number; roomWithout: number | null; pane: R; stack: R; status: R; pinned: R; composer: R; cards: number; line: boolean | null };

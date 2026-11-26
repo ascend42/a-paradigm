@@ -224,6 +224,22 @@ export class DimStore {
     return this.#dims.get(dim)?.rows ?? [];
   }
 
+  /**
+   * How many of this dimension's held rows have a seq above `seq` (the check's k, design board-leaf.check, aegis
+   * C1.1: a row count, never a seq difference; every row kind, C1.2). 0 for a dimension it does not hold.
+   */
+  rowsAfter(dim: string, seq: number): number {
+    const rows = this.#dims.get(dim)?.rows ?? [];
+    let lo = 0;
+    let hi = rows.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (rows[mid]!.seq <= seq) lo = mid + 1;
+      else hi = mid;
+    }
+    return rows.length - lo;
+  }
+
   has(dim: string): boolean {
     return this.#dims.has(dim);
   }

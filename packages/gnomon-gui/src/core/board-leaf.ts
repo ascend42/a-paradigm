@@ -91,6 +91,7 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'link-down' && n.about !== 'link') return 'The link is down · that change wasn’t saved';
   if (n.code === 'redo-unavailable') return 'Redo isn’t on the board yet';
   if (n.code === 'undo-nothing') return 'Nothing to undo';
+  // (design check.signs.never_implied, aegis C2.3: the dock says plain `Reconnected` while the board is unchecked)
   if (n.code === 'reconnected') return 'Reconnected · everything here is saved';
   if (n.about === 'link' && n.code === 'link-down') return INERT_COPY['link-down'];
   if (n.code === 'out-of-date') return INERT_COPY['out-of-date'];
@@ -187,23 +188,59 @@ export function linkDownLine(s: { keep: 'saved' | 'saving' | 'not-saved'; pendin
   if (s.pending > 0 || s.keep === 'not-saved' || (o.unsaved ?? 0) > 0) return coming ? KEEP_COPY.notSavedDown : KEEP_COPY.notSavedOff;
   return coming ? INERT_COPY['link-down'] : KEEP_COPY.notConnected;
 }
-/**
- * The check display (Aegis, final): what the fold was compared with, in plain words. Never a bare "verified": the
- * mod vouches for a POINT, so the line reads "checked up to" it; `verified: null` is unchecked.
- */
-export function checkLine(s: { verified: boolean | null; checkedSeq: number | null; seq: number }): string {
-  if (s.verified === null || s.checkedSeq === null) return CHECK_COPY.unchecked;
-  // (what to do about it is the held-still line's, in the keep line's place: `INERT_COPY['out-of-date']`)
-  if (s.verified === false) return `Did not match at change ${s.checkedSeq}`;
-  return s.checkedSeq < s.seq ? `Checked up to change ${s.checkedSeq} of ${s.seq}` : `Checked up to change ${s.checkedSeq}`;
+/** The check's words (design board-leaf.check.words): no row number on the face; quiet, lower case. */
+export const CHECK_COPY = {
+  latest: 'checked up to the last change',
+  behind: (k: number): string => `checked up to ${k > 999 ? '999+' : k} ${k === 1 ? 'change' : 'changes'} ago`,
+  older: 'checked up to an older change',
+  empty: 'nothing to check yet',
+  unchecked: 'not checked yet',
+  mismatch: 'doesn’t match the saved board',
+} as const;
+/** The longest wording (design check.place: 189px at 10.5): the foot's probe measures this, whatever the check says now. */
+export const CHECK_LONGEST = CHECK_COPY.behind(1000);
+/** The gap the check needs after the hands (design check.place). */
+export const CHECK_GAP = 16;
+export interface CheckInput {
+  verified: boolean | null;
+  checkedSeq: number | null;
+  /** the dimension's latest seq as the fold holds it */
+  seq: number;
+  /** this dimension's held rows above `checkedSeq` (DimStore.rowsAfter) */
+  after: number;
+  /** the held rows include one that makes, changes or removes a mark */
+  marks: boolean;
+  /** the page holds only part of the dimension */
+  partial: boolean;
+  /** the person's changes not stored yet (pending and unsaved) */
+  unstored: number;
+  /** typed words are held on the page */
+  words: boolean;
 }
 /**
- * Where the check shows (boards S1.3 P4b-3; not in the design record, FOR LUNA): the right end of the leaf's foot,
- * in the foot's own style, always whole (the hands give way to it). It was a hover title on the head's glyph.
+ * The check (design board-leaf.check, aegis C1.1 to C1.6): what this page's fold was compared with, in the person's
+ * terms. ONE function for the foot and the Dimensions row (C2.4). Precedence: mismatch, not checked, then a partly
+ * held board (only the older-change form, C1.6), then empty, then latest or behind. "the last change" only when the
+ * check is at the latest row with nothing of the person's unstored and no held words (C1.3, C1.4).
  */
-export const CHECK_COPY = { unchecked: 'Not checked yet' } as const;
+export function checkLine(s: CheckInput): string {
+  if (s.verified === false) return CHECK_COPY.mismatch;
+  if (s.verified === null || s.checkedSeq === null) return CHECK_COPY.unchecked;
+  if (s.partial) return CHECK_COPY.older;
+  if (!s.marks) return CHECK_COPY.empty;
+  if (s.unstored > 0 || s.words) return CHECK_COPY.older;
+  if (s.checkedSeq === s.seq && s.after === 0) return CHECK_COPY.latest;
+  return s.after > 0 ? CHECK_COPY.behind(s.after) : CHECK_COPY.older;
+}
+/** The check's title= (aegis C1.7): the log's row numbers, said as the log's. Empty while unchecked. */
+export const checkTitle = (s: { checkedSeq: number | null; seq: number }): string => (s.checkedSeq === null ? '' : `log row ${s.checkedSeq}; this board’s latest is row ${s.seq}`);
 /** How the check reads: `bad` when the fold did not match (drawn in the failed colour), `none` while unchecked. */
 export const checkTone = (s: { verified: boolean | null; checkedSeq: number | null }): 'ok' | 'none' | 'bad' => (s.verified === null || s.checkedSeq === null ? 'none' : s.verified ? 'ok' : 'bad');
+/** The lead of the line under the head while open and unchecked and the check is not in the foot (design check.signs.unchecked). */
+export const UNCHECKED_LEAD = { quiet: 'not checked yet · ', stated: 'Not checked yet · ' } as const;
+/** The out-of-date line's fact, drawn in --fail at 500 (design check.signs.mismatch). */
+export const OUT_OF_DATE_FACT = 'This board is out of date';
+
 /** The too-short line (design `too_short.line`): words held first, then whether a card is pinned to decide. */
 export const tooShortLine = (o: { pinned: number; words: boolean }): string => (o.words ? LEAF_COPY.tooShortWords : o.pinned > 0 ? LEAF_COPY.tooShort : LEAF_COPY.tooShortNoCard);
 /** The same line is spoken once per entry and never again within this long of the last time (aegis C3_6). */

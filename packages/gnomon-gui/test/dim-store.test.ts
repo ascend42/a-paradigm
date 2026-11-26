@@ -275,3 +275,18 @@ describe('#gui-dim-store rows, lists and reconnect', () => {
     expect(store.stateAt(dimId(1), -1).nodes.size).toBe(0);
   });
 });
+
+describe('#gui-dim-store rowsAfter (design board-leaf.check, aegis C1.1, C1.2)', () => {
+  it('counts THIS dimension\'s held rows above a seq, every row kind; another dimension\'s rows in between do not count; never a seq difference', () => {
+    const s = new DimStore();
+    const a = dimId(1);
+    const b = dimId(2);
+    s.apply([startRow(10, a), addRow(11, a, 1), startRow(12, b), addRow(13, b, 2), addRow(20, a, 3), { seq: 25, kind: DIM_KINDS.attach, payload: { v: 1, dim: a, attached: ['hsid-a', 'hsid-b'], relayedFor: HUMAN } }]);
+    expect(s.rowsAfter(a, 11)).toBe(s.rows(a).filter((r) => r.seq > 11).length);
+    expect(s.rowsAfter(a, 11)).toBeLessThan(25 - 11);
+    expect(s.rowsAfter(a, 20)).toBe(s.rows(a).length - s.rows(a).findIndex((r) => r.seq > 20));
+    expect(s.rowsAfter(a, 10)).toBe(s.rows(a).length - 1);
+    expect(s.rowsAfter(a, 99)).toBe(0);
+    expect(s.rowsAfter(dimId(9), 0)).toBe(0);
+  });
+});

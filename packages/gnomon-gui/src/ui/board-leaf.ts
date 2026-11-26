@@ -15,7 +15,7 @@ import { CONTENT_DEFAULTS, DIM_FALLBACK_LEAD, DIM_LIMITS, dimKindName, resolveCo
 import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
-import { BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { CHECK_GAP, CHECK_LONGEST, OUT_OF_DATE_FACT, UNCHECKED_LEAD, BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
 import { footHands, handName, overlayItems } from '../core/board-overlay.js';
 import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -104,8 +104,14 @@ export interface BoardLeaf {
   setKeep(line: string | null): void;
   /** The dimension's title once the fold holds it (the head, its title= and the region's names). */
   setTitle(title: string): void;
-  /** The check display's line (core/board-leaf.ts `checkLine`), shown whole at the right end of the foot; `bad` when the fold did not match. */
-  setCheck(line: string, tone?: 'ok' | 'none' | 'bad'): void;
+  /**
+   * The check (core/board-leaf.ts `checkLine`): at the foot's right end when its longest wording and its gap fit after
+   * the hands (design check.place), else not; `bad` draws it in --fail. `title` is the log's rows (C1.7); `open`: the
+   * board is open, so an unchecked board leads the line under the head when the check is not in the foot (C2.2).
+   */
+  setCheck(line: string, tone?: 'ok' | 'none' | 'bad', o?: { title?: string; open?: boolean }): void;
+  /** True while the check is drawn in the foot (tests). */
+  checkShown(): boolean;
   /** Other words for the held-still line while it lasts (`Not saved · reconnecting` when something is pending), or null for its own. */
   setInertLine(line: string | null): void;
   /**
@@ -313,7 +319,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // held still: its line stays for as long as it lasts, over anything else the keep line would say
     if (inert && state !== 'failed' && state !== 'loading') {
       keep.title = inertWords();
-      return void keep.append(inertWords());
+      // the mismatch's FACT in --fail at 500, the rest in ink (design check.signs.mismatch)
+      const w = inertWords();
+      if (inert === 'out-of-date' && w.startsWith(OUT_OF_DATE_FACT)) return void keep.append(h('span', 'bd-fail-fact', {}, OUT_OF_DATE_FACT), w.slice(OUT_OF_DATE_FACT.length));
+      return void keep.append(w);
     }
     // what the board refused is said in the keep line's place (as the yielded line is), so nothing below moves
     if (said && state !== 'failed' && state !== 'loading') {
@@ -325,19 +334,26 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       keep.title = `${LEAF_COPY.failedTitle} · ${cause}`;
       return void keep.append(keep.title);
     }
+    // open, unchecked and the check not in the foot: 'not checked yet · ' leads lines 3 to 7 (design check.signs.unchecked)
+    const lead = checkOpen && checkTone === 'none' && !checkInFoot && state !== 'loading';
+    if (lead) {
+      const stated = state === 'too-short' || state === 'yielded' || !!keepShown && keepShown !== KEEP_COPY.opening && keepShown !== KEEP_COPY.folding && keepShown !== KEEP_COPY.saving;
+      keep.append(stated ? UNCHECKED_LEAD.stated : UNCHECKED_LEAD.quiet);
+    }
+    const led = (t: string): string => (lead ? (keep.textContent ?? '') + t : t);
     // one line, cut from its end with …; the whole text is always in title=
     keep.title = state === 'loading' ? '' : state === 'too-short' ? shortLine() : state === 'yielded' ? LEAF_COPY.yielded : '';
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
-    if (state === 'too-short') return void keep.append(shortLine());
-    if (state === 'yielded') return void keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`);
+    if (state === 'too-short') return void ((keep.title = led(shortLine())), keep.append(shortLine()));
+    if (state === 'yielded') return void ((keep.title = led(`◆ ${LEAF_COPY.yielded}`)), keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`));
     // the live loop's own state (a slow save, a board held in part) takes the keep line's place while it lasts
     if (keepShown) {
-      keep.title = keepShown;
+      keep.title = led(keepShown);
       return void keep.append(keepShown);
     }
     const k = keepParts(o);
     const text = `dimension in ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`;
-    keep.title = text;
+    keep.title = led(text);
     keep.append('dimension in ', h('span', `swatch ${o.projectHue ?? 'h0'}`), ` ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`);
   }
 
@@ -611,23 +627,34 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.name), ' ', name, ` ${f.n}`));
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
-    // the check (what this page's fold was compared with) is at the foot's right end and is never cut
-    // (it gives way with an ellipsis rather than be clipped, and keeps its whole words in title=; when the fold did
-    // not match, the words stand whole and only the change number gives way)
-    const m = checkTone === 'bad' ? /^(Did not match)( .*)$/.exec(checkWords) : null;
-    const check = checkWords ? [h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, { title: checkWords }, ...(m ? [h('span', 'bd-check-w', {}, m[1]!), h('span', 'bd-check-n', {}, m[2]!)] : [checkWords]))] : [];
-    const checkCut = (): boolean => check.some((c) => c.scrollWidth > c.clientWidth + 1 || [...c.children].some((k) => k.scrollWidth > k.clientWidth + 1));
-    foot.replaceChildren(...kids, ...check);
+    foot.replaceChildren(...kids);
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
-    // (the other hands fold into '+k more' before the check loses a letter)
-    while ((foot.scrollWidth > foot.clientWidth || checkCut()) && kids.length - cut > 1) {
+    while (foot.scrollWidth > foot.clientWidth && kids.length - cut > 1) {
       cut++;
-      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`), ...check);
+      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`));
+    }
+    // The check: decided by THE HANDS ALONE (design check.place). It is in the foot when its LONGEST wording and its
+    // gap fit after the hands, whatever it says now; never cut, no short form. Measured with the foot's own paint.
+    const used = foot.lastElementChild ? foot.lastElementChild.getBoundingClientRect().right - foot.getBoundingClientRect().left : 0;
+    const pad = parseFloat(getComputedStyle(foot).paddingRight) || 0;
+    const probe = h('span', 'bd-check bd-check-probe', { 'aria-hidden': 'true' }, CHECK_LONGEST);
+    foot.append(probe);
+    const need = probe.getBoundingClientRect().width + CHECK_GAP;
+    probe.remove();
+    const fits = !!checkWords && foot.clientWidth > 0 && used + need <= foot.clientWidth - pad + 0.5;
+    if (fits) foot.append(h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, { title: checkTitleText }, checkWords));
+    if (fits !== checkInFoot) {
+      checkInFoot = fits;
+      el.dataset.checkPlace = fits ? 'foot' : 'list';
+      if (!drawing) drawHead(leafState());
     }
   }
   let checkWords = '';
+  let checkTitleText = '';
+  let checkOpen = false;
+  let checkInFoot = false;
   let checkTone: 'ok' | 'none' | 'bad' = 'none';
   let saidAt = 0;
   function say(text: string): void {
@@ -686,11 +713,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       // the failed note stands on the bare desk: nothing of a stopped engine is left showing
       boardHost.hidden = state === 'failed';
       over.hidden = state === 'failed';
+      // the foot first: whether the check is in it decides the line under the head's lead (check.signs.unchecked)
+      drawFoot();
       drawHead(state);
       drawRail(state);
       drawTray(state);
       drawNote(state);
-      drawFoot();
       drawOver();
       wasYielded = yielded();
       // while a card has the keyboard the engine's document-level listeners do nothing (G-DDL-08)
@@ -1003,13 +1031,20 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       boardHost.setAttribute('aria-label', `Board: ${title}`);
       el.setAttribute('aria-label', `Dimension: ${title}`);
     },
-    setCheck(line, tone = 'ok') {
-      if (line === checkWords && tone === checkTone) return;
+    setCheck(line, tone = 'ok', co = {}) {
+      const title = co.title ?? '';
+      const open = co.open ?? true;
+      if (line === checkWords && tone === checkTone && title === checkTitleText && open === checkOpen) return;
       checkWords = line;
       checkTone = tone;
+      checkTitleText = title;
+      checkOpen = open;
+      // the root keeps the check and its tone whether or not the line is drawn (aegis C2.3)
       el.dataset.check = line;
-      drawFoot();
+      el.dataset.checkTone = tone;
+      draw();
     },
+    checkShown: () => checkInFoot,
     setInertLine(line) {
       if (line === inertLine) return;
       inertLine = line;

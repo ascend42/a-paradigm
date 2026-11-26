@@ -35,6 +35,13 @@ components:
       Esc and the head keys working, the line ('No room to draw · ...' by the
       dock's pinned count) spoken once per entry, a drag in hand said. Under
       56px of board the body is not drawn.
+      The check (design board-leaf.check, aegis C1/C2): DimStore.rowsAfter
+      gives k; core/board-leaf.ts checkLine is the ONE wording for the foot
+      and the palette's open-board row ('open here · <check>'); no log row on
+      the face, the rows in title=; the foot shows it only when its longest
+      wording and 16px fit after the hands; unchecked and not in the foot the
+      line under the head leads 'not checked yet · '; the out-of-date fact is
+      --fail at 500; Reconnected says nothing of saving while unchecked.
       #gui-board (spec §12.7 "The GUI hosts the canvas directly", §11.2 rule
       6; boards S1.0, s1-build-plan §2) - the board engine as a LAZY chunk of
       the pinned bundle. src/board/index.ts is the only module that imports

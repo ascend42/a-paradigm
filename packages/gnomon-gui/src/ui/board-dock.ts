@@ -19,7 +19,8 @@
  *  - No sizes in markup: the host's height and the tab's top are CSSOM properties.
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
-import { checkLine, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
+import { DIM_KINDS } from '@a-company/gnomon-contracts';
+import { checkLine, checkTitle, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf } from './board-leaf.js';
@@ -56,6 +57,8 @@ export interface BoardDockDeps {
   dimensions?: (event: Event) => void;
   /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
   turn?: () => void;
+  /** the open board's check changed (its row in the palette's Dimensions list is painted again while it is open, aegis C2.4) */
+  checkChanged?: () => void;
   /** how many cards are pinned for the focused session: the leaf's too-short line names deciding one only when there is one */
   pinned?: () => number;
   now?: () => number;
@@ -179,12 +182,23 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     }
   }
 
+  /** The open board's check, from this page's session (aegis C4.4): ONE `checkLine` for the foot and the list row (C2.4). */
+  function checkOf(session: DimSession, s: DimSessionStatus): string {
+    const words = (!!held && held.dim === session.dim) || session.alive && !!cur && cur.session === session && cur.leaf.holdsWords();
+    return checkLine({ ...s, after: s.checkedSeq === null ? 0 : store.rowsAfter(session.dim, s.checkedSeq), marks: store.rows(session.dim).some((r) => r.kind === DIM_KINDS.op), unstored: session.unsaved, words });
+  }
+  let lastCheck = '';
   function paint(session: DimSession, leaf: BoardLeaf, s: DimSessionStatus): void {
     const words = !!held && held.dim === session.dim;
     leaf.setTitle(s.title);
     // words that are waiting are said for AS LONG AS they are held (a six-second line was gone before it was read)
     leaf.setKeep(words && s.link === 'up' ? KEEP_COPY.wordsWait : keepStateLine(s));
-    leaf.setCheck(checkLine(s), checkTone(s));
+    const check = checkOf(session, s);
+    leaf.setCheck(check, checkTone(s), { title: checkTitle(s), open: s.phase === 'open' });
+    if (check !== lastCheck) {
+      lastCheck = check;
+      d.checkChanged?.();
+    }
     leaf.el.dataset.words = words ? 'held' : '';
     if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
   }
@@ -228,6 +242,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       d.say(noticeLine(n), 'warn');
       return paint(session, leaf, session.status());
     }
+    // aegis C2.3: no line implies a check while there is none: plain `Reconnected` while unchecked or mismatched
+    if (n.about === 'link' && n.code === 'reconnected' && session.status().verified !== true) return leaf.say(KEEP_COPY.reconnected);
     leaf.say(noticeLine(n));
   }
 
@@ -430,7 +446,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     rows() {
       const hsid = d.focused();
-      return dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
+      const rows = dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
+      // the check's second home (design check.place, aegis C2.5): the open board's row says 'open here · <the check>'
+      const c = cur && cur.session.alive ? cur : null;
+      return c ? rows.map((r) => (r.dim === c.session.dim ? { ...r, check: checkOf(c.session, c.session.status()) } : r)) : rows;
     },
     choose(dim, event) {
       const l = listingOf(dim);

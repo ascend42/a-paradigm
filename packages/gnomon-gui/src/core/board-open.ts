@@ -97,6 +97,8 @@ export interface DimensionRow {
   notes: string[];
   ended: boolean;
   attached: boolean;
+  /** the open board's check (core/board-leaf.ts checkLine, from this page's session): its row reads 'open here · <check>' */
+  check?: string;
 }
 
 /** `lastAt` as the list prints it: hh:mm when it is today (by `now`), else `Mon D`. */

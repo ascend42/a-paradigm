@@ -1980,6 +1980,8 @@ const boardDock = mountBoardDock({
   theme: () => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day'),
   cardFocused: () => cardHasFocus(document),
   pinned: () => $('pinned').querySelectorAll('.card').length,
+  // the open board's row in the palette's Dimensions list changes its words in place while the list is open (aegis C2.4)
+  checkChanged: () => void (palDims && !$('palette').hidden && paintPalette()),
   focused: () => focused,
   sessionInfo: (hsid) => {
     const s = store.sessions.get(hsid);
@@ -3984,7 +3986,7 @@ function paintPalette(): void {
     const list = $('palette-list');
     clear(list);
     list.appendChild(h(doc, 'div', { class: 'menu-h', role: 'presentation' }, 'Dimensions') as unknown as HTMLElement);
-    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim }, h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: 'pal-kbd' }, [r.time, ...r.notes].filter(Boolean).join(' · '))) as unknown as HTMLElement));
+    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim }, h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: 'pal-kbd' }, [...(r.check ? ['open here', r.check] : []), r.time, ...r.notes].filter(Boolean).join(' · '))) as unknown as HTMLElement));
     // none at all, or none that match what was typed: two different things, said as what they are
     if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? 'This session has no dimensions yet · /board opens one' : 'Open a session first')) as unknown as HTMLElement);
     return;

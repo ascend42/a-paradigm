@@ -121,25 +121,39 @@ describe('#gui-board the keep line and the check (boards S1.3 P4b-3; conditions 
     for (const line of [KEEP_COPY.partial, KEEP_COPY.dropped]) expect(line.length, line).toBeLessThanOrEqual(59);
   });
 
-  it('the check reads "checked up to" a point whenever checkedSeq < seq, is never a bare "verified", and `verified: null` is unchecked', async () => {
-    const { checkLine, checkTone } = await import('../src/core/board-leaf.js');
-    for (let seq = 1; seq <= 40; seq++) for (let checked = 1; checked <= seq; checked++) {
-      const line = checkLine({ verified: true, checkedSeq: checked, seq });
-      expect(line).toMatch(/^Checked up to change \d+/);
-      expect(line).not.toMatch(/verified/i);
-      // behind the head it names BOTH points: the one vouched for and the one the board is at
-      if (checked < seq) expect(line).toBe(`Checked up to change ${checked} of ${seq}`);
-      else expect(line).toBe(`Checked up to change ${checked}`);
+  it('design check.words with aegis C1.1 to C1.7: no number on the face; k counts rows, every kind; the last change only at the latest with nothing unstored; the precedence; a partial board shows no count', async () => {
+    const { checkLine, checkTone, checkTitle, CHECK_COPY, CHECK_LONGEST } = await import('../src/core/board-leaf.js');
+    const ok = { verified: true, checkedSeq: 79, seq: 81, after: 2, marks: true, partial: false, unstored: 0, words: false } as const;
+    expect(checkLine(ok)).toBe('checked up to 2 changes ago');
+    expect(checkLine({ ...ok, after: 1 })).toBe('checked up to 1 change ago');
+    expect(checkLine({ ...ok, after: 1000 })).toBe('checked up to 999+ changes ago');
+    // C1.1: k is the row count (79 and 81 with ONE held row between: another dimension's row is not this one's)
+    expect(checkLine({ ...ok, after: 1 })).toBe('checked up to 1 change ago');
+    // C1.3: the last change only at the latest row
+    expect(checkLine({ ...ok, checkedSeq: 81, after: 0 })).toBe('checked up to the last change');
+    expect(checkLine({ ...ok, checkedSeq: 80, after: 0 })).toBe('checked up to an older change');
+    // C1.4: never the last change with a change unstored or words held
+    expect(checkLine({ ...ok, checkedSeq: 81, after: 0, unstored: 1 })).toBe('checked up to an older change');
+    expect(checkLine({ ...ok, checkedSeq: 81, after: 0, words: true })).toBe('checked up to an older change');
+    // C1.5: mismatch, then not checked, then (C1.6, ruled) partial, then empty
+    expect(checkLine({ ...ok, verified: false })).toBe('doesn’t match the saved board');
+    expect(checkLine({ ...ok, verified: false, partial: true, marks: false })).toBe('doesn’t match the saved board');
+    expect(checkLine({ ...ok, verified: null })).toBe('not checked yet');
+    expect(checkLine({ ...ok, checkedSeq: null })).toBe('not checked yet');
+    expect(checkLine({ ...ok, verified: null, partial: true, marks: false })).toBe('not checked yet');
+    expect(checkLine({ ...ok, partial: true })).toBe('checked up to an older change');
+    expect(checkLine({ ...ok, partial: true, checkedSeq: 81, after: 0 })).toBe('checked up to an older change');
+    expect(checkLine({ ...ok, marks: false })).toBe('nothing to check yet');
+    // C1.7 and the tones
+    expect(checkTitle({ checkedSeq: 79, seq: 81 })).toBe('log row 79; this board’s latest is row 81');
+    expect(checkTitle({ checkedSeq: null, seq: 81 })).toBe('');
+    expect([checkTone({ verified: true, checkedSeq: 4 }), checkTone({ verified: false, checkedSeq: 4 }), checkTone({ verified: null, checkedSeq: null })]).toEqual(['ok', 'bad', 'none']);
+    // no number of the log on the face, never a bare "verified", lower case; the probe is the longest wording
+    for (const w of [CHECK_COPY.latest, CHECK_COPY.older, CHECK_COPY.empty, CHECK_COPY.unchecked, CHECK_COPY.mismatch, CHECK_COPY.behind(3)]) {
+      expect(w).not.toMatch(/\b79\b|\b81\b|verified/i);
+      expect(w).toBe(w.toLowerCase());
+      expect(w.length).toBeLessThanOrEqual(CHECK_LONGEST.length);
     }
-    // unchecked: the mod has answered no hash this page could compare (never shown as checked, never as failed)
-    for (const s of [{ verified: null, checkedSeq: null, seq: 9 }, { verified: null, checkedSeq: 4, seq: 9 }, { verified: true, checkedSeq: null, seq: 9 }] as const) {
-      expect(checkLine(s)).toBe('Not checked yet');
-      expect(checkTone(s)).toBe('none');
-    }
-    expect(checkLine({ verified: false, checkedSeq: 4, seq: 9 })).toBe('Did not match at change 4');
-    expect([checkTone({ verified: true, checkedSeq: 4 }), checkTone({ verified: false, checkedSeq: 4 })]).toEqual(['ok', 'bad']);
-    // short enough to stand whole in the foot of the 424px leaf beside the hands
-    for (const line of [checkLine({ verified: true, checkedSeq: 99998, seq: 99999 }), checkLine({ verified: false, checkedSeq: 99999, seq: 99999 }), 'Not checked yet']) expect(line.length, line).toBeLessThanOrEqual(40);
   });
 });
 
@@ -216,10 +230,8 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     const { KEEP_COPY, checkLine, linkDownLine } = await import('../src/core/board-leaf.js');
     // "Reconnecting" alone when nothing is pending; "Not saved" only when something is
     expect([linkDownLine({ keep: 'saved', pending: 0 }), linkDownLine({ keep: 'saving', pending: 2 }), linkDownLine({ keep: 'not-saved', pending: 0 })]).toEqual(['Reconnecting', 'Not saved · reconnecting', 'Not saved · reconnecting']);
-    // the check display: never a bare "verified"; null is unchecked; behind the head it reads "checked up to"
-    expect([checkLine({ verified: null, checkedSeq: null, seq: 9 }), checkLine({ verified: true, checkedSeq: 4, seq: 9 }), checkLine({ verified: true, checkedSeq: 9, seq: 9 })]).toEqual(['Not checked yet', 'Checked up to change 4 of 9', 'Checked up to change 9']);
-    expect(checkLine({ verified: false, checkedSeq: 4, seq: 9 })).toMatch(/^Did not match at change 4/);
-    for (const s of [checkLine({ verified: true, checkedSeq: 9, seq: 9 }), checkLine({ verified: null, checkedSeq: null, seq: 1 })]) expect(s).not.toMatch(/verified/i);
+    const c0 = { verified: true, checkedSeq: 9, seq: 9, after: 0, marks: true, partial: false, unstored: 0, words: false };
+    for (const s of [checkLine(c0), checkLine({ ...c0, verified: null })]) expect(s).not.toMatch(/verified/i);
     notices.push(...Object.values(KEEP_COPY).map((v) => (typeof v === 'function' ? v(64) : v)));
     // Mika 2: a board folded on an earlier page is "folded", as the Dimensions list calls it (never an ended dimension)
     expect(KEEP_COPY.reopens).toBe('That board was folded · opening it starts it again');
