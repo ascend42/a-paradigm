@@ -1973,6 +1973,8 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
    is held at its longest words ('may not edit', 12ch) plus the glyph slot, so a press never moves the next hand's key */
 .bd-foot .bd-count { display: inline-block; width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
 .bd-foot .bd-hand-keyed { flex: none; }
+/* mika F4 / F7: a keyed hand's note (' · not running', the no-key line) in --sec, after the key with the hand's gap */
+.bd-foot .bd-hand-note { color: var(--sec); white-space: nowrap; }
 .key.quiet.bd-grant { display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; min-height: var(--key-h); padding: 0 8px; margin-left: 2px; min-width: calc(12ch + 42px); justify-content: flex-start; font-size: var(--fs-control); font-weight: 400; color: var(--ink2); white-space: nowrap; }
 .bd-grant .bd-grant-g { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 12px; }
 .bd-grant .bd-grant-w { white-space: nowrap; }
