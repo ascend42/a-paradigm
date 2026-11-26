@@ -185,6 +185,12 @@ export interface BoardHandle {
    */
   onUndoKey(listener: (event: KeyboardEvent, redo: boolean) => void): () => void;
   /**
+   * S1.4 P4b: be told when, at the drop, a mark the person had in hand is no longer in the rendered state (another
+   * hand removed it during the gesture). No op is made for it (it is not added back) and it leaves the board;
+   * `change` is `moving` for a drag, `changing` for a resize, a restyle or a text edit. Never a refusal.
+   */
+  onGone?(listener: (report: { what: 'gone'; id: string; change: 'moving' | 'changing' }) => void): () => void;
+  /**
    * While yielded (a card has the keyboard) the board reports no edit and the engine's document-level keyup and
    * gesture listeners do nothing (G-DDL-08).
    */

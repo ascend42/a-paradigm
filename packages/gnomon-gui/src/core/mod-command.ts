@@ -24,7 +24,7 @@ import { RpcError, type GnomonClient } from './client.js';
 import { takeGesture, type Gesture } from './gesture.js';
 
 /** The mods the GUI may send a command to, and the commands of each. Closed: a new one is added here, in review. */
-export const MOD_COMMANDS: ReadonlyMap<string, readonly string[]> = new Map([[DIM_MOD_ID as string, Object.freeze(['dim.open', 'dim.attach', 'dim.op', 'dim.close'])]]);
+export const MOD_COMMANDS: ReadonlyMap<string, readonly string[]> = new Map([[DIM_MOD_ID as string, Object.freeze(['dim.open', 'dim.attach', 'dim.op', 'dim.close', 'dim.grant', 'dim.select', 'dim.check'])]]);
 export const MOD_COMMAND_MODS: readonly string[] = Object.freeze([...MOD_COMMANDS.keys()]);
 /** Top-level arg keys a caller may not set: the host composes the first three and the sender writes the fourth. */
 export const MOD_COMMAND_RESERVED_ARGS: readonly string[] = Object.freeze(['hsid', 'repo', 'paradigm', 'gesture']);
