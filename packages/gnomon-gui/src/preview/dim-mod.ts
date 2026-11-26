@@ -42,6 +42,24 @@ export class PreviewDimMod {
   refuseNext: string | null = null;
   /** DEV: `dim.op` commands are held, unanswered, while true */
   silent = false;
+  /**
+   * DEV (boards S1.3 P4b-3): while true the fake kernel keeps each `dim.op` waiting (fake-kernel.ts) until
+   * `release()` runs them in the order they came: a mark that is drawn and NOT YET STORED, for as long as a test needs.
+   */
+  holding = false;
+  readonly waiting: Array<() => void> = [];
+  release(): number {
+    this.holding = false;
+    const n = this.waiting.length;
+    for (const run of this.waiting.splice(0)) run();
+    return n;
+  }
+  /**
+   * DEV (boards S1.3 P4b-3): the next `dim.open` that succeeds answers a hash that is NOT its fold's, once: the page
+   * must then hold the board still (out of date). This is the stand-in mod lying; the page's own check is untouched,
+   * and nothing of this file is in the served bundle (test/board-app.test.ts holds that).
+   */
+  wrongHashNext = false;
 
   /** Rows already in the log (the fixture's): the mod's fold of them. */
   seed(rows: readonly DimRow[], repo = PREVIEW_DIM_REPO): void {
@@ -63,6 +81,15 @@ export class PreviewDimMod {
    * seq. `args` are what the host composed (the gesture stripped, `hsid` and `repo` set by the host).
    */
   run(commandId: string, args: Record<string, unknown>, relayedFor: Record<string, unknown>, append: (kind: string, payload: Record<string, unknown>) => number): Answer {
+    const r = this.#run(commandId, args, relayedFor, append);
+    if (this.wrongHashNext && commandId === 'dim.open' && r.ok === true && typeof r.hash === 'string') {
+      this.wrongHashNext = false;
+      return { ...r, hash: `sha256:${'0'.repeat(64)}` };
+    }
+    return r;
+  }
+
+  #run(commandId: string, args: Record<string, unknown>, relayedFor: Record<string, unknown>, append: (kind: string, payload: Record<string, unknown>) => number): Answer {
     const actor = M.actorOf(relayedFor);
     if (!actor) return M.refusal('not-human-gui');
     const read = M.readArgs(commandId, args);

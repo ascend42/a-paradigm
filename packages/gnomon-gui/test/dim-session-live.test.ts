@@ -91,6 +91,57 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('undone').lastOps).toEqual(Array(64).fill('delete'));
   }, 120_000);
 
+  it('B1 through the real engine (Judge): the fixture\'s 64 marks, selected by one marquee and deleted by one real Delete, all go (the limit is 64, not under it); ONE Cmd+Z brings all 64 back with the mod\'s hash', async () => {
+    const a = await real(
+      [
+        facts('start'),
+        { drag: [[8, 8], [200, 150], [440, 306]] }, { read: `${B}.state().selected`, as: 'picked' },
+        { key: 'Delete' }, { wait: 1500 }, facts('deleted'),
+        { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows.slice(${'-'}6).map((r) => (r.payload.ops || []).map((o) => o.type)); })()`, as: 'tail' },
+        { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+        { key: 'z', meta: true }, { wait: 400 }, facts('again'),
+      ],
+      'many',
+      'live-delete-64',
+    );
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('start')).toMatchObject({ nodes: 64, marks: 64, sameAsMod: true, notices: [] });
+    expect(a.picked).toBe(64);
+    // every one of the 64 is deleted, as rows of mine, and nothing is refused or said
+    const rows = f('deleted').rows - f('start').rows;
+    expect(rows).toBeGreaterThanOrEqual(1);
+    expect(rows).toBeLessThanOrEqual(4);
+    expect(f('deleted')).toMatchObject({ keep: 'saved', pending: 0, canUndo: true, nodes: 0, marks: 0, sameAsMod: true, drift: 0, notices: [] });
+    const deletes = (a.tail as string[][]).slice(-rows).flat();
+    expect(deletes).toEqual(Array(64).fill('delete'));
+    // ONE undo takes the whole delete back: 64 marks, the mod's fold, on the board
+    expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 64, marks: 64, sameAsMod: true, drift: 0, notices: [] });
+    // and that was the whole of it: a second Cmd+Z has nothing left of the delete to undo
+    expect(f('again')).toMatchObject({ nodes: 64, marks: 64, rows: f('undone').rows });
+  }, 120_000);
+
+  it('a paste made while a drawn mark is not yet stored (Judge; Mika: never dropped): the pasted words are shown at once, wait their turn behind the drawn mark, and both are stored in order once the mod answers', async () => {
+    const a = await real([
+      facts('start'), { read: `(${L}.mod.holding = true, 1)`, as: 'holding' },
+      ...drawRect, facts('drawn'), { read: `${B}.state().selected`, as: 'selected' },
+      // words pasted now are one text mark, behind the drawn one
+      { at: [640, 420], press: true }, { paste: 'pasted while unstored' }, { wait: 500 }, facts('pasted'), { read: `${L}.mod.waiting.length`, as: 'waiting' },
+      { read: `${L}.mod.release()`, as: 'released' }, { wait: 1500 }, facts('landed'),
+      { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows.slice(-2).map((r) => r.payload.ops.map((o) => [o.type, o.node && o.node.kind, o.node && o.node.text])); })()`, as: 'tail' },
+    ]);
+    const f = (k: string): Facts => a[k] as Facts;
+    expect(a.errors).toEqual([]);
+    expect(f('drawn')).toMatchObject({ keep: 'saving', pending: 1, nodes: f('start').nodes + 1, rows: f('start').rows, notices: [] });
+    expect(a.selected).toBe(1);
+    // not dropped: the words are on the board (shown at once) and waiting behind the drawn mark; nothing reached the log yet
+    expect(f('pasted')).toMatchObject({ keep: 'saving', pending: 2, nodes: f('start').nodes + 2, rows: f('start').rows, notices: [] });
+    expect(a.waiting).toBe(1); // one command in flight at a time: the paste has not left
+    // the mod answers: the drawn mark, then the pasted words, each a row, and the fold is the mod's
+    expect(f('landed')).toMatchObject({ keep: 'saved', pending: 0, nodes: f('start').nodes + 2, rows: f('start').rows + 2, sameAsMod: true, drift: 0, notices: [] });
+    expect(a.tail).toEqual([[['add', 'rect', undefined ?? null]], [['add', 'text', 'pasted while unstored']]]);
+  }, 120_000);
+
   it('review leftovers in the engine: words selected in the chrome are copied as themselves (N3); a paste that is too long only AFTER cleaning is refused with its line (N1); pastes step and the step starts again', async () => {
     const long = `${'a'.repeat(3990)}${'\u202e'.repeat(8)}`;
     const a = await real([

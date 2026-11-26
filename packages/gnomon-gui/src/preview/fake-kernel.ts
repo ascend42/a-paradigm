@@ -97,6 +97,8 @@ export class FakeKernel implements Transport {
   readonly #rowListeners = new Set<(r: LogRow) => void>();
   /** the dimension mod this kernel relays to, when the page gave one (the board's live fixture) */
   dim: PreviewDimMod | null = null;
+  /** DEV test hook (boards S1.3 P4b-3): who the NEXT connection authenticates as (a test signs in as someone else after the link went). Preview only. */
+  principal: string = HUMAN_PRINCIPAL;
   /** the gesture stamp last seen on this connection, and how many commands rode it (the kernel's own rule: fan-out 4) */
   #stamp = { n: 0, used: 0 };
   #conn = 0;
@@ -194,8 +196,11 @@ export class FakeKernel implements Transport {
     const composed: Record<string, unknown> = {};
     for (const k of Object.keys(args)) if (!['gesture', 'focus', 'hsid', 'repo', 'paradigm'].includes(k)) composed[k] = args[k];
     if (focus && typeof focus.hsid === 'string') Object.assign(composed, { hsid: focus.hsid, repo: PREVIEW_DIM_REPO });
-    const relayedFor = { principal: HUMAN_PRINCIPAL, connId: this.connId, surface: 'gui' };
+    const relayedFor = { principal: this.principal, connId: this.connId, surface: 'gui' };
     if (mod.silent && p.commandId === 'dim.op') return new Promise(() => undefined);
+    const runIt = (): unknown => ({ result: mod.run(String(p.commandId), composed, relayedFor, (kind, payload) => this.append(kind, { ...payload, relayedFor }, undefined, { principal: `${HUMAN_PRINCIPAL.replace(/\/[^/]*$/, '')}/mod-gnomon.dimension`, scope: { repo: PREVIEW_DIM_REPO } })) });
+    // DEV (P4b-3): held until the test releases it, then answered in the order it came
+    if (mod.holding && p.commandId === 'dim.op') return new Promise((res) => void mod.waiting.push(() => res(runIt())));
     const result = mod.run(String(p.commandId), composed, relayedFor, (kind, payload) => this.append(kind, { ...payload, relayedFor }, undefined, { principal: `${HUMAN_PRINCIPAL.replace(/\/[^/]*$/, '')}/mod-gnomon.dimension`, scope: { repo: PREVIEW_DIM_REPO } }));
     return { result };
   }
@@ -213,7 +218,7 @@ export class FakeKernel implements Transport {
         return hello;
       }
       case 'auth':
-        return { guiToken: 'preview-gui-token', principal: HUMAN_PRINCIPAL, connId: this.connId };
+        return { guiToken: 'preview-gui-token', principal: this.principal, connId: this.connId };
       case 'status':
         // #gui-folder-field: the kernel opens the chooser (a shot sets __ffPreview.chooser false for no-chooser)
         // founder report 2026-10-23 (dictation at the caret): a shot may show live words (__vxPreview.capture: status.voice.capture)

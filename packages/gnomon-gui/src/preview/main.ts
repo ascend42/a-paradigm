@@ -57,7 +57,7 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
   // the leaf covers the chat header and the chat and stops above the pinned cards and the composer
   const fit = (): void => {
     const full = feed.getBoundingClientRect().bottom - pane.getBoundingClientRect().top;
-    host.style.height = `${variant === 'short' ? Math.min(full, 304 + 96) : variant === 'tiny' ? Math.min(full, 200) : full}px`;
+    host.style.height = `${variant === 'short' ? Math.min(full, 304 + 103) : variant === 'tiny' ? Math.min(full, 200) : full}px`;
   };
   fit();
   new ResizeObserver(fit).observe(pane);
@@ -190,7 +190,7 @@ async function openLiveBoard(host: HTMLElement, key: PreviewKey, load: () => Pro
       session.bindLeaf(leaf);
       session.onChange((c) => {
         if (!session.alive) return;
-        // the keep line's place shows the loop's own state while it lasts (a slow save, not saved)
+        // the keep line's place shows the loop's own state while it lasts (a slow save, a board held in part)
         leaf.setKeep(keepStateLine(c.status));
         if (!c.notice) return;
         live.notices.push(c.notice);

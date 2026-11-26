@@ -54,6 +54,11 @@ export interface BoardLeafOptions {
   onOps?: (ops: DimOp[], cause: Event | null) => void;
   /** A new node id (a ULID) for each pasted mark; the leaf mints its own when none is given. */
   mint?: () => string;
+  /**
+   * The head's `Dimensions ▾` key (design board-leaf anatomy: "this project's dimensions, the same list as /boards"),
+   * with the press that asked. Without it (the dev fixtures) the key is drawn disabled.
+   */
+  onDimensions?: (cause: Event) => void;
 }
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -91,12 +96,12 @@ export interface BoardLeaf {
    * the keep line's place and is announced once.
    */
   setInert(why: LeafInert | null): void;
-  /** The live loop's keep state in the keep line's place (`Saving…`, `Not saved`), or null for the usual keep line. A save is shown only once it is slow. */
+  /** The live loop's keep state in the keep line's place (core/board-leaf.ts `keepStateLine`: `Saving…`, a board held in part), or null for the usual keep line. A save is shown only once it is slow. */
   setKeep(line: string | null): void;
   /** The dimension's title once the fold holds it (the head, its title= and the region's names). */
   setTitle(title: string): void;
-  /** The check display's line (core/board-leaf.ts `checkLine`): the head glyph's title= and a hidden description. */
-  setCheck(line: string): void;
+  /** The check display's line (core/board-leaf.ts `checkLine`), shown whole at the right end of the foot; `bad` when the fold did not match. */
+  setCheck(line: string, tone?: 'ok' | 'none' | 'bad'): void;
   /** Other words for the held-still line while it lasts (`Not saved · reconnecting` when something is pending), or null for its own. */
   setInertLine(line: string | null): void;
   /**
@@ -115,8 +120,8 @@ export interface BoardLeaf {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-/** the foot's min-height plus its dashed rule (styles.css .bd-foot) */
-const FOOT_HEIGHT = 29;
+/** the foot's height, its dashed rule included (styles.css .bd-foot: 32px, border-box) */
+const FOOT_HEIGHT = 32;
 type Attrs = Record<string, string | number | boolean | undefined>;
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', attrs: Attrs = {}, ...kids: Array<Node | string>): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -274,11 +279,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // ── head and keep line ───────────────────────────────────────────────────
   function drawHead(state: LeafState): void {
     const failed = state === 'failed';
-    headKey.textContent = failed ? LEAF_COPY.tryAgain : 'Dimensions ▾';
-    headKey.title = failed ? '' : 'Not built yet · type /boards for this project’s dimensions';
-    if (failed) headKey.removeAttribute('aria-disabled');
-    else headKey.setAttribute('aria-disabled', 'true'); // the list is S1.3's
-    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert ? ' bd-said-line' : ''}`;
+    headKey.textContent = failed ? LEAF_COPY.tryAgain : LEAF_COPY.dimensions;
+    // the key opens the same list as /boards (the design's words); a leaf nobody gave a list to draws it disabled
+    headKey.title = failed ? '' : o.onDimensions ? LEAF_COPY.dimensionsTitle : 'Type /boards for this project’s dimensions';
+    if (failed || o.onDimensions) headKey.removeAttribute('aria-disabled');
+    else headKey.setAttribute('aria-disabled', 'true');
+    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', 'dialog');
+    else headKey.removeAttribute('aria-haspopup');
+    // Mika R2: a line that STATES something in the keep line's place draws in ink (marks missing, part of the board,
+    // words waiting), as the refusals and the held-still lines do; opening, folding and saving pass by quietly
+    const stated = keepShown !== null && keepShown !== KEEP_COPY.opening && keepShown !== KEEP_COPY.folding && keepShown !== KEEP_COPY.saving;
+    keep.className = `lp-keep bd-keep${state === 'yielded' ? ' bd-yield' : ''}${said || inert || stated ? ' bd-said-line' : ''}`;
     keep.replaceChildren();
     // held still: its line stays for as long as it lasts, over anything else the keep line would say
     if (inert && state !== 'failed' && state !== 'loading') {
@@ -300,7 +311,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (state === 'loading') return void keep.append(quiet ? '' : LEAF_COPY.loading);
     if (state === 'too-short') return void keep.append(LEAF_COPY.tooShort);
     if (state === 'yielded') return void keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`);
-    // the live loop's own state (a slow save, not saved) takes the keep line's place while it lasts
+    // the live loop's own state (a slow save, a board held in part) takes the keep line's place while it lasts
     if (keepShown) {
       keep.title = keepShown;
       return void keep.append(keepShown);
@@ -354,8 +365,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   function drawRail(state: LeafState): void {
     const s = st();
     const off = (state !== 'open' && state !== 'empty') || inert !== null;
-    rail.className = `bd-rail${off ? ' yielded' : ''}`;
     const lay = railLayout(boardHeight() || 9999, s?.tool ?? 'select');
+    rail.className = `bd-rail${off ? ' yielded' : ''}${lay.tight ? ' tight' : ''}`;
     const style = s?.style ?? { line: CONTENT_DEFAULTS.line, fill: null, weight: 'fine' as BoardWeight };
     // the rail is rebuilt only when what it shows has changed: a rebuild under a pointer press loses the press, and a
     // rebuild on a focus move sent focus round in a loop (review B1)
@@ -367,7 +378,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     for (const group of RAIL_GROUPS) {
       const all = group.filter((t) => lay.visible.includes(t));
       if (all.length === 0) continue;
-      if (!first) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
+      if (!first && !lay.tight) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
       first = false;
       for (const t of all) kids.push(row(off ? '' : railTool(t).letter, toolKey(railTool(t), s, off)));
     }
@@ -376,14 +387,15 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       const more = quietKey('bd-tool bd-more', '⋯', `More tools: ${names}`, off, () => void ((menu = menu === 'more' ? null : 'more'), draw()), { 'aria-haspopup': 'menu', 'aria-label': 'More tools', 'aria-expanded': menu === 'more' ? 'true' : 'false', 'data-key': 'more' });
       kids.push(row('', more, ...(menu === 'more' && !off ? [menuOf(lay.folded.map((t) => ({ label: railTool(t).name, letter: railTool(t).letter, glyph: glyph(railTool(t)), run: () => chooseTool(t) })))] : [])));
     }
-    kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
+    if (!lay.tight) kids.push(h('span', 'bd-brk', { 'aria-hidden': 'true' }));
     const ink = quietKey('bd-tool bd-ink', '', 'Line and fill', off, () => void ((trayOpen = !trayOpen), draw()), { 'aria-label': `Line ${wellName(style.line)}, fill ${wellName(style.fill)}`, 'aria-expanded': trayOpen ? 'true' : 'false', 'data-key': 'ink' });
     const wl = h('span', 'bd-well line');
     wl.style.setProperty('--wl', colour(style.line, 'line'));
     const wf = h('span', `bd-well fill${style.fill === null ? ' c-none' : ''}`);
     if (style.fill !== null) wf.style.setProperty('--wf', colour(style.fill, 'fill'));
     ink.append(wl, wf);
-    kids.push(row('', ink), h('span', 'bd-grow'));
+    kids.push(row('', ink));
+    if (!lay.tight) kids.push(h('span', 'bd-grow'));
     if (lay.hand) kids.push(row(off ? '' : 'H', toolKey(railTool('hand'), s, off)));
     if (lay.zoomKeys) kids.push(row('', quietKey('bd-tool', '+', 'Zoom in (⌘ +)', off, () => handle?.zoomIn(), { 'aria-label': 'Zoom in', 'data-key': 'zoom-in' })));
     const pct = quietKey('bd-zoom', zoomPercent(s?.zoom ?? 1), lay.zoomKeys ? 'Fit everything (⌘ 0)' : 'Zoom', off, () => (lay.zoomKeys ? handle?.zoomToFit() : void ((menu = menu === 'zoom' ? null : 'zoom'), draw())), lay.zoomKeys ? { 'data-key': 'percent' } : { 'aria-haspopup': 'menu', 'aria-expanded': menu === 'zoom' ? 'true' : 'false', 'data-key': 'percent' });
@@ -393,6 +405,22 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     rail.replaceChildren(...kids);
     // focus goes back to the same key (every rail key has a data-key), or to the chosen tool when that key is gone
     if (focused) (rail.querySelector<HTMLElement>(`[data-key="${focused}"]`) ?? rail.querySelector<HTMLElement>('[tabindex="0"]'))?.focus();
+    placeMenu();
+  }
+  /**
+   * An open rail menu stays inside the board's own area (T-2026-11-25-004): it hangs up from its key, and on a short
+   * board that ran it over the head and out of the leaf's top, where its first rows could not be reached. It is moved
+   * down to fit and, when it is taller than the board, scrolls inside itself. Sizes are CSSOM properties.
+   */
+  function placeMenu(): void {
+    const m = rail.querySelector<HTMLElement>('.bd-menu');
+    if (!m) return;
+    const room = stage.getBoundingClientRect();
+    const edge = 4;
+    m.style.maxHeight = `${Math.max(0, Math.floor(room.height - 2 * edge))}px`;
+    const box = m.getBoundingClientRect();
+    const over = room.top + edge - box.top;
+    if (over > 0) m.style.bottom = `${-Math.ceil(over)}px`;
   }
 
   // ── the tray ─────────────────────────────────────────────────────────────
@@ -558,15 +586,24 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.name), ' ', name, ` ${f.n}`));
       } else kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} ${f.n}`));
     }
-    foot.replaceChildren(...kids);
+    // the check (what this page's fold was compared with) is at the foot's right end and is never cut
+    // (it gives way with an ellipsis rather than be clipped, and keeps its whole words in title=; when the fold did
+    // not match, the words stand whole and only the change number gives way)
+    const m = checkTone === 'bad' ? /^(Did not match)( .*)$/.exec(checkWords) : null;
+    const check = checkWords ? [h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, { title: checkWords }, ...(m ? [h('span', 'bd-check-w', {}, m[1]!), h('span', 'bd-check-n', {}, m[2]!)] : [checkWords]))] : [];
+    const checkCut = (): boolean => check.some((c) => c.scrollWidth > c.clientWidth + 1 || [...c.children].some((k) => k.scrollWidth > k.clientWidth + 1));
+    foot.replaceChildren(...kids, ...check);
     // hands that do not fit become '+<k> more', with every hand in title=; 'you' is always first and always shown
     const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
     let cut = 0;
-    while (foot.scrollWidth > foot.clientWidth && kids.length - cut > 1) {
+    // (the other hands fold into '+k more' before the check loses a letter)
+    while ((foot.scrollWidth > foot.clientWidth || checkCut()) && kids.length - cut > 1) {
       cut++;
-      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`));
+      foot.replaceChildren(...kids.slice(0, kids.length - cut), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`), ...check);
     }
   }
+  let checkWords = '';
+  let checkTone: 'ok' | 'none' | 'bad' = 'none';
   let saidAt = 0;
   function say(text: string): void {
     // the same line while it is still showing is not announced a second time (a drag from the rail onto the board
@@ -688,6 +725,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   }
 
   // ── keys and presses ─────────────────────────────────────────────────────
+  /**
+   * The APP's own shortcuts (ui/app.ts: the palette, the board's ⌥B, Settings, New session, the bare mic key). None is
+   * an engine action, so a board held still lets them through to the page (Aegis, review of PR #123: the stop that
+   * keeps keys from the engine had swallowed them, and ⌥B could not fold a board that says "fold it").
+   */
+  const appShortcut = (e: KeyboardEvent): boolean => {
+    const cmd = (e.metaKey || e.ctrlKey) && !e.altKey;
+    if (cmd && !e.shiftKey && ['k', ',', 'n'].includes(e.key.toLowerCase())) return true;
+    if (e.code === 'KeyB' && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) return true;
+    return e.key === '`' && !e.metaKey && !e.ctrlKey && !e.altKey;
+  };
   const onKey = (e: KeyboardEvent): void => {
     const active = document.activeElement;
     const s = st();
@@ -703,6 +751,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       return void o.onFold?.(e);
     }
     if (isField(active) && !boardHost.contains(active)) return;
+    // Held still: no key chooses a tool, and no key reaches the engine from the board (found by the inert-keys test:
+    // a letter still changed the tool, and Cmd+A selected every mark through the engine's own key handler, which
+    // setYielded does not cover; its document-level listeners it does). The person may still LOOK AROUND: the zoom
+    // keys pass, and Tab still leaves the board.
+    if (inert !== null) {
+      const looks = (e.metaKey || e.ctrlKey) && !e.altKey && ['+', '=', '-', '0'].includes(e.key);
+      if (!looks) {
+        if (e.key !== 'Tab' && !appShortcut(e) && boardHost.contains(active)) e.stopPropagation();
+        return;
+      }
+    }
     const a = railKeyAction(e, { boardFocused: el.contains(active), editingText: s?.editingText ?? false, cardFocused: o.cardFocused() });
     if (!a || !handle || !s) return;
     e.preventDefault();
@@ -817,7 +876,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   el.addEventListener('focusin', (e) => {
     if (e.target instanceof HTMLTextAreaElement && boardHost.contains(e.target)) for (const fn of [...textOpen]) fn();
   }, true);
-  headKey.addEventListener('click', () => load === 'failed' && start());
+  headKey.addEventListener('click', (e) => (load === 'failed' ? start() : o.onDimensions?.(e)));
   escKey.addEventListener('click', (e) => o.onFold?.(e));
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
   // the rail key under the pointer and looped with the redraw's own refocus)
@@ -864,7 +923,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       if (line === keepLine) return;
       keepLine = line;
       clearTimeout(keepTimer);
-      if (line === null || line !== 'Saving…') {
+      if (line === null || line !== KEEP_COPY.saving) {
         keepShown = line;
         return draw();
       }
@@ -881,9 +940,12 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       boardHost.setAttribute('aria-label', `Board: ${title}`);
       el.setAttribute('aria-label', `Dimension: ${title}`);
     },
-    setCheck(line) {
-      head.querySelector('.bd-g')?.setAttribute('title', line);
+    setCheck(line, tone = 'ok') {
+      if (line === checkWords && tone === checkTone) return;
+      checkWords = line;
+      checkTone = tone;
       el.dataset.check = line;
+      drawFoot();
     },
     setInertLine(line) {
       if (line === inertLine) return;

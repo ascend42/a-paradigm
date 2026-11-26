@@ -1989,6 +1989,8 @@ const boardDock = mountBoardDock({
   say: (text, kind) => notice(text, kind, { source: 'board' }),
   reconnecting: () => linkComing,
   fallbackFocus: () => $('composer-text'),
+  // the leaf head's Dimensions ▾ key: the same list as /boards (design board-leaf anatomy), on its own trusted press
+  dimensions: () => openDimensions(),
   turn: () => paintBoardTurn(),
 });
 // #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
@@ -4017,7 +4019,10 @@ function run(id: string, trusted: boolean, event?: Event): void {
     // #gui-board-dock: on the press that ran the command (its key or click), handed in by the caller: it mints the
     // gesture stamp. A caller with no event of its own (the settings sheet, a block button) opens nothing.
     if (trusted && event?.isTrusted) boardDock.command('', event);
-  } else if (id === 'dimensions.list') openDimensions();
+  } else if (id === 'dimensions.list') {
+    // the list opens only on the person's own press (a synthetic click on its palette row opens nothing)
+    if (trusted) openDimensions();
+  }
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
   else if (id === 'menu.gnomon') openAppMenu('first');
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
@@ -4590,6 +4595,9 @@ function wire(): void {
       // a row of the Dimensions list opens on THIS press (attach then open when it is not this session's)
       const row = palDims[palSel];
       e.preventDefault();
+      // never on a key REPEAT (Aegis, review of PR #123): the Enter that opened the list from the head's key, still
+      // held, arrived here and chose row 0, which could leave the open board for one nobody picked
+      if (e.repeat) return;
       if (!row) return;
       closePalette();
       return boardDock.choose(row.dim, e);
