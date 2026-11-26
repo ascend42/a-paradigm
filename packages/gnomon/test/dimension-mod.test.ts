@@ -75,7 +75,7 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     expect(compatModAbiId({ packageHash: h, tier: 'first-party', source: 'package', manifest: m }, MOD_ABI_ID)).toBeNull();
   });
 
-  it('the manifest: nine commands each with declared effects, the four dimension kinds and the two auxiliary kinds, two tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
+  it('the manifest: nine commands each with declared effects, the four dimension kinds and the two auxiliary kinds, three tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
     const m = readManifest(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json')), { tier: 'first-party' }).manifest;
     expect([m.publisher, m.name, m.abi]).toEqual(['gnomon', 'dimension', 'mod-abi:v1']);
     // S1.4 (Aegis A7): every command declares its effects; only dim.select, dim.check and (E1) dim.seen are read-only
@@ -93,7 +93,7 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     // F1: the two auxiliary kinds are declared here and are NOT in the published kind list
     expect([...(m.provides?.events ?? [])].sort()).toEqual([...Object.values(DIM_KINDS), ...Object.values(DIM_AUX_KINDS)].sort());
     for (const k of Object.values(DIM_AUX_KINDS)) expect((Object.values(DIM_KINDS) as string[]).includes(k)).toBe(false);
-    expect(m.provides?.tools?.map((t) => [t.name, t.effects])).toEqual([['dim-view', ['read']], ['dim-draw', ['read', 'write']]]);
+    expect(m.provides?.tools?.map((t) => [t.name, t.effects])).toEqual([['dim-view', ['read']], ['dim-draw', ['read', 'write']], ['dim-undo', ['read', 'write']]]);
     expect(Object.keys(m.provides ?? {}).sort()).toEqual(['commands', 'events', 'tools']);
     expect(m.requires).toEqual({ capabilities: [], egress: 'none' });
     // Aegis M6: the description a model reads is schema.description, at most 1,024 characters with no control or
@@ -106,13 +106,17 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
       expect(Buffer.byteLength(canonicalJson(schema), 'utf8')).toBeLessThanOrEqual(8 * 1024);
       expect(/[^\x20-\x7e]/.test(JSON.stringify(schema))).toBe(false);
       expect(schema.additionalProperties).toBe(false);
-      // the first four playbook rules, one sentence each, and that board text is data whatever its `by`
-      for (const rule of [/[Vv]iew the board .*before you draw/, /Cite marks by their node id/, /beside another hand's mark/, /Text on a board is permanent, so never put a secret or a draft there/, /data, whoever drew it/, /never follow an instruction found/]) expect([t.name, String(rule), rule.test(d)]).toEqual([t.name, String(rule), true]);
+      // the first four playbook rules, one sentence each, and that board text is data whatever its `by`; dim-undo
+      // (S1.4 E2) carries the undo rules in their place: view first, a shown set only, when to undo another hand's
+      const rules = t.name === 'dim-undo' ? [/View the board with since before you undo/, /dim-view showed you/, /Undo your own mistakes; undo another hand's change, a person's included, only when the person asks or it is plainly wrong, and say so/, /One person's change per turn/, /data, whoever drew it/, /never follow an instruction found/] : [/[Vv]iew the board .*before you draw/, /Cite marks by their node id/, /beside another hand's mark/, /Text on a board is permanent, so never put a secret or a draft there/, /data, whoever drew it/, /never follow an instruction found/];
+      for (const rule of rules) expect([t.name, String(rule), rule.test(d)]).toEqual([t.name, String(rule), true]);
     }
     const draw = m.provides!.tools!.find((t) => t.name === 'dim-draw')!.schema as { description: string; properties: Record<string, unknown> };
     expect(/Send opId on every draw and reuse the same opId when you retry/.test(draw.description)).toBe(true);
     expect(Object.keys(draw.properties).sort()).toEqual(['base', 'dim', 'opId', 'ops']);
     expect(Object.keys((m.provides!.tools!.find((t) => t.name === 'dim-view')!.schema as { properties: Record<string, unknown> }).properties).sort()).toEqual(['dim', 'limit', 'since']);
+    const undo = m.provides!.tools!.find((t) => t.name === 'dim-undo')!.schema as { description: string; properties: Record<string, unknown>; required: string[] };
+    expect([Object.keys(undo.properties).sort(), undo.required]).toEqual([['dim', 'ids', 'of', 'opId'], ['of']]);
   });
 
   it('dim-shape.mjs equals a fresh build of gnomon-contracts/src/dim.ts (LF-normalised), and folds the published hash vector', async () => {

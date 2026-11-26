@@ -152,7 +152,7 @@ const FIRST_PARTY_PACKAGE_HASHES = new Set<string>([
   // The retired hash is in RETIRED_FIRST_PARTY_PINS, not here and not in the superseded table. An install
   // already pinned at 1.0.0 KEEPS LOADING first-party (its tier is its signed grant.trust row) until the person
   // approves the Update card; it can no longer be staged, decided or rolled back to.
-  'sha256:0472e122ac808644157192d247004ac9e33ea8cd5be62bf59ed743dd8356f2cd', // packages/gnomon-mods/dimension 1.2.0 (gnomon.dimension)
+  'sha256:52a5dc6c29e1223a026d0497ecead4a2f88746d92fb1e03c70df1d260a0989ab', // packages/gnomon-mods/dimension 1.2.0 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),
