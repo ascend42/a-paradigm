@@ -5,7 +5,8 @@
  *
  * Nothing here reads a clock. The work is COUNTED: while a fold runs, the global `Map` and `Set` constructors are
  * replaced by subclasses that count each construction from an existing Map / Set and the entries it copied. That
- * is exactly what `draftOf` does (`new Map(s.nodes)`, `new Set(s.gone)`); the fold builds no other collection.
+ * is exactly what `draftOf` does (`new Map(s.nodes)`, `new Set(s.gone)` and, from S1.4 E1, `new Map(s.goneBy)`, so
+ * one state copy is TWO Map copies: `goneBy` holds one entry per deleted id); the fold builds no other collection.
  */
 import { describe, expect, it } from 'vitest';
 import { DIM_KINDS, dimHash, emptyDimState, foldDim, foldDimRow, type DimRow, type DimState } from '../src/dim.js';
@@ -79,7 +80,7 @@ describe('fold cost: foldDim is linear in the rows', () => {
     expect(out.ops).toBe(n);
     expect(out.unapplied).toBe(0);
     // the empty `from` is copied once; no row copies anything
-    expect(work).toEqual({ mapCopies: 1, mapEntries: 0, setCopies: 1, setEntries: 0 });
+    expect(work).toEqual({ mapCopies: 2, mapEntries: 0, setCopies: 1, setEntries: 0 });
   });
 
   it('continuing from a kept state copies that state once: the copy cost is the board, not the rows', () => {
@@ -87,7 +88,7 @@ describe('fold cost: foldDim is linear in the rows', () => {
     for (const n of [10, 1000, 4000]) {
       const { out, work } = counted(() => foldDim(addRows(n, 1000), undefined, kept));
       expect(out.nodes.size).toBe(1000 + n);
-      expect(work).toEqual({ mapCopies: 1, mapEntries: 1000, setCopies: 1, setEntries: 0 });
+      expect(work).toEqual({ mapCopies: 2, mapEntries: 1000, setCopies: 1, setEntries: 0 });
     }
     expect(kept.nodes.size).toBe(1000); // the kept state is not changed
   });
@@ -97,7 +98,7 @@ describe('fold cost: foldDim is linear in the rows', () => {
     const { out, work } = counted(() => foldDim(rows, 501));
     expect(out.nodes.size).toBe(500);
     expect(out.seq).toBe(501);
-    expect(work.mapCopies).toBe(1);
+    expect(work.mapCopies).toBe(2);
   });
 });
 
@@ -109,7 +110,7 @@ describe('fold cost: foldDimRow copies the state per row (why a scrub must not r
     const start = foldDim([START]);
     const { out, work } = counted(() => rowByRow(rows, start));
     expect(out.nodes.size).toBe(n);
-    expect(work.mapCopies).toBe(n);
+    expect(work.mapCopies).toBe(2 * n);
     expect(work.setCopies).toBe(n);
     expect(work.mapEntries).toBe((n * (n - 1)) / 2);
   });
@@ -121,7 +122,7 @@ describe('fold cost: foldDimRow copies the state per row (why a scrub must not r
     const [a, b] = [entries(300), entries(600)];
     expect(b / a).toBeGreaterThan(3.9);
     expect(b / a).toBeLessThan(4.1);
-    expect([copies(300), copies(600)]).toEqual([1, 1]);
+    expect([copies(300), copies(600)]).toEqual([2, 2]);
   });
 
   it('a scrub from kept states does the same work as the row-by-row fold in a fraction of the copies, with the same hash', () => {
@@ -138,8 +139,8 @@ describe('fold cost: foldDimRow copies the state per row (why a scrub must not r
     expect(dimHash(fast.out)).toBe(dimHash(slow.out));
     expect(fast.out.nodes.size).toBe(n);
     expect({ seq: fast.out.seq, ops: fast.out.ops, unapplied: fast.out.unapplied, attached: fast.out.attached }).toEqual({ seq: slow.out.seq, ops: slow.out.ops, unapplied: slow.out.unapplied, attached: slow.out.attached });
-    expect(fast.work.mapCopies).toBe(Math.ceil(rows.length / every));
-    expect(slow.work.mapCopies).toBe(rows.length);
+    expect(fast.work.mapCopies).toBe(2 * Math.ceil(rows.length / every));
+    expect(slow.work.mapCopies).toBe(2 * rows.length);
     expect(fast.work.mapEntries * 50).toBeLessThan(slow.work.mapEntries);
   });
 

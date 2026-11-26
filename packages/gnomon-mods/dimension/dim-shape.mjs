@@ -775,10 +775,10 @@ function copyJson(v, depth = 0) {
   return null;
 }
 function emptyDimState(dim = null) {
-  return { dim, title: "", attached: [], ended: false, nodes: /* @__PURE__ */ new Map(), gone: /* @__PURE__ */ new Set(), seq: 0, ops: 0, unapplied: 0 };
+  return { dim, title: "", attached: [], ended: false, nodes: /* @__PURE__ */ new Map(), gone: /* @__PURE__ */ new Set(), goneBy: /* @__PURE__ */ new Map(), seq: 0, ops: 0, unapplied: 0 };
 }
 function draftOf(s) {
-  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
+  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), goneBy: new Map(s.goneBy ?? []), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
 }
 var NON_EMPTY = (v) => typeof v === "string" && v.length > 0;
 var own = (o, k) => Object.prototype.hasOwnProperty.call(o, k) ? o[k] : void 0;
@@ -825,7 +825,9 @@ function applyOp(d, op, by, hsid, seq, restored) {
     case "add": {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== "string" || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      const from = restored?.get(node.id);
+      const named = restored?.get(node.id);
+      const was = named ? d.goneBy.get(named.id) : void 0;
+      const from = named && d.gone.has(named.id) && !d.nodes.has(named.id) && was !== void 0 && sameHand(dimViewBy(was), named.by) ? named : void 0;
       const fresh = { node: copyJson(node), by, hsid, addedSeq: seq };
       if (from) {
         fresh.restoredFrom = { id: from.id, by: from.by };
@@ -863,6 +865,8 @@ function applyOp(d, op, by, hsid, seq, restored) {
     }
     case "delete": {
       if (typeof op.id !== "string" || !d.nodes.has(op.id)) return false;
+      const del = d.nodes.get(op.id);
+      d.goneBy.set(op.id, del.restoredFrom?.by ?? del.by);
       d.nodes.delete(op.id);
       d.gone.add(op.id);
       return true;

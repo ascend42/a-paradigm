@@ -490,7 +490,8 @@ function attrFrom(v) {
 export function encodeKeyframe(state, log, aux) {
   const items = [];
   for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq, attrOf(n)]);
-  for (const id of state.gone) items.push(['g', id]);
+  // v3: a deleted id with its original hand (`goneBy`, Aegis defence in depth), or null when the fold has none
+  for (const id of state.gone) items.push(['g', id, state.goneBy?.get(id) ?? null]);
   const chunks = [];
   let cur = [];
   let size = 2;
@@ -536,11 +537,18 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
     if (sumOf(JSON.stringify([head, chunks])) !== h.sum) return null;
     const nodes = new Map();
     const gone = new Set();
+    const goneBy = new Map();
     for (const chunk of chunks) {
       if (!Array.isArray(chunk)) return null;
       for (const it of chunk) {
         if (!Array.isArray(it) || typeof it[1] !== 'string') return null;
-        if (it[0] === 'g') gone.add(it[1]);
+        if (it[0] === 'g') {
+          if (it.length !== 3) return null;
+          const by = it[2] === null ? null : byOk(it[2]);
+          if (it[2] !== null && !by) return null;
+          gone.add(it[1]);
+          if (by) goneBy.set(it[1], by);
+        }
         else if (it[0] === 'n') {
           const by = byOk(it[3]);
           if (it.length !== 7 || !plain(it[2]) || !by || !(it[4] === null || typeof it[4] === 'string') || !Number.isSafeInteger(it[5])) return null;
@@ -550,7 +558,7 @@ export function decodeKeyframe(headIn, chunks, dim, log) {
         } else return null;
       }
     }
-    const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
+    const state = { dim, title: m.title, attached: [...attached], ended: m.ended, nodes, gone, goneBy, seq: h.seq, ops: m.ops, unapplied: m.unapplied };
     // the content and adder by the published hash, the attribution by the published digest (Aegis G7, P5 gate)
     return dimHash(state) === h.hash && dimAttrDigest(state) === h.attr ? { state, grants: aux.grants, oids: aux.oids } : null;
   } catch {

@@ -271,6 +271,13 @@ export interface DimState {
   ended: boolean;
   nodes: ReadonlyMap<string, DimFoldNode>;
   gone: ReadonlySet<string>;
+  /**
+   * S1.4 E1 (Aegis, defence in depth; OUTSIDE the hash and the digest): the ORIGINAL hand (`restoredFrom.by`, else
+   * `by`) of each deleted id, set by the fold's delete. A restored entry is honoured only when its old id is here and
+   * its hand is this one, so a marker cannot give a re-added mark a hand its deleted mark never had. Optional for a
+   * state built by hand; the fold always keeps it, and the mod's keyframe v3 carries it.
+   */
+  goneBy?: ReadonlyMap<string, DimBy>;
   seq: number;
   /** ops applied */
   ops: number;
@@ -284,6 +291,7 @@ interface Draft {
   ended: boolean;
   nodes: Map<string, DimFoldNode>;
   gone: Set<string>;
+  goneBy: Map<string, DimBy>;
   seq: number;
   ops: number;
   unapplied: number;
@@ -314,11 +322,11 @@ function copyJson(v: unknown, depth = 0): unknown {
 
 /** An empty state. Pass `dim` to fold one dimension out of a log that holds several; else the first start row names it. */
 export function emptyDimState(dim: string | null = null): DimState {
-  return { dim, title: '', attached: [], ended: false, nodes: new Map(), gone: new Set(), seq: 0, ops: 0, unapplied: 0 };
+  return { dim, title: '', attached: [], ended: false, nodes: new Map(), gone: new Set(), goneBy: new Map(), seq: 0, ops: 0, unapplied: 0 };
 }
 
 function draftOf(s: DimState): Draft {
-  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
+  return { dim: s.dim, title: s.title, attached: [...s.attached], ended: s.ended, nodes: new Map(s.nodes), gone: new Set(s.gone), goneBy: new Map(s.goneBy ?? []), seq: s.seq, ops: s.ops, unapplied: s.unapplied };
 }
 
 const NON_EMPTY = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
@@ -386,7 +394,12 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
     case 'add': {
       const node = op.node;
       if (!isPlainObject(node) || typeof node.id !== 'string' || d.nodes.has(node.id) || d.gone.has(node.id)) return false;
-      const from = restored?.get(node.id);
+      // Aegis (E1 review, defence in depth): a restored entry is honoured only when its old id was DELETED before
+      // this row and the entry's hand is the deleted mark's original hand (`goneBy`); a marker naming an id that is
+      // live or was never on the board, or another hand, leaves no provenance
+      const named = restored?.get(node.id);
+      const was = named ? d.goneBy.get(named.id) : undefined;
+      const from = named && d.gone.has(named.id) && !d.nodes.has(named.id) && was !== undefined && sameHand(dimViewBy(was), named.by) ? named : undefined;
       const fresh: DimFoldNode = { node: copyJson(node) as Record<string, unknown>, by, hsid, addedSeq: seq };
       if (from) {
         // G5 and I-1: the original hand, and who had written into or changed the mark before it was deleted
@@ -425,6 +438,8 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
     }
     case 'delete': {
       if (typeof op.id !== 'string' || !d.nodes.has(op.id)) return false;
+      const del = d.nodes.get(op.id)!;
+      d.goneBy.set(op.id, del.restoredFrom?.by ?? del.by);
       d.nodes.delete(op.id);
       d.gone.add(op.id);
       return true;

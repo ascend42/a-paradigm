@@ -586,3 +586,65 @@ describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids 
     expect(big.truncated).toEqual({ nodes: 500 });
   });
 });
+
+describe('#dimension-mod E1 item 8: Aegis conditions at the mod', () => {
+  it('every command and both tools, on every surface: a payload carrying undo, restored or of never reaches the log; a person\'s row naming an agent hand in restored never lands', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await draw(w, dim, B, 1, [{ type: 'delete', id: ulid(1) }]);
+    const agentHand = { cls: 'agent', principal: agentOf(B).principal, agent: 'claude' };
+    const restored = [[ulid(50), ulid(1), agentHand]];
+    const undo = { of: turnOf(B, 1), restored };
+    const before = w.log.rows.length;
+    const base: Record<string, Record<string, unknown>> = {
+      'dim.open': { dim, opened: 'menu' },
+      'dim.attach': { dim },
+      'dim.op': { dim, ops: [{ type: 'add', node: { ...(rectOp(50).node as object) } }] },
+      'dim.close': { dim },
+      'dim.grant': { dim, write: true },
+      'dim.select': { dim, ids: [] },
+      'dim.check': { dim },
+      'dim.undo': { dim, of: turnOf(B, 1) },
+      'dim.seen': { dim, of: turnOf(B, 1) },
+    };
+    for (const [cmd, args] of Object.entries(base)) {
+      for (const [k, v] of Object.entries({ undo, restored, of: { ...turnOf(B, 1), restored } })) {
+        // of is an arg of dim.undo and dim.seen: there a forged of (with restored inside) is still refused
+        const sent = { ...args, [k]: v };
+        expect([cmd, k, (await w.run(cmd, sent)).code]).toEqual([cmd, k, 'args-bad']);
+      }
+      // the CLI surface (and so every non-gui caller) is refused before the args are read
+      expect([cmd, (await w.run(cmd, { ...args, undo }, A, { ...GUI, surface: 'cli' })).code]).toEqual([cmd, 'not-human-gui']);
+    }
+    for (const t of ['dim-view', 'dim-draw']) for (const k of ['undo', 'restored', 'of']) expect([t, k, (await w.tool(t, { dim, ...(t === 'dim-draw' ? { ops: [rectOp(51)] } : {}), [k]: k === 'restored' ? restored : undo }, agentOf(B))).code]).toEqual([t, k, 'args-bad']);
+    // the person's dim.op with the marker inside an op: refused by name, no row
+    const inOp = await w.run('dim.op', { dim, ops: [{ ...rectOp(52), undo }] });
+    expect(inOp).toMatchObject({ ok: false, code: 'ops-refused' });
+    expect(w.log.rows.slice(before).filter((x) => x.kind === DIM_KINDS.op)).toHaveLength(0);
+    for (const x of w.log.rows.slice(before)) expect(JSON.stringify(x.payload)).not.toContain('restored');
+    // the only restored entry a person's row ever carries is the mod's own, from its checkpoint: the person's
+    // undo of B's delete names the PERSON's hand (the mark's original), never the agent's
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 1 });
+    const u = w.opRows().at(-1)!.payload as { undo: { restored: unknown[][] } };
+    expect(u.undo.restored[0]![2]).toEqual({ cls: 'human', principal: HUMAN });
+  });
+
+  it('keyframe v3 carries goneBy: after a cold open from it, a restore still keeps its provenance (the fold honours it)', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await draw(w, dim, B, 1, [rectOp(1, { label: 'b' })]);
+    await draw(w, dim, A, 1, [{ type: 'delete', id: ulid(1) }]);
+    await w.run('dim.grant', { dim, write: true }, B); // writes a keyframe
+    const kf = w.state()[`kf:${dim.slice(4)}`] as Record<string, unknown>;
+    expect(kf.v).toBe(3);
+    expect((w.state()[`kf:${dim.slice(4)}:0`] as unknown[][]).find((it) => it[0] === 'g')).toEqual(['g', ulid(1), { cls: 'agent', principal: agentOf(B).principal, agent: 'claude' }]);
+    await w.restart();
+    await draw(w, dim, A, 2, [rectOp(2)]); // the fold is loaded from the keyframe
+    // a restore row read in by a catch-up: the mod's fold (from the keyframe) honours it only if it knows the hand
+    w.log.inject(DIM_KINDS.op, { v: 1, dim, ops: [{ type: 'add', node: { ...(rectOp(3).node as object), label: 'b' } }], act: ulid(9, '01JDAC'), undo: { of: turnOf(A, 1), restored: [[ulid(3), ulid(1), { cls: 'agent', principal: agentOf(B).principal, agent: 'claude' }]] }, relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } });
+    const chk = await w.run('dim.check', { dim });
+    expect(chk.attr).toBe(dimAttrDigest(w.log.fold(dim)));
+    expect(handsOf(await w.tool('dim-view', { dim }, agentOf(A, 3)), ulid(3))!.restoredFrom).toMatchObject({ id: ulid(1), by: { cls: 'agent', agent: 'claude' } });
+  });
+});
