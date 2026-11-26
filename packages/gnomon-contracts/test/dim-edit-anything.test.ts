@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_UNDO_MARK_LIMITS, dimActOf, dimAttrDigest, dimChangeSetOf, dimHash, dimUndoMarkOf, dimViewOf, foldDim, validateDimOps,
+  DIM_HASH_VECTOR_HASH, DIM_HASH_VECTOR_ROWS, DIM_KINDS, DIM_LIMITS, DIM_UNDO_MARK_LIMITS, dimActOf, dimInvertRows, planDimUndo, dimAttrDigest, dimChangeSetOf, dimHash, dimUndoMarkOf, dimViewOf, foldDim, validateDimOps,
   type DimActor, type DimBy, type DimFoldNode, type DimRow, type DimState,
 } from '../src/dim.js';
 
@@ -230,5 +230,161 @@ describe('E0 item 5: the honouring readers dimActOf, dimChangeSetOf and dimUndoM
     // the hash is the same with or without the marker
     const plain = rows.map((r) => ({ ...r, payload: { ...(r.payload as Record<string, unknown>), undo: undefined } }));
     expect(dimHash(foldDim(plain))).toBe(dimHash(foldDim(rows)));
+  });
+});
+
+describe('E0 item 6: planDimUndo (Arky §3.1; Aegis ruling 4, G3, G5)', () => {
+  const minter = (from = 60): (() => string) => {
+    let n = from;
+    return () => id(n++);
+  };
+  /** A board, an agent turn on it, the states before each of its rows, and the rows after it. */
+  function board(): { rows: DimRow[]; set: DimRow[] } {
+    seq = 0;
+    const rows = [start(), row(human, [{ type: 'add', node: rect(1, { label: 'mine', color: 'graphite' }) }, { type: 'add', node: rect(2) }, { type: 'add', node: text(3, 'kit words') }, { type: 'add', node: { id: id(4), kind: 'arrow', x: 0, y: 0, z: 'P', points: [0, 0, 5, 5], from: id(3), to: id(2) } }])];
+    const set = [
+      row(claude, [{ type: 'update', id: id(1), patch: { label: 'Claude', color: null } }, { type: 'move', ids: [id(2)], dx: 10, dy: 5 }]),
+      row(claude, [{ type: 'delete', id: id(3) }, { type: 'add', node: rect(5) }]),
+    ];
+    return { rows: [...rows, ...set], set };
+  }
+  const befores = (all: DimRow[], set: DimRow[]): Array<{ before: DimState; ops: unknown[] }> =>
+    set.map((r) => ({ before: foldDim(all.filter((x) => x.seq < r.seq)), ops: (r.payload as { ops: unknown[] }).ops }));
+  const plan = (all: DimRow[], set: DimRow[], after: DimRow[] = [], o: Partial<Parameters<typeof planDimUndo>[0]> = {}) =>
+    planDimUndo({ rows: befores(all, set), after, current: foldDim([...all, ...after]), actor: human, mint: minter(), ...o });
+  const land = (all: DimRow[], p: { ops: unknown[]; restored: unknown[] }, a: DimActor = human, extra: Record<string, unknown> = {}): DimRow =>
+    row(a, p.ops, { undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, restored: p.restored }, ...extra });
+
+  it('a person undoes an agent turn field by field; a delete is re-added under a new id with links re-pointed and the original hand', () => {
+    const { rows, set } = board();
+    const p = plan(rows, set);
+    expect(p.skipped).toEqual({ changed: 0, gone: 0, refused: 0 });
+    expect(p.more).toBe(false);
+    expect(p.restored).toEqual([[id(60), id(3), handOf(human)]]);
+    const undo = land(rows, p);
+    const s = foldDim([...rows, undo]);
+    expect(s.nodes.get(id(1))!.node).toMatchObject({ label: 'mine', color: 'graphite' });
+    expect(s.nodes.get(id(2))!.node).toMatchObject({ x: 0, y: 0 });
+    expect(s.nodes.has(id(5))).toBe(false);
+    expect(s.nodes.get(id(60))!.node).toMatchObject({ kind: 'text', text: 'kit words' });
+    expect(s.nodes.get(id(60))!.restoredFrom).toEqual({ id: id(3), by: handOf(human) });
+    expect(s.nodes.get(id(4))!.node.from).toBe(id(60));
+    // the page's inverse is the same algorithm without conflict skipping
+    expect(dimInvertRows(befores(rows, set), minter(), foldDim(rows)).length).toBeGreaterThan(0);
+  });
+
+  it('later changes by any hand win: skipped and counted, never a whole refusal', () => {
+    const { rows, set } = board();
+    const after = [
+      row(human, [{ type: 'update', id: id(1), patch: { label: 'person again' } }]),
+      row(kit, [{ type: 'move', ids: [id(2)], dx: 1, dy: 0 }, { type: 'update', id: id(5), patch: { label: 'kit' } }], {}, 'h2'),
+    ];
+    const p = plan(rows, set, after);
+    // the label of 1 was changed since; its colour is still restored. 2 was moved since. 5 was touched after its add.
+    expect(p.skipped).toEqual({ changed: 3, gone: 0, refused: 0 });
+    const s = foldDim([...rows, ...after, land(rows, p)]);
+    expect(s.nodes.get(id(1))!.node).toMatchObject({ label: 'person again', color: 'graphite' });
+    expect(s.nodes.get(id(2))!.node).toMatchObject({ x: 11, y: 5 });
+    expect(s.nodes.has(id(5))).toBe(true);
+    expect(s.nodes.has(id(60))).toBe(true);
+    // a node gone now (deleted later by someone else) is skipped as gone
+    const gone = [row(human, [{ type: 'delete', id: id(2) }])];
+    expect(plan(rows, set, gone).skipped).toEqual({ changed: 0, gone: 1, refused: 0 });
+    // a link re-pointed since is the other hand's: only a link that STILL names the old id is re-pointed
+    const repointed = [row(kit, [{ type: 'update', id: id(4), patch: { from: id(1) } }], {}, 'h2')];
+    const q = plan(rows, set, repointed);
+    expect(q.ops.some((op) => op.type === 'update' && op.id === id(4))).toBe(false);
+  });
+
+  it('G3: a now-secret restored text is skipped while the rest applies; a now-failing colour is skipped; both in one plan', () => {
+    seq = 0;
+    const rows = [
+      start(),
+      row(human, [{ type: 'add', node: text(1, 'note NEWRULE-abc') }, { type: 'add', node: rect(2) }]),
+      // a colour that fails today's palette check, stored by a row no validator read
+      row(human, [{ type: 'add', node: rect(3, { color: 'lemon' }) }]),
+    ];
+    const set = [row(claude, [{ type: 'delete', id: id(1) }, { type: 'delete', id: id(3) }, { type: 'update', id: id(2), patch: { label: 'x' } }])];
+    const all = [...rows, ...set];
+    // a newer rule: the caller's scan stands for the secret rules of the day
+    const scan = (t: string): readonly string[] => (t.includes('NEWRULE') ? ['newrule'] : []);
+    const p = plan(all, set, [], { scan });
+    expect(p.skipped).toEqual({ changed: 0, gone: 0, refused: 2 });
+    expect(p.ops).toEqual([{ type: 'update', id: id(2), patch: { label: null } }]);
+    expect(p.restored).toEqual([]);
+    // and what it hands back is a batch the validator accepts whole
+    const v = validateDimOps(foldDim(all), p.ops, human, { scan });
+    expect([v.secret, v.refused, v.ok.length]).toEqual([false, [], 1]);
+    // each alone
+    const alone = [row(claude, [{ type: 'delete', id: id(1) }, { type: 'update', id: id(2), patch: { label: 'y' } }])];
+    const q = plan([...rows, ...alone], alone, [], { scan });
+    expect([q.skipped.refused, q.applied, q.ops]).toEqual([1, 1, [{ type: 'update', id: id(2), patch: { label: null } }]]);
+  });
+
+  it('validates as the UNDOER: an agent undoes a person\'s action; an actor that is no hand gets nothing', () => {
+    const { rows, set } = board();
+    const asAgent = plan(rows, set, [], { actor: kit });
+    expect([asAgent.applied > 0, asAgent.skipped.refused]).toEqual([true, 0]);
+    const nobody = plan(rows, set, [], { actor: { cls: 'agent', principal: 'p:t/session', agent: '' } });
+    expect(nobody.ops).toEqual([]);
+    expect(nobody.skipped.refused).toBeGreaterThan(0);
+  });
+
+  it('G5: a person undoes an agent\'s delete of agent B\'s text: the re-add names B as the original hand', () => {
+    seq = 0;
+    const rows = [start(), row(kit, [{ type: 'add', node: text(1, 'B words') }], {}, 'h2')];
+    const set = [row(claude, [{ type: 'delete', id: id(1) }])];
+    const all = [...rows, ...set];
+    const p = plan(all, set);
+    expect(p.restored).toEqual([[id(60), id(1), handOf(kit)]]);
+    const s = foldDim([...all, land(all, p)]);
+    expect([s.nodes.get(id(60))!.by, s.nodes.get(id(60))!.restoredFrom]).toEqual([handOf(human), { id: id(1), by: handOf(kit) }]);
+    // the original hand survives a second restore: undo the person's undo, then undo that
+    const undo1 = land(all, p);
+    const all2 = [...all, undo1];
+    const redo = plan(all2, [undo1], [], { mint: minter(70) });
+    const all3 = [...all2, land(all2, redo, claude)];
+    const back = plan(all3, [all3[all3.length - 1]!], [], { mint: minter(80) });
+    expect(back.restored).toEqual([[id(80), id(60), handOf(kit)]]);
+  });
+
+  it('undo of an undo (redo) works the same way, and a mark is never re-added twice', () => {
+    const { rows, set } = board();
+    const p = plan(rows, set);
+    const undo = land(rows, p);
+    const all = [...rows, undo];
+    const redo = plan(all, [undo], [], { mint: minter(70) });
+    const s = foldDim([...all, land(all, redo)]);
+    const turned = foldDim(rows);
+    // back to the agent turn's result: its words, its move, its add; the re-added text is deleted again
+    expect(s.nodes.get(id(1))!.node).toEqual(turned.nodes.get(id(1))!.node);
+    expect(s.nodes.get(id(2))!.node).toEqual(turned.nodes.get(id(2))!.node);
+    expect(s.nodes.has(id(60))).toBe(false);
+    expect(s.nodes.has(id(70))).toBe(true);
+    // the same turn undone a second time after the first undo landed: the delete is not re-added again
+    const again = plan(rows, set, [undo], { mint: minter(90) });
+    expect(again.restored).toEqual([]);
+    expect(again.ops.some((op) => op.type === 'add')).toBe(false);
+  });
+
+  it('new ids come from the caller\'s minter only; a scope limits the plan; a large plan continues', () => {
+    const { rows, set } = board();
+    const calls: string[] = [];
+    const p = plan(rows, set, [], { mint: () => (calls.push('x'), id(66)) });
+    expect(calls).toHaveLength(1);
+    expect(p.ops.find((op) => op.type === 'add')).toMatchObject({ node: { id: id(66) } });
+    // a minter that gives a used id: that re-add is refused, the rest applies
+    expect(plan(rows, set, [], { mint: () => id(1) }).skipped.refused).toBe(1);
+    // scope: only the marks named (old ids)
+    const scoped = plan(rows, set, [], { ids: [id(3)] });
+    expect([scoped.applied, scoped.restored.length]).toEqual([1, 1]);
+    // 70 adds: whole marks up to one call, then more
+    seq = 0;
+    const base = [start()];
+    const big = [row(claude, Array.from({ length: 64 }, (_, i) => ({ type: 'add', node: rect(i + 10) }))), row(claude, Array.from({ length: 6 }, (_, i) => ({ type: 'add', node: rect(i + 80) })))];
+    const q = planDimUndo({ rows: befores([...base, ...big], big), after: [], current: foldDim([...base, ...big]), actor: human, mint: minter() });
+    expect([q.ops.length, q.applied, q.more]).toEqual([DIM_LIMITS.opsPerRow, 64, true]);
+    // malformed input plans nothing and never throws
+    expect(planDimUndo({ rows: null as unknown as [], after: [], current: foldDim(base), actor: human, mint: minter() }).ops).toEqual([]);
   });
 });
