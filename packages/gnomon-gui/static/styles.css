@@ -1944,8 +1944,8 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-menu .bd-mi kbd { white-space: nowrap; margin-left: auto; font: inherit; font-size: var(--fs-label); color: var(--sec); }
 .bd-rail.yielded { background: var(--sheet); }
 .bd-rail.yielded kbd { visibility: hidden; }
-/* T-2026-11-25-004: the shortest rail (core/board-rail.ts `tight`) is its keys alone: no graduations, ticks or spacer */
-.bd-rail.tight { background: var(--sheet); }
+/* design-foot (mika S1): the shortest rail (core/board-rail.ts `tight`) drops its ticks and spacer and KEEPS its
+   graduations (the rail's own background): a bare strip is the yielded rail's look */
 /* Mika R3: the head and the keep line never give way either. A board that lost height in ONE step squeezed the keep
    line under the old, taller rail; the leaf then read its room from the squeezed line and kept a rail too tall for it. */
 .bd-leaf > .bd-head, .bd-leaf > .bd-keep { flex: none; }
@@ -1959,13 +1959,16 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-note .bd-en-t { font-size: var(--fs-reading); font-weight: 600; color: var(--ink); }
 .bd-said-line { color: var(--ink); }
 .bd-foot .bd-more-hands { white-space: nowrap; }
-/* the check (boards S1.3 P4b-3): what this page's copy of the board was compared with, whole, at the foot's right end */
-/* (Mika R1: never clipped unseen. It gives way with an ellipsis and keeps its whole words in title=; `you` never shrinks.
-   A fold that did not match keeps its WORDS whole: only the change number gives way.) */
-.bd-foot .bd-check { flex: 0 1 auto; min-width: 0; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the check (design board-leaf.check.place, design-foot): at the foot's right end when its LONGEST wording and its gap
+   fit after the hands (ui/board-leaf.ts drawFoot decides, the hands alone); never cut, no short form. The probe is
+   the longest wording, measured in the foot's own paint and removed at once. */
+.bd-foot .bd-check { flex: none; margin-left: auto; white-space: nowrap; }
+.bd-foot .bd-check-probe { position: absolute; visibility: hidden; margin: 0; }
 .bd-foot .bd-hand:first-child { flex: none; }
-.bd-foot .bd-check.bad { display: flex; }
-.bd-foot .bd-check-w { flex: none; }
-.bd-foot .bd-check-n { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .bd-foot .bd-check.bad { color: var(--fail); }
-.bd-leaf.too-short .bd-body, .bd-leaf.too-short .bd-foot { display: none; }
+/* design check.signs.mismatch: the out-of-date line's fact in --fail at 500, the rest in ink */
+.bd-keep .bd-fail-fact { color: var(--fail); font-weight: 500; }
+/* design too_short.shows: under the floor there is no rail and the board is SHOWN, held still, the canvas taking the
+   rail's 48px; the foot stays (its draw keys and the check). Under 56px of board the body is not drawn at all. */
+.bd-leaf.too-short .bd-rail, .bd-leaf.too-short .bd-tray { display: none; }
+.bd-leaf.no-body .bd-body { display: none; }

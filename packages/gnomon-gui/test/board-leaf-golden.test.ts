@@ -153,7 +153,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       expect(acted.outside, `${state}: drawn outside the leaf`).toEqual([]);
       expect(acted.short, `${state}: under the least height nothing of the body is drawn`).toBe(true);
       expect(facts.rail?.h ?? 0, `${state}: the rail`).toBe(0);
-      if (state === 'failed') expect(acted.keep).toBe('The board didn’t open · A part of it did not load.');
+      if (state === 'failed') expect(acted.keep).toBe('The board didn’t open · A part of it didn’t load.');
     }
   }, 300_000);
 
@@ -168,11 +168,11 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       const steps = []; let tooShortAt = null;
       for (let h = full; h >= chrome + 120; h--) { host.style.height = h + 'px'; await fr(); const s = look(); if (s.state === 'too-short') { tooShortAt = tooShortAt ?? s.room; continue; } steps.push(s); }
       const chosen = [];
-      for (const room of [472, 408, 367, 312, 304, 271, 239, 232, 230, 229, 198, 197, 190, 161, 157, 156, 148]) { if (chrome + room > full) continue; host.style.height = (chrome + room) + 'px'; await fr();
+      for (const room of [472, 408, 367, 312, 304, 271, 239, 232, 230, 229, 198, 197, 190, 161, 157, 156, 148, 140]) { if (chrome + room > full) continue; host.style.height = (chrome + room) + 'px'; await fr();
         for (const t of ['select', 'sticky', 'text', 'rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand']) { hd.setTool(t); await fr(); const s = look(); chosen.push({ ...s, want: t, shown: s.tools.includes(t) || t === 'hand' }); } }
       // Mika R3: ONE abrupt shrink from the whole height (a pinned card arriving), to each side of every fold step
       hd.setTool('select'); const jumps = [];
-      for (const room of [300, 266, 226, 197, 153, 150, 148]) { host.style.height = full + 'px'; await fr(); await fr(); host.style.height = (chrome + room) + 'px'; await fr(); jumps.push({ ...look(), target: room, keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) }); }
+      for (const room of [300, 266, 226, 197, 153, 150, 140]) { host.style.height = full + 'px'; await fr(); await fr(); host.style.height = (chrome + room) + 'px'; await fr(); jumps.push({ ...look(), target: room, keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) }); }
       host.style.height = full + 'px'; await fr(); const rest = { keepH: Math.round(host.querySelector('.bd-keep').getBoundingClientRect().height), headH: Math.round(host.querySelector('.bd-head').getBoundingClientRect().height) };
       hd.setTool('select'); host.style.height = (chrome + 190) + 'px'; await fr();
       return { full, chrome, steps, chosen, tooShortAt, jumps, rest, at190: look() }; })()`;
@@ -198,7 +198,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     }
     // Mika R3: after ONE abrupt shrink the head and the keep line keep their height, the leaf reads its real room,
     // and the rail is the layout of that room: 8px from the foot (24 when tight), never the taller one it had
-    expect(sweep.jumps.map((j) => j.target)).toEqual([300, 266, 226, 197, 153, 150, 148]);
+    expect(sweep.jumps.map((j) => j.target)).toEqual([300, 266, 226, 197, 153, 150, 140]);
     for (const j of sweep.jumps) {
       const at = `one step down to ${j.target}px`;
       expect([j.headH, j.keepH], `${at}: the head or the keep line was squeezed`).toEqual([sweep.rest.headH, sweep.rest.keepH]);
@@ -210,8 +210,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       expect(j.tight, at).toBe(j.target < 157);
     }
     // (after the rail-versus-room lines above, so a rail that overflows fails THERE and not at this count)
-    expect(Math.min(...sweep.steps.map((s) => s.room))).toBe(148);
-    expect(sweep.tooShortAt).toBe(147);
+    // (design too_short.floor: the tight rail's own need, 140; it was 148)
+    expect(Math.min(...sweep.steps.map((s) => s.room))).toBe(140);
+    expect(sweep.tooShortAt).toBe(139);
     for (const c of sweep.chosen) expect(c.shown, `board ${c.room}px: ${c.want} is chosen and not on the rail`).toBe(true);
     // the reported case: about 190px of board. Select, ⋯, line-and-fill and the percent, clear of the foot
     expect(sweep.at190).toMatchObject({ keys: 4, tools: ['select'], tight: false, over: 0 });
@@ -223,6 +224,161 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(menu.insideLeaf).toBe(true);
     expect(menu.firstReachable).toBe(true);
     expect(acted.picked).toBe('sticky');
+  }, 300_000);
+
+  it('P4b-4 rail (real paint, design fold.guest_tick, fold.tight, menus_scroll): a guest swaps one key and moves no row; the tight rail keeps its graduations; a scrolling menu is cut through a row; rows never wrap', async () => {
+    const RAIL = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const hd = ${B}; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const full = Math.round(host.getBoundingClientRect().height); const chrome = full - leaf.room(); const rail = () => host.querySelector('.bd-rail');
+      const tops = () => [...rail().children].map((k) => Math.round(k.getBoundingClientRect().top)); const ticks = () => rail().querySelectorAll('.bd-brk').length;
+      host.style.height = (chrome + 230) + 'px'; await fr(); hd.setTool('select'); await fr(); const own = { tops: tops(), ticks: ticks(), tools: [...rail().querySelectorAll('[data-tool]')].map((t) => t.dataset.tool) };
+      hd.setTool('frame'); await fr(); const guest = { tops: tops(), ticks: ticks(), tools: [...rail().querySelectorAll('[data-tool]')].map((t) => t.dataset.tool) };
+      hd.setTool('select'); host.style.height = (chrome + 150) + 'px'; await fr(); const tight = { tight: rail().classList.contains('tight'), bg: getComputedStyle(rail()).backgroundImage };
+      host.style.height = (chrome + 190) + 'px'; await fr(); return { own, guest, tight }; })()`;
+    const MENU = `(() => { const m = document.querySelector('#preview-board .bd-menu'); if (!m) return null; const b = m.getBoundingClientRect(); const inner = { top: b.top + m.clientTop, bottom: b.top + m.clientTop + m.clientHeight };
+      const items = [...m.querySelectorAll('.bd-mi')].map((i) => { const r = i.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(r.bottom, inner.bottom) - Math.max(r.top, inner.top))); });
+      return { scrolls: m.scrollHeight > m.clientHeight + 1, shown: items, wrap: [...m.querySelectorAll('.bd-mi, .bd-mi kbd')].map((e) => getComputedStyle(e).whiteSpace) }; })()`;
+    const acted = (await real('open', [ERRORS, { await: RAIL, as: 'rail' }, { press: '#preview-board [data-key="more"]' }, { read: MENU, as: 'menu' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    const r = acted.rail as { own: { tops: number[]; ticks: number; tools: string[] }; guest: { tops: number[]; ticks: number; tools: string[] }; tight: { tight: boolean; bg: string } };
+    expect(r.own.tools).toEqual(['select', 'sticky', 'text']);
+    // the guest takes Text's row, inside Sticky's group: no tick of its own, and Sticky stays (it cost both before)
+    expect(r.guest.tools).toEqual(['select', 'sticky', 'frame']);
+    expect(r.guest.ticks).toBe(r.own.ticks);
+    expect(r.guest.tops).toEqual(r.own.tops);
+    expect(r.tight.tight).toBe(true);
+    expect(r.tight.bg).toMatch(/repeating-linear-gradient/);
+    const m = acted.menu as { scrolls: boolean; shown: number[]; wrap: string[] };
+    expect(m.scrolls).toBe(true);
+    // every row is whole or not shown, but ONE: the cut row, half of it showing (14px of 28)
+    const cut = m.shown.filter((n) => n > 0 && n < 28);
+    expect(cut).toEqual([14]);
+    expect(m.shown.indexOf(14)).toBe(m.shown.filter((n) => n === 28).length);
+    expect(new Set(m.wrap)).toEqual(new Set(['nowrap']));
+  }, 300_000);
+
+  it('P4b-4 too short (REAL input, design too_short, aegis C3_1 to C3_6): the board is shown with no rail and the foot kept; no key reaches it; Esc folds; a press says the line; a text keeps its words; a drag in hand is said; crossing the floor speaks once', async () => {
+    const SIZE = (room: number, as: string) => ({ await: `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const chrome = Math.round(host.getBoundingClientRect().height) - leaf.room(); host.style.height = (chrome + ${room}) + 'px'; await fr(); return leaf.room(); })()`, as });
+    const LOOK = `(() => { const l = document.querySelector('#preview-board .bd-leaf'); const g = (q) => { const e = l.querySelector(q); const b = e.getBoundingClientRect(); return { shown: getComputedStyle(e).display !== 'none' && b.height > 0, h: Math.round(b.height) }; }; const f = l.querySelector('.bd-board textarea');
+      return { state: globalThis.gnomonPreviewLeaf.state(), rail: g('.bd-rail').shown, body: g('.bd-body'), foot: g('.bd-foot'), line: l.querySelector('.bd-keep').textContent, ink: l.querySelector('.bd-keep').classList.contains('bd-said-line'), spoken: l.querySelector('[role="status"]').textContent, tool: ${B}.state().tool, selected: ${B}.state().selected, edits: globalThis.gnomonPreviewFixture ? globalThis.gnomonPreviewFixture.edits.length : null, folds: globalThis.gnomonPreviewFolds ?? 0, field: f ? f.value : null, inert: l.dataset.inert ?? '', active: document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : null, inBoard: l.querySelector('.bd-board').contains(document.activeElement) }; })()`;
+    const SPOKEN = { read: `(globalThis.__spoken = [], new MutationObserver(() => globalThis.__spoken.push(document.querySelector('#preview-board .bd-leaf [role="status"]').textContent)).observe(document.querySelector('#preview-board .bd-leaf [role="status"]'), { childList: true, characterData: true, subtree: true }), 1)`, as: 'observing' };
+    const acted = (await real('open', [
+      // (the keyboard is on the board first, as opening leaves it: the keys below must have somewhere to go)
+      ERRORS, { read: `(${B}.focus(), document.querySelector('#preview-board .bd-board').contains(document.activeElement))`, as: 'focused' }, SIZE(130, 'room'), { read: LOOK, as: 'short' },
+      // C3_1: a tool letter and a delete reach nothing; C3_3: a press on the board says the line again
+      // (⌘A is the engine's OWN key handler, which the engine's yield does not cover; a tool letter it already ignores)
+      { key: 'a', meta: true, commands: ['selectAll'] }, { key: 'r' }, { key: 'Backspace' }, { at: [120, 40], press: true }, { read: LOOK, as: 'keys' },
+      // C3_6: crossing the floor back and forth (a turn strip row coming and going) speaks the line once
+      SIZE(400, 'up'), { read: '(globalThis.__t = performance.now(), 1)', as: 't0' }, { until: 'performance.now() - globalThis.__t > 1600', as: 'the 1.5s since the last time the line was spoken' }, SPOKEN, SIZE(130, 'down1'), SIZE(400, 'up1'), SIZE(130, 'down2'), { read: 'globalThis.__spoken.filter(Boolean)', as: 'spoken' },
+      // C3_3: Esc folds a board that is too short
+      { key: 'Escape' }, { read: LOOK, as: 'esc' },
+      // C3_2: a text being typed keeps its words, held, while too short; they are said to be back when there is room
+      SIZE(400, 'tall'), { key: 't' }, { at: [160, 120], press: true }, { wait: 300 }, ...[...'hello'].map((k) => ({ key: k, settle: 25 })), { read: LOOK, as: 'typing' },
+      SIZE(130, 'shrunk'), ...[...'xyz'].map((k) => ({ key: k, settle: 25 })), { key: 'Escape' }, { read: LOOK, as: 'held' },
+      // ruled (C3_2): the head's esc key does not fold while the words are held; it says the held line again
+      { press: '#preview-board .bd-head [title^="Fold"]' }, { read: LOOK, as: 'escKey' },
+      // aegis F3: out of date as well, the words can never be stored and the line says "fold it": the esc key folds
+      { read: '(globalThis.gnomonPreviewLeaf.setInert("out-of-date"), 1)', as: 'ood' }, { press: '#preview-board .bd-head [title^="Fold"]' }, { read: LOOK, as: 'escOod' }, { read: '(globalThis.gnomonPreviewLeaf.setInert(null), 1)', as: 'ood-off' },
+      SIZE(400, 'back'), { read: LOOK, as: 'back' }, { at: [300, 40], press: true }, { wait: 500 }, { read: LOOK, as: 'committed' },
+      // C3_5: a drag in hand when the board goes too short is put back and said
+      { key: 'r' }, { hold: [[200, 60], [240, 90], [260, 110]] }, SIZE(130, 'mid-drag'), { release: [260, 110] }, { wait: 400 }, { read: LOOK, as: 'drag' },
+      { read: 'globalThis.__errs', as: 'errors' },
+    ], { width: 1024, height: 900 })) as Acted;
+    type Look = { state: string; rail: boolean; body: { shown: boolean; h: number }; foot: { shown: boolean; h: number }; line: string; ink: boolean; spoken: string; tool: string; selected: number; edits: number | null; folds: number; field: string | null; inert: string };
+    const L = (k: string): Look => acted[k] as Look;
+    expect(acted.errors).toEqual([]);
+    expect(L('short')).toMatchObject({ state: 'too-short', rail: false, body: { shown: true }, foot: { shown: true, h: 32 }, ink: true, inert: '' });
+    expect(L('short').line).toMatch(/^No room to draw · /);
+    expect(acted.focused).toBe(true);
+    expect(L('keys').selected).toBe(L('short').selected);
+    expect(L('keys').tool).toBe(L('short').tool);
+    expect(L('keys').edits).toBe(L('short').edits);
+    expect(L('keys').spoken).toBe(L('short').line);
+    expect(acted.spoken).toEqual([L('short').line]);
+    expect(L('esc').folds).toBe(1);
+    expect(L('typing').field).toBe('hello');
+    expect(L('held')).toMatchObject({ field: 'hello', line: 'No room to draw · your words are kept on this page', edits: L('typing').edits });
+    expect(L('escKey')).toMatchObject({ folds: L('esc').folds, field: 'hello', line: 'No room to draw · your words are kept on this page' });
+    expect(L('escOod').folds).toBe(L('escKey').folds + 1);
+    expect(L('back').field).toBe('hello');
+    expect(L('back').line).toBe('Your words are back · click away to save them');
+    expect(L('committed').edits).toBeGreaterThan(L('back').edits!);
+    expect(L('drag').spoken).toBe('That change wasn’t kept · the board is as it was');
+    expect(L('drag').edits).toBe(L('committed').edits);
+  }, 300_000);
+
+  it('aegis C2.1 (design keep_words.precedence): a mismatch while too short and while yielded, at 303 and 424px with an agent hand in the foot, shows the out-of-date line, its fact in --fail at 500', async () => {
+    const RUN = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const full = Math.round(host.getBoundingClientRect().height); const chrome = full - leaf.room(); const out = [];
+      const look = (w, st) => { const k = host.querySelector('.bd-keep'); const f = k.querySelector('.bd-fail-fact'); const probe = document.createElement('span'); probe.style.color = 'var(--fail)'; host.append(probe); const fail = getComputedStyle(probe).color; probe.remove();
+        return { w, st, state: leaf.state(), width: Math.round(host.querySelector('.bd-leaf').getBoundingClientRect().width), line: k.textContent, fact: f ? f.textContent : null, factFail: !!f && getComputedStyle(f).color === fail, weight: f ? getComputedStyle(f).fontWeight : null, agentInFoot: !!host.querySelector('.bd-foot .bd-seal') }; };
+      leaf.setInert('out-of-date'); await fr();
+      for (const w of [303, 424]) { host.style.width = w + 'px'; host.style.height = full + 'px'; await fr();
+        const agent = host.querySelector('.bd-foot .bd-seal');
+        host.style.height = (chrome + 120) + 'px'; await fr(); out.push(look(w, 'too-short'));
+        host.style.height = full + 'px'; await fr(); const card = document.querySelector('#pinned .card button, #stack .card button'); card.focus(); await fr(); await fr(); out.push({ ...look(w, 'yielded'), cardFocused: !!document.activeElement.closest('.card'), agentAtFull: !!agent }); host.querySelector('.bd-board').focus?.(); }
+      return out; })()`;
+    const acted = (await real('open', [ERRORS, { await: RUN, as: 'runs' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    const runs = acted.runs as Array<{ w: number; st: string; state: string; width: number; line: string; fact: string | null; factFail: boolean; weight: string | null; agentInFoot: boolean; cardFocused?: boolean; agentAtFull?: boolean }>;
+    expect(runs).toHaveLength(4);
+    for (const r of runs) {
+      const at = `${r.w}px ${r.st}`;
+      expect(r.width, at).toBe(r.w);
+      expect(r.agentInFoot, `${at}: an agent hand in the foot`).toBe(true);
+      expect(r.line, at).toBe('This board is out of date · fold it and open it again');
+      expect([r.fact, r.factFail, r.weight], at).toEqual(['This board is out of date', true, '500']);
+      if (r.st === 'yielded') expect(r.cardFocused, at).toBe(true);
+    }
+  }, 300_000);
+
+  it('design widths_narrow (H1, H2): the head drops › board, then the glyph, then esc under 340px, and cuts the title last; one draw, measured again on a theme or title change; rename and Dimensions never go', async () => {
+    const HEAD = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const head = () => host.querySelector('.bd-head'); const vis = (q) => { const e = head().querySelector(q); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0; };
+      const look = (w, as) => { const t = head().querySelector('.title'); return { w, as, glyph: vis('.bd-g'), esc: vis('[title^="Fold"]'), medium: vis('.bd-medium'), rename: vis('.rename-btn'), dims: vis('[aria-haspopup], .key:not(.rename-btn):not([title^="Fold"])'), cut: t.scrollWidth > t.clientWidth + 0.5, rows: Math.round(head().getBoundingClientRect().height) }; };
+      const out = []; const one = Math.round(head().getBoundingClientRect().height);
+      for (const title of ['Totals are off by a cent in the invoice PDF', 'auth']) { leaf.setTitle(title); await fr();
+        for (const w of [300, 303, 339, 341, 424, 519, 680]) { host.style.width = w + 'px'; await fr(); out.push({ ...look(w, title), one }); } }
+      leaf.setTitle('Totals are off by a cent in the invoice PDF'); host.style.width = '303px'; await fr(); const a = look(303, 'again'); leaf.setTheme('day'); await fr(); const b = look(303, 'again'); leaf.setTheme('night'); await fr(); const night = look(303, 'night');
+      host.style.width = '424px'; leaf.setTitle('Totals are off'); await fr(); const retitled = look(424, 'retitled');
+      return { out, a, b, night, retitled }; })()`;
+    const acted = (await real('open', [ERRORS, { await: HEAD, as: 'head' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1440, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    type H = { w: number; as: string; glyph: boolean; esc: boolean; medium: boolean; rename: boolean; dims: boolean; cut: boolean; rows: number; one?: number };
+    const r = acted.head as { out: H[]; a: H; b: H; night: H; retitled: H };
+    for (const x of r.out) {
+      const at = `${x.w}px "${x.as}"`;
+      expect([x.rename, x.dims], `${at}: rename and Dimensions never go`).toEqual([true, true]);
+      expect(x.rows, `${at}: the head wrapped`).toBe(x.one);
+      if (x.w < 520) expect(x.medium, at).toBe(false);
+      // in order: the glyph only goes while the title would be cut; esc only under 340 and only after the glyph
+      if (!x.esc) expect([x.glyph, x.w < 340], at).toEqual([false, true]);
+      if (x.w >= 340) expect(x.esc, at).toBe(true);
+      if (x.glyph) expect(x.cut, `${at}: the glyph stayed while the title was cut`).toBe(false);
+      if (x.as === 'auth') expect([x.glyph, x.esc, x.cut], at).toEqual([true, true, false]);
+    }
+    const long303 = r.out.find((x) => x.w === 303 && x.as !== 'auth')!;
+    expect([long303.glyph, long303.esc]).toEqual([false, false]);
+    // H2: one draw: drawing again does not flip the glyph on and off
+    expect(r.b).toMatchObject({ glyph: r.a.glyph, esc: r.a.esc, cut: r.a.cut });
+    expect(r.night.rename).toBe(true);
+    // a title change measures again: a short title brings the glyph back
+    expect(r.retitled).toMatchObject({ glyph: true, esc: true, cut: false });
+  }, 300_000);
+
+  it('mika 1 and 2 (review of P4b-4): on the lines about missing marks the "not checked yet" lead goes after the fact; before the others; data-check-place is on the root from the first draw', async () => {
+    const RUN = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const l = host.querySelector('.bd-leaf');
+      const place0 = l.dataset.checkPlace ?? null; host.style.width = '303px'; leaf.setCheck('not checked yet', 'none', { open: true }); await fr(); const out = { place0, inFoot: leaf.checkShown() };
+      for (const [k, v] of [['partial', 'Earlier marks aren’t shown here · the saved board has them'], ['dropped', 'Some marks may be missing here · the saved board has them'], ['usual', null]]) { leaf.setKeep(v); await fr(); out[k] = l.querySelector('.bd-keep').textContent; }
+      return out; })()`;
+    const acted = (await real('open', [ERRORS, { await: RUN, as: 'r' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    const r = acted.r as { place0: string | null; inFoot: boolean; partial: string; dropped: string; usual: string };
+    expect(r.place0).toBe('list');
+    // (at 303px with an agent's hand the check is not in the foot, so the lead applies)
+    expect(r.inFoot).toBe(false);
+    expect(r.partial).toBe('Earlier marks aren’t shown here · not checked yet · the saved board has them');
+    expect(r.dropped).toBe('Some marks may be missing here · not checked yet · the saved board has them');
+    expect(r.usual).toMatch(/^not checked yet · dimension in /);
   }, 300_000);
 
   it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {

@@ -747,6 +747,10 @@ describe('#gui-dim-session review of PR #118, group A: nothing said lost is then
     expect(w.ops()).toEqual([]);
     expect(h.last().nodes.size).toBe(0);
     expect(n.map((x) => `${x.about}:${x.code}`)).toEqual(['check:hash-mismatch', 'edit:out-of-date', 'undo:out-of-date']);
+    // aegis F6: the link going does not overwrite out of date with link-down (the higher line; read-only either way)
+    leaf.setInert.mockClear();
+    w.sessions.linkDown();
+    expect(leaf.setInert).not.toHaveBeenCalledWith('link-down');
     // a reset is the way out: the session goes, and a new open starts unchecked
     w.sessions.reset();
     expect(s.alive).toBe(false);
