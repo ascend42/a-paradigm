@@ -1921,6 +1921,8 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-over .bd-stub { max-width: none; overflow: hidden; background-color: transparent; border-color: transparent; box-shadow: none; }
 .bd-over .bd-textbox { box-sizing: border-box; border: 1px dashed var(--ink2); }
 .bd-stage > .bd-tray { position: absolute; left: 8px; top: 8px; z-index: 3; max-width: calc(100% - 16px); box-sizing: border-box; }
+/* Mika P0b P1 (board-rail.menus_scroll): the tray never grows past the stage; it scrolls inside the leaf, cut through a line */
+.bd-stage > .bd-tray { max-height: calc(100% - 16px); overflow-y: auto; overscroll-behavior: contain; }
 .bd-tr { flex-wrap: wrap; }
 .bd-tr .bd-wn { font-size: var(--fs-label); color: var(--sec); margin-left: 4px; }
 button.bd-well { padding: 0; cursor: pointer; font: inherit; }

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CONTENT_SWATCH_NAMES, contentColourCheck, nightOf } from '@a-company/gnomon-contracts';
-import { customEntry, MARKER_OFF_TITLE, TRAY_FILL, TRAY_LINE, TRAY_WEIGHTS, wellName } from '../src/core/board-tray.js';
+import { customEntry, heldRefusals, judgeToken, trayRefusalLine, MARKER_OFF_TITLE, TRAY_FILL, TRAY_LINE, TRAY_WEIGHTS, wellName } from '../src/core/board-tray.js';
 import { BOARD_WEIGHTS } from '../src/core/board.js';
 
 describe('#gui-board content tray rows', () => {
@@ -88,6 +88,25 @@ describe('#gui-board custom colour', () => {
       const c = customEntry(hex, role, ctx);
       expect(!c.ok && contentColourCheck(c.offer, role, ctx).ok).toBe(true);
     }
+  });
+
+  it('Mika P0b: the role after "not used", the chosen colour before a mark exists, the pair against every selected mark, and the held style', () => {
+    expect(trayRefusalLine('too faint to see on the board', 'line')).toBe('✕ not used as a line · too faint to see on the board');
+    expect(trayRefusalLine('too faint to see on the board', null)).toBe('✕ not used · too faint to see on the board');
+    // before a mark exists (the tool's own style) the pair words name the chosen colour (C1, the orchestrator's ruling)
+    expect(customEntry('#858585', 'line', { other: 'cobalt', chosen: true })).toMatchObject({ ok: false, why: "it would not show against the chosen fill", offer: 'ink' });
+    expect(customEntry('#22EE66', 'fill', { other: 'custom:#CC0066', chosen: true })).toMatchObject({ ok: false, why: "the chosen line would not show against it at night", offer: 'paper' });
+    // a selection: every selected mark's other colour is judged (S2a)
+    expect(judgeToken('custom:#858585', 'line', { others: ['lemon', 'cobalt'] })).toMatchObject({ ok: false, offer: 'ink', contrast: true });
+    expect(judgeToken('custom:#858585', 'line', { others: ['lemon', null] }).ok).toBe(true);
+    expect(judgeToken('custom:#767676', 'line', { text: true, others: [] })).toMatchObject({ ok: false, why: 'too faint to read as words', offer: 'graphite' });
+    // the held style as the next tool would draw it (S1): one entry per failing role, each with its own key
+    expect(heldRefusals({ line: 'custom:#767676', fill: null }, { line: { text: true, chosen: true }, fill: null })).toEqual([{ role: 'line', why: 'too faint to read as words', offer: 'graphite', line: '✕ not used as a line · too faint to read as words' }]);
+    expect(heldRefusals({ line: 'custom:#858585', fill: 'cobalt' }, { line: { other: 'cobalt', chosen: true }, fill: { other: 'custom:#858585', chosen: true } }).map((r) => [r.role, r.offer, r.line])).toEqual([
+      ['line', 'ink', "✕ not used as a line · it would not show against the chosen fill"],
+      ['fill', 'paper', "✕ not used as a fill · the chosen line would not show against it"],
+    ]);
+    expect(heldRefusals({ line: 'custom:#767676', fill: null }, { line: { other: null, chosen: true }, fill: null })).toEqual([]);
   });
 
   it('what is not six hex digits is not a colour, in plain words', () => {
