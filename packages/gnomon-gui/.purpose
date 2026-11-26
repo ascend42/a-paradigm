@@ -3075,5 +3075,11 @@ components:
 # #gui-board: onGone, a held mark another hand removed yields no op at the drop. The leaf (#gui-board, ui/board-leaf.ts)
 # draws one hand per attached session with its draw key ('may edit' / 'may not edit', E-design edit_anything) and
 # 4ch count slots, keeping key elements so nothing but a press focuses a key; #gui-board-dock says the lines.
-# Not built (recorded): the '+<k> ▾' hands menu and the name/session give-way order of hands_foot.overflow; a key past
-# the foot's width is clipped (seen in the 560px shots). Tests: test/dim-grant.test.ts, test/board-grant-key.test.ts.
+# Review fixes (Aegis I-1 to I-7, N-1, N-3, N-7 to N-9; Mika F1 to F10): keyed hands are built once and named from
+# the session; they give way (session cut to 5, then name) before a key is clipped; a held Enter presses once; an
+# answer before its own row holds (later grant rows fold over it); an unanswered change leaves the key `unsure` until
+# a row; a flip from another page is spoken; a failed backlog read leaves keys disabled; every delete is recorded
+# with who (agent, self, person, unknown); a refused check stays due; resize/rotate/typing/restyle read 'changing'.
+# Not built (recorded): the '+<k> ▾' hands menu: with two agents at a 1024 window or three at 1440 a key is still
+# clipped (a todo test pins it). Held words of a text whose mark another hand removed are NOT kept (aegis N-4, stated).
+# Tests: test/dim-grant.test.ts, test/board-grant-key.test.ts.
