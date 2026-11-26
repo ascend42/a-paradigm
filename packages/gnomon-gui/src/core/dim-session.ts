@@ -323,13 +323,13 @@ export class DimSession {
    */
   #grantAnswer: { seq: number; rowsAt: number; map: Map<string, boolean> } | null = null;
   /** aegis I-3: the session whose change this page never saw answered; its key waits for a row or an answer */
-  #unsure: string | null = null;
+  #unsure: { hsid: string; sentAt: number } | null = null;
   /** what each key last SHOWED as confirmed: a flip that comes from rows (another page) is spoken (aegis I-3) */
   readonly #shown = new Map<string, boolean>();
   /** the grant map has arrived on this connection (the open answer; for a resumed session, the backlog read before it) */
   #grantsReady = false;
   /** the one grant change in flight, or null: a press while it is in flight is DROPPED */
-  #grantFlight: { hsid: string; target: boolean; since: number; id: number } | null = null;
+  #grantFlight: { hsid: string; target: boolean; since: number; id: number; sentAt: number } | null = null;
   #grantFlights = 0;
   #grantTimer: unknown = null;
   /** the attr digest the mod answered at its last hash point (recorded only: an attr-only mismatch is E3's line) */
@@ -729,7 +729,8 @@ export class DimSession {
     const map = new Map<string, boolean>();
     for (const g of list) if (isPlainObject(g) && typeof g.hsid === 'string' && typeof g.write === 'boolean') map.set(g.hsid, g.write);
     this.#grantAnswer = { seq, rowsAt: Math.max(this.#x.deps.store.lastSeqOf(this.dim), seq), map };
-    this.#unsure = null;
+    // aegis F-1: only an answer at or after the unsure change was sent can say what became of it
+    if (this.#unsure && seq >= this.#unsure.sentAt) this.#unsure = null;
     if (this.#x.link() !== null) this.#grantsReady = true;
   }
 
@@ -760,7 +761,7 @@ export class DimSession {
     const f = this.#grantFlight;
     return st.attached.map((hsid) => {
       const write = this.#effectiveWrite(hsid);
-      const state: DimGrantKey['state'] = down ? 'down' : !this.#grantsReady || this.#phase !== 'open' ? 'unknown' : !this.#x.deps.live(hsid) ? 'idle' : f && f.hsid === hsid ? 'pending' : this.#unsure === hsid ? 'unsure' : f ? 'busy' : 'live';
+      const state: DimGrantKey['state'] = down ? 'down' : !this.#grantsReady || this.#phase !== 'open' ? 'unknown' : !this.#x.deps.live(hsid) ? 'idle' : f && f.hsid === hsid ? 'pending' : this.#unsure?.hsid === hsid ? 'unsure' : f ? 'busy' : 'live';
       return { hsid, write, state, since: f ? f.since : null };
     });
   }
@@ -780,7 +781,7 @@ export class DimSession {
     if (!g) return false;
     const target = !key.write;
     const d = this.#x.deps;
-    const flight = { hsid, target, since: d.now(), id: ++this.#grantFlights };
+    const flight = { hsid, target, since: d.now(), id: ++this.#grantFlights, sentAt: this.#x.deps.store.lastSeqOf(this.dim) };
     this.#grantFlight = flight;
     // the 300 ms quiet: the working look is drawn only once the change is slow
     if (this.#grantTimer !== null) d.clearTimer(this.#grantTimer);
@@ -794,7 +795,7 @@ export class DimSession {
         if (this.#dead || this.#grantFlight !== flight) return;
         // aegis I-3: not known whether it changed; the key stays disabled until a row or an answer says
         this.#grantFlight = null;
-        this.#unsure = hsid;
+        this.#unsure = { hsid, sentAt: flight.sentAt };
         this.#emit({ about: 'grant', code: 'grant-unsure', field: 'write', why: 'no-answer', lost: 0, hsid, write: this.#effectiveWrite(hsid) });
       }, DIM_LIVE_TIMEOUT_MS);
     }, DIM_GRANT_QUIET_MS);
@@ -816,7 +817,11 @@ export class DimSession {
           // a late answer still says what the board holds (it ends an unsure key)
           this.#takeGrants(r);
           if (this.#grantFlight !== flight && !this.#dead) {
+            // (aegis nit: a late answer that settles an unsure key and changes what it shows is spoken)
+            const was = this.#shown.get(hsid);
             this.#noteShown();
+            const now = this.#shown.get(hsid);
+            if (this.#unsure === null && was !== undefined && now !== undefined && was !== now && this.#grantFlight?.hsid !== hsid) return this.#emit({ about: 'grant', code: now ? 'grant-on' : 'grant-off', field: 'write', why: 'late', lost: 0, hsid, write: now });
             return this.#emit(null);
           }
           return done(true, null);
@@ -896,7 +901,10 @@ export class DimSession {
    */
   grantRows(): void {
     if (this.#dead) return;
-    this.#unsure = null;
+    // aegis F-1: an unsure key is settled only by a grant row for ITS session, later than when its change was sent
+    const u = this.#unsure;
+    const row = u ? this.#x.deps.store.grants(this.dim).get(u.hsid) : undefined;
+    if (u && row && row.seq > u.sentAt) this.#unsure = null;
     if (this.#grantsReady) {
       for (const hsid of this.#x.deps.store.stateAt(this.dim).attached) {
         const now = this.#effectiveWrite(hsid);

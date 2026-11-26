@@ -216,7 +216,7 @@ export class DimStore {
     const who = agentStampOf(p);
     if (!who || (!Array.isArray(row.causes) && who.turn === null)) return;
     // aegis N-8: the host-stamped turn when the stamp has one; else a cause whose session is the stamp's own
-    const ref = who.turn !== null && parseTurnRef(who.turn) ? who.turn : (row.causes ?? []).find((c) => { const t = parseTurnRef(c); return t !== null && (who.hsid === null || t.hsid === who.hsid); });
+    const ref = who.turn !== null && parseTurnRef(who.turn) ? who.turn : (Array.isArray(row.causes) ? row.causes : []).find((c) => { const t = parseTurnRef(c); return t !== null && (who.hsid === null || t.hsid === who.hsid); });
     const t = ref !== undefined ? parseTurnRef(ref) : null;
     const ops = Object.prototype.hasOwnProperty.call(p, 'ops') ? p.ops : undefined;
     if (!t || !Array.isArray(ops)) return;

@@ -414,11 +414,57 @@ describe('S1.4 P4b review fixes (Aegis I-2, I-3, I-6, I-7, N-1, N-3, N-7, N-8, N
     // another page stops A: spoken once
     w.append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: A, write: false }, w.gui('conn:other'));
     expect(n.filter((x) => x.code === 'grant-off' && x.hsid === A && x.why === 'elsewhere')).toHaveLength(1);
-    // N-3: the LATE answer of the timed-out flight does not end a newer flight for the same session
-    w.free();
-    s.grant(B, press());
+  });
+
+  const unsureB = async () => {
+    const w = world({ attached: [A, B] });
+    const o = await opened(w);
+    // (a row first, so the send point is past the open answer: an answer between the two can be told apart)
+    w.agentOp(A, 1, [rect(9)]);
     w.hold();
+    o.s.grant(B, press());
+    await flush(DIM_GRANT_QUIET_MS + 8000 + DIM_SEND_LIMITS.gapMs);
+    expect(o.s.grantKeys().find((k) => k.hsid === B)!.state).toBe('unsure');
+    return { w, ...o, late: w.of('dim.grant')[0]!, sentAt: w.store.lastSeqOf(DIM) };
+  };
+
+  it('aegis F-1: an unsure key is settled only by a grant row for THAT session, or an answer at or after its send point', async () => {
+    const { w, s, late, sentAt } = await unsureB();
+    // a grant row for another session settles nothing
+    w.append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: A, write: false }, w.gui('conn:other'));
+    expect(s.grantKeys().find((k) => k.hsid === B)!.state).toBe('unsure');
+    // an answer from before the send point settles nothing
+    s.grant(A, press());
     await flush(DIM_SEND_LIMITS.gapMs);
+    w.of('dim.grant')[1]!.resolve({ result: { ok: true, dim: DIM, seq: sentAt - 1, grants: [{ hsid: A, write: true }, { hsid: B, write: false }] } });
+    await flush();
+    expect(s.grantKeys().find((k) => k.hsid === B)!.state).toBe('unsure');
+    // the late answer of its own change, at the send point or after, settles it
+    late.resolve({ result: { ok: true, dim: DIM, seq: sentAt + 1, grants: [{ hsid: A, write: true }, { hsid: B, write: false }] } });
+    await flush();
+    expect(s.grantKeys().find((k) => k.hsid === B)!.state).toBe('live');
+  });
+
+  it('aegis F-2 (N-3): the late answer of a timed-out flight leaves the newer flight pending and is not taken when older', async () => {
+    const { w, s, late } = await unsureB();
+    // its own row settles the key; the person presses again: a NEWER flight for the same session
+    w.append(DIM_AUX_KINDS.grant, { dim: DIM, hsid: B, write: true });
+    expect(s.grant(B, press())).toBe(true);
+    await flush(DIM_SEND_LIMITS.gapMs);
+    expect(s.grantKeys().find((k) => k.hsid === B)).toMatchObject({ write: true, state: 'pending' });
+    // the first flight's answer arrives now, older than the answer held: the newer flight stays pending, nothing taken
+    late.resolve({ result: { ok: true, dim: DIM, seq: 0, grants: [{ hsid: A, write: false }, { hsid: B, write: false }] } });
+    await flush();
+    expect(s.grantKeys().find((k) => k.hsid === A)!.write).toBe(true);
+    expect(s.grantKeys().find((k) => k.hsid === B)).toMatchObject({ write: true, state: 'pending' });
+  });
+
+  it('aegis nit: a late answer that settles an unsure key and changes what it shows is spoken once', async () => {
+    const { s, n, late, sentAt } = await unsureB();
+    late.resolve({ result: { ok: true, dim: DIM, seq: sentAt + 1, grants: [{ hsid: A, write: true }, { hsid: B, write: true }] } });
+    await flush();
+    expect(s.grantKeys().find((k) => k.hsid === B)).toMatchObject({ write: true, state: 'live' });
+    expect(n.filter((x) => x.about === 'grant' && x.hsid === B && x.why === 'late')).toEqual([expect.objectContaining({ code: 'grant-on', write: true })]);
   });
 
   it('I-6: a reconnect whose backlog read failed does not enable the keys', async () => {
