@@ -172,8 +172,9 @@ components:
       sub-budgets per id (32 touches, 16 deletes, 16 words a turn) charged
       before the append; attr beside hash on dim.check and dim.op; dim-view
       changes carry set and undo, attribution compact (hands indices) within
-      a 192 KiB node bound; keyframe v3 carries attribution and goneBy (v1/v2
-      ignored). Tests: test/dimension-edit.test.ts. the four modns.gnomon.dimension.* kinds and the two
+      one bridge-escaped answer budget (240 KiB); keyframe v3 carries attribution, goneBy
+      and the history's set keys (v1/v2 ignored). Tests: test/dimension-edit.test.ts.
+      It declares the four modns.gnomon.dimension.* kinds and the two
       auxiliary ones (grant, draw.refused); tools dim-view (read) and dim-draw
       (read, write) for an attached session's agent (S1.4: see below); no view, keybinding,
       offer, capability or egress. model.mjs is pure: actorOf (a human only

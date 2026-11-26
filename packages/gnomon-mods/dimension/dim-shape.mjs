@@ -805,7 +805,7 @@ function dimHsidOf(state, row) {
 function sameHand(a, b) {
   return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
 }
-var WORDS_KEYS = /* @__PURE__ */ new Set(["text", "label", "title", "refs"]);
+var WORDS_KEYS = /* @__PURE__ */ new Set(["text", "label", "title", "refs", "rel"]);
 function changed(cur, node, by, hsid, seq, words) {
   const out = { ...cur, node, changedBy: by, changedSeq: seq, changedHsid: hsid };
   const original = cur.restoredFrom?.by ?? cur.by;

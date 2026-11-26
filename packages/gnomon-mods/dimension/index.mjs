@@ -150,7 +150,7 @@ function hashOf(state) {
 
 /** G7: the attribution digest of a fold, computed once per fold object, beside its hash. */
 const attrs = new WeakMap();
-function attrOf(state) {
+function attrDigestOf(state) {
   let d = attrs.get(state);
   if (d === undefined) {
     d = dimAttrDigest(state);
@@ -537,7 +537,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     return refusal('unavailable');
   }
   // a read-only command (dim.select, dim.check) cannot set state: the index heals on the next writing command
-  if (entry && entry.dirty && commandId !== 'dim.select' && commandId !== 'dim.check') await saveIdx(host, a.dim, entry);
+  if (entry && entry.dirty && commandId !== 'dim.select' && commandId !== 'dim.check' && commandId !== 'dim.seen') await saveIdx(host, a.dim, entry);
 
   if (commandId === 'dim.open' && !entry) {
     // a new dimension: this session's repo owns it, and this session is its first attached one
@@ -567,7 +567,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       // the row is in the log but the index could not take it: the next command adopts the dimension from the log
       return refusal('unavailable');
     }
-    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), grants: grantList(fresh) };
+    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), attr: attrDigestOf(fresh.state), grants: grantList(fresh) };
   }
 
   // every other path needs a known dimension of the caller's repo
@@ -620,7 +620,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     // a reopen: no title (the first start row named the dimension), and any title sent is not read
     const seq = await write(DIM_KINDS.start, startPayload(a.dim, a.hsid, a.opened));
     if (typeof seq === 'number') await noteOpen(host, a.hsid, a.dim);
-    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), grants: grantList(entry) } : seq;
+    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), grants: grantList(entry) } : seq;
   }
 
   if (commandId === 'dim.grant') {
@@ -664,7 +664,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       return refusal('unavailable');
     }
     // G7: the attribution digest beside the hash; the page compares both at this hash point
-    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrOf(entry.state) };
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state) };
   }
 
   if (commandId === 'dim.seen') {
@@ -714,7 +714,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     if (!a.ids && !out.more) unpinSet(entry.hist, setKey(a.of));
     await saveIdx(host, a.dim, entry);
     if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
-    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrOf(entry.state), applied: out.applied, skipped: out.skipped, ...(out.more ? { more: true } : {}) };
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), applied: out.applied, skipped: out.skipped, ...(out.more ? { more: true } : {}) };
   }
 
   if (commandId !== 'dim.op') return refusal('command-unknown');
@@ -731,7 +731,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   entry.sinceKf += v.ok.length;
   if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
   // the hash of the fold at this seq: the page compares its own fold there (S1.4 §5)
-  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), attr: attrOf(entry.state), applied: v.ok.length, refused: v.refused };
+  return { ok: true, dim: a.dim, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), applied: v.ok.length, refused: v.refused };
 }
 
 /* ── the two agent tools (S1.4 §2) ────────────────────────────────────────── */
@@ -884,7 +884,8 @@ async function drawTool(host, dim, entry, actor, a, stamp, cancelled) {
   const v = validateDimOps(entry.state, kept.map((i) => sugar.ops[i]), { cls: 'agent', principal: actor.principal, agent: actor.agent });
   const at = (r) => (r.index >= 0 && r.index < kept.length ? kept[r.index] : -1);
   const refused = v.refused.map((r) => refusedEntry(at(r), r.field, r.code, sugar.unresolved.get(at(r))?.has(r.field) ? NEW_KEY_FIX : undefined));
-  for (const i of stale) refused.push(refusedEntry(i, 'id', 'changed-since'));
+  // the field a stale op is refused on: a move names its marks in `ids`, an update or delete in `id`
+  for (const i of stale) refused.push(refusedEntry(i, own(plain(sugar.ops[i]) ?? {}, 'type') === 'move' ? 'ids' : 'id', 'changed-since'));
   if (v.secret) return finishRefused(host, dim, entry, actor, refused, 'secret');
   const bad = new Set(v.refused.map((r) => r.index));
   const okIdx = [];

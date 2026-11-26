@@ -42,7 +42,7 @@ export const TURN_OPS = 64;
 /**
  * S1.4 E1 (Aegis ruling 1, F8): marks of OTHER hands one session may touch in one turn, counted PER ID (a move's
  * ids each count), charged before the append like TURN_OPS. Of them at most TURN_FOREIGN_DELETES deletes and at
- * most TURN_FOREIGN_WORDS updates that set or clear text, label, title or refs. "Other hand": the mark's original
+ * most TURN_FOREIGN_WORDS updates that set or clear text, label, title, refs or rel. "Other hand": the mark's original
  * hand (`restoredFrom.by`, else `by`) is not the caller's.
  */
 export const TURN_FOREIGN = 32;
@@ -445,7 +445,7 @@ export const KEYFRAME_VERSION = 3;
  * an object of own keys only, each present only when the fold holds it: `cb`/`cs`/`ch` (changedBy, changedSeq,
  * changedHsid), `ob`/`os` (otherBy, otherSeq), `wb`/`ws` (wordsBy, wordsSeq) and `rf` ([id, by], restoredFrom).
  */
-function attrOf(n) {
+function kfAttrOf(n) {
   const a = {};
   if (n.changedBy !== undefined) (a.cb = n.changedBy), (a.cs = n.changedSeq ?? 0), (a.ch = n.changedHsid ?? null);
   if (n.otherBy !== undefined) (a.ob = n.otherBy), (a.os = n.otherSeq ?? 0);
@@ -492,13 +492,13 @@ function attrFrom(v) {
  * Keyframe `v: 2` (S1.4): the head also carries `aux`, the write grants (`[hsid, write, seq]`) and the op-id memo
  * (`[oid, applied, seq]`, the newest MEMO_CAP). Both are covered by `sum` and so by the log id: a grant's high-water
  * seq is a seq of ONE log, and a keyframe written for another log is refused whole, grants included.
- * Keyframe `v: 3` (S1.4 E1): a node item is `['n', id, node, by, hsid, addedSeq, attr]` (`attrOf`), so the sum, and
+ * Keyframe `v: 3` (S1.4 E1): a node item is `['n', id, node, by, hsid, addedSeq, attr]` (`kfAttrOf`), so the sum, and
  * so the log id, covers attribution too; the head carries `attr` (`dimAttrDigest`) beside `hash`, and a decoded
  * state must answer both, so a keyframe whose attribution does not match its own digest is refused whole.
  */
 export function encodeKeyframe(state, log, aux) {
   const items = [];
-  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq, attrOf(n)]);
+  for (const [id, n] of state.nodes) items.push(['n', id, n.node, n.by, n.hsid, n.addedSeq, kfAttrOf(n)]);
   // v3: a deleted id with its original hand (`goneBy`, Aegis defence in depth), or null when the fold has none
   for (const id of state.gone) items.push(['g', id, state.goneBy?.get(id) ?? null]);
   const chunks = [];
@@ -678,7 +678,7 @@ export function foreignLeft(turns, actor) {
   return { touch: Math.max(0, TURN_FOREIGN - (t.foreign ?? 0)), del: Math.max(0, TURN_FOREIGN_DELETES - (t.fdel ?? 0)), words: Math.max(0, TURN_FOREIGN_WORDS - (t.fwords ?? 0)) };
 }
 
-const WORDS_FIELDS = ['text', 'label', 'title', 'refs'];
+const WORDS_FIELDS = ['text', 'label', 'title', 'refs', 'rel'];
 /**
  * What one accepted op charges to the foreign sub-budgets, from the state BEFORE the call (a mark this call adds
  * is the caller's own): `{touch, del, words}`, per id.
@@ -1114,7 +1114,7 @@ export function emptyHistory(log, before) {
 }
 
 const handSame = (a, b) => !!a && !!b && a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
-const checkpointSize = (s) => s.nodes.size + s.gone.size;
+const checkpointSize = (s) => s.nodes.size + s.gone.size + (s.goneBy ? s.goneBy.size : 0);
 
 /**
  * Note one op row that LANDED (its seq returned, or read from the log), with the state just before it. Opens a

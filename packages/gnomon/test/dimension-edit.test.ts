@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIM_KINDS, dimAttrDigest, dimHash, type DimState } from '@a-company/gnomon-contracts';
+import { DIM_KINDS, dimAttrDigest, dimHash, dimViewBy, type DimState } from '@a-company/gnomon-contracts';
 import { hostDir } from '../src/kernel/modhost/state.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { DIMENSION, DIMENSION_TREE, dimId, fakeLog, installDimension, rectOp, ulid } from './dimension-helpers.js';
@@ -43,7 +43,7 @@ async function editRig(opts: { callTimeoutMs?: number; now?: () => number } = {}
   installDimension(r);
   const log = fakeLog(opts.now ? { now: opts.now } : {});
   const stateFile = path.join(hostDir(r.home, DIMENSION), 'state.db');
-  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: opts.callTimeoutMs ?? 30_000, focusRepo: (hsid) => REPOS[hsid] ?? null });
+  const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: log.kernelCall, callTimeoutMs: opts.callTimeoutMs ?? 30_000, focusRepo: (hsid) => REPOS[hsid] ?? REPO });
   cleanups.push(() => h.stopAll());
   await h.start(DIMENSION);
   const run = async (commandId: string, args: Record<string, unknown>, hsid: string | null = A, who: Record<string, unknown> = GUI): Promise<Res> =>
@@ -163,6 +163,8 @@ describe('#dimension-mod E1 item 1: keyframe v3 carries attribution; v2 is ignor
     const n = handsOf(view, id)!;
     expect(n.wordsBy).toMatchObject({ cls: 'agent', agent: 'claude', principal: agentOf(B).principal });
     expect(n.otherBy).toMatchObject({ cls: 'agent' });
+    // Judge's nit: the mod's attr (from the log fold, never the v2 keyframe) equals the page fold's
+    expect((await w.run('dim.check', { dim })).attr).toBe(dimAttrDigest(w.log.fold(dim)));
     // the cold open read the log from before the first row: the v2 keyframe was not trusted
     const pages = w.log.reads.slice(readsBefore).filter((p) => Array.isArray(p.kinds));
     expect(((pages[0]!.since as { seq?: number } | undefined)?.seq ?? 0) < (w.opRows()[0]!.seq as number)).toBe(true);
@@ -232,7 +234,7 @@ describe('#dimension-mod E1 item 2: `act` on dim.op; `undo`, `restored`, `of` re
 
 const turnOf = (hsid: string, n: number) => ({ hsid, turn: `turn:${hsid}/${n}` });
 /** Agent `hsid` draws in its turn `n` (session B may draw: board() granted it). */
-const draw = (w: Rig, dim: string, hsid: string, n: number, ops: unknown[]) => w.tool('dim-draw', { dim, ops }, agentOf(hsid, n));
+const draw = (w: Rig, dim: string, hsid: string, n: number, ops: unknown[], agent = 'claude') => w.tool('dim-draw', { dim, ops }, agentOf(hsid, n, agent));
 const textOp = (n: number, text: string) => ({ type: 'add', node: { id: ulid(n), kind: 'text', x: n, y: n, z: 'V', text } });
 
 describe('#dimension-mod E1 items 3 and 4: dim.undo of a held change-set (Arky §3.1-§3.3; Aegis G3, G5, ruling 4)', () => {
@@ -698,18 +700,17 @@ describe('#dimension-mod E1 item 8: the pin rules at the model, on an explicit c
 });
 
 describe('#dimension-mod E1 item 8: M3 with the history (Aegis G6 timing case)', () => {
-  it('32 checkpoints held across 8 loaded dimensions, one of 10,048 nodes: every draw while they are held, and the undo, answer inside the 5 s timeout', { timeout: 600_000 }, async () => {
-    // one board of 10,048 nodes (the M3 board) and seven of 64: 4 checkpoints each. Eight boards of 10,048 nodes in
-    // ONE log did not cold-open in this harness (measured: no answer in 120 s; a 1,000-row log page of them is about
-    // 7 MB; the cause is not traced, inferred to be the page size) - reported as an open residual
+  it('32 checkpoints held across 8 loaded dimensions of 10,048 nodes each: every cold open, every draw while they are held, and the undo answer inside the 5 s timeout', { timeout: 600_000 }, async () => {
+    // eight boards of 10,048 nodes in ONE log, 4 checkpoints each. The harness log pages at PAGE_MAX_BYTES (2 MiB) as
+    // the kernel's log-read does (Probe F2); before that bound a 1,000-row page of these boards was about 7 MB and
+    // the cold open never answered
     const w = await editRig({ callTimeoutMs: 5_000 });
     let coldest = 0;
     const gui = { principal: HUMAN, connId: GUI.connId, surface: 'gui' };
     const dims: string[] = [];
     for (let d = 1; d <= 8; d++) dims.push(await board(w, d));
     for (const dim of dims) {
-      const rows = dim === dims[0] ? 157 : 1;
-      for (let r = 0; r < rows; r++) w.log.inject(DIM_KINDS.op, { v: 1, dim, ops: Array.from({ length: 64 }, (_, i) => rectOp(1000 + r * 64 + i)), relayedFor: gui });
+      for (let r = 0; r < 157; r++) w.log.inject(DIM_KINDS.op, { v: 1, dim, ops: Array.from({ length: 64 }, (_, i) => rectOp(1000 + r * 64 + i)), relayedFor: gui });
     }
     await w.restart();
     let slowest = 0;
@@ -721,7 +722,7 @@ describe('#dimension-mod E1 item 8: M3 with the history (Aegis G6 timing case)',
     };
     for (const dim of dims) {
       const c0 = performance.now();
-      await w.tool('dim-view', { dim, limit: 1 }, agentOf(B, 1)); // the cold open
+      expect(await w.tool('dim-view', { dim, limit: 1 }, agentOf(B, 1))).toMatchObject({ v: 1, seq: expect.any(Number) }); // the cold open
       coldest = Math.max(coldest, performance.now() - c0);
       for (let t = 1; t <= 4; t++) expect(await timed(() => draw(w, dim, B, 10 * dims.indexOf(dim) + t, [{ type: 'update', id: ulid(1000 + t), patch: { color: 'graphite' } }]))).toMatchObject({ ok: true });
     }
@@ -730,8 +731,9 @@ describe('#dimension-mod E1 item 8: M3 with the history (Aegis G6 timing case)',
     const u = await w.run('dim.undo', { dim: dims[0]!, of: turnOf(B, 1) });
     const undoMs = performance.now() - t0;
     expect(u).toMatchObject({ ok: true, applied: 1 });
-    expect(await timed(() => draw(w, dims[0]!, B, 99, [{ type: 'update', id: ulid(9000), patch: { color: 'graphite' } }]))).toMatchObject({ ok: true });
+    expect(await timed(() => draw(w, dims[7]!, B, 99, [{ type: 'update', id: ulid(9000), patch: { color: 'graphite' } }]))).toMatchObject({ ok: true });
     expect(slowest).toBeLessThan(5_000);
+    expect(coldest).toBeLessThan(5_000);
     expect(undoMs).toBeLessThan(5_000);
     // the measured numbers, for the E1 report, when asked for
     if (process.env.E1_MEASURE) fs.appendFileSync(process.env.E1_MEASURE, `M3+history: slowest draw ${slowest.toFixed(0)} ms, undo ${undoMs.toFixed(0)} ms, slowest cold open ${coldest.toFixed(0)} ms\n`);
@@ -1001,5 +1003,269 @@ describe('E1 review group D: undoCore is ready for E2 (Judge I-5)', () => {
     expect(at(/r > 0 && o\.between/)).toBeLessThan(at(/await o\.appendRow\(/));
     expect(core).toMatch(/return \{ applied: [^}]*planned, landed: landedIx \}/);
     expect(core).not.toMatch(/maxOps/);
+  });
+});
+
+/* ── kept from Probe's E1 attack file (folded here; the file is gone) ── */
+const HUMAN2 = 'p:00000000/partner';
+const GUI2 = { ...GUI, principal: HUMAN2, connId: 'conn:01JTESTGUI000000000000002' };
+const hsidN = (n: number) => `hsid:v1:01HZZZZZZZZZZZZZZZZZZZZ${String(n).padStart(3, '0').replace(/[ILOU]/g, 'Z')}`;
+const upd = (n: number, patch: Record<string, unknown> = { color: 'graphite' }) => ({ type: 'update', id: ulid(n), patch });
+const leftOf = (w: Rig, hsid: string) => (w.state().turns as unknown[][]).find((e) => e[0] === hsid)!;
+
+describe('kept from Probe (E1 review) item 3: dim.undo and the pins', () => {
+  it('3b: ids naming marks outside the set undo nothing (undo-nothing), and never touch those marks', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2), rectOp(3)] });
+    await draw(w, dim, B, 1, [upd(1)]);
+    await draw(w, dim, B, 2, [upd(2)]);
+    const rows = w.opRows().length;
+    const u = await w.run('dim.undo', { dim, of: turnOf(B, 1), ids: [ulid(2), ulid(3), ulid(999)] });
+    expect(u).toMatchObject({ ok: false });
+    expect(String(u.code)).toMatch(/undo-nothing|args-bad/);
+    expect(w.opRows().length).toBe(rows);
+    expect(w.log.fold(dim).nodes.get(ulid(2))!.node.color).toBe('graphite');
+    // mixed: one inside, two outside: only the inside one is undone
+    const m = await w.run('dim.undo', { dim, of: turnOf(B, 1), ids: [ulid(1), ulid(2)] });
+    expect(m).toMatchObject({ ok: true, applied: 1 });
+    expect(w.log.fold(dim).nodes.get(ulid(2))!.node.color).toBe('graphite');
+    expect(w.log.fold(dim).nodes.get(ulid(1))!.node.color).not.toBe('graphite');
+  });
+
+  it('3c: two people undoing the same set: the second re-adds nothing twice', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'one' }), rectOp(2)] });
+    await draw(w, dim, B, 1, [upd(1, { label: 'ONE' }), { type: 'delete', id: ulid(2) }, rectOp(7)]);
+    const u1 = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(u1).toMatchObject({ ok: true, applied: 3 });
+    const rows = w.opRows().length;
+    const u2 = await w.run('dim.undo', { dim, of: turnOf(B, 1) }, A, GUI2);
+    const fold = w.log.fold(dim);
+    const back = [...fold.nodes.values()].filter((n) => n.restoredFrom?.id === ulid(2));
+    expect([u2.ok, u2.code, back.length]).toEqual([false, 'undo-nothing', 1]);
+    expect(w.opRows().length).toBe(rows);
+    expect(fold.nodes.get(ulid(1))!.node.label).toBe('one');
+  });
+
+  it('3d-2 (Probe F1, fixed): 8 agent-on-agent sets while the person is present no longer push the person\'s pin out', { timeout: 300_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await draw(w, dim, B, 1, [upd(1)]); // touches the person's mark: pinned
+    await draw(w, dim, A, 1, [rectOp(500)]);
+    await w.run('dim.check', { dim }); // the person has the board open
+    for (let t = 2; t <= 9; t++) expect(await draw(w, dim, B, t, [upd(500, { color: t % 2 ? 'leaf' : 'graphite' })])).toMatchObject({ ok: true });
+    for (let t = 2; t <= 41; t++) expect(await draw(w, dim, A, t, [rectOp(2000 + t)])).toMatchObject({ ok: true });
+    const u = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(u).toMatchObject({ ok: true, applied: 1 });
+  });
+
+  it('3f/3g: dim.seen from a loop-like stamp (gui with an agent), a bridge stamp, and naming an existing unpinned set: all refused, pin held', { timeout: 120_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    await draw(w, dim, B, 1, [upd(1)]);
+    await draw(w, dim, A, 1, [rectOp(500)]); // an existing set, never pinned (own marks, nobody's)
+    const tries: Array<[string, Record<string, unknown>]> = [
+      // NOTE: { ...GUI, agent: 'loop' } is NOT a loop stamp: relayCommand forwards only principal, connId and surface,
+      // so the mod sees a plain person on the window (it released the pin; correct). A loop session is principalClass.
+      ['bridge', { ...GUI, surface: 'bridge' }],
+      ['voice', { ...GUI, surface: 'voice' }],
+      ['session', { ...GUI, principalClass: 'session' }],
+    ];
+    const seen: Record<string, unknown> = {};
+    for (const [k, who] of tries) {
+      try {
+        const r = await w.run('dim.seen', { dim, of: turnOf(B, 1) }, A, who);
+        seen[k] = r.ok === false ? r.code : r;
+      } catch (e) {
+        seen[k] = `threw ${(e as Error).message.slice(0, 60)}`;
+      }
+    }
+    for (const k of Object.keys(seen)) expect([k, typeof seen[k] === 'object']).toEqual([k, false]);
+    expect(await w.run('dim.seen', { dim, of: turnOf(A, 1) })).toMatchObject({ ok: false, code: 'not-pinned' });
+    // the pin is still held: 40 turns later it is still undoable
+    for (let t = 2; t <= 41; t++) await draw(w, dim, A, t, [rectOp(1000 + t)]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 1 });
+  });
+});
+
+describe('kept from Probe (E1 review) item 4: the foreign budgets', () => {
+  const marks = async (w: Rig, dim: string, n: number) => {
+    for (let k = 0; k < n; k += 64) await w.run('dim.op', { dim, ops: Array.from({ length: Math.min(64, n - k) }, (_, i) => rectOp(k + i + 1, { x: 0, y: 0 })) });
+  };
+
+  it('4a: a person\'s mark the agent deleted, restored by the person\'s undo, is still foreign to the agent (charged 1, words 1)', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'mine' })] });
+    await draw(w, dim, B, 1, [{ type: 'delete', id: ulid(1) }]);
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true, applied: 1 });
+    const back = [...w.log.fold(dim).nodes.entries()].find(([, n]) => n.restoredFrom?.id === ulid(1))!;
+    expect(back[1].restoredFrom!.by).toMatchObject({ cls: 'human', principal: HUMAN });
+    expect(await w.tool('dim-draw', { dim, ops: [{ type: 'update', id: back[0], patch: { label: 'agent' } }] }, agentOf(B, 2))).toMatchObject({ ok: true, applied: 1 });
+    expect(leftOf(w, B).slice(4)).toEqual([1, 0, 1]);
+  });
+
+  it('4a-2: the agent\'s own mark deleted by the person and restored by the person\'s undo stays the agent\'s (free to it)', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await draw(w, dim, B, 1, [rectOp(5)]);
+    const act = '01JDAC0000000000000000000A';
+    await w.run('dim.op', { dim, ops: [{ type: 'delete', id: ulid(5) }], act });
+    expect(await w.run('dim.undo', { dim, of: { principal: HUMAN, act } })).toMatchObject({ ok: true, applied: 1 });
+    const back = [...w.log.fold(dim).nodes.entries()].find(([, n]) => n.restoredFrom?.id === ulid(5))!;
+    expect(await w.tool('dim-draw', { dim, ops: [{ type: 'update', id: back[0], patch: { label: 'x' } }] }, agentOf(B, 2))).toMatchObject({ ok: true });
+    expect(leftOf(w, B).slice(4)).toEqual([0, 0, 0]);
+  });
+
+  it('4c: words via refs: the 17th foreign refs update is refused foreign-budget', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await marks(w, dim, 20);
+    const d = await draw(w, dim, B, 1, Array.from({ length: 17 }, (_, i) => upd(i + 1, { refs: [`sym:#x${i}`] })));
+    expect(d).toMatchObject({ ok: true, applied: 16 });
+    expect((d.refused as Array<{ index: number; code: string }>).map((x) => [x.index, x.code])).toEqual([[16, 'foreign-budget']]);
+    expect(leftOf(w, B).slice(4)).toEqual([16, 0, 16]);
+    // clearing refs is words too
+    const c = await draw(w, dim, B, 2, [upd(1, { refs: null })]);
+    if (c.ok) expect(leftOf(w, B).slice(4)).toEqual([1, 0, 1]);
+  });
+
+  it('4d: append-busy mid-draw: only the unwritten row\'s ops and foreign charges are refunded', { timeout: 120_000 }, async () => {
+    let T = 0;
+    const w = await editRig({ now: () => T });
+    const dim = await board(w);
+    for (let k = 0; k < 4; k++) {
+      T += 2_000;
+      await w.run('dim.op', { dim, ops: [textOp(k + 1, 'short')] });
+    }
+    T += 2_000;
+    for (let i = 0; i < 19; i++) expect(await w.run('dim.op', { dim, ops: [rectOp(100 + i)] })).toMatchObject({ ok: true });
+    // four words updates of the person's marks, about 6 KB each: more than one row
+    const big = (n: number) => upd(n, { text: String.fromCharCode(97 + n).repeat(4000) });
+    const before = w.opRows().length;
+    const d = await draw(w, dim, B, 1, [big(1), big(2), big(3), big(4)]);
+    const written = w.opRows().length - before;
+    const applied = Number(d.applied ?? 0);
+    const line = `4d draw: ${JSON.stringify({ ok: d.ok, code: d.code, applied, written, refused: d.refused, turns: leftOf(w, B) })}`;
+    expect(written).toBeGreaterThanOrEqual(1);
+    expect(applied).toBeLessThan(4);
+    // charged exactly what landed: used, foreign, words = applied
+    expect(leftOf(w, B).slice(2, 3)).toEqual([applied]);
+    expect(leftOf(w, B).slice(4)).toEqual([applied, 0, applied]);
+  });
+});
+
+describe('kept from Probe (E1 review) item 5: the compact attribution view resolves every node to the right hand', () => {
+  it('500 nodes, many distinct hands (sessions x agent labels x persons): every changedBy/otherBy/wordsBy/restoredFrom.by resolves through hands to the fold\'s hand', { timeout: 600_000 }, async () => {
+    const w = await editRig();
+    const dim = dimId(1);
+    expect(await w.run('dim.open', { dim, title: 'Plan', opened: 'command' })).toMatchObject({ ok: true });
+    const sessions: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      const s = hsidN(i);
+      const at = await w.run('dim.attach', { dim }, s);
+      if (at.ok !== true) break;
+      await w.run('dim.grant', { dim, write: true }, s);
+      sessions.push(s);
+    }
+    const humans = Array.from({ length: 6 }, (_, i) => ({ ...GUI, principal: `p:00000000/human${i}`, connId: `conn:01JTESTGUI00000000000000${i}` }));
+    // 500 nodes by the person
+    for (let k = 0; k < 500; k += 64) await w.run('dim.op', { dim, ops: Array.from({ length: Math.min(64, 500 - k) }, (_, i) => rectOp(k + i + 1, { x: 0, y: 0 })) });
+    // each node changed by a hand picked from (session x label) and (human): changedBy, otherBy (restyle), wordsBy (label)
+    const labels = ['claude', 'codex', 'gemini'];
+    let turn = 1;
+    for (let k = 1; k <= 500; k++) {
+      const pick = (k * 7) % (sessions.length * labels.length + humans.length);
+      if (pick < sessions.length * labels.length) {
+        const s = sessions[pick % sessions.length]!;
+        const lab = labels[Math.floor(pick / sessions.length)]!;
+        const r = await draw(w, dim, s, turn++, [upd(k, k % 2 ? { label: `L${k}` } : { color: 'graphite' })], lab);
+        expect(r).toMatchObject({ ok: true });
+      } else {
+        const h = humans[pick - sessions.length * labels.length]!;
+        await w.run('dim.op', { dim, ops: [upd(k, k % 2 ? { color: 'leaf' } : { label: `H${k}` })] }, sessions[0]!, h);
+      }
+    }
+    // some restores: a session deletes a few nodes and a person undoes it
+    await draw(w, dim, sessions[1]!, 9_000, [1, 2, 3].map((n) => ({ type: 'delete', id: ulid(n) })), 'codex');
+    expect(await w.run('dim.undo', { dim, of: turnOf(sessions[1]!, 9_000) }, sessions[0]!)).toMatchObject({ ok: true });
+    const view = await w.tool('dim-view', { dim, limit: 500 }, agentOf(sessions[0]!, 9_999));
+    expect(view.ok).not.toBe(false);
+    const hands = (view.hands ?? []) as unknown[];
+    const fold = w.log.fold(dim);
+    const nodes = view.nodes as Array<Record<string, unknown> & { id: string }>;
+    let checked = 0;
+    const bad: string[] = [];
+    for (const n of nodes) {
+      const f = fold.nodes.get(n.id)! as unknown as Record<string, unknown>;
+      for (const k of ['changedBy', 'otherBy', 'wordsBy']) {
+        if (f[k] === undefined) {
+          if (n[k] !== undefined) bad.push(`${n.id} ${k} extra`);
+          continue;
+        }
+        checked++;
+        const got = typeof n[k] === 'number' ? hands[n[k] as number] : `not an index: ${JSON.stringify(n[k])}`;
+        if (JSON.stringify(got) !== JSON.stringify(dimViewBy(f[k]))) bad.push(`${n.id} ${k} ${JSON.stringify(got)} != ${JSON.stringify(dimViewBy(f[k]))}`);
+      }
+      const rf = f.restoredFrom as { by: unknown } | undefined;
+      if (rf) {
+        checked++;
+        const got = hands[(n.restoredFrom as { by: number }).by];
+        if (JSON.stringify(got) !== JSON.stringify(dimViewBy(rf.by))) bad.push(`${n.id} restoredFrom`);
+      }
+    }
+    const uniq = new Set(hands.map((x) => JSON.stringify(x)));
+    expect(uniq.size).toBe(hands.length);
+    expect(bad).toEqual([]);
+    expect(checked).toBeGreaterThan(500);
+  });
+});
+
+describe('E1 review group E: harness and nits (Probe F2; Aegis N-2, N-6; Judge nits)', () => {
+  it('Probe F2: the harness log pages at PAGE_MAX_BYTES as log-read.ts does: the crossing row ends the page, next is the last row scanned', async () => {
+    const log = fakeLog({ pageBytes: 10_000 });
+    for (let i = 0; i < 20; i++) log.inject(DIM_KINDS.op, { v: 1, dim: dimId(1), ops: [{ type: 'add', node: { id: ulid(i), kind: 'text', x: 0, y: 0, z: 'V', text: 'x'.repeat(1000) } }] });
+    const page = (await log.readPage({ kinds: [DIM_KINDS.op], limit: 1000 })) as { rows: Array<{ seq: number }>; next: number; caughtUp: boolean };
+    expect(page.rows.length).toBeLessThan(20);
+    expect(page.next).toBe(page.rows.at(-1)!.seq);
+    expect(page.caughtUp).toBe(false);
+  });
+
+  it('Aegis N-2: an update that sets or clears rel on another hand\'s mark is a words change: charged and wordsBy', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2), { type: 'add', node: { id: ulid(3), kind: 'arrow', x: 0, y: 0, z: 'V', points: [0, 0, 5, 5], from: ulid(1), to: ulid(2) } }] });
+    expect(await draw(w, dim, B, 1, [{ type: 'update', id: ulid(3), patch: { rel: 'causes' } }])).toMatchObject({ ok: true, applied: 1 });
+    expect(leftOf(w, B).slice(4)).toEqual([1, 0, 1]);
+    // the mod's own fold (its bundle of the contract) names the agent as wordsBy
+    expect(handsOf(await w.tool('dim-view', { dim }, agentOf(A)), ulid(3))!.wordsBy).toMatchObject({ cls: 'agent' });
+  });
+
+  it('Aegis N-6: dim.open answers attr beside hash; Judge\'s nit: a stale move is refused on `ids`', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = dimId(1);
+    const o = await w.run('dim.open', { dim, title: 'Plan', opened: 'command' });
+    expect(o.attr).toBe(dimAttrDigest(w.log.fold(dim)));
+    await w.run('dim.attach', { dim }, B);
+    await w.run('dim.grant', { dim, write: true }, B);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    const base = w.log.fold(dim).seq;
+    await w.run('dim.op', { dim, ops: [{ type: 'update', id: ulid(1), patch: { color: 'leaf' } }] });
+    const r = await w.tool('dim-draw', { dim, base, ops: [{ type: 'move', ids: [ulid(1)], dx: 1, dy: 1 }] }, agentOf(B));
+    expect((r.refused as Array<{ field: string; code: string }>)[0]).toMatchObject({ field: 'ids', code: 'changed-since' });
+    expect((await w.run('dim.open', { dim, opened: 'menu' })).attr).toBe(dimAttrDigest(w.log.fold(dim)));
+  });
+
+  it('Judge\'s nit: a checkpoint\'s size counts its goneBy entries', async () => {
+    const m = await loadModel();
+    const h = m.emptyHistory!('log:x') as { entries: number };
+    const human = { cls: 'human', principal: HUMAN };
+    const before = { dim: dimId(1), title: 't', attached: [A], ended: false, nodes: new Map([[ulid(1), { node: { id: ulid(1), kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 }, by: human, hsid: A, addedSeq: 1 }]]), gone: new Set([ulid(2)]), goneBy: new Map([[ulid(2), human]]), seq: 1, ops: 0, unapplied: 0 };
+    m.noteHistoryRow!(h, before, { seq: 2, payload: { v: 1, dim: dimId(1), ops: [{ type: 'update', id: ulid(1), patch: { color: 'leaf' } }], relayedFor: agentOf(B) } }, 0);
+    expect(h.entries).toBe(3);
   });
 });

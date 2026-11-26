@@ -365,8 +365,8 @@ function sameHand(a: DimBy, b: DimBy): boolean {
   return a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
 }
 
-/** The free-text fields of a node: writing or clearing one by another hand sets `wordsBy` (Aegis G1). */
-const WORDS_KEYS = new Set(['text', 'label', 'title', 'refs']);
+/** The free-text fields of a node: writing or clearing one by another hand sets `wordsBy` (Aegis G1; `rel` since E1, Aegis N-2). */
+const WORDS_KEYS = new Set(['text', 'label', 'title', 'refs', 'rel']);
 
 /** The attribution of an applied update or move (see `DimFoldNode`). */
 function changed(cur: DimFoldNode, node: Record<string, unknown>, by: DimBy, hsid: string | null, seq: number, words: boolean): DimFoldNode {
