@@ -140,25 +140,28 @@ export type LeafInert = keyof typeof INERT_COPY;
 export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number }): string | null {
   // (`not-saved` is the live loop's word for "pending while the link is down": it is never said without that)
   if (s.link === 'down' || s.keep === 'not-saved') return linkDownLine(s);
+  // (design keep_words.precedence: the lines about missing marks, 5, outrank the passing states, 6)
+  if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
+  if (s.partial) return KEEP_COPY.partial;
   if (s.phase === 'opening') return KEEP_COPY.opening;
   if (s.phase === 'closing') return KEEP_COPY.folding;
   if (s.keep === 'saving') return KEEP_COPY.saving;
-  if ((s.dropped ?? 0) > 0) return KEEP_COPY.dropped;
-  if (s.partial) return KEEP_COPY.partial;
   return null;
 }
 /**
- * The words of the keep line's own states (boards S1.3 P4b-3: the words this pass ships). The design record gives the
- * keep line itself and the yielded and too-short lines; it is silent on every line here, so each is the plainest
- * wording that fits the leaf at a 1024 window (about 59 characters), FOR LUNA to rule.
+ * The words of the keep line's own states (design board-leaf.keep_words, design-foot). ONE rule of case and colour: a
+ * QUIET readout is lower case in --sec (opening, folding, saving); a STATED line is a sentence in ink (.bd-said-line).
+ * Contractions throughout, with the typographic apostrophe. A stated line's fact is before ' · ' and at most 40
+ * characters, so it survives the cut in a 303px leaf.
  */
 export const KEEP_COPY = {
-  opening: 'Opening…',
-  folding: 'Folding…',
-  saving: 'Saving…',
+  // (keep_words.one_wording: the first open reads the same words from the head's first draw: LEAF_COPY.loading)
+  opening: 'opening the board…',
+  folding: 'folding the board…',
+  saving: 'saving…',
   notSavedDown: 'Not saved · reconnecting',
-  dropped: 'Part of this board could not be held · marks are missing',
-  partial: 'Earlier marks are not shown · this is part of the board',
+  dropped: 'Some marks may be missing here · the saved board has them',
+  partial: 'Earlier marks aren’t shown here · the saved board has them',
   wordsHeld: 'Not connected · your words are kept on this page only',
   wordsHeldBack: 'Reconnecting · your words are kept on this page only',
   notConnected: 'Not connected',
@@ -166,14 +169,14 @@ export const KEEP_COPY = {
   // (kept up for as long as the words are held; Mika's wording cut to fit the leaf at a 1024 window)
   wordsWait: 'Your words are waiting · T, then click, gets them back',
   wordsBack: 'Your words are back · click away to save them',
-  wordsGone: 'The words you were typing were not saved',
+  wordsGone: 'The words you were typing weren’t saved',
   reconnected: 'Reconnected',
   copyDown: 'Nothing was copied · copy it again once reconnected',
   foldedDown: 'Folded while reconnecting · unsaved changes were dropped',
   reopens: 'That board was folded · opening it starts it again',
   noSession: 'Open a session first',
-  wordsAndChangesGone: (n: number): string => `Your typed words and ${n === 1 ? 'one change' : `${n} changes`} were not saved`,
-  changesGone: (n: number): string => (n === 1 ? 'One change on the board was not saved' : `${n} changes on the board were not saved`),
+  wordsAndChangesGone: (n: number): string => `Your words and ${n === 1 ? 'one change' : `${n} changes`} weren’t saved`,
+  changesGone: (n: number): string => (n === 1 ? 'One change on the board wasn’t saved' : `${n} changes on the board weren’t saved`),
   cardWaits: 'A card needs you · finish the text on the board first',
   // (aegis C3_5: a drag or a stroke in hand when the board went too short is put back, and said)
   changeBack: 'That change wasn’t kept · the board is as it was',
@@ -262,8 +265,8 @@ export function failedCause(error: unknown, afterMount: boolean): string {
   const m = error instanceof Error ? error.message : String(error ?? '');
   if (afterMount) return 'The drawing engine stopped. Your marks are saved as they were made.';
   if (/in time/.test(m)) return 'It took too long to load.';
-  if (/stylesheet|did not load|did not export|text face/.test(m)) return 'A part of it did not load.';
-  return 'The drawing engine did not start.';
+  if (/stylesheet|did not load|did not export|text face/.test(m)) return 'A part of it didn’t load.';
+  return 'The drawing engine didn’t start.';
 }
 
 /** A dimension title in the edge tab: cut at 24 characters with … (the whole title stays in title=). */

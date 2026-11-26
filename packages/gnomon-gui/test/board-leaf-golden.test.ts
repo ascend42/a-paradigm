@@ -153,7 +153,7 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
       expect(acted.outside, `${state}: drawn outside the leaf`).toEqual([]);
       expect(acted.short, `${state}: under the least height nothing of the body is drawn`).toBe(true);
       expect(facts.rail?.h ?? 0, `${state}: the rail`).toBe(0);
-      if (state === 'failed') expect(acted.keep).toBe('The board didn’t open · A part of it did not load.');
+      if (state === 'failed') expect(acted.keep).toBe('The board didn’t open · A part of it didn’t load.');
     }
   }, 300_000);
 
@@ -301,6 +301,31 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(L('committed').edits).toBeGreaterThan(L('back').edits!);
     expect(L('drag').spoken).toBe('That change wasn’t kept · the board is as it was');
     expect(L('drag').edits).toBe(L('committed').edits);
+  }, 300_000);
+
+  it('aegis C2.1 (design keep_words.precedence): a mismatch while too short and while yielded, at 303 and 424px with an agent hand in the foot, shows the out-of-date line, its fact in --fail at 500', async () => {
+    const RUN = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const full = Math.round(host.getBoundingClientRect().height); const chrome = full - leaf.room(); const out = [];
+      const look = (w, st) => { const k = host.querySelector('.bd-keep'); const f = k.querySelector('.bd-fail-fact'); const probe = document.createElement('span'); probe.style.color = 'var(--fail)'; host.append(probe); const fail = getComputedStyle(probe).color; probe.remove();
+        return { w, st, state: leaf.state(), width: Math.round(host.querySelector('.bd-leaf').getBoundingClientRect().width), line: k.textContent, fact: f ? f.textContent : null, factFail: !!f && getComputedStyle(f).color === fail, weight: f ? getComputedStyle(f).fontWeight : null, agentInFoot: !!host.querySelector('.bd-foot .bd-seal') }; };
+      leaf.setInert('out-of-date'); await fr();
+      for (const w of [303, 424]) { host.style.width = w + 'px'; host.style.height = full + 'px'; await fr();
+        const agent = host.querySelector('.bd-foot .bd-seal');
+        host.style.height = (chrome + 120) + 'px'; await fr(); out.push(look(w, 'too-short'));
+        host.style.height = full + 'px'; await fr(); const card = document.querySelector('#pinned .card button, #stack .card button'); card.focus(); await fr(); await fr(); out.push({ ...look(w, 'yielded'), cardFocused: !!document.activeElement.closest('.card'), agentAtFull: !!agent }); host.querySelector('.bd-board').focus?.(); }
+      return out; })()`;
+    const acted = (await real('open', [ERRORS, { await: RUN, as: 'runs' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    const runs = acted.runs as Array<{ w: number; st: string; state: string; width: number; line: string; fact: string | null; factFail: boolean; weight: string | null; agentInFoot: boolean; cardFocused?: boolean; agentAtFull?: boolean }>;
+    expect(runs).toHaveLength(4);
+    for (const r of runs) {
+      const at = `${r.w}px ${r.st}`;
+      expect(r.width, at).toBe(r.w);
+      expect(r.agentInFoot, `${at}: an agent hand in the foot`).toBe(true);
+      expect(r.line, at).toBe('This board is out of date · fold it and open it again');
+      expect([r.fact, r.factFail, r.weight], at).toEqual(['This board is out of date', true, '500']);
+      if (r.st === 'yielded') expect(r.cardFocused, at).toBe(true);
+    }
   }, 300_000);
 
   it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {

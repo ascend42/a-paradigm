@@ -62,7 +62,7 @@ describe('#gui-board copy (the design\'s words)', () => {
   });
   it('a failed board says why in plain words, never the engine\'s text or a code', () => {
     const causes = [failedCause(new Error('the board stylesheet did not load'), false), failedCause(new Error('the board did not load in time'), false), failedCause(new Error('Minified React error #31; visit https://react.dev/errors/31'), false), failedCause(new Error('TypeError: x is undefined'), true), failedCause(undefined, false)];
-    expect(causes).toEqual(['A part of it did not load.', 'It took too long to load.', 'The drawing engine did not start.', 'The drawing engine stopped. Your marks are saved as they were made.', 'The drawing engine did not start.']);
+    expect(causes).toEqual(['A part of it didn’t load.', 'It took too long to load.', 'The drawing engine didn’t start.', 'The drawing engine stopped. Your marks are saved as they were made.', 'The drawing engine didn’t start.']);
     for (const c of causes) expect(c).not.toMatch(/React|Error|#\d|https?:|undefined|excalidraw/i);
   });
   it('a stub shows the fixed lead word and the pattern-checked kind, and nothing reads as broken or as a key', () => {
@@ -104,18 +104,21 @@ describe('#gui-board the keep line and the check (boards S1.3 P4b-3; conditions 
     const { keepStateLine } = await import('../src/core/board-leaf.js');
     expect(keepStateLine({ keep: 'saved', link: 'down', pending: 0 })).toBe('Reconnecting');
     expect(keepStateLine({ keep: 'not-saved', link: 'down', pending: 2 })).toBe('Not saved · reconnecting');
-    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 2 })).toBe('Saving…');
+    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 2 })).toBe('saving…');
     expect(keepStateLine({ keep: 'saved', link: 'up', pending: 0 })).toBeNull();
   });
 
-  it('`partial` and `dropped` show: each has its line while nothing passing is said, dropped first; a passing state (opening, saving, the link down) is said over them and they return', async () => {
+  it('design keep_words.precedence: `partial` and `dropped` (5) outrank the passing states (6), dropped first; the link down (2) is said over them', async () => {
     const { KEEP_COPY, keepStateLine } = await import('../src/core/board-leaf.js');
     const up = { keep: 'saved', link: 'up', pending: 0 } as const;
     expect(keepStateLine({ ...up, partial: true })).toBe(KEEP_COPY.partial);
     expect(keepStateLine({ ...up, dropped: 1 })).toBe(KEEP_COPY.dropped);
     expect(keepStateLine({ ...up, partial: true, dropped: 4 })).toBe(KEEP_COPY.dropped);
     expect(keepStateLine({ ...up, phase: 'open', partial: true })).toBe(KEEP_COPY.partial);
-    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 1, partial: true, dropped: 2 })).toBe('Saving…');
+    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 1, partial: true, dropped: 2 })).toBe(KEEP_COPY.dropped);
+    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 1, partial: true })).toBe(KEEP_COPY.partial);
+    expect(keepStateLine({ keep: 'saved', link: 'up', pending: 0, phase: 'opening', partial: true })).toBe(KEEP_COPY.partial);
+    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 1 })).toBe('saving…');
     expect(keepStateLine({ keep: 'saved', link: 'down', pending: 0, partial: true })).toBe('Reconnecting');
     expect(keepStateLine({ ...up, partial: false, dropped: 0 })).toBeNull();
     for (const line of [KEEP_COPY.partial, KEEP_COPY.dropped]) expect(line.length, line).toBeLessThanOrEqual(59);
@@ -153,6 +156,26 @@ describe('#gui-board the keep line and the check (boards S1.3 P4b-3; conditions 
       expect(w).not.toMatch(/\b79\b|\b81\b|verified/i);
       expect(w).toBe(w.toLowerCase());
       expect(w.length).toBeLessThanOrEqual(CHECK_LONGEST.length);
+    }
+  });
+});
+
+describe('design keep_words (design-foot): case, colour and contractions', () => {
+  it('the recorded lines verbatim; quiet readouts lower case; stated lines are sentences; no uncontracted "not"; each fact within 40 characters', async () => {
+    const { KEEP_COPY, LEAF_COPY, failedCause } = await import('../src/core/board-leaf.js');
+    expect([KEEP_COPY.opening, KEEP_COPY.folding, KEEP_COPY.saving]).toEqual(['opening the board…', 'folding the board…', 'saving…']);
+    expect(KEEP_COPY.opening).toBe(LEAF_COPY.loading);
+    expect(KEEP_COPY.partial).toBe('Earlier marks aren’t shown here · the saved board has them');
+    expect(KEEP_COPY.dropped).toBe('Some marks may be missing here · the saved board has them');
+    expect(KEEP_COPY.wordsGone).toBe('The words you were typing weren’t saved');
+    expect([KEEP_COPY.wordsAndChangesGone(1), KEEP_COPY.wordsAndChangesGone(3)]).toEqual(['Your words and one change weren’t saved', 'Your words and 3 changes weren’t saved']);
+    expect([KEEP_COPY.changesGone(1), KEEP_COPY.changesGone(2)]).toEqual(['One change on the board wasn’t saved', '2 changes on the board weren’t saved']);
+    for (const q of [KEEP_COPY.opening, KEEP_COPY.folding, KEEP_COPY.saving]) expect(q).toBe(q.toLowerCase());
+    const stated = Object.values(KEEP_COPY).map((v) => (typeof v === 'function' ? v(2) : v)).filter((v) => ![KEEP_COPY.opening, KEEP_COPY.folding, KEEP_COPY.saving].includes(v as never));
+    for (const line of [...stated, LEAF_COPY.tooShort, LEAF_COPY.tooShortNoCard, LEAF_COPY.tooShortWords, failedCause(new Error('x did not load'), false), failedCause(new Error('?'), false)]) {
+      expect(line[0], line).toBe(line[0]!.toUpperCase());
+      expect(line, line).not.toMatch(/\b(were|was|could|are|is|did|does|can) not\b|'/);
+      expect(line.split(' · ')[0]!.length, line).toBeLessThanOrEqual(40);
     }
   });
 });
@@ -240,9 +263,9 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     expect([noticeLine({ about: 'link', code: 'reconnected', lost: 0 }), noticeLine({ about: 'link', code: 'not-saved', lost: 3 }), noticeLine({ about: 'link', code: 'link-down', lost: 0 }), noticeLine({ about: 'edit', code: 'timeout', lost: 2 })]).toEqual(['Reconnected · everything here is saved', '3 changes weren’t saved before the link came back', 'Reconnecting', '2 changes may not be saved · fold and reopen to check']);
     expect(noticeLine({ about: 'undo', code: 'undo-too-many-ops', lost: 0 })).toBe('That was too much to undo · it stays as it is');
     expect(noticeLine({ about: 'close', code: 'close-failed', lost: 0 })).toBe('Your marks are saved · the board didn’t fold · try again');
-    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'Saving…', 'Not saved · reconnecting', 'Reconnecting']);
+    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'saving…', 'Not saved · reconnecting', 'Reconnecting']);
     // the keep line's own states: opening, partly held, rows dropped. "Not saved" is never a state of its own (Mika, final)
-    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0, phase: 'opening' }), keepStateLine({ keep: 'not-saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, partial: true }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, dropped: 2 })]).toEqual(['Opening…', 'Not saved · reconnecting', KEEP_COPY.partial, KEEP_COPY.dropped]);
+    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0, phase: 'opening' }), keepStateLine({ keep: 'not-saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, partial: true }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, dropped: 2 })]).toEqual(['opening the board…', 'Not saved · reconnecting', KEEP_COPY.partial, KEEP_COPY.dropped]);
     for (const line of [...lines, ...notices, ...Object.values(INERT_COPY)]) {
       expect(line.length, line).toBeLessThanOrEqual(59);
       // plain words: never a code, a field name or a kernel word

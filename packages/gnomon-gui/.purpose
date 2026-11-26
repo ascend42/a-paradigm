@@ -42,6 +42,9 @@ components:
       wording and 16px fit after the hands; unchecked and not in the foot the
       line under the head leads 'not checked yet · '; the out-of-date fact is
       --fail at 500; Reconnected says nothing of saving while unchecked.
+      Keep words (design keep_words): quiet readouts lower case, stated lines
+      sentences in ink with contractions; precedence out of date, link down,
+      too short, yielded, missing marks, passing states, the keep line.
       #gui-board (spec §12.7 "The GUI hosts the canvas directly", §11.2 rule
       6; boards S1.0, s1-build-plan §2) - the board engine as a LAZY chunk of
       the pinned bundle. src/board/index.ts is the only module that imports
