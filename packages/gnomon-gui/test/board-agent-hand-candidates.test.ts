@@ -112,6 +112,8 @@ export const PROMOTED: readonly string[] = Object.freeze([
   'stroke-100', 'stroke-400', 'frame-25', 'frame-100', 'frame-400', 'text-25', 'text-100', 'text-400', 'text-boundary-40', 'mix-49', 'mix-50', 'box-14px-100', 'box-20x10-25',
   // Mika's re-look after R1 to R4
   'stroke-25', 'marker-under-80-100', 'text-boundary-41', 'hover-stroke-100', 'hover-stroke-40', 'long-name-edge-100',
+  // Mika's final look
+  'selected-keep-line-100',
 ]);
 const GOLDEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'goldens', 'agent');
 
