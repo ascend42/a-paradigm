@@ -99,8 +99,14 @@ export const DIM_AGENT_STROKE_TYPE = 'line';
 const TYPE_KIND: ReadonlyMap<string, DimCoreKind> = new Map([...DIM_CORE_KINDS.map((k) => [KIND_TYPE[k], k] as const), [DIM_AGENT_STROKE_TYPE, 'stroke'] as const]);
 /** True when a folded node is a stroke drawn as the engine's dashed `line`: a drawable stroke whose `by` is not human (fails closed). */
 export function dimIsAgentStroke(n: DimFoldNode | undefined): boolean {
-  return !!n && own(n.node, 'kind') === 'stroke' && drawable(n.node) && (n.by as { cls?: unknown } | undefined)?.cls !== 'human';
+  return !!n && own(n.node, 'kind') === 'stroke' && drawable(n.node) && (dimHandOf(n) as { cls?: unknown } | undefined)?.cls !== 'human';
 }
+/**
+ * The hand a mark is DRAWN in: its original hand when an undo re-added it (`restoredFrom.by`, S1.4 E0, Aegis G5;
+ * read by the fold from the row's undo marker, never from a node field), else the stamped `by`. So an agent's mark a
+ * person deleted and undid stays the agent's: dashed, with the agent's seal.
+ */
+export const dimHandOf = (n: DimFoldNode): DimFoldNode['by'] => n.restoredFrom?.by ?? n.by;
 const FILL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond']);
 const LABEL_KINDS: ReadonlySet<string> = new Set(['rect', 'ellipse', 'diamond', 'arrow']);
 const LABEL_TYPES: ReadonlySet<string> = new Set(['rectangle', 'ellipse', 'diamond', 'arrow']);
@@ -155,7 +161,7 @@ function build(nodeId: string, n: DimFoldNode, theme: BoardTheme, ids: DimMapIds
   const node = n.node;
   const id = ids.engineOf(nodeId);
   // fails closed: solid only for a hand the fold calls human; a missing `by` or a class this build does not know is dashed
-  const strokeStyle = (n.by as { cls?: unknown } | undefined)?.cls === 'human' ? 'solid' : 'dashed';
+  const strokeStyle = (dimHandOf(n) as { cls?: unknown } | undefined)?.cls === 'human' ? 'solid' : 'dashed';
   const x0 = num(own(node, 'x')) ? Math.round(own(node, 'x') as number) : 0;
   const y0 = num(own(node, 'y')) ? Math.round(own(node, 'y') as number) : 0;
   const parentId = own(node, 'parent');

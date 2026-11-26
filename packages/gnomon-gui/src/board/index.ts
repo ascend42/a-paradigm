@@ -26,7 +26,7 @@ import type { DimFoldNode, DimOp, DimState } from '@a-company/gnomon-contracts';
 import { BOARD_TOOLS, BOARD_WEIGHTS } from '../core/board.js';
 import { handKey } from '../core/board.js';
 import type { BoardAttempt, BoardAuthor, BoardHandle, BoardMarkView, BoardMountOptions, BoardRefusal, BoardState, BoardStyle, BoardStyleRefusal, BoardTheme, BoardTool, BoardView } from '../core/board.js';
-import { dimIsAgentStroke, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
+import { dimHandOf, dimIsAgentStroke, dimIsFallback, dimIsSticky, dimLabelId, dimToElements, elementsToOps, type DimMapIds, type EngineElement } from './dim-map.js';
 import { BOARD_FONT_ID, BOARD_FONT_SIZE, FILLABLE, fillColour, isBoardType, lineColour, normalOf, offNormal } from './normal.js';
 import { fitStroke } from './simplify.js';
 import { applySkin, gnomonBoardRuns, gnomonBoardSkin, onBoardRefusal, setBoardYielded } from './skin.js';
@@ -246,7 +246,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const authorIn = (n: DimFoldNode | undefined): BoardAuthor | undefined => {
         if (!n) return undefined; // not in the rendered state: drawn since, so yours
-        const by = n.by as { cls?: unknown; agent?: unknown } | undefined;
+        const by = dimHandOf(n) as { cls?: unknown; agent?: unknown } | undefined;
         if (by?.cls === 'human') return HUMAN;
         // the seal and the foot key on the principal PLUS the agent (design author-seal session_hint.seal): every Claude is not one hand
         if (by?.cls === 'agent' && typeof by.agent === 'string' && by.agent.length > 0) {

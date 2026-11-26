@@ -14,7 +14,7 @@ import { findChrome, leafUrl, shootLeaf } from '../scripts/board-leaf-shots.mjs'
 // @ts-expect-error plain .mjs dev script (no types)
 import { startPreview } from '../scripts/preview.mjs';
 import { boardFixture, fixtureId } from '../src/preview/board-fixture.js';
-import { planUndo } from '../src/core/dim-undo.js';
+import { planDimUndo } from '@a-company/gnomon-contracts';
 
 const SIZE = { width: 1440, height: 900 };
 const B = 'globalThis.gnomonPreviewBoard';
@@ -166,13 +166,15 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
   it('Aegis: no new node ever comes from a `line`: the l key, an alt-drag duplicate of an agent stroke, engine clipboard JSON holding a line, an undo that restores one', async () => {
     const S = fixtureId(940);
     const json = JSON.stringify({ type: 'excalidraw/clipboard', elements: [{ id: 'pasted-line', type: 'line', x: 10, y: 10, width: 80, height: 0, points: [[0, 0], [80, 0]], strokeStyle: 'dashed', strokeColor: '#000', strokeWidth: 2, version: 1 }], files: {} });
-    // the inverse the app's undo (core/dim-undo.ts planUndo, wired in DimLive; the preview leaf only records the key)
-    // makes of the person's delete of the agent's stroke
+    // the inverse the SHARED undo planner (contracts planDimUndo, S1.4 E0) makes of the person's delete of the
+    // agent's stroke; its row carries the undo marker whose `restored` entry names the ORIGINAL hand (Aegis G5)
     const fx = boardFixture('empty');
     const before = fx.apply([{ type: 'add', node: { id: S, kind: 'stroke', x: 200, y: 200, z: 'za', points: [0, 0, 300, 0] } } as never], 'arky');
     const after = fx.apply([{ type: 'delete', id: S }], 'you');
-    const plan = planUndo({ before, rows: [[{ type: 'delete', id: S }]], current: after, actor: { cls: 'human', principal: 'p:preview/matt' }, mint: () => fixtureId(941) }) as { ok: boolean; ops?: unknown[] };
-    expect(plan.ok).toBe(true);
+    const plan = planDimUndo({ rows: [{ before, ops: [{ type: 'delete', id: S }], seq: fx.rows.length }], after: [], current: after, actor: { cls: 'human', principal: 'p:preview/matt' }, mint: () => fixtureId(941) });
+    expect(plan.ops.map((o) => o.type)).toEqual(['add']);
+    expect(plan.restored.map((r) => [r[0], r[1], r[2].cls])).toEqual([[fixtureId(941), S, 'agent']]);
+    const marker = { of: { principal: 'p:preview/matt', act: '01JD0000000000000000000000' }, restored: plan.restored };
     const lines = `${B}.marks().filter((m) => !m.labelOf && m.kind === 'stroke').map((m) => m.author.cls + (m.node ? '' : ':new')).sort().join(' ')`;
     const adds = `${D}.edits.flatMap((e) => e.ops).filter((o) => o.type === 'add').map((o) => o.node.kind)`;
     const acted = ((await shootLeaf({
@@ -199,7 +201,9 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
         { key: 'z' }, { wait: 300 }, { read: lines, as: 'afterBareZ' }, { read: `${D}.edits.flatMap((e) => e.ops).filter((o) => o.type === 'add').length`, as: 'addsAfterBareZ' },
         { read: `${D}.undoKeys ? ${D}.undoKeys.length : globalThis.gnomonPreviewDim.undoKeys?.length ?? -1`, as: 'undoKeys' },
         // the undo's ops, applied as the person's (as the app's sender does), and rendered
-        { read: `(${B}.render(${D}.apply(${JSON.stringify(plan.ops)}, 'you')), 1)`, as: 'undone' }, { wait: 300 },
+        { read: `(${D}.apply(${JSON.stringify(plan.ops)}, 'you'), ${D}.rows[${D}.rows.length - 1].payload.undo = ${JSON.stringify(marker)}, ${B}.render(${D}.state()), 1)`, as: 'undone' }, { wait: 300 },
+        { read: `[...${D}.state().nodes.values()].filter((n) => n.node.kind === 'stroke').map((n) => [n.by.cls, n.restoredFrom?.by.cls ?? null, n.restoredFrom?.id ?? null])`, as: 'restoredFold' },
+        { read: `(() => { const c = document.querySelector('#preview-board canvas.static'); const x = c.getContext('2d'); const v = ${B}.view(); const y = Math.round((200 + v.scrollY) * v.zoom); let gaps = 0, on = false, off = 0; for (let px = Math.round((215 + v.scrollX) * v.zoom); px < Math.round((485 + v.scrollX) * v.zoom); px++) { let m = 0; for (let d = -1; d <= 1; d++) m = Math.max(m, x.getImageData(px, y + d, 1, 1).data[3]); if (m < 60) { off++; } else { if (off > 0 && on) gaps++; off = 0; on = true; } } return gaps; })()`, as: 'restoredGaps' },
         { read: lines, as: 'afterUndo' }, { read: `[...${D}.state().nodes.values()].filter((n) => n.node.kind === 'stroke').map((n) => n.by.cls).join(' ')`, as: 'foldAfterUndo' },
         { read: `${B}.marks().filter((m) => !m.labelOf && m.kind === 'stroke').map((m) => m.node === '${S}')`, as: 'sameIdAfterUndo' }, { read: 'globalThis.__said', as: 'said' }, { read: `${B}.drift()`, as: 'drift' },
       ],
@@ -223,12 +227,12 @@ describe.skipIf(!!process.env.CI || !chrome)('#gui-board S1.4 P4a: an agent\'s h
     expect(acted.marksBeforeRerender).toBe(0);
     expect(acted.afterBareZ).toBe('');
     expect(acted.addsAfterBareZ).toBe(0);
-    // TODAY's dim-undo re-adds it under a NEW id as the person's: a freehand, solid stroke, never a line without its
-    // agent. Pass E0 (contracts) changes the shared undo planner so a re-add keeps its original hand: when it lands,
-    // this becomes 'agent' (a dashed line again) and the new-id check stays
-    expect(acted.afterUndo).toBe('human');
-    expect(acted.foldAfterUndo).toBe('human');
+    // S1.4 E0: the shared planner re-adds it under a NEW id; the row is the person's (by human) and the fold records
+    // the ORIGINAL hand in restoredFrom, so the board draws it as the agent's: a dashed line with the agent's seal
+    expect(acted.restoredFold).toEqual([['human', 'agent', S]]);
+    expect(acted.afterUndo).toBe('agent');
     expect(acted.sameIdAfterUndo).toEqual([false]);
+    expect(acted.restoredGaps as number).toBeGreaterThanOrEqual(20);
     expect((acted.said as string[]).filter((x) => !x.endsWith(':line'))).toEqual([]);
     expect(acted.drift).toEqual([]);
   }, 120_000);
