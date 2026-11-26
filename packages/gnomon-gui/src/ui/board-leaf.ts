@@ -262,7 +262,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const note = h('div', 'bd-scrap bd-note', { hidden: true });
   const stage = h('div', 'bd-stage', {}, boardHost, over, tray, note);
   const foot = h('div', 'bd-foot', { 'aria-label': 'Hands on this board' });
-  const el = h('div', 'bd-leaf', { role: 'region', 'aria-label': `Dimension: ${o.title}` }, head, keep, saidLine, h('div', 'bd-body', {}, rail, stage), foot);
+  // (mika 2: the check's place is on the root from the first draw, as data-check is)
+  const el = h('div', 'bd-leaf', { role: 'region', 'aria-label': `Dimension: ${o.title}`, 'data-check-place': 'list' }, head, keep, saidLine, h('div', 'bd-body', {}, rail, stage), foot);
   parent.appendChild(el);
 
   const st = (): BoardState | null => (handle && handle.isAlive() ? handle.state() : null);
@@ -298,13 +299,13 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let pressing = false;
   /** the board takes no input: a card has the keys, the board is held still, or it is too short to draw on */
   const yielded = (): boolean => load === 'ready' && (o.cardFocused() || inert !== null || tooShort);
-  /** the too-short line now: words held in an open text first, then whether a card is pinned */
   /** too short with words held in an open text: no fold may take them (aegis C3_2; ruled: the kept-open guard) */
   const holdsWords = (): boolean => tooShort && !!boardField()?.value;
   /** A fold the person asked for in the leaf (Esc, the head's esc key): refused, and the held line said, while words are held. */
   // (aegis F3: an out-of-date board can never store the words, and its line says "fold it": the fold goes ahead and
   // the dock says the words are gone)
   const foldAsk = (e: Event): void => (holdsWords() && inert !== 'out-of-date' ? say(shortLine()) : o.onFold?.(e));
+  /** the too-short line now: words held in an open text first, then whether a card is pinned */
   const shortLine = (): string => tooShortLine({ pinned: o.pinned?.() ?? 0, words: !!boardField()?.value });
   const colour = (token: string | null, role: 'line' | 'fill'): string => (token === null ? 'transparent' : (resolveContentColour(token, role, theme) ?? 'transparent'));
 
@@ -342,7 +343,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       return void keep.append(keep.title);
     }
     // open, unchecked and the check not in the foot: 'not checked yet · ' leads lines 3 to 7 (design check.signs.unchecked)
-    const lead = checkOpen && checkTone === 'none' && !checkInFoot && state !== 'loading';
+    const lead0 = checkOpen && checkTone === 'none' && !checkInFoot && state !== 'loading';
+    // mika 1 (ruled): on the two lines about missing marks the lead goes AFTER the fact, so the fact survives the cut
+    // at 303px ('Earlier marks aren't shown here · not checked yet · …'); before every other line, as ruled
+    const missing = state !== 'too-short' && state !== 'yielded' && (keepShown === KEEP_COPY.partial || keepShown === KEEP_COPY.dropped);
+    const lead = lead0 && !missing;
     if (lead) {
       const stated = state === 'too-short' || state === 'yielded' || !!keepShown && keepShown !== KEEP_COPY.opening && keepShown !== KEEP_COPY.folding && keepShown !== KEEP_COPY.saving;
       keep.append(stated ? UNCHECKED_LEAD.stated : UNCHECKED_LEAD.quiet);
@@ -355,8 +360,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (state === 'yielded') return void ((keep.title = led(`◆ ${LEAF_COPY.yielded}`)), keep.append(h('span', 'bd-yield-m', { 'aria-hidden': 'true' }, '◆'), ` ${LEAF_COPY.yielded}`));
     // the live loop's own state (a slow save, a board held in part) takes the keep line's place while it lasts
     if (keepShown) {
-      keep.title = led(keepShown);
-      return void keep.append(keepShown);
+      const shown = lead0 && missing ? keepShown.replace(' · ', ` · ${UNCHECKED_LEAD.quiet}`) : keepShown;
+      keep.title = led(shown);
+      return void keep.append(shown);
     }
     const k = keepParts(o);
     const text = `dimension in ${k.project} · attached ◇ ${k.session} · ${k.opened} · ${k.time}`;

@@ -48,6 +48,11 @@ components:
       The narrow head (design widths_narrow): fitHead puts the glyph and esc
       back, measures the title, and drops the glyph, then esc (under 340px,
       only while show chat folds: the dock's kept), title cut last.
+      Review fixes (aegis F1 to F7, mika 1 to 3): no leave takes held words
+      silently (carry refuses, a switch says them); the palette's Dimensions
+      list freezes its order and keeps its selection by dim; an out-of-date
+      board folds with held words; the lead follows the fact on the
+      missing-marks lines; data-check-place is set at mount.
       #gui-board (spec §12.7 "The GUI hosts the canvas directly", §11.2 rule
       6; boards S1.0, s1-build-plan §2) - the board engine as a LAZY chunk of
       the pinned bundle. src/board/index.ts is the only module that imports

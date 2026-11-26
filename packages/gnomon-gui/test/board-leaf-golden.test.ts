@@ -365,6 +365,22 @@ describe.skipIf(!!process.env.CI || !chrome)('the board leaf in a real Chrome (d
     expect(r.retitled).toMatchObject({ glyph: true, esc: true, cut: false });
   }, 300_000);
 
+  it('mika 1 and 2 (review of P4b-4): on the lines about missing marks the "not checked yet" lead goes after the fact; before the others; data-check-place is on the root from the first draw', async () => {
+    const RUN = `(async () => { const host = document.getElementById('preview-board'); const leaf = globalThis.gnomonPreviewLeaf; const fr = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const l = host.querySelector('.bd-leaf');
+      const place0 = l.dataset.checkPlace ?? null; host.style.width = '303px'; leaf.setCheck('not checked yet', 'none', { open: true }); await fr(); const out = { place0, inFoot: leaf.checkShown() };
+      for (const [k, v] of [['partial', 'Earlier marks aren’t shown here · the saved board has them'], ['dropped', 'Some marks may be missing here · the saved board has them'], ['usual', null]]) { leaf.setKeep(v); await fr(); out[k] = l.querySelector('.bd-keep').textContent; }
+      return out; })()`;
+    const acted = (await real('open', [ERRORS, { await: RUN, as: 'r' }, { read: 'globalThis.__errs', as: 'errors' }], { width: 1024, height: 900 })) as Acted;
+    expect(acted.errors).toEqual([]);
+    const r = acted.r as { place0: string | null; inFoot: boolean; partial: string; dropped: string; usual: string };
+    expect(r.place0).toBe('list');
+    // (at 303px with an agent's hand the check is not in the foot, so the lead applies)
+    expect(r.inFoot).toBe(false);
+    expect(r.partial).toBe('Earlier marks aren’t shown here · not checked yet · the saved board has them');
+    expect(r.dropped).toBe('Some marks may be missing here · not checked yet · the saved board has them');
+    expect(r.usual).toMatch(/^not checked yet · dimension in /);
+  }, 300_000);
+
   it('review round 2 (REAL input): a zoom-menu item returns focus to the board, and the custom colour lines read once', async () => {
     const acted = await real('open', [
       { press: '#preview-board [data-key="percent"]' },
