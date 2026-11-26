@@ -579,9 +579,9 @@ describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids 
     const bytes = Buffer.byteLength(JSON.stringify(full));
     expect((full.nodes as unknown[]).length).toBe(500);
     expect(full.truncated).toBeUndefined();
-    expect(bytes).toBeLessThan(200 * 1024);
+    expect(bytes).toBeLessThanOrEqual(241 * 1024);
     const big = m.viewAnswer!(mk(true), o) as Res;
-    expect(Buffer.byteLength(JSON.stringify(big))).toBeLessThan(200 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(big))).toBeLessThanOrEqual(241 * 1024);
     expect((big.nodes as unknown[]).length).toBeLessThan(500);
     expect(big.truncated).toEqual({ nodes: 500 });
   });
@@ -932,5 +932,59 @@ describe('E1 review group B: change-set integrity (Aegis I-2, I-4, I-5; Judge I-
     const u = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
     expect(u).toMatchObject({ ok: true, applied: 1, skipped: { refused: 1 } });
     expect(w.log.fold(dim).nodes.get(ulid(1))!.node.color).toBeUndefined();
+  });
+});
+
+describe('E1 review group C: the view bound as the bridge sends it (Judge I-3; Aegis P-3, N-1)', () => {
+  const mk = async () => {
+    const m = await loadModel();
+    const human = { cls: 'human', principal: HUMAN };
+    return { m, human };
+  };
+  const o = { hash: 'sha256:x', mayDraw: true, budgetLeft: 64, selection: [], limit: 500 };
+
+  it('a page of `<`-heavy texts stays inside the bridge\'s 256 KiB after its escaping; the fence never refuses it', async () => {
+    const { m, human } = await mk();
+    const { fenceBridgeResult, escapeBridgeJson } = await import('../src/kernel/modhost/mcp-bridge.js');
+    const nodes = new Map<string, unknown>();
+    for (let i = 0; i < 500; i++) nodes.set(ulid(i), { node: { id: ulid(i), kind: 'text', x: i, y: i, z: 'V', text: '<'.repeat(400) }, by: human, hsid: A, addedSeq: 1 });
+    const state = { dim: dimId(1), title: 't', attached: [A], ended: false, nodes, gone: new Set(), seq: 9, ops: 0, unapplied: 0 };
+    const v = m.viewAnswer!(state, o) as Res;
+    const json = escapeBridgeJson(JSON.stringify(v));
+    expect(Buffer.byteLength(json)).toBeLessThanOrEqual(240 * 1024 + 1024);
+    expect(m.bridgeBytes!(JSON.stringify(v))).toBe(Buffer.byteLength(json));
+    expect(fenceBridgeResult('gnomon.dimension', 'dim-view', v)).not.toBeNull();
+    expect(v.truncated).toEqual({ nodes: 500 });
+    expect((v.nodes as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it('hands are built after the cut (only hands of sent nodes), and a change list past its bound is a reset', async () => {
+    const { m, human } = await mk();
+    const nodes = new Map<string, unknown>();
+    for (let i = 0; i < 300; i++) nodes.set(ulid(i), { node: { id: ulid(i), kind: 'text', x: i, y: i, z: 'V', text: 'x'.repeat(3900) }, by: human, hsid: A, addedSeq: 1, otherBy: { cls: 'agent', principal: `p:00000000/s-${i}`, agent: 'claude' }, otherSeq: 2 });
+    const state = { dim: dimId(1), title: 't', attached: [A], ended: false, nodes, gone: new Set(), seq: 9, ops: 0, unapplied: 0 };
+    const v = m.viewAnswer!(state, o) as Res;
+    expect((v.hands as unknown[]).length).toBe((v.nodes as unknown[]).length);
+    const big = Array.from({ length: 64 }, (_, k) => ({ seq: k + 1, by: human, added: Array.from({ length: 64 }, (_, j) => ulid(k * 64 + j)), updated: [], moved: [], deleted: [] }));
+    const r = m.viewAnswer!(state, { ...o, changes: big, touched: new Set([ulid(1)]) }) as Res;
+    expect(r.changes).toBe('reset');
+  });
+
+  it('Aegis N-1: a change-set whose hsid is out of pattern is not shown as a set; a marker principal over 256 characters is not honoured', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const since = (await w.tool('dim-view', { dim }, agentOf(A))).seq as number;
+    const hs = 'hsid with spaces <and> markup';
+    w.log.inject(DIM_KINDS.op, { v: 1, dim, ops: [rectOp(5)], relayedFor: { principal: agentOf(B).principal, surface: 'bridge', agent: 'claude', hsid: hs, turn: `turn:${hs}/1` } });
+    await w.run('dim.check', { dim }); // the mod reads the row in
+    const v = await w.tool('dim-view', { dim, since }, agentOf(A, 2));
+    const ch = v.changes as Array<Record<string, unknown>>;
+    expect(ch).toHaveLength(1);
+    expect(ch[0]!.set).toBeUndefined();
+    // the mod's own bundle of the contract (dim-shape.mjs, rebuilt from dim.ts)
+    const { dimUndoMarkOf } = (await import(pathToFileURL(path.join(DIMENSION_TREE, 'dim-shape.mjs')).href)) as { dimUndoMarkOf: (r: unknown) => unknown };
+    const row = (principal: string) => ({ seq: 1, kind: DIM_KINDS.op, payload: { v: 1, dim, ops: [], undo: { of: { principal, act: ulid(1, '01JDAC') } }, relayedFor: { principal: HUMAN, connId: 'c', surface: 'gui' } } });
+    expect(dimUndoMarkOf(row('p:00000000/x'))).not.toBeNull();
+    expect(dimUndoMarkOf(row(`p:00000000/${'x'.repeat(300)}`))).toBeNull();
   });
 });

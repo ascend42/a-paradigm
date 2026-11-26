@@ -737,33 +737,26 @@ export function decodeTurns(v) {
 }
 
 /**
- * The view's byte bound (S1.4 E1, carried from the E0 review): a 500-node page with full attribution measured
- * 294,752 bytes as plain hands (108,752 without), past the bridge's 256 KiB result cap. Two measures:
+ * The view's byte bound (S1.4 E1, carried from the E0 review; Judge I-3): a 500-node page with full attribution
+ * measured 294,752 bytes as plain hands (108,752 without), past the bridge's 256 KiB result cap. So:
  *  - attribution is COMPACT: `changedBy`, `otherBy`, `wordsBy` and `restoredFrom.by` are indices into the answer's
- *    `hands` list (each hand once, as `dimViewBy` bounds it); `by` stays the hand itself. The same page then
- *    measures under VIEW_NODE_BYTES;
- *  - the nodes of one answer hold at most VIEW_NODE_BYTES in all (a page of long texts is cut, `truncated`).
+ *    `hands` list (each hand once, as `dimViewBy` bounds it); `by` stays the hand itself;
+ *  - the WHOLE answer (fence included) is held under VIEW_ANSWER_BYTES, counted as the bridge's escaping makes it
+ *    (`bridgeBytes`); nodes past it are cut (`truncated`), and a change list over VIEW_CHANGES_BYTES is a reset.
  */
-export const VIEW_NODE_BYTES = 192 * 1024;
-function compactAttribution(nodes) {
-  const hands = [];
-  const keys = new Map();
-  const ix = (by) => {
-    const k = JSON.stringify([by.cls, by.principal, by.agent ?? null]);
-    if (!keys.has(k)) {
-      keys.set(k, hands.length);
-      hands.push(by);
-    }
-    return keys.get(k);
-  };
-  const out = nodes.map((n) => {
-    if (n.changedBy === undefined && n.otherBy === undefined && n.wordsBy === undefined && n.restoredFrom === undefined) return n;
-    const c = { ...n };
-    for (const f of ['changedBy', 'otherBy', 'wordsBy']) if (c[f] !== undefined) c[f] = ix(c[f]);
-    if (c.restoredFrom !== undefined) c.restoredFrom = { id: c.restoredFrom.id, by: ix(c.restoredFrom.by) };
-    return c;
-  });
-  return { nodes: out, hands };
+export const VIEW_ANSWER_BYTES = 240 * 1024;
+export const VIEW_CHANGES_BYTES = 64 * 1024;
+/** The fence around a tool result (mcp-bridge.ts fenceBridgeResult): its tag, sentence and close, with room to spare. */
+const VIEW_FENCE_BYTES = 1024;
+const BRIDGE_ESCAPED = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}<]/gu;
+/**
+ * The UTF-8 bytes of a JSON text after the bridge's escaping (`escapeBridgeJson`): every Cc, Cf, Zl and Zp code
+ * point and every `<` becomes `\uXXXX` per UTF-16 unit (6 bytes each).
+ */
+export function bridgeBytes(json) {
+  let n = utf8.encode(json).length;
+  for (const m of json.matchAll(BRIDGE_ESCAPED)) n += 6 * m[0].length - utf8.encode(m[0]).length;
+  return n;
 }
 
 /** A stroke is shown as its point count and its box, never its point list (H1: an integer list can carry an encoding). */
@@ -794,18 +787,15 @@ function strokeView(n) {
 export function viewAnswer(state, o) {
   const v = dimViewOf(state);
   const all = v.nodes.map((n) => (n.kind === 'stroke' ? strokeView(n) : n));
-  const pick = o.touched ? all.filter((n) => o.touched.has(n.id)) : all;
-  const { nodes: listed, hands } = compactAttribution(pick.slice(0, o.limit));
-  // the byte bound (S1.4 E1): the answer stays inside VIEW_MAX_BYTES; marks past it are left for a smaller
-  // `limit` or a `since` view, and `truncated` says how many there are
-  let bytes = 0;
-  let fit = 0;
-  for (; fit < listed.length; fit++) {
-    bytes += utf8.encode(JSON.stringify(listed[fit])).length + 1;
-    if (bytes > VIEW_NODE_BYTES) break;
+  // Aegis P-3: a change list past its own bound is a reset (the whole board again)
+  let changes = o.changes;
+  let touched = o.touched;
+  if (Array.isArray(changes) && bridgeBytes(JSON.stringify(changes)) > VIEW_CHANGES_BYTES) {
+    changes = 'reset';
+    touched = undefined;
   }
-  const nodes = listed.slice(0, fit);
-  return {
+  const pick = touched ? all.filter((n) => touched.has(n.id)) : all;
+  const head = {
     v: 1,
     dim: v.dim,
     title: v.title,
@@ -814,16 +804,64 @@ export function viewAnswer(state, o) {
     open: !state.ended,
     mayDraw: o.mayDraw,
     budgetLeft: o.budgetLeft,
+    nodes: [],
+    hands: [],
+    legend: v.legend,
+    selection: o.selection,
+    ...(changes !== undefined ? { changes } : {}),
+    truncated: { nodes: pick.length },
+  };
+  // Judge I-3: ONE answer budget, measured as the bridge hands it over (its escaping), everything counted: the
+  // head, the change list, the legend, the selection and the fence; then each node in z order with the hands it
+  // adds (hands are built AFTER the cut, from the nodes that are sent)
+  let used = bridgeBytes(JSON.stringify(head)) + VIEW_FENCE_BYTES;
+  const hands = [];
+  const keys = new Map();
+  const nodes = [];
+  for (const n of pick.slice(0, o.limit)) {
+    const added = [];
+    const ix = (by) => {
+      const k = JSON.stringify([by.cls, by.principal, by.agent ?? null]);
+      if (!keys.has(k)) {
+        keys.set(k, hands.length + added.length);
+        added.push({ k, by });
+      }
+      return keys.get(k);
+    };
+    let c = n;
+    if (n.changedBy !== undefined || n.otherBy !== undefined || n.wordsBy !== undefined || n.restoredFrom !== undefined) {
+      c = { ...n };
+      for (const f of ['changedBy', 'otherBy', 'wordsBy']) if (c[f] !== undefined) c[f] = ix(c[f]);
+      if (c.restoredFrom !== undefined) c.restoredFrom = { id: c.restoredFrom.id, by: ix(c.restoredFrom.by) };
+    }
+    const cost = bridgeBytes(JSON.stringify(c)) + 1 + added.reduce((a, h) => a + bridgeBytes(JSON.stringify(h.by)) + 1, 0);
+    if (used + cost > VIEW_ANSWER_BYTES) {
+      for (const h of added) keys.delete(h.k);
+      break;
+    }
+    used += cost;
+    for (const h of added) hands.push(h.by);
+    nodes.push(c);
+  }
+  const { nodes: _n, hands: _h, truncated: _t, changes: _c, ...rest } = head;
+  return {
+    ...rest,
     nodes,
     ...(hands.length > 0 ? { hands } : {}),
     legend: v.legend,
     selection: o.selection,
-    ...(o.changes !== undefined ? { changes: o.changes } : {}),
+    ...(changes !== undefined ? { changes } : {}),
     ...(pick.length > nodes.length ? { truncated: { nodes: pick.length } } : {}),
   };
 }
 
 const idOk = (x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x);
+const HSID_SHOWN = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
+/** May a change-set's strings be shown to a model (the view's patterns: an hsid, a principal, a ULID act)? */
+function ofShown(cs) {
+  if (cs.kind === 'act') return DIM_VIEW_PRINCIPAL_PATTERN.test(cs.principal) && DIM_ACT_PATTERN.test(cs.act);
+  return HSID_SHOWN.test(cs.hsid) && cs.turn.length <= 160;
+}
 /**
  * Change entries from op rows (already in seq order, this dimension only): ids only, each list bounded by what one
  * row may hold, the hand from the row's stamp (`byOf(row)`). `null` when there are more than CHANGES_MAX entries:
@@ -838,9 +876,10 @@ export function changesOf(rows, byOf) {
     // `undo: {of}` when the row is an honoured undo (an agent then sees its turn was undone and does not redraw it)
     const r = { seq: row.seq, kind: DIM_KINDS.op, payload: row.payload };
     const cs = dimChangeSetOf(r);
-    if (cs) e.set = ofOf(cs);
+    // Aegis N-1: a set's strings are shown only in their patterns, like `by` (else the entry carries none)
+    if (cs && ofShown(cs)) e.set = ofOf(cs);
     const mark = Object.hasOwn(row.payload, 'undo') ? dimUndoMarkOf(r) : null;
-    if (mark) e.undo = { of: ofOf(mark.of) };
+    if (mark && ofShown(mark.of)) e.undo = { of: ofOf(mark.of) };
     const ops = Array.isArray(own(row.payload, 'ops')) ? row.payload.ops.slice(0, DIM_LIMITS.opsPerRow) : [];
     for (const op of ops) {
       const o = plain(op);

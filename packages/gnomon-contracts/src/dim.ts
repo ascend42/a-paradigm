@@ -1589,7 +1589,8 @@ export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
     } else if (ok === 'act,principal') {
       const principal = own(o, 'principal');
       const act = own(o, 'act');
-      if (!NON_EMPTY(principal) || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+      // Aegis N-1 (E1 review): the principal is bounded like a stamp's (at most 256 characters)
+      if (!NON_EMPTY(principal) || principal.length > 256 || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
       of = { kind: 'act', principal, act };
     } else return null;
     const out: DimUndoMark = { of, restored: [] };

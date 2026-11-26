@@ -1546,7 +1546,7 @@ function dimUndoMarkOf(row) {
     } else if (ok === "act,principal") {
       const principal = own(o, "principal");
       const act = own(o, "act");
-      if (!NON_EMPTY(principal) || typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
+      if (!NON_EMPTY(principal) || principal.length > 256 || typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
       of = { kind: "act", principal, act };
     } else return null;
     const out = { of, restored: [] };
