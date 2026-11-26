@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   DIM_CORE_KINDS, DIM_FIELDS, DIM_KINDS, DIM_LIMITS, DIM_NODE_KEYS, DIM_NODE_REQUIRED, DIM_REF_PATTERN, DIM_REF_SCHEMES, DIM_REFUSAL_CODES, DIM_REFUSAL_FIXES, DIM_SCAN_LIMITS,
-  dimHash, dimTextForScan, emptyDimState, foldDim, validateDimOps, validateDimRef, type DimActor, type DimRow, type DimState,
+  dimHash, dimMayEdit, dimTextForScan, emptyDimState, foldDim, validateDimOps, validateDimRef, type DimActor, type DimRow, type DimState,
 } from '../src/dim.js';
 import { validateRefV1 } from '../src/ref.js';
 import { CONTENT_SWATCH_NAMES } from '../src/content-palette.js';
@@ -162,23 +162,54 @@ describe('G-DDL-11: closed writes', () => {
     expect(res.refused.map((r) => [r.index, r.code])).toEqual([[0, 'field-range'], [1, 'link-missing']]);
   });
 
-  it('ownership: an agent edits only its own marks; a human edits anything', () => {
+  it('edit-anything (S1.4 E0): any well-formed hand edits any mark; dimMayEdit fails closed', () => {
     expect(codes([{ type: 'update', id: id(3), patch: { text: 'again' } }, { type: 'move', ids: [id(4)], dx: 1, dy: 1 }, { type: 'delete', id: id(3) }], agent)).toEqual([]);
-    expect(codes([{ type: 'update', id: id(2), patch: { label: 'x' } }], agent)).toEqual(['not-owner@id']);
-    expect(codes([{ type: 'move', ids: [id(3), id(2)], dx: 1, dy: 1 }], agent)).toEqual(['not-owner@ids']);
-    expect(codes([{ type: 'delete', id: id(1) }], agent)).toEqual(['not-owner@id']);
-    expect(codes([{ type: 'delete', id: id(3) }], other)).toEqual(['not-owner@id']);
-    expect(codes([{ type: 'delete', id: id(3) }], { ...agent, principal: 'p:t/elsewhere' })).toEqual(['not-owner@id']);
-    expect(codes([{ type: 'delete', id: id(3) }], { cls: 'agent', principal: 'p:t/session' })).toEqual(['not-owner@id']);
-    expect(codes([{ type: 'delete', id: id(3) }], { cls: 'robot', principal: 'p:t/session', agent: 'kit' } as unknown as DimActor)).toEqual(['not-owner@id']);
+    // an agent edits a person's marks and another agent's marks
+    expect(codes([{ type: 'update', id: id(2), patch: { label: 'x' } }], agent)).toEqual([]);
+    expect(codes([{ type: 'move', ids: [id(3), id(2)], dx: 1, dy: 1 }], agent)).toEqual([]);
+    expect(codes([{ type: 'delete', id: id(1) }], agent)).toEqual([]);
+    expect(codes([{ type: 'delete', id: id(3) }], other)).toEqual([]);
+    expect(codes([{ type: 'delete', id: id(3) }], { ...agent, principal: 'p:t/elsewhere' })).toEqual([]);
     expect(codes([{ type: 'delete', id: id(3) }, { type: 'update', id: id(4), patch: { label: 'h' } }], human)).toEqual([]);
+    // fail closed: an agent with no label or an empty one, an empty principal, an unknown class, null
+    const bad: unknown[] = [
+      { cls: 'agent', principal: 'p:t/session' },
+      { cls: 'agent', principal: 'p:t/session', agent: '' },
+      { cls: 'agent', principal: '', agent: 'kit' },
+      { cls: 'human', principal: '' },
+      { cls: 'human' },
+      { cls: 'robot', principal: 'p:t/session', agent: 'kit' },
+      { cls: 'unknown', principal: 'unknown' },
+      null,
+      undefined,
+      'human',
+    ];
+    for (const a of bad) {
+      expect(dimMayEdit(a)).toBe(false);
+      // `codes` would put its default actor in for undefined; the validator itself is asked directly
+      if (a === undefined) {
+        expect(validateDimOps(state, [{ type: 'delete', id: id(3) }], a as unknown as DimActor).refused.map((r) => r.code)).toEqual(['not-owner']);
+        continue;
+      }
+      expect(codes([{ type: 'delete', id: id(3) }], a as DimActor)).toEqual(['not-owner@id']);
+      expect(codes([{ type: 'update', id: id(2), patch: { label: 'x' } }], a as DimActor)).toEqual(['not-owner@id']);
+      expect(codes([{ type: 'move', ids: [id(2)], dx: 1, dy: 1 }], a as DimActor)).toEqual(['not-owner@ids']);
+    }
+    // a hand is read from own keys only: a prototype cannot lend an actor its class or its label
+    const proto = Object.create({ cls: 'agent', principal: 'p:t/session', agent: 'kit' }) as unknown;
+    expect(dimMayEdit(proto)).toBe(false);
+    expect(dimMayEdit(human)).toBe(true);
+    expect(dimMayEdit(agent)).toBe(true);
     // an agent may add, then edit what it just added, in one batch
     expect(codes([{ type: 'add', node: rect(20) }, { type: 'update', id: id(20), patch: { label: 'x' } }], agent)).toEqual([]);
-    // nobody owns an unvouched mark but a human
+    // an unvouched mark is editable by any well-formed hand
     const s = foldDim([{ seq: 4, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: [{ type: 'add', node: rect(20) }] } }], undefined, state);
     expect(s.nodes.get(id(20))!.by.cls).toBe('unknown');
-    expect(codes([{ type: 'delete', id: id(20) }], agent, s)).toEqual(['not-owner@id']);
+    expect(codes([{ type: 'delete', id: id(20) }], agent, s)).toEqual([]);
     expect(codes([{ type: 'delete', id: id(20) }], human, s)).toEqual([]);
+    // not-owner keeps its (hashed) place in the list, unused by any well-formed hand, and its fix says so
+    expect(DIM_REFUSAL_CODES).toContain('not-owner');
+    expect(DIM_REFUSAL_FIXES['not-owner']).toBe('This board no longer refuses an edit for the hand that drew a mark; view the board again and retry.');
   });
 
   it('colour: a failing colour is refused, never stored, and the refusal may name a swatch', () => {
