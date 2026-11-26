@@ -86,6 +86,13 @@ let logId = null;
  */
 const loaded = new Map();
 
+/**
+ * `dim.select`: what the page last said is selected, per dimension and hsid. MEMORY ONLY: never a row, a state key
+ * or a keyframe, and empty after a restart. `dim-view` answers a session its OWN hsid's selection only (A3).
+ */
+const selections = new Map();
+const SELECTION_DIMS = 64;
+
 const ulidOf = (dim) => dim.slice(4);
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const REPO = /^repo:[0-9a-f]{16}$/;
@@ -159,15 +166,17 @@ async function readKeyframe(host, dim) {
  * 40,960,000 scanned rows; past that the open is refused `unavailable`), and every dimension row among them is
  * read. Returns the state, and the repo scope and seq of the first start row seen (for an adoption).
  */
-async function foldFromLog(host, dim, from, since) {
+async function foldFromLog(host, dim, from, since, cancelled) {
   let state = from.state;
   let grants = from.grants;
   const oids = new Map(from.oids);
   let at = since;
   // the newest row of this dimension seen, of ANY of its kinds: a grant row is not in the published fold's seq
-  let last = from.state.seq;
+  let last = Math.max(from.state.seq, since);
   let first = null;
   for (let i = 0; i < MAX_PAGES; i++) {
+    // M3: a tool call that ran past its time stops between pages and answers (the host then restarts nothing)
+    if (cancelled && cancelled()) throw new Error('cancelled');
     const page = plain(await host.kernel('log.read', { ...(at > 0 ? { since: { logId, seq: at } } : {}), kinds: PAGE_KINDS, limit: PAGE_ROWS }));
     const rows = page && Array.isArray(own(page, 'rows')) ? page.rows : null;
     const next = page ? own(page, 'next') : undefined;
@@ -260,6 +269,21 @@ function noteOid(oids, payload, seq) {
 
 /** The effective grant of every attached session, as a LIST (M9: `dim.open` and `dim.grant` answer it). */
 const grantList = (entry) => entry.state.attached.map((hsid) => ({ hsid, write: dimMayDraw(entry.state, entry.grants, hsid) }));
+
+/**
+ * Fold what the log holds after the entry's last row into it (the log is the truth; today this mod is its only
+ * writer, so this normally reads one short page). `cancelled` is checked between pages.
+ */
+async function catchUp(host, dim, entry, cancelled) {
+  const out = await foldFromLog(host, dim, entry, entry.idx.lastSeq, cancelled);
+  entry.state = out.state;
+  entry.grants = out.grants;
+  entry.oids = out.oids;
+  if (out.last > entry.idx.lastSeq) {
+    entry.idx = { ...entry.idx, lastSeq: out.last };
+    entry.dirty = true;
+  }
+}
 
 function remember(dim, entry) {
   loaded.delete(dim);
@@ -433,6 +457,30 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     return { ok: true, already: false, dim: a.dim, seq, ops: payload.ops, nodes: payload.nodes, hash: dimHash(entry.state) };
   }
 
+  if (commandId === 'dim.select') {
+    let byHsid = selections.get(a.dim);
+    if (!byHsid) {
+      while (selections.size >= SELECTION_DIMS) selections.delete(selections.keys().next().value);
+      byHsid = new Map();
+      selections.set(a.dim, byHsid);
+    }
+    byHsid.set(a.hsid, a.ids);
+    return { ok: true, dim: a.dim, selected: a.ids.length };
+  }
+
+  if (commandId === 'dim.check') {
+    // the hash point after an agent's turn (Aegis C2.6): an agent's rows reach the page through the log, so the
+    // page's own dim.op answers never vouch for them. Read to the log head, then answer the fold there. No write.
+    try {
+      await catchUp(host, a.dim, entry);
+    } catch {
+      loaded.delete(a.dim);
+      return refusal('unavailable');
+    }
+    if (entry.dirty) await saveIdx(host, a.dim, entry);
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: dimHash(entry.state) };
+  }
+
   if (commandId !== 'dim.op') return refusal('command-unknown');
   if (state.ended) return refusal('dim-ended');
   const v = apply(state, a.ops, actor, { stamp });
@@ -446,7 +494,8 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
   if (typeof seq !== 'number') return seq;
   entry.sinceKf += v.ok.length;
   if (entry.sinceKf >= KEYFRAME_EVERY_OPS) await saveKeyframe(host, a.dim, entry);
-  return { ok: true, dim: a.dim, seq, applied: v.ok.length, refused: v.refused };
+  // the hash of the fold at this seq: the page compares its own fold there (S1.4 §5)
+  return { ok: true, dim: a.dim, seq, hash: dimHash(entry.state), applied: v.ok.length, refused: v.refused };
 }
 
 /** S1.3: no tool is available. `saw` names the relayedFor fields the host sent (names only), for the identity test. */

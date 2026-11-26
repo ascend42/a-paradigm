@@ -211,3 +211,44 @@ describe('#dimension-mod write grants (S1.4 §4.3; Aegis M4, M9, M10)', () => {
   });
 });
 
+
+describe('#dimension-mod dim.select, dim.check and the hash on a dim.op answer (S1.4 §2, §5; Aegis C2.6)', () => {
+  it('dim.op answers the hash of the fold at its seq', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const res = await w.run('dim.op', { dim, ops: [rectOp(1), rectOp(2)] });
+    expect(res).toMatchObject({ ok: true, applied: 2 });
+    expect(res.hash).toBe(dimHash(w.log.fold(dim)));
+  });
+
+  it('dim.check answers {seq, hash} at the latest row and writes nothing; it reads rows the mod did not answer for', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    await w.run('dim.op', { dim, ops: [rectOp(1)] });
+    const before = w.log.rows.length;
+    const at = await w.run('dim.check', { dim });
+    expect(at).toEqual({ ok: true, dim, seq: w.log.fold(dim).seq, hash: dimHash(w.log.fold(dim)) });
+    // a row the mod's fold has not seen (another writer, or a reply it lost): the check reads the log to its head
+    w.inject(DIM_KINDS.op, { v: 1, dim, ops: [rectOp(9)], relayedFor: { principal: 'p:00000000/s-zzzzzzzb', surface: 'bridge', agent: 'claude', hsid: B } });
+    const after = await w.run('dim.check', { dim });
+    expect(after.seq).toBe(w.log.fold(dim).seq);
+    expect(after.hash).toBe(dimHash(w.log.fold(dim)));
+    expect(w.log.rows.length).toBe(before + 1);
+    // a command like every other: a person on the window, an attached session
+    expect(await w.run('dim.check', { dim }, A, CLI)).toMatchObject({ ok: false, code: 'not-human-gui' });
+  });
+
+  it('dim.select keeps ids in memory only (no row, no state key), refuses a bad id or an unattached focus, and is empty after a restart', { timeout: 60_000 }, async () => {
+    const w = await toolRig();
+    const dim = await board(w);
+    const rows = w.log.rows.length;
+    const keys = Object.keys(w.state()).sort();
+    expect(await w.run('dim.select', { dim, ids: [ulid(1), ulid(2), ulid(1)] })).toEqual({ ok: true, dim, selected: 2 });
+    expect(await w.run('dim.select', { dim, ids: ['nope'] })).toMatchObject({ ok: false, code: 'args-bad' });
+    expect(await w.run('dim.select', { dim, ids: Array.from({ length: 65 }, (_, i) => ulid(i)) })).toMatchObject({ ok: false, code: 'args-bad' });
+    expect(await w.run('dim.select', { dim, ids: [ulid(1)] }, A, CLI)).toMatchObject({ ok: false, code: 'not-human-gui' });
+    expect(w.log.rows.length).toBe(rows);
+    expect(Object.keys(w.state()).sort()).toEqual(keys);
+    expect(JSON.stringify(w.state())).not.toContain(ulid(2));
+  });
+});

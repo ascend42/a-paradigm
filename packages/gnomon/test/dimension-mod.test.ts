@@ -185,7 +185,7 @@ describe('#dimension-mod commands under the real mod host (S1.3; Aegis B2)', () 
       expect(opened).toMatchObject({ ok: true, created: true, dim, title: 'Plan', firstSeq: 1, seq: 1 });
       expect(w.log.rows[0]).toMatchObject({ kind: DIM_KINDS.start, scope: { repo: REPO }, payload: { v: 1, dim, title: 'Plan', attached: [A], opened: 'command', relayedFor: { principal: HUMAN, connId: GUI.connId, surface: 'gui' } } });
       const op = await w.run('dim.op', { dim, ops: [rectOp(1, { label: 'One' }), rectOp(2), { type: 'move', ids: [ulid(1)], dx: 5, dy: 5 }] });
-      expect(op).toEqual({ ok: true, dim, seq: 2, applied: 3, refused: [] });
+      expect(op).toEqual({ ok: true, dim, seq: 2, hash: dimHash(w.log.fold(dim)), applied: 3, refused: [] });
       expect(Object.keys(w.log.rows[1]!.payload).sort()).toEqual(['dim', 'ops', 'relayedFor', 'v']);
       const closed = await w.run('dim.close', { dim });
       expect(closed).toMatchObject({ ok: true, already: false, seq: 3, ops: 3, nodes: 2 });
