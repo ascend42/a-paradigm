@@ -629,6 +629,9 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       SHORTEN(true), { until: `${CUR}.leaf.state() === 'too-short'`, as: 'too short' }, ...type('adyn`'), { key: ' ' }, { key: 'Enter', text: '\r' }, { key: 'Escape' }, see('typed'),
       // aegis F5: the check is painted again when the words become held (C1.4: never "the last change" with words held)
       { read: `${CUR}.leaf.el.dataset.check`, as: 'checkHeld' },
+      // aegis re-check of F4: on a Mac only ⌘ passes; Ctrl+K reaches neither the held text nor the palette; ⌘K does
+      { key: 'k', ctrl: true }, { read: `({ palette: !document.getElementById('palette').hidden, field: (document.querySelector('.bd-host .bd-board textarea') || {}).value ?? null })`, as: 'ctrlK' },
+      { key: 'k', meta: true }, { read: `({ palette: !document.getElementById('palette').hidden })`, as: 'metaK' }, { key: 'Escape' }, { until: `document.getElementById('palette').hidden`, as: 'the palette closed' },
       { press: '#board-turn .bd-turn-key' }, { key: 'b', alt: true }, see('folds'),
     ]);
     expect(a.errors).toEqual([]);
@@ -642,6 +645,8 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(S('typed').line).toBe('No room to draw · your words are kept on this page');
     expect(a.checkHeld).toBe('checked up to an older change');
     // ruled C3_2: show chat and ⌥B refuse to fold while the words are held, and say so
+    expect(a.ctrlK).toEqual({ palette: false, field: 'hello' });
+    expect(a.metaK).toEqual({ palette: true });
     expect(S('folds')).toMatchObject({ open: true, field: 'hello', frames: S('typing').frames, line: 'No room to draw · your words are kept on this page' });
   }, 180_000);
 

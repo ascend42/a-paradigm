@@ -174,6 +174,8 @@ export function sealElement(seal: Seal, name: string, cls = ''): SVGElement {
 }
 
 const place = (e: HTMLElement | SVGElement, left: number, top: number): void => void (e.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`);
+/** The platform's own shortcut modifier is ⌘ on macOS (the console is desktop only: Mac first, Windows later). */
+const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 const isField = (n: Element | null): boolean => !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA');
 
 export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardLeaf {
@@ -978,7 +980,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // would end the edit says why; the app's own shortcuts still pass. Link down and too short both: the link's line.
     if (tooShort && inert !== 'link-down') {
       // (aegis F4: only the app's chords pass, ⌘K, ⌘, ⌘N and ⌥B; a bare ` would type into the held text)
-      const chord = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['k', ',', 'n'].includes(e.key.toLowerCase());
+      // (aegis re-check of F4: the platform's own modifier only, ⌘ on macOS, Ctrl elsewhere: on a Mac Ctrl+K is an
+      // editing key of the text, not the palette)
+      const own = MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      const chord = own && !e.altKey && !e.shiftKey && ['k', ',', 'n'].includes(e.key.toLowerCase());
       const altB = e.code === 'KeyB' && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey;
       if (chord || altB || ['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
       e.preventDefault();
