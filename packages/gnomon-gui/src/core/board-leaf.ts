@@ -170,6 +170,8 @@ export const KEEP_COPY = {
   wordsWait: 'Your words are waiting · T, then click, gets them back',
   wordsBack: 'Your words are back · click away to save them',
   wordsGone: 'The words you were typing weren’t saved',
+  // (aegis F1: a session switch cannot be refused; the words that went are named by their first characters)
+  wordsGoneWith: (words: string): string => `The words you were typing weren’t saved · “${[...words.trim()].length > 24 ? `${[...words.trim()].slice(0, 23).join('')}…` : words.trim()}”`,
   reconnected: 'Reconnected',
   copyDown: 'Nothing was copied · copy it again once reconnected',
   foldedDown: 'Folded while reconnecting · unsaved changes were dropped',

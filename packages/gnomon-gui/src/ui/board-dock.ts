@@ -331,9 +331,15 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   }
 
   /** The leaf is gone (its session destroyed it, or is about to): the dock's own part. */
+  /** Words held by a too-short board that a leave is about to take: said by their first characters, never silently (aegis F1). */
+  function sayHeldWordsGone(c: { leaf: BoardLeaf }): void {
+    const words = c.leaf.holdsWords() ? c.leaf.typed() : null;
+    if (words) d.say(KEEP_COPY.wordsGoneWith(words), 'warn');
+  }
   function drop(): void {
     const c = cur;
     if (!c) return;
+    sayHeldWordsGone(c);
     cur = null;
     for (const f of c.off.splice(0)) f();
     if (c.session.alive) c.session.destroy('switch');
@@ -411,6 +417,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     if (!hsid) return;
     if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn');
     if (cur && cur.session.dim === plan.dim) return void cur.leaf.handle()?.focus();
+    // aegis F1: opening another board (a list row, ⌘K, /board, the menu) would take words held by a too-short board:
+    // refused, and the held line said again, as a fold is
+    if (cur && cur.leaf.holdsWords()) return cur.leaf.sayHeld();
     if (cur) {
       // one leaf: the open dimension is left first, and what it lost is said
       const old = cur.session;
@@ -487,6 +496,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       const c = cur;
       if (c && c.session.hsid !== d.focused()) {
         // the leaf follows the session: this one is left (what is pending gets a moment to settle), and the loss is said
+        // (a switch cannot be refused: words held by a too-short board are said by their first characters, aegis F1)
+        sayHeldWordsGone(c);
         cur = null;
         for (const f of c.off.splice(0)) f();
         host.hidden = true;

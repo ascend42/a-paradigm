@@ -727,7 +727,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       // pinned card and the composer); the board is shown, held still, and the foot stays (design too_short.shows)
       el.classList.toggle('too-short', short());
       el.classList.toggle('no-body', boardHeight() < BOARD_BODY_MIN);
-      shortChanged(load === 'ready' && short());
+      // (a hidden host has no height: that is not "too short", aegis F1: the dock hides it before a leave)
+      shortChanged(load === 'ready' && el.getClientRects().length > 0 && short());
       el.dataset.state = state;
       // the failed note stands on the bare desk: nothing of a stopped engine is left showing
       boardHost.hidden = state === 'failed';
@@ -976,6 +977,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let going = false;
   const guardTypedBlur = (e: Event): void => {
     if (going || (inert !== 'link-down' && !tooShort) || e.target !== boardField()) return;
+    // a host being hidden is the leaf going (a switch): its blur is not guarded by a too-short state it never had
+    if (inert !== 'link-down' && el.getClientRects().length === 0) return;
     e.stopImmediatePropagation();
   };
   window.addEventListener('keydown', guardTypedKey, true);

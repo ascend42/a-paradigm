@@ -665,6 +665,31 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(a.forced as string).toMatch(/^not checked yet · /);
   }, 180_000);
 
+  describe('aegis F1: words held by a too-short board are never thrown away silently by a leave that is not a fold', () => {
+    const SHORT = `(() => { const p = document.getElementById('pinned'); const c = ${CUR}; p.style.paddingTop = Math.max(0, c.leaf.room() - 100) + 'px'; return 1; })()`;
+    const SEEF1 = `(() => { const c = ${CUR}; const f = document.querySelector('.bd-host .bd-board textarea'); return { open: !!c, title: c ? c.leaf.el.querySelector('.title').textContent : null, field: f ? f.value : null, line: c ? c.leaf.el.querySelector('.bd-keep').textContent : null, toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent), hsid: c ? c.session.hsid : null }; })()`;
+    const holdHello = [{ press: '.bd-host [data-key="tool:text"]' }, { at: [200, 330], press: true }, { until: `!!document.querySelector('.bd-host .bd-board textarea')`, as: 'a text open' }, ...type('hello'), { read: SHORT, as: 'short' }, { until: `${CUR}.leaf.state() === 'too-short' && ${CUR}.leaf.holdsWords()`, as: 'words held while too short' }];
+    it('a session switch (which cannot be refused) says the words are gone, by their first characters', async () => {
+      const other = `(() => { const r = [...document.querySelectorAll('#session-list .session-row[data-hsid]')].find((x) => !x.classList.contains('active')); if (!r) return null; r.id = 'f1-other'; return r.dataset.hsid; })()`;
+      const a = await real([...toIdle, ...typeBoard, ...holdHello, { read: other, as: 'other' }, { press: '#f1-other' }, { until: `!${CUR}`, as: 'the leaf left (the switch says what it lost as it goes)', timeoutMs: 15_000 }, { read: SEEF1, as: 'after' }]);
+      expect(a.errors).toEqual([]);
+      expect(a.other).toBeTruthy();
+      const toasts = (a.after as { toasts: string[] }).toasts;
+      expect(toasts.some((t) => t.includes('The words you were typing weren’t saved · “hello”')), JSON.stringify(toasts)).toBe(true);
+    }, 180_000);
+    it('a pick of another board in the Dimensions list (/boards) is refused and says the held line; the words stay', async () => {
+      const a = await real([
+        ...toIdle, ...typeBoard, ...foldByEsc, { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 },
+        ...holdHello, { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'the list' },
+        { read: `[...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent)`, as: 'rows' }, { key: 'ArrowDown' }, { key: 'Enter' }, { wait: 300 }, { read: SEEF1, as: 'after' },
+      ]);
+      expect(a.errors).toEqual([]);
+      expect((a.rows as string[])[1]).not.toMatch(/plan B/);
+      expect(a.after).toMatchObject({ open: true, title: 'plan B', field: 'hello', line: 'No room to draw · your words are kept on this page' });
+      expect((a.after as { toasts: string[] }).toasts.filter((t) => /weren.t saved/.test(t))).toEqual([]);
+    }, 240_000);
+  });
+
   it('#gui-board-turn (Aegis L2): a double press on show chat folds once and the first press’s focus move holds (the chat at its latest row)', async () => {
     const a = await real([
       // (the fold is waited for by condition, then the focus move it ends with: a fixed 900ms failed once under a loaded full run)
