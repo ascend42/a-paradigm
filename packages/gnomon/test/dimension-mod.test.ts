@@ -75,10 +75,10 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
     expect(compatModAbiId({ packageHash: h, tier: 'first-party', source: 'package', manifest: m }, MOD_ABI_ID)).toBeNull();
   });
 
-  it('the manifest: seven commands each with declared effects, the four dimension kinds and the two auxiliary kinds, two tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
+  it('the manifest: nine commands each with declared effects, the four dimension kinds and the two auxiliary kinds, two tools with a bounded schema description, no view, keybinding, offer, capability or egress', () => {
     const m = readManifest(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json')), { tier: 'first-party' }).manifest;
     expect([m.publisher, m.name, m.abi]).toEqual(['gnomon', 'dimension', 'mod-abi:v1']);
-    // S1.4 (Aegis A7): every command declares its effects; only dim.select and dim.check are read-only
+    // S1.4 (Aegis A7): every command declares its effects; only dim.select, dim.check and (E1) dim.seen are read-only
     expect(m.provides?.commands?.map((c) => [c.id, c.effects])).toEqual([
       ['dim.open', ['read', 'write']],
       ['dim.attach', ['read', 'write']],
@@ -87,6 +87,8 @@ describe('#dimension-mod: the tree, its pin and the generated dim-shape (spec §
       ['dim.grant', ['read', 'write']],
       ['dim.select', ['read']],
       ['dim.check', ['read']],
+      ['dim.undo', ['read', 'write']],
+      ['dim.seen', ['read']],
     ]);
     // F1: the two auxiliary kinds are declared here and are NOT in the published kind list
     expect([...(m.provides?.events ?? [])].sort()).toEqual([...Object.values(DIM_KINDS), ...Object.values(DIM_AUX_KINDS)].sort());

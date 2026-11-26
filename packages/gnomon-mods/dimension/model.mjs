@@ -16,12 +16,17 @@ import {
   DIM_ROW_VERSION,
   DIM_VIEW_PRINCIPAL_PATTERN,
   DIM_Z_PATTERN,
+  dimActOf,
   dimAttrDigest,
+  dimChangeSetOf,
   dimGrantDefault,
   dimHash,
+  dimRowBy,
+  dimUndoMarkOf,
   dimViewOf,
   dimZPlace,
   emptyDimState,
+  foldDim,
   foldDimRow,
   validateDimOps,
 } from './dim-shape.mjs';
@@ -73,7 +78,7 @@ export const KEYFRAME_BUDGET_BYTES = 640 * 1024;
 export const MOD_REFUSAL_FIXES = Object.freeze({
   'not-human-gui': 'Only a person using the Gnomon window can change a dimension.',
   'no-session': 'Open the dimension from a live session; none was named, or the named one is not live.',
-  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op, dim.close, dim.grant, dim.select or dim.check.',
+  'command-unknown': 'Use one of the commands dim.open, dim.attach, dim.op, dim.close, dim.grant, dim.select, dim.check, dim.undo or dim.seen.',
   'args-bad': 'Send only the listed arguments of this command, each with its listed type.',
   'dim-bad': 'Use dim: followed by a 26-character ULID as the dimension id.',
   'opened-bad': 'Say how the dimension was opened: command, menu or offer.',
@@ -102,6 +107,14 @@ export const MOD_REFUSAL_FIXES = Object.freeze({
   'op-id-reused': 'This opId was already used for a different draw. Use a new opId for new ops.',
   'append-busy': 'The row was not written: the board is taking too many rows this second. Nothing changed for it; send it again in a moment.',
   cancelled: 'The call took too long and was stopped. Rows it had already written stay; read the board again before you retry.',
+  // S1.4 E1 (edit-anything; Luna's E-design words, agent-facing): undo, the stale view and the foreign budget
+  'undo-expired': 'This change is too old to undo in one step; view the board and change the marks yourself.',
+  'undo-nothing': 'Nothing in that change is left to undo; view the board.',
+  'undo-not-allowed': 'You may undo one person\'s change per turn; finish this turn first.',
+  'undo-set-bad': 'That change was not shown to you; view the board and name a change from its changes.',
+  'changed-since': 'Another hand changed this mark after your view; view it again before you edit it.',
+  'foreign-budget': 'This turn has changed as many marks of other hands as it may (32, of them 16 removals and 16 rewritten words). Stop changing others\' marks; the count starts again on the next turn.',
+  'not-pinned': 'That change is not standing on this board; nothing was released.',
 });
 export const MOD_REFUSAL_CODES = Object.freeze(Object.keys(MOD_REFUSAL_FIXES));
 
@@ -288,6 +301,9 @@ export const COMMAND_ARGS = Object.freeze({
   'dim.grant': Object.freeze(['dim', 'write']),
   'dim.select': Object.freeze(['dim', 'ids']),
   'dim.check': Object.freeze(['dim']),
+  // S1.4 E1: a person undoes a change-set, and dismisses a standing notice (Aegis S1 to S3)
+  'dim.undo': Object.freeze(['dim', 'of', 'ids', 'base']),
+  'dim.seen': Object.freeze(['dim', 'of']),
 });
 
 /**
@@ -331,6 +347,21 @@ export function readArgs(commandId, args) {
     const write = own(a, 'write');
     if (typeof write !== 'boolean') return { code: 'args-bad' };
     out.write = write;
+  }
+  if (commandId === 'dim.undo' || commandId === 'dim.seen') {
+    const of = readOf(own(a, 'of'));
+    if (!of) return { code: 'args-bad' };
+    out.of = of;
+  }
+  if (commandId === 'dim.undo') {
+    const ids = own(a, 'ids');
+    if (ids !== undefined) {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > SELECT_MAX || new Set(ids).size !== ids.length || !ids.every((x) => typeof x === 'string' && DIM_NODE_ID_PATTERN.test(x))) return { code: 'args-bad' };
+      out.ids = [...ids];
+    }
+    const base = own(a, 'base');
+    if (base !== undefined && (!Number.isSafeInteger(base) || base < 0)) return { code: 'args-bad' };
+    if (base !== undefined) out.base = base;
   }
   if (commandId === 'dim.select') {
     const ids = own(a, 'ids');
@@ -856,4 +887,248 @@ export function canonicalText(v) {
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalText(v[k])}`).join(',')}}`;
   }
   return JSON.stringify(v) ?? 'null';
+}
+
+/* ── change-sets, checkpoints and the recent-rows ring (S1.4 E1; Arky §3.2; Aegis G6, N1) ─────────────── */
+
+/** Change-sets one loaded dimension keeps a checkpoint for (the state just before the set's first row). */
+export const UNDO_SETS = 32;
+/** Op rows of one loaded dimension kept in the ring (payload and stamp, for the planner's `after`). */
+export const UNDO_ROWS = 512;
+/** Rows the ring may keep past UNDO_ROWS while a PINNED set still needs them; past it even a pinned set goes. */
+export const UNDO_ROWS_PINNED = 2048;
+/** Pinned sets per dimension (G6; Luna's notice cap, both kinds together): a ninth unpins the oldest pinned set. */
+export const UNDO_PINS = 8;
+/** Checkpoint Map entries (nodes + deleted ids) the whole mod keeps (G6): past it the oldest unpinned set goes first. */
+export const UNDO_ENTRIES_MAX = 1_000_000;
+/** A person "has the board open" while a command of theirs for it came within this long (agent-on-agent pins). */
+export const PRESENCE_MS = 10 * 60 * 1000;
+
+/** The key of a change-set, `dimChangeSetOf`'s identity as one string (a person's is `(principal, act)`, never act alone). */
+export function setKey(cs) {
+  return cs.kind === 'act' ? `act\u0000${cs.principal}\u0000${cs.act}` : `turn\u0000${cs.hsid}\u0000${cs.turn}`;
+}
+/** A change-set as an `of` (the marker's and the commands' form). */
+export const ofOf = (cs) => (cs.kind === 'act' ? { principal: cs.principal, act: cs.act } : { hsid: cs.hsid, turn: cs.turn });
+
+/**
+ * `of` as a command names it: exactly `{hsid, turn}` (turn `turn:<hsid>/<n>`) or `{principal, act}` (a ULID act);
+ * own keys only. Returns the change-set or null. Read the way `dimUndoMarkOf` reads a marker's `of`.
+ */
+export function readOf(v) {
+  const o = plain(v);
+  if (!o) return null;
+  const keys = Object.keys(o).sort().join(',');
+  if (keys === 'hsid,turn') {
+    const hsid = own(o, 'hsid');
+    const turn = own(o, 'turn');
+    if (!nonEmpty(hsid, 128) || typeof turn !== 'string' || !turn.startsWith(`turn:${hsid}/`) || !/^[1-9][0-9]{0,14}$/.test(turn.slice(`turn:${hsid}/`.length))) return null;
+    return { kind: 'turn', hsid, turn };
+  }
+  if (keys === 'act,principal') {
+    const principal = own(o, 'principal');
+    const act = own(o, 'act');
+    if (!nonEmpty(principal, 256) || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
+    return { kind: 'act', principal, act };
+  }
+  return null;
+}
+
+/**
+ * A fresh history for one loaded fold. MEMORY ONLY: never state or a keyframe, dropped with the fold (G6). `before`:
+ * the change-set keys of the op rows the cold open folded (a set seen there is held from no row, never in part).
+ */
+export function emptyHistory(log, before) {
+  return { log, rows: [], sets: new Map(), pins: [], entries: 0, presentAt: -Infinity, before: before ?? new Set() };
+}
+
+const handSame = (a, b) => !!a && !!b && a.cls === b.cls && a.principal === b.principal && a.agent === b.agent;
+const checkpointSize = (s) => s.nodes.size + s.gone.size;
+
+/**
+ * Note one op row that LANDED (its seq returned, or read from the log), with the state just before it. Opens a
+ * change-set at its first row with that state as the checkpoint (a reference: a fold is replaced, never mutated),
+ * marks what the set touched, pins it (G6) and applies the per-dimension bounds. `now` is the caller's clock.
+ * `after` (a catch-up stretch): a later state, read only for the hand of a node `before` does not hold.
+ * Returns the keys of the sets this note evicted.
+ */
+export function noteHistoryRow(h, before, row, now, after) {
+  const r = { seq: row.seq, kind: DIM_KINDS.op, payload: row.payload };
+  const cs = dimChangeSetOf(r);
+  const key = cs ? setKey(cs) : null;
+  h.rows.push({ ...r, key });
+  if (cs) {
+    let set = h.sets.get(key);
+    if (!set) {
+      // `straddles`: the set had rows before this fold was opened (its earlier rows are not held): never planned in part
+      set = { key, cs, firstSeq: r.seq, seqs: [], before, pinned: false, offered: false, human: false, other: false, undidPerson: false, straddles: h.before.has(key) };
+      h.sets.set(key, set);
+      h.entries += checkpointSize(before);
+    }
+    set.seqs.push(r.seq);
+    const hand = dimRowBy(r);
+    const ops = Array.isArray(own(r.payload, 'ops')) ? r.payload.ops : [];
+    for (const op of ops) {
+      const o = plain(op);
+      if (!o) continue;
+      const t = own(o, 'type');
+      const ids = t === 'move' && Array.isArray(own(o, 'ids')) ? o.ids : t === 'update' || t === 'delete' ? [own(o, 'id')] : [];
+      for (const id of ids) {
+        // a node's hand never changes after its add: any state that holds it answers (`after` for a catch-up stretch)
+        const n = typeof id === 'string' ? (before.nodes.get(id) ?? after?.nodes.get(id)) : undefined;
+        if (!n) continue;
+        const original = n.restoredFrom?.by ?? n.by;
+        if (handSame(original, hand)) continue;
+        set.other = true;
+        if (original.cls === 'human') set.human = true;
+      }
+    }
+    const mark = Object.hasOwn(r.payload, 'undo') ? dimUndoMarkOf(r) : null;
+    if (mark && mark.of.kind === 'act') set.undidPerson = true;
+    offerPin(h, set, now);
+  }
+  return trimHistory(h);
+}
+
+/**
+ * Pin a set the person still needs (G6; the orchestrator's ruling): one that touched a person's marks or undid a
+ * person's action, and an agent's set that touched another hand's marks while a person has the board open. A
+ * ninth pin unpins the oldest pinned set (it stays undoable until normal eviction, N1).
+ */
+function offerPin(h, set, now) {
+  if (set.pinned) return;
+  const present = now - h.presentAt <= PRESENCE_MS;
+  const want = set.human || set.undidPerson || (set.cs.kind === 'turn' && set.other && present);
+  if (set.cs.kind === 'turn' && set.other && present) set.offered = true;
+  if (!want) return;
+  set.pinned = true;
+  h.pins.push(set.key);
+  while (h.pins.length > UNDO_PINS) {
+    const old = h.sets.get(h.pins.shift());
+    if (old) old.pinned = false;
+  }
+}
+
+/** A person's command for this dimension came now: agent-on-agent sets that landed while nobody looked are pinned. */
+export function notePresence(h, now) {
+  h.presentAt = now;
+  for (const set of h.sets.values()) if (!set.pinned && !set.offered && set.cs.kind === 'turn' && set.other) offerPin(h, set, now);
+}
+
+/** Release one pinned set (dim.seen, or the person's undo of it). True when it was pinned. */
+export function unpinSet(h, key) {
+  const set = h.sets.get(key);
+  if (!set || !set.pinned) return false;
+  set.pinned = false;
+  set.offered = true;
+  h.pins = h.pins.filter((k) => k !== key);
+  return true;
+}
+
+/** Drop one set and its checkpoint. */
+export function evictSet(h, key) {
+  const set = h.sets.get(key);
+  if (!set) return;
+  h.sets.delete(key);
+  h.entries -= checkpointSize(set.before);
+  if (set.pinned) h.pins = h.pins.filter((k) => k !== key);
+}
+
+/** The per-dimension bounds: UNDO_SETS sets (the oldest unpinned first), UNDO_ROWS rows (UNDO_ROWS_PINNED for pins). */
+function trimHistory(h) {
+  const gone = [];
+  const oldest = (pinned) => {
+    let best = null;
+    for (const s of h.sets.values()) if (s.pinned === pinned && (best === null || s.firstSeq < best.firstSeq)) best = s;
+    return best;
+  };
+  while (h.sets.size > UNDO_SETS) {
+    const s = oldest(false) ?? oldest(true);
+    gone.push(s.key);
+    evictSet(h, s.key);
+  }
+  // rows older than every kept set's first row are needed by nothing
+  let need = Infinity;
+  for (const s of h.sets.values()) need = Math.min(need, s.firstSeq);
+  let cut = 0;
+  while (cut < h.rows.length && h.rows[cut].seq < need) cut++;
+  // the ring: past UNDO_ROWS, a row goes with every set that needs it, unpinned first; pinned sets hold up to UNDO_ROWS_PINNED
+  while (h.rows.length - cut > UNDO_ROWS) {
+    const pinnedNeed = Math.min(Infinity, ...[...h.sets.values()].filter((s) => s.pinned).map((s) => s.firstSeq));
+    if (h.rows[cut].seq >= pinnedNeed && h.rows.length - cut <= UNDO_ROWS_PINNED) {
+      break;
+    }
+    const dropped = h.rows[cut].seq;
+    cut++;
+    for (const s of [...h.sets.values()]) if (s.firstSeq <= dropped) (gone.push(s.key), evictSet(h, s.key));
+  }
+  if (cut > 0) h.rows.splice(0, cut);
+  return gone;
+}
+
+/**
+ * The planner's input for one held set: its rows oldest first, each with the state just before it (folded forward
+ * from the checkpoint through the ring, one copy per set row), and every other ring row after the set's first row.
+ * `null` when the ring does not reach the set's first row (it was trimmed).
+ */
+export function setRowsOf(h, key) {
+  const set = h.sets.get(key);
+  if (!set || set.straddles) return null;
+  const i0 = h.rows.findIndex((r) => r.seq === set.firstSeq);
+  if (i0 < 0) return null;
+  const rows = [];
+  const after = [];
+  let state = set.before;
+  let pending = [];
+  for (let i = i0; i < h.rows.length; i++) {
+    const r = h.rows[i];
+    if (r.key === key) {
+      // one linear fold per stretch between two set rows (one state copy per set row, never one per ring row)
+      if (pending.length > 0) state = foldDim(pending, undefined, state);
+      rows.push({ before: state, ops: Array.isArray(own(r.payload, 'ops')) ? r.payload.ops : [], seq: r.seq });
+      pending = [{ seq: r.seq, kind: r.kind, payload: r.payload }];
+    } else {
+      pending.push({ seq: r.seq, kind: r.kind, payload: r.payload });
+      after.push({ seq: r.seq, kind: r.kind, payload: r.payload });
+    }
+  }
+  return { set, rows, after };
+}
+
+/**
+ * The act of an earlier call of this person's undo of `of` (a continuation, `more`): the newest ring row stamped by
+ * this person whose honoured marker names `of`. Its act is reused, so one undo is one change-set however many calls.
+ */
+export function continuationAct(h, cs, principal) {
+  const k = setKey(cs);
+  for (let i = h.rows.length - 1; i >= 0; i--) {
+    const r = h.rows[i];
+    if (!Object.hasOwn(r.payload, 'undo')) continue;
+    const mark = dimUndoMarkOf(r);
+    const act = dimActOf(r);
+    if (mark && act && act.principal === principal && setKey(mark.of) === k) return act.act;
+  }
+  return null;
+}
+
+/**
+ * A catch-up's op rows split into stretches (S1.4 E1): each stretch starts at a row that opens a change-set this
+ * history does not hold yet, so the state at the stretch's start is that set's checkpoint. Only the last UNDO_SETS
+ * openings get a stretch of their own (earlier ones would be evicted anyway); their sets are noted as straddling.
+ * Returns `{ cuts: Set<index> , straddle: Set<key> }` over `rows`.
+ */
+export function catchUpCuts(h, rows) {
+  const opens = [];
+  const seen = new Set(h.sets.keys());
+  rows.forEach((row, i) => {
+    if (row.kind !== DIM_KINDS.op) return;
+    const cs = dimChangeSetOf(row);
+    if (!cs) return;
+    const k = setKey(cs);
+    if (seen.has(k)) return;
+    seen.add(k);
+    opens.push({ i, k });
+  });
+  const keep = opens.slice(-UNDO_SETS);
+  return { cuts: new Set(keep.map((o) => o.i)), straddle: new Set(opens.slice(0, opens.length - keep.length).map((o) => o.k)) };
 }

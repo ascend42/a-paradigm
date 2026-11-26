@@ -50,7 +50,9 @@
       { "id": "dim.close", "title": "Close a dimension", "effects": ["read", "write"] },
       { "id": "dim.grant", "title": "Let a session's agent draw, or stop it", "effects": ["read", "write"] },
       { "id": "dim.select", "title": "Tell the agent what is selected", "effects": ["read"] },
-      { "id": "dim.check", "title": "Check a dimension's hash", "effects": ["read"] }
+      { "id": "dim.check", "title": "Check a dimension's hash", "effects": ["read"] },
+      { "id": "dim.undo", "title": "Undo a change on a board", "effects": ["read", "write"] },
+      { "id": "dim.seen", "title": "Keep a change and dismiss its notice", "effects": ["read"] }
     ],
     "events": [
       "modns.gnomon.dimension.session.start",
