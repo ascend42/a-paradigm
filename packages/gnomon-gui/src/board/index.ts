@@ -444,7 +444,8 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           fill: g?.fill ?? null,
           selected: selected[el.id] === true,
           ...(typeof (el as { strokeWidth?: unknown }).strokeWidth === 'number' ? { strokeWidth: (el as { strokeWidth: number }).strokeWidth } : {}),
-          ...(el.type === 'text' && typeof (el as { fontSize?: unknown }).fontSize === 'number' ? { fontSize: (el as unknown as { fontSize: number }).fontSize } : {}),
+          // (the normal form fixes every text at the board's one size, so that is the size its letters are drawn at)
+          ...(el.type === 'text' ? { textSize: BOARD_FONT_SIZE } : {}),
           ...(g?.stubKind !== undefined ? { stubKind: g.stubKind } : {}),
           ...(el.containerId ? { labelOf: el.containerId } : {}),
         };

@@ -172,7 +172,7 @@ export function lineRingPoint(m: Pick<BoardMarkView, 'firstX' | 'firstY' | 'seco
 }
 
 /** The on-screen height of a text mark's letters. */
-export const letterPx = (m: Pick<BoardMarkView, 'fontSize'>, zoom: number): number => (typeof m.fontSize === 'number' ? m.fontSize : 13.5) * zoom * CAP_HEIGHT;
+export const letterPx = (m: Pick<BoardMarkView, 'textSize'>, zoom: number): number => (typeof m.textSize === 'number' ? m.textSize : 13.5) * zoom * CAP_HEIGHT;
 
 /**
  * The mark the pointer names (design author-seal naming.hover): the TOPMOST mark of a hand that is not the

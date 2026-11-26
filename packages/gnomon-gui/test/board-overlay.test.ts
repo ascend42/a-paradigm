@@ -202,7 +202,7 @@ describe('#gui-board S1.4 P4a: the ring, the too-small rule, the text forms, hov
     expect(lineRingPoint({ firstX: 100, firstY: 160, secondX: 100, secondY: 100 }, v)).toEqual({ left: 95, top: 130 });
   });
   it('agent text is never an empty box and never neither form: box at 50% and over, tight under, a rule under 4px letters, PER MARK (Aegis ruling 2)', () => {
-    const t = (fontSize: number): BoardMarkView => mark({ id: 't', kind: 'text', author: ARKY, fontSize });
+    const t = (textSize: number): BoardMarkView => mark({ id: 't', kind: 'text', author: ARKY, textSize });
     const form = (m: BoardMarkView, z: number, o = {}): string => (overlayItems([m], at(z), o).find((i) => i.type === 'textbox') as { form: string }).form;
     expect(form(t(13.5), 0.5)).toBe('box');
     expect(form(t(13.5), 0.49)).toBe('tight');
@@ -212,7 +212,7 @@ describe('#gui-board S1.4 P4a: the ring, the too-small rule, the text forms, hov
     expect(letterPx(t(13.5), 0.3)).toBeLessThan(4);
     expect(form(t(13.5), 0.3)).toBe('rule');
     // the unknown hand: the same forms
-    expect(form(mark({ id: 't', kind: 'text', author: NOBODY, fontSize: 13.5 }), 0.3)).toBe('rule');
+    expect(form(mark({ id: 't', kind: 'text', author: NOBODY, textSize: 13.5 }), 0.3)).toBe('rule');
     // every low form carries the ring; hover gives back the full box and seal
     for (const z of [0.25, 0.3, 0.4, 0.49]) for (const size of [4, 13.5, 40]) {
       const items = overlayItems([t(size)], at(z));

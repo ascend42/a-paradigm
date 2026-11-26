@@ -96,8 +96,8 @@ export interface BoardMarkView {
   hovered?: boolean;
   /** the engine width of the mark's line (its weight), for the too-small rule */
   strokeWidth?: number;
-  /** a text's size in board units, for its letters' height on the screen */
-  fontSize?: number;
+  /** a text's letter size in board units (every board text is BOARD_FONT_SIZE today), for its letters' height on the screen */
+  textSize?: number;
   /** a stub's kind exactly as it was given (the host pattern-checks it before showing it) */
   stubKind?: string;
   /** the mark this text is the label of, when it is one */
