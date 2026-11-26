@@ -70,6 +70,68 @@ describe('#gui-board copy (the design\'s words)', () => {
   });
 });
 
+describe('#gui-board the keep line and the check (boards S1.3 P4b-3; conditions "P4" and "after the review of P4a")', () => {
+  const KEEPS = ['saved', 'saving', 'not-saved'] as const;
+  const LINKS = ['up', 'down'] as const;
+  const PHASES = [undefined, 'opening', 'open', 'closing', 'failed'] as const;
+  it('"Not saved" is never the keep line\'s own state: in every status the line is null or says more than that', async () => {
+    const { keepStateLine, linkDownLine } = await import('../src/core/board-leaf.js');
+    let seen = 0;
+    for (const keep of KEEPS) for (const link of LINKS) for (const pending of [0, 1, 7]) for (const phase of PHASES) for (const partial of [false, true]) for (const dropped of [0, 3]) {
+      const line = keepStateLine({ keep, link, pending, phase, partial, dropped });
+      seen++;
+      if (line === null) continue;
+      expect(line.trim(), JSON.stringify({ keep, link, pending, phase, partial, dropped })).not.toMatch(/^not saved\.?$/i);
+      // where it is said at all, it is said with what is happening
+      if (/not saved/i.test(line)) expect(line).toMatch(/^Not saved · (reconnecting|not connected)$/);
+    }
+    expect(seen).toBe(3 * 2 * 3 * 5 * 2 * 2);
+    for (const keep of KEEPS) for (const pending of [0, 2]) for (const o of [{}, { coming: false }, { unsaved: 2 }, { words: true }, { coming: false, words: true, unsaved: 1 }]) expect(linkDownLine({ keep, pending }, o)).not.toMatch(/^not saved\.?$/i);
+  });
+
+  it('it reads both keep and link: saved with the link down is "Reconnecting" alone; pending with the link down says it is not saved', async () => {
+    const { keepStateLine } = await import('../src/core/board-leaf.js');
+    expect(keepStateLine({ keep: 'saved', link: 'down', pending: 0 })).toBe('Reconnecting');
+    expect(keepStateLine({ keep: 'not-saved', link: 'down', pending: 2 })).toBe('Not saved · reconnecting');
+    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 2 })).toBe('Saving…');
+    expect(keepStateLine({ keep: 'saved', link: 'up', pending: 0 })).toBeNull();
+  });
+
+  it('`partial` and `dropped` show: each has its line while nothing passing is said, dropped first; a passing state (opening, saving, the link down) is said over them and they return', async () => {
+    const { KEEP_COPY, keepStateLine } = await import('../src/core/board-leaf.js');
+    const up = { keep: 'saved', link: 'up', pending: 0 } as const;
+    expect(keepStateLine({ ...up, partial: true })).toBe(KEEP_COPY.partial);
+    expect(keepStateLine({ ...up, dropped: 1 })).toBe(KEEP_COPY.dropped);
+    expect(keepStateLine({ ...up, partial: true, dropped: 4 })).toBe(KEEP_COPY.dropped);
+    expect(keepStateLine({ ...up, phase: 'open', partial: true })).toBe(KEEP_COPY.partial);
+    expect(keepStateLine({ keep: 'saving', link: 'up', pending: 1, partial: true, dropped: 2 })).toBe('Saving…');
+    expect(keepStateLine({ keep: 'saved', link: 'down', pending: 0, partial: true })).toBe('Reconnecting');
+    expect(keepStateLine({ ...up, partial: false, dropped: 0 })).toBeNull();
+    for (const line of [KEEP_COPY.partial, KEEP_COPY.dropped]) expect(line.length, line).toBeLessThanOrEqual(59);
+  });
+
+  it('the check reads "checked up to" a point whenever checkedSeq < seq, is never a bare "verified", and `verified: null` is unchecked', async () => {
+    const { checkLine, checkTone } = await import('../src/core/board-leaf.js');
+    for (let seq = 1; seq <= 40; seq++) for (let checked = 1; checked <= seq; checked++) {
+      const line = checkLine({ verified: true, checkedSeq: checked, seq });
+      expect(line).toMatch(/^Checked up to change \d+/);
+      expect(line).not.toMatch(/verified/i);
+      // behind the head it names BOTH points: the one vouched for and the one the board is at
+      if (checked < seq) expect(line).toBe(`Checked up to change ${checked} of ${seq}`);
+      else expect(line).toBe(`Checked up to change ${checked}`);
+    }
+    // unchecked: the mod has answered no hash this page could compare (never shown as checked, never as failed)
+    for (const s of [{ verified: null, checkedSeq: null, seq: 9 }, { verified: null, checkedSeq: 4, seq: 9 }, { verified: true, checkedSeq: null, seq: 9 }] as const) {
+      expect(checkLine(s)).toBe('Not checked yet');
+      expect(checkTone(s)).toBe('none');
+    }
+    expect(checkLine({ verified: false, checkedSeq: 4, seq: 9 })).toBe('Did not match at change 4');
+    expect([checkTone({ verified: true, checkedSeq: 4 }), checkTone({ verified: false, checkedSeq: 4 })]).toEqual(['ok', 'bad']);
+    // short enough to stand whole in the foot of the 424px leaf beside the hands
+    for (const line of [checkLine({ verified: true, checkedSeq: 99998, seq: 99999 }), checkLine({ verified: false, checkedSeq: 99999, seq: 99999 }), 'Not checked yet']) expect(line.length, line).toBeLessThanOrEqual(40);
+  });
+});
+
 describe('#gui-board G-DDL-08 (the parts that exist before the S1.3 leaf)', () => {
   it('a card has focus exactly when the active element is inside a .card', () => {
     const inside = { closest: (sel: string) => (sel === '.card' ? {} : null) };
@@ -156,8 +218,8 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     expect(noticeLine({ about: 'undo', code: 'undo-too-many-ops', lost: 0 })).toBe('That was too much to undo · it stays as it is');
     expect(noticeLine({ about: 'close', code: 'close-failed', lost: 0 })).toBe('Your marks are saved · the board didn’t fold · try again');
     expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saving', link: 'up', pending: 1 }), keepStateLine({ keep: 'not-saved', link: 'down', pending: 1 }), keepStateLine({ keep: 'saved', link: 'down', pending: 0 })]).toEqual([null, 'Saving…', 'Not saved · reconnecting', 'Reconnecting']);
-    // the keep line's own states: opening, folding, not saved (its own state), partly held, rows dropped
-    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0, phase: 'opening' }), keepStateLine({ keep: 'not-saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, partial: true }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, dropped: 2 })]).toEqual(['Opening…', 'Not saved', KEEP_COPY.partial, KEEP_COPY.dropped]);
+    // the keep line's own states: opening, partly held, rows dropped. "Not saved" is never a state of its own (Mika, final)
+    expect([keepStateLine({ keep: 'saved', link: 'up', pending: 0, phase: 'opening' }), keepStateLine({ keep: 'not-saved', link: 'up', pending: 0 }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, partial: true }), keepStateLine({ keep: 'saved', link: 'up', pending: 0, dropped: 2 })]).toEqual(['Opening…', 'Not saved · reconnecting', KEEP_COPY.partial, KEEP_COPY.dropped]);
     for (const line of [...lines, ...notices, ...Object.values(INERT_COPY)]) {
       expect(line.length, line).toBeLessThanOrEqual(59);
       // plain words: never a code, a field name or a kernel word

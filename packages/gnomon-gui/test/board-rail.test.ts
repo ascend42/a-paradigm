@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BOARD_TOOLS } from '../src/core/board.js';
-import { RAIL_GROUPS, RAIL_TOOLS, railKeyAction, railLayout, railNeed, railTitle, railTool, zoomPercent } from '../src/core/board-rail.js';
+import { BOARD_MIN_HEIGHT } from '../src/core/board-leaf.js';
+import { RAIL_GROUPS, RAIL_HEIGHT, RAIL_TOOLS, railKeyAction, railLayout, railNeed, railTitle, railTool, zoomPercent } from '../src/core/board-rail.js';
 
 const ON = { boardFocused: true, editingText: false, cardFocused: false };
 
@@ -63,31 +64,64 @@ describe('#gui-board rail keys', () => {
 
 describe('#gui-board rail folding (design short_windows)', () => {
   const all = RAIL_GROUPS.flat();
+  const whole = { zoomKeys: true, hand: true, visible: all, folded: [], tight: false };
   it('whole at 472; + and − leave under it; Hand and tools fold under 408', () => {
-    expect(railLayout(472)).toEqual({ zoomKeys: true, hand: true, visible: all, folded: [] });
-    expect(railLayout(538)).toEqual({ zoomKeys: true, hand: true, visible: all, folded: [] });
-    expect(railLayout(471)).toEqual({ zoomKeys: false, hand: true, visible: all, folded: [] });
-    expect(railLayout(408)).toEqual({ zoomKeys: false, hand: true, visible: all, folded: [] });
-    expect(railLayout(407)).toEqual({ zoomKeys: false, hand: false, visible: all.filter((t) => t !== 'stroke'), folded: ['stroke', 'hand'] });
+    expect(railLayout(472)).toEqual(whole);
+    expect(railLayout(538)).toEqual(whole);
+    expect(railLayout(471)).toEqual({ ...whole, zoomKeys: false });
+    expect(railLayout(408)).toEqual({ ...whole, zoomKeys: false });
+    expect(railLayout(407)).toEqual({ zoomKeys: false, hand: false, visible: all.filter((t) => t !== 'stroke'), folded: ['stroke', 'hand'], tight: false });
+  });
+
+  it('the heights are the design\'s: 472 whole, 408 without + and −, then 367, 335, 303, 271 and 230 as tools fold', () => {
+    expect(railNeed(railLayout(9999))).toBe(RAIL_HEIGHT.whole);
+    expect(railNeed(railLayout(RAIL_HEIGHT.whole - 1))).toBe(RAIL_HEIGHT.noZoomKeys);
+    expect([407, 366, 334, 302, 270].map((h) => railNeed(railLayout(h)))).toEqual([367, 335, 303, 271, 230]);
   });
 
   it('at 304 it is the rail the specimen draws: Select, Sticky, Text, Rectangle, Ellipse and ⋯ holding Arrow, Frame, Stroke, Hand', () => {
-    expect(railLayout(304)).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'rect', 'ellipse'], folded: ['arrow', 'frame', 'stroke', 'hand'] });
-    expect([1, 2, 3, 4, 5].map(railNeed)).toEqual([367, 335, 303, 271, 230]);
+    expect(railLayout(304)).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'rect', 'ellipse'], folded: ['arrow', 'frame', 'stroke', 'hand'], tight: false });
   });
 
-  it('Select, Sticky and Text never fold, however short', () => {
-    for (const h of [232, 148, 60, 0]) expect(railLayout(h).visible).toEqual(['select', 'sticky', 'text']);
-    expect(railLayout(0).folded).toEqual(['rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand']);
+  it('Select, Sticky and Text never fold while their rail fits (230px, the design\'s always-visible set)', () => {
+    for (const h of [232, 231, 230]) expect(railLayout(h)).toMatchObject({ visible: ['select', 'sticky', 'text'], folded: ['rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand'], tight: false });
   });
 
-  it('a folded tool that is chosen takes the last visible tool slot', () => {
-    expect(railLayout(304, 'stroke')).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'rect', 'stroke'], folded: ['ellipse', 'arrow', 'frame', 'hand'] });
-    expect(railLayout(232, 'frame').visible).toEqual(['select', 'sticky', 'text', 'frame']);
-    for (const h of [407, 350, 304, 260, 232]) for (const t of all) {
+  it('T-2026-11-25-004: under 230 the fold goes on (Text, then Sticky, then the ticks and the spacer), so the rail fits the least board the leaf draws', () => {
+    expect(railLayout(229)).toMatchObject({ visible: ['select', 'sticky'], tight: false });
+    expect(railLayout(198)).toMatchObject({ visible: ['select', 'sticky'], tight: false });
+    expect(railLayout(197)).toMatchObject({ visible: ['select'], tight: false });
+    expect(railLayout(190).folded).toEqual(['sticky', 'text', 'rect', 'ellipse', 'arrow', 'frame', 'stroke', 'hand']);
+    expect(railLayout(157)).toMatchObject({ visible: ['select'], tight: false });
+    expect(railLayout(156)).toMatchObject({ visible: ['select'], tight: true });
+    expect(railLayout(BOARD_MIN_HEIGHT)).toMatchObject({ visible: ['select'], tight: true });
+    // THE RULE: at every height a board can have, with any tool chosen, the rail is no taller than its room
+    for (let h = BOARD_MIN_HEIGHT; h <= 600; h++) for (const t of [...all, 'hand'] as const) expect(railNeed(railLayout(h, t)), `${h} ${t}`).toBeLessThanOrEqual(h);
+    // and it is the FULLEST that fits: one more tool slot would not
+    for (let h = BOARD_MIN_HEIGHT; h < 408; h++) {
+      const l = railLayout(h);
+      if (l.tight) expect(railNeed({ ...l, tight: false }), `${h}`).toBeGreaterThan(h);
+      if (!l.tight && l.visible.length < all.length - 1) expect(railNeed({ ...l, visible: all.slice(0, l.visible.length + 1), folded: [...all.slice(l.visible.length + 1), 'hand'] }), `${h}`).toBeGreaterThan(h);
+    }
+    // under the least board height the leaf draws no rail at all; the model still answers its shortest form
+    expect(railLayout(0)).toMatchObject({ visible: ['select'], tight: true });
+    expect(railNeed(railLayout(0))).toBeLessThanOrEqual(BOARD_MIN_HEIGHT);
+  });
+
+  it('a folded tool that is chosen takes the last visible tool slot, and never adds a row', () => {
+    expect(railLayout(304, 'stroke')).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'stroke'], folded: ['rect', 'ellipse', 'arrow', 'frame', 'hand'], tight: false });
+    // (Stroke is its own group: its tick costs 9px more than Ellipse did, so the specimen's 304 holds one tool fewer)
+    expect(railLayout(312, 'stroke')).toEqual({ zoomKeys: false, hand: false, visible: ['select', 'sticky', 'text', 'rect', 'stroke'], folded: ['ellipse', 'arrow', 'frame', 'hand'], tight: false });
+    // (it used to be APPENDED when the last visible tool could not fold: a seventh row that ran over the foot)
+    expect(railLayout(239, 'frame').visible).toEqual(['select', 'sticky', 'frame']);
+    expect(railLayout(232, 'frame').visible).toEqual(['select', 'frame']);
+    expect(railLayout(BOARD_MIN_HEIGHT, 'frame')).toMatchObject({ visible: ['frame'], tight: true });
+    expect(railLayout(BOARD_MIN_HEIGHT, 'frame').folded).toContain('select');
+    for (const h of [407, 350, 304, 260, 232, 200, 160, BOARD_MIN_HEIGHT]) for (const t of all) {
       const l = railLayout(h, t);
       expect(l.visible, `${h} ${t}`).toContain(t);
       expect([...l.visible, ...l.folded].sort(), `${h} ${t}`).toEqual([...all, 'hand'].sort());
+      expect(l.visible.length, `${h} ${t}: a chosen tool never adds a row`).toBeLessThanOrEqual(railLayout(h).visible.length);
     }
   });
 

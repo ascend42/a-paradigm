@@ -46,28 +46,81 @@ const KEYS = { Tab: ['Tab', 9], Escape: ['Escape', 27], Enter: ['Enter', 13], Ar
  * focused field; {drag: …, alt: true} holds Alt; {await: expression} awaits a promise and records its value.
  */
 /** `ready`: the page-side expression that is true once the page can be driven (default: the preview's own mark; the kernel-served app has none). */
-export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [], ready = 'document.documentElement.dataset.preview === "ready"' }) {
+/** Launch failures that happen BEFORE anything is sent to the page: only these are tried again. */
+export const LAUNCH_RETRY_ERRORS = ['chrome did not open its DevTools port', 'chrome opened no page', 'DevTools socket refused', 'DevTools page list refused'];
+/** At most this many launches in all (the first and two more), each on a fresh profile. */
+export const LAUNCH_ATTEMPTS = 3;
+
+/**
+ * One Chrome on about:blank with its DevTools socket open. Throws one of LAUNCH_RETRY_ERRORS when Chrome did not
+ * get that far; the caller may then try again, since nothing has been sent to any page. `portWaitMs` bounds the
+ * wait for the port (tests shorten it).
+ */
+async function launch(chrome, width, height, portWaitMs) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'gnomon-leaf-'));
-  const proc = spawn(chrome, ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${width},${height}`, '--hide-scrollbars', '--force-device-scale-factor=1', '--remote-debugging-port=0', url], { stdio: 'ignore' });
-  let ws = null;
+  const proc = spawn(chrome, ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${width},${height}`, '--hide-scrollbars', '--force-device-scale-factor=1', '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' });
+  proc.on('error', () => undefined); // a chrome that cannot be spawned shows as "did not open its DevTools port"
+  const close = async (ws) => {
+    try {
+      ws?.close();
+    } catch {
+      /* already closed */
+    }
+    proc.kill();
+    await sleep(200);
+    rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
+  };
   try {
     const portFile = path.join(profile, 'DevToolsActivePort');
     // (the file appears before its first line is written: an empty read used to give port "" and a refused connection)
     const portOf = () => (existsSync(portFile) ? readFileSync(portFile, 'utf8').split(/\r?\n/)[0] : '');
-    for (let i = 0; i < 150 && !/^\d+$/.test(portOf()); i++) await sleep(100);
+    // (a Chrome that has already exited will never write the port: no point waiting the rest out)
+    for (let i = 0; i < portWaitMs / 100 && !/^\d+$/.test(portOf()) && proc.exitCode === null; i++) await sleep(100);
     if (!/^\d+$/.test(portOf())) throw new Error('chrome did not open its DevTools port');
     const port = portOf();
     let page = null;
     for (let i = 0; i < 50 && !page; i++) {
-      page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === 'page') ?? null;
+      let list;
+      try {
+        list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+      } catch {
+        throw new Error('DevTools page list refused');
+      }
+      page = list.find((t) => t.type === 'page') ?? null;
       if (!page) await sleep(100);
     }
     if (!page) throw new Error('chrome opened no page');
-    ws = new WebSocket(page.webSocketDebuggerUrl);
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((res, rej) => {
       ws.addEventListener('open', res, { once: true });
       ws.addEventListener('error', () => rej(new Error('DevTools socket refused')), { once: true });
     });
+    return { ws, close: () => close(ws) };
+  } catch (err) {
+    await close(null);
+    throw err;
+  }
+}
+
+/**
+ * `ready`: the page-side expression that is true once the page can be driven (default: the preview's own mark; the kernel-served app has none).
+ * `cpuThrottle`: a CPU slowdown factor (Emulation.setCPUThrottlingRate) for a test that holds its waits under load.
+ * The answer's `attempts` is how many launches it took (1 unless Chrome failed to start: LAUNCH_RETRY_ERRORS).
+ */
+export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [], ready = 'document.documentElement.dataset.preview === "ready"', cpuThrottle = 0, portWaitMs = 15_000 }) {
+  let attempts = 0;
+  let live = null;
+  // a launch is tried again ONLY when it failed before the socket was open: never once a command has been sent
+  while (!live) {
+    attempts++;
+    try {
+      live = await launch(chrome, width, height, portWaitMs);
+    } catch (err) {
+      if (attempts >= LAUNCH_ATTEMPTS || !LAUNCH_RETRY_ERRORS.includes(err instanceof Error ? err.message : '')) throw Object.assign(err instanceof Error ? err : new Error(String(err)), { attempts });
+    }
+  }
+  const ws = live.ws;
+  try {
     let id = 0;
     const call = (method, params = {}) =>
       new Promise((res) => {
@@ -83,6 +136,12 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
       });
     const evaluate = async (expression) => (await call('Runtime.evaluate', { expression, returnByValue: true })).result?.value;
     await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    // The page stays focused and VISIBLE for the whole run (Probe, review of PR #123): without this a headless page
+    // goes `visibilityState: hidden` when an overlay closes, requestAnimationFrame stops, and every rect read after
+    // it is of a page that no longer paints.
+    await call('Emulation.setFocusEmulationEnabled', { enabled: true });
+    if (cpuThrottle > 0) await call('Emulation.setCPUThrottlingRate', { rate: cpuThrottle });
+    await call('Page.navigate', { url });
     const until = Date.now() + timeoutMs;
     while (Date.now() < until && (await evaluate(ready)) !== true) await sleep(100);
     if ((await evaluate(ready)) !== true) throw new Error('the page was never ready (the fixture never set data-preview="ready")');
@@ -97,6 +156,13 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     };
     for (const a of actions) {
       if (a.wait) await sleep(a.wait);
+      else if (a.until) {
+        // wait UNTIL the page says so (never a fixed sleep): throws by name when it never does
+        const stop = Date.now() + (a.timeoutMs ?? 20_000);
+        let ok = false;
+        while (!(ok = (await evaluate(`!!(${a.until})`)) === true) && Date.now() < stop) await sleep(50);
+        if (!ok) throw new Error(`the page never reached: ${a.as ?? a.until}`);
+      }
       else if (a.await) {
         await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
         const r = await call('Runtime.evaluate', { expression: `(async () => JSON.stringify((await (${a.await})) ?? null))()`, awaitPromise: true, returnByValue: true });
@@ -134,6 +200,11 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
         // `text`: a named key that ACTIVATES as a person's does (Enter with its carriage return presses a focused button; a raw key-down alone does not)
         const typed = a.text !== undefined;
         await call('Input.dispatchKeyEvent', { type: typed ? 'keyDown' : KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(typed ? { text: a.text } : KEYS[a.key] || modifiers ? {} : { text: a.key }), ...(a.commands ? { commands: a.commands } : {}) });
+        // `held: n`: the key is HELD: n more key-downs with autoRepeat (event.repeat true) before it is released
+        for (let i = 0; i < (a.held ?? 0); i++) {
+          await sleep(80);
+          await call('Input.dispatchKeyEvent', { type: typed ? 'keyDown' : KEYS[a.key] || modifiers ? 'rawKeyDown' : 'keyDown', ...base, ...(typed ? { text: a.text } : KEYS[a.key] || modifiers ? {} : { text: a.key }), autoRepeat: true });
+        }
         await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
       } else if (a.paste !== undefined) {
         await call('Browser.grantPermissions', { permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
@@ -192,16 +263,9 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
     if (clip && facts.leaf) params.clip = { x: Math.round(facts.leaf.x), y: Math.round(facts.leaf.y), width: Math.round(facts.leaf.w), height: Math.round(facts.leaf.h), scale: 1 };
     const shot = await call('Page.captureScreenshot', params);
     if (!shot.data) throw new Error('no screenshot data');
-    return { png: Buffer.from(shot.data, 'base64'), facts, acted, scripted: scripted ? (typeof scripted.result?.value === 'string' ? JSON.parse(scripted.result.value) : { error: scripted.exceptionDetails?.exception?.description ?? 'no value' }) : null };
+    return { attempts, png: Buffer.from(shot.data, 'base64'), facts, acted, scripted: scripted ? (typeof scripted.result?.value === 'string' ? JSON.parse(scripted.result.value) : { error: scripted.exceptionDetails?.exception?.description ?? 'no value' }) : null };
   } finally {
-    try {
-      ws?.close();
-    } catch {
-      /* already closed */
-    }
-    proc.kill();
-    await sleep(200);
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
+    await live.close();
   }
 }
 

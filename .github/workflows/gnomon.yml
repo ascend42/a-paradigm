@@ -96,6 +96,42 @@ jobs:
           npm run typecheck --workspace=@a-company/gnomon
           npm run typecheck --workspace=@a-company/gnomon-gui
 
+  # The board in the REAL APP, in a real Chrome (T-2026-11-25-001 item 7; boards S1.3 P4b-3). test/board-app.test.ts
+  # drives the dev preview's real ui/app.ts with real pointer and key input over the DevTools protocol; until this job
+  # it ran only on a developer Mac, because it skipped whenever CI was set. It runs ALONE in its own job (the suite
+  # times out on a loaded machine) on macos-15, whose image carries Google Chrome at the path the suite looks for
+  # (the `test` job's gui-browser-darwin suite already uses it). GNOMON_BROWSER_TESTS=1 is the ask: with it a missing
+  # Chrome FAILS the run, it never skips. No retry, no longer timeouts and no assertion differs from a local run.
+  #
+  # NOT here, and why: packages/gnomon/test/dimension-board-browser.test.ts (the same page served by the real kernel
+  # with a real session) needs the darwin session sandbox floor, and GitHub's macOS runners have SIP off, so the
+  # kernel refuses to start a session there (floor sip; see the `test` job's note). It runs on a SIP-on Mac only.
+  board-browser:
+    name: board in a real Chrome (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
+        run: npm run build:gnomon
+
+      - name: The board in the real app (real Chrome, real input; G-DDL-08)
+        working-directory: packages/gnomon-gui
+        env:
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/board-app.test.ts
+
   # M1.0 probes runnable on hosted runners. PR-0 runs only the harness
   # self-test; PR-2 adds P03 (win), P08, P09, P11, P12 and the P06 smoke.
   # Results are uploaded as artifacts only — real results are committed from

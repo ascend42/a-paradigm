@@ -19,7 +19,7 @@
  *  - No sizes in markup: the host's height and the tab's top are CSSOM properties.
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
-import { checkLine, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
+import { checkLine, checkTone, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, tabTitle } from '../core/board-leaf.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf } from './board-leaf.js';
@@ -49,6 +49,11 @@ export interface BoardDockDeps {
   reconnecting?: () => boolean;
   /** where focus goes when the leaf folds and what opened it is gone (the composer) */
   fallbackFocus: () => HTMLElement | null;
+  /**
+   * The leaf head's `Dimensions ▾` key: open this project's Dimensions list, the same one `/boards` opens. Called
+   * only for a trusted press (the list is opened only on its own trusted event, Aegis final).
+   */
+  dimensions?: (event: Event) => void;
   /** #gui-board-turn: paint the turn strip again (the board opened or folded, the pane changed size) */
   turn?: () => void;
   now?: () => number;
@@ -177,7 +182,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     leaf.setTitle(s.title);
     // words that are waiting are said for AS LONG AS they are held (a six-second line was gone before it was read)
     leaf.setKeep(words && s.link === 'up' ? KEEP_COPY.wordsWait : keepStateLine(s));
-    leaf.setCheck(checkLine(s));
+    leaf.setCheck(checkLine(s), checkTone(s));
     leaf.el.dataset.words = words ? 'held' : '';
     if (s.link === 'down') leaf.setInertLine(linkDownLine(s, { unsaved: session.unsaved, words, coming: d.reconnecting?.() ?? true }));
   }
@@ -244,6 +249,15 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       load: d.load,
       cardFocused: d.cardFocused,
       onFold: (cause) => void fold(cause),
+      // the list opens only on the person's own press (written as every other trusted-event check here is: `!== true`)
+      ...(d.dimensions
+        ? {
+            onDimensions: (cause: Event): void => {
+              if (cause.isTrusted !== true) return;
+              d.dimensions?.(cause);
+            },
+          }
+        : {}),
       ...session.leafOptions(),
       onReady: (handle) => {
         session.attachHandle(handle);
@@ -366,6 +380,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
 
   function carry(plan: BoardPlan, event: Event, altB = false, typed = false): void {
     if (event.isTrusted !== true) return; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
+    // a HELD key is one press: its repeats open, leave and drop nothing (checked before the open board is left)
+    if ((event as Partial<KeyboardEvent>).repeat === true) return;
     if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info');
     const hsid = d.focused();
     if (!hsid) return;

@@ -440,6 +440,50 @@ components:
       stays for as long as it lasts) and setKeep(line) (the live loop's
       keep state in the keep line's place; a save shows only once slow).
       core/board-leaf.ts keepStateLine and INERT_COPY are stand-in words.
+      Boards S1.3 pass P4b-3 (T-2026-11-25-004, G-DDL-08): the rail is never
+      taller than its room. core/board-rail.ts railLayout draws the fullest of
+      its steps whose railNeed (rows, ticks, gaps and padding from
+      RAIL_METRICS, held to the real paint by test/board-leaf-golden.test.ts)
+      fits the board: whole (472), + and − in the percent key's menu (408),
+      then tools into ⋯ from the bottom of the list down to the design's
+      always-visible Select, Sticky and Text (230). Below that, which the
+      design record does not rule and a board may reach (148 is the least a
+      leaf draws), the same fold goes on: Text, then Sticky, then the
+      graduations, ticks and spacer (the tight rail: Select or the chosen
+      tool, ⋯, line-and-fill, the percent; 140). A folded tool that is chosen
+      takes the last visible slot and never adds a row. An open rail menu is
+      kept inside the board's own area and scrolls inside itself when taller.
+      The leaf's room() is the body it draws (the foot is 32px; it was counted
+      as 29), and no row or tick of the rail shrinks.
+      Boards S1.3 pass P4b-3 (the keep line and the check; conditions P4 and
+      after-P4a): core/board-leaf.ts keepStateLine reads both keep and link
+      and never answers a bare 'Not saved' (it is said only with the link
+      down, as 'Not saved · reconnecting' or 'Not saved · not connected');
+      partial and dropped have their lines while no passing state is said.
+      checkLine reads 'Checked up to change N[ of M]', 'Not checked yet' for
+      verified null, 'Did not match at change N'; BoardLeaf.setCheck(line,
+      tone) draws it whole at the right end of the foot (.bd-check; the hands
+      give way to it; tone bad in the failed colour). It was a hover title on
+      the head's glyph. The words of KEEP_COPY and CHECK_COPY are not in the
+      design record: they are the plainest that fit the 424px leaf, for Luna
+      to rule.
+      Boards S1.3 pass P4b-3 (keys while held still): with the leaf inert
+      (link down, out of date) the leaf's capture listener lets no key from
+      the board reach the engine and no letter choose a tool; the zoom keys
+      and Tab pass. Before, a tool letter changed the tool and Cmd+A selected
+      every mark through the engine's own key handler (setYielded covers only
+      its document-level listeners). Held by test/board-app.test.ts in both
+      inert states, with focus on the board and off it.
+      Review fixes of PR #123: the check gives way with an ellipsis inside the
+      foot and carries its whole words in title= (a mismatch keeps 'Did not
+      match' whole and only its number gives way; other hands fold before the
+      check loses a letter); a keep-state line that states something (dropped,
+      partial, words waiting) draws in ink through bd-said-line while opening,
+      folding and saving stay quiet; the head and the keep line are flex none,
+      so one abrupt shrink cannot leave the rail on a layout taller than its
+      room; rail menu rows do not wrap; held still, the app's own shortcuts
+      (the palette, the board key, Settings, New session, the bare mic key)
+      pass to the page.
     path: src/board/
     type: module
     tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
@@ -771,6 +815,16 @@ components:
       Not built here: the Dimensions list surface (/boards is the palette
       pattern for now), the keep line's final words, G-DDL-08 across
       layout presets.
+      Boards S1.3 pass P4b-3: the leaf head's Dimensions ▾ key (design board-
+      leaf anatomy: 'this project's dimensions, the same list as /boards') is
+      live. BoardDockDeps.dimensions is called only for a trusted press and
+      opens the app's Dimensions list (the palette's, as /boards and the
+      palette row do); the list is over the board, Esc closes it and focus
+      returns to the key, and a row of the open board puts the keys on it with
+      nothing sent. A Dimensions list surface of its own is NOT built: the
+      design record names the key and where the list is reached, and gives no
+      component for the list (its place, rows and states are for Luna to
+      rule).
     path: src/ui/board-dock.ts
     type: module
     tags: [gnomon, gui, dimension, board]

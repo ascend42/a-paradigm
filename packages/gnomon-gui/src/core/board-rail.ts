@@ -70,14 +70,17 @@ export function railKeyAction(e: RailKey, ctx: RailKeyContext): RailAction | nul
 }
 
 /**
- * Heights the rail needs (design `short_windows`, measured there): whole, and once + and − have gone into the
- * percent key's menu. Each tool folded after that saves a 32px row, and a group that empties saves its 9px tick.
+ * What the rail is made of, in px (styles.css `.bd-rail`, `.bd-row`, `.bd-brk`, `.bd-grow`): its top and bottom
+ * padding together, a key's row, the gap between any two things in it, a group's tick with its margins, and the least
+ * the spacer above the zoom keys takes. `railNeed` adds them up; a real-engine test holds the sum to the paint.
  */
-export const RAIL_HEIGHT = { whole: 472, noZoomKeys: 408, row: 32, tick: 9 } as const;
-/** Tools fold from the bottom of the list, in this order, into the ⋯ key. */
-export const RAIL_FOLD_ORDER: readonly BoardTool[] = ['stroke', 'frame', 'arrow', 'ellipse', 'rect'];
-/** The height the rail needs with `n` tools folded (1 to 5): 367, 335, 303, 271, 230. */
-export const railNeed = (n: number): number => RAIL_HEIGHT.noZoomKeys - RAIL_HEIGHT.row * n - RAIL_HEIGHT.tick * ((n >= 1 ? 1 : 0) + (n >= 5 ? 1 : 0));
+export const RAIL_METRICS = { pad: 16, row: 28, gap: 4, tick: 5, spacer: 4 } as const;
+/** The design's measured heights (`short_windows`, `heights`): the whole rail, and once + and − are in the percent key's menu. */
+export const RAIL_HEIGHT = { whole: 472, noZoomKeys: 408 } as const;
+/** Tools fold from the bottom of the list, in this order, into the ⋯ key. Select never folds by height. */
+export const RAIL_FOLD_ORDER: readonly BoardTool[] = ['stroke', 'frame', 'arrow', 'ellipse', 'rect', 'text', 'sticky'];
+/** With this many tool slots or more the rail is the design's always-visible set (Select, Sticky, Text) or fuller. */
+export const RAIL_ALWAYS_SLOTS = 3;
 
 export interface RailLayout {
   /** + and − are their own keys (else they are in the percent key's menu) */
@@ -88,32 +91,49 @@ export interface RailLayout {
   visible: BoardTool[];
   /** tools in the ⋯ menu, top down ([] means no ⋯ key) */
   folded: BoardTool[];
+  /** the shortest rail: no graduations, no ticks and no spacer, only its keys */
+  tight: boolean;
+}
+
+/** The height a rail drawn as `l` takes: every row, tick and gap of it, and its padding. */
+export function railNeed(l: RailLayout): number {
+  const groups = RAIL_GROUPS.filter((g) => g.some((t) => l.visible.includes(t))).length;
+  const rows = l.visible.length + (l.folded.length ? 1 : 0) + 1 + (l.hand ? 1 : 0) + (l.zoomKeys ? 2 : 0) + 1;
+  const ticks = l.tight ? 0 : groups; // one between groups, and one before line-and-fill
+  const spacer = l.tight ? 0 : 1;
+  const m = RAIL_METRICS;
+  return m.pad + rows * m.row + ticks * m.tick + spacer * m.spacer + (rows + ticks + spacer - 1) * m.gap;
+}
+
+/** The rail with `slots` tool keys and the rest in ⋯: a folded tool that is chosen takes the last visible slot. */
+function folded(slots: number, chosen: BoardTool, tight: boolean): RailLayout {
+  const all = RAIL_GROUPS.flat();
+  let visible = all.slice(0, slots);
+  if (all.includes(chosen) && !visible.includes(chosen)) visible = [...visible.slice(0, -1), chosen];
+  return { zoomKeys: false, hand: false, visible, folded: [...all.filter((t) => !visible.includes(t)), 'hand'], tight };
 }
 
 /**
- * How the rail is drawn in `height` px (design `short_windows`). It never scrolls. Under 472: + and − go into the
- * percent key's menu. Under 408: Hand goes into the ⋯ key, and tools fold into it from the bottom of the list, as
- * many as needed. A folded tool that is chosen takes the last visible tool slot. Select, Sticky, Text, ⋯,
- * line-and-fill and the percent are always there.
+ * How the rail is drawn in `height` px (design `short_windows`). It never scrolls and is never taller than its room:
+ * the fullest of these that fits is drawn. Whole; then + and − go into the percent key's menu; then Hand goes into
+ * the ⋯ key and tools fold into it from the bottom of the list, as many as needed, down to Select, Sticky and Text
+ * (the design's always-visible set, with ⋯, line-and-fill and the percent). A folded tool that is chosen takes the
+ * last visible tool slot.
+ *
+ * BELOW THE DESIGN'S FLOOR (not in the record, for Luna): the always-visible set needs more than the 148px a board
+ * may have (`heights`), and the rail used to run over the foot there. So the same fold goes on, Text and then Sticky,
+ * and last the graduations and the spacer go (`tight`): Select (or the chosen tool), ⋯, line-and-fill and the percent
+ * fit the least board the leaf draws. Every letter still works and every tool is in ⋯.
  */
 export function railLayout(height: number, chosen: BoardTool = 'select'): RailLayout {
   const all = RAIL_GROUPS.flat();
-  if (height >= RAIL_HEIGHT.whole) return { zoomKeys: true, hand: true, visible: all, folded: [] };
-  if (height >= RAIL_HEIGHT.noZoomKeys) return { zoomKeys: false, hand: true, visible: all, folded: [] };
-  let n = 1;
-  while (n < RAIL_FOLD_ORDER.length && railNeed(n) > height) n++;
-  const out = new Set<BoardTool>(RAIL_FOLD_ORDER.slice(0, n));
-  let visible = all.filter((t) => !out.has(t));
-  if (out.has(chosen)) {
-    // the chosen tool takes the last visible tool slot; a foldable tool it displaces folds in its place
-    const last = visible[visible.length - 1]!;
-    if (RAIL_FOLD_ORDER.includes(last)) {
-      visible = [...visible.slice(0, -1), chosen];
-      out.add(last);
-    } else visible = [...visible, chosen];
-    out.delete(chosen);
-  }
-  return { zoomKeys: false, hand: false, visible, folded: [...all.filter((t) => out.has(t)), 'hand'] };
+  const steps: RailLayout[] = [
+    { zoomKeys: true, hand: true, visible: all, folded: [], tight: false },
+    { zoomKeys: false, hand: true, visible: all, folded: [], tight: false },
+  ];
+  for (let slots = all.length - 1; slots >= 1; slots--) steps.push(folded(slots, chosen, false));
+  steps.push(folded(1, chosen, true));
+  return steps.find((l) => railNeed(l) <= height) ?? steps[steps.length - 1]!;
 }
 
 /** `100%` for the percent key. */

@@ -45,6 +45,12 @@ components:
       (test/session-sandbox.test.ts) and the parseSwVersMajor table
       (test/macos-version.test.ts), so no 14.x runner is needed. Intended to
       become a required check once green.
+      Job board-browser (boards S1.3 P4b-3): packages/gnomon-gui test/board-
+      app.test.ts (the real app in a real Chrome, real input) alone on
+      macos-15 with GNOMON_BROWSER_TESTS=1, under which a missing Chrome fails
+      and never skips; no retry. packages/gnomon test/dimension-board-
+      browser.test.ts stays off CI: it needs the darwin session sandbox floor
+      (SIP on), and GitHub's macOS runners have SIP off.
     path: gnomon.yml
     tags: [ci, gnomon, paradigm-8, windows-parity]
 
