@@ -929,8 +929,10 @@ export class DimSession {
    * DROPPED while an edit batch waits. Only this session's hsid is named (the host joins it): a selection is per hsid.
    */
   select(ids: readonly string[], cause: Event | null): void {
-    // S1.4 E3: the mark row reads the selection whatever is sent (a selection of marks ends a cut-out's)
-    if (!this.#dead && cause?.isTrusted === true) {
+    // S1.4 E3: the mark row reads the selection whatever is sent, from a TRUSTED event of the person's only (a
+    // selection of marks ends a cut-out's)
+    const untrusted = !cause || cause.isTrusted !== true;
+    if (!this.#dead && !untrusted) {
       const was = JSON.stringify(this.#markSel);
       this.#markSel = [...ids];
       if (ids.length > 0) this.#cutSel = null;
