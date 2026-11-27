@@ -66,6 +66,13 @@ components:
       at respawn (no listChanged). Tests may pass another allowlist only
       through DaemonSeams.modBridge (src/kernel/testing.ts), never
       ModBridgeOptions; test/dimension-bridge-e2e.test.ts passes none.
+      ModHostOptions.modSipStub (TEST SEAM, S1.4 P5 review): set by the
+      daemon only from DaemonSeams.supervisor (sessionSipStub with a
+      claudePath seam); the host passes it only as modLaunchPlan's `sip`
+      argument (probe undefined) and mod.sandbox says sipStubbed:true on
+      darwin when it applied. A floor refusal is ModRefusal SANDBOX (routed
+      UNSUPPORTED, data.modCode SANDBOX), which the page says as
+      sandbox-unavailable.
       A CALL, in order: unknown tool (-32602); session not running; held
       (Aegis M2: effective mode manual with no approved plan, or a loop
       origin; the bridge refuses itself because an allow rule or a hook can

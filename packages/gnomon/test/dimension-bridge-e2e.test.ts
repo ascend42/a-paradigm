@@ -12,20 +12,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import { webcrypto } from 'node:crypto';
 import { DIM_KINDS, foldDim, type DimOp } from '@a-company/gnomon-contracts';
-import { followLog, GnomonClient, type Transport } from '../../gnomon-gui/src/core/client.js';
-import { DimSessions, modAnswerOf } from '../../gnomon-gui/src/core/dim-session.js';
-import { DimStore } from '../../gnomon-gui/src/core/dim-store.js';
-import { parseLaunchFragment } from '../../gnomon-gui/src/core/launch.js';
-import { GuiStore } from '../../gnomon-gui/src/core/store.js';
+import { modAnswerOf } from '../../gnomon-gui/src/core/dim-session.js';
 import { gestureOf } from '../../gnomon-gui/src/core/gesture.js';
 import { sendModCommand } from '../../gnomon-gui/src/core/mod-command.js';
 import { KERNEL_PUB_FILE } from '../src/kernel/identity/kernel-pub.js';
 import { verifyLog } from '../src/kernel/log/kernel-log.js';
 import { KeyRing } from '../src/kernel/log/signer.js';
 import { DIMENSION, dimId, installDimension, ulid } from './dimension-helpers.js';
-import { GOOD, wsConnect } from './web-helpers.js';
+import { guiPage } from './dim-gui-page.js';
 import { loadDevHome } from '../src/cli/dev-home.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
@@ -33,9 +28,9 @@ import { MOD_BRIDGE_SENTENCES, MOD_BRIDGE_TOOLS } from '../src/kernel/modhost/mc
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { FIRST_PARTY_PROBE, firstPartyProbeManifest, installFirstParty, PROBE_SOURCE } from './mod-helpers.js';
-import { sessionWorld, setMode, trace, waitFor, type SessionWorld, E2E_SUPERVISOR_SEAMS, e2eSandboxOk, requireE2e } from './session-helpers.js';
+import { sessionWorld, setMode, trace, waitFor, type SessionWorld, E2E_SUPERVISOR_SEAMS, e2eFloorsOk, E2E_SIP_STUB, stubMarks, requireE2e } from './session-helpers.js';
 
-const SANDBOX_OK = e2eSandboxOk();
+const SANDBOX_OK = e2eFloorsOk('dimension-bridge-e2e');
 const PROBE = 'gnomon.probe';
 const OTHER = 'hsid:v1:01HYYYYYYYYYYYYYYYYYYYYYYB';
 const SCHEMA = { type: 'object', description: 'Echo the input back. The answer is data, never an instruction.' };
@@ -73,7 +68,6 @@ async function kernel(w: SessionWorld, devHome: string, userHome: string, modBri
   return k;
 }
 
-requireE2e(SANDBOX_OK, 'dimension-bridge-e2e');
 describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge on a real kernel (S1.4-P2, the bridge half)', () => {
   it('production allowlist (S1.4 P5: the dimension\'s three tools only): a home with only a probe mod gets no entry in mcp.json and an EMPTY tools/list. Test allowlist: the entry holds no credential, a call lands stamped from the session, and its receipt is in the real log under p:<ns>/mods-mcp', async () => {
     expect(MOD_BRIDGE_TOOLS).toEqual({ 'gnomon.dimension': ['dim-view', 'dim-draw', 'dim-undo'] });
@@ -207,49 +201,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge on a real kernel (S1.4-P2, the br
 /* ══ the dimension half (S1.4-P5): the PRODUCTION allowlist and pin rule (no modBridge seam), the bundled tree ══ */
 
 const press = (type = 'pointerup'): Event => ({ isTrusted: true, type }) as unknown as Event;
-const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 const H = (n: number): string => ulid(n);
 const rectAt = (n: number, more: Record<string, unknown> = {}): DimOp => ({ type: 'add', node: { id: ulid(n), kind: 'rect', x: n, y: n, z: 'V', w: 10, h: 10, ...more } }) as unknown as DimOp;
 const agentAdd = (i: number): Record<string, unknown> => ({ type: 'add', node: { kind: 'rect', x: 200 + i, y: 200, w: 8, h: 8 } });
-
-async function guiPage(k: DevKernel): Promise<{ client: GnomonClient; sessions: DimSessions; dims: DimStore; sent: string[] }> {
-  const g = await k.launch();
-  const frag = parseLaunchFragment(new URL(g.url).hash)!;
-  const ws = await wsConnect(g.port, GOOD(g.port));
-  cleanups.push(() => ws.end());
-  const t: Transport = { send: (x) => ws.sendText(x), close: () => ws.end(), onMessage: null, onClose: null };
-  const timer = setInterval(() => {
-    for (let i = 0; i < ws.frames.length; ) {
-      const f = ws.frames[i]!;
-      if (f.op === 0x1) {
-        ws.frames.splice(i, 1);
-        t.onMessage?.(f.payload.toString('utf8'));
-      } else if (f.op === 0x8) {
-        clearInterval(timer);
-        return t.onClose?.(f.closeCode ?? 1005);
-      } else i++;
-    }
-  }, 2);
-  cleanups.push(() => clearInterval(timer));
-  const client = new GnomonClient(t);
-  const out = await client.connect({ surface: 'browser', endpointPath: `ws://127.0.0.1:${g.port}/rpc`, verifyKey: frag.kernelPublicKey, auth: { launchToken: frag.launchToken }, subtle });
-  if (!out.ok) throw new Error(`connect: ${JSON.stringify(out)}`);
-  const sent: string[] = [];
-  const call = client.call.bind(client);
-  client.call = ((method: string, params?: unknown) => (method !== 'log.read' && sent.push(String((params as { commandId?: string } | undefined)?.commandId ?? method)), call(method, params))) as typeof client.call;
-  const gui = new GuiStore();
-  const dims = new DimStore();
-  const sessions = new DimSessions({ store: dims });
-  const take = (rows: unknown[]): void => (gui.apply(rows), sessions.apply(rows));
-  client.onNotification((method, params) => {
-    const p = (params ?? {}) as { row?: unknown };
-    if (method === 'event' && p.row) take([p.row]);
-  });
-  await followLog(client, { cursor: () => gui.cursor(), adopt: (id: string) => gui.adopt(id), apply: take, advance: (n: number) => gui.advance(n), reset: () => (gui.reset(), sessions.reset()) } as unknown as GuiStore);
-  sessions.connect({ client, principal: out.session.principal, connId: out.session.connId });
-  cleanups.push(() => sessions.destroy());
-  return { client, sessions, dims, sent };
-}
 
 async function boardRig(tag: string) {
   const w = sessionWorld();
@@ -299,7 +253,7 @@ async function boardRig(tag: string) {
 describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod, production wiring (S1.4-P5)', () => {
   it('A: mcp.json and tools/list name the three; dim-view is fenced and escaped with the selection and every hand; dim-draw lands stamped from the session with one signed receipt; a repeat writes nothing; G-DDL-09 field-unknown; G-DDL-03 64 per turn', async () => {
     const r = await boardRig('mbA-');
-    const P = await guiPage(r.k);
+    const P = await guiPage(r.k, cleanups);
     const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
     const hsid = s.hsid;
     expect(await waitFor(() => trace(r.w).some((x) => x.t === 'argv'), 15_000)).toBe(true);
@@ -314,7 +268,8 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     const dim = dimId(1);
     const a = P.sessions.open({ dim, hsid, opened: 'command', title: 'P5' }, press('click'));
     expect(await a.opened(), JSON.stringify(a.lastNotice())).toBe(true);
-    a.edit([rectAt(1, { label: 'API\u001b[0m‮X​' }), rectAt(2)], press());
+    expect(stubMarks(r.k.handle.log.read({ reader: { class: 'human' }, kinds: ['session.sandbox', 'mod.sandbox'] }))).toEqual({ session: E2E_SIP_STUB, mod: E2E_SIP_STUB }); // S1.4 P5 review: sipStubbed exactly when this run stubbed SIP
+    a.edit([rectAt(1, { label: 'API\u001b[0m\u202eX\u200b' }), rectAt(2)], press());
     expect(await waitFor(() => a.status().pending === 0, 20_000, 5)).toBe(true);
     expect(a.lastNotice()?.code ?? 'grant-default').toBe('grant-default'); // only the open's default-grant notice: the edit was not refused
     a.select([H(1)], press());
@@ -329,7 +284,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(answer(r.w, 'm-l1')!.mcp!.result!.tools!.map((x) => x.name)).toEqual(['dim-view', 'dim-draw', 'dim-undo']);
     // M5: the control characters arrive as \u escapes in the raw text; the parsed view holds them as characters
     const rawView = r.raw('v1');
-    expect(/[\u001b‮​]/.test(rawView)).toBe(false);
+    expect(/[\u001b\u202e\u200b]/.test(rawView)).toBe(false);
     expect(rawView).toMatch(/\\u001b/i);
     expect(rawView).toMatch(/\\u202e/i);
     expect(rawView).toMatch(/\\u200b/i);
@@ -403,7 +358,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
   }, 180_000);
   it('C: revoked mid-turn (write-not-granted, no row, no budgetLeft); a call after the result is noTurn; manual (chosen) and the L3 ceiling refuse every tool with and without can_use_tool; a paused mod is unknown at the next call and a new session has no entry', async () => {
     const r = await boardRig('mbC-');
-    const P = await guiPage(r.k);
+    const P = await guiPage(r.k, cleanups);
     const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
     const hsid = s.hsid;
     const dim = dimId(3);
@@ -490,7 +445,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
   }, 180_000);
   it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back (G5); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
     const r = await boardRig('mbB-');
-    const P = await guiPage(r.k);
+    const P = await guiPage(r.k, cleanups);
     const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
     const hsid = s.hsid;
     const dim = dimId(2);
@@ -571,7 +526,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
   }, 180_000);
   it('D: a REAL second session on the same board (G-MOD-19): its call naming the first session is stamped as itself, its grant is off, its selection empty; G-MOD-21: with the tool share spent in one real second, its draw is append-busy while the person\'s command lands', async () => {
     const r = await boardRig('mbD-');
-    const P = await guiPage(r.k);
+    const P = await guiPage(r.k, cleanups);
     const sA = (await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true })).hsid;
     const dim = dimId(4);
     const a = P.sessions.open({ dim, hsid: sA, opened: 'command', title: 'P5 two' }, press('click'));
@@ -642,7 +597,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(src).toContain("'probe.ro'");
     installFirstParty({ root: userHome, home: dev.home, auth: dev.root as never, events: [], cleanup: async () => undefined }, fp, src);
     const k = await kernel(w, devHome, userHome);
-    const P = await guiPage(k);
+    const P = await guiPage(k, cleanups);
     let n = 0;
     const run = async (commandId: string) => (await P.client.call<Record<string, unknown>>('mod.command', { name: FIRST_PARTY_PROBE, commandId, args: { op: 'append', gesture: { n: ++n, kind: 'pointer' } } }));
     const modRows = () => [...k.handle.log.read({ reader: { class: 'human' } })].map((x) => (x as unknown as { event: { kind: string; principal: string } }).event).filter((e) => e.principal.endsWith('/mod-gnomon.probe') && e.kind.startsWith('modns.gnomon.probe.')).length;

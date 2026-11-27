@@ -798,6 +798,8 @@ describe('S1.4 P5 test seams: sessionSipStub, loopOriginFor and modBridge.curren
   const ALLOWED: Record<string, string[]> = {
     // daemon.ts: the DaemonSeams field and its one hand-over; supervisor.ts: the option; session.ts: the one rule
     sessionSipStub: ['kernel/lifecycle/daemon.ts', 'kernel/sandbox/session.ts', 'kernel/supervisor/supervisor.ts'],
+    // daemon.ts: the hand-over to the mod host; host.ts: the option, its one read at launch and the row mark
+    modSipStub: ['kernel/lifecycle/daemon.ts', 'kernel/modhost/host.ts'],
     // daemon.ts: the one hand-over into ModBridgeSeams; mcp-bridge.ts: the parameter, the seam type and its one read
     currentPin: ['kernel/lifecycle/daemon.ts', 'kernel/modhost/mcp-bridge.ts'],
     // daemon.ts: the DaemonSeams field (passed through the supervisor seams); supervisor.ts: the option and its one read at open
@@ -819,8 +821,9 @@ describe('S1.4 P5 test seams: sessionSipStub, loopOriginFor and modBridge.curren
 
   it('in daemon.ts each token is read only off `seams.` (DaemonSeams), and the production start passes an empty seam set', () => {
     const d = code(path.join(SRC, 'kernel', 'lifecycle', 'daemon.ts'));
-    expect(d).toMatch(/const \{ sessionSipStub, \.\.\.rest \} = seams\.supervisor \?\? \{\};/);
-    expect(d.match(/\bsessionSipStub\b/g)?.length).toBe(4); // the field, the destructure, the condition, the hand-over
+    expect(d).toMatch(/const \{ sessionSipStub: _stub, \.\.\.rest \} = seams\.supervisor \?\? \{\};/);
+    expect(d).toMatch(/const sipStubOn = seams\.supervisor\?\.sessionSipStub === true && typeof seams\.supervisor\.claudePath === 'string'/);
+    expect(d.match(/\bsessionSipStub\b/g)?.length).toBe(4); // the field, the switch, the destructure (dropped), the hand-over
     expect(d).toMatch(/seams\.modBridge\?\.currentPin \? \{ currentPin: seams\.modBridge\.currentPin \}/);
     expect(d.match(/\bcurrentPin\b/g)?.length).toBe(3);
     expect(d.match(/\bloopOriginFor\b/g)?.length).toBe(1); // the DaemonSeams field only: it reaches the supervisor in the seams.supervisor spread

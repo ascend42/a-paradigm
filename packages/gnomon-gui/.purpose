@@ -705,6 +705,9 @@ components:
       stamp is numbered per client object, so a reconnect needs no wiring. A static
       test holds that the relay's name occurs under src/ only in this file
       and the preview's fake kernel. Nothing in the app calls it yet.
+      S1.4 P5 review: modCommandFailure reads data.modCode SANDBOX (the
+      kernel could not apply the mod profile) as code sandbox-unavailable,
+      why SANDBOX; the leaf says the board cannot run here.
     path: src/core/mod-command.ts
     type: module
     tags: [gnomon, gui, gesture, relay]

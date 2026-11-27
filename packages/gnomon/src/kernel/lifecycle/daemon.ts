@@ -1140,6 +1140,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // TD-2026-10-19-063: the GUI re-pin of the claude binary. A refused open and a poll of the resolved source
   // pre-stage ONE re-pin card per new sha; only its approved (fresh-presence) effect writes the pin.
   const supSeams = seams.supervisor ?? {};
+  // S1.4 P5 (the CI job; Aegis ruling 1): the ONE switch for the test-only SIP stub, read off DaemonSeams only: the
+  // session profile's floor (supervisor sessionSipStub) and the mod profile's floor (ModHost modSipStub) answer SIP
+  // true, only with a `claudePath` seam (tests pass the fake). No other floor is ever passed it.
+  const sipStubOn = seams.supervisor?.sessionSipStub === true && typeof seams.supervisor.claudePath === 'string' && seams.supervisor.claudePath.length > 0;
   const claudeRow = claudeCodePlatform(process.platform);
   const repin = new ClaudeRepinCards({
     home,
@@ -1267,9 +1271,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     gitVerbs,
     modBridge,
     ...(() => {
-      // the CI SIP stub reaches the supervisor only with the fake claude's path (sessionSipProbe checks it again)
-      const { sessionSipStub, ...rest } = seams.supervisor ?? {};
-      return { ...rest, ...(sessionSipStub === true && rest.claudePath ? { sessionSipStub: true } : {}) };
+      // the CI SIP stub reaches the supervisor only with a `claudePath` seam (tests pass the fake); sessionSipProbe checks it again
+      const { sessionSipStub: _stub, ...rest } = seams.supervisor ?? {};
+      return { ...rest, ...(sipStubOn ? { sessionSipStub: true } : {}) };
     })(),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
@@ -1315,6 +1319,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     kernelPrincipal,
     ...(opts.platform ? { platform: opts.platform } : {}),
+    ...(sipStubOn ? { modSipStub: true } : {}),
     kernelCall: (req) => modKernelCall(req),
     onCallEnd: (name, callId) => modKernelCall.endCall(name, callId),
     // K3 (#paradigm-context-mod): the focused hsid → its LIVE session cwd, joined here (never from client input)

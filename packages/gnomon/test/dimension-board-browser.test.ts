@@ -34,10 +34,10 @@ import { removeTree } from '../src/kernel/manifest/index.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { installDimension } from './dimension-helpers.js';
-import { sessionWorld, waitFor, E2E_REQUIRED, E2E_SUPERVISOR_SEAMS, e2eSandboxOk, requireE2e } from './session-helpers.js';
+import { sessionWorld, waitFor, E2E_REQUIRED, E2E_SUPERVISOR_SEAMS, e2eFloorsOk, E2E_SIP_STUB, stubMarks, requireE2e } from './session-helpers.js';
 import { GOOD, wsConnect } from './web-helpers.js';
 
-const SANDBOX_OK = e2eSandboxOk();
+const SANDBOX_OK = e2eFloorsOk('dimension-board-browser');
 const CHROME = findChrome() as string | null;
 const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 const cleanups: Array<() => unknown> = [];
@@ -73,7 +73,7 @@ async function transport(port: number): Promise<Transport & { drop(): void }> {
 
 
 // the CI e2e job (GNOMON_E2E_REQUIRED=1) runs it on CI with the SIP stub; elsewhere on CI it still skips
-requireE2e(SANDBOX_OK && !!CHROME, 'dimension-board-browser');
+requireE2e(!!CHROME, 'dimension-board-browser: Chrome');
 describe.skipIf(!SANDBOX_OK || !CHROME || (!!process.env.CI && !E2E_REQUIRED))('#gui-board-dock in a real browser ⇄ the real kernel and the real gnomon.dimension mod', () => {
   it('the kernel-served app opens /board, a real drag draws one mark, and its row comes back through the followed log', async () => {
     const w = sessionWorld();
@@ -154,6 +154,7 @@ describe.skipIf(!SANDBOX_OK || !CHROME || (!!process.env.CI && !E2E_REQUIRED))('
     expect(dims.lastDimOf(session.hsid)).toBe(dim);
     const rows = dims.rows(dim);
     expect(rows.map((r) => r.kind)).toEqual([DIM_KINDS.start, DIM_KINDS.op]);
+    expect(stubMarks(k.handle.log.read({ reader: { class: 'human' }, kinds: ['session.sandbox', 'mod.sandbox'] }))).toEqual({ session: E2E_SIP_STUB, mod: E2E_SIP_STUB }); // S1.4 P5 review: sipStubbed exactly when this run stubbed SIP
     expect(rows[0]!.payload).toMatchObject({ opened: 'command', relayedFor: { surface: 'gui' } });
     expect(opened!.title).toBe(listing[0]!.title);
     const ops = (rows[1]!.payload as { ops: Array<{ type: string; node?: { kind: string } }> }).ops;

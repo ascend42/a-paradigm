@@ -797,7 +797,7 @@ export class SessionSupervisor {
   /** P8-D94: raised, undecided repo-hook cards by repoKey|setHash|hookId (bounded: MAX_PENDING_HOOK_CARDS) */
   readonly #pendingHookCards = new Map<string, string>();
   readonly #platform: string;
-  /** the SESSION profile's SIP probe (sessionSipProbe: the CI stub only with the fake claude; never the local lane's floors) */
+  /** the SESSION profile's SIP probe (sessionSipProbe: the CI stub only with a `claudePath` seam (tests pass the fake); never the local lane's floors) */
   readonly #sessionSip: (() => boolean | null) | undefined;
   /** Aegis M2: the kernel git verbs, never on win32 (its session profile has no .git / kernel-worktree denies yet) */
   readonly #gitVerbs: GitVerbs | undefined;
@@ -1261,7 +1261,7 @@ export class SessionSupervisor {
       live = s;
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path
       await this.#o.log('session.sandbox', {
-        hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), ...(this.#sessionSip !== this.#o.sipEnabled ? { sipStub: true } : {}), profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
+        hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), ...(this.#sessionSip !== this.#o.sipEnabled && this.#platform === 'darwin' ? { sipStubbed: true } : {}), profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
         binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, hooksMode, settingSources: [...settingSources], repoHooksApproved: approved.map((h) => h.hookId), permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
         ...(r ? { resumedFrom: r.drainedEventId, drainOutcome: r.outcome } : {}),
         ...(trace ? { traced: true } : traceRefused ? { traced: false, traceRefused } : {}),

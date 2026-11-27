@@ -148,11 +148,11 @@ jobs:
   # S1.4 P5 (Aegis ruling 1(a), 1(b); T-2026-11-27-001): the real-kernel e2e that gates the board bridge. GitHub's
   # macOS runners have SIP off, so the kernel refuses every session there (floor sip). This job passes ONE test-only
   # seam, `DaemonSeams.supervisor.sessionSipStub` (GNOMON_E2E_SIP_STUB=1, read by the tests, never by src): it
-  # answers only the SESSION floor's SIP probe, only with the fake claude's path set; the macOS floor, the
-  # sandbox-exec check, the generated profile and its argv stay real. GNOMON_E2E_REQUIRED=1 makes a skip FAIL.
+  # answers only the SESSION and MOD floors' SIP probe, only with a claudePath seam (tests pass the fake); the macOS
+  # floor, the sandbox-exec check, the generated profiles and their argv stay real. It exercises the real profiles under
+  # a stubbed SIP answer: it is NOT proof that the sandbox enforces, and NOT the merge gate. GNOMON_E2E_REQUIRED=1 makes a skip FAIL.
   # The first step proves the unstubbed kernel still refuses sandbox-unavailable{floor:'sip'} here, and that a
-  # stubbed plan is the same launch. This is NOT the SIP-on proof: the recorded local run on a SIP-on Mac stays
-  # required before merge. Required status check for the integration branch and main.
+  # stubbed plan is the same launch. The merge gate is the recorded local run on a SIP-on Mac. Required status check for the integration branch and main.
   gnomon-e2e-sip-stubbed:
     name: gnomon-e2e-sip-stubbed (macos-15)
     runs-on: macos-15

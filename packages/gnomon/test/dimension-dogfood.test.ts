@@ -34,10 +34,10 @@ import { removeTree } from '../src/kernel/manifest/index.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { DIMENSION, dimId, installDimension, ulid } from './dimension-helpers.js';
-import { sessionWorld, waitFor, E2E_SUPERVISOR_SEAMS, e2eSandboxOk, requireE2e } from './session-helpers.js';
+import { sessionWorld, waitFor, E2E_SUPERVISOR_SEAMS, e2eFloorsOk, E2E_SIP_STUB, stubMarks, requireE2e } from './session-helpers.js';
 import { GOOD, wsConnect } from './web-helpers.js';
 
-const SANDBOX_OK = e2eSandboxOk();
+const SANDBOX_OK = e2eFloorsOk('dimension-dogfood');
 const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -155,7 +155,6 @@ async function reconnect(k: DevKernel, page: Page): Promise<DimSession[]> {
 
 const saved = (s: DimSession, ms = 20_000): Promise<boolean> => waitFor(() => s.status().pending === 0, ms, 5);
 
-requireE2e(SANDBOX_OK, 'dimension-dogfood');
 describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real gnomon.dimension mod (S1.3 dogfood)', () => {
   it('open, draw, rows through the followed log, refusal, undo, two tabs, disconnect and reconnect with equal hashes, and spaced sends', async () => {
     const w = sessionWorld();
@@ -189,6 +188,7 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
     let a = A.watch(A.sessions.open({ dim, hsid, opened: 'command', title: 'Dogfood' }, press('click')));
     expect(await a.opened(), JSON.stringify(a.lastNotice())).toBe(true);
     expect(k.handle.mods.running()).toContain(DIMENSION);
+    expect(stubMarks(k.handle.log.read({ reader: { class: 'human' }, kinds: ['session.sandbox', 'mod.sandbox'] }))).toEqual({ session: E2E_SIP_STUB, mod: E2E_SIP_STUB }); // S1.4 P5 review: sipStubbed exactly when this run stubbed SIP
     expect(await waitFor(() => a.status().verified === true, 10_000, 5)).toBe(true);
     expect(a.status()).toMatchObject({ phase: 'open', title: 'Dogfood', keep: 'saved', link: 'up' });
     // S1.4 P4b (Aegis D1, N-9): this open MADE the dimension, so the first attached session's default grant is said
