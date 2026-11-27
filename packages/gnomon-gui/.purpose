@@ -893,6 +893,10 @@ components:
       - ../gnomon/test/dimension-board-browser.test.ts
   gui-board-turn:
     description: >-
+      Round 3: R3, this session's own ended turn (only its own marks, no notice)
+      has its undo on the turn row only while the slot shows the you row; the
+      sixth drop level takes it away. The label 'claude' is shown as 'Claude'
+      (#gui-board-dock).
       Round 2: the mark row on the selection and on a selected cut-out (put
       back); cutoutAt (R7: a still click with Select where no mark lies; the
       press is only observed, never prevented); ' this mark' gives way to ' it';
