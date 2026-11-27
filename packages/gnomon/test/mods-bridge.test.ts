@@ -284,6 +284,13 @@ describe('#mod-tool-bridge: the closed production allowlist, pure rule (MOD_BRID
     expect(names([dimMod(undefined, { tier: 'third-party' })])).toEqual([]);
     expect(names([dimMod(undefined, { manifest: { ...DIM_MANIFEST, publisher: 'acme' } as never })])).toEqual([]);
   });
+  it('Aegis N-7: with MOD_BRIDGE_TOOLS and the PRODUCTION pin rule, the dimension mod at any superseded or retired first-party hash lists nothing; at a current pin it lists the three', () => {
+    const old = [...supersededPins().map(([h]) => h), ...retiredPins().map(([h]) => h)];
+    expect(old.length).toBeGreaterThan(0);
+    for (const h of old) expect([h, modBridgeTools([dimMod(undefined, { packageHash: h })], MOD_BRIDGE_TOOLS).map((t) => t.name)]).toEqual([h, []]);
+    const current = firstPartyPins().filter((h) => isCurrentFirstPartyPin(h));
+    expect(current.some((h) => modBridgeTools([dimMod(undefined, { packageHash: h })], MOD_BRIDGE_TOOLS).length === 3)).toBe(true);
+  });
   it('a tools/call of the fourth tool\'s name is -32602 unknown tool and nothing reaches the mod: the call path re-derives the list, and that is the gate', async () => {
     let reached = 0;
     const bridge = testModBridge({

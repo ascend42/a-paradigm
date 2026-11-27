@@ -170,7 +170,10 @@ process.stdin.on('data', (c) => {
       continue;
     }
     if (m.type !== 'user') continue;
-    if (mode.reloadPerTurn) { try { mode = JSON.parse(readFileSync(path.join(dir, 'mode.json'), 'utf8')); } catch { /* keep the last */ } }
+    if (mode.reloadPerTurn) {
+      try { mode = JSON.parse(readFileSync(path.join(dir, 'mode.json'), 'utf8')); } catch { /* keep the last */ }
+      trace({ t: 'turn-start', pid: process.pid, n: n + 1 }); // S1.4 P5 review (Judge I2): this fake took its user message and read mode.json
+    }
     n++;
     const id = `msg_${n}`;
     // mode.replay: a fixture turn's stdout lines, written verbatim in place of the canned turn
@@ -185,49 +188,49 @@ process.stdin.on('data', (c) => {
       const steps = pa.steps ?? [];
       const turnN = n;
       const emit = (from) => {
-      for (let si = from; si < steps.length; si++) {
-        const st = steps[si];
-        if (st.waitFile !== undefined) {
-          const f = path.join(dir, String(st.waitFile));
-          const poll = setInterval(() => { try { readFileSync(f); } catch { return; } clearInterval(poll); trace({ t: 'wait-done', file: st.waitFile, turn: turnN }); emit(si + 1); }, 10);
-          return;
-        }
-        if (st.line !== undefined) {
-          const mcpId = pa.awaitMcp && st.line?.type === 'control_request' && st.line.request?.subtype === 'mcp_message' && st.line.request_id ? st.line.request_id : null;
-          if (mcpId) perm.mcp.add(mcpId);
-          out(st.line);
-          // permissionAsk.serial: the next step waits for this call's answer, then gapMs (one call at a time, as the
-          // bridge's in-flight cap and per-second rate expect of one session)
-          if (mcpId && pa.serial) {
-            const poll = setInterval(() => { if (perm.mcp.has(mcpId)) return; clearInterval(poll); setTimeout(() => emit(si + 1), pa.gapMs ?? 0); }, 5);
+        for (let si = from; si < steps.length; si++) {
+          const st = steps[si];
+          if (st.waitFile !== undefined) {
+            const f = path.join(dir, String(st.waitFile));
+            const poll = setInterval(() => { try { readFileSync(f); } catch { return; } clearInterval(poll); trace({ t: 'wait-done', file: st.waitFile, turn: turnN }); emit(si + 1); }, 10);
             return;
           }
-          continue;
+          if (st.line !== undefined) {
+            const mcpId = pa.awaitMcp && st.line?.type === 'control_request' && st.line.request?.subtype === 'mcp_message' && st.line.request_id ? st.line.request_id : null;
+            if (mcpId) perm.mcp.add(mcpId);
+            out(st.line);
+            // permissionAsk.serial: the next step waits for this call's answer, then gapMs (one call at a time, as the
+            // bridge's in-flight cap and per-second rate expect of one session)
+            if (mcpId && pa.serial) {
+              const poll = setInterval(() => { if (perm.mcp.has(mcpId)) return; clearInterval(poll); setTimeout(() => emit(si + 1), pa.gapMs ?? 0); }, 5);
+              return;
+            }
+            continue;
+          }
+          if (st.ungated) {
+            // a gated tool that runs with NO can_use_tool request (an allow rule / hook would do this in real claude)
+            const u = st.ungated;
+            const tu = u.toolUseId ?? `toolu_ungated_${turnN}_${++k}`;
+            out({ type: 'assistant', message: { id: `${id}_u${k}`, content: [{ type: 'tool_use', id: tu, name: u.tool, input: u.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
+            runAllowed({ tool: u.tool }, u.input);
+            out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: tu, content: 'ok' }] }, tool_result_meta: [{ id: tu, permission_decision: { decision: 'accept', source: 'config', reason_type: 'rule' } }] });
+            continue;
+          }
+          const r = st.request;
+          const reqId = r.id ?? `req-${turnN}-${++k}`;
+          const toolUseId = r.toolUseId ?? `toolu_${turnN}_${k}`;
+          out({ type: 'assistant', message: { id: `${id}_t${k}`, content: [{ type: 'tool_use', id: toolUseId, name: r.tool, input: r.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
+          if (!perm.open.has(reqId)) perm.open.set(reqId, { tool: r.tool, input: r.input, toolUseId });
+          out({ type: 'control_request', request_id: reqId, request: { subtype: 'can_use_tool', tool_name: r.tool, display_name: r.tool, input: r.input, permission_suggestions: [{ type: 'addRules', rules: [{ toolName: r.tool }], behavior: 'allow', destination: 'localSettings' }], tool_use_id: toolUseId } });
         }
-        if (st.ungated) {
-          // a gated tool that runs with NO can_use_tool request (an allow rule / hook would do this in real claude)
-          const u = st.ungated;
-          const tu = u.toolUseId ?? `toolu_ungated_${turnN}_${++k}`;
-          out({ type: 'assistant', message: { id: `${id}_u${k}`, content: [{ type: 'tool_use', id: tu, name: u.tool, input: u.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
-          runAllowed({ tool: u.tool }, u.input);
-          out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: tu, content: 'ok' }] }, tool_result_meta: [{ id: tu, permission_decision: { decision: 'accept', source: 'config', reason_type: 'rule' } }] });
-          continue;
-        }
-        const r = st.request;
-        const reqId = r.id ?? `req-${turnN}-${++k}`;
-        const toolUseId = r.toolUseId ?? `toolu_${turnN}_${k}`;
-        out({ type: 'assistant', message: { id: `${id}_t${k}`, content: [{ type: 'tool_use', id: toolUseId, name: r.tool, input: r.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
-        if (!perm.open.has(reqId)) perm.open.set(reqId, { tool: r.tool, input: r.input, toolUseId });
-        out({ type: 'control_request', request_id: reqId, request: { subtype: 'can_use_tool', tool_name: r.tool, display_name: r.tool, input: r.input, permission_suggestions: [{ type: 'addRules', rules: [{ toolName: r.tool }], behavior: 'allow', destination: 'localSettings' }], tool_use_id: toolUseId } });
-      }
-      if (pa.exitAfterMs !== undefined) setTimeout(() => { trace({ t: 'self-exit' }); process.exit(0); }, pa.exitAfterMs);
-      if (pa.hold) return;
-      perm.turnDone = () => {
-        out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: perm.denied.splice(0), result: 'ok' });
-        // permissionAsk.afterResult: lines written AFTER the turn's result (a background sub-agent finishing late)
-        for (const l of pa.afterResult ?? []) out(l);
-      };
-      finishPerm();
+        if (pa.exitAfterMs !== undefined) setTimeout(() => { trace({ t: 'self-exit' }); process.exit(0); }, pa.exitAfterMs);
+        if (pa.hold) return;
+        perm.turnDone = () => {
+          out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: perm.denied.splice(0), result: 'ok' });
+          // permissionAsk.afterResult: lines written AFTER the turn's result (a background sub-agent finishing late)
+          for (const l of pa.afterResult ?? []) out(l);
+        };
+        finishPerm();
       };
       emit(0);
       continue;

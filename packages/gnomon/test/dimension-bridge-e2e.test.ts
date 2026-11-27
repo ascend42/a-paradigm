@@ -226,10 +226,19 @@ async function boardRig(tag: string) {
     line(`m-${id}`, { jsonrpc: '2.0', id: ++rpc, method: 'tools/call', params: { name, arguments: args, ...extra, _meta: { ...((extra._meta as object) ?? {}), 'claudecode/toolUseId': `toolu_${id}` } } }),
   ];
   const list = (id: string) => [line(`m-${id}`, { jsonrpc: '2.0', id: ++rpc, method: 'tools/list' })];
+  /**
+   * Judge I2: every session's fake reads ONE mode.json, so a send waits until a fake traced `turn-start` for it (it
+   * took the message and read the mode) before the next mode can be written
+   */
+  const send = async (hsid: string) => {
+    const before = trace(w).filter((x) => x.t === 'turn-start').length;
+    await k.client.call('session.send', { hsid, content: [{ text: 'go' }] });
+    expect(await waitFor(() => trace(w).filter((x) => x.t === 'turn-start').length > before, 15_000)).toBe(true);
+  };
   /** a turn: the steps one call at a time (the bridge's in-flight cap and rate), awaited by id */
   const turn = async (hsid: string, steps: unknown[][], o: { hold?: boolean } = {}) => {
     setMode(w, { reloadPerTurn: true, permissionAsk: { hold: o.hold ?? false, awaitMcp: true, serial: true, gapMs: 300, steps: steps.flat() } });
-    await k.client.call('session.send', { hsid, content: [{ text: 'go' }] });
+    await send(hsid);
   };
   const answered = (ids: string[], ms = 60_000) => waitFor(() => ids.every((id) => !!answer(w, `m-${id}`)), ms);
   const raw = (id: string): string => answer(w, `m-${id}`)!.mcp!.result!.content![0]!.text;
@@ -245,9 +254,11 @@ async function boardRig(tag: string) {
     const seen = new Map<number, { kind: string; principal: string; keyId?: string; payload: Record<string, unknown> }>();
     const report = verifyLog(dev.home, { keyRing: ring, kernelPrincipal: k.handle.kernelPrincipal, kernelKeyIds, onRow: (v) => { if (v.kind === 'inject.receipt') seen.set(v.seq, JSON.parse(v.envelope) as never); } });
     const bad = new Set(report.failures.map((f) => (f as { seq?: number }).seq));
+    // Aegis N-1: no receipt is among verify's failures (a failing receipt would be dropped silently otherwise)
+    expect([...bad].filter((q) => q !== undefined && seen.has(q))).toEqual([]);
     return [...seen.entries()].filter(([seq, e]) => !bad.has(seq) && e.principal === `p:${ns}/mods-mcp` && kernelKeyIds.includes(e.keyId ?? '')).map(([seq, e]) => ({ seq, event: e }) as Row);
   };
-  return { w, k, dev, ns, tool, list, turn, answered, raw, body, rows, receipts, kernelKeyIds };
+  return { w, k, dev, ns, tool, list, turn, send, answered, raw, body, rows, receipts, kernelKeyIds, nextId: () => ++rpc };
 }
 
 describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod, production wiring (S1.4-P5)', () => {
@@ -273,8 +284,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(await waitFor(() => a.status().pending === 0, 20_000, 5)).toBe(true);
     expect(a.lastNotice()?.code ?? 'grant-default').toBe('grant-default'); // only the open's default-grant notice: the edit was not refused
     a.select([H(1)], press());
-    expect(await waitFor(() => P.sent.includes('dim.select'), 5_000)).toBe(true);
-    await new Promise((x) => setTimeout(x, 300));
+    expect(await waitFor(() => P.answered.includes('dim.select'), 5_000)).toBe(true); // Judge M5: the select's answer, not a sleep
 
     /* turn 1: list, view, a draw whose params and _meta name another session, the same opId again */
     const forged = { hsid: OTHER, principal: 'p:evil0000/founder', agent: 'kit', surface: 'gui', turn: `turn:${OTHER}/9` };
@@ -376,7 +386,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(agentRows()).toBe(1);
     expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === hsid)?.state === 'live', 10_000)).toBe(true);
     expect(a.grant(hsid, press())).toBe(true);
-    expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === hsid)?.write === false && !!r.rows(['modns.gnomon.dimension.grant', DIM_KINDS.op]).length, 10_000)).toBe(true);
+    // Judge M3: the grant ROW for this session with write:false is in the log, not only the page's key
+    expect(await waitFor(() => r.rows(['modns.gnomon.dimension.grant']).some((x) => x.event.payload.hsid === hsid && x.event.payload.write === false), 10_000)).toBe(true);
+    expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === hsid)?.write === false, 10_000)).toBe(true); // the row lands before the page's key: wait on both
     fs.writeFileSync(path.join(r.w.stubDir, 'go-revoke'), 'x');
     expect(await r.answered(['g2'])).toBe(true);
     const g2 = r.body<Record<string, unknown>>('g2');
@@ -386,8 +398,8 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(await waitFor(() => turnResults() >= 1, 15_000)).toBe(true);
 
     /* C4: a tools/call written after the turn's result (a late background sub-agent) is noTurn */
-    setMode(r.w, { reloadPerTurn: true, permissionAsk: { hold: false, steps: [], afterResult: [line('m-late', { jsonrpc: '2.0', id: 900, method: 'tools/call', params: { name: 'dim-view', arguments: {} } }).line] } });
-    await r.k.client.call('session.send', { hsid, content: [{ text: 'go' }] });
+    setMode(r.w, { reloadPerTurn: true, permissionAsk: { hold: false, steps: [], afterResult: [line('m-late', { jsonrpc: '2.0', id: r.nextId(), method: 'tools/call', params: { name: 'dim-view', arguments: {} } }).line] } });
+    await r.send(hsid);
     expect(await r.answered(['late'])).toBe(true);
     expect(r.raw('late')).toBe(MOD_BRIDGE_SENTENCES.noTurn);
     expect(await waitFor(() => turnResults() >= 2, 15_000)).toBe(true);
@@ -395,7 +407,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     /* C2 (chosen manual): set through the kernel's run-mode verb on the GUI connection, never a seam */
     const modeSet = await P.client.call<Record<string, unknown>>('log.append', { kind: 'request.mode.set', payload: { repo: r.w.cwd, to: 'manual' } });
     expect(modeSet).toMatchObject({ changed: true, applied: true });
-    const bare = (id: string, name: string) => [line(`m-${id}`, { jsonrpc: '2.0', id: 800 + id.length, method: 'tools/call', params: { name, arguments: name === 'dim-draw' ? { ops: [agentAdd(9)] } : {} } })]; // no can_use_tool, no toolUseId
+    const bare = (id: string, name: string) => [line(`m-${id}`, { jsonrpc: '2.0', id: r.nextId(), method: 'tools/call', params: { name, arguments: name === 'dim-draw' ? { ops: [agentAdd(9)] } : {} } })]; // no can_use_tool, no toolUseId
     const before = agentRows();
     await r.turn(hsid, [bare('mv', 'dim-view'), bare('mdr', 'dim-draw'), r.tool('mr', 'dim-view', {}), r.tool('mrd', 'dim-draw', { ops: [agentAdd(10)] })]);
     expect(await r.answered(['mv', 'mdr', 'mr', 'mrd'])).toBe(true);
@@ -418,12 +430,14 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     // the counter rows (folded, written at stop) and the suspect rows of the calls with no can_use_tool
     await r.k.client.call('session.stop', { hsid: s2.hsid });
     await r.k.client.call('session.stop', { hsid });
-    expect(await waitFor(() => r.rows(['inject.receipt']).filter((x) => x.event.payload.outcome === 'refused').length >= 2, 15_000)).toBe(true);
-    const counters = r.rows(['inject.receipt']).filter((x) => x.event.payload.outcome === 'refused');
-    expect(counters.every((x) => x.event.principal === `p:${r.ns}/mods-mcp`)).toBe(true);
-    expect(counters.reduce((n, x) => n + ((x.event.payload.byWhy as Record<string, number>).manual ?? 0), 0)).toBe(7);
-    expect(await waitFor(() => r.rows(['approval.suspect']).length >= 1, 15_000)).toBe(true);
-    const suspects = r.rows(['approval.suspect']).filter((x) => JSON.stringify(x.event.payload).includes('gnomon-mods'));
+    const counters = () => r.rows(['inject.receipt']).filter((x) => x.event.payload.outcome === 'refused');
+    const manualSum = () => counters().reduce((n, x) => n + ((x.event.payload.byWhy as Record<string, number>).manual ?? 0), 0);
+    expect(await waitFor(() => manualSum() === 7, 15_000), String(manualSum())).toBe(true); // Judge M2: the exact sum
+    expect(counters().every((x) => x.event.principal === `p:${r.ns}/mods-mcp`)).toBe(true);
+    const suspectRows = () => r.rows(['approval.suspect']).filter((x) => JSON.stringify(x.event.payload).includes('gnomon-mods'));
+    const missingSum = () => suspectRows().reduce((n, x) => n + ((x.event.payload as { byWhy?: Record<string, number> }).byWhy?.missing ?? 0), 0);
+    expect(await waitFor(() => missingSum() === 4, 15_000), String(missingSum())).toBe(true); // Judge M2: the exact sum
+    const suspects = suspectRows();
     expect(JSON.stringify(suspects)).toContain('ungated-tool-use');
     expect(suspects.reduce((n, x) => n + ((JSON.parse(JSON.stringify(x.event.payload)) as { byWhy?: Record<string, number>; detail?: { byWhy?: Record<string, number> } }).byWhy?.missing ?? (x.event.payload as { detail?: { byWhy?: Record<string, number> } }).detail?.byWhy?.missing ?? 0), 0)).toBe(4); // m-late, mv, mdr, cv: no can_use_tool and no toolUseId
 
@@ -464,7 +478,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     /* turn 1: restyle and re-word the person's H1, delete H2, from the view's seq */
     await r.turn(hsid, [r.tool('e1', 'dim-draw', { base: seq0, opId: 'e1', ops: [{ type: 'update', id: H(1), patch: { color: 'cobalt' } }, { type: 'update', id: H(1), patch: { label: 'Gateway' } }, { type: 'delete', id: H(2) }] })]);
     expect(await r.answered(['e1'])).toBe(true);
-    expect(r.body<{ ok: boolean; applied: number }>('e1'), r.raw('e1')).toMatchObject({ ok: true, applied: 3 });
+    // Aegis N-3: the charge an answer shows is budgetLeft (3 of 64); the foreign sub-budgets (2 touches, 1 delete,
+    // 1 words) are the mod's internal counters (foreignLeft) and no answer carries them (test/dimension-edit.test.ts)
+    expect(r.body<{ ok: boolean; applied: number; budgetLeft: number }>('e1'), r.raw('e1')).toMatchObject({ ok: true, applied: 3, budgetLeft: 61 });
     expect(await waitFor(() => turnResults() >= 1, 15_000)).toBe(true);
     const f1 = fold();
     const h1 = f1.nodes.get(H(1))! as unknown as Record<string, unknown>;
@@ -476,6 +492,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     // the notice: the turn stands pinned in the dim.check answer, which the page renders
     const check = await cmd('dim.check', {});
     expect(check.pins).toEqual(expect.arrayContaining([expect.objectContaining({ hsid, turn: `turn:${hsid}/1` })]));
+    // Judge N2: the open answer lists it too (what a page that opens the board now renders)
+    const reopen = await cmd('dim.open', { title: 'P5 edit', opened: 'command' });
+    expect(reopen.pins, JSON.stringify(reopen)).toEqual(expect.arrayContaining([expect.objectContaining({ hsid, turn: `turn:${hsid}/1` })]));
 
     /* the person's one press: dim.undo of the whole turn */
     const u = await cmd('dim.undo', { of: { hsid, turn: `turn:${hsid}/1` } });
@@ -512,10 +531,12 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     await r.turn(hsid, [r.tool('w2', 'dim-view', { since: seq0 - 1 }), r.tool('x1', 'dim-undo', { of: undoSet, opId: 'x1' }), r.tool('x2', 'dim-undo', { of: { ...undoSet, act: neverShown } }), r.tool('x3', 'dim-undo', { of: drawSet })]);
     expect(await r.answered(['w2', 'x1', 'x2', 'x3'])).toBe(true);
     expect(r.body('x1'), r.raw('x1')).toMatchObject({ ok: true });
-    const rowsBefore = r.rows([DIM_KINDS.op]).length;
     expect(r.body<{ code: string }>('x2').code).toBe('undo-set-bad');
     expect(r.body<{ code: string }>('x3').code).toBe('undo-not-allowed');
-    expect(r.rows([DIM_KINDS.op]).length).toBe(rowsBefore);
+    // Judge M1: every op row this turn caused is x1's undo of the person's undo; x2 and x3 wrote none
+    const t3 = r.rows([DIM_KINDS.op]).filter((x) => (x.event.causes ?? []).includes(`turn:${hsid}/3`));
+    expect(t3.length).toBeGreaterThan(0);
+    expect(t3.map((x) => (x.event.payload.undo as { of?: unknown } | undefined)?.of)).toEqual(t3.map(() => ({ principal: undoSet.principal, act: undoSet.act })));
     expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'Gateway', 10_000)).toBe(true);
     const pins3 = (await cmd('dim.check', {})).pins as Array<Record<string, unknown>>;
     expect(pins3.some((p) => p.hsid === hsid && p.turn === `turn:${hsid}/3`), JSON.stringify(pins3)).toBe(true); // pinned because it undid a person's set (the mod's internal undidPerson)
@@ -525,6 +546,10 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     const redo = await cmd('dim.undo', { of: { hsid, turn: `turn:${hsid}/3` } });
     expect(redo, JSON.stringify(redo)).toMatchObject({ ok: true });
     expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'API', 10_000)).toBe(true);
+    // Judge N2: the M4 sweep after B too: every turn-caused row of the dimension principal is .op or .draw.refused
+    const turnCaused = [...r.k.handle.log.read({ reader: { class: 'human' } })].map((x) => (x as unknown as { event: { kind: string; principal: string; causes?: string[] } }).event).filter((e) => e.principal.endsWith('/mod-gnomon.dimension') && (e.causes ?? []).some((c) => c.startsWith('turn:')));
+    expect(turnCaused.length).toBeGreaterThan(0);
+    expect(turnCaused.every((e) => e.kind === DIM_KINDS.op || e.kind === 'modns.gnomon.dimension.draw.refused')).toBe(true);
     await r.k.client.call('session.stop', { hsid });
   }, 180_000);
   it('D: a REAL second session on the same board (G-MOD-19): its call naming the first session is stamped as itself, its grant is off, its selection empty; G-MOD-21: with the tool share spent in one real second, its draw is append-busy while the person\'s command lands', async () => {
@@ -559,16 +584,16 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
 
     /* G-MOD-21 (a real one-second window, never a stepped clock): A's 4-row draw and B's 2-row draw in the same
        second take more than the 5 tool rows; B's is append-busy; the person's dim.op in that second lands */
+    expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === sB)?.state === 'live', 10_000)).toBe(true); // Judge N4
     expect(a.grant(sB, press())).toBe(true);
     expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === sB)?.write === true, 10_000)).toBe(true);
     const big = (o: number, n: number) => ({ dim, ops: Array.from({ length: n }, (_, i) => ({ type: 'add', node: { kind: 'text', x: o + i, y: 0, text: `${'w'.repeat(3_990)}${i}` } })) });
     await r.turn(sA, [[{ waitFile: 'go21' }], r.tool('a4', 'dim-draw', big(100, 12))]);
-    await new Promise((x) => setTimeout(x, 400)); // A's fake has read its turn's mode before B's is written
     await r.turn(sB, [[{ waitFile: 'go21b' }], r.tool('b2', 'dim-draw', big(200, 5))]);
-    await new Promise((x) => setTimeout(x, 400));
+    // Judge I3: the window is timed from BEFORE A's draw is released, so both draws are inside the measured second
+    const t0 = Date.now();
     fs.writeFileSync(path.join(r.w.stubDir, 'go21'), 'x');
     expect(await r.answered(['a4'])).toBe(true);
-    const t0 = Date.now();
     fs.writeFileSync(path.join(r.w.stubDir, 'go21b'), 'x');
     a.edit([rectAt(50)], press());
     expect(await r.answered(['b2'])).toBe(true);

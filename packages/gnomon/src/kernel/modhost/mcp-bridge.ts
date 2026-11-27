@@ -17,7 +17,8 @@
  *  - the mod and the tool are named on the CLOSED allowlist. The production allowlist MOD_BRIDGE_TOOLS names one
  *    mod and three tools since S1.4-P5: `gnomon.dimension` with dim-view, dim-draw and dim-undo (Aegis M1 was met
  *    first: the revoke key, the dashed stroke, edit-anything attribution, its notice and one-press undo). Tests may
- *    pass another allowlist only through DaemonSeams.modBridge (src/kernel/testing.ts), never ModBridgeOptions;
+ *    pass another allowlist at the daemon, only through DaemonSeams.modBridge (src/kernel/testing.ts), never
+ *    ModBridgeOptions;
  *  - the mod is first-party (`gnomon`-published, tier first-party) and its installed package hash is one of the
  *    kernel's CURRENT pins, never a superseded, a retired or a historical first-party hash (Aegis A7;
  *    isCurrentFirstPartyPin in manifest/install.ts);

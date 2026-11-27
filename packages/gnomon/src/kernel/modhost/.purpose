@@ -63,9 +63,9 @@ components:
       line since S1.4-P5 (Aegis M1 met): gnomon.dimension with dim-view,
       dim-draw and dim-undo, outer object and inner array frozen. A removal
       (pause, repin, uninstall) takes effect at the next call; an addition
-      at respawn (no listChanged). Tests may pass another allowlist only
-      through DaemonSeams.modBridge (src/kernel/testing.ts), never
-      ModBridgeOptions; test/dimension-bridge-e2e.test.ts passes none.
+      at respawn (no listChanged). Tests may pass another allowlist at the
+      daemon, only through DaemonSeams.modBridge (src/kernel/testing.ts),
+      never ModBridgeOptions; test/dimension-bridge-e2e.test.ts passes none.
       ModHostOptions.modSipStub (TEST SEAM, S1.4 P5 review): set by the
       daemon only from DaemonSeams.supervisor (sessionSipStub with a
       claudePath seam); the host passes it only as modLaunchPlan's `sip`

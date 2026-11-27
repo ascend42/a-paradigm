@@ -14,7 +14,7 @@ import { GOOD, wsConnect } from './web-helpers.js';
 
 const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 
-export async function guiPage(k: DevKernel, cleanups: Array<() => unknown>): Promise<{ client: GnomonClient; sessions: DimSessions; dims: DimStore; sent: string[] }> {
+export async function guiPage(k: DevKernel, cleanups: Array<() => unknown>): Promise<{ client: GnomonClient; sessions: DimSessions; dims: DimStore; sent: string[]; answered: string[] }> {
   const g = await k.launch();
   const frag = parseLaunchFragment(new URL(g.url).hash)!;
   const ws = await wsConnect(g.port, GOOD(g.port));
@@ -38,7 +38,16 @@ export async function guiPage(k: DevKernel, cleanups: Array<() => unknown>): Pro
   if (!out.ok) throw new Error(`connect: ${JSON.stringify(out)}`);
   const sent: string[] = [];
   const call = client.call.bind(client);
-  client.call = ((method: string, params?: unknown) => (method !== 'log.read' && sent.push(String((params as { commandId?: string } | undefined)?.commandId ?? method)), call(method, params))) as typeof client.call;
+  /** S1.4 P5 review (Judge M5): every command id whose answer came back, in order (a refusal too) */
+  const answered: string[] = [];
+  client.call = ((method: string, params?: unknown) => {
+    if (method === 'log.read') return call(method, params);
+    const key = String((params as { commandId?: string } | undefined)?.commandId ?? method);
+    sent.push(key);
+    const p = call(method, params);
+    void p.then(() => answered.push(key), () => answered.push(key));
+    return p;
+  }) as typeof client.call;
   const gui = new GuiStore();
   const dims = new DimStore();
   const sessions = new DimSessions({ store: dims });
@@ -50,6 +59,6 @@ export async function guiPage(k: DevKernel, cleanups: Array<() => unknown>): Pro
   await followLog(client, { cursor: () => gui.cursor(), adopt: (id: string) => gui.adopt(id), apply: take, advance: (n: number) => gui.advance(n), reset: () => (gui.reset(), sessions.reset()) } as unknown as GuiStore);
   sessions.connect({ client, principal: out.session.principal, connId: out.session.connId });
   cleanups.push(() => sessions.destroy());
-  return { client, sessions, dims, sent };
+  return { client, sessions, dims, sent, answered };
 }
 

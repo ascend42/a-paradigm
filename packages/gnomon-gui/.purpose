@@ -762,8 +762,8 @@ components:
       confirmed, and drops an entry that can never apply with one notice.
       dimAckOf reads the dimension mod's replies exactly (ok with seq and
       refused; ok false with a code of DIM_COMMAND_REFUSALS). Stated bounds:
-      16 pending batches, 256 early rows, 64 undo entries. Nothing in the
-      app imports it yet.
+      16 pending batches, 256 early rows, 64 undo entries. core/dim-session.ts
+      drives it (one per open dimension, S1.3 P4a).
     path: src/core/dim-live.ts
     type: module
     tags: [gnomon, gui, dimension, pure]
@@ -1136,8 +1136,8 @@ components:
       other action and a set centred on the view steps too; only the closed list DIM_CLIPBOARD_KEYS is carried
       (shape, words, colour; no author, refs, rel or carried-through field).
       The clones are ordinary adds, so whoever pastes is their author.
-      clear() forgets the register (window blur, unmount). Nothing in the
-      app imports it yet (pass P3b wires paste interception).
+      clear() forgets the register (window blur, unmount). ui/board-leaf.ts
+      holds it and intercepts copy, cut and paste (S1.3 P3b).
     path: src/core/dim-clipboard.ts
     type: module
     tags: [gnomon, gui, dimension, clipboard, pure]
