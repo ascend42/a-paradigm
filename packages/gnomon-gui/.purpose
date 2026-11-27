@@ -647,7 +647,7 @@ components:
       carries firstAt and lastAt from the log row's at. stateAt throws
       DimSeqError for a seq that is not a safe integer. reset() forgets
       everything but the pins when the log is replaced.
-      Nothing in the app imports it yet (pass P3b/P4 wires it to followLog).
+      ui/app.ts holds it and feeds it the followed rows (S1.3 P4).
     path: src/core/dim-store.ts
     type: module
     tags: [gnomon, gui, dimension, pure]
@@ -984,7 +984,7 @@ components:
     path: src/ui/board-turn.ts
     type: module
     tags: [gnomon, gui, dimension, board]
-    related: ["#gui-board-dock", "#gui-board-leaf", "#gui-turn-steps", "#gui"]
+    related: ["#gui-board-dock", "#gui-turn-steps", "#gui"]
     tests:
       - test/board-turn.test.ts
       - test/board-app.test.ts

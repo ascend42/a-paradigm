@@ -59,10 +59,13 @@ components:
       tool declares no network or spend effect and carries a schema of type
       object whose description is at most 1,024 chars with no Cc/Cf/Zl/Zp and
       whose canonical JSON is at most 8 KiB; a name two listed mods declare is
-      listed for neither. MOD_BRIDGE_TOOLS, the PRODUCTION allowlist, is EMPTY
-      until S1.4-P5 (Aegis M1): a real kernel lists nothing and no mcp.json
-      gets the entry. Tests pass an allowlist through ModBridgeOptions
-      (DaemonSeams.modBridge).
+      listed for neither. MOD_BRIDGE_TOOLS, the PRODUCTION allowlist, is ONE
+      line since S1.4-P5 (Aegis M1 met): gnomon.dimension with dim-view,
+      dim-draw and dim-undo, outer object and inner array frozen. A removal
+      (pause, repin, uninstall) takes effect at the next call; an addition
+      at respawn (no listChanged). Tests may pass another allowlist only
+      through DaemonSeams.modBridge (src/kernel/testing.ts), never
+      ModBridgeOptions; test/dimension-bridge-e2e.test.ts passes none.
       A CALL, in order: unknown tool (-32602); session not running; held
       (Aegis M2: effective mode manual with no approved plan, or a loop
       origin; the bridge refuses itself because an allow rule or a hook can
@@ -108,8 +111,12 @@ components:
       counter row's key list; MOD_BRIDGE_RECEIPT_KEYS (nine) is for outcome
       ok or error. The list rule also requires the mod and tool names to
       pass the fence's id pattern. allow and currentPin are ModBridgeSeams
-      (second argument), never on ModBridgeOptions. OWED BY P5: readers that
-      accept a receipt only under p:<ns>/mods-mcp and a kernel key.
+      (second argument), never on ModBridgeOptions. A reader of receipts
+      accepts a row only under p:<ns>/mods-mcp whose signature verifies
+      under the kernel key; in S1.4 the only one is the e2e's G-MOD-22
+      checker (verifyLog under the kernel keys). Generic log views do not
+      filter by principal: only the socket append gate keeps forged
+      receipts out.
       createModBridge(o) builds the ports over the mod host (read at call
       time) and the log. The kernel imports nothing from gnomon-mods or the
       mod SDK. Known limit: a sub-agent arrives on the same channel and is

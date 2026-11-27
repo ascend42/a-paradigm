@@ -194,7 +194,7 @@ components:
       test/dimension-undo-tool.test.ts.
       It declares the four modns.gnomon.dimension.* kinds and the two
       auxiliary ones (grant, draw.refused); tools dim-view (read), dim-draw
-      and dim-undo (read, write) for an attached session's agent (S1.4: see below); no view, keybinding,
+      and dim-undo (read, write) for an attached session's agent (S1.4: see below), live in production since S1.4 P5 (MOD_BRIDGE_TOOLS names exactly these three; a new session after install lists them, a running one at respawn); no view, keybinding,
       offer, capability or egress. model.mjs is pure: actorOf (a human only
       for a host stamp with surface gui and no agent), apply(state, ops,
       actor) (the one entry: validateDimOps, rows built from its accepted

@@ -389,7 +389,7 @@ export interface DaemonSeams {
     /** S1.4 P5 (Aegis ruling 2): a test loop origin set on the real Session at open (no production path sets one in 8.0) */
     loopOriginFor?: (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
   };
-  /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
+  /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, the dimension's three tools since S1.4 P5, and the kernel's current pins) */
   modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
   billing?: BillingScanSource;
   /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
@@ -1198,8 +1198,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #mod-tool-bridge (S1.4-P2): the `gnomon-mods` SDK server's ports. The mod host is built below (it needs the
   // supervisor), so it is read at call time. Receipts and the folded refusal counter are appended in-process as
   // USERLAND rows under p:<ns>/mods-mcp (L7 holds as for mod rows and the kernel-speakable row: the kernel key signs
-  // them as an attestation; readers attribute by principal). Production passes no allowlist: MOD_BRIDGE_TOOLS is
-  // empty until P5, so no tool is listed and no session's mcp.json gets the entry.
+  // them as an attestation; readers attribute by principal). Production passes no allowlist: MOD_BRIDGE_TOOLS (the
+  // dimension's three tools since S1.4 P5) and isCurrentFirstPartyPin decide what a session lists.
   const modBridge = createModBridge({
     mods: () => deskMods.list(),
     host: () => mods,
