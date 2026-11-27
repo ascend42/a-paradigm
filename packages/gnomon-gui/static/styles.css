@@ -1953,14 +1953,17 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-col.bd-right-col{min-width:calc(9ch + 18px)}
 .bd-col.bd-more-col{min-width:calc(5ch + 16px)}
 .bd-undo-key[aria-disabled="true"]{color:var(--sec);border-color:var(--rule)}
-.bd-turn-notice [data-only],.bd-turn-mark [data-only]{display:none}
-.bd-turn-notice.tight-1 [data-drop="1"],.bd-turn-mark.tight-1 [data-drop="1"],.bd-turn-notice.tight-2 [data-drop="2"],.bd-turn-mark.tight-2 [data-drop="2"],.bd-turn-notice.tight-3 [data-drop="3"],.bd-turn-notice.tight-4 [data-drop="4"]{display:none}
-.bd-turn-mark.tight-2 [data-only="2"],.bd-turn-notice.tight-3 [data-only="3"]{display:inline}
+.bd-turn-notice > .bd-turn-line [data-only],.bd-turn-mark > .bd-turn-line [data-only]{display:none}
+/* the ladders (Mika E3 r3 D3): a short form shows from its level (data-only) and may go at a later one (data-drop) */
+.bd-turn-mark.tight-2 > .bd-turn-line [data-only="2"],.bd-turn-notice.tight-2 > .bd-turn-line [data-only="2"],.bd-turn-notice.tight-4 > .bd-turn-line [data-only="4"],.bd-turn-notice.tight-6 > .bd-turn-line [data-only="6"]{display:inline}
+.bd-turn-notice.tight-1 > .bd-turn-line [data-drop="1"],.bd-turn-mark.tight-1 > .bd-turn-line [data-drop="1"],.bd-turn-notice.tight-2 > .bd-turn-line [data-drop="2"],.bd-turn-mark.tight-2 > .bd-turn-line [data-drop="2"],.bd-turn-notice.tight-3 > .bd-turn-line [data-drop="3"],.bd-turn-notice.tight-4 > .bd-turn-line [data-drop="4"],.bd-turn-notice.tight-5 > .bd-turn-line [data-drop="5"],.bd-turn-notice.tight-6 > .bd-turn-line [data-drop="6"]{display:none}
 .bd-turn-notice.two-line{flex-wrap:wrap;min-height:48px}
 /* R3: the turn row's own undo key in the undo column; its sixth drop level takes the key away, show chat stays */
 .bd-turn-turn .bd-col.bd-undo-col{margin-right:8px}
 .bd-turn-turn.tight-6 .bd-undo-col{display:none}
 .bd-turn-notice.two-line .bd-turn-line{flex-basis:100%;height:20px}
+/* Mika E3 r3 D3: the name cut and still too long, the words wrap between their parts: no part is ever cut */
+.bd-turn-notice.two-line.wrap .bd-turn-line{flex-wrap:wrap;height:auto;white-space:normal}
 .bd-turn-notice.two-line .bd-turn-keys{margin-left:auto}
 /* the +k menu opens UPWARD over the board, its right edge on the key column, never over the strip (board-centre-only) */
 /* Mika E3 B3: ui/board-turn.ts placeMenu sets right (the key's right edge), bottom (above the hands foot) and max-height */
@@ -1973,9 +1976,16 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 [data-motion="reduced"] .bd-undo-key .spin{animation:none}
 .bd-menu-row{display:flex;align-items:center;gap:8px}
 .bd-menu-words{flex:1 1 auto;text-align:left;background:none;border:0;color:var(--ink2);font:inherit;padding:4px 8px;cursor:default}
-/* Mika E3 B3: inside the leaf; a row's words cut at the end when the menu is capped (whole in title=) */
+/* Mika E3 r3: the menu's rows shorten by the slot's ladder (m-1 ' of your marks', m-2 the session, m-3 'before
+   stopped', m-4 the name cut); the time is never dropped; the row's undo key never shrinks or clips */
 #board-turn .bd-undo-menu{min-width:0}
-.bd-menu-words{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bd-menu-words{min-width:0;overflow:hidden;white-space:nowrap;display:flex;align-items:center}
+.bd-menu-words > span{white-space:pre;flex:none}
+.bd-menu-row > .bd-col{flex:none;min-width:0}
+.bd-menu-row [data-only]{display:none}
+.bd-menu-row.m-2 [data-only="2"]{display:none}
+.bd-menu-row.m-3 [data-only="4"],.bd-menu-row.m-4 [data-only="6"]{display:inline}
+.bd-menu-row.m-1 [data-drop="5"],.bd-menu-row.m-2 [data-drop="2"],.bd-menu-row.m-2 [data-drop="3"],.bd-menu-row.m-3 [data-drop="4"],.bd-menu-row.m-4 [data-drop="6"]{display:none}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
 .bd-hand-s{color:var(--sec)}
 .bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}

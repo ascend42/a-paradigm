@@ -159,9 +159,9 @@ export interface TurnPart {
   lead?: boolean;
   /** the first tail of the row */
   first?: boolean;
-  drop?: 1 | 2 | 3 | 4;
+  drop?: 1 | 2 | 3 | 4 | 5 | 6;
   /** S1.4 E3: shown ONLY from this tight level on (the short form a dropped part gives way to: ' it', ' before stopped') */
-  only?: 2 | 3 | 4;
+  only?: 2 | 3 | 4 | 5 | 6;
   sub?: { text: string; drop: 4 | 5; lead: boolean };
 }
 
@@ -265,6 +265,11 @@ export interface NoticeFacts {
   stopped?: boolean;
 }
 
+/** Mika E3 r3 D3 (notice.tight): the agent's name cut to 12 characters and the session's to 5, each with … */
+export const NOTICE_NAME_MAX = 12;
+export const NOTICE_SESSION_MIN = 5;
+const cutTo = (s: string, n: number): string => `${[...s].slice(0, n).join('')}…`;
+
 /** 'a', 'a and b', 'a, b and c' */
 const joinAnd = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
 
@@ -285,14 +290,19 @@ export function noticeStripRow(n: NoticeFacts, name: string, o: { others: readon
   if (n.state === 'done') {
     parts.push({ cls: 'who', text: 'Undone · ' }, { cls: 'who', text: name }, { cls: 'said', text: ` ${mine || theirs}`.trimEnd() || lead });
   } else {
-    // the ladder (turn_strip.notice.tight): 1 the time; 2 the session's name; 3 ' before it was stopped' becomes
-    // ' before stopped'; 4 ' of your marks'. Never: the name, the counts, the undid lead
-    parts.push({ cls: 'who', text: name });
-    if (o.session) parts.push({ cls: 'said', text: ` in ${o.session}`, drop: 2 });
+    // the ladder (turn_strip.notice.tight; Mika E3 r3 D3): 1 the time; 2 the session's name cut to 5 and …; 3 the
+    // session goes; 4 ' before it was stopped' becomes ' before stopped'; 5 ' of your marks'; then the UI's two-line
+    // step; 6 the agent's name cut to 12 and …. Never: the counts, the undid lead
+    if (name.length > NOTICE_NAME_MAX) parts.push({ cls: 'who', text: name, drop: 6 }, { cls: 'who', text: cutTo(name, NOTICE_NAME_MAX), only: 6 });
+    else parts.push({ cls: 'who', text: name });
+    if (o.session) {
+      if (o.session.length > NOTICE_SESSION_MIN) parts.push({ cls: 'said', text: ` in ${o.session}`, drop: 2 }, { cls: 'said', text: ` in ${cutTo(o.session, NOTICE_SESSION_MIN)}`, only: 2, drop: 3 });
+      else parts.push({ cls: 'said', text: ` in ${o.session}`, drop: 3 });
+    }
     if (lead) parts.push({ cls: 'said', text: lead });
-    if (mine) parts.push({ cls: 'said', text: `${lead ? ' and' : ''} ${mine}` }, { cls: 'said', text: ' of your marks', drop: 4 });
+    if (mine) parts.push({ cls: 'said', text: `${lead ? ' and' : ''} ${mine}` }, { cls: 'said', text: ' of your marks', drop: 5 });
     else if (theirs && !lead) parts.push({ cls: 'said', text: ` ${theirs}` }, { cls: 'said', text: othersOf });
-    if (n.stopped) parts.push({ cls: 'said', text: ' before it was stopped', drop: 3 }, { cls: 'said', text: ' before stopped', only: 3 });
+    if (n.stopped) parts.push({ cls: 'said', text: ' before it was stopped', drop: 4 }, { cls: 'said', text: ' before stopped', only: 4 });
     if (o.time) parts.push({ cls: 't', text: `${TURN_COPY.sep}${o.time}`, drop: 1 });
   }
   const line = parts.filter((p) => p.only === undefined).map((p) => p.text).join('');

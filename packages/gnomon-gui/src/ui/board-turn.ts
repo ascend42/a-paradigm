@@ -26,7 +26,8 @@ import type { FoldedItem } from '../core/store.js';
 const REPLY_MIN_PX = 28;
 
 function partEl(doc: MiniDoc, p: TurnPart, turn: boolean): MiniEl {
-  const drop: Record<string, string> | null = p.drop !== undefined ? { 'data-drop': String(p.drop) } : p.only !== undefined ? { 'data-only': String(p.only) } : null;
+  // (a short form can itself go later: ' in billi…' shows from level 2 and goes at 3, so it carries both)
+  const drop: Record<string, string> | null = p.drop !== undefined || p.only !== undefined ? { ...(p.drop !== undefined ? { 'data-drop': String(p.drop) } : {}), ...(p.only !== undefined ? { 'data-only': String(p.only) } : {}) } : null;
   if (p.cls === 'tail') {
     const sub = p.sub ? h(doc, 'span', { class: 'tsub', 'data-drop': String(p.sub.drop) }, p.sub.text) : null;
     const tail = h(doc, 'span', { class: `tail ${p.tone ?? 'quiet'}${p.first ? ' first' : ''}`, ...drop }, h(doc, 'span', { class: 'tsep' }, TURN_COPY.sep), ...(sub && p.sub!.lead ? [sub] : []), p.text, ...(sub && !p.sub!.lead ? [sub] : []));
@@ -92,7 +93,7 @@ export interface BoardTurnStrip {
   live(): boolean;
 }
 
-export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number; menuRoom?: () => { top: number; bottom: number; left?: number } | null }): BoardTurnStrip {
+export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number; menuRoom?: () => { top: number; bottom: number; left?: number; right?: number } | null }): BoardTurnStrip {
   const doc = document as unknown as MiniDoc;
   const el = o.el;
   const show = document.createElement('button');
@@ -216,7 +217,8 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       const words = document.createElement('button');
       words.type = 'button';
       words.className = 'bd-menu-words';
-      words.textContent = row.title ?? '';
+      // (Mika E3 r3: the row's own parts, so it shortens by the slot's ladder and always keeps its time)
+      for (const p of row.parts) words.appendChild(partEl(doc, p, true) as unknown as Node);
       words.title = row.title ?? '';
       const id = `bring|${row.target!.key}|${row.target!.rev}`;
       words.dataset.undoKey = id;
@@ -241,11 +243,28 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     const room = o.menuRoom?.() ?? null;
     const bottom = Math.min(room?.bottom ?? strip.top, strip.top) - 4;
     const top = (room?.top ?? 0) + 4;
-    m.style.right = `${Math.max(0, strip.right - k.right)}px`;
     m.style.bottom = `${strip.bottom - bottom}px`;
     m.style.maxHeight = `${Math.max(0, bottom - top)}px`;
-    // inside the leaf: a menu wider than the room left of its key has its rows' words cut (whole in title=)
-    m.style.maxWidth = `${Math.max(0, k.right - Math.max(room?.left ?? strip.left, strip.left) - 4)}px`;
+    // Mika E3 r3: inside the stage. Its right edge on the key while the rows fit left of it; else the right edge goes
+    // out to the stage's right edge. A row that still does not fit shortens by the slot's ladder, the time always kept
+    const left = Math.max(room?.left ?? strip.left, strip.left) + 4;
+    const right = Math.min(room?.right ?? strip.right, strip.right) - 4;
+    m.style.maxWidth = '';
+    m.style.right = `${Math.max(0, strip.right - k.right)}px`;
+    for (const r of m.querySelectorAll('.bd-menu-row')) r.classList.remove('m-1', 'm-2', 'm-3', 'm-4');
+    const natural = m.scrollWidth;
+    if (natural > k.right - left) {
+      m.style.right = `${Math.max(0, strip.right - right)}px`;
+      m.style.maxWidth = `${Math.max(0, right - left)}px`;
+    } else m.style.maxWidth = `${Math.max(0, k.right - left)}px`;
+    for (const r of m.querySelectorAll<HTMLElement>('.bd-menu-row')) {
+      const w = r.querySelector<HTMLElement>('.bd-menu-words');
+      if (!w) continue;
+      for (const level of [1, 2, 3, 4]) {
+        if (w.scrollWidth <= w.clientWidth + 0.5) break;
+        r.classList.add(`m-${level}`);
+      }
+    }
   };
   const closeMenu = (back: boolean): void => {
     if (!menuOpen) return;
@@ -320,15 +339,22 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
 
   /** a notice or mark row drops by core order (the time, then ' of your marks'), and last becomes two lines (R5) */
   function fitSlot(row: HTMLElement): void {
-    row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'two-line');
+    row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5', 'tight-6', 'two-line', 'wrap');
     const line = row.querySelector<HTMLElement>('.bd-turn-line');
     if (!line) return;
     const over = (): boolean => line.scrollWidth > line.clientWidth + 0.5;
-    for (const level of [1, 2, 3, 4] as const) {
+    // the notice: 1 time, 2 session cut, 3 session gone, 4 'before stopped', 5 ' of your marks', two lines, 6 the
+    // name cut (Mika E3 r3 D3); the mark row: 1 time, 2 ' it'
+    const levels = row.classList.contains('bd-turn-mark') ? [1, 2] : [1, 2, 3, 4, 5];
+    for (const level of levels) {
       if (!over()) return;
       row.classList.add(`tight-${level}`);
     }
-    if (over()) row.classList.add('two-line');
+    if (!over()) return;
+    if (row.classList.contains('bd-turn-mark')) return;
+    row.classList.add('two-line');
+    if (over()) row.classList.add('tight-6');
+    if (over()) row.classList.add('wrap');
   }
 
   /** the turn row drops by core order until it fits: reply (when it overflows or is cut to nothing), name, more */

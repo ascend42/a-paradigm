@@ -16,14 +16,18 @@ describe('E3 round 2 word steps', () => {
     expect(rowText(r.parts, 2)).toBe('Claude changed it');
     expect(r.title).toBe('Claude changed this mark · 14:20');
   });
-  it('the notice ladder: time, the session\'s name, " before it was stopped" to " before stopped", then " of your marks"', () => {
-    const r = noticeStripRow(N({ stopped: true }), 'Claude', { others: [], more: 0, time: '14:20', session: 'billing-ui' });
-    expect(rowText(r.parts)).toBe('Claude in billing-ui changed 3 of your marks before it was stopped · 14:20');
-    expect(rowText(r.parts, 1)).toBe('Claude in billing-ui changed 3 of your marks before it was stopped');
-    expect(rowText(r.parts, 2)).toBe('Claude changed 3 of your marks before it was stopped');
-    expect(rowText(r.parts, 3)).toBe('Claude changed 3 of your marks before stopped');
-    expect(rowText(r.parts, 4)).toBe('Claude changed 3 before stopped');
-    expect(r.title).toBe('Claude in billing-ui changed 3 of your marks before it was stopped · 14:20');
+  it('the notice ladder (Mika E3 r3 D3): time, the session cut to 5 and …, the session, " before stopped", " of your marks", then the name cut to 12', () => {
+    const r = noticeStripRow(N({ stopped: true }), 'billing-totals-review-agent', { others: [], more: 0, time: '14:20', session: 'billing-ui' });
+    expect(rowText(r.parts)).toBe('billing-totals-review-agent in billing-ui changed 3 of your marks before it was stopped · 14:20');
+    expect(rowText(r.parts, 1)).toBe('billing-totals-review-agent in billing-ui changed 3 of your marks before it was stopped');
+    expect(rowText(r.parts, 2)).toBe('billing-totals-review-agent in billi… changed 3 of your marks before it was stopped');
+    expect(rowText(r.parts, 3)).toBe('billing-totals-review-agent changed 3 of your marks before it was stopped');
+    expect(rowText(r.parts, 4)).toBe('billing-totals-review-agent changed 3 of your marks before stopped');
+    expect(rowText(r.parts, 5)).toBe('billing-totals-review-agent changed 3 before stopped');
+    expect(rowText(r.parts, 6)).toBe('billing-tota… changed 3 before stopped');
+    expect(r.title).toBe('billing-totals-review-agent in billing-ui changed 3 of your marks before it was stopped · 14:20');
+    // a short name is never cut
+    expect(rowText(noticeStripRow(N(), 'Claude', { others: [], more: 0, time: '14:20' }).parts, 6)).toBe('Claude changed 3');
   });
 });
 

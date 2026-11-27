@@ -2029,7 +2029,7 @@ turnStrip = mountBoardTurn({
   menuRoom: () => {
     const foot = document.querySelector('.bd-host .bd-foot')?.getBoundingClientRect();
     const stage = document.querySelector('.bd-host .bd-stage')?.getBoundingClientRect();
-    return foot && stage ? { top: stage.top, bottom: foot.top, left: stage.left } : null;
+    return foot && stage ? { top: stage.top, bottom: foot.top, left: stage.left, right: stage.right } : null;
   },
 });
 boardRepaint = () => boardDock.repaint();

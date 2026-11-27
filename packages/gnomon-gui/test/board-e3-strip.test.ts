@@ -10,11 +10,12 @@ const N = (o: Partial<NoticeFacts> = {}): NoticeFacts => ({ key: 'turn:h/1', rev
 const time = '14:20';
 
 describe('E3 the notice row', () => {
-  it('changed and removed counted apart, of your marks, the time; drops the time, then (level 4) " of your marks"; never the name or counts', () => {
+  it('changed and removed counted apart, of your marks, the time; drops the time, then (level 5) " of your marks"; never the name or counts', () => {
     const r = noticeStripRow(N(), 'Claude', { others: [], more: 0, time });
     expect(rowText(r.parts)).toBe('Claude changed 3 · removed 2 of your marks · 14:20');
     expect(rowText(r.parts, 1)).toBe('Claude changed 3 · removed 2 of your marks');
-    expect(rowText(r.parts, 4)).toBe('Claude changed 3 · removed 2');
+    expect(rowText(r.parts, 4)).toBe('Claude changed 3 · removed 2 of your marks');
+    expect(rowText(r.parts, 5)).toBe('Claude changed 3 · removed 2');
     expect(r.keys).toEqual({ right: 'dismiss', undo: 'undo', more: 0 });
     expect(r.title).toBe('Claude changed 3 · removed 2 of your marks · 14:20');
   });

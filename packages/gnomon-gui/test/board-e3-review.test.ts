@@ -115,7 +115,9 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
       expect(meets(m.menu, m.foot)).toBe(false);
       // inside the leaf: never under the sessions column
       expect(m.menu!.l).toBeGreaterThanOrEqual(m.stage!.l - 1);
-      expect(Math.abs(m.menu!.r - m.more!.r)).toBeLessThanOrEqual(1);
+      // (Mika r3: at the 303 leaf the rows do not fit left of the key: the right edge goes out to the stage's)
+      if (o.decide) expect(m.menu!.r).toBeLessThanOrEqual(m.stage!.r);
+      else expect(Math.abs(m.menu!.r - m.more!.r)).toBeLessThanOrEqual(1);
       expect(m.after).toMatch(/^more\|/);
       expect(m.role).toEqual([null]);
       if (o.decide) expect(a.leafW).toBeLessThan(340);
@@ -159,4 +161,53 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
     expect(before.title).toBe('Keep these changes · after this, undo them mark by mark while the board still can');
     // (the way back to the key's own title needs a check point after a press: stated, not driven here)
   }, 120_000);
+
+  // ── round 3 (Mika r3 items 1 and 2) ──
+  const LONG_NAME = 'billing-totals-review-agent';
+  /** the long form by an agent whose label is long */
+  const LONGN = (n = 1) => { const t = LONG(n) as { read: string; as: string }; return { ...t, read: t.read.split("agent: 'claude'").join(`agent: '${LONG_NAME}'`).split('p:7k2m9q4x/claude').join(`p:7k2m9q4x/${LONG_NAME}`) }; };
+  const SHOTS_R3 = '../../.e3fix-logs/shots/r3';
+  const realShot = async (actions: unknown[], o: { width: number; height: number; shot: string; theme?: string }): Promise<Record<string, unknown>> => {
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const r = (await shootLeaf({ chrome, url: `${fixtureUrl(p.url, 'desk', o.theme ?? 'day', 'off')}&dim=1`, width: o.width, height: o.height, timeoutMs: 90_000, actions: [ERRORS, ...actions, { read: 'globalThis.__errs', as: 'errors' }] })) as { png: Buffer; acted: Record<string, unknown> };
+    mkdirSync(SHOTS_R3, { recursive: true });
+    writeFileSync(`${SHOTS_R3}/${o.shot}.png`, r.png);
+    return r.acted;
+  };
+  for (const o of [{ leaf: 423, decide: false }, { leaf: 303, decide: true }])
+    for (const theme of ['day', 'night'])
+      it(`r3 D3 (real paint): at the ${o.leaf} leaf a long agent name is cut, never the counts or the undid lead (${theme})`, async () => {
+        const a = await realShot([...openBoard, ...rectAt(160, 160), ...rectAt(320, 160), LONGN(), ...(o.decide ? [{ press: '#composer-text' }, ...toDecide] : []), { wait: 700 }, PARTS], { width: 1024, height: 900, theme, shot: `long-name-${theme}-leaf${o.leaf}` });
+        expect(a.errors).toEqual([]);
+        const s = a.parts as Parts;
+        expect(Math.abs(s.leafW - o.leaf)).toBeLessThanOrEqual(2);
+        expect(s.cut).toEqual([]);
+        expect(s.over).toBe(false);
+        expect(s.painted).toMatch(/undid your change and changed 1 · removed 1/);
+        expect(s.painted).not.toContain(LONG_NAME);
+        expect(s.painted).toMatch(/^billing-tota…/);
+        expect(s.cls).toMatch(/two-line/);
+      }, 120_000);
+
+  const MENU_ROWS = { read: `(() => { const b = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }; const m = document.querySelector('#board-turn .bd-undo-menu');
+    return { menu: b(m), stage: b(document.querySelector('.bd-host .bd-stage')), foot: b(document.querySelector('.bd-host .bd-foot')), leafW: Math.round(document.querySelector('.bd-host .bd-leaf').getBoundingClientRect().width),
+      rows: [...m.querySelectorAll('.bd-menu-row')].map((row) => { const w = row.querySelector('.bd-menu-words'); const parts = [...w.querySelectorAll('span')].filter((e) => getComputedStyle(e).display !== 'none'); return { key: b(row.querySelector('[data-undo-key^="undo|"]')), words: parts.map((e) => e.textContent).join(''), clipped: w.scrollWidth > w.clientWidth + 0.5 }; }) }; })()`, as: 'rows' };
+  type MenuRows = { menu: NonNullable<Box>; stage: NonNullable<Box>; foot: NonNullable<Box>; leafW: number; rows: Array<{ key: NonNullable<Box>; words: string; clipped: boolean }> };
+  const inside = (a: NonNullable<Box>, b: NonNullable<Box>): boolean => a.l >= b.l - 0.5 && a.r <= b.r + 0.5 && a.t >= b.t - 0.5 && a.b <= b.b + 0.5;
+  for (const o of [{ leaf: 303, width: 1024, decide: true }, { leaf: 423, width: 1024, decide: false }, { leaf: 560, width: 1161, decide: false }])
+    for (const theme of ['day', 'night'])
+      it(`r3 item 2: the +k menu at the ${o.leaf} leaf: rows keep their time, their undo keys inside the menu, the menu inside the stage and clear of the foot (${theme})`, async () => {
+        const a = await realShot([...openBoard, ...rectAt(30, 120), ...rectAt(110, 120), ...rectAt(190, 120), turn(1, recolour(0)), turn(2, recolour(1)), turn(3, recolour(2)), ...(o.decide ? [{ press: '#composer-text' }, ...toDecide, { wait: 600 }] : []), ARM, { press: KEY('more') }, ARM, MENU_ROWS], { width: o.width, height: 900, theme, shot: `menu-${theme}-leaf${o.leaf}` });
+        expect(a.errors).toEqual([]);
+        const m = a.rows as MenuRows;
+        expect(Math.abs(m.leafW - o.leaf)).toBeLessThanOrEqual(2);
+        expect(inside(m.menu, m.stage)).toBe(true);
+        expect(meets(m.menu, m.foot)).toBe(false);
+        expect(m.rows).toHaveLength(2);
+        for (const r of m.rows) {
+          expect(inside(r.key, m.menu)).toBe(true);
+          expect(r.words).toMatch(/^Claude changed 1.* · \d\d:\d\d$/);
+          expect(r.clipped).toBe(false);
+        }
+      }, 120_000);
 });
