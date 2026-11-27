@@ -2025,6 +2025,12 @@ turnStrip = mountBoardTurn({
   onFreeze: (on) => boardDock.freezeNotices(on),
   onFocusBoard: () => boardDock.focusBoard(),
   onTrace: (key) => boardDock.traceNotice(key),
+  // Mika E3 B3: the +k menu stays over the board's stage, above the hands foot (it never covers a draw key or the stop)
+  menuRoom: () => {
+    const foot = document.querySelector('.bd-host .bd-foot')?.getBoundingClientRect();
+    const stage = document.querySelector('.bd-host .bd-stage')?.getBoundingClientRect();
+    return foot && stage ? { top: stage.top, bottom: foot.top } : null;
+  },
 });
 boardRepaint = () => boardDock.repaint();
 boardLook = (t) => boardDock.setTheme(t);

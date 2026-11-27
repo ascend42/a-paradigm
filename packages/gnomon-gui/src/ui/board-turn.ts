@@ -92,7 +92,7 @@ export interface BoardTurnStrip {
   live(): boolean;
 }
 
-export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number }): BoardTurnStrip {
+export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number; menuRoom?: () => { top: number; bottom: number } | null }): BoardTurnStrip {
   const doc = document as unknown as MiniDoc;
   const el = o.el;
   const show = document.createElement('button');
@@ -114,6 +114,18 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
   let focusIn = false;
   let frozen = false;
   let lastNotices: NoticeStrip | null = null;
+  /** Mika E3 C2: the next paint focuses the slot's undo key (a notice was brought from the menu) */
+  let focusSlotUndo = false;
+  /** true while paint rebuilds the rows and puts focus back */
+  let rebuilding = false;
+  /** Mika E3 C4: the key the person pressed (its row and column): aria-busy, and the working mark after 300 ms */
+  let pressed: { id: string; key: string; col: string } | null = null;
+  const colOf = (k: HTMLElement): string => (k.closest('.bd-undo-menu') ? 'menu-' : '') + ([...(k.closest('.bd-col')?.classList ?? [])].find((c) => c !== 'bd-col') ?? '');
+  /** a key in the row of set `key`, in column `col` (the slot's or the menu's row) */
+  const keyAt = (key: string, col: string): HTMLElement | null => {
+    for (const k of el.querySelectorAll<HTMLElement>('[data-undo-key]')) if (targets.get(k.dataset.undoKey!)?.key === key && colOf(k) === col) return k;
+    return null;
+  };
   const freeze = (): void => {
     const on = hover || focusIn || menuOpen;
     if (on === frozen) return;
@@ -136,10 +148,20 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
   el.addEventListener('pointerleave', () => ((hover = false), freeze()));
   el.addEventListener('focusin', () => ((focusIn = true), freeze()));
   el.addEventListener('focusout', (e) => {
+    // (a repaint rebuilds the rows: the focused key it removes is not focus leaving; paint settles focusIn after)
+    if (rebuilding) return;
     if (e.relatedTarget instanceof Node && el.contains(e.relatedTarget)) return;
     focusIn = false;
+    // Mika E3 D2: the trace ends with the focus (a pointer still over a row keeps its own)
+    if (traced !== null && !hover) (traced = null), o.onTrace?.(null);
+    // Mika E3 C1: focus left the strip and its menu: the menu closes where it is (the U2 freeze then ends)
+    closeMenu(false);
     freeze();
   });
+  // Mika E3 C1: a press outside the strip and its menu closes the menu, focus left where the press put it
+  document.addEventListener('pointerdown', (e) => {
+    if (menuOpen && !(e.target instanceof Node && el.contains(e.target))) closeMenu(false);
+  }, true);
   const keyEl = (what: string, word: string, target: { key: string; rev: number; id?: string; own?: boolean }, aria: string | undefined, title?: string): HTMLElement => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -171,8 +193,8 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     if (row.kind === 'notice') {
       const more = k.more > 0 ? keyEl('more', `+${k.more} ▾`, t, row.aria?.more, row.aria?.more) : null;
       if (more) {
-        more.setAttribute('aria-haspopup', 'menu');
         more.setAttribute('aria-expanded', String(menuOpen));
+        more.setAttribute('aria-controls', 'bd-undo-menu');
       }
       keys.appendChild(col('bd-more-col', more));
     }
@@ -185,7 +207,8 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
   function menuEl(rows: readonly TurnStripRow[]): HTMLElement {
     const m = document.createElement('div');
     m.className = 'bd-menu bd-undo-menu';
-    m.setAttribute('role', 'menu');
+    // Mika E3 C2: a list of rows, each with its own key: no menu role (its keys are Tab stops), +k keeps aria-expanded
+    m.id = 'bd-undo-menu';
     for (const row of rows) {
       const line = document.createElement('div');
       line.className = 'bd-menu-row';
@@ -193,7 +216,6 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       const words = document.createElement('button');
       words.type = 'button';
       words.className = 'bd-menu-words';
-      words.setAttribute('role', 'menuitem');
       words.textContent = row.title ?? '';
       const id = `bring|${row.target!.key}|${row.target!.rev}`;
       words.dataset.undoKey = id;
@@ -204,6 +226,24 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     }
     return m;
   }
+  /**
+   * Mika E3 B3 (the orchestrator's ruling: the menu never covers the foot): the menu goes right after the +k key in
+   * the DOM (C2), its right edge on the key (more_menu.key), its bottom above the room the page gives (the hands
+   * foot's top), its height capped to that room with the rows scrolling inside.
+   */
+  const placeMenu = (m: HTMLElement): void => {
+    const key = el.querySelector<HTMLElement>('[data-undo-key^="more|"]');
+    if (!key) return;
+    key.after(m);
+    const strip = el.getBoundingClientRect();
+    const k = key.getBoundingClientRect();
+    const room = o.menuRoom?.() ?? null;
+    const bottom = Math.min(room?.bottom ?? strip.top, strip.top) - 4;
+    const top = (room?.top ?? 0) + 4;
+    m.style.right = `${Math.max(0, strip.right - k.right)}px`;
+    m.style.bottom = `${strip.bottom - bottom}px`;
+    m.style.maxHeight = `${Math.max(0, bottom - top)}px`;
+  };
   const closeMenu = (back: boolean): void => {
     if (!menuOpen) return;
     menuOpen = false;
@@ -229,7 +269,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       menuOpen = true;
       freeze();
       k.setAttribute('aria-expanded', 'true');
-      el.appendChild(menuEl((lastNotices?.behind ?? []) as TurnStripRow[]));
+      placeMenu(menuEl((lastNotices?.behind ?? []) as TurnStripRow[]));
       return;
     }
     // dropped while pending, held or link-down: never queued, never replayed
@@ -237,8 +277,20 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     const target = targets.get(id);
     if (!target) return;
     const act: NoticeWhat = what === 'bring' ? 'bring' : (WORD_WHAT[id.split('|').at(-1)!] ?? 'undo');
-    if (act === 'bring') closeMenu(false);
+    // Mika E3 C2: a notice brought from the menu takes the slot, and focus goes to the slot's undo key
+    // (focus moves to the slot's key BEFORE the menu goes: a removed focused row would drop focus to the body and end
+    // the U2 freeze, which gives the slot back to the newest before the brought notice is drawn)
+    if (act === 'bring') {
+      focusSlotUndo = true;
+      el.querySelector<HTMLElement>('.bd-turn-notice > .bd-turn-keys > .bd-undo-col > [data-undo-key]')?.focus({ preventScroll: true });
+      closeMenu(false);
+    }
+    else pressed = { id, key: target.key, col: colOf(k) };
     o.onNoticeKey?.(act, target, e);
+  });
+  // Mika E3 B2: a HELD Enter or Space never presses again (the key under it may be redo by then)
+  el.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.repeat && (e.target as HTMLElement | null)?.closest?.('[data-undo-key]')) e.preventDefault();
   });
   el.addEventListener('keydown', (e) => {
     if (!menuOpen) return;
@@ -313,18 +365,26 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
         const had = document.activeElement;
         // a focused key whose row leaves: focus goes to the board, never to another key (undo-key press 4)
         const hadKey = had instanceof HTMLElement && el.contains(had) ? (had.dataset.undoKey ?? null) : null;
+        // Mika E3 B2: the focused key's row and column, so undo's key becoming redo keeps the focus
+        const hadAt = hadKey !== null && targets.has(hadKey) ? { key: targets.get(hadKey)!.key, col: colOf(had as HTMLElement) } : null;
         targets = new Map();
         if (menuOpen && !(v.notices?.behind.length ?? 0)) closeMenu(false);
         const hadWork = had instanceof HTMLElement && el.contains(had) ? (had.dataset.stripWork ?? null) : null;
         const hadShow = had === show;
+        rebuilding = true;
         while (el.firstChild) el.removeChild(el.firstChild);
         for (const r of rows) el.appendChild(r.kind === 'notice' || r.kind === 'mark' ? slotRow(r) : (renderTurnRow(doc, r, Date.now()) as unknown as Node));
-        if (menuOpen && v.notices) el.appendChild(menuEl(v.notices.behind));
+        if (menuOpen && v.notices) placeMenu(menuEl(v.notices.behind));
         // keys no longer drawn forget their arming (a key drawn again is armed afresh)
         const live = new Set([...el.querySelectorAll<HTMLElement>('[data-undo-key]')].map((k) => k.dataset.undoKey!));
         for (const id of [...armed.keys()]) if (!live.has(id)) armed.delete(id);
-        if (hadKey !== null) {
-          const again = el.querySelector<HTMLElement>(`[data-undo-key="${CSS.escape(hadKey)}"]`);
+        if (focusSlotUndo) {
+          focusSlotUndo = false;
+          const u = el.querySelector<HTMLElement>('.bd-turn-notice > .bd-turn-keys > .bd-undo-col > [data-undo-key]');
+          if (u) u.focus({ preventScroll: true });
+        } else if (hadKey !== null) {
+          // the same key; else the same row's key in the same column (undo became redo: armed afresh, U1); else the board
+          const again = el.querySelector<HTMLElement>(`[data-undo-key="${CSS.escape(hadKey)}"]`) ?? (hadAt ? keyAt(hadAt.key, hadAt.col) : null);
           if (again) again.focus({ preventScroll: true });
           else o.onFocusBoard?.();
         }
@@ -337,17 +397,45 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
         if (hadWork !== null) el.querySelector<HTMLElement>(`[data-strip-work="${CSS.escape(hadWork)}"]`)?.focus({ preventScroll: true });
         // Aegis L3: show chat is moved into the rebuilt row, which detaches it: its focus comes back with it
         if (hadShow && document.activeElement !== show) show.focus({ preventScroll: true });
+        rebuilding = false;
+        if (focusIn && !el.contains(document.activeElement)) {
+          focusIn = false;
+          if (traced !== null && !hover) (traced = null), o.onTrace?.(null);
+          closeMenu(false);
+          freeze();
+        }
       }
       const turn = el.querySelector<HTMLElement>('.bd-turn-turn');
       if (turn) fit(turn);
       // S1.4 E3: every undo-family key disabled while one is pending past 300 ms or the board is held
       const n = v.notices;
-      const off = !!n && (n.held !== null || (n.pending !== null && Date.now() - n.pending.since >= UNDO_QUIET_MS));
+      const slow = !!n && n.pending !== null && Date.now() - n.pending.since >= UNDO_QUIET_MS;
+      const off = !!n && (n.held !== null || slow);
+      if (!n?.pending) pressed = null;
+      // Mika E3 C4 (undo-key.state-notes.pending): the pressed key, or its row's key in its column, is busy at once
+      // and shows the working mark before its words once the answer is slow
+      const busy = pressed ? (el.querySelector<HTMLElement>(`[data-undo-key="${CSS.escape(pressed.id)}"]`) ?? keyAt(pressed.key, pressed.col)) : null;
+      // Mika E3 C5, Aegis N-5: a held key's title and description name the real hold, and give back its own after
+      const heldWords = n?.held === 'link-down' ? UNDO_COPY.linkDown : n?.held === 'catching-up' ? UNDO_COPY.catchingUp : n?.held === 'out-of-date' ? UNDO_COPY.outOfDate : null;
       for (const k of el.querySelectorAll<HTMLElement>('[data-undo-key]')) {
         if (k.dataset.undoKey!.startsWith('more|') || k.dataset.undoKey!.startsWith('bring|')) continue;
         if (off) k.setAttribute('aria-disabled', 'true');
         else k.removeAttribute('aria-disabled');
-        if (n?.held) k.title = UNDO_COPY.linkDown;
+        if (k === busy) k.setAttribute('aria-busy', 'true');
+        else k.removeAttribute('aria-busy');
+        k.classList.toggle('working', k === busy && slow);
+        if (k === busy && slow && !k.querySelector('.spin')) k.prepend(h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }) as unknown as Node);
+        else if (!(k === busy && slow)) k.querySelector('.spin')?.remove();
+        if (heldWords !== null) {
+          if (k.dataset.ownTitle === undefined) k.dataset.ownTitle = k.getAttribute('title') ?? '';
+          k.title = heldWords;
+          k.setAttribute('aria-description', heldWords);
+        } else if (k.dataset.ownTitle !== undefined) {
+          if (k.dataset.ownTitle) k.title = k.dataset.ownTitle;
+          else k.removeAttribute('title');
+          delete k.dataset.ownTitle;
+          k.removeAttribute('aria-description');
+        }
       }
       for (const r of el.querySelectorAll<HTMLElement>('.bd-turn-notice, .bd-turn-mark')) fitSlot(r);
     },

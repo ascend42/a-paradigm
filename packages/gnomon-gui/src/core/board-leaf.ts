@@ -386,6 +386,9 @@ export const UNDO_COPY = Object.freeze({
   busy: 'Not undone · the board was busy; press undo again',
   other: 'Not undone · nothing was changed',
   linkDown: 'Not connected · this can’t be undone until the board is back',
+  /** E3 review C5 (the orchestrator's words, for Luna): the other two holds, on a key's title and description */
+  catchingUp: 'Catching up with the board · this can be pressed in a moment',
+  outOfDate: 'This board is out of date · fold it and open it again',
   pushedOut: (name: string, at: string): string => `An older change of ${name}’s from ${at} can’t be undone in one step now`,
   attrOff: 'Who changed what couldn’t be checked · the marks themselves match',
   /** the partial tail: changed since, removed since, couldn't be put back, joined by ', ' */

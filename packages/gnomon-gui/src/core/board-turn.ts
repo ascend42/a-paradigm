@@ -301,9 +301,10 @@ export function noticeStripRow(n: NoticeFacts, name: string, o: { others: readon
     done: n.state === 'done',
     keys: { right: n.state === 'done' ? null : 'dismiss', undo: n.state === 'done' ? 'redo' : 'undo', more: n.state === 'done' ? 0 : o.more },
     aria: {
-      undo: n.state === 'done' ? `Redo · put ${name}’s changes back` : `Undo ${name}’s turn of ${o.time}${counts ? ` · it ${counts}${mine ? ' of your marks' : ''}` : ''}`,
+      // (Mika E3 D4: the undid lead is in the name too: 'Undo Claude's turn of 10:07 · it undid your change and changed 1')
+      undo: n.state === 'done' ? `Redo · put ${name}’s changes back` : `Undo ${name}’s turn of ${o.time}${lead || counts ? ` · it${lead}${lead && counts ? ' and' : ''}${counts ? ` ${counts}${mine ? ' of your marks' : ''}` : ''}` : ''}`,
       ...(n.state === 'done' ? {} : { right: 'Dismiss · keep these changes' }),
-      ...(o.more > 0 ? { more: `${o.more} more changes you can undo` } : {}),
+      ...(o.more > 0 ? { more: `${o.more} more ${o.more === 1 ? 'change' : 'changes'} you can undo` } : {}),
     },
     target: { key: n.key, rev: n.rev },
   };

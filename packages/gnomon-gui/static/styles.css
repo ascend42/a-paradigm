@@ -1961,7 +1961,14 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-turn-notice.two-line .bd-turn-line{flex-basis:100%;height:20px}
 .bd-turn-notice.two-line .bd-turn-keys{margin-left:auto}
 /* the +k menu opens UPWARD over the board, its right edge on the key column, never over the strip (board-centre-only) */
-#board-turn .bd-undo-menu{position:absolute;top:auto;left:auto;right:14px;bottom:calc(100% + 4px);z-index:30}
+/* Mika E3 B3: ui/board-turn.ts placeMenu sets right (the key's right edge), bottom (above the hands foot) and max-height */
+#board-turn .bd-undo-menu{position:absolute;top:auto;left:auto;right:14px;bottom:calc(100% + 4px);z-index:30;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
+/* Mika E3 B1: the notice and mark words are cut only by the ladder and the two-line step, never piece by piece */
+.bd-turn-notice .said,.bd-turn-mark .said{flex:none;overflow:visible}
+/* Mika E3 C4 (undo-key.state-notes.pending): the working mark before the words once the answer is slow */
+.bd-undo-key.working{display:inline-flex;align-items:center;gap:6px}
+.bd-undo-key .spin{width:9px;height:9px;flex:none;box-sizing:border-box;border:1.5px solid var(--rule);border-top-color:var(--key-edge);border-radius:50%;animation:turn-spin 0.9s linear infinite}
+[data-motion="reduced"] .bd-undo-key .spin{animation:none}
 .bd-menu-row{display:flex;align-items:center;gap:8px}
 .bd-menu-words{flex:1 1 auto;text-align:left;background:none;border:0;color:var(--ink2);font:inherit;padding:4px 8px;cursor:default}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}

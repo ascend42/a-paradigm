@@ -99,3 +99,29 @@ describe('E3 cut-outs (R7) and the trace', () => {
     expect(t[0]).toMatchObject({ left: 98, top: 48 });
   });
 });
+
+describe('E3 review C3 (Mika; the orchestrator\'s ruling): the words sign never covers the words', () => {
+  const HALF: Record<string, number> = { seal: 11, ring: 3, counter: COUNTER.half };
+  const cases = [
+    { name: 'short words', labelBox: { x: 110, y: 70, width: 40, height: 20 } },
+    { name: 'words to the right edge', labelBox: { x: 104, y: 60, width: 112, height: 20 } },
+    { name: 'words to the bottom right', labelBox: { x: 104, y: 104, width: 112, height: 22 } },
+    { name: 'one line filling the mark', labelBox: { x: 100, y: 50, width: 120, height: 80 } },
+  ];
+  for (const zoom of [0.25, 0.5, 1, 4])
+    for (const c of cases)
+      for (const by of [CLAUDE, YOU])
+        it(`at ${zoom * 100}%, ${c.name}, words by ${by.cls}: the sign's box never meets the label's box`, () => {
+          const m = mark({ id: 's', kind: 'sticky', author: by.cls === 'human' ? MIKA : YOU, wordsBy: by, labelBox: c.labelBox });
+          const items = overlayItems([m], at(zoom));
+          const words = of(items, 'words')[0]!;
+          expect(words).toBeDefined();
+          const lab = { l: c.labelBox.x * zoom, t: c.labelBox.y * zoom, r: (c.labelBox.x + c.labelBox.width) * zoom, b: (c.labelBox.y + c.labelBox.height) * zoom };
+          // the words sign is the last seal, ring or counter drawn for the mark
+          const sign = items.filter((i) => i.type === 'seal' || i.type === 'ring' || i.type === 'counter').at(-1) as OverlayItem & { left: number; top: number };
+          expect(sign).toBeDefined();
+          const h = HALF[sign.type]!;
+          const meets = sign.left - h < lab.r && lab.l < sign.left + h && sign.top - h < lab.b && lab.t < sign.top + h;
+          expect(meets, JSON.stringify({ sign, lab })).toBe(false);
+        });
+});

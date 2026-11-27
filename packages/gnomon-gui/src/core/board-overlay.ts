@@ -293,6 +293,25 @@ export const CHIP_HALF = 9;
 export const SELECTED_OFF = 7;
 export const SELECTED_BELOW = ENGINE_HANDLE_REACH + 2 + CHIP_HALF;
 
+/** The gap between the words' rule and their sign (Mika E3 C3). */
+export const WORDS_SIGN_GAP = 2;
+
+/**
+ * Mika E3 C3: where the words sign (half-size `half`) stands for a label whose rule runs from `left` for `width` at
+ * screen `y`, inside the mark's box `box`, never over the words: its left edge at the rule's end + 2, at the rule's
+ * height; where the box's right edge would pull it back over the words, below the rule (its top at the rule + 2) at
+ * the rule's end, kept inside the box. Null when neither fits (the caller draws the ring).
+ */
+export function wordsSignAt(left: number, width: number, y: number, box: { left: number; top: number; width: number; height: number }, half: number): { left: number; top: number } | null {
+  const end = left + width;
+  const maxLeft = box.left + box.width - half - WORDS_SIGN_GAP;
+  const beside = end + WORDS_SIGN_GAP + half;
+  if (beside <= maxLeft) return { left: beside, top: Math.min(y, box.top + box.height - half - WORDS_SIGN_GAP) };
+  const below = { left: Math.min(end, maxLeft), top: y + WORDS_SIGN_GAP + half };
+  if (below.top + half <= box.top + box.height - WORDS_SIGN_GAP && below.left - half >= box.left) return below;
+  return null;
+}
+
 /**
  * Everything the host draws over the marks, in paint order. `left`/`top` of a pin, hollow pin, seal or ring is the
  * point it is CENTRED on; a chip's is its left edge and vertical centre. A label (the text inside a sticky or a
@@ -387,11 +406,16 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
       const w = Math.max(1, m.labelBox.width * view.zoom);
       const y = l.top + m.labelBox.height * view.zoom;
       out.push({ type: 'words', id: m.id, left: l.left, top: y, width: w });
-      // the seal at the rule's right end, clamped inside the mark (R9)
-      const half = low ? RING_HALF : SEAL_HALF;
-      const at = { left: Math.min(l.left + w, box.left + box.width - half - 2), top: Math.min(y, box.top + box.height - half - 2) };
-      if (low || m.wordsBy.cls !== 'agent') out.push({ type: m.wordsBy.cls === 'human' ? 'counter' : 'ring', id: m.id, ...at, ...(m.wordsBy.cls === 'human' ? { disc: true } : {}) } as OverlayItem);
-      else named({ ...m, author: m.wordsBy }, at, 'mark', false, SEAL_HALF);
+      // Mika E3 C3 (the orchestrator's ruling): the sign never covers the words. Its left edge at the rule's end + 2;
+      // where the mark's right edge would pull it back over the words, below the rule (its top at the rule + 2),
+      // inside the mark; where neither fits, the ring beside the rule's end
+      const human = m.wordsBy.cls === 'human';
+      const want = low || m.wordsBy.cls !== 'agent' ? (human ? COUNTER.half : RING_HALF) : SEAL_HALF;
+      const ring = (): void => void out.push({ type: human ? 'counter' : 'ring', id: m.id, ...(wordsSignAt(l.left, w, y, box, human ? COUNTER.half : RING_HALF) ?? { left: l.left + w + WORDS_SIGN_GAP + (human ? COUNTER.half : RING_HALF), top: y }), ...(human ? { disc: true } : {}) } as OverlayItem);
+      const at = wordsSignAt(l.left, w, y, box, want);
+      if (want !== SEAL_HALF) ring();
+      else if (at) named({ ...m, author: m.wordsBy }, at, 'mark', false, SEAL_HALF);
+      else ring();
     }
   }
   for (const c of opts.cutouts ?? []) {
