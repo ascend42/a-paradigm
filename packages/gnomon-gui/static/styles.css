@@ -1927,6 +1927,17 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-over .bd-textbox.rule { border: 0; border-top: 1px dashed var(--ink2); height: 1px; }
 .bd-ring{position:absolute;width:6px;height:6px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--ink);background:var(--sheet);pointer-events:none}
 [data-theme="night"] .bd-ring{background:var(--ground)}
+/* S1.4 E3 (author-seal.other_hands, board-trace, turn_strip.notice.cut_out): host DOM, no pointer, no focus */
+.bd-counter.disc{background:var(--ink)}
+.bd-words{position:absolute;height:0;border-bottom:1px dashed var(--ink2);pointer-events:none}
+.bd-cutout{position:absolute;pointer-events:none;--arm:6px}
+.bd-tick{position:absolute;width:var(--arm);height:var(--arm);border:0 solid var(--sec)}
+.bd-cutout.traced .bd-tick{border-color:var(--ink)}
+.bd-tick.tl{left:0;top:0;border-left-width:1px;border-top-width:1px}
+.bd-tick.tr{right:0;top:0;border-right-width:1px;border-top-width:1px}
+.bd-tick.bl{left:0;bottom:0;border-left-width:1px;border-bottom-width:1px}
+.bd-tick.br{right:0;bottom:0;border-right-width:1px;border-bottom-width:1px}
+.bd-trace{position:absolute;box-sizing:border-box;border:1px dashed var(--ink2);pointer-events:none}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
 .bd-hand-s{color:var(--sec)}
 .bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}

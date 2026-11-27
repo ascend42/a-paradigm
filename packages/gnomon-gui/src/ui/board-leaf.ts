@@ -748,6 +748,30 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         const s = sealElement(it.seal, it.name);
         place(s, it.left - 11, it.top - 11);
         kids.push(s);
+      } else if (it.type === 'counter') {
+        // S1.4 E3 countermark: the ring's shape (a filled disc for you); nothing to press, no title, no pointer
+        const r = h('span', `bd-ring bd-counter${it.disc ? ' disc' : ''}`, { 'aria-hidden': 'true' });
+        place(r, it.left - 3, it.top - 3);
+        kids.push(r);
+      } else if (it.type === 'words') {
+        const w = h('span', 'bd-words', { 'aria-hidden': 'true' });
+        place(w, it.left, it.top);
+        w.style.width = `${Math.round(it.width)}px`;
+        kids.push(w);
+      } else if (it.type === 'cutout') {
+        // four corner ticks round the removed mark's last box: no fill, no words, nothing between the ticks
+        const c = h('div', `bd-cutout${it.traced ? ' traced' : ''}`, { 'aria-hidden': 'true' }, ...['tl', 'tr', 'bl', 'br'].map((k) => h('span', `bd-tick ${k}`)));
+        place(c, it.left, it.top);
+        c.style.width = `${Math.round(it.width)}px`;
+        c.style.height = `${Math.round(it.height)}px`;
+        c.style.setProperty('--arm', `${Math.max(1, Math.round(it.arm))}px`);
+        kids.push(c);
+      } else if (it.type === 'trace') {
+        const t = h('div', 'bd-trace', { 'aria-hidden': 'true' });
+        place(t, it.left, it.top);
+        t.style.width = `${Math.round(it.width)}px`;
+        t.style.height = `${Math.round(it.height)}px`;
+        kids.push(t);
       } else if (it.type === 'textbox') {
         const b = h('div', `bd-textbox${it.form === 'box' ? '' : ` ${it.form}`}`);
         place(b, it.left, it.top);

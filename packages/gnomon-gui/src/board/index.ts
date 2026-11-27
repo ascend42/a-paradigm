@@ -246,7 +246,12 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
       };
       const authorIn = (n: DimFoldNode | undefined): BoardAuthor | undefined => {
         if (!n) return undefined; // not in the rendered state: drawn since, so yours
-        const by = dimHandOf(n) as { cls?: unknown; agent?: unknown } | undefined;
+        return authorOfBy(dimHandOf(n), n.hsid);
+      };
+      /** A fold hand as a BoardAuthor (S1.4 E3: the drawn hand, and the attribution fields of the view) */
+      const authorOfBy = (raw: unknown, hsid: string | null | undefined): BoardAuthor => {
+        const n = { hsid };
+        const by = raw as { cls?: unknown; agent?: unknown } | undefined;
         if (by?.cls === 'human') return HUMAN;
         // the seal and the foot key on the principal PLUS the agent (design author-seal session_hint.seal): every Claude is not one hand
         if (by?.cls === 'agent' && typeof by.agent === 'string' && by.agent.length > 0) {
@@ -451,7 +456,38 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           ...(el.type === 'text' ? { textSize: BOARD_FONT_SIZE } : {}),
           ...(g?.stubKind !== undefined ? { stubKind: g.stubKind } : {}),
           ...(el.containerId ? { labelOf: el.containerId } : {}),
+          ...attributionOf(el, nodeId),
         };
+      };
+      /**
+       * S1.4 E3 item 1 (author-seal.other_hands, .restored): who changed the mark, who changed it that is not its own
+       * hand, who wrote words into it, whether an undo re-added it; for an open mark its last run, and the box of a
+       * bound label. All from the fold the board last rendered, never from an element.
+       */
+      // one index per scene array (the engine hands back the same array until the scene changes): never a scan per mark
+      let labels: { of: unknown; map: Map<string, Element> } | null = null;
+      const labelIndex = (): Map<string, Element> => {
+        const els = api.getSceneElements() as unknown as readonly Element[];
+        if (labels?.of !== els) labels = { of: els, map: new Map(els.filter((x) => x.type === 'text').map((x) => [x.id, x])) };
+        return labels.map;
+      };
+      const attributionOf = (el: Element, nodeId: string | undefined): Partial<BoardMarkView> => {
+        const n = nodeId !== undefined ? prev.nodes.get(nodeId) : undefined;
+        const out: Partial<BoardMarkView> = {};
+        if (n?.changedBy) out.changedBy = authorOfBy(n.changedBy, n.changedHsid ?? null);
+        if (n?.otherBy) out.otherBy = authorOfBy(n.otherBy, null);
+        if (n?.wordsBy) out.wordsBy = authorOfBy(n.wordsBy, null);
+        if (n?.restoredFrom) out.restoredFrom = authorOfBy(n.restoredFrom.by, null);
+        const pts = el.points;
+        if (pts && pts.length > 1) {
+          const a = pts[pts.length - 2]!;
+          const b = pts[pts.length - 1]!;
+          out.lastRun = { x1: el.x + a[0], y1: el.y + a[1], x2: el.x + b[0], y2: el.y + b[1] };
+        }
+        const bound = (el as { boundElements?: ReadonlyArray<{ type: string; id: string }> | null }).boundElements?.find((b) => b.type === 'text');
+        const label = bound ? labelIndex().get(bound.id) : undefined;
+        if (label && !label.isDeleted) out.labelBox = { x: label.x, y: label.y, width: label.width, height: label.height };
+        return out;
       };
       /** Repaint every mark from its tokens (a theme change, or a paste that brought another look). */
       const recolourAll = (): void => {
