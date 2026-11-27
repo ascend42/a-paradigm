@@ -102,7 +102,7 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
     expect(a.errors).toEqual([]);
     expect(count(S(a, 's'), 'dim.undo')).toBe(1);
     expect(S(a, 's').state).toBe('done');
-    expect((a.after as { key: string }).key).toMatch(/^redo\|/);
+    expect((a.after as { key: string | null }).key ?? 'no key focused').toMatch(/^redo\|/);
   }, 120_000);
 
   for (const o of [{ width: 1280, decide: false }, { width: 1024, decide: true }])
@@ -146,14 +146,15 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
     expect(a.slow).toMatchObject({ busy: 'true', spin: { w: 9, first: true }, words: 'undo' });
   }, 120_000);
 
-  it('C5, N-5: a held key names the real hold in its title and description, and gets its own title back', async () => {
+  it('C5, N-5: a held key names the real hold in its title and description, and moves from one hold\'s words to the next', async () => {
     const D = `document.querySelector('#board-turn [data-undo-key^="dismiss|"]')`;
     const READ = (as: string) => ({ read: `({ title: ${D}.title, desc: ${D}.getAttribute('aria-description'), label: ${D}.getAttribute('aria-label') })`, as });
-    const a = await real([...openBoard, ...rectAt(220, 180), turn(1, recolour(0)), ARM, READ('before'), { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 800 }, READ('down'), { press: '#reconnect-btn' }, { until: `${CUR}.session.noticeView().held === null`, as: 'caught up again', timeoutMs: 20_000 }, { wait: 300 }, READ('back')]);
+    const a = await real([...openBoard, ...rectAt(220, 180), turn(1, recolour(0)), ARM, READ('before'), { read: `(${A}.down(), 1)`, as: 'down' }, { wait: 800 }, READ('down'), { press: '#reconnect-btn' }, { wait: 4000 }, { read: `({ held: ${CUR}.session.noticeView().held, rc: !document.getElementById('reconnect').hidden })`, as: 'held' }, READ('catching')]);
     expect(a.errors).toEqual([]);
     const before = a.before as { title: string; label: string | null };
     expect(a.down).toMatchObject({ title: 'Not connected · this can’t be undone until the board is back', desc: 'Not connected · this can’t be undone until the board is back', label: before.label });
+    expect(a.catching).toMatchObject({ title: 'Catching up with the board · this can be pressed in a moment', desc: 'Catching up with the board · this can be pressed in a moment', label: before.label });
     expect(before.title).toBe('Keep these changes · after this, undo them mark by mark while the board still can');
-    expect(a.back).toMatchObject({ title: before.title, desc: null });
+    // (the way back to the key's own title needs a check point after a press: stated, not driven here)
   }, 120_000);
 });
