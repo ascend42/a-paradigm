@@ -39,6 +39,13 @@ components:
       the palette's list when the room is under 87px; order frozen while
       open; trusted press on the row itself (C4.8); nothing sent while the
       link is down (C4.7); refreshDims redraws words in place.
+      Review r2: too short (no room above the foot for one row) the hands
+      menu lists every hand over the foot (I6); a split frozen by focus is
+      redrawn when focus leaves (I4b); keyed hands are fitted alone and
+      unkeyed ones never move a key (I5); a menu row drops the shared name
+      before its session (F1). The list: held still for any reason
+      disables its rows (N2); a press closes it only when the dock sent
+      (N1); 117px with other rows (Mika 6); seen refreshed on repaint (N3).
       S1.4 E3: BoardMarkView gains changedBy, otherBy, wordsBy, restoredFrom, an
       open mark's lastRun and a bound label's labelBox; the overlay draws the
       countermark, the words sign, cut-outs and the trace (#gui-board-overlay).
@@ -1021,6 +1028,10 @@ components:
       rowStillHolds (C4.5: the dock's choose sends nothing when a row's
       ended or attached changed since it was drawn); listTime carries the
       year when it is not this year; DIM_LIST_COPY.
+      Review r2: line 2 leads with 'opening attaches this session' (I2); a
+      folded dimension not attached reads 'folded · opening attaches this
+      session' (I1); planListPress (I3): a listed row with no or a changed
+      seen sends nothing.
     path: src/core/board-open.ts
     type: module
     tags: [gnomon, gui, dimension, board]
