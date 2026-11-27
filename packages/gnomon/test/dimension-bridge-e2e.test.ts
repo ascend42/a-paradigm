@@ -443,7 +443,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(mcpJsonText(r.w).includes('gnomon-mods')).toBe(false);
     await r.k.client.call('session.stop', { hsid: s4.hsid });
   }, 180_000);
-  it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back (G5); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
+  it.todo('B (E-fix: clear otherBy/wordsBy on the person\'s full undo): after the person\'s honoured full undo of an agent\'s turn, the restored mark carries no otherBy or wordsBy (Aegis I-1, after S1.4 P5)');
+
+  it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back under their own hand (G5); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
     const r = await boardRig('mbB-');
     const P = await guiPage(r.k, cleanups);
     const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
@@ -482,15 +484,16 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     const f2 = fold();
     const back = f2.nodes.get(H(1))! as unknown as Record<string, unknown>;
     expect([(back.node as Record<string, unknown>).label, (back.node as Record<string, unknown>).color, back.by]).toEqual(['API', undefined, humanBy]);
-    // the contract (gnomon-contracts dim.ts, otherBy/wordsBy): the record survives a later change by `by` itself, so
-    // "who changed what" never silently disappears; the person's undo restores content, not the attribution history
-    expect([(back.otherBy as { cls?: string }).cls, (back.wordsBy as { cls?: string }).cls]).toEqual(['agent', 'agent']);
+    // Aegis I-1 (S1.4 P5 review): today otherBy/wordsBy survive the person's own honoured full undo, so the restored mark
+    // still carries the agent's changed-by sign. Task "E-fix: clear otherBy/wordsBy on the person's full undo" clears them;
+    // its expectation, which this test takes on then:
+    //   expect([back.otherBy, back.wordsBy]).toEqual([undefined, undefined]);
     const readded = [...f2.nodes.entries()].filter(([id]) => id !== H(1));
     expect(readded).toHaveLength(1);
     const [newId, h2] = readded[0]! as [string, Record<string, unknown>];
     expect(newId).not.toBe(H(2));
     expect((h2.restoredFrom as { by: unknown }).by).toEqual(humanBy); // G5: back as the person's
-    expect([...f2.nodes.values()].every((n) => (n.by as { cls?: string }).cls === 'human')).toBe(true); // nothing renders as the agent's
+    expect([...f2.nodes.values()].every((n) => (n.by as { cls?: string }).cls === 'human')).toBe(true); // every mark's hand (`by`) is the person's
     expect(((await cmd('dim.check', {})).pins as Array<{ hsid?: string; turn?: string }>).some((p) => p.hsid === hsid && p.turn === `turn:${hsid}/1`)).toBe(false);
 
     /* turn 2: the agent sees the person's undo as a set and undoes it; a made-up set; a second person set */
