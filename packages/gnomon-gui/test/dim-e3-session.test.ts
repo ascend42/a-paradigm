@@ -391,3 +391,23 @@ describe('E3 round 2 item 4: the mark row, cut-outs, before it was stopped', () 
   });
 });
 
+describe('E3 round 2 revert gaps', () => {
+  it('dismiss names only the SHOWN notice: a single press on a notice behind the slot sends nothing', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    const k1 = await withNotice(w, s, 1, 10);
+    await withNotice(w, s, 2, 11);
+    expect(s.dismissNotice(k1, press('click'))).toBe(false);
+    await flush(200);
+    expect(w.of('dim.seen')).toHaveLength(0);
+  });
+  it('N3: a marker naming a person act the page never saw raises no "your change"', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    s.edit([rect(40)], press());
+    await flush(200);
+    w.turn('luna', 1, [{ type: 'update', id: ULID(40), patch: { color: 'cobalt' } } as DimOp], { undo: { of: { principal: ME, act: ULID(999) } } });
+    expect(s.noticeView().shown).toMatchObject({ lead: null, changed: 1 });
+  });
+});
+
