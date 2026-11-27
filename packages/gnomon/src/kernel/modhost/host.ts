@@ -229,6 +229,13 @@ export interface ModHostOptions {
   /** the user home the K1 projector never walks into (tests); default os.homedir() */
   userHome?: string;
   platform?: string;
+  /**
+   * TEST SEAM ONLY (S1.4 P5, the CI job gnomon-e2e-sip-stubbed; Aegis ruling 1, option (b)): answer the MOD floor's
+   * SIP probe true. The daemon sets it only from DaemonSeams.supervisor (sessionSipStub with a non-empty claudePath;
+   * tests pass the fake claude). It reaches darwinMod only as modLaunchPlan's `sip` argument: the macOS floor, the
+   * sandbox-exec check, the snapshot checks and the generated profile stay real. mod.sandbox then says sipStubbed.
+   */
+  modSipStub?: boolean;
   callTimeoutMs?: number;
   cancelGraceMs?: number;
   now?: () => number;
@@ -623,7 +630,7 @@ export class ModHost {
       };
       let plan: ChildLaunchPlan;
       try {
-        plan = this.#seams.launcher ? this.#seams.launcher(input) : modLaunchPlan(input, this.#o.platform);
+        plan = this.#seams.launcher ? this.#seams.launcher(input) : modLaunchPlan(input, this.#o.platform, undefined, this.#o.modSipStub === true ? () => true : undefined);
       } catch (err) {
         if (isLifecycleRefusal(err)) {
           this.#emit('mod.health', { name, ok: false, why: 'sandbox-unavailable' });
@@ -631,7 +638,7 @@ export class ModHost {
         }
         throw err;
       }
-      this.#emit('mod.sandbox', { name, profile: 'mod', sandbox: plan.sandbox, profileHash: plan.profileHash });
+      this.#emit('mod.sandbox', { name, profile: 'mod', sandbox: plan.sandbox, profileHash: plan.profileHash, ...(this.#o.modSipStub === true && !this.#seams.launcher && (this.#o.platform ?? process.platform) === 'darwin' ? { sipStubbed: true } : {}) });
       const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], env: plan.env, detached: true, windowsHide: true });
       void gateRunningChild(child); // Aegis S1 M2: no mod RPC is read until the RUNNING child meets gnomon.node's pin
       child.on('error', () => undefined);

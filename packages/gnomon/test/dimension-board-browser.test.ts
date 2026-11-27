@@ -11,10 +11,10 @@
  * (`command`, titled, relayed for a human on the GUI) and ONE op row adding a rect, which the page also shows.
  *
  * Darwin only: a session runs only under the darwin session profile, and Chrome is found at its macOS path.
- * Never on CI; run it ALONE. The blocker is not Chrome (GitHub's macos-15 image has it): it is the session sandbox
- * floor. A session starts only with System Integrity Protection on (darwinFloor, `floor: 'sip'`), GitHub's macOS
- * runners have SIP off, and making the floor pass there would be a test switch on a security rule. The same page on
- * the dev preview's kernel runs on CI: packages/gnomon-gui/test/board-app.test.ts, job `board-browser`.
+ * Run it ALONE. A session starts only with System Integrity Protection on (darwinFloor, `floor: 'sip'`), and
+ * GitHub's macOS runners have SIP off. On CI it runs only in the `gnomon-e2e-sip-stubbed` job (S1.4 P5, Aegis
+ * ruling 1(a)): GNOMON_E2E_SIP_STUB=1 passes the test-only `sessionSipStub` seam (the SIP answer alone, the fake
+ * claude only) and GNOMON_E2E_REQUIRED=1 makes a skip fail. The SIP-on proof stays the recorded local run.
  */
 import * as path from 'node:path';
 import { webcrypto } from 'node:crypto';
@@ -31,14 +31,13 @@ import { GuiStore, rowOf } from '../../gnomon-gui/src/core/store.js';
 import { loadDevHome } from '../src/cli/dev-home.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { installDimension } from './dimension-helpers.js';
-import { sessionWorld, waitFor } from './session-helpers.js';
+import { sessionWorld, waitFor, E2E_REQUIRED, E2E_SUPERVISOR_SEAMS, e2eFloorsOk, E2E_SIP_STUB, stubMarks, requireE2e } from './session-helpers.js';
 import { GOOD, wsConnect } from './web-helpers.js';
 
-const SANDBOX_OK = darwinFloor().ok;
+const SANDBOX_OK = e2eFloorsOk('dimension-board-browser');
 const CHROME = findChrome() as string | null;
 const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 const cleanups: Array<() => unknown> = [];
@@ -73,7 +72,9 @@ async function transport(port: number): Promise<Transport & { drop(): void }> {
 }
 
 
-describe.skipIf(!SANDBOX_OK || !CHROME || !!process.env.CI)('#gui-board-dock in a real browser ⇄ the real kernel and the real gnomon.dimension mod', () => {
+// the CI e2e job (GNOMON_E2E_REQUIRED=1) runs it on CI with the SIP stub; elsewhere on CI it still skips
+requireE2e(!!CHROME, 'dimension-board-browser: Chrome');
+describe.skipIf(!SANDBOX_OK || !CHROME || (!!process.env.CI && !E2E_REQUIRED))('#gui-board-dock in a real browser ⇄ the real kernel and the real gnomon.dimension mod', () => {
   it('the kernel-served app opens /board, a real drag draws one mark, and its row comes back through the followed log', async () => {
     const w = sessionWorld();
     cleanups.push(() => w.cleanup());
@@ -88,7 +89,7 @@ describe.skipIf(!SANDBOX_OK || !CHROME || !!process.env.CI)('#gui-board-dock in 
       userHome,
       start: (o) =>
         startDaemonForTest(o, {
-          supervisor: { claudePath: w.claude, allowScripts: true, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
+          supervisor: { claudePath: w.claude, allowScripts: true, ...E2E_SUPERVISOR_SEAMS, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
           billing: { env: () => ({}), layers: () => [] },
         }),
     });
@@ -153,6 +154,7 @@ describe.skipIf(!SANDBOX_OK || !CHROME || !!process.env.CI)('#gui-board-dock in 
     expect(dims.lastDimOf(session.hsid)).toBe(dim);
     const rows = dims.rows(dim);
     expect(rows.map((r) => r.kind)).toEqual([DIM_KINDS.start, DIM_KINDS.op]);
+    expect(stubMarks(k.handle.log.read({ reader: { class: 'human' }, kinds: ['session.sandbox', 'mod.sandbox'] }))).toEqual({ session: E2E_SIP_STUB, mod: E2E_SIP_STUB }); // S1.4 P5 review: sipStubbed exactly when this run stubbed SIP
     expect(rows[0]!.payload).toMatchObject({ opened: 'command', relayedFor: { surface: 'gui' } });
     expect(opened!.title).toBe(listing[0]!.title);
     const ops = (rows[1]!.payload as { ops: Array<{ type: string; node?: { kind: string } }> }).ops;

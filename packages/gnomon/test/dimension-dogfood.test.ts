@@ -31,14 +31,13 @@ import { GuiStore } from '../../gnomon-gui/src/core/store.js';
 import { loadDevHome } from '../src/cli/dev-home.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { DIMENSION, dimId, installDimension, ulid } from './dimension-helpers.js';
-import { sessionWorld, waitFor } from './session-helpers.js';
+import { sessionWorld, waitFor, E2E_SUPERVISOR_SEAMS, e2eFloorsOk, E2E_SIP_STUB, stubMarks, requireE2e } from './session-helpers.js';
 import { GOOD, wsConnect } from './web-helpers.js';
 
-const SANDBOX_OK = darwinFloor().ok;
+const SANDBOX_OK = e2eFloorsOk('dimension-dogfood');
 const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -173,7 +172,7 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
       userHome,
       start: (o) =>
         startDaemonForTest(o, {
-          supervisor: { claudePath: w.claude, allowScripts: true, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
+          supervisor: { claudePath: w.claude, allowScripts: true, ...E2E_SUPERVISOR_SEAMS, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
           billing: { env: () => ({}), layers: () => [] },
         }),
     });
@@ -189,6 +188,7 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
     let a = A.watch(A.sessions.open({ dim, hsid, opened: 'command', title: 'Dogfood' }, press('click')));
     expect(await a.opened(), JSON.stringify(a.lastNotice())).toBe(true);
     expect(k.handle.mods.running()).toContain(DIMENSION);
+    expect(stubMarks(k.handle.log.read({ reader: { class: 'human' }, kinds: ['session.sandbox', 'mod.sandbox'] }))).toEqual({ session: E2E_SIP_STUB, mod: E2E_SIP_STUB }); // S1.4 P5 review: sipStubbed exactly when this run stubbed SIP
     expect(await waitFor(() => a.status().verified === true, 10_000, 5)).toBe(true);
     expect(a.status()).toMatchObject({ phase: 'open', title: 'Dogfood', keep: 'saved', link: 'up' });
     // S1.4 P4b (Aegis D1, N-9): this open MADE the dimension, so the first attached session's default grant is said

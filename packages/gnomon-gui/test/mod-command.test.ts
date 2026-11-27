@@ -154,6 +154,8 @@ describe('#gui-mod-command sendModCommand', () => {
     expect(modCommandFailure(rpc('FORBIDDEN', { reason: 'ungranted', needs: 'gesture', verb: 'mod.command', why: 'replayed' }))).toEqual({ code: 'gesture-refused', why: 'replayed' });
     expect(modCommandFailure(rpc('FORBIDDEN', { needs: 'gesture', why: '<b>anything</b>' }))).toEqual({ code: 'gesture-refused', why: null });
     expect(modCommandFailure(rpc('FORBIDDEN', { modCode: 'EFFECT', cap: 'command-read' }))).toEqual({ code: 'read-only', why: 'command-read' });
+    // S1.4 P5 review: a mod floor refusal (ModRefusal SANDBOX, routed UNSUPPORTED) arrives as what it is
+    expect(modCommandFailure(rpc('UNSUPPORTED', { modCode: 'SANDBOX', profile: 'mod', floor: 'sip' }))).toEqual({ code: 'sandbox-unavailable', why: 'SANDBOX' });
     expect(modCommandFailure(rpc('CLOSED'))).toEqual({ code: 'link-down', why: null });
     expect(modCommandFailure(rpc('TIMEOUT'))).toEqual({ code: 'no-answer', why: null });
     expect(modCommandFailure(rpc('DELIVERY_UNKNOWN'))).toEqual({ code: 'no-answer', why: null });

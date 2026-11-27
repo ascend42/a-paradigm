@@ -382,8 +382,14 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
  * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
  */
 export interface DaemonSeams {
-  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void> };
-  /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
+  supervisor?: {
+    claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void>;
+    /** S1.4 P5 (the CI e2e job, Aegis ruling 1(a)): stub ONLY the session floor's SIP answer; honoured only with `claudePath` (the fake claude) */
+    sessionSipStub?: boolean;
+    /** S1.4 P5 (Aegis ruling 2): a test loop origin set on the real Session at open (no production path sets one in 8.0) */
+    loopOriginFor?: (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
+  };
+  /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, the dimension's three tools since S1.4 P5, and the kernel's current pins) */
   modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
   billing?: BillingScanSource;
   /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
@@ -1134,6 +1140,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // TD-2026-10-19-063: the GUI re-pin of the claude binary. A refused open and a poll of the resolved source
   // pre-stage ONE re-pin card per new sha; only its approved (fresh-presence) effect writes the pin.
   const supSeams = seams.supervisor ?? {};
+  // S1.4 P5 (the CI job; Aegis ruling 1): the ONE switch for the test-only SIP stub, read off DaemonSeams only: the
+  // session profile's floor (supervisor sessionSipStub) and the mod profile's floor (ModHost modSipStub) answer SIP
+  // true, only with a `claudePath` seam (tests pass the fake). No other floor is ever passed it.
+  const sipStubOn = seams.supervisor?.sessionSipStub === true && typeof seams.supervisor.claudePath === 'string' && seams.supervisor.claudePath.length > 0;
   const claudeRow = claudeCodePlatform(process.platform);
   const repin = new ClaudeRepinCards({
     home,
@@ -1192,8 +1202,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #mod-tool-bridge (S1.4-P2): the `gnomon-mods` SDK server's ports. The mod host is built below (it needs the
   // supervisor), so it is read at call time. Receipts and the folded refusal counter are appended in-process as
   // USERLAND rows under p:<ns>/mods-mcp (L7 holds as for mod rows and the kernel-speakable row: the kernel key signs
-  // them as an attestation; readers attribute by principal). Production passes no allowlist: MOD_BRIDGE_TOOLS is
-  // empty until P5, so no tool is listed and no session's mcp.json gets the entry.
+  // them as an attestation; readers attribute by principal). Production passes no allowlist: MOD_BRIDGE_TOOLS (the
+  // dimension's three tools since S1.4 P5) and isCurrentFirstPartyPin decide what a session lists.
   const modBridge = createModBridge({
     mods: () => deskMods.list(),
     host: () => mods,
@@ -1260,7 +1270,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
     gitVerbs,
     modBridge,
-    ...(seams.supervisor ?? {}),
+    ...(() => {
+      // the CI SIP stub reaches the supervisor only with a `claudePath` seam (tests pass the fake); sessionSipProbe checks it again
+      const { sessionSipStub: _stub, ...rest } = seams.supervisor ?? {};
+      return { ...rest, ...(sipStubOn ? { sessionSipStub: true } : {}) };
+    })(),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,
@@ -1305,6 +1319,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     kernelPrincipal,
     ...(opts.platform ? { platform: opts.platform } : {}),
+    ...(sipStubOn ? { modSipStub: true } : {}),
     kernelCall: (req) => modKernelCall(req),
     onCallEnd: (name, callId) => modKernelCall.endCall(name, callId),
     // K3 (#paradigm-context-mod): the focused hsid → its LIVE session cwd, joined here (never from client input)

@@ -26,9 +26,9 @@ import { MOD_REFUSAL_CODES, ModRefusal } from '../src/kernel/modhost/refusal.js'
 import { refuseAppend } from '../src/kernel/socket/log-append.js';
 import { loopClampAllows } from '../src/kernel/supervisor/loop-clamp.js';
 import { unsandboxedModLauncher, withPinTablesForTest } from '../src/kernel/testing.js';
-import { fakeLog } from './dimension-helpers.js';
+import { DIMENSION, DIMENSION_TREE, fakeLog, installDimension, installTree } from './dimension-helpers.js';
 import { PKG_ROOT } from './helpers.js';
-import { firstPartyProbeManifest, host, installFirstParty, rig, type Rig, testModBridge } from './mod-helpers.js';
+import { firstPartyProbeManifest, host, installFirstParty, installFirstPartyTree, rig, type Rig, testModBridge } from './mod-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -129,10 +129,13 @@ const mod = (o: Partial<BridgeMod> & { tools?: Array<{ name: string; schema?: un
 });
 const listed = (m: BridgeMod[], allow: Record<string, string[]> = { [PROBE]: ['t'] }): string[] => modBridgeTools(m, allow, (h) => h === 'sha256:current').map((t) => `${t.mod}:${t.name}`);
 
-describe('#mod-tool-bridge: the list rule and the empty production allowlist (Aegis M1, M6, A7)', () => {
-  it('the production allowlist is EMPTY, the entry is the constant, and a real set of mods lists nothing without a test allowlist', async () => {
-    expect(Object.keys(MOD_BRIDGE_TOOLS)).toEqual([]);
+describe('#mod-tool-bridge: the list rule and the closed production allowlist (Aegis M1, M6, A7)', () => {
+  it('the production allowlist is ONE mod and THREE tools in that order, frozen outside and in; the entry is the constant; a set of mods without the dimension lists nothing', async () => {
+    expect(MOD_BRIDGE_TOOLS).toEqual({ 'gnomon.dimension': ['dim-view', 'dim-draw', 'dim-undo'] });
+    expect(Object.keys(MOD_BRIDGE_TOOLS)).toEqual(['gnomon.dimension']);
     expect(Object.isFrozen(MOD_BRIDGE_TOOLS)).toBe(true);
+    expect(Object.isFrozen(MOD_BRIDGE_TOOLS['gnomon.dimension'])).toBe(true);
+    expect(() => (MOD_BRIDGE_TOOLS['gnomon.dimension'] as string[]).push('dim-fourth')).toThrow();
     expect(MOD_BRIDGE_ENTRY).toEqual({ type: 'sdk', name: 'gnomon-mods' });
     expect(MOD_BRIDGE_SERVER).toBe('gnomon-mods');
     const w = world({ allow: null });
@@ -238,6 +241,115 @@ describe('#mod-tool-bridge: the list rule and the empty production allowlist (Ae
     expect(/[<>"]/.test(unknown.error!.message)).toBe(false);
     expect(w.reached()).toBe(0);
   });
+});
+
+/**
+ * S1.4 P5 (Aegis ruling 4): the closed list, split. The PURE rule cases run the production allowlist with a pin stub,
+ * so they fail only on the allowlist or the effects rule: editing the real tree changes its package hash, and the
+ * pin rule would then delist the whole mod and pass these for the wrong reason. The real-install case below is
+ * named for the pin.
+ */
+describe('#mod-tool-bridge: the closed production allowlist, pure rule (MOD_BRIDGE_TOOLS with a pin stub)', () => {
+  const DIM_MANIFEST = JSON.parse(fs.readFileSync(path.join(DIMENSION_TREE, 'gnomon-manifest.json'), 'utf8')) as { publisher: string; provides: { tools: Array<{ name: string; effects: string[]; schema?: unknown }> } };
+  type T = { name: string; effects: string[]; schema?: unknown };
+  const dimMod = (tools: (ts: T[]) => T[] = (ts) => ts, o: Partial<BridgeMod> = {}): BridgeMod => ({ name: 'gnomon.dimension', manifest: { ...DIM_MANIFEST, provides: { tools: tools(structuredClone(DIM_MANIFEST.provides.tools)) } } as never, packageHash: 'sha256:stub', tier: 'first-party', ...o });
+  const names = (m: BridgeMod[]): string[] => modBridgeTools(m, MOD_BRIDGE_TOOLS, () => true).map((t) => `${t.mod}:${t.name}`);
+  const THREE = ['gnomon.dimension:dim-view', 'gnomon.dimension:dim-draw', 'gnomon.dimension:dim-undo'];
+  const fourth: T = { name: 'dim-fourth', effects: ['read'], schema: { type: 'object', description: 'A fourth tool the allowlist does not name.' } };
+
+  it('the bundled manifest lists exactly the three, in the allowlist\'s order', () => {
+    expect(names([dimMod()])).toEqual(THREE);
+  });
+  it('a fourth declared tool is not listed, and the three still are', () => {
+    expect(names([dimMod((ts) => [...ts, fourth])])).toEqual(THREE);
+    expect(names([dimMod((ts) => [fourth, ...ts])])).toEqual(THREE);
+  });
+  it('`spend` on dim-view delists dim-view ONLY; `network` does the same', () => {
+    for (const eff of ['spend', 'network']) {
+      expect([eff, names([dimMod((ts) => ts.map((t) => (t.name === 'dim-view' ? { ...t, effects: [...t.effects, eff] } : t)))])]).toEqual([eff, THREE.slice(1)]);
+    }
+  });
+  it('a manifest missing one of the three still lists the other two, and does not throw', () => {
+    expect(names([dimMod((ts) => ts.filter((t) => t.name !== 'dim-undo'))])).toEqual(THREE.slice(0, 2));
+    expect(names([dimMod((ts) => ts.filter((t) => t.name !== 'dim-view'))])).toEqual(THREE.slice(1));
+    expect(names([dimMod(() => [])])).toEqual([]);
+  });
+  it('a third-party, a non-gnomon or a non-allowlisted mod declaring a tool named dim-view does not delist the dimension tools (the duplicate rule counts allowlisted first-party tools only)', () => {
+    const squat = (o: Partial<BridgeMod>): BridgeMod => ({ name: 'acme.squat', manifest: { publisher: 'acme', provides: { tools: [{ name: 'dim-view', effects: ['read'], schema: { type: 'object', description: 'squat' } }] } } as never, packageHash: 'sha256:stub', tier: 'third-party', ...o });
+    expect(names([dimMod(), squat({})])).toEqual(THREE);
+    expect(names([dimMod(), squat({ tier: 'first-party' })])).toEqual(THREE); // publisher acme
+    expect(names([dimMod(), squat({ name: 'gnomon.squat', tier: 'first-party', manifest: { publisher: 'gnomon', provides: { tools: [{ name: 'dim-view', effects: ['read'], schema: { type: 'object', description: 'squat' } }] } } as never })])).toEqual(THREE); // not allowlisted
+  });
+  it('the dimension mod off the first-party tier or not gnomon-published lists nothing', () => {
+    expect(names([dimMod(undefined, { tier: 'third-party' })])).toEqual([]);
+    expect(names([dimMod(undefined, { manifest: { ...DIM_MANIFEST, publisher: 'acme' } as never })])).toEqual([]);
+  });
+  it('Aegis N-7: with MOD_BRIDGE_TOOLS and the PRODUCTION pin rule, the dimension mod at any superseded or retired first-party hash lists nothing; at a current pin it lists the three', () => {
+    const old = [...supersededPins().map(([h]) => h), ...retiredPins().map(([h]) => h)];
+    expect(old.length).toBeGreaterThan(0);
+    for (const h of old) expect([h, modBridgeTools([dimMod(undefined, { packageHash: h })], MOD_BRIDGE_TOOLS).map((t) => t.name)]).toEqual([h, []]);
+    const current = firstPartyPins().filter((h) => isCurrentFirstPartyPin(h));
+    expect(current.some((h) => modBridgeTools([dimMod(undefined, { packageHash: h })], MOD_BRIDGE_TOOLS).length === 3)).toBe(true);
+  });
+  it('a tools/call of the fourth tool\'s name is -32602 unknown tool and nothing reaches the mod: the call path re-derives the list, and that is the gate', async () => {
+    let reached = 0;
+    const bridge = testModBridge({
+      mods: () => [dimMod((ts) => [...ts, fourth])],
+      host: () => ({ admit: async () => undefined, callTool: async () => (reached++, { ok: true }) }) as never,
+      ns: () => 'abcdefgh',
+      append: async () => undefined,
+      now: () => 1_000,
+      allow: MOD_BRIDGE_TOOLS,
+      currentPin: () => true,
+    });
+    const s: BridgeSession = { hsid: HSID, principal: 'p:abcdefgh/s-01hzzzzz', agent: 'claude', turn: `turn:${HSID}/1`, surface: 'bridge', held: null, rate: newBridgeRate(), running: () => true };
+    const a = (await modBridgeAnswer({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'dim-fourth', arguments: {} } }, bridge, () => s)) as Ans;
+    expect(a.error).toMatchObject({ code: -32602 });
+    expect(reached).toBe(0);
+  });
+});
+
+describe('#mod-tool-bridge: the closed list on a REAL install with the production pin rule', () => {
+  const cleanup: Array<() => Promise<void>> = [];
+  afterEach(async () => {
+    while (cleanup.length) await cleanup.pop()!();
+  });
+  const copyTree = (root: string, edit: (m: Record<string, unknown>) => void): string => {
+    const dir = path.join(root, 'tree-edited');
+    fs.cpSync(DIMENSION_TREE, dir, { recursive: true });
+    const f = path.join(dir, 'gnomon-manifest.json');
+    const m = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>;
+    edit(m);
+    fs.writeFileSync(f, `${JSON.stringify(m, null, 2)}\n`);
+    return dir;
+  };
+  it('the bundled tree at its current pin lists the three with the production defaults (no seam at all)', () => {
+    const r = rig();
+    cleanup.push(() => r.cleanup());
+    installDimension(r);
+    expect(modBridgeTools(readDeskMods(r.home, r.auth)).map((t) => t.name)).toEqual(['dim-view', 'dim-draw', 'dim-undo']);
+  });
+  for (const [label, edit] of [
+    ['a fourth tool', (m: Record<string, unknown>) => void (m.provides as { tools: unknown[] }).tools.push({ name: 'dim-fourth', effects: ['read'], schema: { type: 'object', description: 'fourth' } })],
+    ['spend on dim-view', (m: Record<string, unknown>) => void (m.provides as { tools: Array<{ name: string; effects: string[] }> }).tools.find((t) => t.name === 'dim-view')!.effects.push('spend')],
+  ] as const) {
+    it(`BECAUSE OF THE PIN: the tree edited with ${label} changes its package hash, which is no current pin, so it lists NOTHING at all`, () => {
+      const r = rig();
+      cleanup.push(() => r.cleanup());
+      // the human install path refuses an unpinned `gnomon` tree outright; the grant rows are written as for a
+      // first-party install, so what delists it here is the production pin rule and nothing else
+      const human = rig();
+      cleanup.push(() => human.cleanup());
+      expect(() => installTree(human, copyTree(r.root, edit), DIMENSION)).toThrow(/first-party only/);
+      const packageHash = installFirstPartyTree(r, path.join(r.root, 'tree-edited'), DIMENSION);
+      expect(isCurrentFirstPartyPin(packageHash)).toBe(false);
+      const mods = readDeskMods(r.home, r.auth);
+      expect(mods.map((m) => [m.name, m.tier])).toEqual([[DIMENSION, 'first-party']]);
+      expect(modBridgeTools(mods).map((t) => t.name)).toEqual([]);
+      // and with only the pin stubbed, the same edited tree lists the three: the pin was the reason
+      expect(modBridgeTools(mods, MOD_BRIDGE_TOOLS, () => true).map((t) => t.name)).toEqual(['dim-view', 'dim-draw', 'dim-undo'].filter((n) => label !== 'spend on dim-view' || n !== 'dim-view'));
+    });
+  }
 });
 
 describe('#mod-tool-bridge: a call is stamped from the session only (G-MOD-19)', () => {
@@ -674,7 +786,81 @@ describe('#mod-tool-bridge: source facts that hold on every platform (G-MOD-19; 
     const spawn = sup.slice(sup.indexOf('async #spawnClaude('), sup.indexOf('async #onLine('));
     expect(spawn).toContain('[MOD_BRIDGE_SERVER]: { ...MOD_BRIDGE_ENTRY }');
     for (const f of [...files(path.join(SRC, 'kernel', 'local')), path.join(SRC, 'kernel', 'supervisor', 'local-session.ts')]) {
-      expect([rel(f), /mcp-bridge|MOD_BRIDGE|gnomon-mods/.test(fs.readFileSync(f, 'utf8'))]).toEqual([rel(f), false]);
+      expect([rel(f), /mcp-bridge|MOD_BRIDGE|gnomon-mods|ModHost|modhost\//.test(fs.readFileSync(f, 'utf8'))]).toEqual([rel(f), false]);
     }
+  });
+});
+
+/**
+ * S1.4 P5 (Aegis ruling 1(a) and 2, item 4): the TEST seams the turn-on leans on stay test-only. Each token appears
+ * outside comments only in the files allowed below; no line naming it reads the environment, the argv or a config;
+ * production starts pass no seams; and the internal test entry is no export or bin target (its import closure:
+ * test/seams-fence.test.ts).
+ */
+describe('S1.4 P5 test seams: sessionSipStub, loopOriginFor and modBridge.currentPin are reachable only from DaemonSeams', () => {
+  const SRC = path.join(PKG_ROOT, 'src');
+  const files = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : /\.(ts|mts|mjs|js)$/.test(e.name) ? [path.join(dir, e.name)] : []));
+  const code = (f: string): string => fs.readFileSync(f, 'utf8').replace(/\/\*[^]*?\*\/|\/\/.*$/gm, '');
+  const rel = (f: string): string => path.relative(SRC, f).split(path.sep).join('/');
+  const ALLOWED: Record<string, string[]> = {
+    // daemon.ts: the DaemonSeams field and its one hand-over; supervisor.ts: the option; session.ts: the one rule
+    sessionSipStub: ['kernel/lifecycle/daemon.ts', 'kernel/sandbox/session.ts', 'kernel/supervisor/supervisor.ts'],
+    // daemon.ts: the hand-over to the mod host; host.ts: the option, its one read at launch and the row mark
+    modSipStub: ['kernel/lifecycle/daemon.ts', 'kernel/modhost/host.ts'],
+    // daemon.ts: the one hand-over into ModBridgeSeams; mcp-bridge.ts: the parameter, the seam type and its one read
+    currentPin: ['kernel/lifecycle/daemon.ts', 'kernel/modhost/mcp-bridge.ts'],
+    // daemon.ts: the DaemonSeams field (passed through the supervisor seams); supervisor.ts: the option and its one read at open
+    loopOriginFor: ['kernel/lifecycle/daemon.ts', 'kernel/supervisor/supervisor.ts'],
+  };
+
+  it('each token names only its allowed files, and no line naming it reads process.env, process.argv or a config', () => {
+    for (const [token, allowed] of Object.entries(ALLOWED)) {
+      const found: string[] = [];
+      for (const f of files(SRC)) {
+        const lines = code(f).split('\n').filter((l) => new RegExp(`\\b${token}\\b`).test(l));
+        if (!lines.length) continue;
+        found.push(rel(f));
+        for (const l of lines) expect([token, rel(f), /process\.(env|argv)|\bconfig\b|getConfig|readConfig|parseArgs|--[a-z]/i.test(l), l.trim()]).toEqual([token, rel(f), false, l.trim()]);
+      }
+      expect([token, found.sort()]).toEqual([token, [...allowed].sort()]);
+    }
+  });
+
+  it('in daemon.ts each token is read only off `seams.` (DaemonSeams), and the production start passes an empty seam set', () => {
+    const d = code(path.join(SRC, 'kernel', 'lifecycle', 'daemon.ts'));
+    expect(d).toMatch(/const \{ sessionSipStub: _stub, \.\.\.rest \} = seams\.supervisor \?\? \{\};/);
+    expect(d).toMatch(/const sipStubOn = seams\.supervisor\?\.sessionSipStub === true && typeof seams\.supervisor\.claudePath === 'string'/);
+    expect(d.match(/\bsessionSipStub\b/g)?.length).toBe(4); // the field, the switch, the destructure (dropped), the hand-over
+    expect(d).toMatch(/seams\.modBridge\?\.currentPin \? \{ currentPin: seams\.modBridge\.currentPin \}/);
+    expect(d.match(/\bcurrentPin\b/g)?.length).toBe(3);
+    expect(d.match(/\bloopOriginFor\b/g)?.length).toBe(1); // the DaemonSeams field only: it reaches the supervisor in the seams.supervisor spread
+    const sup = code(path.join(SRC, 'kernel', 'supervisor', 'supervisor.ts'));
+    expect(sup.match(/\bloopOriginFor\b/g)?.length).toBe(2);
+    // the one read: at open, onto the real Session (never a stub of bridgeHeld)
+    expect(sup).toContain('const seamLoop = this.#o.loopOriginFor?.({ cwd: req.cwd });');
+    // the only other writer of loopOrigin in src: none (the field's declaration and its reads only)
+    expect(sup.match(/\.loopOrigin\s*=(?!=)/g)?.length).toBe(1);
+    // the one production start, and the seam channel's registration (read only by src/kernel/testing.ts)
+    expect(d.match(/startDaemonWith\(/g)?.length).toBe(3);
+    expect(d).toContain('return startDaemonWith(opts, {});');
+    expect(d).toContain("registerSeams('daemon', { start: (opts, seams) => startDaemonWith(opts, seams) });");
+    // gnomond and `gnomon dev up` reach the daemon through startDaemon only, never the test entry or the seam channel
+    for (const f of ['cli/gnomond.ts', 'cli/dev-cli.ts', 'cli/gnomon.ts']) {
+      const c = code(path.join(SRC, ...f.split('/')));
+      expect([f, /testing\.js|internal-seams|seamsOf|startDaemonForTest|sessionSipStub|loopOriginFor/.test(c)]).toEqual([f, false]);
+    }
+  });
+
+  it('kernel/testing.ts is no package export or bin target: every one maps to a tsup production entry, none of them the test entry', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as { exports: Record<string, unknown>; bin: Record<string, string> };
+    const targets = [...Object.values(pkg.exports).flatMap((v) => (typeof v === 'string' ? [v] : Object.values(v as Record<string, string>))), ...Object.values(pkg.bin)].filter((t) => t.startsWith('./dist/') || t.startsWith('dist/'));
+    const tsup = fs.readFileSync(path.join(PKG_ROOT, 'tsup.config.ts'), 'utf8');
+    const entries = Object.fromEntries([...tsup.slice(tsup.indexOf('entry: {'), tsup.indexOf('},', tsup.indexOf('entry: {'))).matchAll(/'?([\w/-]+)'?: '(src\/[^']+\.ts)'/g)].map((m) => [m[1]!, m[2]!]));
+    for (const t of targets) {
+      const name = t.replace(/^\.?\/?dist\//, '').replace(/\.(d\.ts|js)$/, '');
+      expect([t, typeof entries[name]]).toEqual([t, 'string']);
+      expect(entries[name]).not.toMatch(/testing/);
+    }
+    expect(JSON.stringify(pkg.exports) + JSON.stringify(pkg.bin)).not.toMatch(/testing/);
   });
 });

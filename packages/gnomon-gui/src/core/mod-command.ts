@@ -93,7 +93,7 @@ export function sendModCommand(c: Pick<GnomonClient, 'call'>, g: Gesture | null,
 
 /** Why a send failed, in the words a notice is built from. `code` is from a closed list; `why` is the kernel's own short word, when it gave one. */
 export interface ModCommandFailure {
-  code: 'not-sent' | 'gesture-refused' | 'read-only' | 'link-down' | 'no-answer' | 'refused';
+  code: 'not-sent' | 'gesture-refused' | 'read-only' | 'sandbox-unavailable' | 'link-down' | 'no-answer' | 'refused';
   why: string | null;
 }
 
@@ -113,5 +113,8 @@ export function modCommandFailure(err: unknown): ModCommandFailure {
   if (code === 'TIMEOUT' || code === 'DELIVERY_UNKNOWN') return { code: 'no-answer', why: null };
   if (code === 'FORBIDDEN' && data && data.needs === 'gesture') return { code: 'gesture-refused', why: typeof data.why === 'string' && GESTURE_WHYS.includes(data.why) ? data.why : null };
   if (code === 'FORBIDDEN' && data && data.modCode === 'EFFECT' && data.cap === 'command-read') return { code: 'read-only', why: 'command-read' };
+  // S1.4 P5 review: the mod profile cannot be applied on this host (the kernel's ModRefusal SANDBOX, routed UNSUPPORTED):
+  // said as what it is, never a bare refusal
+  if (data && data.modCode === 'SANDBOX') return { code: 'sandbox-unavailable', why: 'SANDBOX' };
   return { code: 'refused', why: /^[A-Za-z][A-Za-z0-9_ -]{0,31}$/.test(code) ? code : null };
 }

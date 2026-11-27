@@ -647,7 +647,7 @@ components:
       carries firstAt and lastAt from the log row's at. stateAt throws
       DimSeqError for a seq that is not a safe integer. reset() forgets
       everything but the pins when the log is replaced.
-      Nothing in the app imports it yet (pass P3b/P4 wires it to followLog).
+      ui/app.ts holds it and feeds it the followed rows (S1.3 P4).
     path: src/core/dim-store.ts
     type: module
     tags: [gnomon, gui, dimension, pure]
@@ -705,6 +705,9 @@ components:
       stamp is numbered per client object, so a reconnect needs no wiring. A static
       test holds that the relay's name occurs under src/ only in this file
       and the preview's fake kernel. Nothing in the app calls it yet.
+      S1.4 P5 review: modCommandFailure reads data.modCode SANDBOX (the
+      kernel could not apply the mod profile) as code sandbox-unavailable,
+      why SANDBOX; the leaf says the board cannot run here.
     path: src/core/mod-command.ts
     type: module
     tags: [gnomon, gui, gesture, relay]
@@ -759,8 +762,8 @@ components:
       confirmed, and drops an entry that can never apply with one notice.
       dimAckOf reads the dimension mod's replies exactly (ok with seq and
       refused; ok false with a code of DIM_COMMAND_REFUSALS). Stated bounds:
-      16 pending batches, 256 early rows, 64 undo entries. Nothing in the
-      app imports it yet.
+      16 pending batches, 256 early rows, 64 undo entries. core/dim-session.ts
+      drives it (one per open dimension, S1.3 P4a).
     path: src/core/dim-live.ts
     type: module
     tags: [gnomon, gui, dimension, pure]
@@ -984,7 +987,7 @@ components:
     path: src/ui/board-turn.ts
     type: module
     tags: [gnomon, gui, dimension, board]
-    related: ["#gui-board-dock", "#gui-board-leaf", "#gui-turn-steps", "#gui"]
+    related: ["#gui-board-dock", "#gui-turn-steps", "#gui"]
     tests:
       - test/board-turn.test.ts
       - test/board-app.test.ts
@@ -1133,8 +1136,8 @@ components:
       other action and a set centred on the view steps too; only the closed list DIM_CLIPBOARD_KEYS is carried
       (shape, words, colour; no author, refs, rel or carried-through field).
       The clones are ordinary adds, so whoever pastes is their author.
-      clear() forgets the register (window blur, unmount). Nothing in the
-      app imports it yet (pass P3b wires paste interception).
+      clear() forgets the register (window blur, unmount). ui/board-leaf.ts
+      holds it and intercepts copy, cut and paste (S1.3 P3b).
     path: src/core/dim-clipboard.ts
     type: module
     tags: [gnomon, gui, dimension, clipboard, pure]

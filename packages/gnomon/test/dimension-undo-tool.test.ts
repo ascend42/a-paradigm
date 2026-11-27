@@ -390,15 +390,15 @@ describe('#dimension-mod E2 review fixes (Aegis I-1, I-2, N-1, N-3, N-4)', () =>
   });
 });
 
-describe('#dimension-mod E2: the bridge (M1 allowlist in tests only, M2 loop refusal)', () => {
-  it('the production allowlist stays EMPTY; a test allowlist lists dim-undo; a loop-origin session\'s dim-undo and dim-draw are refused exactly alike and no row lands', { timeout: 60_000 }, async () => {
-    expect(MOD_BRIDGE_TOOLS).toEqual({});
+describe('#dimension-mod E2: the bridge (M1 allowlist, M2 loop refusal)', () => {
+  it('the production allowlist names the three (S1.4 P5); the bundled tree lists them with the production defaults; a loop-origin session\'s dim-undo and dim-draw are refused exactly alike and no row lands', { timeout: 60_000 }, async () => {
+    expect(MOD_BRIDGE_TOOLS).toEqual({ [DIMENSION]: ['dim-view', 'dim-draw', 'dim-undo'] });
     const w = await undoRig();
     const dim = await board(w);
     await w.run('dim.op', { dim, ops: [rectOp(1)], act: actOf(1) });
     const allow = { [DIMENSION]: ['dim-view', 'dim-draw', 'dim-undo'] };
     const mods = readDeskMods(w.r.home, w.r.auth);
-    expect(modBridgeTools(mods).map((t) => t.name)).toEqual([]);
+    expect(modBridgeTools(mods).map((t) => t.name)).toEqual(['dim-view', 'dim-draw', 'dim-undo']);
     expect(modBridgeTools(mods, allow, () => true).map((t) => t.name)).toEqual(['dim-view', 'dim-draw', 'dim-undo']);
     let reached = 0;
     const bridge = testModBridge({

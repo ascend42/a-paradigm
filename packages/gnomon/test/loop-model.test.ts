@@ -217,10 +217,13 @@ describe('the loop-origin clamp', () => {
     expect(src).toMatch(/const offered = editPass\?\.ok && loopBy === null \? withEditScopes\(/);
     // and nothing in 8.0 makes a supervisor session a loop session (step 10 sets loopOrigin, through this clamp)
     // S1.4-P2 (Aegis): whichever PR first assigns Session.loopOrigin in supervisor.ts ALSO adds the live #mod-tool-bridge
-    // test: a loop session's mcp_message for `gnomon-mods` with no can_use_tool is refused and no row lands. Until then
-    // the loop refusal is held by the truth table of bridgeHeld (test/mods-bridge.test.ts), which the stamp and the
-    // permission pass both call.
-    expect(src).not.toMatch(/loopOrigin\s*[:=][^?]/);
+    // test. S1.4-P5 did: the ONE assignment is the test-only DaemonSeams seam (loopOriginFor) at open, and
+    // test/dimension-bridge-e2e.test.ts ('loop status comes only from the test seam') proves on a real kernel that a
+    // loop session's calls, with and without can_use_tool, are refused and the mod never starts. Any other assignment
+    // is a production loop origin, which owes its own test through that path (Aegis ruling 2).
+    const seam = 'if (seamLoop) s.loopOrigin = { loopId: seamLoop.loopId, runId: seamLoop.runId, authoredBy: seamLoop.authoredBy };';
+    expect(src.split(seam).length - 1).toBe(1);
+    expect(src.replace(seam, '')).not.toMatch(/loopOrigin\s*[:=][^?]/);
     for (const m of ['mode:auto-edits', 'mode:read-only', 'mode:ask:read-only', 'rule:']) expect(loopClampAllows(m, undefined)).toBe(false);
   });
 

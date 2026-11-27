@@ -154,6 +154,21 @@ export function installFirstParty(r: Rig, m: ManifestV2 = firstPartyProbeManifes
   return name;
 }
 
+/**
+ * S1.4 P5: an EDITED first-party tree installed as installFirstParty does (the trust and install grant rows written
+ * directly), so the production pin rule, not the install refusal, is what a test meets. Returns the package hash.
+ */
+export function installFirstPartyTree(r: Rig, dir: string, name: string): string {
+  const snap = snapshotFolder(r.home, dir, name, noEvents);
+  const read = readManifest(fs.readFileSync(path.join(snap.dir, MANIFEST_FILE)), { tier: 'first-party' });
+  const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
+  appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
+  const caps = read.manifest.requires?.capabilities ?? [];
+  if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: read.manifestHash, capabilities: [...caps] });
+  appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
+  return snap.packageHash;
+}
+
 /** createModBridge with the test seams (`allow`, `currentPin`) taken out of one options object, as the tests write it. */
 export function testModBridge(o: ModBridgeOptions & ModBridgeSeams): ModBridge {
   const { allow, currentPin, ...rest } = o;

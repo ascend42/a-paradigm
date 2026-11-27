@@ -77,7 +77,17 @@ components:
       modBridge). mcp.json: after the desk merge and the kernel's own entry,
       the bridge's {type:'sdk', name:'gnomon-mods'} is written LAST, only on
       this (Claude Code) spawn path and only when modBridge.tools() yields a
-      tool at spawn; never in production before P5. #onMcp dispatches by
+      tool at spawn (since S1.4-P5 the dimension's three tools in production).
+      Test seams, DaemonSeams.supervisor only (src/kernel/testing.ts):
+      loopOriginFor sets Session.loopOrigin on the real Session at open;
+      the loop refusal is proven through this seam, and no production path
+      sets a loop origin in 8.0 (a production path that sets one, 8.1's
+      escalation or a relay, owes a test through that path before it
+      ships; T-2026-10-18-014). sessionSipStub (only with a claudePath seam;
+      tests pass the fake) stubs the SESSION floor's SIP answer for the CI
+      job gnomon-e2e-sip-stubbed and marks session.sandbox sipStubbed:true
+      (darwin only). The same daemon switch reaches the mod host as
+      modSipStub; no other floor is passed it. #onMcp dispatches by
       server name FIRST, so the bridge answers with no git verbs (win32);
       answered outside the stdout queue, exactly once (a throw is a control
       error line), session.inject{channel:'mods-mcp'}. #bridgeSession
