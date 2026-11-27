@@ -695,6 +695,8 @@ describe('S1.4 P5 test seams: sessionSipStub, loopOriginFor and modBridge.curren
     sessionSipStub: ['kernel/lifecycle/daemon.ts', 'kernel/sandbox/session.ts', 'kernel/supervisor/supervisor.ts'],
     // daemon.ts: the one hand-over into ModBridgeSeams; mcp-bridge.ts: the parameter, the seam type and its one read
     currentPin: ['kernel/lifecycle/daemon.ts', 'kernel/modhost/mcp-bridge.ts'],
+    // daemon.ts: the DaemonSeams field (passed through the supervisor seams); supervisor.ts: the option and its one read at open
+    loopOriginFor: ['kernel/lifecycle/daemon.ts', 'kernel/supervisor/supervisor.ts'],
   };
 
   it('each token names only its allowed files, and no line naming it reads process.env, process.argv or a config', () => {
@@ -716,6 +718,13 @@ describe('S1.4 P5 test seams: sessionSipStub, loopOriginFor and modBridge.curren
     expect(d.match(/\bsessionSipStub\b/g)?.length).toBe(4); // the field, the destructure, the condition, the hand-over
     expect(d).toMatch(/seams\.modBridge\?\.currentPin \? \{ currentPin: seams\.modBridge\.currentPin \}/);
     expect(d.match(/\bcurrentPin\b/g)?.length).toBe(3);
+    expect(d.match(/\bloopOriginFor\b/g)?.length).toBe(1); // the DaemonSeams field only: it reaches the supervisor in the seams.supervisor spread
+    const sup = code(path.join(SRC, 'kernel', 'supervisor', 'supervisor.ts'));
+    expect(sup.match(/\bloopOriginFor\b/g)?.length).toBe(2);
+    // the one read: at open, onto the real Session (never a stub of bridgeHeld)
+    expect(sup).toContain('const seamLoop = this.#o.loopOriginFor?.({ cwd: req.cwd });');
+    // the only other writer of loopOrigin in src: none (the field's declaration and its reads only)
+    expect(sup.match(/\.loopOrigin\s*=(?!=)/g)?.length).toBe(1);
     // the one production start, and the seam channel's registration (read only by src/kernel/testing.ts)
     expect(d.match(/startDaemonWith\(/g)?.length).toBe(3);
     expect(d).toContain('return startDaemonWith(opts, {});');

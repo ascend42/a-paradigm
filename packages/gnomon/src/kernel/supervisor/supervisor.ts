@@ -335,6 +335,14 @@ export interface SupervisorOptions {
    * (src/kernel/testing.ts); no env, CLI or config reads it. The session.sandbox row then carries `sipStub: true`.
    */
   sessionSipStub?: boolean;
+  /**
+   * TEST SEAM ONLY (S1.4 P5, Aegis ruling 2): the loop origin a Claude session gets on its real `Session` at open
+   * (by the request's cwd). The daemon passes it only from `DaemonSeams.supervisor` (src/kernel/testing.ts). No
+   * production path sets a loop origin in 8.0 (loop act sessions are local, loop-clamp.ts), so the bridge's loop
+   * refusal is proven through this seam: the stamp and the permission pass both read `Session.loopOrigin`.
+   * No client verb or session.open field reaches it.
+   */
+  loopOriginFor?: (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
   /** #local-runner (M1.8): the local lane's endpoints + runner; absent ⇒ model:local raises a fallback card */
   local?: LocalLaneConfig;
   /** TEST RIG ONLY: the local probe's fetch */
@@ -1247,6 +1255,8 @@ export class SessionSupervisor {
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
         ...(repoCtx ? { skills: { dir: repoCtx.pluginDir, ctx: { skills: repoCtx.skills, refused: repoCtx.refused } } } : {}), binary: { exec: priv.exec, sha256: priv.sha256 },
       };
+      const seamLoop = this.#o.loopOriginFor?.({ cwd: req.cwd });
+      if (seamLoop) s.loopOrigin = { loopId: seamLoop.loopId, runId: seamLoop.runId, authoredBy: seamLoop.authoredBy };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path

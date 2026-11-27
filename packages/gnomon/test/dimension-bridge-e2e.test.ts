@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDevHome } from '../src/cli/dev-home.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { MOD_BRIDGE_TOOLS } from '../src/kernel/modhost/mcp-bridge.js';
+import { MOD_BRIDGE_SENTENCES, MOD_BRIDGE_TOOLS } from '../src/kernel/modhost/mcp-bridge.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { firstPartyProbeManifest, installFirstParty } from './mod-helpers.js';
@@ -44,12 +44,13 @@ const mcpJsonText = (w: SessionWorld): string => {
   return fs.readFileSync(argv[argv.indexOf('--mcp-config') + 1]!, 'utf8');
 };
 
-async function kernel(w: SessionWorld, devHome: string, userHome: string, modBridge?: { allow: Record<string, string[]>; currentPin: () => boolean }): Promise<DevKernel> {
+type LoopOriginFor = (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
+async function kernel(w: SessionWorld, devHome: string, userHome: string, modBridge?: { allow: Record<string, string[]>; currentPin: () => boolean }, loopOriginFor?: LoopOriginFor): Promise<DevKernel> {
   const k = await startDevKernel(devHome, {
     userHome,
     start: (o) =>
       startDaemonForTest(o, {
-        supervisor: { claudePath: w.claude, allowScripts: true, ...E2E_SUPERVISOR_SEAMS, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
+        supervisor: { claudePath: w.claude, allowScripts: true, ...E2E_SUPERVISOR_SEAMS, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), ...(loopOriginFor ? { loopOriginFor } : {}) },
         billing: { env: () => ({}), layers: () => [] },
         ...(modBridge ? { modBridge } : {}),
       }),
@@ -133,4 +134,58 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge on a real kernel (S1.4-P2, the br
     expect(auto!.seq).toBeLessThan(receipts[0]!.seq);
     expect(k.handle.mods.running()).toContain(PROBE);
   }, 120_000);
+  it('loop status comes only from the test seam on the real Session: no session.open or session.send field sets it; with the seam both arms (with and without can_use_tool) get the loop sentence', async () => {
+    const w = sessionWorld();
+    cleanups.push(() => w.cleanup());
+    const t = tempHome('mbl-');
+    cleanups.push(() => removeTree(path.dirname(t.home)));
+    const userHome = path.dirname(t.home);
+    const devHome = path.join(userHome, 'devhome');
+    expect(await runDevCommand(['init', '--home', devHome], quiet(), { userHome, host: 'mac-1' })).toBe(0);
+    const dev = loadDevHome(devHome, { userHome });
+    installFirstParty({ root: userHome, home: dev.home, auth: dev.root as never, events: [], cleanup: async () => undefined }, MANIFEST, SOURCE);
+    const call = (id: string, n: number) => line(id, { jsonrpc: '2.0', id: n, method: 'tools/call', params: { name: 'bridge-echo', arguments: {} } });
+    const arms = () => setMode(w, {
+      permissionAsk: {
+        hold: true,
+        steps: [
+          { request: { id: 'p-a', tool: 'mcp__gnomon-mods__bridge-echo', input: {}, toolUseId: 'toolu_la' } },
+          line('m-a', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'bridge-echo', arguments: {}, _meta: { 'claudecode/toolUseId': 'toolu_la' } } }),
+          call('m-b', 2), // no can_use_tool first
+        ],
+      },
+    });
+    const allow = { allow: { [PROBE]: ['bridge-echo'] }, currentPin: () => true };
+    const forgedLoop = { loopId: 'loop:01HZZZZZZZZZZZZZZZZZZZZZZA', runId: 'run:x', authoredBy: 'p:evil0000/founder' };
+
+    /* ── no seam: every loop-like field a client could send is refused or ignored ── */
+    arms();
+    let k = await kernel(w, devHome, userHome, allow);
+    const extra = { loopOrigin: forgedLoop, loop: true, origin: 'loop', loopId: forgedLoop.loopId, runId: forgedLoop.runId };
+    const opened = await k.client.call<{ hsid: string }>('session.open', { cwd: w.cwd, attended: true, ...extra }).then((v) => ({ ok: v }), (e: unknown) => ({ err: e }));
+    const s = 'ok' in opened ? opened.ok : await k.client.call<{ hsid: string }>('session.open', { cwd: w.cwd, attended: true });
+    const sent = await k.client.call('session.send', { hsid: s.hsid, content: [{ text: 'go' }], ...extra }).then(() => true, () => false);
+    if (!sent) await k.client.call('session.send', { hsid: s.hsid, content: [{ text: 'go' }] });
+    expect(await waitFor(() => !!answer(w, 'm-a') && !!answer(w, 'm-b'), 30_000)).toBe(true);
+    const textOf = (id: string) => answer(w, id)!.mcp!.result!.content![0]!.text;
+    expect(textOf('m-a')).not.toBe(MOD_BRIDGE_SENTENCES.loop);
+    expect(answer(w, 'm-a')!.mcp!.result!.isError).toBe(false);
+    expect(textOf('m-b')).not.toBe(MOD_BRIDGE_SENTENCES.loop);
+    await k.client.call('session.stop', { hsid: s.hsid });
+    await k.stop();
+    fs.rmSync(path.join(w.stubDir, 'trace.jsonl'), { force: true });
+
+    /* ── the seam sets Session.loopOrigin at open: the stamp AND the permission pass read it ── */
+    arms();
+    k = await kernel(w, devHome, userHome, allow, (req) => (req.cwd === w.cwd ? { loopId: 'loop:test', runId: 'run:test', authoredBy: 'p:test/founder' } : undefined));
+    const s2 = await k.client.call<{ hsid: string }>('session.open', { cwd: w.cwd, attended: true });
+    await k.client.call('session.send', { hsid: s2.hsid, content: [{ text: 'go' }] });
+    expect(await waitFor(() => !!answer(w, 'm-a') && !!answer(w, 'm-b') && trace(w).some((x) => x.t === 'perm-answer' && x.id === 'p-a'), 30_000)).toBe(true);
+    expect(textOf('m-a')).toBe(MOD_BRIDGE_SENTENCES.loop);
+    expect(textOf('m-b')).toBe(MOD_BRIDGE_SENTENCES.loop);
+    // the permission pass: the can_use_tool for a mod tool in a loop session is not auto-allowed
+    expect(trace(w).find((x) => x.t === 'perm-answer' && x.id === 'p-a')).not.toMatchObject({ behavior: 'allow' });
+    expect(k.handle.mods.running()).not.toContain(PROBE);
+    await k.client.call('session.stop', { hsid: s2.hsid });
+  }, 150_000);
 });

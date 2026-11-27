@@ -386,6 +386,8 @@ export interface DaemonSeams {
     claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void>;
     /** S1.4 P5 (the CI e2e job, Aegis ruling 1(a)): stub ONLY the session floor's SIP answer; honoured only with `claudePath` (the fake claude) */
     sessionSipStub?: boolean;
+    /** S1.4 P5 (Aegis ruling 2): a test loop origin set on the real Session at open (no production path sets one in 8.0) */
+    loopOriginFor?: (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
   };
   /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
   modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
