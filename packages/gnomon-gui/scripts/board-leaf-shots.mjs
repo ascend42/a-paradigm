@@ -107,6 +107,8 @@ async function launch(chrome, width, height, portWaitMs) {
  * `cpuThrottle`: a CPU slowdown factor (Emulation.setCPUThrottlingRate) for a test that holds its waits under load.
  * The answer's `attempts` is how many launches it took (1 unless Chrome failed to start: LAUNCH_RETRY_ERRORS).
  */
+/** the longest one DevTools call may take before the run fails by name */
+const CALL_MS = 90_000;
 export async function shootLeaf({ chrome, url, width, height, clip = false, timeoutMs = 30_000, script = null, actions = [], ready = 'document.documentElement.dataset.preview === "ready"', cpuThrottle = 0, portWaitMs = 15_000 }) {
   let attempts = 0;
   let live = null;
@@ -122,16 +124,27 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
   const ws = live.ws;
   try {
     let id = 0;
+    // every DevTools call is bounded: a page stuck in a loop, or a Chrome that went away, fails by NAME (the method and
+    // the action) instead of holding the test until its own timeout with nothing said (CI, PR #138: a 300 s silence)
+    let acting = 'setup';
     const call = (method, params = {}) =>
-      new Promise((res) => {
+      new Promise((res, rej) => {
         const mine = ++id;
+        const done = () => {
+          clearTimeout(timer);
+          ws.removeEventListener('message', on);
+          ws.removeEventListener('close', closed);
+        };
         const on = (e) => {
           const m = JSON.parse(e.data);
           if (m.id !== mine) return;
-          ws.removeEventListener('message', on);
+          done();
           res(m.result ?? {});
         };
+        const closed = () => (done(), rej(new Error(`DevTools ${method}: the socket closed (Chrome went away) during ${acting}`)));
+        const timer = setTimeout(() => (done(), rej(new Error(`DevTools ${method} had no answer in ${CALL_MS / 1000} s (the page or Chrome is stuck) during ${acting}`))), CALL_MS);
         ws.addEventListener('message', on);
+        ws.addEventListener('close', closed);
         ws.send(JSON.stringify({ id: mine, method, params }));
       });
     const evaluate = async (expression) => (await call('Runtime.evaluate', { expression, returnByValue: true })).result?.value;
@@ -155,6 +168,7 @@ export async function shootLeaf({ chrome, url, width, height, clip = false, time
       await mouse('mouseReleased', x, y, { clickCount });
     };
     for (const a of actions) {
+      acting = JSON.stringify(a).slice(0, 160);
       if (a.wait) await sleep(a.wait);
       else if (a.until) {
         // wait UNTIL the page says so (never a fixed sleep): throws by name when it never does

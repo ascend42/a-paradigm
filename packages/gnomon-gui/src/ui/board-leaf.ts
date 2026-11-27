@@ -379,7 +379,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     else headKey.setAttribute('aria-disabled', 'true');
     // design dimension-list.a11y / placement (mika D3): 'menu' when the key opens its own list, 'dialog' when the
     // room under it is too small and it opens the palette's list instead
-    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', o.dimRows && dimsRoom() >= dimsMinRoom() ? 'menu' : 'dialog');
+    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', o.dimRows && dimsFits() ? 'menu' : 'dialog');
     else headKey.removeAttribute('aria-haspopup');
     if (!failed && o.dimRows) {
       headKey.setAttribute('aria-expanded', String(dimsOpen));
@@ -920,7 +920,14 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const DIMS_MIN_ROOM = 87;
   /** mika 6 (amends D3): with other rows than the open one, the list needs room for one more row to be a list */
   const DIMS_MIN_ROOM_ROWS = 117;
-  const dimsMinRoom = (): number => ((o.dimRows?.().length ?? 0) > 1 ? DIMS_MIN_ROOM_ROWS : DIMS_MIN_ROOM);
+  /** True when the list fits under the key. The rows are asked for only when the room is between 87 and 117px: never on
+   * every head draw (the dock builds them from the whole store, and the head draws on every key and mark) */
+  const dimsFits = (): boolean => {
+    const room = dimsRoom();
+    if (room >= DIMS_MIN_ROOM_ROWS) return true;
+    if (room < DIMS_MIN_ROOM) return false;
+    return (o.dimRows?.().length ?? 0) <= 1;
+  };
   const DIMS_WIDTH = 344;
   const dimsMenuId = `bd-dims-${++menuIdSeq}`;
   const dimsMenu = h('div', 'bd-menu bd-dims', { role: 'menu', 'aria-label': DIM_LIST_COPY.menuLabel });
@@ -1808,11 +1815,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (load === 'failed') return start();
     if (dimsOpen) return closeDims(true);
     // the list hangs under the key when there is room for its open row, the rule and the find row (mika D3)
-    if (o.dimRows && e.isTrusted && dimsRoom() >= dimsMinRoom()) return openDims();
+    if (o.dimRows && e.isTrusted && dimsFits()) return openDims();
     o.onDimensions?.(e);
   });
   headKey.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted && load !== 'failed' && dimsRoom() >= dimsMinRoom()) {
+    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted && load !== 'failed' && dimsFits()) {
       e.preventDefault();
       openDims();
     }
