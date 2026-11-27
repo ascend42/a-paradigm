@@ -152,8 +152,8 @@ describe.skipIf(!process.env.GNOMON_E3_SHOTS || !chrome)('S1.4 E3 shots for Mika
       }, 120_000);
 });
 
-/** Promoted after Mika's E3 r4 review: another-hand-is-signed at 100 and 400%, compared as decoded pixels on every local run. */
-export const E3_PROMOTED: readonly number[] = Object.freeze([1, 4]);
+/** Promoted after Mika's E3 r4 and r5 reviews: another-hand-is-signed at 25, 49, 50, 100 and 400%, compared as decoded pixels on every local run. */
+export const E3_PROMOTED: readonly number[] = Object.freeze([0.25, 0.49, 0.5, 1, 4]);
 const E3_GOLDEN = path.resolve('test/goldens/e3');
 describe.skipIf(!!process.env.CI || !process.env.GNOMON_BROWSER_TESTS || !!process.env.GNOMON_E3_SHOTS || !chrome)('#gui-board S1.4 E3 goldens (promoted after Mika\'s review)', () => {
   let p: { url: string; close: () => Promise<void> };
