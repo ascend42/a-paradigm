@@ -36,7 +36,8 @@ function partEl(doc: MiniDoc, p: TurnPart, turn: boolean): MiniEl {
     return tail;
   }
   // (Mika E3 r4 F1: a leading space is its own child, so a wrapped line can start without it)
-  const lead = p.text.startsWith(' ') && p.cls !== 'sep' ? [h(doc, 'span', { class: 'sp' }, ' '), p.text.slice(1)] : [p.text];
+  // (Mika E3 r5: a leading ' · ' is the space and the separator, each its own child: a wrapped line reads '04:11')
+  const lead = p.cls === 'sep' ? [p.text] : p.text.startsWith(TURN_COPY.sep) ? [h(doc, 'span', { class: 'sp' }, ' '), h(doc, 'span', { class: 'lsep' }, TURN_COPY.sep.slice(1)), p.text.slice(TURN_COPY.sep.length)] : p.text.startsWith(' ') ? [h(doc, 'span', { class: 'sp' }, ' '), p.text.slice(1)] : [p.text];
   const el = h(doc, 'span', { class: `${p.cls}${turn && p.cls === 'sep' && p.drop === 1 ? ' who-sep' : ''}`, ...drop }, ...lead);
   // dir=auto: an isolate, so an RTL message keeps its first words and a reply's direction cannot leak (Mika 2)
   if (p.bidi) el.setAttribute('dir', 'auto');

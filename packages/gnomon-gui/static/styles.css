@@ -1987,7 +1987,7 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-menu-row.m-1 [data-drop="5"],.bd-menu-row.m-2 [data-drop="2"],.bd-menu-row.m-2 [data-drop="3"],.bd-menu-row.m-3 [data-drop="4"],.bd-menu-row.m-4 [data-drop="6"]{display:none}
 /* Mika E3 r4 F2: the menu's last resort wraps between parts; F1: a wrapped line never starts with a space */
 .bd-menu-row.m-wrap .bd-menu-words{flex-wrap:wrap;white-space:normal;height:auto}
-.bd-menu-row.m-wrap .ln-start > .sp,.bd-turn-notice.wrap .ln-start > .sp{display:none}
+.bd-menu-row.m-wrap .ln-start > .sp,.bd-turn-notice.wrap .ln-start > .sp,.bd-menu-row.m-wrap .ln-start > .lsep,.bd-turn-notice.wrap .ln-start > .lsep{display:none}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
 .bd-hand-s{color:var(--sec)}
 .bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}

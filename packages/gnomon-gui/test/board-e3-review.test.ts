@@ -221,10 +221,13 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
   for (const theme of ['day', 'night'])
     it(`r4 F2: at the 303 leaf with a long agent name, every +k menu row's time is wholly visible (${theme})`, async () => {
       const TIMES = { read: `(() => { const b = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }; const m = document.querySelector('#board-turn .bd-undo-menu');
-        return { menu: b(m), rows: [...m.querySelectorAll('.bd-menu-row')].map((row) => { const w = row.querySelector('.bd-menu-words'); const t = w.querySelector('.t'); return { words: b(w), t: t && getComputedStyle(t).display !== 'none' ? b(t) : null, key: b(row.querySelector('[data-undo-key^="undo|"]')), cls: row.className }; }) }; })()`, as: 'times' };
+        return { menu: b(m), rows: [...m.querySelectorAll('.bd-menu-row')].map((row) => { const w = row.querySelector('.bd-menu-words'); const t = w.querySelector('.t'); return { words: b(w), t: t && getComputedStyle(t).display !== 'none' ? b(t) : null, tStart: t ? t.classList.contains('ln-start') : false, tText: t ? [...t.childNodes].filter((c) => !(c.nodeType === 1 && getComputedStyle(c).display === 'none')).map((c) => c.textContent).join('') : '', key: b(row.querySelector('[data-undo-key^="undo|"]')), cls: row.className }; }) }; })()`, as: 'times' };
       const a = await realShot([...openBoard, ...rectAt(30, 120), ...rectAt(110, 120), ...rectAt(190, 120), LONG_RECOLOUR(1, 0), LONG_RECOLOUR(2, 1), LONG_RECOLOUR(3, 2), { press: '#composer-text' }, ...toDecide, { wait: 600 }, ARM, { press: KEY('more') }, ARM, TIMES], { width: 1024, height: 900, theme, shot: `menu-${theme}-leaf303-long` });
       expect(a.errors).toEqual([]);
-      const m = a.times as { menu: NonNullable<Box>; rows: Array<{ words: NonNullable<Box>; t: Box; key: NonNullable<Box>; cls: string }> };
+      const m = a.times as { menu: NonNullable<Box>; rows: Array<{ words: NonNullable<Box>; t: Box; tStart: boolean; tText: string; key: NonNullable<Box>; cls: string }> };
+      // Mika r5: a time that begins a wrapped line reads '04:11', no separator and no space before it
+      expect(m.rows.some((r) => r.tStart)).toBe(true);
+      for (const r of m.rows) if (r.tStart) expect(r.tText).toMatch(/^\d\d:\d\d$/);
       expect(m.rows).toHaveLength(2);
       for (const r of m.rows) {
         expect(r.t, r.cls).not.toBeNull();
