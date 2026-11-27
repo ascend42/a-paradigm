@@ -1973,6 +1973,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 [data-motion="reduced"] .bd-undo-key .spin{animation:none}
 .bd-menu-row{display:flex;align-items:center;gap:8px}
 .bd-menu-words{flex:1 1 auto;text-align:left;background:none;border:0;color:var(--ink2);font:inherit;padding:4px 8px;cursor:default}
+/* Mika E3 B3: inside the leaf; a row's words cut at the end when the menu is capped (whole in title=) */
+#board-turn .bd-undo-menu{min-width:0}
+.bd-menu-words{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
 .bd-hand-s{color:var(--sec)}
 .bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}

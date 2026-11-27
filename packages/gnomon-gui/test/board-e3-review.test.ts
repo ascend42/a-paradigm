@@ -67,7 +67,7 @@ const PARTS = { read: `(() => { const row = document.querySelector('#board-turn 
   return { leafW: Math.round(leaf.getBoundingClientRect().width), stripW: Math.round(document.querySelector('#board-turn').getBoundingClientRect().width), cut: parts.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent), painted: parts.filter((e) => !e.querySelector('span')).map((e) => e.textContent).join(''), over: line.scrollWidth > line.clientWidth + 0.5, cls: row.className }; })()`, as: 'parts' };
 type Parts = { leafW: number; stripW: number; cut: string[]; painted: string; over: boolean; cls: string };
 const BOX = (q: string) => `(() => { const e = document.querySelector(${JSON.stringify(q)}); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; })()`;
-const MENU_FOOT = { read: `({ menu: ${BOX('#board-turn .bd-undo-menu')}, foot: ${BOX('.bd-host .bd-foot')}, more: ${BOX('#board-turn [data-undo-key^="more|"]')}, after: (() => { const m = document.querySelector('#board-turn .bd-undo-menu'); return m && m.previousElementSibling ? m.previousElementSibling.dataset.undoKey || null : null; })(), role: (() => { const m = document.querySelector('#board-turn .bd-undo-menu'); return m ? [m.getAttribute('role'), ...[...m.querySelectorAll('[role]')].map((e) => e.getAttribute('role'))] : null; })() })`, as: 'mf' };
+const MENU_FOOT = { read: `({ menu: ${BOX('#board-turn .bd-undo-menu')}, foot: ${BOX('.bd-host .bd-foot')}, stage: ${BOX('.bd-host .bd-stage')}, more: ${BOX('#board-turn [data-undo-key^="more|"]')}, after: (() => { const m = document.querySelector('#board-turn .bd-undo-menu'); return m && m.previousElementSibling ? m.previousElementSibling.dataset.undoKey || null : null; })(), role: (() => { const m = document.querySelector('#board-turn .bd-undo-menu'); return m ? [m.getAttribute('role'), ...[...m.querySelectorAll('[role]')].map((e) => e.getAttribute('role'))] : null; })() })`, as: 'mf' };
 type Box = { l: number; t: number; r: number; b: number } | null;
 const meets = (a: Box, b: Box): boolean => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
 const FOCUS = (q: string) => ({ read: `(document.querySelector(${JSON.stringify(q)}).focus(), document.activeElement.dataset.undoKey || null)`, as: 'focused' });
@@ -110,9 +110,11 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
       // (the marks are drawn at the desk's leaf; Decide's 303px leaf is too narrow for the rail's tools)
       const a = await real([...openBoard, ...rectAt(30, 120), ...rectAt(110, 120), ...rectAt(190, 120), turn(1, recolour(0)), turn(2, recolour(1)), turn(3, recolour(2)), ...(o.decide ? [{ press: '#composer-text' }, ...toDecide, { wait: 600 }] : []), ARM, { press: KEY('more') }, ARM, MENU_FOOT, { read: `Math.round(document.querySelector('.bd-host .bd-leaf').getBoundingClientRect().width)`, as: 'leafW' }], { width: o.width, height: 900 });
       expect(a.errors).toEqual([]);
-      const m = a.mf as { menu: Box; foot: Box; more: Box; after: string | null; role: Array<string | null> };
+      const m = a.mf as { menu: Box; foot: Box; stage: Box; more: Box; after: string | null; role: Array<string | null> };
       expect(m.menu).not.toBeNull();
       expect(meets(m.menu, m.foot)).toBe(false);
+      // inside the leaf: never under the sessions column
+      expect(m.menu!.l).toBeGreaterThanOrEqual(m.stage!.l - 1);
       expect(Math.abs(m.menu!.r - m.more!.r)).toBeLessThanOrEqual(1);
       expect(m.after).toMatch(/^more\|/);
       expect(m.role).toEqual([null]);

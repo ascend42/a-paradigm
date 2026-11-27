@@ -92,7 +92,7 @@ export interface BoardTurnStrip {
   live(): boolean;
 }
 
-export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number; menuRoom?: () => { top: number; bottom: number } | null }): BoardTurnStrip {
+export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number; menuRoom?: () => { top: number; bottom: number; left?: number } | null }): BoardTurnStrip {
   const doc = document as unknown as MiniDoc;
   const el = o.el;
   const show = document.createElement('button');
@@ -217,6 +217,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       words.type = 'button';
       words.className = 'bd-menu-words';
       words.textContent = row.title ?? '';
+      words.title = row.title ?? '';
       const id = `bring|${row.target!.key}|${row.target!.rev}`;
       words.dataset.undoKey = id;
       if (!armed.has(id)) armed.set(id, now());
@@ -243,6 +244,8 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     m.style.right = `${Math.max(0, strip.right - k.right)}px`;
     m.style.bottom = `${strip.bottom - bottom}px`;
     m.style.maxHeight = `${Math.max(0, bottom - top)}px`;
+    // inside the leaf: a menu wider than the room left of its key has its rows' words cut (whole in title=)
+    m.style.maxWidth = `${Math.max(0, k.right - Math.max(room?.left ?? strip.left, strip.left) - 4)}px`;
   };
   const closeMenu = (back: boolean): void => {
     if (!menuOpen) return;
