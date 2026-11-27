@@ -297,6 +297,41 @@ describe('S1.4 P4b the hash point after an agent turn (Aegis C2.6) and the arriv
     expect(s.status().checkDue).toBe(false);
   });
 
+  it('the check the dim.op answer completes is EMITTED: the row came back first, then the answer (the real kernel\'s order)', async () => {
+    // the regression: the answer's settle emitted, THEN the check moved, and nothing emitted again; the check line
+    // (painted from the emitted status) read "checked up to 1 change ago" after the person's own drag
+    const w = world();
+    const { s } = await opened(w);
+    let last = s.status();
+    s.onChange((c) => void (last = c.status));
+    s.edit([rect(9)], press('pointerup'));
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    const seq = w.store.stateAt(DIM).seq;
+    expect(w.of('dim.op')).toHaveLength(1);
+    expect(last).toMatchObject({ keep: 'saved', verified: true, checkedSeq: seq });
+  });
+
+  it('the check the dim.op answer points at is EMITTED when its row comes back after the answer', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    let last = s.status();
+    s.onChange((c) => void (last = c.status));
+    w.hold();
+    s.edit([rect(9)], press('pointerup'));
+    await flush(DIM_SEND_LIMITS.gapMs);
+    const c = w.of('dim.op')[0]!;
+    // the answer first, at the row's seq and the fold with it; the row itself comes later
+    const row = { seq: w.store.stateAt(DIM).seq + 1, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: c.args.ops, relayedFor: w.gui() } };
+    const shadow = new DimStore();
+    shadow.apply([...w.store.rows(DIM), row] as never);
+    c.resolve({ result: { ok: true, dim: DIM, seq: row.seq, hash: dimHash(shadow.stateAt(DIM)), attr: dimAttrDigest(shadow.stateAt(DIM)), applied: 1, refused: [] } });
+    await flush(0);
+    expect(last.checkedSeq).not.toBe(row.seq);
+    w.sessions.apply([row]);
+    await flush(0);
+    expect(last).toMatchObject({ verified: true, checkedSeq: row.seq });
+  });
+
   it('ONE arrival line per agent turn, counted from rows; nothing when nothing landed; a result read again says nothing more', async () => {
     const w = world();
     const { s, n } = await opened(w);

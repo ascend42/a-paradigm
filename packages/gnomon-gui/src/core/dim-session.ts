@@ -522,31 +522,37 @@ export class DimSession {
   }
 
   /** Compare the fold at the mod's last answered seq with the hash it gave, once the store has that row. */
-  #check(): void {
+  /**
+   * Compare the fold at the last hash point. True when the check moved (a new point checked): the status changed,
+   * so a caller that would not emit anyway must (the check line reads `checkedSeq`; a moved check never emitted
+   * left the line one change behind: a person's own `dim.op` answer, after its row came back first).
+   */
+  #check(): boolean {
     this.#compareAttr();
     const v = this.#x.verifiedAt(this.dim);
     const store = this.#x.deps.store;
     // checked already at this seq (the whole fold is not hashed again for every row), or already known wrong
-    if (!v || this.#verified === false || this.#checkedSeq === v.seq || store.stateAt(this.dim).seq < v.seq) return;
+    if (!v || this.#verified === false || this.#checkedSeq === v.seq || store.stateAt(this.dim).seq < v.seq) return false;
     const same = dimHash(store.stateAt(this.dim, v.seq)) === v.hash;
     this.#verified = same;
     this.#checkedSeq = v.seq;
-    if (same) return;
+    if (same) return true;
     // the page's fold is not the mod's: the board is READ-ONLY from here until the log is read again (reset)
     this.#readOnly = true;
     this.#leaf?.setInert?.('out-of-date');
     this.#emit({ about: 'check', code: 'hash-mismatch', field: 'dim', why: null, lost: 0 });
+    return false;
   }
 
   #sendBatch(batch: DimLiveBatch): void {
-    const settle = (ack: DimAck): void => {
+    const settle = (ack: DimAck): boolean => {
       // a row that failed takes the rest of its action with it: nothing more comes on that stamp
       if (!ack.ok) this.#release(batch.gesture);
-      if (!this.#dead) this.#after(this.#live.ack(batch.id, ack), 'edit', true);
+      return !this.#dead && this.#after(this.#live.ack(batch.id, ack), 'edit', true);
     };
     void this.#opened
       .then((ok) => {
-        if (!ok) return settle({ ok: false, code: 'not-open', why: null });
+        if (!ok) return void settle({ ok: false, code: 'not-open', why: null });
         return this.#command(batch.gesture, 'dim.op', { ops: batch.ops, act: batch.act }, batch.more, batch.id).then((r) => {
           // the person's own answer is a hash point too (S1.4 P4b: `hash` on the dim.op ok answer); it vouches for
           // every row up to its seq, an agent's included
@@ -554,13 +560,15 @@ export class DimSession {
             this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
             this.#hashPoint(r);
           }
-          settle(dimAckOf(r));
-          this.#check();
+          // checked BEFORE the settle emits: the row usually came back before this answer, so nothing else moves
+          // the check line to this point (it read one change behind until the next row)
+          const moved = this.#check();
+          if (!settle(dimAckOf(r)) && moved && !this.#dead) this.#emit(null);
         });
       })
       .catch((err: unknown) => {
         const f = this.#failure(err);
-        settle({ ok: false, code: f.code, why: f.why });
+        void settle({ ok: false, code: f.code, why: f.why });
       });
   }
 
@@ -583,8 +591,9 @@ export class DimSession {
   }
 
   /** `settling`: the result is of a batch that was already pending (an answer, the timer), not of something the person just did. */
-  #after(r: DimLiveResult, about: DimSessionNotice['about'], settling = false): void {
-    if (this.#dead) return;
+  /** True when it emitted. */
+  #after(r: DimLiveResult, about: DimSessionNotice['about'], settling = false): boolean {
+    if (this.#dead) return false;
     // the link is down and the board says so for as long as it lasts: what was pending falls under THAT line, not
     // under a notice of its own. It is counted, and said once when the link is back.
     if (settling && r.notice && this.#x.link() === null) {
@@ -595,8 +604,10 @@ export class DimSession {
     // refusal, or the check of what still holds): it has no more to send, so the gate goes NOW, whatever else waits
     if (this.#held && this.#heldFor === 'edit' && !this.#live.rides(this.#held)) this.#release(this.#held);
     if (r.changed || r.resync) this.#render();
-    if (r.changed || r.resync || r.notice) this.#emit(r.notice ? { ...r.notice, about } : null);
+    const emit = r.changed || r.resync || !!r.notice;
+    if (emit) this.#emit(r.notice ? { ...r.notice, about } : null);
     this.#arm();
+    return emit;
   }
 
   #emit(notice: DimSessionNotice | null): void {
@@ -1302,8 +1313,9 @@ export class DimSession {
           }
           const sk = isPlainObject(r.skipped) ? r.skipped : {};
           const n = (v: unknown): number => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : 0);
-          this.#flightEnd(then({ kind: 'ok', more: r.more === true, skipped: { changed: n(sk.changed) + n(sk.partial), gone: n(sk.gone), refused: n(sk.refused) } }));
+          // checked before the flight's end emits (the same order as the edit's answer)
           this.#check();
+          this.#flightEnd(then({ kind: 'ok', more: r.more === true, skipped: { changed: n(sk.changed) + n(sk.partial), gone: n(sk.gone), refused: n(sk.refused) } }));
           return;
         }
         const code = isPlainObject(r) && typeof r.code === 'string' ? r.code : 'refused';
@@ -1350,8 +1362,9 @@ export class DimSession {
       resync ||= r.resync;
       this.#noteRemover(row);
     }
-    this.#check();
-    this.#after({ changed, resync, notice: null }, 'edit');
+    // a check this row completed (its hash point answered first) is a status change of its own
+    const moved = this.#check();
+    if (!this.#after({ changed, resync, notice: null }, 'edit') && moved) this.#emit(null);
   }
 
   /** @internal the link went down */

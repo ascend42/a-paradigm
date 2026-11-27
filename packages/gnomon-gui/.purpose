@@ -3126,7 +3126,10 @@ components:
 # reconnect, with the backlog read before connect), select(ids, cause) (dim.select: lowest priority, latest wins,
 # dropped while an edit batch waits, own hsid only), touch(cause) (the hash point after an agent turn: dim.check rides
 # on the person's NEXT trusted press, because every GUI mod.command needs a gesture stamp; once per turn; hash and attr
-# recorded, attr only recorded), dim.op ok answers are hash points too, turnEnded (one `arrived` notice per agent turn)
+# recorded, attr only recorded), dim.op ok answers are hash points too (the fold is checked BEFORE the answer's settle
+# emits, and a check that a later row completes emits on its own: a moved check is always an emitted status, so the
+# check line never stays one change behind after the person's own drag; dim.undo's answer the same), turnEnded (one
+# `arrived` notice per agent turn)
 # and gone(id) (the remover from recent foreign deletes). DimSessions.drewFor(hsid) gives #gui-board-turn the tail
 # ' · drew N on the board' from rows of the latest ended turn (drop levels 4 ' on the board' and 5 'stopped: ').
 # #gui-board: onGone, a held mark another hand removed yields no op at the drop. The leaf (#gui-board, ui/board-leaf.ts)
