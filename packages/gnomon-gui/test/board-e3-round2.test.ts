@@ -52,3 +52,12 @@ describe('E3 round 2 cut-out hit rules (R7)', () => {
     expect(cutoutAt(at, { still: true, tool: 'select', marks: [mark({ id: 'm', x: 310, y: 310, width: 30, height: 30 })], view: V, cutouts })).toBeNull();
   });
 });
+
+describe('E3 review D4 (Mika): the +k and undo keys\' names', () => {
+  it('"1 more change" when k is 1; the undo key\'s name carries the undid lead', () => {
+    expect(noticeStripRow(N(), 'Claude', { others: [], more: 1, time: '10:07' }).aria?.more).toBe('1 more change you can undo');
+    expect(noticeStripRow(N(), 'Claude', { others: [], more: 2, time: '10:07' }).aria?.more).toBe('2 more changes you can undo');
+    expect(noticeStripRow(N({ lead: 'undid', changed: 1 }), 'Claude', { others: [], more: 0, time: '10:07' }).aria?.undo).toBe('Undo Claude’s turn of 10:07 · it undid your change and changed 1 of your marks');
+    expect(noticeStripRow(N({ lead: 'undid', changed: 0 }), 'Claude', { others: [], more: 0, time: '10:07' }).aria?.undo).toBe('Undo Claude’s turn of 10:07 · it undid your change');
+  });
+});
