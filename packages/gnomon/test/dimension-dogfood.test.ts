@@ -31,14 +31,13 @@ import { GuiStore } from '../../gnomon-gui/src/core/store.js';
 import { loadDevHome } from '../src/cli/dev-home.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
 import { tempHome } from './daemon-helpers.js';
 import { DIMENSION, dimId, installDimension, ulid } from './dimension-helpers.js';
-import { sessionWorld, waitFor } from './session-helpers.js';
+import { sessionWorld, waitFor, E2E_SUPERVISOR_SEAMS, e2eSandboxOk, requireE2e } from './session-helpers.js';
 import { GOOD, wsConnect } from './web-helpers.js';
 
-const SANDBOX_OK = darwinFloor().ok;
+const SANDBOX_OK = e2eSandboxOk();
 const subtle = webcrypto.subtle as unknown as SubtleCrypto;
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -156,6 +155,7 @@ async function reconnect(k: DevKernel, page: Page): Promise<DimSession[]> {
 
 const saved = (s: DimSession, ms = 20_000): Promise<boolean> => waitFor(() => s.status().pending === 0, ms, 5);
 
+requireE2e(SANDBOX_OK, 'dimension-dogfood');
 describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real gnomon.dimension mod (S1.3 dogfood)', () => {
   it('open, draw, rows through the followed log, refusal, undo, two tabs, disconnect and reconnect with equal hashes, and spaced sends', async () => {
     const w = sessionWorld();
@@ -173,7 +173,7 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
       userHome,
       start: (o) =>
         startDaemonForTest(o, {
-          supervisor: { claudePath: w.claude, allowScripts: true, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
+          supervisor: { claudePath: w.claude, allowScripts: true, ...E2E_SUPERVISOR_SEAMS, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
           billing: { env: () => ({}), layers: () => [] },
         }),
     });

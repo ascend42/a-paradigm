@@ -382,7 +382,11 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
  * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
  */
 export interface DaemonSeams {
-  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void> };
+  supervisor?: {
+    claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void>;
+    /** S1.4 P5 (the CI e2e job, Aegis ruling 1(a)): stub ONLY the session floor's SIP answer; honoured only with `claudePath` (the fake claude) */
+    sessionSipStub?: boolean;
+  };
   /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, empty until P5, and the kernel's current pins) */
   modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
   billing?: BillingScanSource;
@@ -1260,7 +1264,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
     gitVerbs,
     modBridge,
-    ...(seams.supervisor ?? {}),
+    ...(() => {
+      // the CI SIP stub reaches the supervisor only with the fake claude's path (sessionSipProbe checks it again)
+      const { sessionSipStub, ...rest } = seams.supervisor ?? {};
+      return { ...rest, ...(sessionSipStub === true && rest.claudePath ? { sessionSipStub: true } : {}) };
+    })(),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,

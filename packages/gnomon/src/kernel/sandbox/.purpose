@@ -8,6 +8,17 @@ context:
   - >-
     Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
     relative to packages/gnomon, the package root.
+  - >-
+    S1.4 P5 (Aegis ruling 1(a)): sessionSipProbe in session.ts is the ONE
+    place the test-only `sessionSipStub` seam is read. With it AND the fake
+    claude's claudePath (both only from DaemonSeams.supervisor, via
+    src/kernel/testing.ts) the SESSION profile's floor gets SIP answered
+    true; the macOS-major floor, the sandbox-exec check, the generated
+    profile and its argv stay real (test/session-sip-stub.test.ts: a stubbed
+    plan equals an unstubbed one). It never reaches the mod, loop-act or
+    loop-check floors. The supervisor marks such a launch `sipStub: true` on
+    its session.sandbox row. Used only by the CI job gnomon-e2e-sip-stubbed;
+    the SIP-on proof stays the recorded local run.
 components:
   oracle-sandbox:
     description: >-

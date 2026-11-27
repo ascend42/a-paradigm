@@ -112,7 +112,7 @@ import { privateToUser } from '../../platform/owner-only.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
-import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
+import { sessionLaunchPlan, sessionSandboxFidelity, sessionSipProbe } from '../sandbox/session.js';
 import type { LocalMcpServer, McpListCache } from '../local/mcp-client.js';
 import type { PoolTrust } from '../local/trust-book.js';
 import type { ResultPolicyPort } from '../local/result-policy.js';
@@ -329,6 +329,12 @@ export interface SupervisorOptions {
   macosMajor?: () => number | null;
   /** TEST RIG ONLY: the SIP probe (default: the platform's csrutil). Tests pass false to exercise the SIP refusal, true to run the rig on a SIP-off host. */
   sipEnabled?: () => boolean | null;
+  /**
+   * TEST SEAM ONLY (S1.4 P5, the CI e2e job; Aegis ruling 1(a)): stub the `sip` answer of the SESSION profile's floor,
+   * honoured only with `claudePath` set (the fake claude). The daemon passes it only from `DaemonSeams.supervisor`
+   * (src/kernel/testing.ts); no env, CLI or config reads it. The session.sandbox row then carries `sipStub: true`.
+   */
+  sessionSipStub?: boolean;
   /** #local-runner (M1.8): the local lane's endpoints + runner; absent ⇒ model:local raises a fallback card */
   local?: LocalLaneConfig;
   /** TEST RIG ONLY: the local probe's fetch */
@@ -783,6 +789,8 @@ export class SessionSupervisor {
   /** P8-D94: raised, undecided repo-hook cards by repoKey|setHash|hookId (bounded: MAX_PENDING_HOOK_CARDS) */
   readonly #pendingHookCards = new Map<string, string>();
   readonly #platform: string;
+  /** the SESSION profile's SIP probe (sessionSipProbe: the CI stub only with the fake claude; never the local lane's floors) */
+  readonly #sessionSip: (() => boolean | null) | undefined;
   /** Aegis M2: the kernel git verbs, never on win32 (its session profile has no .git / kernel-worktree denies yet) */
   readonly #gitVerbs: GitVerbs | undefined;
   readonly #identity: SessionIdentity | null;
@@ -820,6 +828,7 @@ export class SessionSupervisor {
   constructor(o: SupervisorOptions) {
     this.#o = o;
     this.#platform = o.platform ?? process.platform;
+    this.#sessionSip = sessionSipProbe(o);
     this.#gitVerbs = this.#platform === 'win32' ? undefined : o.gitVerbs;
     // the session identity is resolved ONCE, at daemon start, from the OS (runner/env.ts), never from the daemon's env
     this.#identity = (o.identity ?? sessionIdentity)();
@@ -1145,7 +1154,7 @@ export class SessionSupervisor {
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
-          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras, hsid }, this.#platform, this.#o.macosMajor, this.#sessionSip);
           const ch = spawn(p.command, p.args, { cwd: req.cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
           let stdout = '';
           const t = setTimeout(() => ch.kill('SIGKILL'), 15_000);
@@ -1198,7 +1207,7 @@ export class SessionSupervisor {
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
       const argv = drv.argv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), appendSystemPrompt: sessionSystemPrompt({ ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}), gitVerbs: this.#gitVerbs ? GIT_VERBS_GUIDANCE : null }), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
-      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#sessionSip);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
       if (wNow !== wHash || gitHash(req.worktree ?? req.cwd) !== gHash) {
@@ -1242,7 +1251,7 @@ export class SessionSupervisor {
       live = s;
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path
       await this.#o.log('session.sandbox', {
-        hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
+        hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), ...(this.#sessionSip !== this.#o.sipEnabled ? { sipStub: true } : {}), profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
         binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, hooksMode, settingSources: [...settingSources], repoHooksApproved: approved.map((h) => h.hookId), permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
         ...(r ? { resumedFrom: r.drainedEventId, drainOutcome: r.outcome } : {}),
         ...(trace ? { traced: true } : traceRefused ? { traced: false, traceRefused } : {}),

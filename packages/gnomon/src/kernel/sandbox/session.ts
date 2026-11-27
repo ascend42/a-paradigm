@@ -71,6 +71,17 @@ export function darwinFloor(probe: MacosProbe = darwinMacosMajor, sip: SipProbe 
   return { ok: true, have, need: SESSION_SANDBOX_MIN_MACOS };
 }
 
+/**
+ * TEST SEAM (S1.4 P5, Aegis ruling 1(a); the CI e2e job): the SIP probe the SESSION profile's floor uses. With
+ * `sessionSipStub` AND a fake-claude `claudePath` (both only ever from `DaemonSeams.supervisor`, read by
+ * src/kernel/testing.ts) the floor's `sip` answer is `true`; everything else stays real: the macOS-major floor,
+ * the `sandbox-exec` presence check, the generated profile and its argv. Without both, the supervisor's own
+ * `sipEnabled` (default: csrutil). It is never passed to the mod, loop-act or loop-check floors.
+ */
+export function sessionSipProbe(o: { sessionSipStub?: boolean; claudePath?: string; sipEnabled?: SipProbe }): SipProbe | undefined {
+  return o.sessionSipStub === true && typeof o.claudePath === 'string' && o.claudePath.length > 0 ? () => true : o.sipEnabled;
+}
+
 function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe): SessionLaunchPlan {
   const floor = darwinFloor(probe, sip);
   if (floor.floor === 'macos') {

@@ -678,3 +678,65 @@ describe('#mod-tool-bridge: source facts that hold on every platform (G-MOD-19; 
     }
   });
 });
+
+/**
+ * S1.4 P5 (Aegis ruling 1(a) and 2, item 4): the TEST seams the turn-on leans on stay test-only. Each token appears
+ * outside comments only in the files allowed below; no line naming it reads the environment, the argv or a config;
+ * production starts pass no seams; and the internal test entry is no export or bin target (its import closure:
+ * test/seams-fence.test.ts).
+ */
+describe('S1.4 P5 test seams: sessionSipStub, loopOriginFor and modBridge.currentPin are reachable only from DaemonSeams', () => {
+  const SRC = path.join(PKG_ROOT, 'src');
+  const files = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : /\.(ts|mts|mjs|js)$/.test(e.name) ? [path.join(dir, e.name)] : []));
+  const code = (f: string): string => fs.readFileSync(f, 'utf8').replace(/\/\*[^]*?\*\/|\/\/.*$/gm, '');
+  const rel = (f: string): string => path.relative(SRC, f).split(path.sep).join('/');
+  const ALLOWED: Record<string, string[]> = {
+    // daemon.ts: the DaemonSeams field and its one hand-over; supervisor.ts: the option; session.ts: the one rule
+    sessionSipStub: ['kernel/lifecycle/daemon.ts', 'kernel/sandbox/session.ts', 'kernel/supervisor/supervisor.ts'],
+    // daemon.ts: the one hand-over into ModBridgeSeams; mcp-bridge.ts: the parameter, the seam type and its one read
+    currentPin: ['kernel/lifecycle/daemon.ts', 'kernel/modhost/mcp-bridge.ts'],
+  };
+
+  it('each token names only its allowed files, and no line naming it reads process.env, process.argv or a config', () => {
+    for (const [token, allowed] of Object.entries(ALLOWED)) {
+      const found: string[] = [];
+      for (const f of files(SRC)) {
+        const lines = code(f).split('\n').filter((l) => new RegExp(`\\b${token}\\b`).test(l));
+        if (!lines.length) continue;
+        found.push(rel(f));
+        for (const l of lines) expect([token, rel(f), /process\.(env|argv)|\bconfig\b|getConfig|readConfig|parseArgs|--[a-z]/i.test(l), l.trim()]).toEqual([token, rel(f), false, l.trim()]);
+      }
+      expect([token, found.sort()]).toEqual([token, [...allowed].sort()]);
+    }
+  });
+
+  it('in daemon.ts each token is read only off `seams.` (DaemonSeams), and the production start passes an empty seam set', () => {
+    const d = code(path.join(SRC, 'kernel', 'lifecycle', 'daemon.ts'));
+    expect(d).toMatch(/const \{ sessionSipStub, \.\.\.rest \} = seams\.supervisor \?\? \{\};/);
+    expect(d.match(/\bsessionSipStub\b/g)?.length).toBe(4); // the field, the destructure, the condition, the hand-over
+    expect(d).toMatch(/seams\.modBridge\?\.currentPin \? \{ currentPin: seams\.modBridge\.currentPin \}/);
+    expect(d.match(/\bcurrentPin\b/g)?.length).toBe(3);
+    // the one production start, and the seam channel's registration (read only by src/kernel/testing.ts)
+    expect(d.match(/startDaemonWith\(/g)?.length).toBe(3);
+    expect(d).toContain('return startDaemonWith(opts, {});');
+    expect(d).toContain("registerSeams('daemon', { start: (opts, seams) => startDaemonWith(opts, seams) });");
+    // gnomond and `gnomon dev up` reach the daemon through startDaemon only, never the test entry or the seam channel
+    for (const f of ['cli/gnomond.ts', 'cli/dev-cli.ts', 'cli/gnomon.ts']) {
+      const c = code(path.join(SRC, ...f.split('/')));
+      expect([f, /testing\.js|internal-seams|seamsOf|startDaemonForTest|sessionSipStub|loopOriginFor/.test(c)]).toEqual([f, false]);
+    }
+  });
+
+  it('kernel/testing.ts is no package export or bin target: every one maps to a tsup production entry, none of them the test entry', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as { exports: Record<string, unknown>; bin: Record<string, string> };
+    const targets = [...Object.values(pkg.exports).flatMap((v) => (typeof v === 'string' ? [v] : Object.values(v as Record<string, string>))), ...Object.values(pkg.bin)].filter((t) => t.startsWith('./dist/') || t.startsWith('dist/'));
+    const tsup = fs.readFileSync(path.join(PKG_ROOT, 'tsup.config.ts'), 'utf8');
+    const entries = Object.fromEntries([...tsup.slice(tsup.indexOf('entry: {'), tsup.indexOf('},', tsup.indexOf('entry: {'))).matchAll(/'?([\w/-]+)'?: '(src\/[^']+\.ts)'/g)].map((m) => [m[1]!, m[2]!]));
+    for (const t of targets) {
+      const name = t.replace(/^\.?\/?dist\//, '').replace(/\.(d\.ts|js)$/, '');
+      expect([t, typeof entries[name]]).toEqual([t, 'string']);
+      expect(entries[name]).not.toMatch(/testing/);
+    }
+    expect(JSON.stringify(pkg.exports) + JSON.stringify(pkg.bin)).not.toMatch(/testing/);
+  });
+});
