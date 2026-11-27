@@ -43,6 +43,10 @@ components:
       menu lists every hand over the foot (I6); a split frozen by focus is
       redrawn when focus leaves (I4b); keyed hands are fitted alone and
       unkeyed ones never move a key (I5); a menu row drops the shared name
+      before its session (F1). STATED LIMIT (I5): keyed hands are fitted
+      again only when '+<k> ▾' itself has no room beside them; then a key
+      can move as an unkeyed hand arrives (a clipped key would be worse).
+      Too short, ↑ from the first menu row closes the menu (WCAG 2.4.11).
       before its session (F1). The list: held still for any reason
       disables its rows (N2); a press closes it only when the dock sent
       (N1); 117px with other rows (Mika 6); seen refreshed on repaint (N3).
