@@ -22,7 +22,7 @@ import { GuiStore } from '../../gnomon-gui/src/core/store.js';
 import { KERNEL_PUB_FILE } from '../src/kernel/identity/kernel-pub.js';
 import { verifyLog } from '../src/kernel/log/kernel-log.js';
 import { KeyRing } from '../src/kernel/log/signer.js';
-import { dimId, installDimension, ulid } from './dimension-helpers.js';
+import { DIMENSION, dimId, installDimension, ulid } from './dimension-helpers.js';
 import { GOOD, wsConnect } from './web-helpers.js';
 import { loadDevHome } from '../src/cli/dev-home.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
@@ -398,5 +398,92 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect([...new Set(turnCaused.map((e) => e.kind))].sort()).toEqual(expect.arrayContaining([DIM_KINDS.op]));
     expect(turnCaused.every((e) => e.kind === DIM_KINDS.op || e.kind === 'modns.gnomon.dimension.draw.refused')).toBe(true);
     await r.k.client.call('session.stop', { hsid });
+  }, 180_000);
+  it('C: revoked mid-turn (write-not-granted, no row, no budgetLeft); a call after the result is noTurn; manual (chosen) and the L3 ceiling refuse every tool with and without can_use_tool; a paused mod is unknown at the next call and a new session has no entry', async () => {
+    const r = await boardRig('mbC-');
+    const P = await guiPage(r.k);
+    const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
+    const hsid = s.hsid;
+    const dim = dimId(3);
+    const a = P.sessions.open({ dim, hsid, opened: 'command', title: 'P5 gates' }, press('click'));
+    expect(await a.opened(), JSON.stringify(a.lastNotice())).toBe(true);
+    a.edit([rectAt(1)], press());
+    expect(await waitFor(() => a.status().pending === 0, 20_000, 5)).toBe(true);
+    const agentRows = () => r.rows([DIM_KINDS.op]).filter((x) => (x.event.payload.relayedFor as { surface?: string } | undefined)?.surface === 'bridge').length;
+    const turnResults = () => r.rows(['turn.result']).length;
+
+    /* C1: one turn draws, the person revokes through the real socket, the same turn draws again */
+    await r.turn(hsid, [r.tool('g1', 'dim-draw', { ops: [agentAdd(1)] }), [{ waitFile: 'go-revoke' }], r.tool('g2', 'dim-draw', { ops: [agentAdd(2)] })]);
+    expect(await r.answered(['g1'])).toBe(true);
+    expect(r.body<{ ok: boolean }>('g1').ok).toBe(true);
+    expect(agentRows()).toBe(1);
+    expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === hsid)?.state === 'live', 10_000)).toBe(true);
+    expect(a.grant(hsid, press())).toBe(true);
+    expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === hsid)?.write === false && !!r.rows(['modns.gnomon.dimension.grant', DIM_KINDS.op]).length, 10_000)).toBe(true);
+    fs.writeFileSync(path.join(r.w.stubDir, 'go-revoke'), 'x');
+    expect(await r.answered(['g2'])).toBe(true);
+    const g2 = r.body<Record<string, unknown>>('g2');
+    expect([g2.ok, g2.code]).toEqual([false, 'write-not-granted']);
+    expect(Object.hasOwn(g2, 'budgetLeft')).toBe(false);
+    expect(agentRows()).toBe(1);
+    expect(await waitFor(() => turnResults() >= 1, 15_000)).toBe(true);
+
+    /* C4: a tools/call written after the turn's result (a late background sub-agent) is noTurn */
+    setMode(r.w, { reloadPerTurn: true, permissionAsk: { hold: false, steps: [], afterResult: [line('m-late', { jsonrpc: '2.0', id: 900, method: 'tools/call', params: { name: 'dim-view', arguments: {} } }).line] } });
+    await r.k.client.call('session.send', { hsid, content: [{ text: 'go' }] });
+    expect(await r.answered(['late'])).toBe(true);
+    expect(r.raw('late')).toBe(MOD_BRIDGE_SENTENCES.noTurn);
+    expect(await waitFor(() => turnResults() >= 2, 15_000)).toBe(true);
+
+    /* C2 (chosen manual): set through the kernel's run-mode verb on the GUI connection, never a seam */
+    const modeSet = await P.client.call<Record<string, unknown>>('log.append', { kind: 'request.mode.set', payload: { repo: r.w.cwd, to: 'manual' } });
+    expect(modeSet).toMatchObject({ changed: true, applied: true });
+    const bare = (id: string, name: string) => [line(`m-${id}`, { jsonrpc: '2.0', id: 800 + id.length, method: 'tools/call', params: { name, arguments: name === 'dim-draw' ? { ops: [agentAdd(9)] } : {} } })]; // no can_use_tool, no toolUseId
+    const before = agentRows();
+    await r.turn(hsid, [bare('mv', 'dim-view'), bare('mdr', 'dim-draw'), r.tool('mr', 'dim-view', {}), r.tool('mrd', 'dim-draw', { ops: [agentAdd(10)] })]);
+    expect(await r.answered(['mv', 'mdr', 'mr', 'mrd'])).toBe(true);
+    for (const id of ['mv', 'mdr', 'mr', 'mrd']) expect([id, r.raw(id)]).toEqual([id, MOD_BRIDGE_SENTENCES.manual]);
+    for (const id of ['p-mr', 'p-mrd']) expect(trace(r.w).find((x) => x.t === 'perm-answer' && x.id === id)).toMatchObject({ behavior: 'deny' });
+    expect(agentRows()).toBe(before);
+
+    /* C2 (the L3 ceiling): a second repo whose CHOSEN mode is untouched; the repo raised to L3 makes it manual */
+    const repo2 = path.join(r.w.root, 'repo2');
+    fs.mkdirSync(path.join(repo2, '.git', 'hooks'), { recursive: true });
+    fs.mkdirSync(path.join(repo2, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(repo2, '.git', 'config'), '[core]\n');
+    setMode(r.w, { reloadPerTurn: true });
+    const s2 = await r.k.client.call<{ hsid: string }>('session.open', { cwd: repo2, attended: true });
+    expect(await P.client.call<Record<string, unknown>>('log.append', { kind: 'request.strictness.set', payload: { repo: repo2, to: 'L3' } })).toBeTruthy();
+    await r.turn(s2.hsid, [bare('cv', 'dim-view'), r.tool('cr', 'dim-view', {}), r.tool('crd', 'dim-draw', { ops: [agentAdd(11)] })]);
+    expect(await r.answered(['cv', 'cr', 'crd'])).toBe(true);
+    for (const id of ['cv', 'cr', 'crd']) expect([id, r.raw(id)]).toEqual([id, MOD_BRIDGE_SENTENCES.manual]);
+    expect(agentRows()).toBe(before);
+    // the counter rows (folded, written at stop) and the suspect rows of the calls with no can_use_tool
+    await r.k.client.call('session.stop', { hsid: s2.hsid });
+    await r.k.client.call('session.stop', { hsid });
+    expect(await waitFor(() => r.rows(['inject.receipt']).filter((x) => x.event.payload.outcome === 'refused').length >= 2, 15_000)).toBe(true);
+    const counters = r.rows(['inject.receipt']).filter((x) => x.event.payload.outcome === 'refused');
+    expect(counters.every((x) => x.event.principal === `p:${r.ns}/mods-mcp`)).toBe(true);
+    expect(counters.reduce((n, x) => n + ((x.event.payload.byWhy as Record<string, number>).manual ?? 0), 0)).toBe(7);
+    expect(await waitFor(() => r.rows(['approval.suspect']).length >= 1, 15_000)).toBe(true);
+    const suspects = r.rows(['approval.suspect']).filter((x) => JSON.stringify(x.event.payload).includes('gnomon-mods'));
+    expect(JSON.stringify(suspects)).toContain('ungated-tool-use');
+    expect(suspects.reduce((n, x) => n + ((JSON.parse(JSON.stringify(x.event.payload)) as { byWhy?: Record<string, number>; detail?: { byWhy?: Record<string, number> } }).byWhy?.missing ?? (x.event.payload as { detail?: { byWhy?: Record<string, number> } }).detail?.byWhy?.missing ?? 0), 0)).toBe(4); // m-late, mv, mdr, cv: no can_use_tool and no toolUseId
+
+    /* C5: pause the mod through the admin verb: the next call is the unknown tool, a new session gets no entry */
+    setMode(r.w, { reloadPerTurn: true });
+    const s3 = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
+    expect(await waitFor(() => trace(r.w).filter((x) => x.t === 'argv').length >= 3, 15_000)).toBe(true);
+    expect(mcpJsonText(r.w)).toContain('gnomon-mods');
+    await P.client.call('log.append', { kind: 'request.mod.pause', payload: { name: DIMENSION } });
+    await r.turn(s3.hsid, [r.list('pl'), r.tool('pz', 'dim-view', {})]);
+    expect(await r.answered(['pl', 'pz'])).toBe(true);
+    expect(answer(r.w, 'm-pl')!.mcp!.result!.tools).toEqual([]);
+    expect(answer(r.w, 'm-pz')!.mcp!.error).toMatchObject({ code: -32602 });
+    await r.k.client.call('session.stop', { hsid: s3.hsid });
+    const s4 = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
+    expect(await waitFor(() => trace(r.w).filter((x) => x.t === 'argv').length >= 4, 15_000)).toBe(true);
+    expect(mcpJsonText(r.w).includes('gnomon-mods')).toBe(false);
+    await r.k.client.call('session.stop', { hsid: s4.hsid });
   }, 180_000);
 });
