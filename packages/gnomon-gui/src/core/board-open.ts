@@ -129,7 +129,8 @@ export function listTime(lastAt: string | null, now: number): string {
 
 /** A listed title as line 1 shows it (aegis C4.2): the leaf head's check, then no control or format character; 'Untitled' when nothing is left. */
 export function listTitle(title: string): string {
-  return boardTitleOf(String(title ?? '')).replace(/[\p{Cc}\p{Cf}]/gu, '').trim() || 'Untitled';
+  // (the contracts' ONE sanitizer, through boardTitleOf: a control or bidi character never reaches the row raw)
+  return boardTitleOf(String(title ?? '')) || 'Untitled';
 }
 
 /** What the open board's row says of its check (from this page's session, never the listing: aegis C4.4). */

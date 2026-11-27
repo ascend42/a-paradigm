@@ -2093,3 +2093,4 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-dscroll { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .bd-dims > .bd-dr { flex: none; }
 .pal-kbd.bad { color: var(--fail); }
+.pal-row .pal-mark { flex: none; width: 14px; color: var(--ink); }

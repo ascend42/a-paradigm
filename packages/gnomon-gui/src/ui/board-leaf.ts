@@ -918,7 +918,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const DIMS_MIN_ROOM = 87;
   const DIMS_WIDTH = 344;
   const dimsMenuId = `bd-dims-${Math.random().toString(36).slice(2, 8)}`;
-  const dimsMenu = h('div', 'bd-menu bd-dims', { role: 'menu', 'aria-label': DIM_LIST_COPY.menuLabel, id: dimsMenuId });
+  const dimsMenu = h('div', 'bd-menu bd-dims', { role: 'menu', 'aria-label': DIM_LIST_COPY.menuLabel });
+  dimsMenu.id = dimsMenuId;
   const dimsScroll = h('div', 'bd-dscroll', { role: 'none' });
   const dimsEls = new Map<string, { row: HTMLButtonElement; sig: string; seen: DimensionRow['seen']; current: boolean }>();
   let dimsOpen = false;
@@ -1125,7 +1126,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let behindHands: Node[] = [];
   const handsMenuId = `bd-hands-menu-${Math.random().toString(36).slice(2, 8)}`;
   let moreEl: HTMLButtonElement | null = null;
-  const handsMenu = h('div', 'bd-menu bd-hands-menu', { id: handsMenuId });
+  const handsMenu = h('div', 'bd-menu bd-hands-menu');
+  handsMenu.id = handsMenuId;
   function moreKey(n: number): HTMLButtonElement {
     if (!moreEl) {
       moreEl = h('button', 'key quiet bd-hands-more', { type: 'button', 'aria-controls': handsMenuId, 'aria-expanded': 'false' }) as HTMLButtonElement;
