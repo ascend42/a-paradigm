@@ -372,7 +372,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
             },
             // the head key's own list (design dimension-list): the rows, and a press on one (aegis C4.5 at the press)
             dimRows: () => dockApi.rows(),
-            onChooseDim: (dim: string, cause: Event, seen: DimensionRow['seen']): boolean => cause.isTrusted === true && dockApi.choose(dim, cause, seen),
+            onChooseDim: (dim: string, cause: Event, seen: DimensionRow['seen']): boolean => cause.isTrusted && dockApi.choose(dim, cause, seen),
           }
         : {}),
       ...session.leafOptions(),

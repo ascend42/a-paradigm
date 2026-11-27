@@ -226,6 +226,8 @@ const place = (e: HTMLElement | SVGElement, left: number, top: number): void => 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 const isField = (n: Element | null): boolean => !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA');
 
+/** the leaf's menus' ids (aria-controls), one per mount: a counter, not a random value */
+let menuIdSeq = 0;
 export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardLeaf {
   let handle: BoardHandle | null = null;
   let load: LeafLoad = 'loading';
@@ -917,7 +919,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // builder (two-line menuitemradio rows, the mark, the note line, the find row), not menuOf
   const DIMS_MIN_ROOM = 87;
   const DIMS_WIDTH = 344;
-  const dimsMenuId = `bd-dims-${Math.random().toString(36).slice(2, 8)}`;
+  const dimsMenuId = `bd-dims-${++menuIdSeq}`;
   const dimsMenu = h('div', 'bd-menu bd-dims', { role: 'menu', 'aria-label': DIM_LIST_COPY.menuLabel });
   dimsMenu.id = dimsMenuId;
   const dimsScroll = h('div', 'bd-dscroll', { role: 'none' });
@@ -1124,7 +1126,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let handsOpen = false;
   let shownIds: Set<string> | null = null;
   let behindHands: Node[] = [];
-  const handsMenuId = `bd-hands-menu-${Math.random().toString(36).slice(2, 8)}`;
+  const handsMenuId = `bd-hands-menu-${++menuIdSeq}`;
   let moreEl: HTMLButtonElement | null = null;
   const handsMenu = h('div', 'bd-menu bd-hands-menu');
   handsMenu.id = handsMenuId;
@@ -1748,11 +1750,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (load === 'failed') return start();
     if (dimsOpen) return closeDims(true);
     // the list hangs under the key when there is room for its open row, the rule and the find row (mika D3)
-    if (o.dimRows && e.isTrusted === true && dimsRoom() >= DIMS_MIN_ROOM) return openDims();
+    if (o.dimRows && e.isTrusted && dimsRoom() >= DIMS_MIN_ROOM) return openDims();
     o.onDimensions?.(e);
   });
   headKey.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted === true && load !== 'failed' && dimsRoom() >= DIMS_MIN_ROOM) {
+    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted && load !== 'failed' && dimsRoom() >= DIMS_MIN_ROOM) {
       e.preventDefault();
       openDims();
     }
