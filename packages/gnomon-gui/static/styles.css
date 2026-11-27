@@ -1414,7 +1414,7 @@ body:has(.transcript.bd-open) #reconnect { align-items: flex-end; padding-top: 0
    the latest turn under an open board, a transcript-row variant (turn-strip). At most two one-line rows (you 24px,
    the turn 28px) on --sheet with a 1px --rule top edge, no box. Never overflow:hidden: show chat's focus ring sits
    outside the row. A tight turn row drops (.tight-N) the reply, then the name, then "more in the chat". */
-.bd-turn { flex: 0 0 auto; display: flex; flex-direction: column; padding: 0 14px; background: var(--sheet); border-top: 1px solid var(--rule); font-size: var(--fs-control); line-height: 18px; color: var(--ink2); }
+.bd-turn { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; padding: 0 14px; background: var(--sheet); border-top: 1px solid var(--rule); font-size: var(--fs-control); line-height: 18px; color: var(--ink2); }
 .bd-turn[hidden] { display: none; }
 .bd-turn-r { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .bd-turn-you { height: 24px; color: var(--ink); }
@@ -1939,6 +1939,23 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-tick.bl{left:0;bottom:0;border-left-width:1px;border-bottom-width:1px}
 .bd-tick.br{right:0;bottom:0;border-right-width:1px;border-bottom-width:1px}
 .bd-trace{position:absolute;box-sizing:border-box;border:1px dashed var(--ink2);pointer-events:none}
+/* S1.4 E3 (undo-key.slot; turn_strip.notice): three fixed columns from the right, the same on every row kind */
+.bd-turn-notice,.bd-turn-mark{display:flex;align-items:center;min-height:28px}
+.bd-turn-notice .bd-turn-line,.bd-turn-mark .bd-turn-line{flex:1 1 auto;min-width:0}
+.bd-turn-notice.done .who:first-child{color:var(--ink);font-weight:500}
+.bd-turn-keys{display:flex;flex:0 0 auto;gap:8px;margin-left:12px;align-items:center}
+.bd-col{display:flex;justify-content:flex-end}
+.bd-col.bd-undo-col{min-width:calc(8ch + 30px)}
+.bd-col.bd-right-col{min-width:calc(9ch + 18px)}
+.bd-col.bd-more-col{min-width:calc(5ch + 16px)}
+.bd-undo-key[aria-disabled="true"]{color:var(--sec);border-color:var(--rule)}
+.bd-turn-notice.tight-1 [data-drop="1"],.bd-turn-mark.tight-1 [data-drop="1"],.bd-turn-notice.tight-2 [data-drop="2"]{display:none}
+.bd-turn-notice.two-line{flex-wrap:wrap;min-height:48px}
+.bd-turn-notice.two-line .bd-turn-line{flex-basis:100%;height:20px}
+.bd-turn-notice.two-line .bd-turn-keys{margin-left:auto}
+.bd-undo-menu{position:absolute;right:0;bottom:100%;z-index:3}
+.bd-menu-row{display:flex;align-items:center;gap:8px}
+.bd-menu-words{flex:1 1 auto;text-align:left;background:none;border:0;color:var(--ink2);font:inherit;padding:4px 8px;cursor:default}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
 .bd-hand-s{color:var(--sec)}
 .bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}

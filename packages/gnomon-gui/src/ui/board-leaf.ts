@@ -107,6 +107,8 @@ export interface LeafGrant {
 }
 
 export interface BoardLeaf {
+  /** S1.4 E3: focus goes to the board (a focused strip key's row left) */
+  focusBoard?(): void;
   el: HTMLElement;
   /** S1.4 P4b: one line to a screen reader only (the polite status line), never the keep line: the arrival line, a confirmed grant */
   speak(line: string): void;
@@ -1393,6 +1395,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
 
   start();
   return {
+    focusBoard: () => handle?.focus(),
     el,
     speak(line) {
       // a polite line only: the keep line stays the person's own (design said.arrival). Cleared, then set on the next

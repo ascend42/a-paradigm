@@ -20,7 +20,9 @@
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { DIM_KINDS } from '@a-company/gnomon-contracts';
-import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle } from '../core/board-leaf.js';
+import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle, undoLine } from '../core/board-leaf.js';
+import { noticeStripRow, type TurnStripRow } from '../core/board-turn.js';
+import { hhmm } from '../core/loops.js';
 import { boardAgentName, handName, sessionShort } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
@@ -102,6 +104,23 @@ export interface BoardDock {
   setTheme(theme: BoardTheme): void;
   /** the open leaf and its session (tests and the app's layout checks) */
   current(): { leaf: BoardLeaf; session: DimSession } | null;
+  /** S1.4 E3: the open board's notice row and its +k menu rows, as the strip draws them; null with no board open */
+  noticeStrip(): NoticeStrip | null;
+  /** S1.4 E3: a strip key pressed (the strip checked U1); the session drops anything else */
+  noticeKey(what: 'undo' | 'redo' | 'dismiss' | 'bring', target: { key: string; rev: number; id?: string }, event: Event): void;
+  /** S1.4 E3 (U2): the strip is hovered, focused or its menu open */
+  freezeNotices(on: boolean): void;
+  /** S1.4 E3: a focused key's row left: focus goes to the board, never to another key */
+  focusBoard(): void;
+}
+
+/** S1.4 E3: what the turn strip draws of the open board's notices. */
+export interface NoticeStrip {
+  slot: TurnStripRow | null;
+  behind: TurnStripRow[];
+  /** every undo-family key is disabled: pending past 300 ms (`slow`), or held (link down, out of date, catching up) */
+  pending: { since: number } | null;
+  held: string | null;
 }
 
 const two = (n: number): string => String(n).padStart(2, '0');
@@ -268,6 +287,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   /** One notice of the session, said once, in the leaf's words. */
   function tell(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): void {
     if (tellHand(session, leaf, n)) return;
+    // S1.4 E3 (said.undo): an undo-family key's answer, or a ninth notice pushing the oldest out (N2)
+    if (n.about === 'undo' && n.scope !== undefined || n.code === 'pushed-out' || n.code === 'redone') {
+      const line = undoLine(n, handNameOf(session, n.hsid ?? '', n.agent ?? null), (t) => hhmm(new Date(t).toISOString()));
+      if (line) leaf.say(line);
+      return;
+    }
     if (n.about === 'link' && n.code === 'link-down') {
       // the link went: what was being typed is held in page memory (the held-still line says so while it lasts)
       // (an out-of-date board can never store them: nothing is held for a rebuilt board to give back, aegis F6)
@@ -347,6 +372,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
         paint(session, leaf, c.status);
         leaf.drawFoot();
         if (c.notice) tell(session, leaf, c.notice);
+        // S1.4 E3: the strip holds the board's notices; it is painted again with the session
+        d.turn?.();
       }),
       // held words go back ONLY into a text the person opens on this dimension, for the same principal, link up
       leaf.onTextOpen(() => {
@@ -604,5 +631,27 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     setTheme: (theme) => cur?.leaf.setTheme(theme),
     current: () => (cur ? { leaf: cur.leaf, session: cur.session } : null),
+    noticeStrip() {
+      if (!cur) return null;
+      const session = cur.session;
+      const v = session.noticeView();
+      const row = (n: NonNullable<typeof v.shown>, more: number): TurnStripRow =>
+        noticeStripRow(n, handNameOf(session, n.of.hsid, n.agent), { others: n.others.map((o) => (o ? handName(boardAgentName(o)) : '')), more, time: hhmm(new Date(n.at).toISOString()) });
+      return { slot: v.shown ? row(v.shown, v.behind.length) : null, behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held };
+    },
+    noticeKey(what, target, event) {
+      const session = cur?.session;
+      if (!session || !event.isTrusted) return;
+      if (what === 'undo') {
+        if (target.id) session.undoMark(target.id, target.key, target.rev, event);
+        else session.undoNotice(target.key, target.rev, event);
+      } else if (what === 'redo') session.redoNotice(target.key, event);
+      else if (what === 'dismiss') session.dismissNotice(target.key, event);
+      else session.bringNotice(target.key, event);
+    },
+    freezeNotices: (on) => cur?.session.freezeNotices(on),
+    focusBoard: () => {
+      if (cur && !d.cardFocused()) cur.leaf.focusBoard?.();
+    },
   };
 }

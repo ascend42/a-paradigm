@@ -872,6 +872,7 @@ function paintBoardTurnNow(): void {
     // the board's room measured WITHOUT the strip (Luna: two rows at 300px), so the switch cannot flicker
     room: () => (boardDock.current()?.leaf.room() ?? 0) + $('board-turn').offsetHeight,
     kept: boardDock.kept(),
+    notices: boardDock.noticeStrip(),
   });
   // (deferred: the ticker also runs while only the strip shows a running turn, the raw view's case)
   liveTicker.sync(hasLive(items) || strip.live());
@@ -2015,7 +2016,15 @@ const boardDock = mountBoardDock({
   localModel: (hsid) => backendWord(store.sessions.get(hsid)?.backend) === 'local model',
 });
 // #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
-turnStrip = mountBoardTurn({ el: $('board-turn'), onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)), onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)) });
+turnStrip = mountBoardTurn({
+  el: $('board-turn'),
+  onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)),
+  onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)),
+  // S1.4 E3: the notices' keys, the U2 freeze, and focus to the board when a focused key's row leaves
+  onNoticeKey: (what, target, e) => boardDock.noticeKey(what, target, e),
+  onFreeze: (on) => boardDock.freezeNotices(on),
+  onFocusBoard: () => boardDock.focusBoard(),
+});
 boardRepaint = () => boardDock.repaint();
 boardLook = (t) => boardDock.setTheme(t);
 const loopsView = mountLoopsView({

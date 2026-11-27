@@ -15,7 +15,9 @@
  *  - A tight turn row drops by core order (reply, name, more), measured on the strip's own paint
  *    (line.scrollWidth > clientWidth), never by a viewport query.
  */
-import { TURN_COPY, turnStripRows, type LatestTurn, type TurnPart, type TurnStripRow } from '../core/board-turn.js';
+import { TURN_COPY, turnStripRows, withSlot, type LatestTurn, type TurnPart, type TurnStripRow } from '../core/board-turn.js';
+import { UNDO_COPY } from '../core/board-leaf.js';
+import type { NoticeStrip } from './board-dock.js';
 import { workParts } from '../core/live-turn.js';
 import { displayText, h, type MiniDoc, type MiniEl } from '../core/render.js';
 import type { FoldedItem } from '../core/store.js';
@@ -49,6 +51,8 @@ export function stripWorkingEl(doc: MiniDoc, it: FoldedItem, now: number): MiniE
 export function renderTurnRow(doc: MiniDoc, row: TurnStripRow, now: number): MiniEl {
   if (row.kind === 'you') return h(doc, 'div', { class: 'bd-turn-r bd-turn-you' }, ...row.parts.map((p) => partEl(doc, p, false)));
   const line = h(doc, 'div', { class: 'bd-turn-line' }, ...(row.working ? [stripWorkingEl(doc, row.working, now)] : row.parts.map((p) => partEl(doc, p, true))));
+  // S1.4 E3: notice and mark rows are not live regions (#turn-say and the leaf's status line speak)
+  if (row.kind === 'notice' || row.kind === 'mark') return h(doc, 'div', { class: `bd-turn-r bd-turn-${row.kind}${row.done ? ' done' : ''}` }, line);
   return h(doc, 'div', { class: `bd-turn-r bd-turn-turn${row.refused ? ' refused' : ''}` }, line);
 }
 
@@ -69,7 +73,16 @@ export interface BoardTurnView {
   room: () => number;
   /** the board is held still with words or unsaved changes: show chat does not fold, and its title says why */
   kept: boolean;
+  /** S1.4 E3: the open board's standing notices (the slot's row and the +k menu's rows) */
+  notices?: NoticeStrip | null;
 }
+
+/** S1.4 E3 (undo-key aegis U1): a key takes presses only this long after it, or its row's words, were last drawn. */
+export const UNDO_ARM_MS = 500;
+/** S1.4 E3 (undo-key pending): the working look only once the answer is slow. */
+export const UNDO_QUIET_MS = 300;
+type NoticeWhat = 'undo' | 'redo' | 'dismiss' | 'bring';
+const WORD_WHAT: Readonly<Record<string, NoticeWhat>> = { undo: 'undo', redo: 'redo', 'put back': 'undo', dismiss: 'dismiss' };
 
 export interface BoardTurnStrip {
   paint(v: BoardTurnView): void;
@@ -79,7 +92,7 @@ export interface BoardTurnStrip {
   live(): boolean;
 }
 
-export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void }): BoardTurnStrip {
+export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; now?: () => number }): BoardTurnStrip {
   const doc = document as unknown as MiniDoc;
   const el = o.el;
   const show = document.createElement('button');
@@ -90,6 +103,140 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
   show.addEventListener('click', (e) => o.onShowChat(e));
   let sig = '';
   let working: FoldedItem | null = null;
+  const now = o.now ?? (() => performance.now());
+
+  // ── S1.4 E3: the notice and mark rows' keys ────────────────────────────────
+  /** when each key (by what, target and word) was last drawn: a press inside UNDO_ARM_MS is dropped (U1) */
+  const armed = new Map<string, number>();
+  let targets = new Map<string, { key: string; rev: number; id?: string }>();
+  let menuOpen = false;
+  let hover = false;
+  let focusIn = false;
+  let frozen = false;
+  let lastNotices: NoticeStrip | null = null;
+  const freeze = (): void => {
+    const on = hover || focusIn || menuOpen;
+    if (on === frozen) return;
+    frozen = on;
+    o.onFreeze?.(on);
+  };
+  el.addEventListener('pointerenter', () => ((hover = true), freeze()));
+  el.addEventListener('pointerleave', () => ((hover = false), freeze()));
+  el.addEventListener('focusin', () => ((focusIn = true), freeze()));
+  el.addEventListener('focusout', (e) => {
+    if (e.relatedTarget instanceof Node && el.contains(e.relatedTarget)) return;
+    focusIn = false;
+    freeze();
+  });
+  const keyEl = (what: string, word: string, target: { key: string; rev: number; id?: string }, aria: string | undefined, title?: string): HTMLElement => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'key quiet bd-undo-key';
+    b.textContent = word;
+    const id = `${what}|${target.key}|${target.id ?? ''}|${target.rev}|${word}`;
+    b.dataset.undoKey = id;
+    if (aria) b.setAttribute('aria-label', aria);
+    if (title) b.title = title;
+    if (!armed.has(id)) armed.set(id, now());
+    targets.set(id, target);
+    return b;
+  };
+  const col = (cls: string, kid: HTMLElement | null): HTMLElement => {
+    const c = document.createElement('span');
+    c.className = `bd-col ${cls}`;
+    if (kid) c.appendChild(kid);
+    return c;
+  };
+  /** a notice or mark row: the words, then the three fixed columns from the right (+k, undo, right) */
+  function slotRow(row: TurnStripRow): HTMLElement {
+    const r = renderTurnRow(doc, row, Date.now()) as unknown as HTMLElement;
+    if (row.title) r.title = row.title;
+    const t = row.target!;
+    const k = row.keys!;
+    const keys = document.createElement('span');
+    keys.className = 'bd-turn-keys';
+    if (row.kind === 'notice') {
+      const more = k.more > 0 ? keyEl('more', `+${k.more} ▾`, t, row.aria?.more, row.aria?.more) : null;
+      if (more) {
+        more.setAttribute('aria-haspopup', 'menu');
+        more.setAttribute('aria-expanded', String(menuOpen));
+      }
+      keys.appendChild(col('bd-more-col', more));
+    }
+    keys.appendChild(col('bd-undo-col', k.undo ? keyEl(k.undo, k.undo, t, row.aria?.undo) : null));
+    keys.appendChild(col('bd-right-col', k.right ? keyEl(k.right, k.right, t, row.aria?.right, k.right === 'dismiss' ? UNDO_COPY.dismissTitle : undefined) : null));
+    r.appendChild(keys);
+    return r;
+  }
+  /** the +k menu (one menu component, .bd-menu, upward over the board): one row per notice behind, each with its own undo */
+  function menuEl(rows: readonly TurnStripRow[]): HTMLElement {
+    const m = document.createElement('div');
+    m.className = 'bd-menu bd-undo-menu';
+    m.setAttribute('role', 'menu');
+    for (const row of rows) {
+      const line = document.createElement('div');
+      line.className = 'bd-menu-row';
+      const words = document.createElement('button');
+      words.type = 'button';
+      words.className = 'bd-menu-words';
+      words.setAttribute('role', 'menuitem');
+      words.textContent = row.title ?? '';
+      const id = `bring|${row.target!.key}|${row.target!.rev}`;
+      words.dataset.undoKey = id;
+      if (!armed.has(id)) armed.set(id, now());
+      targets.set(id, row.target!);
+      line.append(words, col('bd-undo-col', keyEl('undo', UNDO_COPY.undo, row.target!, row.aria?.undo)));
+      m.appendChild(line);
+    }
+    return m;
+  }
+  const closeMenu = (back: boolean): void => {
+    if (!menuOpen) return;
+    menuOpen = false;
+    el.querySelector('.bd-undo-menu')?.remove();
+    el.querySelector('[data-undo-key^="more|"]')?.setAttribute('aria-expanded', 'false');
+    if (back) el.querySelector<HTMLElement>('[data-undo-key^="more|"]')?.focus({ preventScroll: true });
+    freeze();
+  };
+  const disabled = (): boolean => {
+    const n = lastNotices;
+    if (!n) return true;
+    return n.held !== null || n.pending !== null;
+  };
+  el.addEventListener('click', (e) => {
+    const k = (e.target as HTMLElement | null)?.closest?.('[data-undo-key]') as HTMLElement | null;
+    if (!k) return;
+    const id = k.dataset.undoKey ?? '';
+    const what = id.split('|')[0]!;
+    // a trusted press only; never the second press of a double click; never within UNDO_ARM_MS of being drawn (U1)
+    if (!e.isTrusted || e.detail > 1 || now() - (armed.get(id) ?? Infinity) < UNDO_ARM_MS) return;
+    if (what === 'more') {
+      if (menuOpen) return closeMenu(true);
+      menuOpen = true;
+      freeze();
+      k.setAttribute('aria-expanded', 'true');
+      el.appendChild(menuEl((lastNotices?.behind ?? []) as TurnStripRow[]));
+      return;
+    }
+    // dropped while pending, held or link-down: never queued, never replayed
+    if (disabled()) return;
+    const target = targets.get(id);
+    if (!target) return;
+    const act: NoticeWhat = what === 'bring' ? 'bring' : (WORD_WHAT[id.split('|').at(-1)!] ?? 'undo');
+    if (act === 'bring') closeMenu(false);
+    o.onNoticeKey?.(act, target, e);
+  });
+  el.addEventListener('keydown', (e) => {
+    if (!menuOpen) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu(true);
+    } else if (e.key === 'ArrowDown' && (e.target as HTMLElement | null)?.closest?.('[data-undo-key^="more|"]')) {
+      e.preventDefault();
+      el.querySelector<HTMLElement>('.bd-undo-menu .bd-menu-words')?.focus();
+    }
+  });
 
   const pressWork = (e: Event): void => {
     const k = (e.target as HTMLElement | null)?.closest?.('[data-strip-work]') as HTMLElement | null;
@@ -101,6 +248,19 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     e.preventDefault();
     pressWork(e);
   });
+
+  /** a notice or mark row drops by core order (the time, then ' of your marks'), and last becomes two lines (R5) */
+  function fitSlot(row: HTMLElement): void {
+    row.classList.remove('tight-1', 'tight-2', 'two-line');
+    const line = row.querySelector<HTMLElement>('.bd-turn-line');
+    if (!line) return;
+    const over = (): boolean => line.scrollWidth > line.clientWidth + 0.5;
+    for (const level of [1, 2] as const) {
+      if (!over()) return;
+      row.classList.add(`tight-${level}`);
+    }
+    if (over()) row.classList.add('two-line');
+  }
 
   /** the turn row drops by core order until it fits: reply (when it overflows or is cut to nothing), name, more */
   function fit(row: HTMLElement): void {
@@ -127,16 +287,31 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       const room = v.room();
       el.hidden = false;
       show.title = v.kept ? TURN_COPY.keptTitle : TURN_COPY.showChatTitle;
-      const rows = turnStripRows(v.turn, v.agent, room);
+      lastNotices = v.notices ?? null;
+      // S1.4 E3: a standing notice takes the you row's slot (and the strip is two rows while it stands)
+      const rows = withSlot(turnStripRows(v.turn, v.agent, room), v.notices?.slot ?? null);
       working = rows.find((r) => r.working)?.working ?? null;
-      const next = stripSig(rows);
+      const next = stripSig(rows) + JSON.stringify(v.notices?.behind.map((r) => r.target) ?? []);
       if (next !== sig) {
         sig = next;
         const had = document.activeElement;
+        // a focused key whose row leaves: focus goes to the board, never to another key (undo-key press 4)
+        const hadKey = had instanceof HTMLElement && el.contains(had) ? (had.dataset.undoKey ?? null) : null;
+        targets = new Map();
+        if (menuOpen && !(v.notices?.behind.length ?? 0)) closeMenu(false);
         const hadWork = had instanceof HTMLElement && el.contains(had) ? (had.dataset.stripWork ?? null) : null;
         const hadShow = had === show;
         while (el.firstChild) el.removeChild(el.firstChild);
-        for (const r of rows) el.appendChild(renderTurnRow(doc, r, Date.now()) as unknown as Node);
+        for (const r of rows) el.appendChild(r.kind === 'notice' || r.kind === 'mark' ? slotRow(r) : (renderTurnRow(doc, r, Date.now()) as unknown as Node));
+        if (menuOpen && v.notices) el.appendChild(menuEl(v.notices.behind));
+        // keys no longer drawn forget their arming (a key drawn again is armed afresh)
+        const live = new Set([...el.querySelectorAll<HTMLElement>('[data-undo-key]')].map((k) => k.dataset.undoKey!));
+        for (const id of [...armed.keys()]) if (!live.has(id)) armed.delete(id);
+        if (hadKey !== null) {
+          const again = el.querySelector<HTMLElement>(`[data-undo-key="${CSS.escape(hadKey)}"]`);
+          if (again) again.focus({ preventScroll: true });
+          else o.onFocusBoard?.();
+        }
         el.querySelector('.bd-turn-turn')?.appendChild(show);
         // a repaint keeps a focused working key focused (its row was rebuilt)
         if (hadWork !== null) el.querySelector<HTMLElement>(`[data-strip-work="${CSS.escape(hadWork)}"]`)?.focus({ preventScroll: true });
@@ -145,6 +320,16 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       }
       const turn = el.querySelector<HTMLElement>('.bd-turn-turn');
       if (turn) fit(turn);
+      // S1.4 E3: every undo-family key disabled while one is pending past 300 ms or the board is held
+      const n = v.notices;
+      const off = !!n && (n.held !== null || (n.pending !== null && Date.now() - n.pending.since >= UNDO_QUIET_MS));
+      for (const k of el.querySelectorAll<HTMLElement>('[data-undo-key]')) {
+        if (k.dataset.undoKey!.startsWith('more|') || k.dataset.undoKey!.startsWith('bring|')) continue;
+        if (off) k.setAttribute('aria-disabled', 'true');
+        else k.removeAttribute('aria-disabled');
+        if (n?.held) k.title = UNDO_COPY.linkDown;
+      }
+      for (const r of el.querySelectorAll<HTMLElement>('.bd-turn-notice, .bd-turn-mark')) fitSlot(r);
     },
     tick(now) {
       if (!working?.live) return;
