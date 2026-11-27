@@ -68,6 +68,8 @@ export interface DimStandingNotice {
   ids: string[];
   /** ids it removed of the person's (cut-outs) */
   removedIds: string[];
+  /** their last boxes, scene units, where the fold had one (a cut-out is drawn there) */
+  removedBoxes: Array<{ node: string; x: number; y: number; width: number; height: number }>;
   /** 'standing', or 'done' in its redo window after an undo */
   state: 'standing' | 'done';
   /** done: the redo window's time left, and since when it runs (null while held) */
@@ -86,6 +88,7 @@ interface Tally {
   base: number;
   rev: number;
   ids: string[];
+  boxes: Map<string, { x: number; y: number; width: number; height: number }>;
 }
 
 const handSame = (a: DimBy | undefined, b: DimBy): boolean => !!a && a.cls === b.cls && a.principal === b.principal && (a as { agent?: string }).agent === (b as { agent?: string }).agent;
@@ -148,7 +151,7 @@ export class DimNotices {
     let t = this.#tallies.get(cs.turn);
     if (!t) {
       const r = p.relayedFor as Record<string, unknown>;
-      t = { key: cs.turn, of: { hsid: cs.hsid, turn: cs.turn }, agent: typeof r.agent === 'string' ? r.agent : null, mine: { changed: new Set(), removed: new Set() }, other: { changed: new Set(), removed: new Set() }, others: new Set(), lead: null, base: row.seq, rev: 0, ids: [] };
+      t = { key: cs.turn, of: { hsid: cs.hsid, turn: cs.turn }, agent: typeof r.agent === 'string' ? r.agent : null, mine: { changed: new Set(), removed: new Set() }, other: { changed: new Set(), removed: new Set() }, others: new Set(), lead: null, base: row.seq, rev: 0, ids: [], boxes: new Map() };
       this.#tallies.set(cs.turn, t);
       while (this.#tallies.size > DIM_NOTICE_MEMORY.sets) this.#tallies.delete(this.#tallies.keys().next().value as string);
     }
@@ -182,6 +185,8 @@ export class DimNotices {
         if (op.type === 'delete') {
           bucket.changed.delete(id);
           bucket.removed.add(id);
+          const nd = n.node as { x?: unknown; y?: unknown; w?: unknown; h?: unknown };
+          if (person && [nd.x, nd.y, nd.w, nd.h].every((v) => typeof v === 'number' && Number.isFinite(v))) t.boxes.set(id, { x: nd.x as number, y: nd.y as number, width: nd.w as number, height: nd.h as number });
         } else if (!bucket.removed.has(id)) bucket.changed.add(id);
         if (!person) {
           const label = (original as { agent?: unknown }).agent;
@@ -194,7 +199,7 @@ export class DimNotices {
     if (n) Object.assign(n, this.#face(t));
   }
 
-  #face(t: Tally): Pick<DimStandingNotice, 'changed' | 'removed' | 'otherChanged' | 'otherRemoved' | 'others' | 'lead' | 'personal' | 'base' | 'rev' | 'ids' | 'removedIds'> {
+  #face(t: Tally): Pick<DimStandingNotice, 'changed' | 'removed' | 'otherChanged' | 'otherRemoved' | 'others' | 'lead' | 'personal' | 'base' | 'rev' | 'ids' | 'removedIds' | 'removedBoxes'> {
     return {
       changed: t.mine.changed.size,
       removed: t.mine.removed.size,
@@ -207,6 +212,7 @@ export class DimNotices {
       rev: t.rev,
       ids: [...t.ids],
       removedIds: [...t.mine.removed],
+      removedBoxes: [...t.mine.removed].flatMap((id) => (t.boxes.has(id) ? [{ node: id, ...t.boxes.get(id)! }] : [])),
     };
   }
 

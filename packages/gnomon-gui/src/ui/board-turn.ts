@@ -92,7 +92,7 @@ export interface BoardTurnStrip {
   live(): boolean;
 }
 
-export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; now?: () => number }): BoardTurnStrip {
+export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number }): BoardTurnStrip {
   const doc = document as unknown as MiniDoc;
   const el = o.el;
   const show = document.createElement('button');
@@ -121,6 +121,18 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     o.onFreeze?.(on);
   };
   el.addEventListener('pointerenter', () => ((hover = true), freeze()));
+  // board-trace: pointing at or focusing a notice (or a +k menu row) traces that turn's marks
+  let traced: string | null = null;
+  const trace = (e: Event): void => {
+    const row = (e.target as HTMLElement | null)?.closest?.('[data-notice]') as HTMLElement | null;
+    const key = row?.dataset.notice ?? null;
+    if (key === traced) return;
+    traced = key;
+    o.onTrace?.(key);
+  };
+  el.addEventListener('pointerover', trace);
+  el.addEventListener('focusin', trace);
+  el.addEventListener('pointerleave', () => traced !== null && ((traced = null), o.onTrace?.(null)));
   el.addEventListener('pointerleave', () => ((hover = false), freeze()));
   el.addEventListener('focusin', () => ((focusIn = true), freeze()));
   el.addEventListener('focusout', (e) => {
@@ -151,6 +163,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
   function slotRow(row: TurnStripRow): HTMLElement {
     const r = renderTurnRow(doc, row, Date.now()) as unknown as HTMLElement;
     if (row.title) r.title = row.title;
+    r.dataset.notice = row.target!.key;
     const t = row.target!;
     const k = row.keys!;
     const keys = document.createElement('span');
@@ -176,6 +189,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     for (const row of rows) {
       const line = document.createElement('div');
       line.className = 'bd-menu-row';
+      line.dataset.notice = row.target!.key;
       const words = document.createElement('button');
       words.type = 'button';
       words.className = 'bd-menu-words';

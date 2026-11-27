@@ -1060,6 +1060,21 @@ export class DimSession {
     return { shown: this.#notices.shown(), behind: this.#notices.behind(), pending: f, held };
   }
 
+  /** S1.4 E3: the cut-outs of the person's removed marks while their notice stands, and what a hovered notice traces */
+  boardMarks(): { cutouts: Array<{ node: string; x: number; y: number; width: number; height: number; by: { cls: 'agent'; id: string; name: string } }>; trace: ReadonlySet<string> } {
+    const cutouts = this.#notices.list().filter((n) => n.state === 'standing').flatMap((n) => n.removedBoxes.map((b) => ({ ...b, by: { cls: 'agent' as const, id: n.of.hsid, name: n.agent ?? 'claude' } })));
+    const t = this.#trace ? this.#notices.get(this.#trace) : null;
+    return { cutouts, trace: new Set(t ? t.ids : []) };
+  }
+
+  #trace: string | null = null;
+  /** board-trace: hovering or focusing a notice (or a +k menu row) traces that turn's marks; null ends it */
+  traceNotice(key: string | null): void {
+    if (this.#dead || this.#trace === key) return;
+    this.#trace = key;
+    this.#emit(null);
+  }
+
   /** U2: the strip is hovered, focused or its menu is open (the slot holds), or no longer. */
   freezeNotices(on: boolean): void {
     if (this.#dead || this.#notices.frozen === on) return;

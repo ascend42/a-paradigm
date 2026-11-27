@@ -16,7 +16,7 @@ import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
 import { CHECK_GAP, CHECK_LONGEST, countSlot, GRANT_COPY, OUT_OF_DATE_FACT, UNCHECKED_LEAD, BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
-import { footHands, handName, hoveredMark, overlayItems, selectionLine } from '../core/board-overlay.js';
+import { footHands, handName, hoveredMark, overlayItems, selectionLine, type OverlayOptions } from '../core/board-overlay.js';
 import { DIM_GRANT_QUIET_MS } from '../core/dim-session.js';
 import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { sealOf, SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -40,6 +40,8 @@ export interface BoardLeafOptions {
   load: () => Promise<BoardModule>;
   /** true while a card in the stack or the pinned zone has focus: the board then takes no key */
   cardFocused: () => boolean;
+  /** S1.4 E3: the cut-outs and the trace the overlay draws (the session's), when there are any */
+  overlayExtras?: () => Pick<OverlayOptions, 'cutouts' | 'trace'>;
   /** called once the engine is up (the fixture adds its marks here) */
   onReady?: (handle: BoardHandle) => void;
   /** Esc with nothing else to leave, or the head's esc key: with the trusted event that asked (the fold's gesture stamp is minted from it) */
@@ -109,6 +111,8 @@ export interface LeafGrant {
 export interface BoardLeaf {
   /** S1.4 E3: focus goes to the board (a focused strip key's row left) */
   focusBoard?(): void;
+  /** S1.4 E3: draw the overlay again (the notices' cut-outs or trace moved) */
+  redrawOver?(): void;
   el: HTMLElement;
   /** S1.4 P4b: one line to a screen reader only (the polite status line), never the keep line: the arrival line, a confirmed grant */
   speak(line: string): void;
@@ -731,7 +735,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const marks = handle.marks();
     const view = handle.view();
     hovered = hoveredMark(marks, view, pointerAt);
-    for (const it of overlayItems(marks, view, { hovered, theme })) {
+    for (const it of overlayItems(marks, view, { hovered, theme, ...(o.overlayExtras?.() ?? {}) })) {
       if (it.type === 'pin' || it.type === 'hollow') {
         const p = h('span', `bd-pin${it.type === 'hollow' ? ' unk' : ''}${it.type === 'pin' && it.low ? ' low' : ''}`);
         place(p, it.left - 4, it.top - 4);
@@ -1396,6 +1400,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   start();
   return {
     focusBoard: () => handle?.focus(),
+    redrawOver: () => drawOver(),
     el,
     speak(line) {
       // a polite line only: the keep line stays the person's own (design said.arrival). Cleared, then set on the next

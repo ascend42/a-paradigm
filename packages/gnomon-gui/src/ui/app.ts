@@ -2024,6 +2024,7 @@ turnStrip = mountBoardTurn({
   onNoticeKey: (what, target, e) => boardDock.noticeKey(what, target, e),
   onFreeze: (on) => boardDock.freezeNotices(on),
   onFocusBoard: () => boardDock.focusBoard(),
+  onTrace: (key) => boardDock.traceNotice(key),
 });
 boardRepaint = () => boardDock.repaint();
 boardLook = (t) => boardDock.setTheme(t);

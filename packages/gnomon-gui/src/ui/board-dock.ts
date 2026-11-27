@@ -112,6 +112,8 @@ export interface BoardDock {
   noticeKey(what: 'undo' | 'redo' | 'dismiss' | 'bring', target: { key: string; rev: number; id?: string }, event: Event): void;
   /** S1.4 E3 (U2): the strip is hovered, focused or its menu open */
   freezeNotices(on: boolean): void;
+  /** S1.4 E3 board-trace: the notice the pointer or focus is on, or null */
+  traceNotice(key: string | null): void;
   /** S1.4 E3: a focused key's row left: focus goes to the board, never to another key */
   focusBoard(): void;
 }
@@ -349,6 +351,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       theme: d.theme(),
       load: d.load,
       cardFocused: d.cardFocused,
+      overlayExtras: () => session.boardMarks(),
       ...(d.pinned ? { pinned: d.pinned } : {}),
       kept: () => keptOpen(),
       onHoldChange: () => void (cur && cur.session.alive && paint(cur.session, cur.leaf, cur.session.status())),
@@ -379,8 +382,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
         paint(session, leaf, c.status);
         leaf.drawFoot();
         if (c.notice) tell(session, leaf, c.notice);
-        // S1.4 E3: the strip holds the board's notices; it is painted again with the session
+        // S1.4 E3: the strip holds the board's notices; it is painted again with the session, and the overlay's
+        // cut-outs and trace with it
         d.turn?.();
+        leaf.redrawOver?.();
       }),
       // held words go back ONLY into a text the person opens on this dimension, for the same principal, link up
       leaf.onTextOpen(() => {
@@ -657,6 +662,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       else session.bringNotice(target.key, event);
     },
     freezeNotices: (on) => cur?.session.freezeNotices(on),
+    traceNotice: (key) => cur?.session.traceNotice(key),
     focusBoard: () => {
       if (cur && !d.cardFocused()) cur.leaf.focusBoard?.();
     },
