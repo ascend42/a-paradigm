@@ -110,7 +110,7 @@ let buf = '';
 // S1.4 P5 (the board e2e): `mode.reloadPerTurn` re-reads mode.json at EVERY user message, so a test can read the
 // trace between turns and write the next turn's steps (the real hsid, the agent's ids, a seq). `permissionAsk.awaitMcp`
 // ends the turn only after every `{line}` step that is an SDK mcp_message has its control_response too (as real
-// claude waits for a tool's result). A `{waitFile: name}` step pauses the rest of the turn's steps until
+// claude waits for a tool's result); with `serial` (and `gapMs`) each such call waits for its answer before the next step. A `{waitFile: name}` step pauses the rest of the turn's steps until
 // <stub>/<name> exists (the person's press mid-turn); its arrival is traced as `t:'wait-done'`.
 const perm = { open: new Map(), denied: [], turnDone: null, mcp: new Set() };
 const finishPerm = () => {
@@ -193,8 +193,15 @@ process.stdin.on('data', (c) => {
           return;
         }
         if (st.line !== undefined) {
-          if (pa.awaitMcp && st.line?.type === 'control_request' && st.line.request?.subtype === 'mcp_message' && st.line.request_id) perm.mcp.add(st.line.request_id);
+          const mcpId = pa.awaitMcp && st.line?.type === 'control_request' && st.line.request?.subtype === 'mcp_message' && st.line.request_id ? st.line.request_id : null;
+          if (mcpId) perm.mcp.add(mcpId);
           out(st.line);
+          // permissionAsk.serial: the next step waits for this call's answer, then gapMs (one call at a time, as the
+          // bridge's in-flight cap and per-second rate expect of one session)
+          if (mcpId && pa.serial) {
+            const poll = setInterval(() => { if (perm.mcp.has(mcpId)) return; clearInterval(poll); setTimeout(() => emit(si + 1), pa.gapMs ?? 0); }, 5);
+            return;
+          }
           continue;
         }
         if (st.ungated) {

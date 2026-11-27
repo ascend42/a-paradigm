@@ -14,9 +14,10 @@
  * WHAT IS LISTED (modBridgeTools). A tool is listed, and callable, only when all of these hold. The rule is
  * re-derived on every `tools/call`; an earlier `tools/list` is never trusted.
  *  - its mod is installed, verified, granted and unpaused (the desk set the daemon passes in);
- *  - the mod and the tool are named on the CLOSED allowlist. The production allowlist MOD_BRIDGE_TOOLS is EMPTY
- *    until S1.4-P5 (Aegis M1: nothing draws before the revoke key and the dashed stroke exist), so a real kernel
- *    lists nothing and writes no mcp.json entry in this pass; tests pass an allowlist through the ports;
+ *  - the mod and the tool are named on the CLOSED allowlist. The production allowlist MOD_BRIDGE_TOOLS names one
+ *    mod and three tools since S1.4-P5: `gnomon.dimension` with dim-view, dim-draw and dim-undo (Aegis M1 was met
+ *    first: the revoke key, the dashed stroke, edit-anything attribution, its notice and one-press undo). Tests may
+ *    pass another allowlist only through DaemonSeams.modBridge (src/kernel/testing.ts), never ModBridgeOptions;
  *  - the mod is first-party (`gnomon`-published, tier first-party) and its installed package hash is one of the
  *    kernel's CURRENT pins, never a superseded, a retired or a historical first-party hash (Aegis A7;
  *    isCurrentFirstPartyPin in manifest/install.ts);
@@ -72,8 +73,10 @@
  * before the tool call, and counts against the mod's restart cap.
  *
  * The socket append gate refuses `inject.receipt` for every caller class, and no device, agent, mod or session name
- * can yield the reserved principal (tests). OWED BY P5: the readers (`dim stats`, replay, the G-MOD-22 checker) must
- * accept a receipt only under that principal and a kernel key; no reader exists in this pass.
+ * can yield the reserved principal (tests). A reader of receipts accepts a row only under that principal AND whose
+ * signature verifies under the kernel key (every non-diagnostic row is signed, so "signed" alone filters nothing).
+ * In S1.4 the only reader is the e2e's G-MOD-22 checker; `gnomon dim stats` does not read receipts yet, and generic
+ * log views (`gnomon log`, replay) do not filter by principal: only the socket append gate keeps forged receipts out.
  * A receipt append is awaited for at most MOD_BRIDGE_LIMITS.receiptWaitMs: one that never settles is the fixed receipt
  * sentence, like one that fails. At session exit and at daemon stop the pending counter appends are awaited (bounded)
  * before the log closes, and a refusal that lands after a session ended opens no new fold for it.
@@ -91,10 +94,12 @@ export const MOD_BRIDGE_SERVER = 'gnomon-mods';
 /** The session mcp.json entry of the bridge. Nothing else is ever written for it: no env, no path, no token. */
 export const MOD_BRIDGE_ENTRY = Object.freeze({ type: 'sdk', name: MOD_BRIDGE_SERVER });
 /**
- * The CLOSED production allowlist: mod id → tool names. EMPTY in S1.4-P2 (Aegis M1); P5 adds the one line, and may
- * merge only after P4a and P4b. A tool outside it is never listed and never called.
+ * The CLOSED production allowlist: mod id → tool names. Empty from S1.4-P2 (Aegis M1) until S1.4-P5, which added this
+ * one line after the revoke key, the dashed hand, edit-anything attribution, its notice and one-press undo had all
+ * merged (P4a, P4b, E0, E1, E3, and the hands +k menu). Outer object and inner array are frozen. A tool outside it is
+ * never listed and never called; every listed tool still passes the list rule below on every call.
  */
-export const MOD_BRIDGE_TOOLS: Readonly<Record<string, readonly string[]>> = Object.freeze({});
+export const MOD_BRIDGE_TOOLS: Readonly<Record<string, readonly string[]>> = Object.freeze({ 'gnomon.dimension': Object.freeze(['dim-view', 'dim-draw', 'dim-undo'] as const) });
 /** The MCP protocol version answered when the client names none (the client's own version is echoed otherwise). */
 export const MOD_BRIDGE_PROTOCOL = '2025-06-18';
 export const MOD_BRIDGE_LIMITS = Object.freeze({
