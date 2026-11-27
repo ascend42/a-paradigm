@@ -893,6 +893,11 @@ components:
       - ../gnomon/test/dimension-board-browser.test.ts
   gui-board-turn:
     description: >-
+      Round 2: the mark row on the selection and on a selected cut-out (put
+      back); cutoutAt (R7: a still click with Select where no mark lies; the
+      press is only observed, never prevented); ' this mark' gives way to ' it';
+      the notice ladder time, session name, ' before stopped', ' of your marks';
+      the countermark turns with a rotated mark (angle).
       S1.4 E3: row kinds notice and mark in the you row's slot, three fixed key
       columns (right, undo, +k), the notice ladder and the two-line step, the
       redo window's words, U1 arming (500 ms, detail > 1 dropped), the U2
@@ -977,6 +982,10 @@ components:
       - test/board-open.test.ts
   gui-dim-notices:
     description: >-
+      Round 2: follow(pins) at each dim.open / dim.check answer (a notice stands
+      only while the mod pins its set; a pinned turn with no notice is raised
+      from held rows); setFor(id) for the mark row; runningOf(hsid) for ' before
+      it was stopped'.
       #gui-dim-notices (S1.4 E3; design board-leaf.turn_strip.notice,
       undo-key; Aegis G2, G6, N1 to N3, U2, S3, V1) - the standing notices of
       one board, PURE. An agent turn that changed or removed another hand's
