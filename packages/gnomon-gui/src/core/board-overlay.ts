@@ -238,7 +238,16 @@ export const CUTOUT = Object.freeze({ arm: 6, min: 12 });
  */
 export function countermarkPoint(m: BoardMarkView, view: BoardView): { left: number; top: number } {
   const box = markBox(view, m);
-  if (!m.lastRun || (m.kind !== 'stroke' && m.kind !== 'arrow')) return { left: box.left + box.width - COUNTER.dx, top: box.top + box.height + COUNTER.dy };
+  if (!m.lastRun || (m.kind !== 'stroke' && m.kind !== 'arrow')) {
+    const p = { left: box.left + box.width - COUNTER.dx, top: box.top + box.height + COUNTER.dy };
+    if (!m.angle) return p;
+    // a rotated mark: its rotated corner, as the engine turns its own handles about the box's centre
+    const cx = box.left + box.width / 2;
+    const cy = box.top + box.height / 2;
+    const c = Math.cos(m.angle);
+    const s = Math.sin(m.angle);
+    return { left: cx + (p.left - cx) * c - (p.top - cy) * s, top: cy + (p.left - cx) * s + (p.top - cy) * c };
+  }
   const a = toScreen(view, m.lastRun.x1, m.lastRun.y1);
   const b = toScreen(view, m.lastRun.x2, m.lastRun.y2);
   const dx = b.left - a.left;
@@ -480,3 +489,20 @@ export function footHands(marks: readonly BoardMarkView[], sessionName?: Session
 /** The longest name shown beside a seal (a bidi-isolated text node; the whole name stays in title=). */
 export const HAND_NAME_MAX = 24;
 export const handName = (name: string): string => ([...name].length > HAND_NAME_MAX ? `${[...name].slice(0, HAND_NAME_MAX - 1).join('').trimEnd()}…` : name);
+
+/**
+ * S1.4 E3 (turn_strip.notice.cut_out_hit, Mika R7): the cut-out a press selects, or null. Only a STILL click
+ * (`still`), with Select in hand, where no mark's box lies (the engine's marks first), inside a cut-out's last box
+ * (the topmost, the newest). Screen point relative to the board's top-left. Everything else is the engine's.
+ */
+export function cutoutAt(at: { x: number; y: number }, o: { still: boolean; tool: string; marks: readonly BoardMarkView[]; view: BoardView; cutouts: ReadonlyArray<{ node: string; x: number; y: number; width: number; height: number }> }): string | null {
+  if (!o.still || o.tool !== 'select') return null;
+  const inside = (b: { left: number; top: number; width: number; height: number }): boolean => at.x >= b.left && at.x <= b.left + b.width && at.y >= b.top && at.y <= b.top + b.height;
+  if (o.marks.some((m) => !m.labelOf && inside(markBox(o.view, m)))) return null;
+  for (let i = o.cutouts.length - 1; i >= 0; i--) {
+    const c = o.cutouts[i]!;
+    const tl = toScreen(o.view, c.x, c.y);
+    if (inside({ left: tl.left, top: tl.top, width: c.width * o.view.zoom, height: c.height * o.view.zoom })) return c.node;
+  }
+  return null;
+}

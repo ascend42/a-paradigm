@@ -1949,7 +1949,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-col.bd-right-col{min-width:calc(9ch + 18px)}
 .bd-col.bd-more-col{min-width:calc(5ch + 16px)}
 .bd-undo-key[aria-disabled="true"]{color:var(--sec);border-color:var(--rule)}
-.bd-turn-notice.tight-1 [data-drop="1"],.bd-turn-mark.tight-1 [data-drop="1"],.bd-turn-notice.tight-2 [data-drop="2"]{display:none}
+.bd-turn-notice [data-only],.bd-turn-mark [data-only]{display:none}
+.bd-turn-notice.tight-1 [data-drop="1"],.bd-turn-mark.tight-1 [data-drop="1"],.bd-turn-notice.tight-2 [data-drop="2"],.bd-turn-mark.tight-2 [data-drop="2"],.bd-turn-notice.tight-3 [data-drop="3"],.bd-turn-notice.tight-4 [data-drop="4"]{display:none}
+.bd-turn-mark.tight-2 [data-only="2"],.bd-turn-notice.tight-3 [data-only="3"]{display:inline}
 .bd-turn-notice.two-line{flex-wrap:wrap;min-height:48px}
 .bd-turn-notice.two-line .bd-turn-line{flex-basis:100%;height:20px}
 .bd-turn-notice.two-line .bd-turn-keys{margin-left:auto}

@@ -8,7 +8,7 @@ import { DIM_KINDS, dimAttrDigest, dimChangeSetOf, dimHash, dimUndoMarkOf, planD
 import type { DimChangeSet, DimOp, DimRow } from '@a-company/gnomon-contracts';
 import { dimHandOf } from '../src/board/dim-map.js';
 import type { BoardHandle } from '../src/core/board.js';
-import { DIM_NOTICE_CAP, DIM_REDO_WINDOW_MS } from '../src/core/dim-notices.js';
+import { DIM_NOTICE_CAP, DIM_REDO_WINDOW_MS, DimNotices } from '../src/core/dim-notices.js';
 import { DIM_SEND_LIMITS, DimSessions, type DimSession, type DimSessionNotice } from '../src/core/dim-session.js';
 import { DimStore } from '../src/core/dim-store.js';
 
@@ -349,6 +349,45 @@ describe('E3 round 2: the notices follow the mod\'s pins', () => {
     w.pins = [{ hsid: AG, turn: `turn:${AG}/1` }];
     const { s } = await opened(w);
     expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, changed: 1 });
+  });
+});
+
+describe('E3 round 2 item 4: the mark row, cut-outs, before it was stopped', () => {
+  it('one selected mark an agent changed shows its row; its undo is dim.undo with ids [that mark]; two selected show none', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    const key = await withNotice(w, s, 1, 10);
+    s.select([ULID(10)], press());
+    expect(s.noticeView().mark).toMatchObject({ key, id: ULID(10), removed: false });
+    s.select([ULID(10), ULID(11)], press());
+    expect(s.noticeView().mark).toBeNull();
+    s.select([ULID(10)], press());
+    const m = s.noticeView().mark!;
+    expect(s.undoMark(m.id, m.key, m.rev, press('click'))).toBe(true);
+    await flush(200);
+    expect(w.of('dim.undo')[0]!.args).toMatchObject({ of: { hsid: AG, turn: key }, ids: [ULID(10)] });
+  });
+  it('a selected cut-out of your removed mark shows put back; a selection of marks ends it', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    s.edit([rect(20)], press());
+    await flush(200);
+    w.turn('claude', 1, [{ type: 'delete', id: ULID(20) } as DimOp]);
+    expect(s.boardMarks().cutouts).toMatchObject([{ node: ULID(20), x: 20, y: 0, width: 10, height: 10 }]);
+    s.selectCutout(ULID(20));
+    expect(s.noticeView().mark).toMatchObject({ id: ULID(20), removed: true });
+    s.select([ULID(5)], press());
+    expect(s.noticeView().mark).toBeNull();
+  });
+  it('turning a hand off while its turn runs raises that turn\'s notice at once, marked stopped (DimNotices)', () => {
+    const n = new DimNotices({ me: ME });
+    const before = { dim: DIM, title: '', attached: [], ended: false, nodes: new Map([[ULID(30), { node: { id: ULID(30), kind: 'rect' }, by: { cls: 'human', principal: ME }, hsid: null, addedSeq: 1 }]]), gone: new Set(), seq: 1, ops: 1, unapplied: 0 } as never;
+    n.row({ seq: 2, kind: DIM_KINDS.op, payload: { v: 1, dim: DIM, ops: [{ type: 'update', id: ULID(30), patch: { color: 'cobalt' } }], relayedFor: { principal: 'p:00000000/claude', surface: 'bridge', agent: 'claude', hsid: AG, turn: `turn:${AG}/1` } } } as DimRow, before);
+    expect(n.shown()).toBeNull();
+    const run = n.runningOf(AG);
+    expect(run).toBe(`turn:${AG}/1`);
+    n.ended(run!, 5, { stopped: true });
+    expect(n.shown()).toMatchObject({ key: run, stopped: true, changed: 1 });
   });
 });
 

@@ -26,7 +26,7 @@ import type { FoldedItem } from '../core/store.js';
 const REPLY_MIN_PX = 28;
 
 function partEl(doc: MiniDoc, p: TurnPart, turn: boolean): MiniEl {
-  const drop = p.drop !== undefined ? { 'data-drop': String(p.drop) } : null;
+  const drop: Record<string, string> | null = p.drop !== undefined ? { 'data-drop': String(p.drop) } : p.only !== undefined ? { 'data-only': String(p.only) } : null;
   if (p.cls === 'tail') {
     const sub = p.sub ? h(doc, 'span', { class: 'tsub', 'data-drop': String(p.sub.drop) }, p.sub.text) : null;
     const tail = h(doc, 'span', { class: `tail ${p.tone ?? 'quiet'}${p.first ? ' first' : ''}`, ...drop }, h(doc, 'span', { class: 'tsep' }, TURN_COPY.sep), ...(sub && p.sub!.lead ? [sub] : []), p.text, ...(sub && !p.sub!.lead ? [sub] : []));
@@ -265,11 +265,11 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
 
   /** a notice or mark row drops by core order (the time, then ' of your marks'), and last becomes two lines (R5) */
   function fitSlot(row: HTMLElement): void {
-    row.classList.remove('tight-1', 'tight-2', 'two-line');
+    row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'two-line');
     const line = row.querySelector<HTMLElement>('.bd-turn-line');
     if (!line) return;
     const over = (): boolean => line.scrollWidth > line.clientWidth + 0.5;
-    for (const level of [1, 2] as const) {
+    for (const level of [1, 2, 3, 4] as const) {
       if (!over()) return;
       row.classList.add(`tight-${level}`);
     }

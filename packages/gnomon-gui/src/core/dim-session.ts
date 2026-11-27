@@ -238,6 +238,8 @@ export interface DimNoticeView {
   pending: { key: string | null; since: number } | null;
   /** the link is down, the board is out of date, or it has not caught up since the link came back: every key disabled */
   held: 'link-down' | 'out-of-date' | 'catching-up' | null;
+  /** the mark row: one selected mark (or cut-out) and the set its key undoes */
+  mark: { key: string; rev: number; id: string; agent: string | null; removed: boolean; at: number; of: { hsid: string; turn: string } } | null;
 }
 
 export interface DimSessionChange {
@@ -891,6 +893,12 @@ export class DimSession {
       this.#shown.set(hsid, this.#effectiveWrite(hsid));
       if (this.#grantTimer !== null) d.clearTimer(this.#grantTimer);
       this.#grantTimer = null;
+      // S1.4 E3 (turn_strip.notice.stopped): a hand turned off while its turn runs brings that turn's notice AT ONCE
+      // when it has touched another hand's marks, so stop then undo is two presses
+      if (ok && !this.#effectiveWrite(hsid)) {
+        const run = this.#notices.runningOf(hsid);
+        if (run) this.#notices.ended(run, d.now(), { stopped: true });
+      }
       if (ok) this.#emit({ about: 'grant', code: this.#effectiveWrite(hsid) ? 'grant-on' : 'grant-off', field: 'write', why: null, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
       else this.#emit({ about: 'grant', code: 'grant-refused', field: 'write', why, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
     };
@@ -921,6 +929,13 @@ export class DimSession {
    * DROPPED while an edit batch waits. Only this session's hsid is named (the host joins it): a selection is per hsid.
    */
   select(ids: readonly string[], cause: Event | null): void {
+    // S1.4 E3: the mark row reads the selection whatever is sent (a selection of marks ends a cut-out's)
+    if (!this.#dead && cause?.isTrusted === true) {
+      const was = JSON.stringify(this.#markSel);
+      this.#markSel = [...ids];
+      if (ids.length > 0) this.#cutSel = null;
+      if (JSON.stringify(this.#markSel) !== was) this.#emit(null);
+    }
     if (this.#dead || !cause || cause.isTrusted !== true || this.#readOnly || this.#phase !== 'open' || this.#x.link() === null) return;
     const list = [...new Set(ids.filter((id) => typeof id === 'string'))].slice(0, 64);
     const key = JSON.stringify(list);
@@ -1082,7 +1097,35 @@ export class DimSession {
   noticeView(): DimNoticeView {
     const f = this.#undoFlight ?? (this.#grantFlight ? { key: null, since: this.#grantFlight.since } : null);
     const held = this.#x.link() === null ? 'link-down' : this.#readOnly ? 'out-of-date' : !this.#caughtUp ? 'catching-up' : null;
-    return { shown: this.#notices.shown(), behind: this.#notices.behind(), pending: f, held };
+    return { shown: this.#notices.shown(), behind: this.#notices.behind(), pending: f, held, mark: this.#markRow() };
+  }
+
+  /** the person's selection as last reported (node ids), and a cut-out they selected (a removed mark's node id) */
+  #markSel: string[] = [];
+  #cutSel: string | null = null;
+
+  /**
+   * The mark row (turn_strip.notice.mark_row): exactly one mark selected whose newest change-set is an agent turn
+   * this page tallied (standing, or pushed out and still held: N1), and that the person has not changed since; or a
+   * selected cut-out of the person's removed mark while its notice stands (put back). Else null.
+   */
+  #markRow(): DimNoticeView['mark'] {
+    const id = this.#cutSel ?? (this.#markSel.length === 1 ? this.#markSel[0]! : null);
+    if (!id) return null;
+    const set = this.#notices.setFor(id);
+    if (!set) return null;
+    if (this.#cutSel !== null) return set.removed && this.#notices.get(set.key)?.state === 'standing' ? { ...set, id, removed: true } : null;
+    const n = this.#x.deps.store.stateAt(this.dim).nodes.get(id);
+    // the person's own edit after it is the newest change: no row (⌘Z is theirs)
+    if (!n || set.removed || ((n.changedSeq ?? 0) > set.base && (n.changedBy as { cls?: unknown } | undefined)?.cls === 'human')) return null;
+    return { ...set, id, removed: false };
+  }
+
+  /** R7: the person selected a cut-out (a still click with Select where the engine hit no mark), or none (null) */
+  selectCutout(node: string | null): void {
+    if (this.#dead || this.#cutSel === node) return;
+    this.#cutSel = node;
+    this.#emit(null);
   }
 
   /** S1.4 E3: the cut-outs of the person's removed marks while their notice stands, and what a hovered notice traces */

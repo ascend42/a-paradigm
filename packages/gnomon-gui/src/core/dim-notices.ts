@@ -61,6 +61,8 @@ export interface DimStandingNotice {
   personal: boolean;
   /** the clock time it was raised at (hh:mm on the face) */
   at: number;
+  /** raised at once because the person turned that hand's draw key off while the turn ran (' before it was stopped') */
+  stopped?: boolean;
   /** the seq of its last row: the press's `base` */
   base: number;
   /** its rows so far: a press drawn from fewer rows sends nothing (the set changed) */
@@ -221,12 +223,12 @@ export class DimNotices {
    * The turn `turn` ended (its `turn.result` row). Raises its notice when it touched another hand's marks or undid a
    * person's change. Returns the notice raised and the one a ninth pushed out (said once, N2; never a `dim.seen`).
    */
-  ended(turn: string, now: number): { raised: DimStandingNotice | null; pushedOut: DimStandingNotice | null } {
+  ended(turn: string, now: number, o: { stopped?: boolean } = {}): { raised: DimStandingNotice | null; pushedOut: DimStandingNotice | null } {
     const t = this.#tallies.get(turn);
     if (!t || this.#list.some((x) => x.key === turn)) return { raised: null, pushedOut: null };
     const face = this.#face(t);
     if (face.lead === null && face.changed + face.removed + face.otherChanged + face.otherRemoved === 0) return { raised: null, pushedOut: null };
-    const n: DimStandingNotice = { key: t.key, of: t.of, agent: t.agent, at: now, state: 'standing', ...face };
+    const n: DimStandingNotice = { key: t.key, of: t.of, agent: t.agent, at: now, state: 'standing', ...face, ...(o.stopped ? { stopped: true } : {}) };
     this.#list.push(n);
     let pushedOut: DimStandingNotice | null = null;
     if (this.#list.length > DIM_NOTICE_CAP) {
@@ -357,6 +359,24 @@ export class DimNotices {
   /** The newest standing notice whose set touched `id` (the mark row; N1 keeps a pushed-out set's marks reachable through `held`). */
   forMark(id: string): DimStandingNotice | null {
     return this.list().find((x) => x.state === 'standing' && x.ids.includes(id)) ?? null;
+  }
+
+  /**
+   * The mark row's set for one mark: the NEWEST agent set this page tallied that touched it (standing, or pushed out
+   * and still held by the mod: N1), with whether it removed the mark. Null when none did.
+   */
+  setFor(id: string): (Pick<DimStandingNotice, 'key' | 'of' | 'agent' | 'base' | 'rev' | 'at'> & { removed: boolean }) | null {
+    const sets = [...this.#tallies.values()].reverse();
+    const t = sets.find((x) => x.ids.includes(id));
+    if (!t) return null;
+    const n = this.get(t.key);
+    return { key: t.key, of: t.of, agent: t.agent, base: t.base, rev: t.rev, at: n?.at ?? 0, removed: t.mine.removed.has(id) };
+  }
+
+  /** The newest tallied turn of a session that has not raised its notice (a turn still running), or null. */
+  runningOf(hsid: string): string | null {
+    const sets = [...this.#tallies.values()].reverse();
+    return sets.find((t) => t.of.hsid === hsid && !this.get(t.key))?.key ?? null;
   }
 
   /** U3: the act of this person's undo of the set `key`, from its rows, or null (not arrived yet) */

@@ -111,6 +111,8 @@ export interface BoardMarkView {
   otherBy?: BoardAuthor;
   wordsBy?: BoardAuthor;
   restoredFrom?: BoardAuthor;
+  /** S1.4 E3: the mark's rotation in radians (the fold's `rot`, as the engine draws it): the countermark turns with it */
+  angle?: number;
   /** an open mark's (stroke, arrow) last run, scene units: the countermark stands at 80% of it (R2) */
   lastRun?: { x1: number; y1: number; x2: number; y2: number };
   /** a bound label's box, scene units: the words sign spans it (R9); an arrow's countermark stands past it (R2) */

@@ -21,11 +21,11 @@
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { DIM_KINDS } from '@a-company/gnomon-contracts';
 import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle, undoLine } from '../core/board-leaf.js';
-import { noticeStripRow, type TurnStripRow } from '../core/board-turn.js';
+import { markStripRow, noticeStripRow, type TurnStripRow } from '../core/board-turn.js';
 import { hhmm } from '../core/loops.js';
 /** S1.4 E3: the folded board's edge tab while a notice about your marks stands */
 const UNDO_TAB = ' · your marks changed';
-import { boardAgentName, handName, sessionShort } from '../core/board-overlay.js';
+import { boardAgentName, cutoutAt, handName, sessionShort } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
@@ -420,6 +420,26 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
         session.select(hd.marks().filter((m) => m.selected && !m.labelOf && m.node !== null).map((m) => m.node as string), e);
       });
     };
+    // S1.4 E3 (turn_strip.notice.cut_out_hit, R7): a cut-out is selected ONLY by a still click with Select where no
+    // mark lies (engine marks first, the cut-out's box second). The press is only observed here, in the capture
+    // phase and never prevented: every press still reaches the engine, so a marquee or a tool over a cut-out
+    // behaves as if it were not there
+    let downAt: { x: number; y: number } | null = null;
+    const onDown = (e: PointerEvent): void => void (downAt = e.isTrusted ? { x: e.clientX, y: e.clientY } : null);
+    const onCut = (e: PointerEvent): void => {
+      const from = downAt;
+      downAt = null;
+      const hd = leaf.handle();
+      const host = leaf.el.querySelector<HTMLElement>('.bd-board');
+      if (!e.isTrusted || !session.alive || !hd || !hd.isAlive() || !host || !(e.target as Element | null)?.closest?.('.bd-board')) return;
+      const still = !!from && Math.hypot(e.clientX - from.x, e.clientY - from.y) < 3;
+      const r = host.getBoundingClientRect();
+      const pick = cutoutAt({ x: e.clientX - r.left, y: e.clientY - r.top }, { still, tool: hd.state().tool, marks: hd.marks(), view: hd.view(), cutouts: session.boardMarks().cutouts });
+      session.selectCutout(pick);
+    };
+    leaf.el.addEventListener('pointerdown', onDown, true);
+    leaf.el.addEventListener('pointerup', onCut, true);
+    off.push(() => (leaf.el.removeEventListener('pointerdown', onDown, true), leaf.el.removeEventListener('pointerup', onCut, true)));
     leaf.el.addEventListener('pointerup', onPress, true);
     leaf.el.addEventListener('keydown', onPress, true);
     off.push(() => (leaf.el.removeEventListener('pointerup', onPress, true), leaf.el.removeEventListener('keydown', onPress, true)));
@@ -647,9 +667,20 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       if (!cur) return null;
       const session = cur.session;
       const v = session.noticeView();
-      const row = (n: NonNullable<typeof v.shown>, more: number): TurnStripRow =>
-        noticeStripRow(n, handNameOf(session, n.of.hsid, n.agent), { others: n.others.map((o) => (o ? handName(boardAgentName(o)) : '')), more, time: hhmm(new Date(n.at).toISOString()) });
-      return { slot: v.shown ? row(v.shown, v.behind.length) : null, behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held };
+      // the hand's name, and the session's name apart (it is the second step of the ladder), as handNameOf decides it
+      const named = (hsid: string, agent: string | null): { name: string; session?: string } => {
+        const whole = handNameOf(session, hsid, agent);
+        const base = agent ? handName(boardAgentName(agent)) : 'Claude';
+        return whole.startsWith(`${base} in `) ? { name: base, session: whole.slice(base.length + 4) } : { name: whole };
+      };
+      const row = (n: NonNullable<typeof v.shown>, more: number): TurnStripRow => {
+        const w = named(n.of.hsid, n.agent);
+        return noticeStripRow(n, w.name, { others: n.others.map((o) => (o ? handName(boardAgentName(o)) : '')), more, time: hhmm(new Date(n.at).toISOString()), ...(w.session ? { session: w.session } : {}) });
+      };
+      // slot order (turn_strip.notice.slot_order): the mark row while one mark is selected, else the newest notice
+      const m = v.mark;
+      const mark = m ? markStripRow({ key: m.key, rev: m.rev, id: m.id, name: named(m.of.hsid, m.agent).name, removed: m.removed, time: m.at ? hhmm(new Date(m.at).toISOString()) : '' }) : null;
+      return { slot: mark ?? (v.shown ? row(v.shown, v.behind.length) : null), behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held };
     },
     noticeKey(what, target, event) {
       const session = cur?.session;

@@ -457,6 +457,7 @@ export function mountBoard(host: HTMLElement, options: BoardMountOptions = {}): 
           ...(g?.stubKind !== undefined ? { stubKind: g.stubKind } : {}),
           ...(el.containerId ? { labelOf: el.containerId } : {}),
           ...attributionOf(el, nodeId),
+          ...(typeof (el as { angle?: unknown }).angle === 'number' && (el as unknown as { angle: number }).angle !== 0 ? { angle: (el as unknown as { angle: number }).angle } : {}),
         };
       };
       /**
