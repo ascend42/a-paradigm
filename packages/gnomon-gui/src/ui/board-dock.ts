@@ -254,7 +254,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   /** S1.4 P4b: a session's hand as the foot and the said lines name it: 'Claude', with its session when two would read the same. */
   function handNameOf(session: DimSession, hsid: string, label: string | null = null): string {
     // (aegis N-7: a label is shown through the board's own name rules and cut as every hand's name is)
-    const name = label ? handName(boardAgentName(label)) : 'Claude';
+    // (design board-leaf.said.by: the label 'claude' is shown as 'Claude', the turn strip's word)
+    const name = label ? (label === 'claude' ? 'Claude' : handName(boardAgentName(label))) : 'Claude';
     const attached = session.grantKeys().map((k) => k.hsid);
     const same = attached.filter((h) => h !== hsid && !(d.localModel?.(h) ?? false)).length > 0;
     const where = same ? sessionShort(d.sessionInfo(hsid).name) : '';
