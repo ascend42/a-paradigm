@@ -164,6 +164,15 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 in the real app: the notic
     expect(S(a, 'after').keep).toBe('Who changed what couldn’t be checked · the marks themselves match');
   }, 120_000);
 
+  it('R3: an own turn that touched only its own marks has its undo on the turn row while the slot shows the you row; a notice takes it away', async () => {
+    const ownKey = { read: `[...document.querySelectorAll('#board-turn .bd-turn-turn [data-undo-key]')].map((k) => k.textContent)`, as: 'x' };
+    const a = await real([...openBoard, ...rectAt(220, 180), turn(1, `return [{ type: 'add', node: { id: '01JD1MOWNTURN0000000000001', kind: 'rect', x: 420, y: 60, z: 'VZ', w: 30, h: 30 } }];`), ARM, { ...ownKey, as: 'alone' }, turn(2, recolour(0)), { wait: 600 }, { ...ownKey, as: 'withNotice' }, strip('after')]);
+    expect(a.errors).toEqual([]);
+    expect(a.alone).toEqual(['undo']);
+    expect(a.withNotice).toEqual([]);
+    expect(S(a, 'after').shown).toMatch(T(2));
+  }, 120_000);
+
   it('D1: a default-on grant is said ONCE on the open that made the board', async () => {
     const a = await real([...openBoard, ...rectAt(220, 180), { wait: 800 }, strip('after')]);
     expect(a.errors).toEqual([]);

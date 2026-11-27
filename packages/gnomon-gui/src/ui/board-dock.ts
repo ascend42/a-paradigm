@@ -109,7 +109,7 @@ export interface BoardDock {
   /** S1.4 E3: the open board's notice row and its +k menu rows, as the strip draws them; null with no board open */
   noticeStrip(): NoticeStrip | null;
   /** S1.4 E3: a strip key pressed (the strip checked U1); the session drops anything else */
-  noticeKey(what: 'undo' | 'redo' | 'dismiss' | 'bring', target: { key: string; rev: number; id?: string }, event: Event): void;
+  noticeKey(what: 'undo' | 'redo' | 'dismiss' | 'bring', target: { key: string; rev: number; id?: string; own?: boolean }, event: Event): void;
   /** S1.4 E3 (U2): the strip is hovered, focused or its menu open */
   freezeNotices(on: boolean): void;
   /** S1.4 E3 board-trace: the notice the pointer or focus is on, or null */
@@ -125,6 +125,8 @@ export interface NoticeStrip {
   /** every undo-family key is disabled: pending past 300 ms (`slow`), or held (link down, out of date, catching up) */
   pending: { since: number } | null;
   held: string | null;
+  /** R3: this session's own ended turn, undone from the turn row ONLY while the slot shows the you row (null otherwise) */
+  own: { key: string; rev: number } | null;
 }
 
 const two = (n: number): string => String(n).padStart(2, '0');
@@ -681,13 +683,16 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       // slot order (turn_strip.notice.slot_order): the mark row while one mark is selected, else the newest notice
       const m = v.mark;
       const mark = m ? markStripRow({ key: m.key, rev: m.rev, id: m.id, name: named(m.of.hsid, m.agent).name, removed: m.removed, time: m.at ? hhmm(new Date(m.at).toISOString()) : '' }) : null;
-      return { slot: mark ?? (v.shown ? row(v.shown, v.behind.length) : null), behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held };
+      const slot = mark ?? (v.shown ? row(v.shown, v.behind.length) : null);
+      // (mika R3: one undo-family key in the strip at a time; the turn row's only while the slot shows the you row)
+      return { slot, behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held, own: slot ? null : v.own };
     },
     noticeKey(what, target, event) {
       const session = cur?.session;
       if (!session || !event.isTrusted) return;
       if (what === 'undo') {
-        if (target.id) session.undoMark(target.id, target.key, target.rev, event);
+        if (target.own) session.undoOwn(target.key, target.rev, event);
+        else if (target.id) session.undoMark(target.id, target.key, target.rev, event);
         else session.undoNotice(target.key, target.rev, event);
       } else if (what === 'redo') session.redoNotice(target.key, event);
       else if (what === 'dismiss') session.dismissNotice(target.key, event);

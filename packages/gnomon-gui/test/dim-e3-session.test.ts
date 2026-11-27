@@ -411,3 +411,20 @@ describe('E3 round 2 revert gaps', () => {
   });
 });
 
+describe('E3 round 3: R3, this session\'s own turn', () => {
+  it('an own turn that touched only its own marks raises no notice; its key undoes it (dim.undo of that turn), once', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    const own = (t: number) => ({ principal: 'p:00000000/claude', surface: 'bridge', agent: 'claude', hsid: HSID, turn: `turn:${HSID}/${t}` });
+    w.push(DIM_KINDS.op, { ops: [rect(50)], relayedFor: own(1) });
+    w.sessions.apply([{ seq: 9_000, kind: 'turn.result', payload: { turn: `turn:${HSID}/1` } }]);
+    const v = s.noticeView();
+    expect(v.shown).toBeNull();
+    expect(v.own).toEqual({ key: `turn:${HSID}/1`, rev: 1 });
+    expect(s.undoOwn(v.own!.key, v.own!.rev, press('click'))).toBe(true);
+    await flush(200);
+    expect(w.of('dim.undo')[0]!.args).toMatchObject({ of: { hsid: HSID, turn: `turn:${HSID}/1` } });
+    expect(s.noticeView().own).toBeNull();
+  });
+});
+

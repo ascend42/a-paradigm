@@ -92,7 +92,7 @@ export interface BoardTurnStrip {
   live(): boolean;
 }
 
-export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number }): BoardTurnStrip {
+export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => void; onWorkKey: (e: Event, itemKey: string) => void; onNoticeKey?: (what: NoticeWhat, target: { key: string; rev: number; id?: string; own?: boolean }, e: Event) => void; onFreeze?: (on: boolean) => void; onFocusBoard?: () => void; onTrace?: (key: string | null) => void; now?: () => number }): BoardTurnStrip {
   const doc = document as unknown as MiniDoc;
   const el = o.el;
   const show = document.createElement('button');
@@ -108,7 +108,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
   // ── S1.4 E3: the notice and mark rows' keys ────────────────────────────────
   /** when each key (by what, target and word) was last drawn: a press inside UNDO_ARM_MS is dropped (U1) */
   const armed = new Map<string, number>();
-  let targets = new Map<string, { key: string; rev: number; id?: string }>();
+  let targets = new Map<string, { key: string; rev: number; id?: string; own?: boolean }>();
   let menuOpen = false;
   let hover = false;
   let focusIn = false;
@@ -140,7 +140,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     focusIn = false;
     freeze();
   });
-  const keyEl = (what: string, word: string, target: { key: string; rev: number; id?: string }, aria: string | undefined, title?: string): HTMLElement => {
+  const keyEl = (what: string, word: string, target: { key: string; rev: number; id?: string; own?: boolean }, aria: string | undefined, title?: string): HTMLElement => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'key quiet bd-undo-key';
@@ -278,13 +278,14 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
 
   /** the turn row drops by core order until it fits: reply (when it overflows or is cut to nothing), name, more */
   function fit(row: HTMLElement): void {
-    row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5');
+    row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5', 'tight-6');
     const line = row.querySelector<HTMLElement>('.bd-turn-line');
     if (!line || !row.querySelector('[data-drop]')) return;
     const said = line.querySelector<HTMLElement>('.said[data-drop]');
     const over = (): boolean => line.scrollWidth > line.clientWidth + 0.5;
     const starved = (): boolean => !!said && said.offsetParent !== null && said.scrollWidth > said.clientWidth + 0.5 && said.clientWidth < REPLY_MIN_PX;
-    for (const level of [1, 2, 3, 4, 5] as const) {
+    row.classList.remove('tight-6');
+    for (const level of [1, 2, 3, 4, 5, 6] as const) {
       if (!over() && !(level === 1 && starved())) return;
       row.classList.add(`tight-${level}`);
     }
@@ -327,6 +328,10 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
           else o.onFocusBoard?.();
         }
         el.querySelector('.bd-turn-turn')?.appendChild(show);
+        // R3: this session's own ended turn has its undo in the UNDO column left of show chat, only while the slot
+        // shows the you row (the dock passes it only then); the sixth drop level takes it away, show chat stays
+        const own = v.notices?.own;
+        if (own) show.before(col('bd-undo-col', keyEl('undo', UNDO_COPY.undo, { key: own.key, rev: own.rev, own: true }, `Undo ${v.agent}’s last turn on this board`)));
         // a repaint keeps a focused working key focused (its row was rebuilt)
         if (hadWork !== null) el.querySelector<HTMLElement>(`[data-strip-work="${CSS.escape(hadWork)}"]`)?.focus({ preventScroll: true });
         // Aegis L3: show chat is moved into the rebuilt row, which detaches it: its focus comes back with it

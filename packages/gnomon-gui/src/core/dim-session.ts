@@ -238,6 +238,8 @@ export interface DimNoticeView {
   pending: { key: string | null; since: number } | null;
   /** the link is down, the board is out of date, or it has not caught up since the link came back: every key disabled */
   held: 'link-down' | 'out-of-date' | 'catching-up' | null;
+  /** R3: this session's own ended turn that its turn-row key undoes, or null */
+  own: { key: string; rev: number } | null;
   /** the mark row: one selected mark (or cut-out) and the set its key undoes */
   mark: { key: string; rev: number; id: string; agent: string | null; removed: boolean; at: number; of: { hsid: string; turn: string } } | null;
 }
@@ -281,6 +283,8 @@ interface Internals {
   gate: StampGate;
   /** S1.4 E3: the board's standing notices, kept by DimSessions so a reconnect's rebuilt session keeps them */
   notices(dim: string, me: string): DimNotices;
+  /** S1.4 E3 (R3): the turn a session's latest turn.result closed, or null */
+  lastTurn(hsid: string): string | null;
 }
 
 /** Lets one stamp finish its commands before another stamp is first sent on the connection. */
@@ -1099,7 +1103,35 @@ export class DimSession {
   noticeView(): DimNoticeView {
     const f = this.#undoFlight ?? (this.#grantFlight ? { key: null, since: this.#grantFlight.since } : null);
     const held = this.#x.link() === null ? 'link-down' : this.#readOnly ? 'out-of-date' : !this.#caughtUp ? 'catching-up' : null;
-    return { shown: this.#notices.shown(), behind: this.#notices.behind(), pending: f, held, mark: this.#markRow() };
+    return { shown: this.#notices.shown(), behind: this.#notices.behind(), pending: f, held, mark: this.#markRow(), own: this.#ownTurn() };
+  }
+
+  /** own turns this page undid from the turn row (their key leaves) */
+  readonly #ownUndone = new Set<string>();
+  /**
+   * R3 (turn_strip.notice.own_turn): this session's own latest ENDED turn, when it wrote rows here and raised no
+   * notice (a turn that touched only its own marks), and has not been undone from here. The strip shows its key on
+   * the turn row only while the slot shows the you row.
+   */
+  #ownTurn(): { key: string; rev: number } | null {
+    const key = this.#x.lastTurn(this.hsid);
+    if (!key || this.#ownUndone.has(key) || this.#notices.get(key)) return null;
+    const held = this.#notices.held(key);
+    return held && held.rev > 0 ? { key, rev: held.rev } : null;
+  }
+
+  /** The turn row's own undo key (R3): dim.undo of this session's own turn, the target the row showed. */
+  undoOwn(key: string, rev: number, cause: Event | null): boolean {
+    const g = this.#mayPress(cause);
+    if (!g) return false;
+    const own = this.#ownTurn();
+    if (!own || own.key !== key || own.rev !== rev) return this.#emit(null), false;
+    const held = this.#notices.held(key)!;
+    this.#undoCall(g, null, { of: held.of, base: held.base }, (out) => {
+      if (out.kind === 'ok' && !out.more) this.#ownUndone.add(key);
+      return this.#undoLine(out, 'turn', { agent: held.agent });
+    });
+    return true;
   }
 
   /** the person's selection as last reported (node ids), and a cut-out they selected (a removed mark's node id) */
@@ -1456,6 +1488,7 @@ export class DimSessions {
       verifiedAt: (dim) => this.#verified.get(dim) ?? null,
       setVerified: (dim, v) => void this.#verified.set(dim, v),
       gate: new StampGate(),
+      lastTurn: (hsid) => this.#lastResult.get(hsid) ?? null,
       notices: (dim, me) => {
         let n = this.#notices.get(dim);
         if (!n) {
