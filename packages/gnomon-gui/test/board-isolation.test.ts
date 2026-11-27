@@ -120,7 +120,9 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     // +6,951, the overlay +4,610, the leaf's words +2,649, board-turn +2,103, contracts +2,107 (dimAttrDigest and the
     // marker readers; planDimUndo is NOT in app.js), the rest under 2 kB each). The cap only has to catch the engine,
     // which is 1.2 MB or more on its own
-    expect(app.length).toBeLessThan(1_450_000);
+    // The E3 review rounds (r1 to r4: the notices' fallbacks, the strip's ladders, the menu's place, chips) grew it to
+    // 1,450,552 at 802e05fb: the cap goes to 1_500_000, still far under the engine
+    expect(app.length).toBeLessThan(1_500_000);
     expect(app).not.toMatch(/\bplanDimUndo\b/);
   });
 
