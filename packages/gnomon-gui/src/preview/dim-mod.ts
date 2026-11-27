@@ -9,7 +9,10 @@
  * file's order, with no keyframes, no state store and no cold read. The host around it (the gesture check, the
  * stamp, `hsid` and `repo`) is the fake kernel's.
  */
-import type { DimRow, DimState } from '@a-company/gnomon-contracts';
+import { DIM_KINDS, dimChangeSetOf, foldDim, planDimUndo } from '@a-company/gnomon-contracts';
+import type { DimChangeSet, DimRow, DimState } from '@a-company/gnomon-contracts';
+import { packDimRows } from '../core/dim-rows.js';
+import { mintDimNodeId } from '../core/dim-session.js';
 // @ts-ignore the mod's own plain .mjs (no types): bundled into the preview only
 import * as model from '../../../gnomon-mods/dimension/model.mjs';
 // @ts-ignore the mod's built copy of the contract
@@ -38,6 +41,23 @@ export const PREVIEW_DIM_REPO = 'repo:0123456789abcdef';
 
 export class PreviewDimMod {
   readonly #dims = new Map<string, { repo: string; state: DimState }>();
+  /** S1.4 E3 stand-in of the mod's undo history: each dimension's op rows with the state just before each (newest 512) */
+  readonly #hist = new Map<string, Array<{ row: DimRow; before: DimState }>>();
+  #note(dim: string, row: DimRow, before: DimState): void {
+    const list = this.#hist.get(dim) ?? [];
+    list.push({ row, before });
+    if (list.length > 512) list.shift();
+    this.#hist.set(dim, list);
+  }
+  /** DEV: an agent's row written as the bridge would (the fixture's agents); folded here and noted for undo */
+  landedElsewhere(row: DimRow): void {
+    const dim = (row.payload as { dim?: string }).dim;
+    const e = typeof dim === 'string' ? this.#dims.get(dim) : undefined;
+    if (!e || row.kind !== DIM_KINDS.op) return;
+    const before = e.state;
+    e.state = foldDim([row], undefined, before);
+    this.#note(dim!, row, before);
+  }
   /** DEV: the next `dim.op` is answered with this refusal code instead (a test shows the roll back) */
   refuseNext: string | null = null;
   /** DEV: `dim.op` commands are held, unanswered, while true */
@@ -68,7 +88,15 @@ export class PreviewDimMod {
       const dim = (r.payload as { dim?: string }).dim;
       if (typeof dim === 'string') by.set(dim, [...(by.get(dim) ?? []), r]);
     }
-    for (const [dim, list] of by) this.#dims.set(dim, { repo, state: S.foldDim(list) });
+    for (const [dim, list] of by) {
+      let st: DimState | undefined;
+      for (const r of list) {
+        const before: DimState = st ?? S.emptyDimState(dim);
+        st = foldDim([r], undefined, st);
+        if (r.kind === DIM_KINDS.op) this.#note(dim, r, before);
+      }
+      this.#dims.set(dim, { repo, state: S.foldDim(list) });
+    }
   }
 
   hash(dim: string): string | null {
@@ -115,7 +143,9 @@ export class PreviewDimMod {
     const write = (kind: string, payload: Record<string, unknown>): number | Answer => {
       if (M.rowProblem(payload, stamp)) return M.refusal('row-too-large');
       const seq = append(kind, payload);
+      const before = e.state;
       e.state = M.landed(e.state, kind, payload, stamp, seq);
+      if (kind === S.DIM_KINDS.op) this.#note(a.dim, { seq, kind, payload: { ...payload, relayedFor: stamp } }, before);
       return seq;
     };
     if (commandId === 'dim.attach') {
@@ -136,6 +166,9 @@ export class PreviewDimMod {
       return typeof seq === 'number' ? { ok: true, already: false, dim: a.dim, seq, ops: payload.ops, nodes: payload.nodes, hash: S.dimHash(e.state) } : seq;
     }
     if (state.ended) return M.refusal('dim-ended');
+    // S1.4 E3 stand-in: no pins are kept here, so a dismiss always releases
+    if (commandId === 'dim.seen') return { ok: true, dim: a.dim, released: true };
+    if (commandId === 'dim.undo') return this.#undo(a as never, e, write, actor, stamp);
     if (this.refuseNext) {
       const code = this.refuseNext;
       this.refuseNext = null;
@@ -145,8 +178,44 @@ export class PreviewDimMod {
     if (v.tooLarge) return M.refusal('row-too-large');
     if (v.secret) return M.refusal('secret', { refused: v.refused });
     if (v.ok.length === 0) return M.refusal('ops-refused', { refused: v.refused });
-    const seq = write(S.DIM_KINDS.op, M.opPayload(a.dim, v.ok));
+    const act = (a as { act?: string }).act;
+    const seq = write(S.DIM_KINDS.op, { ...M.opPayload(a.dim, v.ok), ...(act ? { act } : {}) });
     if (typeof seq !== 'number') return seq;
     return { ok: true, dim: a.dim, seq, applied: v.ok.length, refused: v.refused };
+  }
+
+  /**
+   * STAND-IN of index.mjs `dim.undo` (S1.4 E1): the set's rows from the noted history, `planDimUndo` as the person,
+   * packed into rows each carrying a fresh act and the `undo` marker with its `restored` entries (G5). No pins, no
+   * continuation memory, no keyframes: a set not in the history is `undo-expired`.
+   */
+  #undo(a: { dim: string; of: DimChangeSet; ids?: string[] }, e: { state: DimState }, write: (kind: string, payload: Record<string, unknown>) => number | Answer, actor: { cls: 'human'; principal: string }, stamp: Record<string, string>): Answer {
+    const hist = this.#hist.get(a.dim) ?? [];
+    const same = (cs: DimChangeSet | null): boolean => !!cs && cs.kind === a.of.kind && (cs.kind === 'act' ? cs.principal === (a.of as { principal: string }).principal && cs.act === (a.of as { act: string }).act : cs.turn === (a.of as { turn: string }).turn);
+    const mine = hist.filter((h) => same(dimChangeSetOf(h.row)));
+    if (mine.length === 0) return M.refusal('undo-expired');
+    const first = mine[0]!.row.seq;
+    const plan = planDimUndo({
+      rows: mine.map((h) => ({ before: h.before, ops: (h.row.payload as { ops: unknown[] }).ops, seq: h.row.seq })),
+      after: hist.filter((h) => h.row.seq > first && !mine.includes(h)).map((h) => h.row),
+      current: e.state,
+      actor,
+      mint: mintDimNodeId,
+      of: a.of,
+      undoer: { cls: 'human', principal: actor.principal } as never,
+      ...(a.ids ? { ids: a.ids } : {}),
+    });
+    if (plan.ops.length === 0) return M.refusal('undo-nothing', { skipped: plan.skipped });
+    const rows = packDimRows(plan.ops) ?? [plan.ops];
+    const act = mintDimNodeId();
+    const of = a.of.kind === 'act' ? { principal: a.of.principal, act: a.of.act } : { hsid: a.of.hsid, turn: a.of.turn };
+    for (const ops of rows) {
+      const adds = new Set(ops.flatMap((o) => (o.type === 'add' ? [(o.node as { id: string }).id] : [])));
+      const restored = plan.restored.filter((r) => adds.has(r[0]));
+      const seq = write(S.DIM_KINDS.op, { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}) } });
+      if (typeof seq !== 'number') return seq;
+    }
+    void stamp;
+    return { ok: true, dim: a.dim, seq: e.state.seq, hash: S.dimHash(e.state), applied: plan.applied, skipped: plan.skipped, ...(plan.more ? { more: true } : {}) };
   }
 }

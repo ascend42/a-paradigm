@@ -137,7 +137,7 @@ describe('#gui-dim-session open, edit, confirm', () => {
     await flush(DIM_SEND_LIMITS.gapMs);
     expect(await s.opened()).toBe(true);
     expect(w.calls.map((c) => c.commandId)).toEqual(['dim.open', 'dim.op']);
-    expect(w.calls[1]!.args).toEqual({ ops: [rect(1)], dim: DIM, focus: { hsid: HSID }, gesture: { n: 2, kind: 'pointer' } });
+    expect(w.calls[1]!.args).toEqual({ ops: [rect(1)], act: expect.stringMatching(/^[0-9A-HJKMNP-TV-Z]{26}$/), dim: DIM, focus: { hsid: HSID }, gesture: { n: 2, kind: 'pointer' } });
     w.answer(w.calls[1]!);
     await flush();
     expect(s.status()).toMatchObject({ phase: 'open', keep: 'saved', pending: 0, canUndo: true, title: 'Plan', verified: true, partial: false, dropped: 0 });
@@ -891,11 +891,13 @@ describe('#gui-dim-session review of PR #118, group C', () => {
     h.edit([rect(3)], press());
     await flush(2000);
     expect(w.ops()).toHaveLength(1);
-    expect(s.status()).toMatchObject({ pending: 2, inFlight: true });
+    // S1.4 E3 item 7: two actions are two batches, one act each, never merged
+    expect(s.status()).toMatchObject({ pending: 3, inFlight: true });
     w.answer(w.ops()[0]!);
     await flush(DIM_SEND_LIMITS.gapMs * 2);
     expect(w.ops()).toHaveLength(2);
-    expect(w.ops()[1]!.args.ops).toEqual([rect(2), rect(3)]);
+    expect(w.ops()[1]!.args.ops).toEqual([rect(2)]);
+    expect(w.ops()[1]!.args.act).not.toBe(w.ops()[0]!.args.act);
   });
 
   it('a handle given to a dead session is not kept or listened to; a listener that throws does not break the open or the loop', async () => {
