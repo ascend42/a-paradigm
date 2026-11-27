@@ -180,7 +180,103 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the remo
     expect(bh.map((h) => h.note)).toEqual([null, null]);
     expect(bh.some((h) => h.name !== null)).toBe(true);
   }, 240_000);
-  it.todo('two agents at a 1024 window and three agents at 1440: the +<k> menu (a later S1.4 pass) keeps every key in reach');
+  // T-2026-11-26-004 (design hands_foot.overflow; draw-grant.never 'hidden behind an overflow with no way to press it')
+  const C = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZC';
+  const D = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZD';
+  const E = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZE';
+  const agents = (n: number) => [A, B2, C, D, E].slice(0, n).map((hsid, i) => ({ ...one(i === 0, 'live', { session: ['billing-ui follow-up', 'Totals are off by a cent', 'auth handoff review', 'release notes', 'the paging fix'][i] }), hsid }));
+  const reach = `(() => { const f = document.querySelector('.bd-foot').getBoundingClientRect(); const leaf = document.querySelector('.bd-leaf').getBoundingClientRect(); const m = document.querySelector('.bd-hands-menu'); const mb = m && m.isConnected ? m.getBoundingClientRect() : null; return { foot: [...document.querySelectorAll('.bd-foot > .bd-hand .bd-grant')].map((k) => { const b = k.getBoundingClientRect(); return { hsid: k.dataset.grant, inside: b.left >= f.left + 14 - 0.5 && b.right <= f.right - 14 + 0.5 }; }), menu: m && m.isConnected ? [...m.querySelectorAll('.bd-grant')].map((k) => { const b = k.getBoundingClientRect(); return { hsid: k.dataset.grant, inside: b.left >= leaf.left - 0.5 && b.right <= leaf.right + 0.5 && b.top >= leaf.top && b.bottom <= f.top + 0.5 && b.width > 0 }; }) : null, more: document.querySelector('.bd-hands-more') ? { text: document.querySelector('.bd-hands-more').textContent, label: document.querySelector('.bd-hands-more').getAttribute('aria-label'), expanded: document.querySelector('.bd-hands-more').getAttribute('aria-expanded'), controls: document.querySelector('.bd-hands-more').getAttribute('aria-controls') === (m && m.id) } : null, menuBottom: mb ? mb.bottom : null, footTop: f.top, rows: m && m.isConnected ? [...m.querySelectorAll('.bd-hands-row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim()) : null, role: m ? m.getAttribute('role') : null }; })()`;
+  it('the +<k> ▾ menu: two agents at a 1024 window and three at 1440 (and 2 and 3 in a 560 leaf): every draw key is whole in the foot or reachable in the menu, none clipped, and the menu never covers the foot', async () => {
+    // (where the hands fit with their words cut there is no menu: a 1440 window holds three; then a second run opens it)
+    for (const width of [1024, 1280, 1440, 560]) for (const n of [2, 3, 4]) {
+      for (const theme of ['day', 'night'] as const) {
+        const set = [{ read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(agents(n)), as: 'set' }, { wait: 400 }, { read: reach, as: 'closed' }];
+        const first = await real(set, { width, theme, shot: `dl-hands-foot-${n}-${theme}-${width}` });
+        const has = !!(first.closed as { more: unknown }).more;
+        const a = has ? await real([...set, { press: '.bd-hands-more' }, { wait: 300 }, { read: reach, as: 'open' }, { read: active, as: 'focus' }], { width, theme, shot: `dl-hands-menu-${n}-${theme}-${width}` }) : first;
+        const closed = a.closed as { foot: Array<{ hsid: string; inside: boolean }>; more: { text: string; label: string } | null };
+        const open = a.open as { foot: Array<{ hsid: string; inside: boolean }>; menu: Array<{ hsid: string; inside: boolean }> | null; more: { expanded: string; controls: boolean } | null; menuBottom: number | null; footTop: number; rows: string[] | null; role: string | null };
+        const tag = `${n} agents at ${width} ${theme}`;
+        for (const k of closed.foot) expect(k.inside, `${tag}: a key clipped off the foot`).toBe(true);
+        if (!has) {
+          // every hand fits: every key whole in the foot
+          expect(closed.foot.length, tag).toBe(n);
+          continue;
+        }
+        // the hands that do not fit went behind the key; a 1024 window with two, and a 560 leaf, need it
+        if ((width === 1024 || width === 560) && n >= 2) expect(closed.foot.length, tag).toBeLessThan(n);
+        expect(closed.more!.label, tag).toBe(`${n - closed.foot.length} more ${n - closed.foot.length === 1 ? 'hand' : 'hands'}`);
+        expect(closed.more!.text, tag).toBe(`+${n - closed.foot.length} ▾`);
+        // open: every key is in the foot or the menu, once, and whole
+        const all = [...open.foot, ...(open.menu ?? [])];
+        expect(all.map((k) => k.hsid).sort(), tag).toEqual([A, B2, C, D, E].slice(0, n).sort());
+        for (const k of all) expect(k.inside, `${tag}: ${k.hsid} out of reach`).toBe(true);
+        expect(open.foot, `${tag}: the foot's keys stay where they were`).toEqual(closed.foot);
+        expect(open.menuBottom! <= open.footTop - 3.5, `${tag}: the menu covers the foot`).toBe(true);
+        expect(open.more, tag).toEqual({ text: expect.any(String), label: expect.any(String), expanded: 'true', controls: true });
+        expect(open.role, tag).toBeNull();
+        // each row whole: its name and its session (the foot's own cut never applies in the menu)
+        for (const r of open.rows!) expect(r, tag).toMatch(/Claude\s*◇\s*\S/);
+        expect(a.focus, `${tag}: opening leaves focus on the key`).toBe('BUTTON.key quiet bd-hands-more');
+      }
+    }
+  }, 600_000);
+  it('the +<k> ▾ menu: a press on a key in it sends exactly one dim.grant, for that hand, trusted; the menu stays open; an untrusted press opens nothing and sends nothing', async () => {
+    const a = await real([
+      { read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(agents(3)), as: 'set' }, { wait: 400 },
+      { read: `(document.querySelector('.bd-hands-more').click(), document.querySelector('.bd-hands-more').getAttribute('aria-expanded'))`, as: 'synthetic' },
+      { press: '.bd-hands-more' }, { wait: 250 },
+      { read: `(document.querySelector('.bd-hands-menu .bd-grant').click(), ${presses}.length)`, as: 'syntheticKey' },
+      { read: `document.querySelector('.bd-hands-menu .bd-grant').dataset.grant`, as: 'target' },
+      { press: '.bd-hands-menu .bd-grant' }, { wait: 250 },
+      { read: presses, as: 'presses' }, { read: `document.querySelector('.bd-hands-more').getAttribute('aria-expanded')`, as: 'still' },
+    ], { width: 1024 });
+    expect(a.synthetic).toBe('false');
+    expect(a.syntheticKey).toBe(0);
+    expect(a.presses).toEqual([{ hsid: a.target, type: 'click', trusted: true }]);
+    expect(a.still).toBe('true');
+  }, 180_000);
+  it('the +<k> ▾ menu: a menu key is dropped while pending, down or unknown, with the foot key\'s titles; ↓ goes in, Esc closes it ONLY and returns to the key; focus leaving and an outside press close it', async () => {
+    const st = (state: string) => grants(agents(3).map((g, i) => (i === 2 ? { ...g, state, since: state === 'pending' ? 0 : null } : g)));
+    const a = await real([
+      { read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(agents(3)), as: 'set' }, { wait: 400 },
+      { press: '.bd-hands-more' }, { wait: 250 },
+      { read: st('down'), as: 'd' }, { wait: 100 }, { press: `.bd-hands-menu [data-grant="${C}"]` }, { wait: 100 },
+      { read: `document.querySelector('.bd-hands-menu [data-grant="${C}"]').getAttribute('aria-label')`, as: 'downTitle' },
+      { read: st('unknown'), as: 'u' }, { wait: 100 }, { press: `.bd-hands-menu [data-grant="${C}"]` }, { wait: 100 },
+      { read: st('pending'), as: 'p' }, { wait: 400 }, { press: `.bd-hands-menu [data-grant="${C}"]` }, { wait: 100 },
+      { read: presses, as: 'dropped' },
+      { read: grants(agents(3)), as: 'back' }, { wait: 100 },
+      { read: `(document.querySelector('.bd-hands-more').focus(), [document.querySelector('.bd-hands-more').getAttribute('aria-expanded'), document.querySelectorAll('.bd-hands-menu .bd-grant').length, document.activeElement.className])`, as: 'f' }, { key: 'ArrowDown' }, { wait: 100 }, { read: active, as: 'down' },
+      { key: 'Escape' }, { wait: 150 }, { read: active, as: 'esc' }, { read: `document.querySelector('.bd-hands-more').getAttribute('aria-expanded')`, as: 'escOpen' }, { read: `!!document.querySelector('.bd-leaf')`, as: 'leaf' }, { read: `globalThis.gnomonPreviewFolds ?? 0`, as: 'folds' },
+      { press: '.bd-hands-more' }, { wait: 200 }, { key: 'Tab' }, { key: 'Tab' }, { key: 'Tab' }, { key: 'Tab' }, { wait: 150 }, { read: `document.querySelector('.bd-hands-more').getAttribute('aria-expanded')`, as: 'tabbed' },
+      { read: `(document.querySelector('.bd-hands-more').focus(), 1)`, as: 'f2' }, { press: '.bd-hands-more' }, { wait: 200 }, { at: [300, 200], press: true }, { wait: 150 }, { read: `document.querySelector('.bd-hands-more').getAttribute('aria-expanded')`, as: 'outside' },
+    ], { width: 1024 });
+    expect(a.dropped).toEqual([]);
+    expect(a.downTitle).toMatch(/^Not connected|connect/i);
+    expect(a.f).toEqual(['true', 2, 'key quiet bd-hands-more']);
+    expect(a.down).toMatch(/^key:/);
+    expect(a.esc).toBe('BUTTON.key quiet bd-hands-more');
+    expect(a.escOpen).toBe('false');
+    expect(a.folds).toBe(0);
+    expect(a.tabbed).toBe('false');
+    expect(a.outside).toBe('false');
+  }, 180_000);
+  it('the +<k> ▾ menu: order is fixed and frozen while it is open: an agent\'s state change moves no key and takes no focus; a hand that attaches joins the END of the menu', async () => {
+    const a = await real([
+      { read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(agents(3)), as: 'set' }, { wait: 400 },
+      { press: '.bd-hands-more' }, { wait: 250 }, { key: 'ArrowDown' }, { wait: 100 },
+      { read: reach, as: 'before' }, { read: active, as: 'f0' },
+      { read: grants(agents(3).map((g) => ({ ...g, write: !g.write }))), as: 'flip' }, { wait: 150 },
+      { read: `(globalThis.gnomonPreviewGrants = ${JSON.stringify([])}.concat(globalThis.gnomonPreviewGrants, [{ hsid: '${D}', write: false, state: 'live', since: null, name: 'Claude', session: 'release notes' }]), ${LEAF}.drawFoot(), 1)`, as: 'add' }, { wait: 150 },
+      { read: reach, as: 'after' }, { read: active, as: 'f1' },
+    ], { width: 1024 });
+    const before = a.before as { foot: Array<{ hsid: string }>; menu: Array<{ hsid: string }> };
+    const after = a.after as { foot: Array<{ hsid: string }>; menu: Array<{ hsid: string }> };
+    expect(after.foot.map((k) => k.hsid)).toEqual(before.foot.map((k) => k.hsid));
+    expect(after.menu.map((k) => k.hsid)).toEqual([...before.menu.map((k) => k.hsid), D]);
+    expect(a.f1).toBe(a.f0);
+  }, 180_000);
 
   it('aegis I-4: a first mark of the session (another label) moves no key and drops no focus; a second Claude attaching keeps focus on the key', async () => {
     const mark = `globalThis.gnomonPreviewState([{ hand: 'arky', hsid: '${A}', marks: [{ kind: 'rect', x: 300, y: 200, w: 60, h: 40 }] }])`;

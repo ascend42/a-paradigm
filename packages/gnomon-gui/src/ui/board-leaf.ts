@@ -897,7 +897,91 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     e.hint.hidden = e.session === null;
     if (e.session !== null) setText(e.hintName, e.session);
   }
+  // the hands foot's '+<k> ▾' (design hands_foot.overflow; T-2026-11-26-004): the hands that do not fit, in the
+  // leaf's one menu component (.bd-menu, as the notices' +k menu: upward over the board, its right edge on its key,
+  // in the DOM right after the key; no menu roles, the key has aria-expanded and aria-controls)
+  let handsOpen = false;
+  let shownIds: Set<string> | null = null;
+  let behindHands: Node[] = [];
+  const handsMenuId = `bd-hands-menu-${Math.random().toString(36).slice(2, 8)}`;
+  let moreEl: HTMLButtonElement | null = null;
+  const handsMenu = h('div', 'bd-menu bd-hands-menu', { id: handsMenuId });
+  function moreKey(n: number): HTMLButtonElement {
+    if (!moreEl) {
+      moreEl = h('button', 'key quiet bd-hands-more', { type: 'button', 'aria-controls': handsMenuId, 'aria-expanded': 'false' }) as HTMLButtonElement;
+      moreEl.addEventListener('click', (e) => {
+        // the person's own press only; opening leaves focus on the key (aegis)
+        if (e.isTrusted !== true) return;
+        if (handsOpen) return closeHands(true);
+        handsOpen = true;
+        moreEl!.setAttribute('aria-expanded', 'true');
+        drawFoot();
+      });
+    }
+    setText(moreEl, `+${n} ▾`);
+    moreEl.setAttribute('aria-label', `${n} more ${n === 1 ? 'hand' : 'hands'}`);
+    return moreEl;
+  }
+  function closeHands(back: boolean): void {
+    if (!handsOpen) return;
+    handsOpen = false;
+    // focus first, then the rows go: a removed focused key would drop focus to the body
+    if (back && moreEl?.isConnected) moreEl.focus({ preventScroll: true });
+    handsMenu.replaceChildren();
+    handsMenu.remove();
+    moreEl?.setAttribute('aria-expanded', 'false');
+    drawFoot();
+  }
+  /** One row per hand behind the key, in the foot's order, each whole: seal, name, ◇ session, count, its own key. */
+  function drawHandsMenu(): void {
+    if (!moreEl) return;
+    const rows = behindHands.map((k) => {
+      const ke = [...grantEls.values()].find((e) => e.hand === k);
+      if (ke) {
+        fullHand(ke);
+        ke.hand.removeAttribute('title');
+      }
+      const id = (k as HTMLElement).dataset.hand ?? '';
+      const row = [...handsMenu.children].find((r) => (r as HTMLElement).dataset.handRow === id) ?? h('div', 'bd-menu-row bd-hands-row', { 'data-hand-row': id });
+      syncKids(row as HTMLElement, [k]);
+      return row;
+    });
+    syncKids(handsMenu, rows);
+    if (handsMenu.previousElementSibling !== moreEl) moreEl.after(handsMenu);
+    // above the foot, never over it; its right edge on the key; inside the leaf (never past its left inset); its
+    // height up to the head's bottom, the rows scrolling inside (board-centre-only)
+    const f = foot.getBoundingClientRect();
+    const k = moreEl.getBoundingClientRect();
+    const top = head.getBoundingClientRect().bottom + 4;
+    // (as the notices' menu, Mika E3 r3) its right edge on the key while its rows fit left of it; else out to the
+    // foot's right inset; a row that still does not fit cuts its name and session with … (whole in title=)
+    const left = f.left + 14;
+    handsMenu.style.maxWidth = '';
+    handsMenu.style.right = `${Math.max(0, f.right - k.right)}px`;
+    const natural = handsMenu.scrollWidth;
+    const wide = natural > k.right - left;
+    handsMenu.style.right = `${wide ? 14 : Math.max(0, f.right - k.right)}px`;
+    handsMenu.style.maxWidth = `${Math.max(0, (wide ? f.right - 14 : k.right) - left)}px`;
+    for (const r of handsMenu.children) {
+      const hand = r.firstElementChild as HTMLElement | null;
+      if (!hand) continue;
+      const cut = hand.scrollWidth > hand.clientWidth + 0.5;
+      const full = hand.querySelector('svg')?.getAttribute('aria-label') ?? '';
+      if (cut && full) hand.title = full;
+      else hand.removeAttribute('title');
+    }
+    handsMenu.style.maxHeight = `${Math.max(0, f.top - 4 - top)}px`;
+  }
+  let footDrawing = false;
   function drawFoot(): void {
+    footDrawing = true;
+    try {
+      drawFootNow();
+    } finally {
+      footDrawing = false;
+    }
+  }
+  function drawFootNow(): void {
     const kids: Node[] = [];
     const marks = handle && handle.isAlive() ? handle.marks() : [];
     const hands = handle && handle.isAlive() ? footHands(marks, o.sessionName) : [{ hand: 'you' as const, n: 0 }];
@@ -964,10 +1048,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         const name = h('bdi', '', { title: f.session ? `${f.name}, ${f.session}` : f.name }, handName(f.name));
         // two agent hands that would read the same: each carries its session, ◇ and the name cut at 16 (session_hint)
         const hint = f.session ? [' ', h('span', 'bd-hand-s', { title: f.session }, '◇ ', h('bdi', '', {}, f.session))] : [];
-        kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ' ', slot(f.n)));
-      } else if (f.hand === 'unknown') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} `, slot(f.n)));
+        kids.push(h('span', 'bd-hand', { 'data-hand': `agent:${f.id}` }, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ' ', slot(f.n)));
+      } else if (f.hand === 'unknown') kids.push(h('span', 'bd-hand', { 'data-hand': 'unknown' }, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} `, slot(f.n)));
     }
-    syncKids(foot, kids);
+    // (the hands go into the foot through lay() below: a key in the open menu is never moved back first)
     // a pending change past its quiet: drawn again then
     const pend = grants.find((g) => g.since !== null && now - g.since < DIM_GRANT_QUIET_MS);
     if (pend && grantQuietTimer === null) grantQuietTimer = setTimeout(() => ((grantQuietTimer = null), drawFoot()), DIM_GRANT_QUIET_MS - (now - pend.since!) + 5);
@@ -975,39 +1059,68 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // (0) a not-running note goes first, from the last hand back (its meaning stays in the key's sentence; ruling F1-b);
     // (1) from the last keyed hand back, its session's name is cut to 5 characters and …;
     // (2a, mika F1-a) on EVERY keyed hand that shows a session, at once, the shared name ('Claude') goes: the session
-    //     is what tells two Claudes apart; (2b) only then the session, from the last hand back, and last a lone name.
+    //     is what tells two Claudes apart; (2b) only then the session, from the last hand back, and last a lone name;
+    // (3) hands that still do not fit, from the last, go behind '+<k> ▾' (T-2026-11-26-004), whose menu holds them
+    //     whole, each keyed one with its own draw key. Each split starts again from whole hands (a hand put behind
+    //     gives the ones left their words back). 'you' and the first attached hand stay, except where even that
+    //     does not fit (hands_foot.narrow): then every hand is a menu row.
     // A hand whose words went carries them whole in title= (and in the seal's accessible name and the key's sentence)
     const over = (): boolean => foot.scrollWidth > foot.clientWidth + 0.5;
-    const back = [...keyedEls].reverse();
-    for (const e of back) {
-      if (!over()) break;
-      if (!e.note.hidden && e.key) e.note.hidden = true;
-    }
-    for (const e of back) {
-      if (!over()) break;
-      if (e.session !== null && [...e.session].length > SESSION_FLOOR) setText(e.hintName, `${[...e.session].slice(0, SESSION_FLOOR).join('').trimEnd()}…`);
-    }
-    if (over()) for (const e of keyedEls) if (e.session !== null) e.name.hidden = true;
-    for (const e of back) {
-      if (!over()) break;
-      e.hint.hidden = true;
-      e.name.hidden = true;
+    const fit = (shown: readonly KeyedHand[]): void => {
+      for (const e of shown) {
+        fullHand(e);
+        e.note.hidden = e.note.textContent === '';
+      }
+      const back = [...shown].reverse();
+      for (const e of back) {
+        if (!over()) break;
+        if (!e.note.hidden && e.key) e.note.hidden = true;
+      }
+      for (const e of back) {
+        if (!over()) break;
+        if (e.session !== null && [...e.session].length > SESSION_FLOOR) setText(e.hintName, `${[...e.session].slice(0, SESSION_FLOOR).join('').trimEnd()}…`);
+      }
+      if (over()) for (const e of shown) if (e.session !== null) e.name.hidden = true;
+      for (const e of back) {
+        if (!over()) break;
+        e.hint.hidden = true;
+        e.name.hidden = true;
+      }
+    };
+    const idOf = (k: Node): string => (k as HTMLElement).dataset?.hand ?? '';
+    const youEl = kids[0]!;
+    const rest = kids.slice(1);
+    const keyedOf = (k: Node): KeyedHand | undefined => keyedEls.find((e) => e.hand === k);
+    const lay = (shown: readonly Node[], behindN: number): void => {
+      syncKids(foot, [youEl, ...shown, ...(behindN > 0 ? [moreKey(behindN), ...(handsOpen ? [handsMenu] : [])] : [])]);
+      fit(shown.map(keyedOf).filter((e): e is KeyedHand => !!e));
+    };
+    // ORDER AND FOCUS: while the menu is open or focus is in the foot, the split is frozen (no hand moves in or out
+    // of the foot under the pointer or the focus); a hand that arrives then joins the end of the menu
+    const frozen = handsOpen || foot.contains(document.activeElement);
+    let behind: Node[];
+    if (frozen && shownIds) {
+      const shown = rest.filter((k) => shownIds!.has(idOf(k)));
+      behind = rest.filter((k) => !shownIds!.has(idOf(k)));
+      lay(shown, behind.length);
+    } else {
+      let cut = 0;
+      lay(rest, 0);
+      // the first attached hand stays while '+<k> ▾' has room beside it; a lone hand never goes (hands_foot.narrow)
+      while (over() && cut < (rest.length < 2 ? 0 : rest.length)) {
+        cut++;
+        lay(rest.slice(0, rest.length - cut), cut);
+      }
+      behind = rest.slice(rest.length - cut);
+      shownIds = new Set(rest.slice(0, rest.length - cut).map(idOf));
     }
     for (const e of keyedEls) {
       const gone = e.name.hidden || (e.session !== null && (e.hint.hidden || e.hintName.textContent !== e.session));
-      if (gone) e.hand.title = e.full;
+      if (gone && foot.contains(e.hand)) e.hand.title = e.full;
       else e.hand.removeAttribute('title');
     }
-    // hands that do not fit become '+<k> more', with every hand in title=; 'you' and every hand with a key stay
-    // (a draw key is never put out of reach: design hands_foot.overflow; the '+<k> ▾' menu is not built yet)
-    const cuttable = kids.filter((k) => !(k as HTMLElement).classList?.contains('bd-hand-keyed'));
-    const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
-    let cut = 0;
-    while (foot.scrollWidth > foot.clientWidth && cuttable.length - cut > 1) {
-      cut++;
-      const gone = new Set(cuttable.slice(cuttable.length - cut));
-      syncKids(foot, [...kids.filter((k) => !gone.has(k)), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`)]);
-    }
+    behindHands = behind;
+    if (!behind.length && handsOpen) closeHands(false);
     // The check: decided by THE HANDS ALONE (design check.place). It is in the foot when its LONGEST wording and its
     // gap fit after the hands, whatever it says now; never cut, no short form. Measured with the foot's own paint.
     const used = foot.lastElementChild ? foot.lastElementChild.getBoundingClientRect().right - foot.getBoundingClientRect().left : 0;
@@ -1018,6 +1131,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     probe.remove();
     const fits = !!checkWords && foot.clientWidth > 0 && used + need <= foot.clientWidth - pad + 0.5;
     if (fits) foot.append(h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, { title: checkTitleText }, checkWords));
+    if (handsOpen && behind.length) drawHandsMenu();
     if (fits !== checkInFoot) {
       checkInFoot = fits;
       el.dataset.checkPlace = fits ? 'foot' : 'list';
@@ -1229,6 +1343,18 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   };
   const onKey = (e: KeyboardEvent): void => {
     const active = document.activeElement;
+    // the hands menu: Esc closes it ONLY and returns focus to '+<k> ▾' (the leaf stays open); ↓ from the key goes
+    // into its rows, ↑ ↓ move between the rows' keys
+    if (handsOpen && active instanceof HTMLElement && foot.contains(active)) {
+      if (e.key === 'Escape') return void (e.preventDefault(), e.stopPropagation(), closeHands(true));
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const keys = [...handsMenu.querySelectorAll<HTMLElement>('.bd-grant')];
+        const at = keys.indexOf(active);
+        const next = active === moreEl ? (e.key === 'ArrowDown' ? keys[0] : undefined) : at >= 0 ? keys[at + (e.key === 'ArrowDown' ? 1 : -1)] : undefined;
+        if (next) next.focus();
+        if (active === moreEl || at >= 0) return void (e.preventDefault(), e.stopPropagation());
+      }
+    }
     const s = st();
     // held still (the link is down, the fold is out of date) Esc folds the leaf at once: there is no tool to leave
     // and the held-still line tells the person to fold (a text being typed while down keeps its field: guardTypedKey)
@@ -1397,6 +1523,14 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   const onFocus = (): void => void queueMicrotask(() => yielded() !== wasYielded && draw());
   document.addEventListener('focusin', onFocus);
   document.addEventListener('focusout', onFocus);
+  // the hands menu closes where it is when focus leaves the foot and its menu, or on a press outside them
+  // (a redraw moves no focused key: a focusout it causes is not focus leaving)
+  foot.addEventListener('focusout', (e) => {
+    if (!handsOpen || footDrawing || (e.relatedTarget instanceof Node && foot.contains(e.relatedTarget))) return;
+    closeHands(false);
+  });
+  const outsideHands = (e: Event): void => void (handsOpen && !(e.target instanceof Node && foot.contains(e.target)) && closeHands(false));
+  document.addEventListener('pointerdown', outsideHands, true);
   const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => draw());
   ro?.observe(el);
 
@@ -1529,6 +1663,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       clip.clear();
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('focusout', onFocus);
+      document.removeEventListener('pointerdown', outsideHands, true);
       cancelAnimationFrame(sceneFrame);
       ro?.disconnect();
       handle?.unmount();

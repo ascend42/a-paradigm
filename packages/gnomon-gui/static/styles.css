@@ -2054,3 +2054,16 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
    rail's 48px; the foot stays (its draw keys and the check). Under 56px of board the body is not drawn at all. */
 .bd-leaf.too-short .bd-rail, .bd-leaf.too-short .bd-tray { display: none; }
 .bd-leaf.no-body .bd-body { display: none; }
+/* S1.4 the hands foot's '+<k> ▾' (design hands_foot.overflow; T-2026-11-26-004): the leaf's one menu component,
+   upward over the board from its key, never over the foot; one row per hand behind the key, each with its draw key */
+.bd-foot { position: relative; }
+.bd-foot .bd-hands-more { flex: none; }
+.bd-foot .bd-hands-menu { position: absolute; left: auto; top: auto; bottom: calc(100% + 5px); z-index: 30; min-width: 0; box-sizing: border-box; color: var(--sec); }
+.bd-hands-menu .bd-hands-row { min-height: var(--key-h); padding: 2px 8px; white-space: nowrap; }
+.bd-hands-menu .bd-hands-row { display: flex; min-width: 0; }
+.bd-foot .bd-hands-menu .bd-hand { display: flex; flex: 1 1 auto; min-width: 0; }
+.bd-hands-menu .bd-hand > bdi { flex: none; }
+.bd-hands-menu .bd-hand > .bd-hand-s:not(.bd-hand-note) { flex: 0 1 auto; min-width: 2ch; overflow: hidden; text-overflow: ellipsis; }
+.bd-hands-menu .bd-hand > .bd-hand-s > bdi { white-space: nowrap; }
+.bd-hands-menu .bd-hand > .bd-seal, .bd-hands-menu .bd-hand > .bd-count, .bd-hands-menu .bd-hand > .bd-grant, .bd-hands-menu .bd-hand > .bd-hand-note { flex: none; }
+.bd-hands-menu .bd-hand > .bd-grant { margin-left: auto; }
