@@ -499,7 +499,8 @@ export function selectionLine(marks: readonly BoardMarkView[], sessionName?: Ses
   // owner of a mark an undo re-added is its original hand; the hand that re-added it put it back
   const owner = m.restoredFrom ?? m.author;
   const putBy = m.restoredFrom && !sameHand(m.restoredFrom, m.author) ? m.author : null;
-  const who = (a: BoardAuthor): string => (a.cls === 'human' ? 'you' : a.cls === 'agent' ? boardAgentName(a.name) : 'unknown hand');
+  // (Mika E3 r3, the orchestrator's ruling: the name spelled as the chips spell it, chipNameOf)
+  const who = (a: BoardAuthor): string => (a.cls === 'human' ? 'you' : a.cls === 'agent' ? chipNameOf(a.name) : 'unknown hand');
   const extra: string[] = [];
   if (m.wordsBy && !sameHand(m.wordsBy, owner)) extra.push(`words by ${who(m.wordsBy)}`);
   if (m.otherBy && !sameHand(m.otherBy, owner)) extra.push(`changed by ${who(m.otherBy)}`);

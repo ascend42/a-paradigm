@@ -265,6 +265,9 @@ export interface NoticeFacts {
   stopped?: boolean;
 }
 
+/** 'a', 'a and b', 'a, b and c' */
+const joinAnd = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+
 const countsOf = (c: number, r: number): string => [c > 0 ? `changed ${c}` : '', r > 0 ? `removed ${r}` : ''].filter(Boolean).join(' · ');
 
 /**
@@ -293,7 +296,7 @@ export function noticeStripRow(n: NoticeFacts, name: string, o: { others: readon
     if (o.time) parts.push({ cls: 't', text: `${TURN_COPY.sep}${o.time}`, drop: 1 });
   }
   const line = parts.filter((p) => p.only === undefined).map((p) => p.text).join('');
-  const counts = [n.changed + n.otherChanged > 0 ? `changed ${n.changed + n.otherChanged}` : '', n.removed + n.otherRemoved > 0 ? `removed ${n.removed + n.otherRemoved}` : ''].filter(Boolean).join(' and ');
+  const said = [lead.trim(), n.changed + n.otherChanged > 0 ? `changed ${n.changed + n.otherChanged}` : '', n.removed + n.otherRemoved > 0 ? `removed ${n.removed + n.otherRemoved}` : ''].filter(Boolean);
   return {
     kind: 'notice',
     parts,
@@ -302,7 +305,8 @@ export function noticeStripRow(n: NoticeFacts, name: string, o: { others: readon
     keys: { right: n.state === 'done' ? null : 'dismiss', undo: n.state === 'done' ? 'redo' : 'undo', more: n.state === 'done' ? 0 : o.more },
     aria: {
       // (Mika E3 D4: the undid lead is in the name too: 'Undo Claude's turn of 10:07 · it undid your change and changed 1')
-      undo: n.state === 'done' ? `Redo · put ${name}’s changes back` : `Undo ${name}’s turn of ${o.time}${lead || counts ? ` · it${lead}${lead && counts ? ' and' : ''}${counts ? ` ${counts}${mine ? ' of your marks' : ''}` : ''}` : ''}`,
+      // (Mika E3 r3: only the last part takes ' and': 'it undid your change, changed 1 and removed 1 of your marks')
+      undo: n.state === 'done' ? `Redo · put ${name}’s changes back` : `Undo ${name}’s turn of ${o.time}${said.length ? ` · it ${joinAnd(said)}${mine ? ' of your marks' : ''}` : ''}`,
       ...(n.state === 'done' ? {} : { right: 'Dismiss · keep these changes' }),
       ...(o.more > 0 ? { more: `${o.more} more ${o.more === 1 ? 'change' : 'changes'} you can undo` } : {}),
     },
