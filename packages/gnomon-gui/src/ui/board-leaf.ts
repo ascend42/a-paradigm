@@ -1018,13 +1018,19 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     dimsMenu.style.maxHeight = `${Math.max(0, room)}px`;
     // the rows that scroll take what the open row, the note, the rule and the find row leave
     dimsScroll.style.maxHeight = '';
-    const fixed = dimsMenu.scrollHeight - dimsScroll.scrollHeight;
+    // (its border and padding included: the menu's box less the rows' natural height)
+    // (the menu's box less the rows' box: the rows shrink to fit the menu's cap, the other parts are flex none)
+    const fixed = dimsMenu.getBoundingClientRect().height - dimsScroll.getBoundingClientRect().height;
     const avail = Math.max(0, room - fixed);
     // mika D2 (board-rail.menus_scroll): when the rows scroll, the cut passes through a line of text: whole rows
     // plus 30px, so the last row shows part of its second line and the list is seen to go on
-    const rowH = (dimsScroll.firstElementChild as HTMLElement | null)?.getBoundingClientRect().height || 42;
+    const r0 = dimsScroll.children[0]?.getBoundingClientRect();
+    const r1 = dimsScroll.children[1]?.getBoundingClientRect();
+    const rowH = (r0 && r1 ? r1.top - r0.top : r0?.height) || 42;
     const cut = dimsScroll.scrollHeight > avail + 0.5 && avail >= rowH ? Math.floor((avail - 30) / rowH) * rowH + 30 : avail;
     dimsScroll.style.maxHeight = `${Math.max(0, Math.min(avail, cut))}px`;
+    // (the menu's own cap may still shrink the rows a few px: then one row fewer, so the cut stays in a second line)
+    if (cut !== avail && dimsScroll.clientHeight < cut - 0.5 && cut - rowH >= 30) dimsScroll.style.maxHeight = `${cut - rowH}px`;
   }
   function openDims(): void {
     dimsOpen = true;

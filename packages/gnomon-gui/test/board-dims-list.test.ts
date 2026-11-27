@@ -105,10 +105,10 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 the Dimensions list under the
     const a = await real([
       { read: set({ listings: many, openDim: L(1).dim, check: { line: 'checked up to the last change', bad: false } }), as: 's' },
       { press: KEY }, { wait: 300 },
-      { read: `(() => { const m = document.querySelector('.bd-dims').getBoundingClientRect(); const cur = document.querySelector('.bd-dims .bd-dr.current').getBoundingClientRect(); const sc = document.querySelector('.bd-dscroll'); const s = sc.getBoundingClientRect(); const cutRow = [...sc.querySelectorAll('.bd-dr')].find((r) => { const b = r.getBoundingClientRect(); return b.top < s.bottom && b.bottom > s.bottom; }); const l2 = cutRow ? cutRow.querySelector('.l2').getBoundingClientRect() : null; const find = document.querySelector('.bd-dfind').getBoundingClientRect(); const foot = document.querySelector('.bd-foot').getBoundingClientRect(); return { first: document.querySelector('.bd-dims > .bd-dr') === document.querySelector('.bd-dr.current'), inView: cur.top >= m.top && cur.bottom <= m.bottom, scrolls: sc.scrollHeight > sc.clientHeight, cutInL2: !!l2 && l2.top < s.bottom && l2.bottom > s.bottom, findIn: find.bottom <= m.bottom + 0.5, aboveFoot: m.bottom <= foot.top - 7.5 }; })()`, as: 'geo' },
+      { read: `(() => { const m = document.querySelector('.bd-dims').getBoundingClientRect(); const cur = document.querySelector('.bd-dims .bd-dr.current').getBoundingClientRect(); const sc = document.querySelector('.bd-dscroll'); const s = sc.getBoundingClientRect(); const cutRow = [...sc.querySelectorAll('.bd-dr')].find((r) => { const b = r.getBoundingClientRect(); return b.top < s.bottom && b.bottom > s.bottom; }); const l2 = cutRow ? cutRow.querySelector('.l2').getBoundingClientRect() : null; const find = document.querySelector('.bd-dfind').getBoundingClientRect(); const foot = document.querySelector('.bd-foot').getBoundingClientRect(); return { first: document.querySelector('.bd-dims > .bd-dr') === document.querySelector('.bd-dr.current'), inView: cur.top >= m.top && cur.bottom <= m.bottom, scrolls: sc.scrollHeight > sc.clientHeight, cutInL2: !!l2 && l2.top < s.bottom && l2.bottom > s.bottom, cutAt: cutRow ? Math.round(s.bottom - cutRow.getBoundingClientRect().top) : null, findIn: find.bottom <= m.bottom + 0.5, aboveFoot: m.bottom <= foot.top - 7.5 }; })()`, as: 'geo' },
       { read: active, as: 'focus' },
     ], { shot: 'list-50-day-1280' });
-    expect(a.geo).toEqual({ first: true, inView: true, scrolls: true, cutInL2: true, findIn: true, aboveFoot: true });
+    expect(a.geo).toEqual({ first: true, inView: true, scrolls: true, cutInL2: true, cutAt: 30, findIn: true, aboveFoot: true });
     expect(a.focus).toBe(`row:${L(1).dim}`);
   }, 180_000);
 
@@ -131,7 +131,7 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 the Dimensions list under the
       { read: set(SAMPLE), as: 's' },
       { read: `(document.querySelector('${KEY}').focus(), 1)`, as: 'f' }, { key: 'Enter', text: '\r', held: 3 }, { wait: 200 }, { read: active, as: 'opened' }, { read: presses, as: 'p0' },
       { key: 'm' }, { wait: 100 }, { read: active, as: 'typed' }, { read: presses, as: 'p1' },
-      { read: `(document.querySelector('.bd-dims .bd-dr[data-dim="${L(5).dim}"]').click(), ${presses}.length)`, as: 'synthetic' },
+      { read: `(document.querySelector('.bd-dims .bd-dr[data-dim="${L(5).dim}"]').click(), document.querySelector('.bd-dims .bd-dr[data-dim="${L(5).dim}"]').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })), ${presses}.length)`, as: 'synthetic' },
       // C4.5: the other session detaches from L(5) between the drawing and the press
       { read: `(globalThis.gnomonPreviewDims.listings.find((l) => l.dim === '${L(5).dim}').attached = [], 1)`, as: 'changed' },
       { press: `.bd-dims .bd-dr[data-dim="${L(5).dim}"]` }, { wait: 200 }, { read: presses, as: 'p2' }, { read: rows, as: 'redrawn' },
@@ -163,8 +163,8 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 the Dimensions list under the
 
   it('mika D6: the open row on focus is on --sheet (no fold fill), its mismatch in --fail; D4: \'open here · \' goes before the check is cut', async () => {
     const a = await real([
-      { read: set({ ...SAMPLE, check: { line: 'doesn’t match the saved board', bad: true } }), as: 's' }, { press: KEY }, { wait: 300 },
-      { read: `(() => { const r = document.querySelector('.bd-dr.current'); const cs = getComputedStyle(r); const l2 = r.querySelector('.l2'); const probe = document.createElement('span'); probe.style.color = 'var(--fail)'; document.body.append(probe); const fail = getComputedStyle(probe).color; probe.remove(); return { focused: document.activeElement === r, bg: cs.backgroundColor, l2: getComputedStyle(l2).color === fail, text: l2.textContent }; })()`, as: 'cur' },
+      { read: set({ ...SAMPLE, check: { line: 'doesn’t match the saved board', bad: true } }), as: 's' }, { read: `(document.querySelector('${KEY}').focus(), 1)`, as: 'f' }, { key: 'Enter', text: '\r' }, { wait: 300 },
+      { read: `(() => { const r = document.querySelector('.bd-dr.current'); const cs = getComputedStyle(r); const l2 = r.querySelector('.l2'); const probe = document.createElement('span'); probe.style.color = 'var(--fail)'; document.body.append(probe); const fail = getComputedStyle(probe).color; probe.remove(); return { focused: document.activeElement === r && r.matches(':focus-visible'), bg: cs.backgroundColor, l2: getComputedStyle(l2).color === fail, text: l2.textContent }; })()`, as: 'cur' },
     ], { width: 560, shot: 'list-mismatch-day-560' });
     const cur = a.cur as { focused: boolean; bg: string; l2: boolean; text: string };
     expect(cur.focused).toBe(true);

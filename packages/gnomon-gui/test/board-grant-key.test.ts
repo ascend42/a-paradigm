@@ -262,6 +262,18 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the remo
     expect(a.tabbed).toBe('false');
     expect(a.outside).toBe('false');
   }, 180_000);
+  it('the +<k> ▾ split is frozen while focus is in the foot: a hand that attaches never pushes the focused key behind the menu (its focus kept)', async () => {
+    const a = await real([
+      { read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(agents(3)), as: 'set' }, { wait: 400 },
+      { read: `(document.querySelector('.bd-foot > .bd-hand [data-grant="${C}"]').focus(), 1)`, as: 'f' }, { read: active, as: 'f0' },
+      { read: grants(agents(5)), as: 'more' }, { wait: 200 },
+      { read: active, as: 'f1' }, { read: reach, as: 'after' },
+    ], { width: 1440 });
+    expect(a.f0).toBe(`key:${C}`);
+    expect(a.f1).toBe(`key:${C}`);
+    const after = a.after as { foot: Array<{ hsid: string; inside: boolean }> };
+    expect(after.foot.map((k) => k.hsid)).toContain(C);
+  }, 180_000);
   it('the +<k> ▾ menu: order is fixed and frozen while it is open: an agent\'s state change moves no key and takes no focus; a hand that attaches joins the END of the menu', async () => {
     const a = await real([
       { read: `(${B}.render(${marks(9)}), 1)`, as: 'r' }, { read: grants(agents(3)), as: 'set' }, { wait: 400 },
