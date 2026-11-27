@@ -23,6 +23,8 @@ import { DIM_KINDS } from '@a-company/gnomon-contracts';
 import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle, undoLine } from '../core/board-leaf.js';
 import { noticeStripRow, type TurnStripRow } from '../core/board-turn.js';
 import { hhmm } from '../core/loops.js';
+/** S1.4 E3: the folded board's edge tab while a notice about your marks stands */
+const UNDO_TAB = ' · your marks changed';
 import { boardAgentName, handName, sessionShort } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
@@ -197,9 +199,14 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     d.turn?.();
     if (show) {
       const title = a.last!.title || 'Untitled';
-      tab.textContent = `${tabTitle(title)} · board`;
-      tab.title = `Open the board “${title}” (⌥B)`;
-      tab.setAttribute('aria-label', `${title} · board`);
+      // S1.4 E3 (turn_strip.notice.folded): a notice that touched your marks waits; the tab ends ' · your marks changed'
+      // and its title= has each notice line. Nothing pops up
+      const standing = d.sessions.standingFor(a.last!.dim).filter((n) => n.personal);
+      const changed = standing.length > 0 ? UNDO_TAB : '';
+      const lines = standing.map((n) => noticeStripRow(n, n.agent ? handName(boardAgentName(n.agent)) : 'Claude', { others: [], more: 0, time: hhmm(new Date(n.at).toISOString()) }).title ?? '');
+      tab.textContent = `${tabTitle(title)} · board${changed}`;
+      tab.title = [`Open the board “${title}” (⌥B)`, ...lines].join('\n');
+      tab.setAttribute('aria-label', `${title} · board${changed}`);
       placeTab();
     }
   }
