@@ -15,10 +15,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { DIM_KINDS, foldDim, type DimOp } from '@a-company/gnomon-contracts';
 import { followLog, GnomonClient, type Transport } from '../../gnomon-gui/src/core/client.js';
-import { DimSessions } from '../../gnomon-gui/src/core/dim-session.js';
+import { DimSessions, modAnswerOf } from '../../gnomon-gui/src/core/dim-session.js';
 import { DimStore } from '../../gnomon-gui/src/core/dim-store.js';
 import { parseLaunchFragment } from '../../gnomon-gui/src/core/launch.js';
 import { GuiStore } from '../../gnomon-gui/src/core/store.js';
+import { gestureOf } from '../../gnomon-gui/src/core/gesture.js';
+import { sendModCommand } from '../../gnomon-gui/src/core/mod-command.js';
 import { KERNEL_PUB_FILE } from '../src/kernel/identity/kernel-pub.js';
 import { verifyLog } from '../src/kernel/log/kernel-log.js';
 import { KeyRing } from '../src/kernel/log/signer.js';
@@ -485,5 +487,86 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(await waitFor(() => trace(r.w).filter((x) => x.t === 'argv').length >= 4, 15_000)).toBe(true);
     expect(mcpJsonText(r.w).includes('gnomon-mods')).toBe(false);
     await r.k.client.call('session.stop', { hsid: s4.hsid });
+  }, 180_000);
+  it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back (G5); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
+    const r = await boardRig('mbB-');
+    const P = await guiPage(r.k);
+    const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
+    const hsid = s.hsid;
+    const dim = dimId(2);
+    const a = P.sessions.open({ dim, hsid, opened: 'command', title: 'P5 edit' }, press('click'));
+    expect(await a.opened(), JSON.stringify(a.lastNotice())).toBe(true);
+    a.edit([rectAt(1, { label: 'API' }), rectAt(2)], press());
+    expect(await waitFor(() => a.status().pending === 0, 20_000, 5)).toBe(true);
+    const fold = () => foldDim(r.rows([DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op, DIM_KINDS.end]).filter((x) => x.event.payload.dim === dim).map((x) => ({ seq: x.seq, kind: x.event.kind, payload: x.event.payload })) as never);
+    const cmd = async (commandId: string, args: Record<string, unknown>) => modAnswerOf(await sendModCommand(P.client, gestureOf({ isTrusted: true, type: 'pointerup' }, Date.now()), DIMENSION, commandId, { ...args, dim, focus: { hsid } })) as Record<string, unknown>;
+    const turnResults = () => r.rows(['turn.result']).length;
+    const seq0 = fold().seq;
+    const humanBy = fold().nodes.get(H(1))!.by;
+
+    /* turn 1: restyle and re-word the person's H1, delete H2, from the view's seq */
+    await r.turn(hsid, [r.tool('e1', 'dim-draw', { base: seq0, opId: 'e1', ops: [{ type: 'update', id: H(1), patch: { color: 'cobalt' } }, { type: 'update', id: H(1), patch: { label: 'Gateway' } }, { type: 'delete', id: H(2) }] })]);
+    expect(await r.answered(['e1'])).toBe(true);
+    expect(r.body<{ ok: boolean; applied: number }>('e1'), r.raw('e1')).toMatchObject({ ok: true, applied: 3 });
+    expect(await waitFor(() => turnResults() >= 1, 15_000)).toBe(true);
+    const f1 = fold();
+    const h1 = f1.nodes.get(H(1))! as unknown as Record<string, unknown>;
+    expect(h1.by).toEqual(humanBy); // still the person's mark
+    expect((h1.otherBy as { cls?: string }).cls).toBe('agent');
+    expect((h1.wordsBy as { cls?: string }).cls).toBe('agent');
+    expect([(h1.node as Record<string, unknown>).label, (h1.node as Record<string, unknown>).color]).toEqual(['Gateway', 'cobalt']);
+    expect(f1.nodes.has(H(2))).toBe(false);
+    // the notice: the turn stands pinned in the dim.check answer, which the page renders
+    const check = await cmd('dim.check', {});
+    expect(check.pins).toEqual(expect.arrayContaining([expect.objectContaining({ hsid, turn: `turn:${hsid}/1` })]));
+
+    /* the person's one press: dim.undo of the whole turn */
+    const u = await cmd('dim.undo', { of: { hsid, turn: `turn:${hsid}/1` } });
+    expect(u, JSON.stringify(u)).toMatchObject({ ok: true });
+    expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'API', 10_000)).toBe(true);
+    const f2 = fold();
+    const back = f2.nodes.get(H(1))! as unknown as Record<string, unknown>;
+    expect([(back.node as Record<string, unknown>).label, (back.node as Record<string, unknown>).color, back.by]).toEqual(['API', undefined, humanBy]);
+    // the contract (gnomon-contracts dim.ts, otherBy/wordsBy): the record survives a later change by `by` itself, so
+    // "who changed what" never silently disappears; the person's undo restores content, not the attribution history
+    expect([(back.otherBy as { cls?: string }).cls, (back.wordsBy as { cls?: string }).cls]).toEqual(['agent', 'agent']);
+    const readded = [...f2.nodes.entries()].filter(([id]) => id !== H(1));
+    expect(readded).toHaveLength(1);
+    const [newId, h2] = readded[0]! as [string, Record<string, unknown>];
+    expect(newId).not.toBe(H(2));
+    expect((h2.restoredFrom as { by: unknown }).by).toEqual(humanBy); // G5: back as the person's
+    expect([...f2.nodes.values()].every((n) => (n.by as { cls?: string }).cls === 'human')).toBe(true); // nothing renders as the agent's
+    expect(((await cmd('dim.check', {})).pins as Array<{ hsid?: string; turn?: string }>).some((p) => p.hsid === hsid && p.turn === `turn:${hsid}/1`)).toBe(false);
+
+    /* turn 2: the agent sees the person's undo as a set and undoes it; a made-up set; a second person set */
+    await r.turn(hsid, [r.tool('w1', 'dim-view', { since: seq0 - 1 })]);
+    expect(await r.answered(['w1'])).toBe(true);
+    const changes = r.body<{ changes: Array<{ set: Record<string, unknown>; by?: { cls?: string } }> }>('w1').changes;
+    expect(Array.isArray(changes), r.raw('w1')).toBe(true);
+    const personSets = changes.filter((c) => Object.hasOwn(c.set, 'act'));
+    expect(personSets.length, JSON.stringify(changes)).toBeGreaterThanOrEqual(2); // the person's draw and the person's undo
+    const undoSet = personSets.at(-1)!.set;
+    const drawSet = personSets[0]!.set;
+    // a well-formed set no view ever showed: the person's act with its last character changed
+    const act = String(undoSet.act);
+    const neverShown = act.slice(0, -1) + (act.endsWith('0') ? '1' : '0');
+    expect(await waitFor(() => turnResults() >= 2, 15_000)).toBe(true);
+    await r.turn(hsid, [r.tool('w2', 'dim-view', { since: seq0 - 1 }), r.tool('x1', 'dim-undo', { of: undoSet, opId: 'x1' }), r.tool('x2', 'dim-undo', { of: { ...undoSet, act: neverShown } }), r.tool('x3', 'dim-undo', { of: drawSet })]);
+    expect(await r.answered(['w2', 'x1', 'x2', 'x3'])).toBe(true);
+    expect(r.body('x1'), r.raw('x1')).toMatchObject({ ok: true });
+    const rowsBefore = r.rows([DIM_KINDS.op]).length;
+    expect(r.body<{ code: string }>('x2').code).toBe('undo-set-bad');
+    expect(r.body<{ code: string }>('x3').code).toBe('undo-not-allowed');
+    expect(r.rows([DIM_KINDS.op]).length).toBe(rowsBefore);
+    expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'Gateway', 10_000)).toBe(true);
+    const pins3 = (await cmd('dim.check', {})).pins as Array<Record<string, unknown>>;
+    expect(pins3.some((p) => p.hsid === hsid && p.turn === `turn:${hsid}/3`), JSON.stringify(pins3)).toBe(true); // pinned because it undid a person's set (the mod's internal undidPerson)
+
+    /* the person's redo: dim.undo of the agent's undo turn restores the person's undo */
+    expect(await waitFor(() => turnResults() >= 3, 15_000)).toBe(true);
+    const redo = await cmd('dim.undo', { of: { hsid, turn: `turn:${hsid}/3` } });
+    expect(redo, JSON.stringify(redo)).toMatchObject({ ok: true });
+    expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'API', 10_000)).toBe(true);
+    await r.k.client.call('session.stop', { hsid });
   }, 180_000);
 });
