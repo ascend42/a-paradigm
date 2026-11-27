@@ -124,6 +124,8 @@ export class DimNotices {
   #frozen = false;
   /** sets this page pressed undo, redo or dismiss on (a notice the mod then unpins was the person's own doing) */
   readonly #pressed = new Set<string>();
+  /** Aegis E3 r3 F-1: pinned turns the page has not seen close (turn → since when, clock time) */
+  readonly #waiting = new Map<string, number>();
   /** sets that ever raised a notice here (Aegis E3 N-3: R3's own-turn key is for a turn that raised none at all) */
   readonly #raised = new Set<string>();
 
@@ -234,6 +236,7 @@ export class DimNotices {
     if (face.lead === null && face.changed + face.removed + face.otherChanged + face.otherRemoved === 0) return { raised: null, pushedOut: null };
     const n: DimStandingNotice = { key: t.key, of: t.of, agent: t.agent, at: o.at ?? now, state: 'standing', ...face, ...(o.stopped ? { stopped: true } : {}) };
     this.#list.push(n);
+    this.#waiting.delete(n.key);
     this.#raised.add(n.key);
     while (this.#raised.size > DIM_NOTICE_MEMORY.acts) this.#raised.delete(this.#raised.values().next().value as string);
     let pushedOut: DimStandingNotice | null = null;
@@ -311,12 +314,45 @@ export class DimNotices {
       if (this.get(k)) continue;
       if (!this.#tallies.has(k)) seed(k);
       const at = closedAt(k);
-      if (at === null) continue;
+      if (at === null) {
+        if (this.#tallies.has(k) && !this.#waiting.has(k)) this.#waiting.set(k, now);
+        continue;
+      }
       const r = this.ended(k, now, { at });
       if (r.raised) moved = true;
       if (r.pushedOut) pushed.push(r.pushedOut);
     }
     return { moved, gone, pushed };
+  }
+
+  /**
+   * Aegis E3 r3 F-1: a pinned turn whose `turn.result` never came (the session died mid-turn, its grant still on) is
+   * raised as stopped when its session is gone (`below` Infinity), when a LATER turn of that session wrote a row
+   * (`below` that turn's number), or when it has waited since `before` (the live timeout). Returns the ninths pushed out.
+   */
+  lapse(o: { hsid?: string; below?: number; before?: number }, now: number): { raised: number; pushedOut: DimStandingNotice[] } {
+    let raised = 0;
+    const pushedOut: DimStandingNotice[] = [];
+    for (const [turn, since] of [...this.#waiting]) {
+      const t = this.#tallies.get(turn);
+      if (!t) {
+        this.#waiting.delete(turn);
+        continue;
+      }
+      const n = Number(turn.slice(turn.lastIndexOf('/') + 1));
+      const hit = o.before !== undefined ? since <= o.before : t.of.hsid === o.hsid && n < (o.below ?? Infinity);
+      if (!hit) continue;
+      this.#waiting.delete(turn);
+      const r = this.ended(turn, now, { stopped: true });
+      if (r.raised) raised++;
+      if (r.pushedOut) pushedOut.push(r.pushedOut);
+    }
+    return { raised, pushedOut };
+  }
+
+  /** True while a pinned turn waits for its close (F-1: the session keeps a timer). */
+  get waiting(): number {
+    return this.#waiting.size;
   }
 
   /** This page pressed undo, redo or dismiss on the set `key` (follow says no N2 line when it then leaves). */
@@ -384,6 +420,7 @@ export class DimNotices {
     this.#undoActs.clear();
     this.#pressed.clear();
     this.#raised.clear();
+    this.#waiting.clear();
   }
 
   /** True when the set `key` raised a notice on this page at any time (standing now or not). */

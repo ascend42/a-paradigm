@@ -383,6 +383,7 @@ export class DimSession {
   /** S1.4 E3: the one undo-family press in flight (undo, redo, dismiss, a mark's undo, a ⌘Z the mod plans), or null */
   #undoFlight: { key: string | null; since: number } | null = null;
   #undoTimer: unknown = null;
+  #lapseTimer: unknown = null;
   #doneTimer: unknown = null;
   /** S1.4 E3 (undo-key link-down): after a rebuild the keys wait until a check point at or past every notice's rows */
   #caughtUp: boolean;
@@ -848,6 +849,14 @@ export class DimSession {
     for (const n of f.pushed) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
     for (const n of f.gone) this.#emit({ about: 'undo', code: 'no-longer', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
     if (f.moved && f.gone.length + f.pushed.length === 0) this.#emit(null);
+    // Aegis E3 r3 F-1: a pinned turn that never closes is raised as stopped after the live timeout
+    if (this.#notices.waiting > 0 && this.#lapseTimer === null) {
+      const d = this.#x.deps;
+      this.#lapseTimer = d.setTimer(() => {
+        this.#lapseTimer = null;
+        if (!this.#dead) this.noticesLapsed(this.#notices.lapse({ before: d.now() - DIM_LIVE_TIMEOUT_MS }, d.now()));
+      }, DIM_LIVE_TIMEOUT_MS + 1);
+    }
   }
 
   #attrAt: { seq: number; attr: string; hash: string } | null = null;
@@ -1043,6 +1052,13 @@ export class DimSession {
       }
     }
     this.#emit(null);
+  }
+
+  /** @internal Aegis E3 r3 F-1: notices raised by a lapse (DimNotices.lapse): a ninth's line, and the strip drawn */
+  noticesLapsed(r: { raised: number; pushedOut: readonly DimStandingNotice[] }): void {
+    if (this.#dead) return;
+    for (const n of r.pushedOut) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    if (r.raised > 0 && r.pushedOut.length === 0) this.#emit(null);
   }
 
   /** @internal an agent turn closed (its `turn.result` row came): one arrival line, and its hash point is due */
@@ -1458,6 +1474,8 @@ export class DimSession {
     this.#release(this.#held);
     if (this.#phase !== 'closed' && this.#phase !== 'failed') this.#phase = 'closed';
     if (this.#timer !== null) this.#x.deps.clearTimer(this.#timer);
+    if (this.#lapseTimer !== null) this.#x.deps.clearTimer(this.#lapseTimer);
+    this.#lapseTimer = null;
     this.#timer = null;
     if (this.#grantTimer !== null) this.#x.deps.clearTimer(this.#grantTimer);
     this.#grantTimer = null;
@@ -1488,6 +1506,9 @@ type DimRowLike = Parameters<DimNotices['row']>[0];
 class LinkDown extends Error {}
 /** The batch was dropped while its command waited its turn: nothing is sent. */
 class Stale extends Error {}
+
+/** Aegis E3 r3 F-1: rows that say a session is gone (core/store.ts reads them so) */
+const SESSION_GONE = new Set(['session.orphaned', 'session.exited', 'session.stop', 'session.exit', 'session.end', 'session.refused']);
 
 export class DimSessions {
   readonly #deps: Internals['deps'];
@@ -1607,6 +1628,22 @@ export class DimSessions {
     for (const [dim, added] of fresh) this.#sessions.get(dim)?.rows(added);
     // a grant row moved a board's grant map: its keys are drawn again (a pending press ends on the answer or here)
     for (const dim of store.grantsMoved()) this.#sessions.get(dim)?.grantRows();
+    // Aegis E3 r3 F-1: a pinned turn whose result never came is raised as stopped when its session is gone, or when
+    // a later turn of that session writes any row
+    const now0 = this.#deps.now?.() ?? Date.now();
+    for (const r of flat) {
+      // (a turn.result closes its turns below: they end as themselves, never as stopped)
+      if (!isPlainObject(r) || r.kind === 'turn.result') continue;
+      const p = isPlainObject(r.payload) ? r.payload : {};
+      const gone = SESSION_GONE.has(String(r.kind)) && typeof r.session === 'string' ? (r.session as string) : null;
+      const t = parseTurnRef(p.turn) ?? parseTurnRef(isPlainObject(p.relayedFor) ? p.relayedFor.turn : null);
+      if (!gone && !t) continue;
+      for (const [dim, nb] of this.#notices) {
+        if (nb.waiting === 0) continue;
+        const res = gone ? nb.lapse({ hsid: gone }, now0) : nb.lapse({ hsid: t!.hsid, below: t!.n }, now0);
+        if (res.raised > 0) this.#sessions.get(dim)?.noticesLapsed(res);
+      }
+    }
     // an agent turn ended (S1.4 P4b): what it did on each open board is said once, and its hash point is due
     for (const r of flat) {
       if (!isPlainObject(r) || r.kind !== 'turn.result' || !isPlainObject(r.payload)) continue;

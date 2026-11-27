@@ -555,4 +555,39 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
     w.sessions.apply([{ seq: 800, kind: 'turn.result', at: AT, payload: { turn: `turn:${AG}/1` } }]);
     expect(w.sessions.standingFor(DIM)[0]).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
   });
+
+  describe('r3 F-1: a pinned turn whose turn.result never comes is raised as stopped', () => {
+    const backlog = (w: ReturnType<typeof world>): void => {
+      w.push(DIM_KINDS.start, { title: 'Plan', attached: [HSID, AG], opened: 'command', relayedFor: w.human });
+      w.push(DIM_KINDS.op, { ops: [rect(10)], act: ULID(90), relayedFor: w.human });
+      w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(10), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 1) });
+      w.pins = [{ hsid: AG, turn: `turn:${AG}/1` }];
+    };
+    it('when its session is gone', async () => {
+      const w = world();
+      backlog(w);
+      const { s } = await opened(w);
+      expect(s.noticeView().shown).toBeNull();
+      w.sessions.apply([{ seq: 700, kind: 'session.exited', session: AG, payload: { code: 0 } }]);
+      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
+    });
+    it('when a later turn of that session writes a row', async () => {
+      const w = world();
+      backlog(w);
+      const { s } = await opened(w);
+      expect(s.noticeView().shown).toBeNull();
+      w.sessions.apply([{ seq: 700, kind: 'tool.call', session: AG, payload: { turn: `turn:${AG}/2` } }]);
+      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
+    });
+    it('when it has waited past the live timeout', async () => {
+      const w = world();
+      backlog(w);
+      const { s } = await opened(w);
+      expect(s.noticeView().shown).toBeNull();
+      await flush(4000);
+      expect(s.noticeView().shown).toBeNull();
+      await flush(5000);
+      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
+    });
+  });
 });
