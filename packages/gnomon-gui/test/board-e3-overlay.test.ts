@@ -146,3 +146,16 @@ describe('E3 review D2 (Mika): the trace under 50%, a tiny box, marks out of vie
     expect(traceOutCopy(2)).toBe('2 of these marks are out of view');
   });
 });
+
+describe('E3 review D1 (Mika): the hover chips and heads', () => {
+  const chips = (items: OverlayItem[]) => items.filter((i) => i.type === 'chip').map((i) => { const c = i as OverlayItem & { name: string; lead?: string }; return `${c.lead ?? ''}|${c.name}`; });
+  it('hovered, an agent\'s change reads "changed by Claude"; words by an agent read "words by Claude"', () => {
+    expect(chips(overlayItems([mark({ id: 'r', kind: 'rect', otherBy: CLAUDE, changedBy: CLAUDE, hovered: true })], at(1)))).toContain('changed by|Claude');
+    expect(chips(overlayItems([mark({ id: 's', kind: 'sticky', wordsBy: CLAUDE, labelBox: { x: 110, y: 70, width: 40, height: 20 }, hovered: true })], at(1)))).toContain('words by|Claude');
+  });
+  it('an open mark (an arrow) has its hover head too; your change of another hand\'s mark reads "changed by you"', () => {
+    const arrow = mark({ id: 'a', kind: 'arrow', x: 0, y: 100, width: 100, height: 0, lastRun: { x1: 0, y1: 100, x2: 100, y2: 100 }, author: MIKA, otherBy: CLAUDE, hovered: true });
+    expect(chips(overlayItems([arrow], at(1)))).toContain('changed by|Claude');
+    expect(chips(overlayItems([mark({ id: 'r', kind: 'rect', author: MIKA, otherBy: YOU, changedBy: YOU, hovered: true })], at(1)))).toContain('changed by|you');
+  });
+});

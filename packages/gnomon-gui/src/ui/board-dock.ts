@@ -207,7 +207,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       // and its title= has each notice line. Nothing pops up
       const standing = d.sessions.standingFor(a.last!.dim).filter((n) => n.personal);
       const changed = standing.length > 0 ? UNDO_TAB : '';
-      const lines = standing.map((n) => noticeStripRow(n, n.agent ? handName(boardAgentName(n.agent)) : 'Claude', { others: [], more: 0, time: hhmm(new Date(n.at).toISOString()) }).title ?? '');
+      // (Mika E3 D1: the hand named as the strip names it, handNameOf)
+      const lines = standing.map((n) => noticeStripRow(n, handNameOf(null, n.of.hsid, n.agent), { others: [], more: 0, time: hhmm(new Date(n.at).toISOString()) }).title ?? '');
       tab.textContent = `${tabTitle(title)} · board${changed}`;
       tab.title = [`Open the board “${title}” (⌥B)`, ...lines].join('\n');
       tab.setAttribute('aria-label', `${title} · board${changed}`);
@@ -254,11 +255,11 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   }
 
   /** S1.4 P4b: a session's hand as the foot and the said lines name it: 'Claude', with its session when two would read the same. */
-  function handNameOf(session: DimSession, hsid: string, label: string | null = null): string {
+  function handNameOf(session: DimSession | null, hsid: string, label: string | null = null): string {
     // (aegis N-7: a label is shown through the board's own name rules and cut as every hand's name is)
     // (design board-leaf.said.by: the label 'claude' is shown as 'Claude', the turn strip's word)
     const name = label ? (label === 'claude' ? 'Claude' : handName(boardAgentName(label))) : 'Claude';
-    const attached = session.grantKeys().map((k) => k.hsid);
+    const attached = session ? session.grantKeys().map((k) => k.hsid) : [];
     const same = attached.filter((h) => h !== hsid && !(d.localModel?.(h) ?? false)).length > 0;
     const where = same ? sessionShort(d.sessionInfo(hsid).name) : '';
     return where ? `${name} in ${where}` : name;

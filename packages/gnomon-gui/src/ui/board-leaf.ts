@@ -747,7 +747,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         kids.push(r);
       } else if (it.type === 'chip') {
         // the hand's name, a bidi-isolated text node cut at 24 characters; the name is the authority
-        const c = h('span', 'chip', {}, h('bdi', '', {}, handName(it.name)));
+        // (Mika E3 D1: 'changed by Claude', 'words by Claude': the lead is the page's words, the name an isolate)
+        const c = h('span', 'chip', {}, ...(it.lead ? [`${it.lead} `] : []), h('bdi', '', {}, handName(it.name)));
         place(c, it.left, it.top - 9);
         kids.push(c);
       } else if (it.type === 'seal') {

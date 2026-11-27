@@ -44,7 +44,7 @@ export type OverlayItem =
   /** the 6px ring (design author-seal seal.ring): a seal or hollow pin under 50%, and a mark too short to show its dash */
   | { type: 'ring'; id: string; left: number; top: number }
   /** the hand's name as a chip beside its seal or hollow pin, on hover and selection (design author-seal naming) */
-  | { type: 'chip'; id: string; left: number; top: number; name: string }
+  | { type: 'chip'; id: string; left: number; top: number; name: string; lead?: string }
   /**
    * round a text that is not yours: `box` the dashed box with its padding (at 50% and over, and on hover or
    * selection), `tight` the box 2px off the letters (under 50%), `rule` a dashed rule under the text when its
@@ -310,6 +310,12 @@ export const CHIP_HALF = 9;
 export const SELECTED_OFF = 7;
 export const SELECTED_BELOW = ENGINE_HANDLE_REACH + 2 + CHIP_HALF;
 
+/** A chip's agent name as the strip and the said lines read it (design board-leaf.said.by: 'claude' is 'Claude'). */
+export const chipNameOf = (label: string): string => {
+  const n = boardAgentName(label);
+  return n === 'claude' ? 'Claude' : n;
+};
+
 /** The gap between the words' rule and their sign (Mika E3 C3). */
 export const WORDS_SIGN_GAP = 2;
 
@@ -342,12 +348,12 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
   const out: OverlayItem[] = [];
   const low = view.zoom < LOW_ZOOM;
   // (Mika R2) the chip is kept whole in view: past the right edge it stands to the LEFT of its seal; its top is clamped
-  const chip = (id: string, at: { left: number; top: number }, half: number, name: string): void => {
-    const shown = handName(name);
+  const chip = (id: string, at: { left: number; top: number }, half: number, name: string, lead?: string): void => {
+    const shown = lead ? `${lead} ${handName(name)}` : handName(name);
     const w = chipWidth(shown);
     const right = at.left + half + 4;
     const left = right + w > view.width - 4 ? at.left - half - 4 - w : right;
-    out.push({ type: 'chip', id, left: Math.max(4, left), top: Math.min(view.height - 9, Math.max(9, at.top)), name });
+    out.push({ type: 'chip', id, left: Math.max(4, left), top: Math.min(view.height - 9, Math.max(9, at.top)), name, ...(lead ? { lead } : {}) });
   };
   const named = (m: BoardMarkView, at: { left: number; top: number }, on: 'pin' | 'text' | 'mark', shown: boolean, half: number): void => {
     if (m.author.cls === 'agent') {
@@ -399,13 +405,19 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
     }
     // S1.4 E3: the countermark of the other hand that changed it (otherBy), and the words sign (wordsBy)
     if (m.otherBy && !sameHand(m.otherBy, m.author)) {
-      const shownHead = (m.selected || m.hovered === true || opts.hovered === m.id) && m.otherBy.cls !== 'human';
-      if (shownHead && !m.lastRun) {
-        // the full head on hover or selection (R1): never inside the handle square; its chip to the right
-        const at = { left: box.left + box.width - COUNTER.hoverDx, top: box.top + box.height + COUNTER.hoverDy };
+      const pointed = m.selected || m.hovered === true || opts.hovered === m.id;
+      if (pointed && m.otherBy.cls !== 'human') {
+        // the full head on hover or selection (R1): never inside the handle square; its chip to the right, 'changed
+        // by <Name>' (Mika E3 D1). An open mark (a line or an arrow) has its head at its countermark's place
+        const at = m.lastRun ? countermarkPoint(m, view) : { left: box.left + box.width - COUNTER.hoverDx, top: box.top + box.height + COUNTER.hoverDy };
         named({ ...m, author: m.otherBy }, at, 'mark', false, SEAL_HALF);
-        chip(m.id, { left: at.left, top: box.top + box.height + COUNTER.chipTop + 9 }, SEAL_HALF, m.otherBy.cls === 'agent' ? boardAgentName(m.otherBy.name) : 'unknown hand');
+        chip(m.id, { left: at.left, top: m.lastRun ? at.top + SEAL_HALF + 9 : box.top + box.height + COUNTER.chipTop + 9 }, SEAL_HALF, m.otherBy.cls === 'agent' ? chipNameOf(m.otherBy.name) : 'unknown hand', 'changed by');
       } else {
+        if (pointed) {
+          // Mika E3 D1: the person's own change of another hand's mark: the disc stays, its chip says 'changed by you'
+          const c = countermarkPoint(m, view);
+          chip(m.id, c, COUNTER.half, 'you', 'changed by');
+        }
         let at = countermarkPoint(m, view);
         // 4px clear of the owner's ring or seal on the same mark
         for (const it of out) {
@@ -433,6 +445,11 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
       if (want !== SEAL_HALF) ring();
       else if (at) named({ ...m, author: m.wordsBy }, at, 'mark', false, SEAL_HALF);
       else ring();
+      // Mika E3 D1: pointed at, the words sign's chip says whose words they are
+      if ((m.selected || m.hovered === true || opts.hovered === m.id) && m.wordsBy.cls !== 'human') {
+        const sign = out.at(-1) as { left: number; top: number };
+        chip(m.id, sign, want, m.wordsBy.cls === 'agent' ? chipNameOf(m.wordsBy.name) : 'unknown hand', 'words by');
+      }
     }
   }
   for (const c of opts.cutouts ?? []) {
