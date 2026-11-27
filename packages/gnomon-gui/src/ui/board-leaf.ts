@@ -1154,6 +1154,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     moreEl?.setAttribute('aria-expanded', 'false');
     drawFoot();
   }
+  /** aegis I6: the room above the foot (to the head) cannot hold one 28px row with the menu's padding and border. */
+  const HANDS_ROW_ROOM = 28 + 10;
+  function handsNoRoom(): boolean {
+    return foot.getBoundingClientRect().top - 4 - (head.getBoundingClientRect().bottom + 4) < HANDS_ROW_ROOM;
+  }
   /** One row per hand behind the key, in the foot's order, each whole: seal, name, ◇ session, count, its own key. */
   function drawHandsMenu(): void {
     if (!moreEl) return;
@@ -1184,15 +1189,32 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const wide = natural > k.right - left;
     handsMenu.style.right = `${wide ? 14 : Math.max(0, f.right - k.right)}px`;
     handsMenu.style.maxWidth = `${Math.max(0, (wide ? f.right - 14 : k.right) - left)}px`;
+    // mika F1 (the foot's F1-a rule in a row): when the session is cut and the name is the shared one, the name goes
+    // and the session is measured again; a row whose name or session is cut or gone has both whole in title=
+    const isCut = (x: Element | null): boolean => !!x && (x as HTMLElement).scrollWidth > (x as HTMLElement).clientWidth + 0.5;
     for (const r of handsMenu.children) {
       const hand = r.firstElementChild as HTMLElement | null;
       if (!hand) continue;
-      const cut = hand.scrollWidth > hand.clientWidth + 0.5;
+      const name = hand.querySelector<HTMLElement>(':scope > bdi');
+      const sess = hand.querySelector<HTMLElement>(':scope > .bd-hand-s:not(.bd-hand-note)');
+      if (name) name.hidden = false;
+      const shared = !!sess && !sess.hidden;
+      if (shared && isCut(sess) && name) name.hidden = true;
       const full = hand.querySelector('svg')?.getAttribute('aria-label') ?? '';
-      if (cut && full) hand.title = full;
+      const gone = (!!name && name.hidden) || isCut(name) || (!!sess && !sess.hidden && isCut(sess));
+      if (gone && full) hand.title = full;
       else hand.removeAttribute('title');
     }
-    handsMenu.style.maxHeight = `${Math.max(0, f.top - 4 - top)}px`;
+    // aegis I6: too short, it takes the leaf's whole height (over the foot, and the head when it must), so every
+    // hand's row is in view; Esc or a press outside gives the leaf back
+    if (handsNoRoom()) {
+      const lb = el.getBoundingClientRect();
+      handsMenu.style.bottom = `${Math.round(f.bottom - (lb.bottom - 4))}px`;
+      handsMenu.style.maxHeight = `${Math.max(0, lb.height - 8)}px`;
+    } else {
+      handsMenu.style.bottom = '';
+      handsMenu.style.maxHeight = `${Math.max(0, f.top - 4 - top)}px`;
+    }
   }
   let footDrawing = false;
   function drawFoot(): void {
@@ -1321,20 +1343,55 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // of the foot under the pointer or the focus); a hand that arrives then joins the end of the menu
     const frozen = handsOpen || foot.contains(document.activeElement);
     let behind: Node[];
-    if (frozen && shownIds) {
+    if (handsOpen && handsNoRoom()) {
+      // aegis I6 (too short): the room above the foot cannot hold one row; the menu lists EVERY hand, those that
+      // were in the foot included, and may cover the foot, so each key is in it and in view
+      lay([], rest.length);
+      behind = rest;
+    } else if (frozen && shownIds) {
       const shown = rest.filter((k) => shownIds!.has(idOf(k)));
       behind = rest.filter((k) => !shownIds!.has(idOf(k)));
       lay(shown, behind.length);
     } else {
-      let cut = 0;
-      lay(rest, 0);
+      // aegis I5: an unkeyed hand arriving (a mark of an unattached agent) or going behind never moves a key. The keyed
+      // hands are fitted first, alone; unkeyed hands are then added after them while they fit, WITHOUT fitting the
+      // keyed ones again; the ones that do not fit go behind '+<k> ▾', placed after the keys as they stand. Only when
+      // that key itself has no room are the keyed hands fitted again with room for it (a clipped key is worse)
+      const keyedN = rest.filter((k) => !!keyedOf(k));
+      const unkeyed = rest.filter((k) => !keyedOf(k));
       // the first attached hand stays while '+<k> ▾' has room beside it; a lone hand never goes (hands_foot.narrow)
-      while (over() && cut < (rest.length < 2 ? 0 : rest.length)) {
-        cut++;
-        lay(rest.slice(0, rest.length - cut), cut);
+      const maxCut = rest.length < 2 ? 0 : keyedN.length;
+      const fitKeyed = (res: number): number => {
+        let c = 0;
+        lay(keyedN, res);
+        while (over() && c < maxCut) {
+          c++;
+          lay(keyedN.slice(0, keyedN.length - c), c + res);
+        }
+        return c;
+      };
+      const tail = (n: number): Node[] => (n > 0 ? [moreKey(n), ...(handsOpen ? [handsMenu] : [])] : []);
+      let cut = fitKeyed(0);
+      let added = 0;
+      if (unkeyed.length) {
+        const shownKeyed = keyedN.slice(0, keyedN.length - cut);
+        if (cut === 0) {
+          while (added < unkeyed.length) {
+            syncKids(foot, [youEl, ...shownKeyed, ...unkeyed.slice(0, added + 1), ...tail(unkeyed.length - added - 1)]);
+            if (over()) break;
+            added++;
+          }
+        }
+        syncKids(foot, [youEl, ...shownKeyed, ...unkeyed.slice(0, added), ...tail(cut + unkeyed.length - added)]);
+        if (over() && added > 0) {
+          added = 0;
+          syncKids(foot, [youEl, ...shownKeyed, ...tail(cut + unkeyed.length)]);
+        }
+        if (over()) cut = fitKeyed(unkeyed.length);
       }
-      behind = rest.slice(rest.length - cut);
-      shownIds = new Set(rest.slice(0, rest.length - cut).map(idOf));
+      const shown = [...keyedN.slice(0, keyedN.length - cut), ...unkeyed.slice(0, added)];
+      behind = rest.filter((k) => !shown.includes(k));
+      shownIds = new Set(shown.map(idOf));
     }
     for (const e of keyedEls) {
       const gone = e.name.hidden || (e.session !== null && (e.hint.hidden || e.hintName.textContent !== e.session));
@@ -1578,7 +1635,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         const keys = [...handsMenu.querySelectorAll<HTMLElement>('.bd-grant')];
         const at = keys.indexOf(active);
-        const next = active === moreEl ? (e.key === 'ArrowDown' ? keys[0] : undefined) : at >= 0 ? keys[at + (e.key === 'ArrowDown' ? 1 : -1)] : undefined;
+        // (mika 8: ↑ from the first row goes back to '+<k> ▾')
+        const next = active === moreEl ? (e.key === 'ArrowDown' ? keys[0] : undefined) : at === 0 && e.key === 'ArrowUp' ? (moreEl ?? undefined) : at >= 0 ? keys[at + (e.key === 'ArrowDown' ? 1 : -1)] : undefined;
         if (next) next.focus();
         if (active === moreEl || at >= 0) return void (e.preventDefault(), e.stopPropagation());
       }
@@ -1777,8 +1835,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // the hands menu closes where it is when focus leaves the foot and its menu, or on a press outside them
   // (a redraw moves no focused key: a focusout it causes is not focus leaving)
   foot.addEventListener('focusout', (e) => {
-    if (!handsOpen || footDrawing || (e.relatedTarget instanceof Node && foot.contains(e.relatedTarget))) return;
-    closeHands(false);
+    if (footDrawing || (e.relatedTarget instanceof Node && foot.contains(e.relatedTarget))) return;
+    if (handsOpen) return closeHands(false);
+    // aegis I4b: the split was frozen while focus was here; drawn again once it leaves, so nothing stays clipped
+    queueMicrotask(() => drawFoot());
   });
   const outsideHands = (e: Event): void => void (handsOpen && !(e.target instanceof Node && foot.contains(e.target)) && closeHands(false));
   document.addEventListener('pointerdown', outsideHands, true);
