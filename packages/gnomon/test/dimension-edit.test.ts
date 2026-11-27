@@ -1341,3 +1341,31 @@ describe('E1 re-check (Aegis R-1, N-a)', () => {
     expect(acts.at(-1)).not.toBe(first);
   });
 });
+
+describe('E3 review A1 (Aegis): a person\'s undo of their own act pins nothing', () => {
+  const human = { cls: 'human', principal: HUMAN };
+  type H = { sets: Map<string, { pinned: boolean; undidPerson: boolean }>; pins: string[] };
+  const NOW = 1_000_000_000;
+  const setup = async () => {
+    const m = await loadModel();
+    const node = (id: string, by: unknown) => ({ node: { id, kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 }, by, hsid: A, addedSeq: 1 });
+    const nodes = new Map<string, unknown>([[ulid(1), node(ulid(1), human)]]);
+    const state = { dim: dimId(1), title: 't', attached: [A, B], ended: false, nodes, gone: new Set(), seq: 1, ops: 0, unapplied: 0 };
+    const h = m.emptyHistory!('log:x') as H & Record<string, unknown>;
+    return { m, h, state };
+  };
+  const undoRow = (seq: number, act: string, of: string, relayedFor: Record<string, string>) => ({
+    seq,
+    payload: { v: 1, dim: dimId(1), ops: [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }], act, undo: { of: { principal: HUMAN, act: of } }, relayedFor },
+  });
+
+  it('a person\'s dim.undo (and redo) of their own act leaves h.pins unchanged; another hand\'s undo of it still pins', async () => {
+    const { m, h, state } = await setup();
+    const gui = { principal: HUMAN, connId: GUI.connId, surface: 'gui' };
+    for (let i = 0; i < 10; i++) m.noteHistoryRow!(h, state, undoRow(20 + i, ulid(40 + i, '01JDAC'), ulid(60 + i, '01JDAC'), gui), NOW);
+    expect(h.pins).toEqual([]);
+    for (const s of h.sets.values()) expect(s.undidPerson).toBe(false);
+    m.noteHistoryRow!(h, state, undoRow(40, ulid(80, '01JDAC'), ulid(60, '01JDAC'), { ...agentOf(B, 5) }), NOW);
+    expect(h.pins).toHaveLength(1);
+  });
+});

@@ -1196,7 +1196,9 @@ export function noteHistoryRow(h, before, row, now, after) {
       }
     }
     const mark = Object.hasOwn(r.payload, 'undo') ? dimUndoMarkOf(r) : null;
-    if (mark && mark.of.kind === 'act') set.undidPerson = true;
+    // Aegis E3 A1: a person's undo (or redo) of their OWN act is not a person's action undone by another hand: it
+    // pins nothing (eight of them would push out an agent's notice about the person's marks)
+    if (mark && mark.of.kind === 'act' && !(hand.cls === 'human' && hand.principal === mark.of.principal)) set.undidPerson = true;
     // Aegis N-a: a continuation must never add rows to an act someone has since undone
     if (mark && mark.of.kind === 'act') for (const [k, p] of h.pending) if (p.act === mark.of.act && p.principal === mark.of.principal) h.pending.delete(k);
     offerPin(h, set, now);
