@@ -173,6 +173,37 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 the Dimensions list under the
     expect(['open here · doesn’t match the saved board', 'doesn’t match the saved board']).toContain(cur.text);
   }, 180_000);
 
+  it('mika D3: under 87px of room the head key opens the palette\'s list instead (aria-haspopup dialog); the find row opens the palette\'s list; ↓ on the key opens the menu', async () => {
+    const room = `(() => { const k = document.querySelector('.bd-leaf .bd-head .key[aria-controls^="bd-dims-"]').getBoundingClientRect(); const f = document.querySelector('.bd-foot').getBoundingClientRect(); return Math.round(f.top - 8 - (k.bottom + 4)); })()`;
+    const t = await real([
+      { read: set(SAMPLE), as: 's' }, { read: `(document.getElementById('preview-board').style.height = '165px', 1)`, as: 'h' }, { wait: 400 }, { read: room, as: 'room' }, { read: `document.querySelector('${KEY}').getAttribute('aria-haspopup')`, as: 'popup' },
+      { press: KEY }, { wait: 300 }, { read: `!!document.querySelector('.bd-dims')`, as: 'menu' }, { read: '(globalThis.gnomonPreviewPalette ?? []).length', as: 'palette' },
+    ], { board: 'tiny' });
+    expect(t.room as number).toBeLessThan(87);
+    expect(t.popup).toBe('dialog');
+    expect(t.menu).toBe(false);
+    expect(t.palette).toBe(1);
+    const a = await real([
+      { read: set(SAMPLE), as: 's' }, { read: `(document.querySelector('${KEY}').focus(), 1)`, as: 'f' }, { key: 'ArrowDown' }, { wait: 200 }, { read: `!!document.querySelector('.bd-dims')`, as: 'down' },
+      { key: 'End' }, { wait: 100 }, { read: `document.activeElement.classList.contains('bd-dfind')`, as: 'end' },
+      { press: '.bd-dims .bd-dfind' }, { wait: 200 }, { read: '(globalThis.gnomonPreviewPalette ?? []).length', as: 'palette' }, { read: `!!document.querySelector('.bd-dims')`, as: 'closed' }, { read: presses, as: 'p' },
+    ]);
+    expect(a.down).toBe(true);
+    expect(a.end).toBe(true);
+    expect(a.palette).toBe(1);
+    expect(a.closed).toBe(false);
+    expect(a.p).toEqual([]);
+  }, 180_000);
+  it('mika D4: where \'open here · <the check>\' would be cut, \'open here · \' goes and the check is never cut', async () => {
+    const a = await real([
+      { read: set({ ...SAMPLE, check: { line: 'checked up to an older change', bad: false } }), as: 's' }, { read: `(Object.assign(document.getElementById('preview-board').style, { right: 'auto', width: '303px' }), 1)`, as: 'w' }, { wait: 400 }, { press: KEY }, { wait: 300 },
+      { read: `(() => { const l2 = document.querySelector('.bd-dr.current .l2'); const shown = l2.textContent; const cut = l2.scrollWidth > l2.clientWidth + 0.5; l2.textContent = 'open here · ' + shown.replace(/^open here · /, ''); const fullCut = l2.scrollWidth > l2.clientWidth + 0.5; l2.textContent = shown; return { shown, cut, fullCut }; })()`, as: 'l2' },
+    ], { width: 560 });
+    const l2 = a.l2 as { shown: string; cut: boolean; fullCut: boolean };
+    expect(l2.fullCut, 'the case under test: the whole line does not fit').toBe(true);
+    expect(l2.shown).toBe('checked up to an older change');
+    expect(l2.cut).toBe(false);
+  }, 180_000);
   it('shots: the list open, day and night, at 1024, 1280, 1440 and a 560 window', async () => {
     for (const width of [1024, 1280, 1440, 560]) for (const theme of ['day', 'night'] as const) {
       const a = await real([{ read: set(SAMPLE), as: 's' }, { press: KEY }, { wait: 300 }, { read: `(() => { const m = document.querySelector('.bd-dims').getBoundingClientRect(); const leaf = document.querySelector('.bd-leaf').getBoundingClientRect(); return m.left >= leaf.left + 13.5 && m.right <= leaf.right; })()`, as: 'inside' }], { width, theme, shot: `list-open-${theme}-${width}` });
