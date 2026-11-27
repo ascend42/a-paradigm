@@ -1928,6 +1928,7 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-ring{position:absolute;width:6px;height:6px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--ink);background:var(--sheet);pointer-events:none}
 [data-theme="night"] .bd-ring{background:var(--ground)}
 /* S1.4 E3 (author-seal.other_hands, board-trace, turn_strip.notice.cut_out): host DOM, no pointer, no focus */
+.bd-counter{z-index:1}
 .bd-counter.disc{background:var(--ink)}
 .bd-words{position:absolute;height:0;border-bottom:1px dashed var(--ink2);pointer-events:none}
 .bd-cutout{position:absolute;pointer-events:none;--arm:6px}

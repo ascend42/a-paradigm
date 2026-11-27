@@ -164,7 +164,20 @@ export interface TurnPart {
 }
 
 export interface TurnStripRow {
-  kind: 'you' | 'turn';
+  /** S1.4 E3: `notice` and `mark` take the you row's slot (turn_strip.notice.rows) */
+  kind: 'you' | 'turn' | 'notice' | 'mark';
+  /**
+   * S1.4 E3 (undo-key.slot): the keys of a notice or mark row, in their fixed columns from the right: `right`
+   * (dismiss, or empty), `undo` (undo, redo, put back, or empty), `more` (+k, notice rows only). `aria` is each
+   * key's whole sentence; `title` the row's whole line (the words may be cut, the title never is).
+   */
+  keys?: { right: 'dismiss' | null; undo: 'undo' | 'redo' | 'put back' | null; more: number };
+  aria?: { undo?: string; right?: string; more?: string };
+  title?: string;
+  /** what a press names: the set, the rows it was drawn from, and the mark for a mark row */
+  target?: { key: string; rev: number; id?: string };
+  /** the notice row is in its redo window */
+  done?: boolean;
   /** the you row: a refusal; the turn row: the refused line in --fail */
   refused?: boolean;
   parts: TurnPart[];
@@ -232,4 +245,81 @@ export function rowText(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5
  */
 export function escFoldsFromComposer(e: { key: string; repeat: boolean; isComposing: boolean; defaultPrevented: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }, o: { inComposer: boolean; cardFocused: boolean }): boolean {
   return e.key === 'Escape' && o.inComposer && !o.cardFocused && !e.repeat && !e.isComposing && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+}
+
+/* ── S1.4 E3: the notice row and the mark row (design board-leaf.turn_strip.notice, undo-key) ── */
+
+/** What a notice row is drawn from (core/dim-notices.ts DimStandingNotice, less what the strip never shows). */
+export interface NoticeFacts {
+  key: string;
+  rev: number;
+  state: 'standing' | 'done';
+  changed: number;
+  removed: number;
+  otherChanged: number;
+  otherRemoved: number;
+  lead: 'undid' | 'put-back' | null;
+  at: number;
+}
+
+const countsOf = (c: number, r: number): string => [c > 0 ? `changed ${c}` : '', r > 0 ? `removed ${r}` : ''].filter(Boolean).join(' · ');
+
+/**
+ * The notice row (turn_strip.notice): '<Name> changed 3 · removed 2 of your marks · 14:20'; the undid lead first and
+ * never dropped; other hands' marks when none were yours ('of Mika's marks', 'of other hands' marks'). Drop levels:
+ * 1 the time, 2 ' of your marks' (a notice about others' marks keeps its 'of …'). The two-line step is the UI's.
+ * In its redo window: 'Undone · Claude changed 3 · removed 2', redo in the undo column, the right column empty.
+ */
+export function noticeStripRow(n: NoticeFacts, name: string, o: { others: readonly string[]; more: number; time: string }): TurnStripRow {
+  const mine = countsOf(n.changed, n.removed);
+  const theirs = countsOf(n.otherChanged, n.otherRemoved);
+  const othersOf = o.others.length === 1 && o.others[0] ? ` of ${o.others[0]}’s marks` : ' of other hands’ marks';
+  const lead = n.lead === 'undid' ? ' undid your change' : n.lead === 'put-back' ? ' put back what you undid' : '';
+  const parts: TurnPart[] = [];
+  if (n.state === 'done') {
+    parts.push({ cls: 'who', text: 'Undone · ' }, { cls: 'who', text: name }, { cls: 'said', text: ` ${mine || theirs}`.trimEnd() || lead });
+  } else {
+    parts.push({ cls: 'who', text: name });
+    if (lead) parts.push({ cls: 'said', text: lead });
+    if (mine) parts.push({ cls: 'said', text: `${lead ? ' and' : ''} ${mine}` }, { cls: 'said', text: ' of your marks', drop: 2 });
+    else if (theirs && !lead) parts.push({ cls: 'said', text: ` ${theirs}` }, { cls: 'said', text: othersOf });
+    if (o.time) parts.push({ cls: 't', text: `${TURN_COPY.sep}${o.time}`, drop: 1 });
+  }
+  const line = parts.map((p) => p.text).join('');
+  const counts = [n.changed + n.otherChanged > 0 ? `changed ${n.changed + n.otherChanged}` : '', n.removed + n.otherRemoved > 0 ? `removed ${n.removed + n.otherRemoved}` : ''].filter(Boolean).join(' and ');
+  return {
+    kind: 'notice',
+    parts,
+    title: line,
+    done: n.state === 'done',
+    keys: { right: n.state === 'done' ? null : 'dismiss', undo: n.state === 'done' ? 'redo' : 'undo', more: n.state === 'done' ? 0 : o.more },
+    aria: {
+      undo: n.state === 'done' ? `Redo · put ${name}’s changes back` : `Undo ${name}’s turn of ${o.time}${counts ? ` · it ${counts}${mine ? ' of your marks' : ''}` : ''}`,
+      ...(n.state === 'done' ? {} : { right: 'Dismiss · keep these changes' }),
+      ...(o.more > 0 ? { more: `${o.more} more changes you can undo` } : {}),
+    },
+    target: { key: n.key, rev: n.rev },
+  };
+}
+
+/**
+ * The mark row (turn_strip.notice.mark_row): one key in the undo column, the right column empty. 'Claude changed
+ * this mark · 14:20' (undo), 'Claude removed your mark · 14:20' (put back). Drop level 1: the time.
+ */
+export function markStripRow(o: { key: string; rev: number; id: string; name: string; removed: boolean; time: string }): TurnStripRow {
+  const parts: TurnPart[] = [{ cls: 'who', text: o.name }, { cls: 'said', text: o.removed ? ' removed your mark' : ' changed this mark' }, ...(o.time ? [{ cls: 't' as const, text: `${TURN_COPY.sep}${o.time}`, drop: 1 as const }] : [])];
+  return {
+    kind: 'mark',
+    parts,
+    title: parts.map((p) => p.text).join(''),
+    keys: { right: null, undo: o.removed ? 'put back' : 'undo', more: 0 },
+    aria: { undo: o.removed ? `Put back your mark that ${o.name} removed` : `Undo ${o.name}’s change to this mark` },
+    target: { key: o.key, rev: o.rev, id: o.id },
+  };
+}
+
+/** The strip with a notice or mark row in the you row's slot (it stays two rows while one stands, whatever the room). */
+export function withSlot(rows: readonly TurnStripRow[], slot: TurnStripRow | null): TurnStripRow[] {
+  if (!slot) return [...rows];
+  return [slot, ...rows.filter((r) => r.kind !== 'you')];
 }

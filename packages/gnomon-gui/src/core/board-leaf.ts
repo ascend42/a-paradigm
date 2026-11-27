@@ -141,7 +141,10 @@ export type LeafInert = keyof typeof INERT_COPY;
  * `Saving…`, and one that failed is said once as a notice. A board this page holds only in part (`partial`), or
  * whose rows it could not keep (`dropped`), says so whenever no passing state (opening, saving, the link down) has the line.
  */
-export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number }): string | null {
+export function keepStateLine(s: { keep: 'saved' | 'saving' | 'not-saved'; link: 'up' | 'down'; pending: number; phase?: string; partial?: boolean; dropped?: number; attrOff?: boolean }): string | null {
+  // S1.4 E3 (keep_words.precedence 1b, aegis A1): under the mismatch line, over everything else; the session sets
+  // attrOff only when the hash matched at that check point and only attr differs
+  if (s.attrOff) return UNDO_COPY.attrOff;
   // (`not-saved` is the live loop's word for "pending while the link is down": it is never said without that)
   if (s.link === 'down' || s.keep === 'not-saved') return linkDownLine(s);
   // (design keep_words.precedence: the lines about missing marks, 5, outrank the passing states, 6)
@@ -359,4 +362,61 @@ export function removedLine(name: string | null, change: 'moving' | 'changing', 
   if (who === 'self') return `The mark you were ${change} was removed on another of your pages`;
   // another person: a row names no person, so it reads as the unknown hand (aegis I-7); WORKING LINE (Luna)
   return `An unknown hand removed the mark you were ${change}`;
+}
+
+/* ── S1.4 E3: what the undo family's keys say (design board-leaf.said.undo, undo-key) ── */
+
+const nMarks = (n: number, verb: string, plural: string): string => (n === 1 ? `1 mark ${verb}` : `${n} marks ${plural}`);
+
+/** The words of said.undo, the keys, and the 1b line. Plain words only; never a wire code, a seq or a row count. */
+export const UNDO_COPY = Object.freeze({
+  undo: 'undo',
+  redo: 'redo',
+  putBack: 'put back',
+  dismiss: 'dismiss',
+  dismissTitle: 'Keep these changes · after this, undo them mark by mark while the board still can',
+  doneTurn: (name: string): string => `Undid ${name}’s turn`,
+  doneMark: (name: string): string => `Undid ${name}’s change to this mark`,
+  putBackYours: 'Put back your mark',
+  putBackTheirs: (name: string): string => `Put back ${name}’s mark`,
+  redone: (name: string): string => `Redone · ${name}’s changes are back`,
+  more: (name: string): string => `Undid part of ${name}’s turn · undo again for the rest`,
+  expired: 'Too old to undo in one step · change the marks by hand',
+  nothing: 'Nothing to undo · the marks are already as they were',
+  busy: 'Not undone · the board was busy; press undo again',
+  other: 'Not undone · nothing was changed',
+  linkDown: 'Not connected · this can’t be undone until the board is back',
+  pushedOut: (name: string, at: string): string => `An older change of ${name}’s from ${at} can’t be undone in one step now`,
+  attrOff: 'Who changed what couldn’t be checked · the marks themselves match',
+  /** the partial tail: changed since, removed since, couldn't be put back, joined by ', ' */
+  skipped: (k: { changed: number; gone: number; refused: number }): string =>
+    [
+      k.changed > 0 ? `${nMarks(k.changed, 'changed since was left as it is', 'changed since were left as they are')}` : '',
+      k.gone > 0 ? `${nMarks(k.gone, 'removed since stays removed', 'removed since stay removed')}` : '',
+      k.refused > 0 ? (k.changed + k.gone > 0 ? `${k.refused} couldn’t be put back` : `${nMarks(k.refused, 'couldn’t be put back', 'couldn’t be put back')}`) : '',
+    ]
+      .filter(Boolean)
+      .join(', '),
+});
+
+/**
+ * The line said once an undo-family key's press is answered (said.undo). `name` is the hand's name (boardAgentName);
+ * `n` is the session's notice (`about: 'undo'`). Null for a code that says nothing.
+ */
+export function undoLine(n: { code: string; scope?: 'turn' | 'mark' | 'own'; removed?: boolean; skipped?: { changed: number; gone: number; refused: number }; at?: number }, name: string, hhmm: (t: number) => string): string | null {
+  if (n.code === 'undo-done') {
+    const head = n.scope === 'mark' ? (n.removed ? UNDO_COPY.putBackYours : UNDO_COPY.doneMark(name)) : n.scope === 'own' ? null : UNDO_COPY.doneTurn(name);
+    const tail = n.skipped ? UNDO_COPY.skipped(n.skipped) : '';
+    if (head === null) return tail ? `Undone · ${tail}` : null;
+    return tail ? `${head} · ${tail}` : head;
+  }
+  if (n.code === 'undo-more') return UNDO_COPY.more(name);
+  if (n.code === 'undo-expired') return UNDO_COPY.expired;
+  if (n.code === 'undo-nothing') return UNDO_COPY.nothing;
+  if (n.code === 'undo-busy') return UNDO_COPY.busy;
+  if (n.code === 'undo-other') return UNDO_COPY.other;
+  if (n.code === 'redone') return UNDO_COPY.redone(name);
+  if (n.code === 'pushed-out') return UNDO_COPY.pushedOut(name, typeof n.at === 'number' ? hhmm(n.at) : '');
+  if (n.code === 'link-down') return UNDO_COPY.linkDown;
+  return null;
 }
