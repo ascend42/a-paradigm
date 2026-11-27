@@ -18,7 +18,7 @@ const A = 'globalThis.gnomonPreviewApp';
 const CUR = `${A}.board.dock.current()`;
 const L = 'globalThis.gnomonPreviewLive';
 const B = 'globalThis.gnomonPreviewBoard';
-const SHOTS = path.resolve('../../.e3fix-logs/shots');
+const SHOTS = path.resolve('../../.e3fix-logs/shots/r3');
 const CAND = path.resolve('test/goldens/candidates/e3');
 const type = (s: string): unknown[] => [...s].map((k) => ({ key: k, settle: 25 }));
 const BOARD_UP = `(() => { const c = ${CUR}; if (!c) return false; const hd = c.leaf.handle(); return c.leaf.state() !== 'loading' && !!hd && hd.isAlive() && c.session.status().phase !== 'opening'; })()`;
