@@ -93,7 +93,7 @@ export function sendModCommand(c: Pick<GnomonClient, 'call'>, g: Gesture | null,
 
 /** Why a send failed, in the words a notice is built from. `code` is from a closed list; `why` is the kernel's own short word, when it gave one. */
 export interface ModCommandFailure {
-  code: 'not-sent' | 'gesture-refused' | 'read-only' | 'link-down' | 'no-answer' | 'refused';
+  code: 'not-sent' | 'gesture-refused' | 'read-only' | 'sandbox-unavailable' | 'link-down' | 'no-answer' | 'refused';
   why: string | null;
 }
 
