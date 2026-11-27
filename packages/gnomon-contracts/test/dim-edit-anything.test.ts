@@ -189,8 +189,8 @@ describe('E0 item 5: the honouring readers dimActOf, dimChangeSetOf and dimUndoM
     const add = (n: number): unknown => ({ type: 'add', node: rect(n) });
     const mark = (undo: unknown, ops: unknown[] = [add(10)], stamp: unknown = gui): DimRow => opRow(stamp, { undo }, ops);
     const ofTurn = { hsid: 'h1', turn: 'turn:h1/3' };
-    expect(dimUndoMarkOf(mark({ of: ofTurn, restored: [[id(10), id(1), handOf(kit)]] }))).toEqual({ of: { kind: 'turn', ...ofTurn }, restored: [{ newId: id(10), oldId: id(1), by: handOf(kit) }] });
-    expect(dimUndoMarkOf(mark({ of: { principal: HUMAN, act: ACT }, ids: [id(1)] }, [], tool))).toEqual({ of: { kind: 'act', principal: HUMAN, act: ACT }, ids: [id(1)], restored: [] });
+    expect(dimUndoMarkOf(mark({ of: ofTurn, restored: [[id(10), id(1), handOf(kit)]] }))).toEqual({ of: { kind: 'turn', ...ofTurn }, restored: [{ newId: id(10), oldId: id(1), by: handOf(kit) }], prior: [] });
+    expect(dimUndoMarkOf(mark({ of: { principal: HUMAN, act: ACT }, ids: [id(1)] }, [], tool))).toEqual({ of: { kind: 'act', principal: HUMAN, act: ACT }, ids: [id(1)], restored: [], prior: [] });
     // of: only the two forms, closed keys
     for (const of of [{ act: ACT }, { turn: 'turn:h1/3' }, { ...ofTurn, act: ACT }, { hsid: 'h2', turn: 'turn:h1/3' }, { principal: '', act: ACT }, { principal: HUMAN, act: 'x' }, 'turn:h1/3', null]) expect(dimUndoMarkOf(mark({ of }))).toBeNull();
     // a marker naming an id the row did not add is ignored (that entry), as is a repeat, a self-restore and a malformed entry

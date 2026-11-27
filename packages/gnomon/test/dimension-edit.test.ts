@@ -266,7 +266,9 @@ describe('#dimension-mod E1 items 3 and 4: dim.undo of a held change-set (Arky Â
     const row = w.opRows().at(-1)!;
     const p = row.payload as Record<string, unknown>;
     expect(p.act).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/);
-    expect(p.undo).toEqual({ of: turnOf(B, 1), restored: [[back.node.id, ulid(3), { cls: 'human', principal: HUMAN }]] });
+    // E-fix (T-2026-11-27-006): the marks undone whole carry the attribution they had before the turn (none here)
+    expect(p.undo).toEqual({ of: turnOf(B, 1), restored: [[back.node.id, ulid(3), { cls: 'human', principal: HUMAN }]], prior: [[ulid(2), null, null], [ulid(1), null, null]] });
+    for (const id of [ulid(1), ulid(2)]) expect([page.nodes.get(id)!.otherBy, page.nodes.get(id)!.wordsBy]).toEqual([undefined, undefined]);
     expect((p.relayedFor as Record<string, unknown>).surface).toBe('gui');
     const turns = w.state().turns as unknown[][];
     expect(turns.find((e) => e[0] === B)![2]).toBe(4);
@@ -565,7 +567,7 @@ describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids 
     expect(dimAttrDigest(page)).not.toBe(chk.attr);
   });
 
-  it('changes entries carry their set id and, on an honoured undo row, undo: {of}; attribution is compact (indices into hands)', { timeout: 60_000 }, async () => {
+  it('changes entries carry their set id and, on an honoured undo row, undo: {of}; attribution is compact (indices into hands), and the person\'s full undo clears otherBy', { timeout: 60_000 }, async () => {
     const w = await editRig();
     const dim = await board(w);
     const act = ulid(4, '01JDAC');
@@ -584,7 +586,8 @@ describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids 
     const hands = v.hands as Array<Record<string, unknown>>;
     expect(typeof n.changedBy).toBe('number');
     expect(hands[n.changedBy as number]).toEqual({ cls: 'human', principal: HUMAN });
-    expect(hands[n.otherBy as number]).toMatchObject({ cls: 'agent', agent: 'claude' });
+    // E-fix (T-2026-11-27-006): the person's own honoured full undo puts the mark's signs back to none
+    expect([n.otherBy, n.wordsBy]).toEqual([undefined, undefined]);
     expect(n.by).toEqual({ cls: 'human', principal: HUMAN });
   });
 
@@ -802,6 +805,73 @@ describe('#dimension-mod E1 item 8: a busy refusal mid-undo keeps the fold, and 
   });
 });
 
+describe('#dimension-mod E-fix round 2 (Aegis I-1, Arky R1): the undo packs BY MARK, so a mark is never settled by half', () => {
+  /** M (a text of the person's) restyled and re-worded by an agent in one turn, with three bulky re-words between: the inverse needs two rows */
+  async function split(T0: { t: number }) {
+    const w = await editRig({ now: () => T0.t });
+    const dim = await board(w);
+    T0.t += 2_000;
+    await w.run('dim.op', { dim, ops: [textOp(1, 'm'.repeat(4000)), textOp(2, 'a'.repeat(4000))] });
+    T0.t += 2_000;
+    await w.run('dim.op', { dim, ops: [textOp(3, 'b'.repeat(4000)), textOp(4, 'c'.repeat(4000))] });
+    T0.t += 2_000;
+    await draw(w, dim, B, 1, [
+      { type: 'update', id: ulid(1), patch: { color: 'cobalt' } },
+      ...[2, 3, 4].map((n) => ({ type: 'update', id: ulid(n), patch: { text: `claude ${n}` } })),
+      { type: 'update', id: ulid(1), patch: { text: 'claude words' } },
+    ]);
+    const m = w.log.fold(dim).nodes.get(ulid(1))!;
+    expect([m.otherBy?.cls, m.wordsBy?.cls]).toEqual(['agent', 'agent']);
+    return { w, dim };
+  }
+
+  it('row 2 refused (APPEND_BUDGET): every op of M is in the row that landed, so M is back whole with no sign; the continuation finishes the rest', { timeout: 120_000 }, async () => {
+    const T0 = { t: 0 };
+    const { w, dim } = await split(T0);
+    // a fresh window: 19 rows of the person's, so the undo's first row is the 20th and its second is refused
+    T0.t += 2_000;
+    for (let i = 0; i < 19; i++) expect(await w.run('dim.op', { dim, ops: [rectOp(100 + i)] })).toMatchObject({ ok: true });
+    const u = await w.run('dim.undo', { dim, of: turnOf(B, 1) });
+    expect(u).toMatchObject({ ok: true, more: true });
+    const undoRows = () => w.opRows().filter((r) => (r.payload as Record<string, unknown>).undo);
+    expect(undoRows()).toHaveLength(1);
+    // the mark's ops are never split: M is in that row whole (both inverses) or not at all
+    const named = (r: { payload: unknown }) => ((r.payload as { ops: Array<{ id?: string }> }).ops).filter((op) => op.id === ulid(1)).length;
+    expect(named(undoRows()[0]!)).toBe(2);
+    const m = w.log.fold(dim).nodes.get(ulid(1))!;
+    expect([m.node.text, m.node.color, m.otherBy, m.wordsBy]).toEqual(['m'.repeat(4000), undefined, undefined, undefined]);
+    T0.t += 2_000;
+    expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true });
+    const f = w.log.fold(dim);
+    expect([2, 3, 4].map((n) => f.nodes.get(ulid(n))!.node.text)).toEqual(['a'.repeat(4000), 'b'.repeat(4000), 'c'.repeat(4000)]);
+    for (const n of [1, 2, 3, 4]) expect([n, f.nodes.get(ulid(n))!.otherBy, f.nodes.get(ulid(n))!.wordsBy]).toEqual([n, undefined, undefined]);
+    // P-1: no mark was left half undone by the continuation
+    for (const r of undoRows()) for (const n of [1, 2, 3, 4]) expect([0, 1, 2]).toContain(((r.payload as { ops: Array<{ id?: string }> }).ops).filter((op) => op.id === ulid(n)).length);
+    expect(undoRows().reduce((k, r) => k + named(r), 0)).toBe(2);
+  });
+});
+
+describe('#dimension-mod E-fix round 2 (Aegis N-3): prior only on the person\'s OWN undo', () => {
+  it('a person undoing ANOTHER person\'s act writes no prior (the fold would ignore it); undoing their own act does', { timeout: 60_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    await draw(w, dim, B, 1, [rectOp(5)]);
+    const act = ulid(7, '01JDAC');
+    await w.run('dim.op', { dim, ops: [{ type: 'update', id: ulid(5), patch: { color: 'cobalt' } }], act });
+    expect(await w.run('dim.undo', { dim, of: { principal: HUMAN, act } }, A, GUI2)).toMatchObject({ ok: true });
+    const last = () => (w.opRows().at(-1)!.payload as { undo: Record<string, unknown> }).undo;
+    expect(Object.hasOwn(last(), 'prior')).toBe(false);
+    // the control: the same act undone by its own person carries prior
+    const v = await editRig();
+    const dim2 = await board(v);
+    await draw(v, dim2, B, 1, [rectOp(5)]);
+    await v.run('dim.op', { dim: dim2, ops: [{ type: 'update', id: ulid(5), patch: { color: 'cobalt' } }], act });
+    const u2 = await v.run('dim.undo', { dim: dim2, of: { principal: HUMAN, act } });
+    expect(u2, JSON.stringify(u2)).toMatchObject({ ok: true });
+    expect((v.opRows().at(-1)!.payload as { undo: Record<string, unknown> }).undo.prior).toEqual([[ulid(5), null, null]]);
+  });
+});
+
 describe('#dimension-mod E1 item 8: source scan (Aegis G3): no op row is built from ops the validator did not accept', () => {
   it('every opPayload in index.mjs is built from v.ok (dim.op, dim-draw) or from the undo plan, whose ops are planDimUndo\'s accepted batch', () => {
     const src = fs.readFileSync(path.join(DIMENSION_TREE, 'index.mjs'), 'utf8');
@@ -812,9 +882,10 @@ describe('#dimension-mod E1 item 8: source scan (Aegis G3): no op row is built f
     const core = src.slice(src.indexOf('async function undoCore('), src.indexOf('/** A draw that wrote no op row'));
     expect(core.match(/const plan = planDimUndo\(/g)).toHaveLength(1);
     expect(/plan\.ops\s*=|plan\.ops\.push|plan\.ops\.splice/.test(core)).toBe(false);
-    // the packer's ops are plan.ops[i] only
-    expect(core.match(/const op = plan\.ops\[i\];/g)).toHaveLength(1);
-    for (const m of core.matchAll(/payloadOf\(([^)]*)\)/g)) expect([m[1], ['ops', '[...cur, op]', '[op]'].includes(m[1]!.trim())]).toEqual([m[1], true]);
+    // the packer's ops are the plan's own op objects by index only (E-fix round 2: packed by mark)
+    expect(core.match(/const opsAt = \(ix\) => ix\.map\(\(k\) => plan\.ops\[k\]\);/g)).toHaveLength(1);
+    expect(core.match(/plan\.ops\[/g)).toHaveLength(core.match(/plan\.ops\[(k|ix)\]/g)!.length);
+    for (const m of core.matchAll(/payloadOf\(([^)]*)\)/g)) expect([m[1], ['ops', 'next', 'alone'].includes(m[1]!.trim())]).toEqual([m[1], true]);
   });
 });
 

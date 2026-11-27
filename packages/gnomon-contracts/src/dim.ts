@@ -240,9 +240,21 @@ export interface DimBy {
  * `dimAttrDigest`.
  *  - `changedBy`, `changedSeq`, `changedHsid`: the newest applied update or move, by any hand.
  *  - `otherBy`, `otherSeq`: the newest applied update or move by a hand that is not `by`. It survives a later
- *    change by `by` itself, so "who changed what" never silently disappears.
+ *    change by `by` itself, so "who changed what" never silently disappears; it is put back only by the person's
+ *    own honoured undo (below).
  *  - `wordsBy`, `wordsSeq` (G1): the newest applied update by a hand that is not `by` that wrote or cleared a
- *    free-text field (`text`, `label`, `title`, `refs`). A later restyle by another hand does not move it.
+ *    free-text field (`text`, `label`, `title`, `refs`, `rel`). A later restyle by another hand does not move it,
+ *    nor does the owner's later edit (Mika Q-c).
+ *  - THE PERSON'S OWN HONOURED UNDO (S1.4 E-fix, T-2026-11-27-006; Aegis I-1 after P5; design
+ *    `other_hands.countermark.after_undo`): on an op row whose honoured undo marker (`dimUndoMarkOf`) is a person's
+ *    (the human gui hand, undoing an agent's turn or that person's own act), each `prior` entry `[id, otherBy,
+ *    wordsBy]` whose node this row updated or moved puts that node's `otherBy` and `wordsBy` back to what they were
+ *    before the undone set (`dimSettlePrior`). The planner writes an entry only for a mark it undoes WHOLE (no field
+ *    left as changed since, nothing touched it after the set), so a mark undone to what it was shows no sign, and a
+ *    redo of that undo brings the sign back. Putting back an agent's or the unknown hand fails closed and is always
+ *    taken; clearing, or putting back a human, is taken only when the node's newest change was the undone hand's
+ *    (fails closed on a marker the fold cannot check). `wordsBy` is cleared only when this row wrote a words field
+ *    of that node. An agent's undo is a change like any other (`otherBy`/`wordsBy` set to that agent).
  *  - `otherBy` and `wordsBy` compare the editor with the ORIGINAL hand (`restoredFrom.by ?? by`, Aegis I-2), so
  *    an undoer who re-added a mark and then rewrites it is still a hand other than the mark's own.
  *  - On a re-add, `wordsBy` and `otherBy` are carried over from the deleted mark through the honoured restored
@@ -450,6 +462,53 @@ function applyOp(d: Draft, op: unknown, by: DimBy, hsid: string | null, seq: num
   }
 }
 
+/** Is this honoured undo marker the PERSON's own (the honouring rule of `prior`, see `DimFoldNode`)? */
+function personsUndo(mark: DimUndoMark, by: DimBy): boolean {
+  // dimUndoMarkOf already binds a human marker to the gui surface with no agent key
+  if (by.cls !== 'human') return false;
+  return mark.of.kind === 'turn' || mark.of.principal === by.principal;
+}
+
+/**
+ * The fold's E-fix rule (T-2026-11-27-006): the attribution of a node a person's honoured undo row updated or moved,
+ * given its `prior` entry. `pre` is the node as the row found it, `now` after the row's ops. Fails closed: an
+ * agent's or the unknown hand is always put back; a clear, or a human put back, only when `pre`'s newest change was
+ * the undone hand's (for a turn, an agent change of that turn's session; for an act, that person's change), and for
+ * `wordsBy` only when the row wrote a words field of the node and that newest change wrote the words.
+ */
+function settlePrior(pre: DimFoldNode, now: DimFoldNode, e: DimPrior, of: DimChangeSet, undoer: DimBy, seq: number, wroteWords: boolean): DimFoldNode {
+  const original = now.restoredFrom?.by ?? now.by;
+  const ob = pre.otherBy;
+  const newestIsSet =
+    ob !== undefined &&
+    pre.changedSeq === pre.otherSeq &&
+    pre.changedBy !== undefined &&
+    sameHand(pre.changedBy, ob) &&
+    (of.kind === 'turn' ? ob.cls === 'agent' && pre.changedHsid === of.hsid : sameHand(ob, undoer));
+  const out: DimFoldNode = { ...now };
+  const sign = (h: DimBy | undefined): boolean => !!h && h.cls !== 'human' && !sameHand(h, original);
+  const put = (k: 'otherBy' | 'wordsBy', s: 'otherSeq' | 'wordsSeq', h: DimBy | undefined): void => {
+    if (h && !sameHand(h, original)) (out[k] = h), (out[s] = seq);
+    else delete out[k], delete out[s];
+  };
+  if (sign(e.otherBy)) put('otherBy', 'otherSeq', e.otherBy);
+  else if (newestIsSet) put('otherBy', 'otherSeq', e.otherBy);
+  if (sign(e.wordsBy)) put('wordsBy', 'wordsSeq', e.wordsBy);
+  else if (newestIsSet && wroteWords && pre.wordsBy !== undefined && sameHand(pre.wordsBy, ob!) && pre.wordsSeq === pre.changedSeq) put('wordsBy', 'wordsSeq', e.wordsBy);
+  return out;
+}
+
+/** The ids an op names as its update or move target, and whether an update writes a words field. */
+function opTargets(op: unknown): { ids: string[]; words: boolean } {
+  if (!isPlainObject(op)) return { ids: [], words: false };
+  if (op.type === 'update' && typeof op.id === 'string' && isPlainObject(op.patch)) {
+    const patch = op.patch;
+    return { ids: [op.id], words: Object.keys(patch).some((k) => WORDS_KEYS.has(k) && patch[k] !== undefined) };
+  }
+  if (op.type === 'move' && Array.isArray(op.ids)) return { ids: op.ids.filter((x): x is string => typeof x === 'string'), words: false };
+  return { ids: [], words: false };
+}
+
 function applyRow(d: Draft, row: DimRow): void {
   if (!row || typeof row.kind !== 'string') return;
   const k = row.kind;
@@ -490,9 +549,24 @@ function applyRow(d: Draft, row: DimRow): void {
   // G5: a node this row re-adds through an undo carries what it was restored from, read by the one reader only
   const mark = own(p, 'undo') !== undefined ? dimUndoMarkOf(row) : null;
   const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by, ...(r.wordsBy ? { wordsBy: r.wordsBy } : {}), ...(r.otherBy ? { otherBy: r.otherBy } : {}) }])) : undefined;
+  // E-fix (T-2026-11-27-006): a person's own honoured undo puts back the attribution of the marks it undid whole
+  const prior = mark && mark.prior.length > 0 && personsUndo(mark, by) ? new Map(mark.prior.map((e) => [e.id, e])) : undefined;
+  const pre = new Map<string, DimFoldNode>();
+  const hit = new Map<string, boolean>();
+  if (prior) for (const id of prior.keys()) if (d.nodes.has(id)) pre.set(id, d.nodes.get(id)!);
   for (const op of p.ops) {
-    if (applyOp(d, op, by, hsid, d.seq, restored)) d.ops += 1;
-    else d.unapplied += 1;
+    const before = prior ? opTargets(op) : null;
+    const was = before ? before.ids.map((id) => d.nodes.get(id)) : [];
+    if (applyOp(d, op, by, hsid, d.seq, restored)) {
+      d.ops += 1;
+      if (before) before.ids.forEach((id, i) => pre.has(id) && d.nodes.get(id) !== was[i] && hit.set(id, (hit.get(id) ?? false) || before.words));
+    } else d.unapplied += 1;
+  }
+  if (prior) {
+    for (const [id, words] of hit) {
+      const now = d.nodes.get(id);
+      if (now) d.nodes.set(id, settlePrior(pre.get(id)!, now, prior.get(id)!, mark!.of, by, d.seq, words));
+    }
   }
 }
 
@@ -1495,7 +1569,7 @@ export function dimRowBy(row: DimRow): DimBy {
 /** A person's action id: a ULID, as a node id. */
 export const DIM_ACT_PATTERN = DIM_NODE_ID_PATTERN;
 /** At most this many ids (`undo.ids`) and restored entries (`undo.restored`) are honoured on one marker. */
-export const DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64 });
+export const DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64, prior: 64 });
 /** The `<n>` of `turn:<hsid>/<n>`, as the mod's `toolActorOf` reads it. */
 const TURN_N = /^[1-9][0-9]{0,14}$/;
 const HSID_MAX = 128;
@@ -1572,25 +1646,40 @@ export interface DimRestored {
   wordsBy?: DimBy;
   otherBy?: DimBy;
 }
+/**
+ * One honoured prior entry (S1.4 E-fix, T-2026-11-27-006): a mark the undo row puts back WHOLE, with the `otherBy`
+ * and `wordsBy` it had before the undone set (each left out when it had none; bounded by `dimViewBy`).
+ */
+export interface DimPrior {
+  id: string;
+  otherBy?: DimBy;
+  wordsBy?: DimBy;
+}
 export interface DimUndoMark {
   of: DimChangeSet;
   /** the scope the undo was asked for, when it was */
   ids?: string[];
   restored: DimRestored[];
+  /** E-fix: what the fold puts back on a person's own honoured undo (`DimFoldNode`) */
+  prior: DimPrior[];
 }
 /**
- * The undo marker of an op row, or null. `undo: {of, ids?, restored?}`:
+ * The undo marker of an op row, or null. `undo: {of, ids?, restored?, prior?}`:
  *  - the row must be an op row stamped by a person on the Gnomon window (`surface: 'gui'`, no `agent` key) or by an
  *    agent (a stamp that folds as the agent hand); any other marker (a cli row, an unstamped row) is ignored;
- *  - the marker's own keys are exactly `of`, `ids?` and `restored?`; any other key makes it null;
+ *  - the marker's own keys are exactly `of`, `ids?`, `restored?` and `prior?`; any other key makes it null;
  *  - `of` is honoured only in its two forms, with exactly these own keys: `{hsid, turn}` with `turn` exactly
  *    `turn:<hsid>/<n>`, or `{principal, act}` with a non-empty principal and a ULID act; else the marker is null;
  *  - `ids`, when present, is 1 to 64 distinct node ids, else the marker is null;
  *  - `restored` is at most 64 entries (more: the marker is null); each entry `[newId, oldId, by, wordsBy?, otherBy?]`
  *    (the last two `null` or left out when the deleted mark had none) is honoured only
  *    when both are node ids, `newId` is the id of an `add` op IN THE SAME ROW, and no earlier entry named it. An
- *    entry that fails is dropped by itself. `by` is bounded by `dimViewBy`.
- * The fold reads `restored` through this reader only (`restoredFrom`); it never changes `by`.
+ *    entry that fails is dropped by itself. `by` is bounded by `dimViewBy`;
+ *  - `prior` (S1.4 E-fix) is at most 64 entries (more: the marker is null); each entry `[id, otherBy, wordsBy]`
+ *    (exactly three; `null` where the mark had none) is honoured only when `id` is a node id that an `update` or a
+ *    `move` op IN THE SAME ROW names, and no earlier entry named it. An entry that fails is dropped by itself; both
+ *    hands are bounded by `dimViewBy`. The fold honours it on a person's own undo only (`DimFoldNode`).
+ * The fold reads `restored` and `prior` through this reader only; it never changes `by`.
  */
 export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
   try {
@@ -1603,7 +1692,7 @@ export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
     if (hand.cls === 'human' && (own(r, 'surface') !== 'gui' || Object.prototype.hasOwnProperty.call(r, 'agent'))) return null;
     const u = own(p, 'undo');
     if (!isPlainObject(u)) return null;
-    for (const k of Object.keys(u)) if (k !== 'of' && k !== 'ids' && k !== 'restored') return null;
+    for (const k of Object.keys(u)) if (k !== 'of' && k !== 'ids' && k !== 'restored' && k !== 'prior') return null;
     const o = own(u, 'of');
     if (!isPlainObject(o)) return null;
     const ok = Object.keys(o).sort().join(',');
@@ -1619,7 +1708,7 @@ export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
       if (!NON_EMPTY(principal) || principal.length > 256 || typeof act !== 'string' || !DIM_ACT_PATTERN.test(act)) return null;
       of = { kind: 'act', principal, act };
     } else return null;
-    const out: DimUndoMark = { of, restored: [] };
+    const out: DimUndoMark = { of, restored: [], prior: [] };
     const ids = own(u, 'ids');
     if (ids !== undefined) {
       if (!Array.isArray(ids) || ids.length < 1 || ids.length > DIM_UNDO_MARK_LIMITS.ids || new Set(ids).size !== ids.length) return null;
@@ -1647,6 +1736,30 @@ export function dimUndoMarkOf(row: DimRow): DimUndoMark | null {
         if (!added.has(newId) || seen.has(newId) || newId === oldId) continue;
         seen.add(newId);
         out.restored.push({ newId, oldId, by: dimViewBy(by), ...(wordsBy != null ? { wordsBy: dimViewBy(wordsBy) } : {}), ...(otherBy != null ? { otherBy: dimViewBy(otherBy) } : {}) });
+      }
+    }
+    const prior = own(u, 'prior');
+    if (prior !== undefined) {
+      if (!Array.isArray(prior) || prior.length > DIM_UNDO_MARK_LIMITS.prior) return null;
+      const ops = own(p, 'ops');
+      const named = new Set<string>();
+      if (Array.isArray(ops)) {
+        for (const op of ops) {
+          if (!isPlainObject(op)) continue;
+          const type = own(op, 'type');
+          const id = own(op, 'id');
+          const ids = own(op, 'ids');
+          if (type === 'update' && typeof id === 'string') named.add(id);
+          else if (type === 'move' && Array.isArray(ids)) for (const x of ids) if (typeof x === 'string') named.add(x);
+        }
+      }
+      const seen = new Set<string>();
+      for (const e of prior) {
+        if (!Array.isArray(e) || e.length !== 3) continue;
+        const [id, otherBy, wordsBy] = e as unknown[];
+        if (typeof id !== 'string' || !DIM_NODE_ID_PATTERN.test(id) || !named.has(id) || seen.has(id)) continue;
+        seen.add(id);
+        out.prior.push({ id, ...(otherBy != null ? { otherBy: dimViewBy(otherBy) } : {}), ...(wordsBy != null ? { wordsBy: dimViewBy(wordsBy) } : {}) });
       }
     }
     return out;
@@ -1800,6 +1913,8 @@ interface DimInverse {
   restored: Map<string, DimRestoredEntry>;
   /** node id → why its inverse was left out */
   skipped: Map<string, 'changed' | 'gone'>;
+  /** E-fix: node id → the first set row that updated or moved it (its seq) and the node just before that row */
+  first: Map<string, { at: number; before: DimFoldNode | undefined }>;
 }
 
 /**
@@ -1813,6 +1928,7 @@ function invertCore(rows: ReadonlyArray<{ before: DimState; ops: readonly unknow
   const renamed = new Map<string, string>();
   const restored = new Map<string, DimRestoredEntry>();
   const skipped = new Map<string, 'changed' | 'gone'>();
+  const first = new Map<string, { at: number; before: DimFoldNode | undefined }>();
   // per MARK, one reason: gone wins over changed (a mark deleted since is gone, whatever else changed it)
   const skip = (id: string, why: 'changed' | 'gone'): void => {
     if (!skipped.has(id) || why === 'gone') skipped.set(id, why);
@@ -1826,6 +1942,9 @@ function invertCore(rows: ReadonlyArray<{ before: DimState; ops: readonly unknow
     const since = (m: ReadonlyMap<string, number> | undefined, id: string): boolean => (m?.get(id) ?? Number.NEGATIVE_INFINITY) > at;
     const fieldSince = (id: string, k: string): boolean => (later?.fields.get(id)?.get(k) ?? Number.NEGATIVE_INFINITY) > at;
     const done = (id: unknown): boolean => typeof id === 'string' && !!later?.done.has(id);
+    const touch = (id: string): void => {
+      if (!first.has(id)) first.set(id, { at, before: row.before.nodes.get(id) });
+    };
     for (const op of row.ops) {
       const inv: Array<{ unit: string; op: DimOp; repoint?: true }> = [];
       if (isPlainObject(op)) {
@@ -1840,6 +1959,7 @@ function invertCore(rows: ReadonlyArray<{ before: DimState; ops: readonly unknow
         } else if (op.type === 'update') {
           const cur = typeof op.id === 'string' ? state.nodes.get(op.id) : undefined;
           if (cur && isPlainObject(op.patch) && inScope(op.id) && !done(op.id)) {
+            touch(op.id as string);
             const patch: Record<string, unknown> = {};
             for (const k of Object.keys(op.patch)) {
               if (k === 'id' || k === 'kind' || DROPPED_KEYS.has(k) || op.patch[k] === undefined) continue;
@@ -1854,6 +1974,7 @@ function invertCore(rows: ReadonlyArray<{ before: DimState; ops: readonly unknow
           }
         } else if (op.type === 'move') {
           let ids = Array.isArray(op.ids) ? op.ids.filter((id): id is string => typeof id === 'string' && state.nodes.has(id) && inScope(id) && !done(id)) : [];
+          for (const id of ids) touch(id);
           if (later) {
             ids = ids.filter((id) => {
               const moved = fieldSince(id, 'x') || fieldSince(id, 'y');
@@ -1933,7 +2054,7 @@ function invertCore(rows: ReadonlyArray<{ before: DimState; ops: readonly unknow
     }
     out.push(e);
   }
-  return { entries: out, restored, skipped };
+  return { entries: out, restored, skipped, first };
 }
 
 /**
@@ -1946,14 +2067,46 @@ export function dimInvertRows(rows: ReadonlyArray<{ before: DimState; ops: reado
   return invertCore(rows, mint, current).entries.map((e) => e.op);
 }
 
+/**
+ * The prior entries of a plan that one packed row may carry (E-fix): those whose id an update or a move of `rowOps`
+ * names, as `dimUndoMarkOf` honours them, and only when EVERY op of `planOps` naming that id is in `rowOps` (by
+ * reference: the rows are packed from the plan's own op objects). The mod and the page's stand-in pack by mark
+ * (`DimUndoPlan.marks`) and write `undo.prior` from this only.
+ */
+export function dimUndoPriorOf(prior: readonly DimPriorEntry[], planOps: readonly DimOp[], rowOps: readonly DimOp[]): DimPriorEntry[] {
+  const targets = (op: DimOp): string[] => (op.type === 'update' ? [op.id] : op.type === 'move' ? op.ids : []);
+  const inRow = new Set<DimOp>(rowOps);
+  const named = new Set<string>();
+  for (const op of rowOps) for (const id of targets(op)) named.add(id);
+  // Aegis I-1 (defence in depth): a mark any of whose plan ops is NOT in this row is never settled here: a later row
+  // holding the rest may never land
+  for (const op of planOps) if (!inRow.has(op)) for (const id of targets(op)) named.delete(id);
+  return prior.filter((e) => named.has(e[0])).map((e) => [e[0], e[1], e[2]]);
+}
+
 /** One restored entry as the mod writes it on the undo row: `[newId, oldId, by, wordsBy?, otherBy?]`. */
 export type DimRestoredEntry = [string, string, DimBy, (DimBy | null)?, (DimBy | null)?];
+
+/** One prior entry as the mod writes it on the undo row: `[id, otherBy, wordsBy]` before the set (E-fix). */
+export type DimPriorEntry = [string, DimBy | null, DimBy | null];
 
 /** What `planDimUndo` hands back. `ops` is always a batch `validateDimOps` accepted WHOLE as `actor`, or empty. */
 export interface DimUndoPlan {
   ops: DimOp[];
   /** `[newId, oldId, by, wordsBy?, otherBy?]` for every re-add in `ops`; `by` is the ORIGINAL hand (Aegis G5) */
   restored: Array<DimRestoredEntry>;
+  /**
+   * E-fix (T-2026-11-27-006): `[id, otherBy, wordsBy]` for every mark `ops` undoes WHOLE by an update or a move (not
+   * a re-add): none of its fields left as changed since, and no row after the set's first row on it touched it. The
+   * hands are the mark's just before that first row. The person's undo row carries the entries of the marks it holds
+   * (`dimUndoPriorOf`); the fold puts them back (see `DimFoldNode`).
+   */
+  prior: Array<DimPriorEntry>;
+  /**
+   * E-fix (Aegis I-1, Arky R1): the mark each op of `ops` belongs to (its node id; a re-add's OLD id, with its link
+   * re-points), parallel to `ops`. A caller that splits `ops` into rows keeps every op of one mark in one row.
+   */
+  marks: string[];
   /**
    * Counted per MARK, each mark once (a mark both updated and deleted by the set is one mark). These are the
    * inputs of the undo's answer line and of the page's notice (Luna's words, E-design): "N marks changed since were
@@ -2005,7 +2158,7 @@ export function planDimUndo(o: {
   ids?: readonly string[];
   scan?: (text: string) => readonly string[];
 }): DimUndoPlan {
-  const empty = (): DimUndoPlan => ({ ops: [], restored: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
+  const empty = (): DimUndoPlan => ({ ops: [], restored: [], prior: [], marks: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== 'function') return empty();
     const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x): x is number => Number.isSafeInteger(x)));
@@ -2072,7 +2225,15 @@ export function planDimUndo(o: {
       const v = validateDimOps(o.current, ops, o.actor, opts);
       if (whole(v, ops.length)) {
         const { applied, ...skipped } = tally(keep);
-        return { ops: v.ok, restored: keep.flatMap((u) => (inv.restored.has(u) ? [inv.restored.get(u)!] : [])), skipped, applied, more };
+        // E-fix: a mark undone whole, not re-added, untouched since the set's first row on it
+        const prior = keep.flatMap((u): DimPriorEntry[] => {
+          const id = u.slice(2);
+          const f = inv.first.get(id);
+          if (!f || inv.restored.has(u) || inv.skipped.has(id) || !o.current.nodes.has(id)) return [];
+          if ((later.touched.get(id) ?? Number.NEGATIVE_INFINITY) > f.at) return [];
+          return [[id, f.before?.otherBy ?? null, f.before?.wordsBy ?? null]];
+        });
+        return { ops: v.ok, restored: keep.flatMap((u) => (inv.restored.has(u) ? [inv.restored.get(u)!] : [])), prior, marks: entries.map((e) => e.unit.slice(2)), skipped, applied, more };
       }
       // drop every mark the whole batch refused (by op index), then try once more
       const bad = new Set(v.refused.map((r) => (r.index >= 0 && r.index < entries.length ? entries[r.index]!.unit : '*')));
@@ -2082,7 +2243,7 @@ export function planDimUndo(o: {
     }
     for (const u of keep) refused.add(u);
     const { applied: _none, ...skipped } = tally([]);
-    return { ops: [], restored: [], skipped, applied: 0, more };
+    return { ops: [], restored: [], prior: [], marks: [], skipped, applied: 0, more };
   } catch {
     return empty();
   }

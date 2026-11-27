@@ -9,7 +9,7 @@
  * file's order, with no keyframes, no state store and no cold read. The host around it (the gesture check, the
  * stamp, `hsid` and `repo`) is the fake kernel's.
  */
-import { DIM_KINDS, dimAttrDigest, dimChangeSetOf, dimMayDraw, emptyDimGrants, foldDim, planDimUndo } from '@a-company/gnomon-contracts';
+import { DIM_KINDS, dimAttrDigest, dimChangeSetOf, dimMayDraw, dimUndoPriorOf, emptyDimGrants, foldDim, planDimUndo } from '@a-company/gnomon-contracts';
 import type { DimChangeSet, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
 import { mintDimNodeId } from '../core/dim-session.js';
 // @ts-ignore the mod's own plain .mjs (no types): bundled into the preview only
@@ -219,7 +219,8 @@ export class PreviewDimMod {
 
   /**
    * STAND-IN of index.mjs `dim.undo` (S1.4 E1): the set's rows from the noted history, `planDimUndo` as the person,
-   * packed into rows each carrying a fresh act and the `undo` marker with its `restored` entries (G5). No pins, no
+   * packed into rows each carrying a fresh act and the `undo` marker with its `restored` entries (G5) and its `prior`
+ * entries (E-fix). No pins, no
    * continuation memory, no keyframes: a set not in the history is `undo-expired`.
    */
   #undo(a: { dim: string; of: DimChangeSet; ids?: string[] }, e: { state: DimState }, write: (kind: string, payload: Record<string, unknown>) => number | Answer, actor: { cls: 'human'; principal: string }, stamp: Record<string, string>): Answer {
@@ -244,43 +245,55 @@ export class PreviewDimMod {
     const payloadOf = (ops: DimOp[]): Record<string, unknown> => {
       const adds = new Set(ops.flatMap((o) => (o.type === 'add' ? [(o.node as { id: string }).id] : [])));
       const restored = plan.restored.filter((r) => adds.has(r[0]));
-      return { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}) } };
+      // E-fix (T-2026-11-27-006): the person's undo carries the prior attribution of the marks it undoes whole
+      const prior = a.of.kind === 'turn' || a.of.principal === actor.principal ? dimUndoPriorOf(plan.prior, plan.ops, ops) : [];
+      return { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}), ...(prior.length ? { prior } : {}) } };
     };
-    // as index.mjs undoCore packs: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside
+    // as index.mjs undoCore packs: mark by mark, each row measured WITH its marker, at most CALL_ROWS rows inside
     // CALL_BYTES; what does not fit is left for the next press (`more`). An op that fits no row alone is refused.
+    // BY MARK (E-fix, Aegis I-1): every op of one mark in one row, in the plan's order; a mark that fits no row alone is refused
+    const groups: number[][] = [];
+    const byMark = new Map<string, number[]>();
+    plan.ops.forEach((_, ix) => {
+      const m = plan.marks[ix] ?? `#${ix}`;
+      let g = byMark.get(m);
+      if (!g) (byMark.set(m, (g = [])), groups.push(g));
+      g.push(ix);
+    });
     const rows: DimOp[][] = [];
-    let cur: DimOp[] = [];
+    let cur: number[] = [];
     let used = 0;
     let curBytes = 0;
-    let i = 0;
+    let gi = 0;
     let unfit = 0;
-    while (i < plan.ops.length) {
-      const op = plan.ops[i]!;
-      const b = M.rowBytes(payloadOf([...cur, op]), stamp);
+    const opsOf = (ix: number[]): DimOp[] => ix.map((k) => plan.ops[k]!);
+    while (gi < groups.length) {
+      const ix = [...cur, ...groups[gi]!].sort((x, y) => x - y);
+      const b = M.rowBytes(payloadOf(opsOf(ix)), stamp);
       if (b !== null && used + b <= M.CALL_BYTES) {
-        cur.push(op);
+        cur = ix;
         curBytes = b;
-        i++;
+        gi++;
         continue;
       }
       if (cur.length === 0) {
         unfit++;
-        i++;
+        gi++;
         continue;
       }
       if (rows.length + 1 >= M.CALL_ROWS) break;
-      rows.push(cur);
+      rows.push(opsOf(cur));
       used += curBytes;
       cur = [];
       curBytes = 0;
     }
-    if (cur.length > 0) rows.push(cur);
+    if (cur.length > 0) rows.push(opsOf(cur));
     if (rows.length === 0) return M.refusal(unfit > 0 ? 'undo-nothing' : 'row-too-large');
     for (const ops of rows) {
       const seq = write(S.DIM_KINDS.op, payloadOf(ops));
       if (typeof seq !== 'number') return seq;
     }
-    const more = plan.more || i < plan.ops.length;
+    const more = plan.more || gi < groups.length;
     if (!a.ids && !more && a.of.kind === 'turn') {
       const pins = this.#pins.get(a.dim) ?? [];
       const at = pins.findIndex((p) => p.turn === (a.of as { turn: string }).turn);

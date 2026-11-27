@@ -12,7 +12,7 @@
 //  - every check, the 512 cap and the row-size check included, runs BEFORE the append;
 //  - mod state and the in-memory fold change only AFTER the append returned a seq;
 //  - a refusal is a code and a fixed sentence, never input.
-import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, dimOpOid, dimRowBy, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, planDimUndo, validateDimOps } from './dim-shape.mjs';
+import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, dimOpOid, dimRowBy, dimUndoPriorOf, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, planDimUndo, validateDimOps } from './dim-shape.mjs';
 import {
   ATTACH_CAP,
   DIM_CAP,
@@ -1157,7 +1157,8 @@ async function undoTool(host, dim, entry, actor, a, stamp, cancelled) {
  * E2, the agent's `dim-undo`. Plans the undo of one HELD change-set with the published `planDimUndo` as `o.actor`
  * (the undoer: never "as a human" for a tool), per-node validated (G3), against the newest fold; packs the plan into
  * at most CALL_ROWS rows inside the call's bytes, each row carrying `act` and the mod-built `undo` marker (its
- * restored entries only for the re-adds IN that row, as `dimUndoMarkOf` honours them); appends them through
+ * restored entries only for the re-adds IN that row, and on a person's undo its prior entries only for the marks
+ * that row updates or moves, as `dimUndoMarkOf` honours them); appends them through
  * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.fit(planOps, restored)` (E2: charges
  * the turn and foreign budgets) answers how many of the plan's ops may be sent, after planning and before the first
  * append; `o.between()` (E2: the grant re-check, M9) runs before each row after the first and stops the rest when
@@ -1174,17 +1175,24 @@ async function undoCore(host, dim, entry, o) {
   const marker = (ops) => {
     const added = new Set(ops.filter((op) => op.type === 'add').map((op) => op.node.id));
     const restored = plan.restored.filter((e) => added.has(e[0])).map((e) => (e.length > 3 ? [e[0], e[1], e[2], e[3] ?? null, e[4] ?? null] : [e[0], e[1], e[2]]));
-    return { of: ofOf(o.cs), ...(o.ids ? { ids: [...o.ids] } : {}), ...(restored.length > 0 ? { restored } : {}) };
+    // E-fix (T-2026-11-27-006): on the PERSON's OWN undo (an agent's turn, or that person's own act; the fold honours
+    // no other), the attribution each mark this row undoes whole had before the set, for a mark ALL of whose plan ops
+    // are in this row (dimUndoPriorOf, Aegis I-1); an agent's undo is a change and carries none
+    const mine = o.undoer?.cls === 'human' && (o.cs.kind === 'turn' || o.cs.principal === o.undoer.principal);
+    const prior = mine ? dimUndoPriorOf(plan.prior, plan.ops, ops) : [];
+    return { of: ofOf(o.cs), ...(o.ids ? { ids: [...o.ids] } : {}), ...(restored.length > 0 ? { restored } : {}), ...(prior.length > 0 ? { prior } : {}) };
   };
   const payloadOf = (ops) => opPayload(dim, ops, undefined, { act: o.act, undo: marker(ops) });
-  // pack: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside CALL_BYTES
+  // pack BY MARK (E-fix, Aegis I-1 and Arky R1; the orchestrator's ruling): every op of one mark lands in ONE row, so
+  // a row never settles a mark whose other ops a later row (that may never land) holds, and a continuation never
+  // finds half a mark done (P-1). Each row measured WITH its marker, at most CALL_ROWS rows inside CALL_BYTES; a
+  // row's ops keep the plan's order
   const rows = [];
   let cur = [];
   let curIx = [];
   const rowIx = [];
   let used = 0;
   let curBytes = 0;
-  let i = 0;
   // Judge I-5 (E2-readiness): the caller's `fit(planOps)` runs after planning and before the first append and
   // answers how many of the plan's ops may be sent (E2 charges its turn and foreign budgets inside it)
   let limit = plan.ops.length;
@@ -1193,32 +1201,58 @@ async function undoCore(host, dim, entry, o) {
     limit = Number.isSafeInteger(n) ? Math.max(0, Math.min(n, plan.ops.length)) : 0;
     if (limit === 0) return { code: o.fitCode ?? 'undo-nothing', extra: { skipped: plan.skipped }, planned: [], landed: [] };
   }
-  // Aegis I-4: an op that cannot fit a row even ALONE (a near-limit re-add with its marker) is left out with every
-  // later op that names the id it would add, counted in skipped.refused; packing goes on
+  // the plan's marks in their first op's order; a mark is sent only when every one of its ops is inside `limit`
+  // the packer's ops are the plan's own op objects, by index (the source fence reads this line)
+  const opsAt = (ix) => ix.map((k) => plan.ops[k]);
+  const groups = [];
+  const byMark = new Map();
+  plan.ops.forEach((op, ix) => {
+    const m = Array.isArray(plan.marks) && typeof plan.marks[ix] === 'string' ? plan.marks[ix] : `#${ix}`;
+    let g = byMark.get(m);
+    if (!g) (byMark.set(m, (g = [])), groups.push(g));
+    g.push(ix);
+  });
+  // Aegis I-4: a mark that cannot fit a row even ALONE (a near-limit re-add with its marker) is left out with every
+  // later mark that names an id it would add, counted in skipped.refused; packing goes on
   const dropped = new Set();
   let unfit = 0;
+  let stopped = false;
   const names = (op) => (op.type === 'add' ? false : op.type === 'move' ? op.ids.some((x) => dropped.has(x)) : dropped.has(op.id) || (op.type === 'update' && Object.values(op.patch).some((v) => typeof v === 'string' && dropped.has(v))));
-  while (i < limit) {
-    const op = plan.ops[i];
-    if (names(op)) {
-      i++;
+  const drop = (g) => {
+    for (const ix of g) if (plan.ops[ix].type === 'add') dropped.add(plan.ops[ix].node.id);
+    unfit++;
+  };
+  for (let gi = 0; gi < groups.length; ) {
+    const g = groups[gi];
+    if (g.some((ix) => ix >= limit)) {
+      stopped = true;
+      break;
+    }
+    if (g.some((ix) => names(plan.ops[ix]))) {
+      drop(g);
+      gi++;
       continue;
     }
-    const b = rowBytes(payloadOf([...cur, op]), o.stamp);
+    const ix = [...curIx, ...g].sort((a, b) => a - b);
+    const next = opsAt(ix);
+    const alone = opsAt(g);
+    const b = rowBytes(payloadOf(next), o.stamp);
     if (b !== null && used + b <= CALL_BYTES) {
-      cur.push(op);
-      curIx.push(i);
+      curIx = ix;
+      cur = next;
       curBytes = b;
-      i++;
+      gi++;
       continue;
     }
-    if (cur.length === 0 && (b === null || rowBytes(payloadOf([op]), o.stamp) === null)) {
-      if (op.type === 'add') dropped.add(op.node.id);
-      unfit++;
-      i++;
+    if (cur.length === 0 && (b === null || rowBytes(payloadOf(alone), o.stamp) === null)) {
+      drop(g);
+      gi++;
       continue;
     }
-    if (cur.length === 0 || rows.length + 1 >= CALL_ROWS) break;
+    if (cur.length === 0 || rows.length + 1 >= CALL_ROWS) {
+      stopped = true;
+      break;
+    }
     rows.push(cur);
     rowIx.push(curIx);
     used += curBytes;
@@ -1229,7 +1263,7 @@ async function undoCore(host, dim, entry, o) {
   if (cur.length > 0) (rows.push(cur), rowIx.push(curIx));
   const planned = rowIx.flat();
   const landedIx = [];
-  let more = plan.more || i < plan.ops.length;
+  let more = plan.more || stopped;
   const skipped = { ...plan.skipped, refused: plan.skipped.refused + unfit };
   if (rows.length === 0) return unfit > 0 ? { code: 'undo-nothing', extra: { skipped } } : { code: 'row-too-large' };
   const landedIds = new Set();
@@ -1264,7 +1298,7 @@ async function undoCore(host, dim, entry, o) {
     for (const op of ops) landedIds.add(op.type === 'move' ? op.ids[0] : op.type === 'add' ? op.node.id : op.id);
   }
   // per mark: the plan's own counts when every row landed, else the marks the landed rows reached
-  const whole = landedRows === rows.length && i === plan.ops.length;
+  const whole = landedRows === rows.length && !stopped;
   // `planned` and `landed` are indices into the plan's ops (E2 refunds what was charged and never sent)
   return { applied: whole ? plan.applied - unfit : landedIds.size, skipped, more, planned, landed: landedIx, unknown: unknownIx };
 }

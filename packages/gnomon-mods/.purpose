@@ -154,6 +154,13 @@ components:
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   dimension-mod:
     description: >-
+      S1.4 E-fix round 2 (Aegis I-1, Arky R1, Aegis N-3): undoCore packs the
+      undo BY MARK (plan.marks; a mark that fits no row alone is
+      skipped.refused), and writes prior only on the person's OWN undo.
+      S1.4 E-fix (T-2026-11-27-006): undoCore writes undo.prior
+      (dimUndoPriorOf) on the person's dim.undo rows only, so a mark the
+      person undid whole shows no countermark or words sign and a redo brings
+      them back; dim-shape.mjs rebuilt and 1.2.0 re-pinned in place.
       E3 review (Aegis A1): a person's undo or redo of their own act pins
       nothing (undidPerson only when another hand undid a person's act).
       S1.4 E3: dim.open and dim.check answer pins (pinList: the sets still

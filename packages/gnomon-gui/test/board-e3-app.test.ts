@@ -178,4 +178,21 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 in the real app: the notic
     expect(a.errors).toEqual([]);
     expect(S(a, 'after').said.filter((t) => t === 'Claude may edit this board: it can change and remove any mark'), JSON.stringify(S(a, 'after').said)).toHaveLength(1);
   }, 120_000);
+
+  /** the signs on the board (the countermark and the words sign) and the person's first mark's attribution in the page's fold */
+  const SIGNS = `(() => { const s = ${CUR}.session; const n = [...s.view().nodes.values()].filter((v) => v.by.cls === 'human').sort((a, b) => a.addedSeq - b.addedSeq)[0];
+    return { counters: document.querySelectorAll('.bd-host .bd-counter').length, words: document.querySelectorAll('.bd-host .bd-words').length, label: n.node.label ?? null, otherBy: n.otherBy ? n.otherBy.cls : null, wordsBy: n.wordsBy ? n.wordsBy.cls : null }; })()`;
+  type Signs = { counters: number; words: number; label: string | null; otherBy: string | null; wordsBy: string | null };
+  it('E-fix (T-2026-11-27-006): after the person\'s undo of an agent\'s restyle and re-word, no countermark and no words sign; the redo brings both back', async () => {
+    const a = await real([...openBoard, ...rectAt(220, 180), turn(1, "return [{ type: 'update', id: mine[0], patch: { color: 'cobalt' } }, { type: 'update', id: mine[0], patch: { label: 'Gateway' } }];"), ARM, { read: SIGNS, as: 'changed' }, { press: KEY('undo') }, { wait: 1500 }, { read: SIGNS, as: 'undone' }, ARM, { press: KEY('redo') }, { wait: 1500 }, { read: SIGNS, as: 'redone' }, strip('after')]);
+    expect(a.errors).toEqual([]);
+    expect(a.changed as Signs).toMatchObject({ label: 'Gateway', otherBy: 'agent', wordsBy: 'agent' });
+    expect((a.changed as Signs).counters).toBeGreaterThanOrEqual(1);
+    expect((a.changed as Signs).words).toBeGreaterThanOrEqual(1);
+    expect(a.undone as Signs).toEqual({ counters: 0, words: 0, label: null, otherBy: null, wordsBy: null });
+    // the redo names the person's undo set (U3): Claude's change is back, and so are its signs
+    expect(count(S(a, 'after'), 'dim.undo')).toBe(2);
+    expect(a.redone as Signs).toMatchObject({ label: 'Gateway', otherBy: 'agent', wordsBy: 'agent' });
+    expect((a.redone as Signs).counters).toBeGreaterThanOrEqual(1);
+  }, 120_000);
 });

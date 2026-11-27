@@ -283,6 +283,21 @@ components:
 
   contract-dim-shape:
     description: >-
+      S1.4 E-fix round 2 (Aegis I-1): planDimUndo returns marks (each op's
+      mark, parallel to ops); dimUndoPriorOf(prior, planOps, rowOps) keeps an
+      entry only when every plan op naming that mark is in the row.
+      S1.4 E-fix (T-2026-11-27-006, Aegis I-1 after P5): dimUndoMarkOf honours
+      undo.prior ([id, otherBy, wordsBy], at most 64, each only for an update
+      or move target of the same row); on a person's own honoured undo (human
+      gui hand, an agent's turn or that person's own act) the fold puts each
+      named mark's otherBy and wordsBy back to the carried hands
+      (settlePrior): an agent's or the unknown hand always, a clear or a human
+      only when the mark's newest change was the undone hand's, wordsBy only
+      when the row wrote a words field. planDimUndo returns prior for the
+      marks it undoes whole (no skipped field, untouched since the set's first
+      row on it, not a re-add); dimUndoPriorOf picks a packed row's entries.
+      An agent's undo is a change (prior ignored). Outside the hash;
+      dimAttrDigest moves; keyframe v3 unchanged.
       S1.4 E1 (Aegis, defence in depth): the fold keeps goneBy (the original
       hand of each deleted id, outside the hash and the digest); a restored
       entry gives restoredFrom only for an old id deleted before that row with
