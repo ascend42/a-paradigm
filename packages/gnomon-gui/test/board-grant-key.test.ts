@@ -314,11 +314,39 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the remo
       { read: `(document.getElementById('preview-board').style.height = '120px', 1)`, as: 'h' }, { wait: 400 },
       { read: `(() => { const f = document.querySelector('.bd-foot').getBoundingClientRect(); const hd = document.querySelector('.bd-head').getBoundingClientRect(); return Math.round(f.top - 4 - (hd.bottom + 4)); })()`, as: 'room' },
       { press: '.bd-hands-more' }, { wait: 300 }, { read: reach, as: 'open' },
+      // aegis I6: nothing under the menu takes a press: at each key's centre, and over the head's keys the menu spans
+      { read: `(() => { const m = document.querySelector('.bd-hands-menu'); const mb = m.getBoundingClientRect(); const top = (x, y) => m.contains(document.elementFromPoint(x, y)); const keys = [...m.querySelectorAll('.bd-grant')].map((k) => { const b = k.getBoundingClientRect(); return top(b.left + b.width / 2, b.top + b.height / 2); }); const head = [...document.querySelectorAll('.bd-head .key')].map((k) => { const b = k.getBoundingClientRect(); const x = b.left + b.width / 2; const y = b.top + b.height / 2; return { key: k.textContent.trim(), under: x >= mb.left && x <= mb.right && y >= mb.top && y <= mb.bottom, top: top(x, y) }; }); return { keys, head }; })()`, as: 'topmost' },
+      // mika: the fill on a row's key in the shot is the pointer's hover (it was pressed where '+<k> ▾' is, now under
+      // the menu): moved away, the key has no fill; focused by the keyboard, its focus is the ring, not a fill
+      { read: `(() => { const k = document.querySelector('.bd-hands-more').getBoundingClientRect(); const e = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2); return { at: e ? e.className.baseVal ?? e.className : null, hovered: [...document.querySelectorAll('.bd-hands-menu .bd-grant')].map((x) => x.matches(':hover')), fills: [...document.querySelectorAll('.bd-hands-menu .bd-grant')].map((x) => getComputedStyle(x).backgroundColor), focus: document.activeElement.className }; })()`, as: 'underPointer' },
+      { move: '#composer-text' }, { wait: 150 },
+      { read: `[...document.querySelectorAll('.bd-hands-menu .bd-grant')].map((k) => getComputedStyle(k).backgroundColor)`, as: 'fills' },
+      { key: 'ArrowDown' }, { key: 'ArrowDown' }, { key: 'ArrowDown' }, { wait: 100 },
+      { read: `(() => { const k = document.activeElement; const cs = getComputedStyle(k); return { grant: k.dataset.grant ?? null, outline: cs.outlineStyle + ' ' + cs.outlineWidth, fill: cs.backgroundColor, rest: getComputedStyle(document.querySelector('.bd-hands-menu .bd-grant')).backgroundColor }; })()`, as: 'focused' },
+      // mika (WCAG 2.4.11): too short, ↑ from the first row closes the menu and returns to '+<k> ▾' (the menu covers it)
+      { key: 'ArrowUp' }, { key: 'ArrowUp' }, { wait: 100 }, { read: active, as: 'first' }, { key: 'ArrowUp' }, { wait: 200 },
+      { read: active, as: 'up' }, { read: `document.querySelector('.bd-hands-more').getAttribute('aria-expanded')`, as: 'upOpen' },
     ], { width: 1024, board: 'tiny', shot: 'r2/hands-tiny-3-day-1024' });
     expect(a.room as number).toBeLessThan(38);
     const open = a.open as { menu: Array<{ hsid: string; inside: boolean }> | null };
     expect(open.menu!.map((k) => k.hsid).sort()).toEqual([A, B2, C].sort());
     for (const k of open.menu!) expect(k.inside, k.hsid).toBe(true);
+    const topmost = a.topmost as { keys: boolean[]; head: Array<{ key: string; under: boolean; top: boolean }> };
+    expect(topmost.keys.every(Boolean), 'a press at a menu key reaches something else').toBe(true);
+    for (const h of topmost.head) if (h.under) expect(h.top, `the head's ${h.key} takes a press through the menu`).toBe(true);
+    expect(topmost.head.some((h) => h.under), JSON.stringify(topmost.head)).toBe(true);
+    // the one key with a fill is the one under the pointer (:hover), and focus is on '+<k> ▾', not on it
+    const up0 = a.underPointer as { hovered: boolean[]; fills: string[]; focus: string };
+    expect(up0.focus).toBe('key quiet bd-hands-more');
+    up0.fills.forEach((f, i) => expect(f !== up0.fills.find((_, j) => !up0.hovered[j]), `key ${i}`).toBe(up0.hovered[i]));
+    expect(new Set(a.fills as string[]).size, JSON.stringify(a.fills)).toBe(1);
+    const focused = a.focused as { grant: string | null; outline: string; fill: string; rest: string };
+    expect(focused.grant).not.toBeNull();
+    expect(focused.outline).toBe('solid 2px');
+    expect(focused.fill).toBe(focused.rest);
+    expect(String(a.first)).toMatch(/^key:/);
+    expect(a.up).toBe('BUTTON.key quiet bd-hands-more');
+    expect(a.upOpen).toBe('false');
   }, 180_000);
   it('mika F1: in a 303px leaf with three Claudes the menu rows show distinct sessions (the shared name goes first, whole in title=); mika 8: ↑ from the first row returns to \'+<k> ▾\'', async () => {
     const a = await real([

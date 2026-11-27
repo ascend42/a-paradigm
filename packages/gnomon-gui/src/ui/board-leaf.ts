@@ -1635,7 +1635,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         const keys = [...handsMenu.querySelectorAll<HTMLElement>('.bd-grant')];
         const at = keys.indexOf(active);
-        // (mika 8: ↑ from the first row goes back to '+<k> ▾')
+        // (mika 8: ↑ from the first row goes back to '+<k> ▾'; too short, the menu covers that key, so ↑ there closes
+        // the menu first, as Esc does: focus never lands on a key hidden under the menu, WCAG 2.4.11)
+        if (e.key === 'ArrowUp' && active !== moreEl && keys.indexOf(active) === 0 && handsNoRoom()) return void (e.preventDefault(), e.stopPropagation(), closeHands(true));
         const next = active === moreEl ? (e.key === 'ArrowDown' ? keys[0] : undefined) : at === 0 && e.key === 'ArrowUp' ? (moreEl ?? undefined) : at >= 0 ? keys[at + (e.key === 'ArrowDown' ? 1 : -1)] : undefined;
         if (next) next.focus();
         if (active === moreEl || at >= 0) return void (e.preventDefault(), e.stopPropagation());
