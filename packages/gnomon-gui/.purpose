@@ -27,6 +27,12 @@ components:
       S1.4 E3: BoardMarkView gains changedBy, otherBy, wordsBy, restoredFrom, an
       open mark's lastRun and a bound label's labelBox; the overlay draws the
       countermark, the words sign, cut-outs and the trace (#gui-board-overlay).
+      E3 review (Mika C3, D1, D2, D5): the words sign beside the rule's end or
+      below it, never over the words, else the ring (wordsSignAt); chips read
+      'changed by Claude', 'words by Claude', 'changed by you', an open mark
+      has its hover head; the trace stands 1px out under 50%, a box under 6px
+      is the dashed ring, traceOutOfView counts for the slot's title; the
+      selection line names every hand, the person's own marks too.
       P4b-4 (design-foot, components.board-rail.fold and board-leaf.too_short):
       a chosen folded tool is a guest in the displaced tool's row, so the
       rail's need is the unchosen layout's (railNeed, railDrawGroups); the
@@ -893,6 +899,14 @@ components:
       - ../gnomon/test/dimension-board-browser.test.ts
   gui-board-turn:
     description: >-
+      E3 review (Mika B1 to C5): notice and mark words cut only by the ladder or
+      the two-line step; a key's row and column keep focus across a repaint
+      (undo becomes redo) and a held Enter never presses again; the +k menu sits
+      right after its key, its right edge on it, above the hands foot (menuRoom),
+      scrolling when short, closed by focus leaving or a press outside, with no
+      menu roles; a notice brought from it focuses the slot's undo; the pressed
+      key is aria-busy and shows the working mark after 300 ms; a held key's
+      title and description name the real hold and give its own title back.
       Round 3: R3, this session's own ended turn (only its own marks, no notice)
       has its undo on the turn row only while the slot shows the you row; the
       sixth drop level takes it away. The label 'claude' is shown as 'Claude'
@@ -986,6 +1000,11 @@ components:
       - test/board-open.test.ts
   gui-dim-notices:
     description: >-
+      E3 review (Aegis A2, A3, N-1, N-3): follow raises a pinned turn only once
+      the page saw its turn.result, at that row's time; a notice it removes that
+      this page never pressed, and a ninth pushed out while the board is folded
+      (said at the next open), get the N2 line; everRaised(key) keeps R3's
+      own-turn key off a turn that ever raised a notice.
       Round 2: follow(pins) at each dim.open / dim.check answer (a notice stands
       only while the mod pins its set; a pinned turn with no notice is raised
       from held rows); setFor(id) for the mark row; runningOf(hsid) for ' before

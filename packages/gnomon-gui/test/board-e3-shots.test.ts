@@ -18,7 +18,7 @@ const A = 'globalThis.gnomonPreviewApp';
 const CUR = `${A}.board.dock.current()`;
 const L = 'globalThis.gnomonPreviewLive';
 const B = 'globalThis.gnomonPreviewBoard';
-const SHOTS = path.resolve('../../.e3-logs/shots');
+const SHOTS = path.resolve('../../.e3fix-logs/shots');
 const CAND = path.resolve('test/goldens/candidates/e3');
 const type = (s: string): unknown[] => [...s].map((k) => ({ key: k, settle: 25 }));
 const BOARD_UP = `(() => { const c = ${CUR}; if (!c) return false; const hd = c.leaf.handle(); return c.leaf.state() !== 'loading' && !!hd && hd.isAlive() && c.session.status().phase !== 'opening'; })()`;
@@ -70,33 +70,55 @@ describe.skipIf(!process.env.GNOMON_E3_SHOTS || !chrome)('S1.4 E3 shots for Mika
           expect(r.png.length).toBeGreaterThan(1000);
         }, 120_000);
 
-  // another-hand-is-signed: an agent restyles your rect and writes into your sticky, another agent restyles that
-  // agent's words, an agent changes a labelled arrow of yours, a 14px agent box changed by another agent, and a forged
-  // restoredFrom on an agent's add (never solid, never your pin); the rect selected so the engine's handles show
+  // another-hand-is-signed (E3 review E1: every case drawn, none skipped). The person's own rows add an unlabelled
+  // rect, a labelled one-run arrow and a sticky; Claude restyles the rect, writes into the sticky, recolours the
+  // arrow, adds a 14px box and a text, removes that text, and carries a forged restoredFrom; the person puts the text
+  // back (an undo marker naming Claude's turn, the restored hand Claude's) and changes the 14px box; Mika restyles the
+  // sticky. The rect is selected so the engine's handles show. A missing case throws.
   const signed = (zoom: number) => [
     { read: `(() => { const s = ${L}.session; const k = ${L}.kernel; const dim = '${FIXTURE_DIM}';
-        const nodes = [...s.view().nodes.entries()]; const mine = nodes.filter(([, v]) => v.by.cls === 'human');
-        const rect = mine.find(([, v]) => v.node.kind === 'rect' && !v.node.label); const sticky = mine.find(([, v]) => v.node.kind === 'rect' && typeof v.node.label === 'string'); const arrow = mine.find(([, v]) => v.node.kind === 'arrow' && v.node.label);
-        const put = (agent, n, ops, extra) => { const payload = Object.assign({ v: 1, dim, ops, relayedFor: { principal: 'p:7k2m9q4x/' + agent, surface: 'bridge', agent, hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB', turn: 'turn:hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB/' + n } }, extra || {}); const seq = k.append('modns.gnomon.dimension.op', payload, undefined, { scope: { repo: 'repo:0123456789abcdef' } }); ${L}.mod.landedElsewhere({ seq, kind: 'modns.gnomon.dimension.op', payload }); };
-        const ops = [];
-        if (rect) ops.push({ type: 'update', id: rect[0], patch: { color: 'raspberry' } });
-        if (sticky) ops.push({ type: 'update', id: sticky[0], patch: { label: 'words by claude' } });
-        if (arrow) ops.push({ type: 'update', id: arrow[0], patch: { color: 'cobalt' } });
-        ops.push({ type: 'add', node: { id: '01JD1MSMALLBOX000000000014', kind: 'rect', x: 40, y: 330, z: 'V9', w: 14, h: 14 } });
-        ops.push({ type: 'add', node: { id: '01JD1MFORGED00000000000099', kind: 'rect', x: 600, y: 330, z: 'VA', w: 60, h: 40 } });
-        put('claude', 1, ops, { undo: { of: { principal: 'p:7k2m9q4x/matt', act: '01JD1M0000000000000000ACT9' }, restored: [['01JD1MFORGED00000000000099', '01JD1MNEVERDELETED00000000', { cls: 'human', principal: 'p:7k2m9q4x/matt' }]] } });
-        const later = [{ type: 'update', id: '01JD1MSMALLBOX000000000014', patch: { color: 'leaf' } }];
-        if (sticky) later.push({ type: 'update', id: sticky[0], patch: { fill: 'sky' } });
-        put('mika', 2, later);
-        return JSON.stringify({ rect: rect && rect[0] }); })()`, as: 'drawn' },
+        const scope = { repo: 'repo:0123456789abcdef' };
+        const me = [...s.view().nodes.values()].find((v) => v.by.cls === 'human');
+        if (!me) throw new Error('no person mark in the fixture');
+        const human = { principal: me.by.principal, connId: 'conn:preview', surface: 'gui' };
+        const AG = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
+        const stamp = (agent, n) => ({ principal: 'p:7k2m9q4x/' + agent, surface: 'bridge', agent, hsid: AG, turn: 'turn:' + AG + '/' + n });
+        const land = (payload) => { const seq = k.append('modns.gnomon.dimension.op', payload, undefined, { scope }); ${L}.mod.landedElsewhere({ seq, kind: 'modns.gnomon.dimension.op', payload }); };
+        const id = (t) => ('01JD1ME1' + t).padEnd(26, '0');
+        const R = id('RECT'), AR = id('ARRW'), ST = id('STKY'), BX = id('BXAA'), TX = id('TEXT'), TX2 = id('TEXTB'), FG = id('FRGD');
+        land({ v: 1, dim, act: id('ACTA'), relayedFor: human, ops: [
+          { type: 'add', node: { id: R, kind: 'rect', x: 380, y: 40, z: 'W1', w: 120, h: 70 } },
+          { type: 'add', node: { id: AR, kind: 'arrow', x: 380, y: 160, z: 'W2', points: [0, 0, 140, 0], label: 'flows to' } },
+          { type: 'add', node: { id: ST, kind: 'sticky', x: 560, y: 40, z: 'W3', w: 140, h: 90, label: 'my words' } } ] });
+        land({ v: 1, dim, relayedFor: stamp('claude', 1), ops: [
+          { type: 'update', id: R, patch: { color: 'raspberry' } },
+          { type: 'update', id: ST, patch: { label: 'words by claude' } },
+          { type: 'update', id: AR, patch: { color: 'cobalt' } },
+          { type: 'add', node: { id: BX, kind: 'rect', x: 40, y: 330, z: 'W4', w: 14, h: 14 } },
+          { type: 'add', node: { id: TX, kind: 'text', x: 560, y: 200, z: 'W5', text: 'claude wrote this' } },
+          { type: 'add', node: { id: FG, kind: 'rect', x: 600, y: 330, z: 'W6', w: 60, h: 40 } } ],
+          undo: { of: { principal: me.by.principal, act: '01JD1M0000000000000000ACT9' }, restored: [[FG, id('NEVER'), { cls: 'human', principal: me.by.principal }]] } });
+        land({ v: 1, dim, relayedFor: stamp('claude', 2), ops: [{ type: 'delete', id: TX }] });
+        land({ v: 1, dim, act: id('ACTB'), relayedFor: human, ops: [{ type: 'add', node: { id: TX2, kind: 'text', x: 560, y: 200, z: 'W7', text: 'claude wrote this' } }],
+          undo: { of: { hsid: AG, turn: 'turn:' + AG + '/2' }, restored: [[TX2, TX, { cls: 'agent', principal: 'p:7k2m9q4x/claude', agent: 'claude' }]] } });
+        land({ v: 1, dim, act: id('ACTC'), relayedFor: human, ops: [{ type: 'update', id: BX, patch: { color: 'leaf' } }] });
+        land({ v: 1, dim, relayedFor: stamp('mika', 3), ops: [{ type: 'update', id: ST, patch: { fill: 'sky' } }] });
+        return 1; })()`, as: 'put' },
     { wait: 900 },
-    { read: `(() => { const s = ${L}.session; const r = [...s.view().nodes.entries()].find(([, v]) => v.by.cls === 'human' && v.node.kind === 'rect' && !v.node.label); if (r) ${B}.select([r[0]]); ${B}.setView({ zoom: ${zoom}, scrollX: 0, scrollY: 0 }); return 1; })()`, as: 'set' },
+    { read: `(() => { const v = ${L}.session.view().nodes; const id = (t) => ('01JD1ME1' + t).padEnd(26, '0'); const tx = v.get(id('TEXTB'));
+        return JSON.stringify({ need: { rect: v.has(id('RECT')), arrow: v.has(id('ARRW')), sticky: v.has(id('STKY')), box: v.has(id('BXAA')), putBack: !!tx && !!tx.restoredFrom, forged: v.has(id('FRGD')) }, errs: ${L}.notices.slice(-4) }); })()`, as: 'drawn' },
+    { read: `(() => { const R = ('01JD1ME1' + 'RECT').padEnd(26, '0'); ${B}.select([R]); ${B}.setView({ zoom: ${zoom}, scrollX: 0, scrollY: 0 }); return 1; })()`, as: 'set' },
     { wait: 900 },
+    { read: `document.querySelectorAll('.bd-over .bd-ring, .bd-over .bd-counter, .bd-over [class*="seal"]').length`, as: 'signs' },
   ];
   for (const theme of ['day', 'night'] as const)
     for (const zoom of [0.25, 0.49, 0.5, 1, 4])
       it(`another-hand-is-signed ${theme} ${zoom * 100}%`, async () => {
-        const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'live', theme, 'sample'), width: 1440, height: 900, timeoutMs: 90_000, actions: signed(zoom) })) as { png: Buffer };
+        const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'live', theme, 'sample'), width: 1440, height: 900, timeoutMs: 90_000, actions: signed(zoom) })) as { png: Buffer; acted: Record<string, unknown> };
+        // E3 review E1: every case is drawn, or the shot fails loudly
+        const drawn = JSON.parse(String(r.acted.drawn)) as { need: Record<string, boolean> };
+        expect(drawn.need).toEqual({ rect: true, arrow: true, sticky: true, box: true, putBack: true, forged: true });
+        expect(r.acted.signs).toBeGreaterThan(0);
         mkdirSync(CAND, { recursive: true });
         writeFileSync(path.join(CAND, `another-hand-is-signed-${theme}-${Math.round(zoom * 100)}.png`), r.png);
         expect(r.png.length).toBeGreaterThan(1000);

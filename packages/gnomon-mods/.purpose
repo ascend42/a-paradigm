@@ -154,6 +154,8 @@ components:
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   dimension-mod:
     description: >-
+      E3 review (Aegis A1): a person's undo or redo of their own act pins
+      nothing (undidPerson only when another hand undid a person's act).
       S1.4 E3: dim.open and dim.check answer pins (pinList: the sets still
       pinned, oldest first, at most 8, in the of shape; GUI answers only),
       so the page's standing notices follow the mod.
