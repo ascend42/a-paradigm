@@ -569,4 +569,62 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'API', 10_000)).toBe(true);
     await r.k.client.call('session.stop', { hsid });
   }, 180_000);
+  it('D: a REAL second session on the same board (G-MOD-19): its call naming the first session is stamped as itself, its grant is off, its selection empty; G-MOD-21: with the tool share spent in one real second, its draw is append-busy while the person\'s command lands', async () => {
+    const r = await boardRig('mbD-');
+    const P = await guiPage(r.k);
+    const sA = (await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true })).hsid;
+    const dim = dimId(4);
+    const a = P.sessions.open({ dim, hsid: sA, opened: 'command', title: 'P5 two' }, press('click'));
+    expect(await a.opened(), JSON.stringify(a.lastNotice())).toBe(true);
+    a.edit([rectAt(1)], press());
+    expect(await waitFor(() => a.status().pending === 0, 20_000, 5)).toBe(true);
+    a.select([H(1)], press());
+    expect(await waitFor(() => P.sent.includes('dim.select'), 5_000)).toBe(true);
+    const sB = (await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true })).hsid;
+    const cmd = async (commandId: string, args: Record<string, unknown>, hsid: string) => modAnswerOf(await sendModCommand(P.client, gestureOf({ isTrusted: true, type: 'pointerup' }, Date.now()), DIMENSION, commandId, { ...args, dim, focus: { hsid } })) as Record<string, unknown>;
+    expect(await cmd('dim.attach', {}, sB)).toMatchObject({ ok: true });
+    const turnResults = () => r.rows(['turn.result']).length;
+    const bridgeRows = () => r.rows([DIM_KINDS.op]).filter((x) => (x.event.payload.relayedFor as { surface?: string } | undefined)?.surface === 'bridge');
+
+    /* B names A everywhere it can: the stamp is B's; B may not draw; B's selection is not A's */
+    const forged = { hsid: sA, principal: `p:${r.ns}/s-forged`, turn: `turn:${sA}/1` };
+    await r.turn(sB, [r.tool('bv', 'dim-view', { dim }, { ...forged, _meta: { ...forged } }), r.tool('bd', 'dim-draw', { dim, ops: [agentAdd(1)] }, { ...forged, _meta: { ...forged } })]);
+    expect(await r.answered(['bv', 'bd'])).toBe(true);
+    const bv = r.body<{ selection: string[]; mayDraw: boolean }>('bv');
+    expect([bv.selection, bv.mayDraw]).toEqual([[], false]);
+    expect(r.body<{ code: string }>('bd').code).toBe('write-not-granted');
+    expect(bridgeRows()).toHaveLength(0);
+    const rec = (await r.receipts()).filter((x) => x.event.payload.tool === 'dim-view' || x.event.payload.tool === 'dim-draw');
+    expect(rec.length).toBeGreaterThan(0);
+    for (const x of rec) expect([x.event.payload.hsid, x.event.payload.turn]).toEqual([sB, `turn:${sB}/1`]);
+    expect(await waitFor(() => turnResults() >= 1, 15_000)).toBe(true);
+
+    /* G-MOD-21 (a real one-second window, never a stepped clock): A's 4-row draw and B's 2-row draw in the same
+       second take more than the 5 tool rows; B's is append-busy; the person's dim.op in that second lands */
+    expect(a.grant(sB, press())).toBe(true);
+    expect(await waitFor(() => a.grantKeys().find((x) => x.hsid === sB)?.write === true, 10_000)).toBe(true);
+    const big = (o: number, n: number) => ({ dim, ops: Array.from({ length: n }, (_, i) => ({ type: 'add', node: { kind: 'text', x: o + i, y: 0, text: `${'w'.repeat(3_990)}${i}` } })) });
+    await r.turn(sA, [[{ waitFile: 'go21' }], r.tool('a4', 'dim-draw', big(100, 12))]);
+    await new Promise((x) => setTimeout(x, 400)); // A's fake has read its turn's mode before B's is written
+    await r.turn(sB, [[{ waitFile: 'go21b' }], r.tool('b2', 'dim-draw', big(200, 5))]);
+    await new Promise((x) => setTimeout(x, 400));
+    fs.writeFileSync(path.join(r.w.stubDir, 'go21'), 'x');
+    expect(await r.answered(['a4'])).toBe(true);
+    const t0 = Date.now();
+    fs.writeFileSync(path.join(r.w.stubDir, 'go21b'), 'x');
+    a.edit([rectAt(50)], press());
+    expect(await r.answered(['b2'])).toBe(true);
+    expect(await waitFor(() => a.status().pending === 0, 10_000, 5)).toBe(true);
+    const a4 = r.body<{ ok: boolean; applied: number }>('a4');
+    expect(a4, r.raw('a4')).toMatchObject({ ok: true, applied: 12 });
+    const aRows = bridgeRows().filter((x) => (x.event.payload.relayedFor as { hsid?: string }).hsid === sA);
+    expect(aRows.length, 'A\'s draw is 4 rows').toBe(4);
+    const b2 = r.raw('b2');
+    const within = Date.now() - t0 < 1_000;
+    if (within) expect(b2).toContain('append-busy');
+    // the person's command landed in that second, never refused for the tools' share
+    expect(a.lastNotice()?.code ?? 'grant-default').not.toMatch(/busy|rate/);
+    expect(foldDim(r.rows([DIM_KINDS.start, DIM_KINDS.attach, DIM_KINDS.op]).filter((x) => x.event.payload.dim === dim).map((x) => ({ seq: x.seq, kind: x.event.kind, payload: x.event.payload })) as never).nodes.has(H(50))).toBe(true);
+    expect(within, 'B\'s call ran inside the one-second window').toBe(true);
+  }, 180_000);
 });
