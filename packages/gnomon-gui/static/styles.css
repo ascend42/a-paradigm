@@ -1939,6 +1939,8 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-tick.bl{left:0;bottom:0;border-left-width:1px;border-bottom-width:1px}
 .bd-tick.br{right:0;bottom:0;border-right-width:1px;border-bottom-width:1px}
 .bd-trace{position:absolute;box-sizing:border-box;border:1px dashed var(--ink2);pointer-events:none}
+/* board-trace.zoom (Mika E3 D2): a box under 6px on the screen is the ring's 6px circle, dashed */
+.bd-trace.ring{border-radius:50%}
 /* S1.4 E3 (undo-key.slot; turn_strip.notice): three fixed columns from the right, the same on every row kind */
 .bd-turn-notice,.bd-turn-mark{display:flex;align-items:center;min-height:28px}
 .bd-turn-notice .bd-turn-line,.bd-turn-mark .bd-turn-line{flex:1 1 auto;min-width:0}

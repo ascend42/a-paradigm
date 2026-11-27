@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { BoardAuthor, BoardMarkView, BoardView } from '../src/core/board.js';
-import { COUNTER, CUTOUT, TRACE_MAX, countermarkPoint, markBox, overlayItems, type OverlayItem } from '../src/core/board-overlay.js';
+import { COUNTER, CUTOUT, TRACE_MAX, countermarkPoint, markBox, overlayItems, traceOutCopy, traceOutOfView, type OverlayItem } from '../src/core/board-overlay.js';
 
 const YOU: BoardAuthor = { cls: 'human' };
 const CLAUDE: BoardAuthor = { cls: 'agent', id: '9:p:x/agentclaude', name: 'claude' };
@@ -124,4 +124,25 @@ describe('E3 review C3 (Mika; the orchestrator\'s ruling): the words sign never 
           const meets = sign.left - h < lab.r && lab.l < sign.left + h && sign.top - h < lab.b && lab.t < sign.top + h;
           expect(meets, JSON.stringify({ sign, lab })).toBe(false);
         });
+});
+
+describe('E3 review D2 (Mika): the trace under 50%, a tiny box, marks out of view', () => {
+  it('under 50% the box stands 1px out; at 50% and over, 2px', () => {
+    const m = mark({ id: 'r', kind: 'rect' });
+    const lo = of(overlayItems([m], at(0.49), { trace: new Set(['r']) }), 'trace')[0]!;
+    const b = markBox(at(0.49), m);
+    expect(lo).toMatchObject({ left: b.left - 1, top: b.top - 1, width: b.width + 2 });
+    expect(of(overlayItems([m], at(0.5), { trace: new Set(['r']) }), 'trace')[0]).toMatchObject({ left: markBox(at(0.5), m).left - 2 });
+  });
+  it('a box under 6px on the screen is the 6px dashed ring at its centre', () => {
+    const m = mark({ id: 'r', kind: 'rect', width: 16, height: 16 });
+    const t = of(overlayItems([m], at(0.25), { trace: new Set(['r']) }), 'trace')[0] as OverlayItem & { left: number; top: number; width: number; ring?: boolean };
+    const b = markBox(at(0.25), m);
+    expect(t).toMatchObject({ ring: true, width: 6, height: 6, left: b.left + b.width / 2 - 3, top: b.top + b.height / 2 - 3 });
+  });
+  it('counts the traced marks wholly out of view, and says it', () => {
+    const marks = [mark({ id: 'a', kind: 'rect' }), mark({ id: 'b', kind: 'rect', x: 5000 }), mark({ id: 'c', kind: 'rect', y: -900 })];
+    expect(traceOutOfView(marks, at(1), new Set(['a', 'b', 'c']))).toBe(2);
+    expect(traceOutCopy(2)).toBe('2 of these marks are out of view');
+  });
 });

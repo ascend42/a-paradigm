@@ -63,7 +63,7 @@ export type OverlayItem =
   /** a removed mark of yours while its notice stands (turn_strip.notice.cut_out): four corner ticks, `arm` long; `traced` draws them in --ink */
   | { type: 'cutout'; id: string; left: number; top: number; width: number; height: number; arm: number; traced: boolean }
   /** board-trace: the hand edge 2px out round a traced mark (at most TRACE_MAX), no fill, no pointer, aria-hidden */
-  | { type: 'trace'; id: string; left: number; top: number; width: number; height: number };
+  | { type: 'trace'; id: string; left: number; top: number; width: number; height: number; ring?: boolean };
 
 /**
  * The kinds whose stroke the engine draws dashed for a hand that is not yours. It does NOT dash a freehand stroke
@@ -228,6 +228,23 @@ export const COUNTER = Object.freeze({ dx: 7, dy: 7, hoverDx: 13, hoverDy: 15, c
 /** board-trace: boxes 2px out, at most this many */
 export const TRACE_MAX = 64;
 export const TRACE_OUT = 2;
+/** board-trace.zoom (Mika E3 D2): under 50% the boxes stand 1px out; a box under 6px is the ring's 6px circle, dashed */
+export const TRACE_OUT_LOW = 1;
+export const TRACE_RING = 6;
+
+/** board-trace.limits: the words for `n` traced marks out of view */
+export const traceOutCopy = (n: number): string => `${n} of these marks ${n === 1 ? 'is' : 'are'} out of view`;
+
+/** board-trace.limits (Mika E3 D2): how many of the marks `ids` names (held and shown) lie wholly out of the view. */
+export function traceOutOfView(marks: readonly BoardMarkView[], view: BoardView, ids: ReadonlySet<string>): number {
+  let n = 0;
+  for (const m of marks) {
+    if (m.labelOf || m.node === null || !ids.has(m.node)) continue;
+    const b = markBox(view, m);
+    if (b.left + b.width < 0 || b.top + b.height < 0 || b.left > view.width || b.top > view.height) n++;
+  }
+  return n;
+}
 /** a cut-out's ticks: arms min(6, a quarter of the shorter side); a box under 12px on the screen ticks a 12px square */
 export const CUTOUT = Object.freeze({ arm: 6, min: 12 });
 
@@ -439,7 +456,12 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
       if (n >= TRACE_MAX) break;
       if (m.labelOf || m.node === null || !opts.trace.has(m.node)) continue;
       const box = markBox(view, m);
-      out.push({ type: 'trace', id: m.id, left: box.left - TRACE_OUT, top: box.top - TRACE_OUT, width: box.width + 2 * TRACE_OUT, height: box.height + 2 * TRACE_OUT });
+      const d = low ? TRACE_OUT_LOW : TRACE_OUT;
+      if (box.width < TRACE_RING || box.height < TRACE_RING) {
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+        out.push({ type: 'trace', id: m.id, left: cx - TRACE_RING / 2, top: cy - TRACE_RING / 2, width: TRACE_RING, height: TRACE_RING, ring: true });
+      } else out.push({ type: 'trace', id: m.id, left: box.left - d, top: box.top - d, width: box.width + 2 * d, height: box.height + 2 * d });
       n++;
     }
   }

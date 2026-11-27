@@ -25,7 +25,7 @@ import { markStripRow, noticeStripRow, type TurnStripRow } from '../core/board-t
 import { hhmm } from '../core/loops.js';
 /** S1.4 E3: the folded board's edge tab while a notice about your marks stands */
 const UNDO_TAB = ' · your marks changed';
-import { boardAgentName, cutoutAt, handName, sessionShort } from '../core/board-overlay.js';
+import { boardAgentName, cutoutAt, handName, sessionShort, traceOutCopy, traceOutOfView } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
@@ -684,6 +684,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       const m = v.mark;
       const mark = m ? markStripRow({ key: m.key, rev: m.rev, id: m.id, name: named(m.of.hsid, m.agent).name, removed: m.removed, time: m.at ? hhmm(new Date(m.at).toISOString()) : '' }) : null;
       const slot = mark ?? (v.shown ? row(v.shown, v.behind.length) : null);
+      // board-trace.limits (Mika E3 D2): the slot's title says how many of its marks are out of view
+      const hd = cur.leaf.handle();
+      if (!mark && v.shown && slot && hd?.isAlive()) {
+        const out = traceOutOfView(hd.marks(), hd.view(), new Set(v.shown.ids));
+        if (out > 0) slot.title = `${slot.title ?? ''}\n${traceOutCopy(out)}`;
+      }
       // (mika R3: one undo-family key in the strip at a time; the turn row's only while the slot shows the you row)
       return { slot, behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held, own: slot ? null : v.own };
     },

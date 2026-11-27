@@ -773,7 +773,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         c.style.setProperty('--arm', `${Math.max(1, Math.round(it.arm))}px`);
         kids.push(c);
       } else if (it.type === 'trace') {
-        const t = h('div', 'bd-trace', { 'aria-hidden': 'true' });
+        const t = h('div', it.ring ? 'bd-trace ring' : 'bd-trace', { 'aria-hidden': 'true' });
         place(t, it.left, it.top);
         t.style.width = `${Math.round(it.width)}px`;
         t.style.height = `${Math.round(it.height)}px`;
