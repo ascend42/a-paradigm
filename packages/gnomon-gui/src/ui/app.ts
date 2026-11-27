@@ -75,7 +75,7 @@ import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
 import { loadBoard } from '../core/board.js';
 import { followBoth, parseBoardCommand, type DimensionRow } from '../core/board-open.js';
 import { DimSessions } from '../core/dim-session.js';
-import { DimStore } from '../core/dim-store.js';
+import { DimStore, parseTurnRef } from '../core/dim-store.js';
 import { mountBoardDock } from './board-dock.js';
 import { mountBoardTurn, type BoardTurnStrip } from './board-turn.js';
 import { escFoldsFromComposer, latestTurn, refusalBrief } from '../core/board-turn.js';
@@ -109,7 +109,21 @@ const store = new GuiStore();
  */
 // S1.4 P4b: a grant targets the focus hsid the host joins to a LIVE session, so a session that is not live has its
 // draw key disabled (never "may not edit")
-const dimSessions = new DimSessions({ store: new DimStore(), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen') });
+const dimSessions = new DimSessions({
+  store: new DimStore(),
+  live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'),
+  // Aegis E3 r4: a turn's close in the page's own rows (newest first): a turn.result of that session at turn n or later
+  closeOf: (hsid, n) => {
+    const rows = store.transcript(hsid);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i]!;
+      if (r.kind !== 'turn.result' || !r.payload || typeof r.payload !== 'object') continue;
+      const t = parseTurnRef((r.payload as { turn?: unknown }).turn);
+      if (t && t.hsid === hsid && t.n >= n) return typeof r.at === 'string' && Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : Date.now();
+    }
+    return null;
+  },
+});
 let boardRepaint: () => void = () => undefined;
 /** true while the page waits for a restart to reconnect by itself; false when the Reconnect dialog is the only way back */
 let linkComing = false;

@@ -133,6 +133,11 @@ export interface DimSessionsDeps {
    * disabled. Default: every session is live.
    */
   live?: (hsid: string) => boolean;
+  /**
+   * Aegis E3 r4: the time of a `turn.result` the page's own rows hold for session `hsid` at turn `n` or later (the
+   * reverse of turnsUpTo), or null. Read when a pinned turn's close is not in the page's last 256 (a cold open).
+   */
+  closeOf?: (hsid: string, n: number) => number | null;
 }
 
 /** S1.4 P4b: a pending grant shows its working look only after this long (design draw-grant state-notes.pending). */
@@ -275,7 +280,7 @@ export type DimSessionsEvent = { type: 'opened'; session: DimSession } | { type:
 export const DIM_SWITCH_WAIT_MS = 2000;
 
 interface Internals {
-  deps: Required<Pick<DimSessionsDeps, 'now' | 'setTimer' | 'clearTimer' | 'mint' | 'live'>> & { store: DimStore; limiter: DimSendLimiter };
+  deps: Required<Pick<DimSessionsDeps, 'now' | 'setTimer' | 'clearTimer' | 'mint' | 'live' | 'closeOf'>> & { store: DimStore; limiter: DimSendLimiter };
   link(): DimLink | null;
   verifiedAt(dim: string): { seq: number; hash: string } | null;
   setVerified(dim: string, v: { seq: number; hash: string }): void;
@@ -843,19 +848,31 @@ export class DimSession {
         if (cs && cs.kind === 'turn' && cs.turn === turn) this.#notices.row(row, store.stateAt(this.dim, row.seq - 1));
       }
     };
-    const f = this.#notices.follow(keys, seed, this.#x.deps.now(), (turn) => this.#x.closedAt(turn), this.#undoFlight?.key ?? null);
+    // (Aegis E3 r4: a close the page's last 256 no longer hold is looked for in its rows)
+    const closed = (turn: string): number | null => {
+      const t = parseTurnRef(turn);
+      return this.#x.closedAt(turn) ?? (t ? this.#x.deps.closeOf(t.hsid, t.n) : null);
+    };
+    const f = this.#notices.follow(keys, seed, this.#x.deps.now(), closed, this.#undoFlight?.key ?? null);
     // Aegis E3 A3: a notice that left without a press here is said once (N2), as a ninth's is
     // (E3 r3, the orchestrator's ruling: a ninth's push-out keeps its words; a notice the mod let go says it left the strip)
     for (const n of f.pushed) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
     for (const n of f.gone) this.#emit({ about: 'undo', code: 'no-longer', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
     if (f.moved && f.gone.length + f.pushed.length === 0) this.#emit(null);
-    // Aegis E3 r3 F-1: a pinned turn that never closes is raised as stopped after the live timeout
+    // Aegis E3 r4: a pinned turn that has not closed is raised as stopped only when its session is not live; the
+    // clock alone is never evidence (a turn may run long): while the session lives the check only comes again
+    this.#lapseCheck();
+  }
+
+  #lapseCheck(): void {
+    const d = this.#x.deps;
+    if (this.#dead || this.#notices.waiting === 0) return;
+    this.noticesLapsed(this.#notices.lapse({ notLive: (h) => !d.live(h) }, d.now()));
     if (this.#notices.waiting > 0 && this.#lapseTimer === null) {
-      const d = this.#x.deps;
       this.#lapseTimer = d.setTimer(() => {
         this.#lapseTimer = null;
-        if (!this.#dead) this.noticesLapsed(this.#notices.lapse({ before: d.now() - DIM_LIVE_TIMEOUT_MS }, d.now()));
-      }, DIM_LIVE_TIMEOUT_MS + 1);
+        this.#lapseCheck();
+      }, DIM_LIVE_TIMEOUT_MS);
     }
   }
 
@@ -1075,6 +1092,7 @@ export class DimSession {
       // S1.4 E3: a turn that touched another hand's marks or undid a person's change stands as a notice; a ninth
       // pushes the oldest out, said once naming its hand and time (N2), and sends NO dim.seen (S3)
       const raised = this.#notices.ended(ref, this.#x.deps.now(), { at: this.#x.closedAt(ref) ?? this.#x.deps.now() });
+      if (raised.corrected) this.#emit(null);
       if (raised.pushedOut) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: raised.pushedOut.agent, at: raised.pushedOut.at });
       // nothing landed (every op refused): nothing is said
       if (m.added + m.changed + m.removed === 0) continue;
@@ -1529,6 +1547,7 @@ export class DimSessions {
       mint: deps.mint ?? mintDimNodeId,
       limiter: deps.limiter ?? new DimSendLimiter(),
       live: deps.live ?? (() => true),
+      closeOf: deps.closeOf ?? (() => null),
     };
     this.#x = {
       deps: this.#deps,
@@ -1640,8 +1659,14 @@ export class DimSessions {
       if (!gone && !t) continue;
       for (const [dim, nb] of this.#notices) {
         if (nb.waiting === 0) continue;
-        const res = gone ? nb.lapse({ hsid: gone }, now0) : nb.lapse({ hsid: t!.hsid, below: t!.n }, now0);
-        if (res.raised > 0) this.#sessions.get(dim)?.noticesLapsed(res);
+        const res = gone ? nb.lapse({ gone }, now0) : nb.lapse({ later: { hsid: t!.hsid, n: t!.n } }, now0);
+        const open = this.#sessions.get(dim);
+        if (open) {
+          if (res.raised > 0) open.noticesLapsed(res);
+        } else if (res.pushedOut.length > 0) {
+          // (Aegis E3 r4: a folded board's ninth is said at its next open, as the turn.result path keeps it)
+          this.#foldedOut.set(dim, [...(this.#foldedOut.get(dim) ?? []), ...res.pushedOut].slice(-DIM_NOTICE_CAP));
+        }
       }
     }
     // an agent turn ended (S1.4 P4b): what it did on each open board is said once, and its hash point is due

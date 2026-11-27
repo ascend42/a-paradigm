@@ -177,7 +177,8 @@ export class DimStore {
       }
       const seq = raw.seq as number;
       if (entry.rows.length > 0 && seq <= entry.rows[entry.rows.length - 1]!.seq) continue;
-      const row: DimRow = { seq, kind: raw.kind, payload, ...(Array.isArray(raw.causes) ? { causes: raw.causes as string[] } : {}) };
+      // (Aegis E3 r4: the row's time is kept, so a turn's notice can say when its last row came)
+      const row: DimRow = { seq, kind: raw.kind, payload, ...(Array.isArray(raw.causes) ? { causes: raw.causes as string[] } : {}), ...(typeof raw.at === 'string' ? { at: raw.at } : {}) } as DimRow;
       const at = atOf(raw.at);
       if (entry.rows.length === 0 && !fresh.has(dim)) entry.firstAt = at;
       entry.lastAt = at ?? entry.lastAt;

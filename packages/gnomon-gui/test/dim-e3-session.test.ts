@@ -30,7 +30,8 @@ function world() {
   const store = new DimStore();
   const calls: Call[] = [];
   let n = 7000;
-  const sessions = new DimSessions({ store, mint: () => ULID(n++) });
+  const lv = { live: (_h: string): boolean => true, closeOf: (_h: string, _n: number): number | null => null };
+  const sessions = new DimSessions({ store, mint: () => ULID(n++), live: (h) => lv.live(h), closeOf: (h, k) => lv.closeOf(h, k) });
   let seq = 0;
   const human = { principal: ME, connId: 'conn:A', surface: 'gui' };
   const agentStamp = (agent: string, t: number) => ({ principal: `p:00000000/${agent}`, surface: 'bridge', agent, hsid: AG, turn: `turn:${AG}/${t}` });
@@ -91,6 +92,7 @@ function world() {
     store, sessions, calls, of, push, turn, human, agentStamp, hold, waiting, release: () => waiting.splice(0).forEach((f) => f()),
     set check(v: { hash?: string; attr?: string }) { o.check = v; },
     set pins(v: Array<{ hsid: string; turn: string }> | null) { o.pins = v; },
+    lv,
     get turns() { return o.turns; },
     set turns(v: number) { o.turns = v; },
   };
@@ -556,14 +558,15 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
     expect(w.sessions.standingFor(DIM)[0]).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
   });
 
-  describe('r3 F-1: a pinned turn whose turn.result never comes is raised as stopped', () => {
-    const backlog = (w: ReturnType<typeof world>): void => {
+  describe('r4 F-1: a pinned turn whose turn.result never comes is raised only on evidence (Aegis)', () => {
+    const backlog = (w: ReturnType<typeof world>, at?: string): void => {
       w.push(DIM_KINDS.start, { title: 'Plan', attached: [HSID, AG], opened: 'command', relayedFor: w.human });
       w.push(DIM_KINDS.op, { ops: [rect(10)], act: ULID(90), relayedFor: w.human });
-      w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(10), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 1) });
+      const row = { seq: 50, kind: DIM_KINDS.op, ...(at ? { at } : {}), payload: { v: 1, dim: DIM, ops: [{ type: 'update', id: ULID(10), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 1) } };
+      w.sessions.apply([row]);
       w.pins = [{ hsid: AG, turn: `turn:${AG}/1` }];
     };
-    it('when its session is gone', async () => {
+    it('when its session is gone: stopped', async () => {
       const w = world();
       backlog(w);
       const { s } = await opened(w);
@@ -571,23 +574,75 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
       w.sessions.apply([{ seq: 700, kind: 'session.exited', session: AG, payload: { code: 0 } }]);
       expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
     });
-    it('when a later turn of that session writes a row', async () => {
+    it('a turn running past 8 s with no rows is NOT raised while its session is live', async () => {
       const w = world();
       backlog(w);
+      const { s } = await opened(w);
+      await flush(30_000);
+      expect(s.noticeView().shown).toBeNull();
+    });
+    it('at the check, a session that is not live raises it as stopped (b)', async () => {
+      const w = world();
+      backlog(w);
+      const { s } = await opened(w);
+      expect(s.noticeView().shown).toBeNull();
+      w.lv.live = () => false;
+      await flush(9_000);
+      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
+    });
+    it('a later turn of that session writing a row proves it ENDED, at its last row\'s time', async () => {
+      const w = world();
+      backlog(w, AT);
       const { s } = await opened(w);
       expect(s.noticeView().shown).toBeNull();
       w.sessions.apply([{ seq: 700, kind: 'tool.call', session: AG, payload: { turn: `turn:${AG}/2` } }]);
-      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
+      const v = s.noticeView().shown!;
+      expect(v).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
+      expect(v.stopped).toBeUndefined();
     });
-    it('when it has waited past the live timeout', async () => {
+    it('a cold open: an old closed turn whose close is past the page\'s 256 reads ended, from its rows', async () => {
+      const w = world();
+      backlog(w);
+      w.lv.closeOf = (h, n) => (h === AG && n === 1 ? Date.parse(AT) : null);
+      const { s } = await opened(w);
+      const v = s.noticeView().shown!;
+      expect(v).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
+      expect(v.stopped).toBeUndefined();
+    });
+    it('a late turn.result corrects stopped to ended', async () => {
       const w = world();
       backlog(w);
       const { s } = await opened(w);
-      expect(s.noticeView().shown).toBeNull();
-      await flush(4000);
-      expect(s.noticeView().shown).toBeNull();
-      await flush(5000);
-      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, stopped: true });
+      w.sessions.apply([{ seq: 700, kind: 'session.exited', session: AG, payload: { code: 0 } }]);
+      expect(s.noticeView().shown).toMatchObject({ stopped: true });
+      w.sessions.apply([{ seq: 701, kind: 'turn.result', at: AT, payload: { turn: `turn:${AG}/1` } }]);
+      const v = s.noticeView().shown!;
+      expect(v.stopped).toBeUndefined();
+      expect(v.at).toBe(Date.parse(AT));
+    });
+    it('a folded board\'s lapse queues its ninth for the next open', async () => {
+      const w = world();
+      const first = await opened(w);
+      first.s.edit([rect(30)], press());
+      await flush(DIM_SEND_LIMITS.gapMs * 2);
+      for (let t = 1; t <= DIM_NOTICE_CAP; t++) await withNotice(w, first.s, t, 10 + t);
+      // turn 20 touches the person's mark and is pinned, but never closes
+      w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(30), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 20) });
+      w.turn('claude', 9, [{ type: 'update', id: ULID(30), patch: { color: 'leaf' } } as DimOp]);
+      w.pins = [...Array.from({ length: DIM_NOTICE_CAP - 1 }, (_, i) => ({ hsid: AG, turn: `turn:${AG}/${i + 3}` })), { hsid: AG, turn: `turn:${AG}/20` }];
+      first.s.touch(press());
+      await flush(200);
+      expect(await first.s.fold(press('keydown'))).toBe(true);
+      // folded: turn 10 ends (the eighth standing), then the session dies: turn 20 is raised and pushes one out
+      w.turn('claude', 10, [{ type: 'update', id: ULID(30), patch: { color: 'sky' } } as DimOp]);
+      w.sessions.apply([{ seq: 900, kind: 'session.exited', session: AG, payload: { code: 0 } }]);
+      expect(w.sessions.standingFor(DIM).map((n) => n.key)).toContain(`turn:${AG}/20`);
+      const lines: DimSessionNotice[] = [];
+      const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+      s.onChange((c) => void (c.notice && lines.push(c.notice)));
+      await flush(DIM_SEND_LIMITS.gapMs);
+      expect(await s.opened()).toBe(true);
+      expect(lines.filter((n) => n.code === 'pushed-out')).toHaveLength(1);
     });
   });
 });

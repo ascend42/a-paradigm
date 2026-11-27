@@ -82,6 +82,10 @@ export interface DimStandingNotice {
 
 interface Tally {
   key: string;
+  /** Aegis E3 r4: its rows came through the page's own follow (not a seed at a pins answer) */
+  live: boolean;
+  /** the time of its last row (its `at`), when the row had one */
+  lastAt: number | null;
   of: DimNoticeOf;
   agent: string | null;
   mine: { changed: Set<string>; removed: Set<string> };
@@ -126,6 +130,10 @@ export class DimNotices {
   readonly #pressed = new Set<string>();
   /** Aegis E3 r3 F-1: pinned turns the page has not seen close (turn → since when, clock time) */
   readonly #waiting = new Map<string, number>();
+  /** true while follow seeds a set from held rows (its tally is not live) */
+  #seeding = false;
+  /** notices raised as stopped by the F-1 fallback: a real turn.result later corrects them to ended (Aegis E3 r4) */
+  readonly #lapsed = new Set<string>();
   /** sets that ever raised a notice here (Aegis E3 N-3: R3's own-turn key is for a turn that raised none at all) */
   readonly #raised = new Set<string>();
 
@@ -160,12 +168,14 @@ export class DimNotices {
     let t = this.#tallies.get(cs.turn);
     if (!t) {
       const r = p.relayedFor as Record<string, unknown>;
-      t = { key: cs.turn, of: { hsid: cs.hsid, turn: cs.turn }, agent: typeof r.agent === 'string' ? r.agent : null, mine: { changed: new Set(), removed: new Set() }, other: { changed: new Set(), removed: new Set() }, others: new Set(), lead: null, base: row.seq, rev: 0, ids: [], boxes: new Map() };
+      t = { key: cs.turn, live: !this.#seeding, lastAt: null, of: { hsid: cs.hsid, turn: cs.turn }, agent: typeof r.agent === 'string' ? r.agent : null, mine: { changed: new Set(), removed: new Set() }, other: { changed: new Set(), removed: new Set() }, others: new Set(), lead: null, base: row.seq, rev: 0, ids: [], boxes: new Map() };
       this.#tallies.set(cs.turn, t);
       while (this.#tallies.size > DIM_NOTICE_MEMORY.sets) this.#tallies.delete(this.#tallies.keys().next().value as string);
     }
     t.base = row.seq;
     t.rev += 1;
+    const ra = (row as { at?: unknown }).at;
+    if (typeof ra === 'string' && Number.isFinite(Date.parse(ra))) t.lastAt = Date.parse(ra);
     // N3: the lead only from a marker whose `of` is a person's set this page saw
     if (mark && mark.of.kind === 'act') {
       const seen = this.#acts.get(`${mark.of.principal}\u0000${mark.of.act}`);
@@ -229,9 +239,17 @@ export class DimNotices {
    * The turn `turn` ended (its `turn.result` row). Raises its notice when it touched another hand's marks or undid a
    * person's change. Returns the notice raised and the one a ninth pushed out (said once, N2; never a `dim.seen`).
    */
-  ended(turn: string, now: number, o: { stopped?: boolean; at?: number } = {}): { raised: DimStandingNotice | null; pushedOut: DimStandingNotice | null } {
+  ended(turn: string, now: number, o: { stopped?: boolean; at?: number } = {}): { raised: DimStandingNotice | null; pushedOut: DimStandingNotice | null; corrected?: boolean } {
     const t = this.#tallies.get(turn);
-    if (!t || this.#list.some((x) => x.key === turn)) return { raised: null, pushedOut: null };
+    const listed = this.#list.find((x) => x.key === turn);
+    // Aegis E3 r4: a notice the fallback raised as stopped is corrected to ended when its real turn.result comes
+    if (listed && !o.stopped && this.#lapsed.has(turn)) {
+      this.#lapsed.delete(turn);
+      delete listed.stopped;
+      if (o.at !== undefined) listed.at = o.at;
+      return { raised: null, pushedOut: null, corrected: true };
+    }
+    if (!t || listed) return { raised: null, pushedOut: null };
     const face = this.#face(t);
     if (face.lead === null && face.changed + face.removed + face.otherChanged + face.otherRemoved === 0) return { raised: null, pushedOut: null };
     const n: DimStandingNotice = { key: t.key, of: t.of, agent: t.agent, at: o.at ?? now, state: 'standing', ...face, ...(o.stopped ? { stopped: true } : {}) };
@@ -312,7 +330,14 @@ export class DimNotices {
     }
     for (const k of pinned) {
       if (this.get(k)) continue;
-      if (!this.#tallies.has(k)) seed(k);
+      if (!this.#tallies.has(k)) {
+        this.#seeding = true;
+        try {
+          seed(k);
+        } finally {
+          this.#seeding = false;
+        }
+      }
       const at = closedAt(k);
       if (at === null) {
         if (this.#tallies.has(k) && !this.#waiting.has(k)) this.#waiting.set(k, now);
@@ -326,25 +351,34 @@ export class DimNotices {
   }
 
   /**
-   * Aegis E3 r3 F-1: a pinned turn whose `turn.result` never came (the session died mid-turn, its grant still on) is
-   * raised as stopped when its session is gone (`below` Infinity), when a LATER turn of that session wrote a row
-   * (`below` that turn's number), or when it has waited since `before` (the live timeout). Returns the ninths pushed out.
+   * Aegis E3 r3 F-1, reworked r4: a pinned turn whose `turn.result` never came is raised only on POSITIVE evidence,
+   * never by the clock alone:
+   *  - `gone`: its session is gone (a session-gone row), or not live at a check (`notLive`): stopped;
+   *  - `later`: a LATER turn of its session wrote a row: it ENDED, at its last row's time; said stopped only when
+   *    this page tallied it live (its turn.result would have come through the same follow, and did not).
+   * Returns the notices raised and the ninths pushed out.
    */
-  lapse(o: { hsid?: string; below?: number; before?: number }, now: number): { raised: number; pushedOut: DimStandingNotice[] } {
+  lapse(o: { gone?: string; notLive?: (hsid: string) => boolean; later?: { hsid: string; n: number } }, now: number): { raised: number; pushedOut: DimStandingNotice[] } {
     let raised = 0;
     const pushedOut: DimStandingNotice[] = [];
-    for (const [turn, since] of [...this.#waiting]) {
+    for (const [turn] of [...this.#waiting]) {
       const t = this.#tallies.get(turn);
       if (!t) {
         this.#waiting.delete(turn);
         continue;
       }
       const n = Number(turn.slice(turn.lastIndexOf('/') + 1));
-      const hit = o.before !== undefined ? since <= o.before : t.of.hsid === o.hsid && n < (o.below ?? Infinity);
-      if (!hit) continue;
+      let stopped: boolean;
+      if (o.gone !== undefined && t.of.hsid === o.gone) stopped = true;
+      else if (o.notLive && o.notLive(t.of.hsid)) stopped = true;
+      else if (o.later && t.of.hsid === o.later.hsid && n < o.later.n) stopped = t.live;
+      else continue;
       this.#waiting.delete(turn);
-      const r = this.ended(turn, now, { stopped: true });
-      if (r.raised) raised++;
+      const r = this.ended(turn, now, { ...(stopped ? { stopped: true } : {}), at: t.lastAt ?? now });
+      if (r.raised) {
+        raised++;
+        if (stopped) this.#lapsed.add(turn);
+      }
       if (r.pushedOut) pushedOut.push(r.pushedOut);
     }
     return { raised, pushedOut };
@@ -421,6 +455,7 @@ export class DimNotices {
     this.#pressed.clear();
     this.#raised.clear();
     this.#waiting.clear();
+    this.#lapsed.clear();
   }
 
   /** True when the set `key` raised a notice on this page at any time (standing now or not). */
