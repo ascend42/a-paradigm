@@ -426,6 +426,30 @@ describe('#dimension-mod E1 item 3: pins (Aegis G6, N1; the orchestrator\'s ruli
     expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: false, code: 'undo-expired' });
     expect(await w.run('dim.undo', { dim, of: turnOf(B, 2) })).toMatchObject({ ok: true, applied: 1 });
   });
+
+  it('S1.4 E3 the pins read: dim.check and a reopen answer pins (oldest first, the of shape, at most 8); dim.seen and a ninth pin leave it; no tool answers it', { timeout: 240_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const ops = Array.from({ length: 10 }, (_, i) => rectOp(i + 1));
+    await w.run('dim.op', { dim, ops });
+    for (let t = 1; t <= 3; t++) await draw(w, dim, B, t, [{ type: 'update', id: ulid(t), patch: { color: 'graphite' } }]);
+    const chk = await w.run('dim.check', { dim });
+    expect(chk.pins).toEqual([turnOf(B, 1), turnOf(B, 2), turnOf(B, 3)]);
+    expect(await w.run('dim.seen', { dim, of: turnOf(B, 2) })).toMatchObject({ ok: true });
+    expect((await w.run('dim.check', { dim })).pins).toEqual([turnOf(B, 1), turnOf(B, 3)]);
+    // a reopen answers it too
+    const open = await w.run('dim.open', { dim, opened: 'menu' });
+    expect(open.pins).toEqual([turnOf(B, 1), turnOf(B, 3)]);
+    // cap 8: the ninth pushes the oldest out
+    for (let t = 4; t <= 10; t++) await draw(w, dim, B, t, [{ type: 'update', id: ulid(t), patch: { color: 'graphite' } }]);
+    const pins = (await w.run('dim.check', { dim })).pins as unknown[];
+    expect(pins).toHaveLength(8);
+    expect(pins).not.toContainEqual(turnOf(B, 1));
+    expect(pins.at(-1)).toEqual(turnOf(B, 10));
+    // an agent's view never carries it (GUI answers only)
+    const view = await w.tool('dim-view', { dim }, agentOf(B));
+    expect(JSON.stringify(view)).not.toContain('"pins"');
+  });
 });
 
 describe('#dimension-mod E1: a catch-up notes rows the mod did not answer for', () => {

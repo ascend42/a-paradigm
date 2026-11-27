@@ -74,6 +74,7 @@ import {
   evictSet,
   noteHistoryRow,
   notePresence,
+  pinList,
   ofOf,
   setKey,
   setRowsOf,
@@ -574,7 +575,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       // the row is in the log but the index could not take it: the next command adopts the dimension from the log
       return refusal('unavailable');
     }
-    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), attr: attrDigestOf(fresh.state), grants: grantList(fresh) };
+    return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: hashOf(fresh.state), attr: attrDigestOf(fresh.state), grants: grantList(fresh), pins: [] };
   }
 
   // every other path needs a known dimension of the caller's repo
@@ -627,7 +628,7 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
     // a reopen: no title (the first start row named the dimension), and any title sent is not read
     const seq = await write(DIM_KINDS.start, startPayload(a.dim, a.hsid, a.opened));
     if (typeof seq === 'number') await noteOpen(host, a.hsid, a.dim);
-    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), grants: grantList(entry) } : seq;
+    return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: entry.state.title, firstSeq: entry.idx.firstSeq, seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), grants: grantList(entry), pins: pinList(entry.hist) } : seq;
   }
 
   if (commandId === 'dim.grant') {
@@ -671,7 +672,8 @@ async function runCommand(commandId, rawArgs, relayedFor, callId) {
       return refusal('unavailable');
     }
     // G7: the attribution digest beside the hash; the page compares both at this hash point
-    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state) };
+    // S1.4 E3: the sets still pinned (the page's standing notices follow it; GUI answers only, never a tool's)
+    return { ok: true, dim: a.dim, seq: entry.state.seq, hash: hashOf(entry.state), attr: attrDigestOf(entry.state), pins: pinList(entry.hist) };
   }
 
   if (commandId === 'dim.seen') {

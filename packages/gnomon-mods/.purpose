@@ -154,6 +154,9 @@ components:
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   dimension-mod:
     description: >-
+      S1.4 E3: dim.open and dim.check answer pins (pinList: the sets still
+      pinned, oldest first, at most 8, in the of shape; GUI answers only),
+      so the page's standing notices follow the mod.
       #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3, S1.4 E1, E2; first-party, 1.2.0) -
       packages/gnomon-mods/dimension, id gnomon.dimension: the ONE writer of
       dimension rows. Nine commands, each declaring effects (dim.open,
