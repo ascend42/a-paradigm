@@ -928,7 +928,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect((a.unknownRows as { rows: string[] }).rows).toEqual([]);
     // the second session lists both dimensions of the repo; the first session's says it is not this session's yet
     expect(a.rows as string[]).toHaveLength(2);
-    expect((a.filtered as string[])[0]).toMatch(/Totals are off.*folded · opening starts it again$/);
+    expect((a.filtered as string[])[0]).toMatch(/Totals are off.*folded · opening attaches this session$/);
     // ONE press: dim.attach then dim.open, both on the same stamp
     expect(f('attached')).toMatchObject({ open: true, phase: 'open' });
     expect(f('attached').rows.slice(-2)).toEqual(['attach', 'session.start:command']);

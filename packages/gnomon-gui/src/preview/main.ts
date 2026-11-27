@@ -57,6 +57,8 @@ function previewDimsOptions(): { onDimensions: (cause: Event) => void; dimRows: 
       if (cause.isTrusted !== true) return false;
       const l = d().listings.find((x) => x.dim === dim) ?? null;
       if (l && !rowStillHolds(seen, l)) return false;
+      // (`gnomonPreviewDimRefuse`: the dock refused to send, the link down or words held: aegis N1)
+      if ((globalThis as { gnomonPreviewDimRefuse?: boolean }).gnomonPreviewDimRefuse) return false;
       (g.gnomonPreviewDimPresses ??= []).push({ dim, attach: !!l && !l.attached.includes(d().hsid), type: cause.type });
       return true;
     },

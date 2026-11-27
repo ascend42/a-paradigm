@@ -146,14 +146,13 @@ export const DIM_LIST_COPY = {
   folded: 'folded · opening starts it again',
   foldedPart: 'folded · opening shows part of it',
   partShown: 'part of it is shown',
-  wasOpening: 'didn’t finish opening · a press tries again',
+  wasOpening: 'didn’t open · a press tries again',
   menuLabel: 'Dimensions in this project',
   find: 'Find a dimension…',
   findHint: '/boards',
-  empty: 'No dimensions here yet · /board opens one',
+  empty: 'no dimensions here yet · /board opens one',
   noSession: 'Open a session first',
   down: 'Not connected · nothing can be opened yet',
-  opening: 'opening the board…',
 } as const;
 
 /** Who is attached, in line 2's form: this session first; a session the page cannot name is counted (aegis C4.3). */
@@ -186,9 +185,12 @@ export function dimensionRows(listings: readonly DimListing[], hsid: string | nu
         line2 = o.check?.line ?? '';
         bad = !!o.check?.bad;
         if (!line2) lead = 'open here';
-      } else if (l.ended) line2 = l.partial ? DIM_LIST_COPY.foldedPart : DIM_LIST_COPY.folded;
-      else if (attached) line2 = `attached ${who.startsWith('◇') ? who : `· ${who}`}`;
-      else line2 = who ? `${who} · ${DIM_LIST_COPY.attaches}` : DIM_LIST_COPY.attaches;
+      } else if (l.ended) {
+        // aegis I1 / mika 3: a folded dimension this session is not attached to says that opening attaches it
+        line2 = !attached && hsid ? `folded · ${DIM_LIST_COPY.attaches}` : l.partial ? DIM_LIST_COPY.foldedPart : DIM_LIST_COPY.folded;
+      } else if (attached) line2 = `attached ${who.startsWith('◇') ? who : `· ${who}`}`;
+      // aegis I2 / mika 2: the consequence first, so the attach fact is never the part that is cut
+      else line2 = who ? `${DIM_LIST_COPY.attaches} · ${who}` : DIM_LIST_COPY.attaches;
       if (!l.ended && l.partial) line2 = line2 ? `${line2} · ${DIM_LIST_COPY.partShown}` : DIM_LIST_COPY.partShown;
       const row: DimensionRow = { dim: l.dim, title: listTitle(l.title), time: listTime(l.lastAt, now), ended: l.ended, attached, notes: [...(l.ended ? ['folded'] : []), ...(l.partial ? ['partly held'] : []), ...(attached ? [] : ['not this session’s yet'])], mark: l.ended ? '○' : '●', line2, lead, bad, current, seen: { ended: l.ended, attached: [...l.attached] } };
       if (current && o.check) row.check = o.check.line;
@@ -198,6 +200,17 @@ export function dimensionRows(listings: readonly DimListing[], hsid: string | nu
   const pending: DimensionRow[] = opening.filter((p) => !have.has(p.dim)).map((p) => ({ dim: p.dim, title: listTitle(p.title), time: '', ended: false, attached: true, notes: ['was opening when the link went'], mark: '…', line2: DIM_LIST_COPY.wasOpening, lead: '', bad: false, current: false, seen: { ended: false, attached: [] } }));
   const cur = rows.filter((r) => r.current);
   return [...cur, ...pending, ...rows.filter((r) => !r.current)];
+}
+
+/**
+ * aegis C4.5 / I3: what a press on a row of the list sends. A listed row needs what it said when it was drawn
+ * (`seen`): a missing `seen`, or an ended or attached that changed since, sends nothing (null). A dimension this page
+ * was opening (not listed yet) opens without attaching.
+ */
+export function planListPress(l: Pick<DimListing, 'dim' | 'title' | 'ended' | 'attached'> | null, pending: { title: string } | null, dim: string, hsid: string | null, seen: DimensionRow['seen'] | undefined): BoardPlan | null {
+  if (l) return seen && rowStillHolds(seen, l) ? planBoardRow(l, hsid) : null;
+  if (pending) return hsid ? { type: 'open', dim, attach: false, reopens: false, title: pending.title } : { type: 'none', why: 'no-session' };
+  return null;
 }
 
 /** aegis C4.5: what the row said when it was drawn still holds at the press (ended, and who is attached). */

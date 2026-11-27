@@ -28,6 +28,7 @@ const SHOTS = process.env.GNOMON_SHOTS_DIR ?? '';
 const keep = (name: string, png: Buffer): void => {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
+  mkdirSync(path.dirname(path.join(SHOTS, `dl-${name}.png`)), { recursive: true });
   writeFileSync(path.join(SHOTS, `dl-${name}.png`), png);
 };
 
@@ -71,8 +72,8 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 the Dimensions list under the
     const r = a.rows as Array<{ title: string; l2: string; mark: string; checked: string; role: string }>;
     expect(r.map((x) => [x.mark, x.title, x.l2])).toEqual([
       ['●', 'Totals are off by a cent', 'open here · checked up to the last change'],
-      ['…', 'Untitled', 'didn’t finish opening · a press tries again'],
-      ['●', 'auth handoff and the mods bridge credential', '◇ billing-ui foll… · opening attaches this session'],
+      ['…', 'Untitled', 'didn’t open · a press tries again'],
+      ['●', 'auth handoff and the mods bridge credential', 'opening attaches this session · ◇ billing-ui foll…'],
       ['●', 'Mods bridge map', 'attached ◇ Totals are off… +1'],
       ['○', 'Voice ladder sketch', 'folded · opening shows part of it'],
       ['○', 'Release checklist', 'folded · opening starts it again'],
@@ -203,6 +204,58 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 the Dimensions list under the
     expect(l2.fullCut, 'the case under test: the whole line does not fit').toBe(true);
     expect(l2.shown).toBe('checked up to an older change');
     expect(l2.cut).toBe(false);
+  }, 180_000);
+  it('aegis I2 / mika 2: at 303 and 560 the attach words lead line 2 and are never the part cut', async () => {
+    for (const w of [303, 560]) {
+      const a = await real([
+        { read: set(SAMPLE), as: 's' }, { read: `(Object.assign(document.getElementById('preview-board').style, { right: 'auto', width: '${w}px' }), 1)`, as: 'w' }, { wait: 400 }, { press: KEY }, { wait: 300 },
+        { read: `(() => { const l2 = document.querySelector('.bd-dr[data-dim="${L(5).dim}"] .l2'); const r = document.createRange(); r.setStart(l2.firstChild, 0); r.setEnd(l2.firstChild, 'opening attaches this session'.length); return { text: l2.textContent, prefixRight: r.getBoundingClientRect().right, boxRight: l2.getBoundingClientRect().right }; })()`, as: 'l2' },
+      ], w === 303 ? { shot: 'r2/list-attach-303-day' } : {});
+      const l2 = a.l2 as { text: string; prefixRight: number; boxRight: number };
+      expect(l2.text.startsWith('opening attaches this session'), `${w}`).toBe(true);
+      expect(l2.prefixRight <= l2.boxRight + 0.5, `${w}: the attach words are cut`).toBe(true);
+    }
+  }, 180_000);
+  it('aegis N2: out of date, the rows are disabled and the note shows; N1: a press the dock refused leaves the list open and says nothing', async () => {
+    const a = await real([
+      { read: set(SAMPLE), as: 's' }, { read: `(${LEAF}.setInert('out-of-date'), 1)`, as: 'ood' }, { wait: 150 },
+      { press: KEY }, { wait: 300 }, { read: rows, as: 'rows' }, { read: `document.querySelector('.bd-dims .bd-dnote')?.textContent ?? null`, as: 'note' },
+      { key: 'Escape' }, { read: `(${LEAF}.setInert(null), globalThis.gnomonPreviewDimRefuse = true, 1)`, as: 'up' }, { wait: 200 },
+      { press: KEY }, { wait: 300 }, { press: `.bd-dims .bd-dr[data-dim="${L(4).dim}"]` }, { wait: 200 },
+      { read: `!!document.querySelector('.bd-dims')`, as: 'open' }, { read: `document.querySelector('.bd-leaf .sr-only[role=status]').textContent`, as: 'said' },
+    ]);
+    expect((a.rows as Array<{ disabled: string | null }>).every((r) => r.disabled === 'true')).toBe(true);
+    expect(a.note).toBe('Not connected · nothing can be opened yet');
+    expect(a.open).toBe(true);
+    expect(a.said).not.toBe('opening the board…');
+  }, 180_000);
+  it('mika 6: with other rows, under 117px of room the key opens the palette; with the open row alone 87px is enough; mika 9: the title is dir=auto', async () => {
+    const run = (d: Record<string, unknown>) => real([
+      { read: set(d), as: 's' }, { read: `(document.getElementById('preview-board').style.height = '185px', 1)`, as: 'h' }, { wait: 400 },
+      { read: `(() => { const k = document.querySelector('${KEY}').getBoundingClientRect(); const f = document.querySelector('.bd-foot').getBoundingClientRect(); return Math.round(f.top - 8 - (k.bottom + 4)); })()`, as: 'room' },
+      { press: KEY }, { wait: 300 }, { read: `!!document.querySelector('.bd-dims')`, as: 'menu' }, { read: `document.querySelector('.bd-dims .bd-dr .t')?.getAttribute('dir') ?? null`, as: 'dir' },
+    ], { board: 'tiny' });
+    const many = await run(SAMPLE);
+    expect(many.room as number).toBeGreaterThanOrEqual(87);
+    expect(many.room as number).toBeLessThan(117);
+    expect(many.menu).toBe(false);
+    const alone = await run({ listings: [L(3)], openDim: L(3).dim, check: SAMPLE.check });
+    expect(alone.menu).toBe(true);
+    expect(alone.dir).toBe('auto');
+  }, 180_000);
+  it('aegis N3: a row redrawn with new words presses with those words (one press sent); mika 7: a disabled row takes no hover fill; mika 5: the find row\'s focus is the inset ring', async () => {
+    const a = await real([
+      { read: set(SAMPLE), as: 's' }, { press: KEY }, { wait: 300 },
+      { read: `(globalThis.gnomonPreviewDims.listings.find((l) => l.dim === '${L(5).dim}').attached = [], ${LEAF}.refreshDims(), 1)`, as: 'changed' }, { wait: 100 },
+      { press: `.bd-dims .bd-dr[data-dim="${L(5).dim}"]` }, { wait: 200 }, { read: presses, as: 'p' },
+      { read: `(${LEAF}.setInert('link-down'), 1)`, as: 'down' }, { press: KEY }, { wait: 300 }, { move: `.bd-dims .bd-dr[data-dim="${L(4).dim}"]` }, { wait: 100 },
+      { read: `getComputedStyle(document.querySelector('.bd-dims .bd-dr[data-dim="${L(4).dim}"]')).backgroundColor`, as: 'hover' },
+      { read: `(${LEAF}.setInert(null), 1)`, as: 'up' }, { key: 'End' }, { wait: 100 },
+      { read: `(() => { const f = document.activeElement; return f && f.classList.contains('bd-dfind') ? getComputedStyle(f).boxShadow : null; })()`, as: 'ring' },
+    ]);
+    expect(a.p).toEqual([{ dim: L(5).dim, attach: true, type: 'click' }]);
+    expect(a.hover).toBe('rgba(0, 0, 0, 0)');
+    expect(String(a.ring)).toMatch(/inset/);
   }, 180_000);
   it('shots: the list open, day and night, at 1024, 1280, 1440 and a 560 window', async () => {
     for (const width of [1024, 1280, 1440, 560]) for (const theme of ['day', 'night'] as const) {

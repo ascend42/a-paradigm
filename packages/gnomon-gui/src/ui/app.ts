@@ -73,7 +73,7 @@ import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
 import { loadBoard } from '../core/board.js';
-import { followBoth, parseBoardCommand, type DimensionRow } from '../core/board-open.js';
+import { DIM_LIST_COPY, followBoth, parseBoardCommand, type DimensionRow } from '../core/board-open.js';
 import { DimSessions } from '../core/dim-session.js';
 import { DimStore, parseTurnRef } from '../core/dim-store.js';
 import { mountBoardDock } from './board-dock.js';
@@ -4057,7 +4057,7 @@ function paintPalette(): void {
     // (design dimension-list.slash_boards: the palette's rows take the menu's words: the mark, the title, the time, line 2)
     palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim, ...(r.current ? { 'aria-current': 'true' } : {}) }, h(doc, 'span', { class: 'pal-mark', 'aria-hidden': 'true' }, r.mark), h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: `pal-kbd${r.bad ? ' bad' : ''}` }, [r.time, `${r.lead}${r.line2}`].filter(Boolean).join(' · '))) as unknown as HTMLElement));
     // none at all, or none that match what was typed: two different things, said as what they are
-    if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? 'This session has no dimensions yet · /board opens one' : 'Open a session first')) as unknown as HTMLElement);
+    if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? DIM_LIST_COPY.empty : 'Open a session first')) as unknown as HTMLElement);
     return;
   }
   palItems = filterCommands(paletteEntries(status as never), $<HTMLInputElement>('palette-input').value);

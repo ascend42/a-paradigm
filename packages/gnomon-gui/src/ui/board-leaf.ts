@@ -379,7 +379,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     else headKey.setAttribute('aria-disabled', 'true');
     // design dimension-list.a11y / placement (mika D3): 'menu' when the key opens its own list, 'dialog' when the
     // room under it is too small and it opens the palette's list instead
-    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', o.dimRows && dimsRoom() >= DIMS_MIN_ROOM ? 'menu' : 'dialog');
+    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', o.dimRows && dimsRoom() >= dimsMinRoom() ? 'menu' : 'dialog');
     else headKey.removeAttribute('aria-haspopup');
     if (!failed && o.dimRows) {
       headKey.setAttribute('aria-expanded', String(dimsOpen));
@@ -918,6 +918,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   // design dimension-list (S1.3 P4b-3 rulings; mika B1, D1-D6; aegis C4.1-C4.8): the head key's own list, its own
   // builder (two-line menuitemradio rows, the mark, the note line, the find row), not menuOf
   const DIMS_MIN_ROOM = 87;
+  /** mika 6 (amends D3): with other rows than the open one, the list needs room for one more row to be a list */
+  const DIMS_MIN_ROOM_ROWS = 117;
+  const dimsMinRoom = (): number => ((o.dimRows?.().length ?? 0) > 1 ? DIMS_MIN_ROOM_ROWS : DIMS_MIN_ROOM);
   const DIMS_WIDTH = 344;
   const dimsMenuId = `bd-dims-${++menuIdSeq}`;
   const dimsMenu = h('div', 'bd-menu bd-dims', { role: 'menu', 'aria-label': DIM_LIST_COPY.menuLabel });
@@ -928,17 +931,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   let dimsDrawing = false;
   /** aegis C4.6 / mika D5: the order the rows had when the list opened; a dimension that appears joins the end */
   let dimsOrder: string[] = [];
-  let armedRow: HTMLElement | null = null;
   /** The room under the head key: from 4px below it to the foot less 8px (placement). */
   function dimsRoom(): number {
     const k = headKey.getBoundingClientRect();
     const f = foot.getBoundingClientRect();
     return f.top - 8 - (k.bottom + 4);
   }
-  const dimsDown = (): boolean => inert === 'link-down';
+  // aegis N2: held still for ANY reason of the link (down, or out of date): nothing can be opened from the list
+  const dimsDown = (): boolean => inert !== null;
   function dimRowEl(r: DimensionRow): HTMLButtonElement {
     const row = h('button', 'bd-dr', { type: 'button', role: 'menuitemradio', tabindex: '-1', 'data-dim': r.dim }) as HTMLButtonElement;
-    row.append(h('span', 'dm', { 'aria-hidden': 'true' }), h('span', 't'), h('span', 'at'), h('span', 'l2'));
+    row.append(h('span', 'dm', { 'aria-hidden': 'true' }), h('span', 't', { dir: 'auto' }), h('span', 'at'), h('span', 'l2'));
     return row;
   }
   /** A row's words, in place (a focused row is never rebuilt): set by textContent only (aegis C4.2). */
@@ -973,6 +976,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         const sig = JSON.stringify([r.mark, r.title, r.time, r.lead, r.line2, r.bad, r.current, down]);
         if (e.sig !== sig) paintDimRow(e.row, r, down);
         e.sig = sig;
+        // aegis N3: what the press compares is what the row says now
+        e.seen = r.seen;
         e.current = r.current;
         return e;
       });
@@ -1049,7 +1054,6 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   function closeDims(back: boolean): void {
     if (!dimsOpen) return;
     dimsOpen = false;
-    armedRow = null;
     if (back) headKey.focus({ preventScroll: true });
     dimsMenu.remove();
     headKey.setAttribute('aria-expanded', 'false');
@@ -1057,11 +1061,9 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   function onDimsPress(e: MouseEvent): void {
     const row = (e.target as HTMLElement | null)?.closest?.('.bd-dr, .bd-dfind') as HTMLElement | null;
     if (!row) return;
-    // aegis C4.8: a trusted press ON the row: a click, or Enter or Space that went down on this row
-    const keyed = e.detail === 0;
-    const armed = armedRow === row;
-    armedRow = null;
-    if (e.isTrusted !== true || (keyed && !armed)) return;
+    // aegis C4.8: a trusted press ON the row (a click, or Enter or Space on it: a held key's repeats are dropped in
+    // dimsKey). N6: no 'the key went down on this row' rule, which refused an assistive technology's activation
+    if (e.isTrusted !== true) return;
     // aegis C4.7 / state-notes link-down: nothing is sent and nothing is queued; the line is said again
     if (row.getAttribute('aria-disabled') === 'true') return void (dimsDown() && say(DIM_LIST_COPY.down));
     if (row === dimsFind) {
@@ -1084,7 +1086,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       return drawDims();
     }
     closeDims(true);
-    say(DIM_LIST_COPY.opening);
+    say(LEAF_COPY.loading);
   }
   /** design dimension-list.keyboard, inside the menu. True when the key was the menu's. */
   function dimsKey(e: KeyboardEvent, active: HTMLElement): boolean {
@@ -1103,11 +1105,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (e.key === 'Home') return go(0), stop();
     if (e.key === 'End') return go(items.length - 1), stop();
     // aegis I-1 / C4.8: only a fresh Enter or Space ON the row presses it (a held key, the key that opened the menu, never)
-    if (e.key === 'Enter' || e.key === ' ') {
-      if (e.repeat) return e.preventDefault(), true;
-      armedRow = active;
-      return true;
-    }
+    if (e.key === 'Enter' || e.key === ' ') return e.repeat && e.preventDefault(), true;
     if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
       // typeahead moves focus only: it never opens a row (aegis C4.8)
       const ch = e.key.toLowerCase();
@@ -1750,11 +1748,11 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     if (load === 'failed') return start();
     if (dimsOpen) return closeDims(true);
     // the list hangs under the key when there is room for its open row, the rule and the find row (mika D3)
-    if (o.dimRows && e.isTrusted && dimsRoom() >= DIMS_MIN_ROOM) return openDims();
+    if (o.dimRows && e.isTrusted && dimsRoom() >= dimsMinRoom()) return openDims();
     o.onDimensions?.(e);
   });
   headKey.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted && load !== 'failed' && dimsRoom() >= DIMS_MIN_ROOM) {
+    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted && load !== 'failed' && dimsRoom() >= dimsMinRoom()) {
       e.preventDefault();
       openDims();
     }

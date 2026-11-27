@@ -26,7 +26,7 @@ import { hhmm } from '../core/loops.js';
 /** S1.4 E3: the folded board's edge tab while a notice about your marks stands */
 const UNDO_TAB = ' · your marks changed';
 import { boardAgentName, cutoutAt, handName, sessionShort, traceOutCopy, traceOutOfView } from '../core/board-overlay.js';
-import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, rowStillHolds, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
+import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planListPress, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
 
@@ -554,18 +554,18 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     } else if (cur && cur.session === e.session && !e.session.openedOk) drop();
   });
 
-  function carry(plan: BoardPlan, event: Event, altB = false, typed = false): void {
-    if (event.isTrusted !== true) return; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
+  function carry(plan: BoardPlan, event: Event, altB = false, typed = false): boolean {
+    if (event.isTrusted !== true) return false; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
     // a HELD key is one press: its repeats open, leave and drop nothing (checked before the open board is left)
-    if ((event as Partial<KeyboardEvent>).repeat === true) return;
-    if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info');
+    if ((event as Partial<KeyboardEvent>).repeat === true) return false;
+    if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info'), false;
     const hsid = d.focused();
-    if (!hsid) return;
-    if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn');
-    if (cur && cur.session.dim === plan.dim) return void cur.leaf.handle()?.focus();
+    if (!hsid) return false;
+    if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn'), false;
+    if (cur && cur.session.dim === plan.dim) return cur.leaf.handle()?.focus(), false;
     // aegis F1: opening another board (a list row, ⌘K, /board, the menu) would take words held by a too-short board:
     // refused, and the held line said again, as a fold is
-    if (cur && cur.leaf.holdsWords()) return cur.leaf.sayHeld();
+    if (cur && cur.leaf.holdsWords()) return cur.leaf.sayHeld(), false;
     if (cur) {
       // one leaf: the open dimension is left first, and what it lost is said
       const old = cur.session;
@@ -583,6 +583,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     const session = d.sessions.open({ dim: plan.dim, hsid, opened: how, ...(fresh ? { title: fresh.title, titleFrom: fresh.titleFrom } : {}) }, event);
     mount(session, { title: plan.title, how });
     if (plan.type === 'open' && plan.reopens && !foldedHere.has(plan.dim)) cur?.leaf.say(KEEP_COPY.reopens);
+    return true;
   }
 
   tab.addEventListener('click', (e) => carry(planBoardKey(ask()), e));
@@ -613,15 +614,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       });
     },
     choose(dim, event, seen) {
-      const l = listingOf(dim);
-      const pend = opening.get(dim);
-      const hsid = d.focused();
-      // aegis C4.5: the plan is made from the listing AT THE PRESS; a row whose ended or attached changed since it was
-      // drawn sends nothing (the list redraws it), so 'opening attaches this session' is what the person read
-      if (l && seen && !rowStillHolds(seen, l)) return false;
-      if (l) return carry(planBoardRow(l, hsid), event), true;
-      if (pend) return carry(hsid ? { type: 'open', dim, attach: false, reopens: false, title: pend.title } : { type: 'none', why: 'no-session' }, event), true;
-      return false;
+      // aegis C4.5 / I3: planned from the listing AT THE PRESS; a listed row with no `seen`, or whose ended or
+      // attached changed since it was drawn, sends nothing (the list redraws it). N1: true only when it was sent
+      const plan = planListPress(listingOf(dim) ?? null, opening.get(dim) ?? null, dim, d.focused(), seen);
+      return plan ? carry(plan, event) : false;
     },
     escape(event) {
       if (!cur || cur.leaf.el.contains(document.activeElement)) return false;
@@ -667,7 +663,11 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       }
       paintTab();
     },
-    repaint: paintTab,
+    repaint: () => {
+      paintTab();
+      // aegis N3: rows of other dimensions changed (who is attached, folded): the open list says so in place
+      cur?.leaf.refreshDims?.();
+    },
     hasBoard: () => !!cur || !!ask().last,
     isOpen: () => !!cur,
     cardBlocked() {

@@ -2094,3 +2094,8 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-dims > .bd-dr { flex: none; }
 .pal-kbd.bad { color: var(--fail); }
 .pal-row .pal-mark { flex: none; width: 14px; color: var(--ink); }
+/* mika 4 (D6 in the palette): the open board's row takes no fill when selected, only the ring */
+.pal-row.sel[aria-current="true"] { background: none; box-shadow: inset 0 0 0 2px var(--key-edge); }
+/* mika 5: the find row's focus is the rows' inset ring; mika 7: a disabled row takes no hover fill */
+.bd-dims .bd-dfind:focus-visible { box-shadow: inset 0 0 0 2px var(--key-edge); }
+.bd-dr[aria-disabled="true"]:hover { background: none; }
