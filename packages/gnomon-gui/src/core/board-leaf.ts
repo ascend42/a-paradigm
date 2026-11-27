@@ -389,9 +389,10 @@ export const UNDO_COPY = Object.freeze({
   /** E3 review C5 (the orchestrator's words, for Luna): the other two holds, on a key's title and description */
   catchingUp: 'Catching up with the board · this can be pressed in a moment',
   outOfDate: 'This board is out of date · fold it and open it again',
-  pushedOut: (name: string, at: string): string => `An older change of ${name}’s from ${at} can’t be undone in one step now`,
+  pushedOut: (name: string, at: string): string => `An older change of ${name}’s${at ? ` from ${at}` : ''} can’t be undone in one step now`,
   /** E3 r3 (the orchestrator's words, for Luna): a notice dismissed on another page, or unpinned by the mod */
-  noLonger: (name: string, at: string): string => `${name}’s change from ${at} is no longer on the strip`,
+  // (E3 r4 F3, the orchestrator's words: what it means for the person, not where it went)
+  noLonger: (name: string, at: string): string => `${name}’s change${at ? ` from ${at}` : ''} can’t be undone from here now`,
   attrOff: 'Who changed what couldn’t be checked · the marks themselves match',
   /** the partial tail: changed since, removed since, couldn't be put back, joined by ', ' */
   skipped: (k: { changed: number; gone: number; refused: number }): string =>

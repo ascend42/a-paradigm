@@ -68,9 +68,12 @@ describe('E3 review D4 (Mika): the +k and undo keys\' names', () => {
 });
 
 describe('E3 r3 item 5: the words of a notice the mod let go', () => {
-  it('"<Name>\'s change from <time> is no longer on the strip"; the ninth keeps the push-out words', async () => {
+  it('"<Name>\'s change from <time> can\'t be undone from here now"; the ninth keeps the push-out words', async () => {
     const { undoLine } = await import('../src/core/board-leaf.js');
-    expect(undoLine({ code: 'no-longer', at: 0 }, 'Claude', () => '14:20')).toBe('Claude’s change from 14:20 is no longer on the strip');
+    expect(undoLine({ code: 'no-longer', at: 0 }, 'Claude', () => '14:20')).toBe('Claude’s change from 14:20 can’t be undone from here now');
+    // r4 F4: no time, no ' from ' and no double space
+    expect(undoLine({ code: 'no-longer' }, 'Claude', () => '14:20')).toBe('Claude’s change can’t be undone from here now');
+    expect(undoLine({ code: 'pushed-out' }, 'Claude', () => '14:20')).toBe('An older change of Claude’s can’t be undone in one step now');
     expect(undoLine({ code: 'pushed-out', at: 0 }, 'Claude', () => '14:20')).toBe('An older change of Claude’s from 14:20 can’t be undone in one step now');
   });
 });

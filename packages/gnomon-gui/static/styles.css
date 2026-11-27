@@ -1983,7 +1983,6 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-menu-words > span{white-space:pre;flex:none}
 .bd-menu-row > .bd-col{flex:none;min-width:0}
 .bd-menu-row [data-only]{display:none}
-.bd-menu-row.m-2 [data-only="2"]{display:none}
 .bd-menu-row.m-3 [data-only="4"],.bd-menu-row.m-4 [data-only="6"]{display:inline}
 .bd-menu-row.m-1 [data-drop="5"],.bd-menu-row.m-2 [data-drop="2"],.bd-menu-row.m-2 [data-drop="3"],.bd-menu-row.m-3 [data-drop="4"],.bd-menu-row.m-4 [data-drop="6"]{display:none}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
