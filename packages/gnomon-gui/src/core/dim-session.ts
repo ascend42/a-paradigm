@@ -37,7 +37,7 @@
  *  - `reset()` (the log was replaced, `cursor-epoch`): the `DimStore` is reset and every session destroyed.
  *  - One session per dimension. A dimension switch is `destroy()` of one and `open()` of another.
  */
-import { DIM_KINDS, DIM_MOD_ID, dimAttrDigest, dimHash, dimMayDraw, isPlainObject } from '@a-company/gnomon-contracts';
+import { DIM_KINDS, DIM_MOD_ID, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, isPlainObject } from '@a-company/gnomon-contracts';
 import type { DimActor, DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardView } from './board.js';
 import type { GnomonClient } from './client.js';
@@ -495,6 +495,7 @@ export class DimSession {
       if (!isPlainObject(r) || r.ok !== true) return fail('open-failed', refusalCodeOf(r));
       if (Number.isSafeInteger(r.seq) && typeof r.hash === 'string') this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
       this.#hashPoint(r);
+      this.#takePins(r);
       const before = this.#grantsReady;
       this.#takeGrants(r);
       this.#phase = 'open';
@@ -799,6 +800,29 @@ export class DimSession {
     this.#compareAttr();
   }
 
+  /**
+   * S1.4 E3: the mod's `pins` (open and check answers): the notices follow it. Only well-formed turn keys of
+   * `turn:<hsid>/<n>` are read (a person's act pin raises no notice: notices are agent turns), at most 8.
+   */
+  #takePins(r: Record<string, unknown>): void {
+    if (!Array.isArray(r.pins)) return;
+    const keys: string[] = [];
+    for (const o of r.pins.slice(0, 8)) {
+      if (!isPlainObject(o) || typeof o.hsid !== 'string' || typeof o.turn !== 'string') continue;
+      const t = parseTurnRef(o.turn);
+      if (t && t.hsid === o.hsid) keys.push(o.turn);
+    }
+    const store = this.#x.deps.store;
+    const seed = (turn: string): void => {
+      for (const row of store.rows(this.dim)) {
+        if (row.kind !== DIM_KINDS.op) continue;
+        const cs = dimChangeSetOf(row);
+        if (cs && cs.kind === 'turn' && cs.turn === turn) this.#notices.row(row, store.stateAt(this.dim, row.seq - 1));
+      }
+    };
+    if (this.#notices.follow(keys, seed, this.#x.deps.now())) this.#emit(null);
+  }
+
   #attrAt: { seq: number; attr: string; hash: string } | null = null;
   #compareAttr(): void {
     const a = this.#attrAt;
@@ -944,6 +968,7 @@ export class DimSession {
         if (!isPlainObject(r) || r.ok !== true || !Number.isSafeInteger(r.seq) || typeof r.hash !== 'string') return again();
         this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
         this.#hashPoint(r);
+        this.#takePins(r);
         this.#check();
         this.#emit(null);
       })

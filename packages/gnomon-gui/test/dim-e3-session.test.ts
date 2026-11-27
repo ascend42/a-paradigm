@@ -52,7 +52,7 @@ function world() {
     return { ok: true, dim: DIM, seq, hash: dimHash(store.stateAt(DIM)), applied: plan.applied, skipped: plan.skipped };
   };
   const hold = { undo: false, seen: false };
-  const o = { check: {} as { hash?: string; attr?: string }, turns: 0 };
+  const o = { check: {} as { hash?: string; attr?: string }, turns: 0, pins: null as Array<{ hsid: string; turn: string }> | null };
   const waiting: Array<() => void> = [];
   const client = {
     call: <T>(_m: string, params?: unknown): Promise<T> => {
@@ -62,7 +62,7 @@ function world() {
         const a = p.args;
         if (p.commandId === 'dim.open') {
           const row = push(DIM_KINDS.start, { title: 'Plan', attached: [HSID, AG], opened: 'command', relayedFor: human });
-          return { ok: true, created: true, dim: DIM, seq: row.seq, hash: dimHash(store.stateAt(DIM)) };
+          return { ok: true, created: true, dim: DIM, seq: row.seq, hash: dimHash(store.stateAt(DIM)), ...(o.pins ? { pins: o.pins } : {}) };
         }
         if (p.commandId === 'dim.op') {
           const row = push(DIM_KINDS.op, { ops: a.ops, ...(a.act ? { act: a.act } : {}), relayedFor: human });
@@ -70,7 +70,7 @@ function world() {
         }
         if (p.commandId === 'dim.undo') return undo(a);
         if (p.commandId === 'dim.seen') return { ok: true, dim: DIM, released: true };
-        if (p.commandId === 'dim.check') return { ok: true, dim: DIM, seq: store.stateAt(DIM).seq, hash: o.check.hash ?? dimHash(store.stateAt(DIM)), attr: o.check.attr ?? dimAttrDigest(store.stateAt(DIM)) };
+        if (p.commandId === 'dim.check') return { ok: true, dim: DIM, seq: store.stateAt(DIM).seq, hash: o.check.hash ?? dimHash(store.stateAt(DIM)), attr: o.check.attr ?? dimAttrDigest(store.stateAt(DIM)), ...(o.pins ? { pins: o.pins } : {}) };
         return { ok: true, already: true, dim: DIM, seq };
       };
       return new Promise<T>((resolve) => {
@@ -90,6 +90,7 @@ function world() {
   return {
     store, sessions, calls, of, push, turn, human, agentStamp, hold, waiting, release: () => waiting.splice(0).forEach((f) => f()),
     set check(v: { hash?: string; attr?: string }) { o.check = v; },
+    set pins(v: Array<{ hsid: string; turn: string }> | null) { o.pins = v; },
     get turns() { return o.turns; },
     set turns(v: number) { o.turns = v; },
   };
@@ -324,3 +325,30 @@ describe('E3 item 5 (aegis A1): the 1b line only when the hash matched and only 
     expect(s.status()).toMatchObject({ verified: false, attrOff: false });
   });
 });
+
+describe('E3 round 2: the notices follow the mod\'s pins', () => {
+  it('at a check, a notice whose set the mod no longer pins leaves (dismissed on another page); a pinned one stays', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    const k1 = await withNotice(w, s, 1, 10);
+    const k2 = await withNotice(w, s, 2, 11);
+    w.pins = [{ hsid: AG, turn: k1 }];
+    s.touch(press());
+    await flush(200);
+    expect(s.noticeView().shown!.key).toBe(k1);
+    expect(s.noticeView().behind).toHaveLength(0);
+    expect(w.of('dim.seen')).toHaveLength(0);
+    void k2;
+  });
+  it('a reload: the open answer\'s pins raise the notices from the rows the page already holds', async () => {
+    const w = world();
+    // an agent turn on the board before the page opened it (the backlog)
+    w.push(DIM_KINDS.start, { title: 'Plan', attached: [HSID, AG], opened: 'command', relayedFor: w.human });
+    w.push(DIM_KINDS.op, { ops: [rect(10)], act: ULID(90), relayedFor: w.human });
+    w.turn('claude', 1, [{ type: 'update', id: ULID(10), patch: { color: 'cobalt' } } as DimOp]);
+    w.pins = [{ hsid: AG, turn: `turn:${AG}/1` }];
+    const { s } = await opened(w);
+    expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, changed: 1 });
+  });
+});
+

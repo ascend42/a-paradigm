@@ -14,11 +14,12 @@
  *    (`dimActOf` of a row it followed): 'undid your change' when that act undid nothing, 'put back what you undid'
  *    when that act was itself a person's undo. Never from any row's words.
  *
- * WHAT THE MOD HOLDS. The mod pins such sets (memory only, model.mjs offerPin) and offers no read of its pins: the
- * page cannot learn which sets stand pinned, so the list here is the page's own, mirrored on the mod's rule (cap 8
- * per dimension, both kinds together; over the cap the oldest notice that is not a PERSON's goes first, else the
- * oldest: model.mjs Probe F1). A press on a notice the mod no longer holds is answered `undo-expired` or
- * `not-pinned`, and the line says so.
+ * WHAT THE MOD HOLDS. The mod pins such sets (memory only, model.mjs offerPin) and, since E3, answers them as
+ * `pins` on `dim.open` and `dim.check` (`follow`): at each answer a notice stands ONLY while its set is pinned, and a
+ * pinned turn the page has no notice for (a reload, another page) is raised from its rows. Between answers the list
+ * is the page's own mirror of the mod's rule (cap 8 per dimension, both kinds together; over the cap the oldest
+ * notice that is not a PERSON's goes first, else the oldest: model.mjs Probe F1). A press on a set the mod no
+ * longer holds is answered `undo-expired` or `not-pinned`, and the line says so.
  *
  * THE SLOT. Newest first, FROZEN while the strip is hovered, focused or its menu is open (U2): a notice arriving
  * then never takes the slot; the slot changes only by a press, the end of a redo window, or the freeze ending.
@@ -271,6 +272,27 @@ export class DimNotices {
 
   get(key: string): DimStandingNotice | null {
     return this.#list.find((x) => x.key === key) ?? null;
+  }
+
+  /**
+   * The mod's pins (an open or check answer): turn keys, oldest pin first. A standing notice whose set is not pinned
+   * leaves (dismissed on another page, pushed out); a pinned turn with no notice is raised, its rows tallied first by
+   * `seed(turn)` when the page has not tallied them. A notice in its redo window is left alone. True when it moved.
+   */
+  follow(pinned: readonly string[], seed: (turn: string) => void, now: number): boolean {
+    let moved = false;
+    for (const n of [...this.#list]) {
+      if (n.state === 'standing' && !pinned.includes(n.key)) {
+        this.remove(n.key);
+        moved = true;
+      }
+    }
+    for (const k of pinned) {
+      if (this.get(k)) continue;
+      if (!this.#tallies.has(k)) seed(k);
+      if (this.ended(k, now).raised) moved = true;
+    }
+    return moved;
   }
 
   /** A +k menu row's words were pressed: that notice takes the slot (the shown one goes back behind, still standing). */
