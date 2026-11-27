@@ -600,6 +600,17 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
       expect(v).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
       expect(v.stopped).toBeUndefined();
     });
+    it('r5: a queued turn.sent for turn 2 while turn 1 runs raises nothing (a send-time row is no proof)', async () => {
+      const w = world();
+      backlog(w);
+      const { s } = await opened(w);
+      w.sessions.apply([{ seq: 700, kind: 'turn.sent', session: AG, payload: { turn: `turn:${AG}/2` } }]);
+      w.sessions.apply([{ seq: 701, kind: 'composer', session: AG, payload: { turn: `turn:${AG}/2` } }]);
+      expect(s.noticeView().shown).toBeNull();
+      // turn 2's own row is the proof
+      w.sessions.apply([{ seq: 702, kind: 'turn.event', session: AG, payload: { turn: `turn:${AG}/2` } }]);
+      expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1` });
+    });
     it('a cold open: an old closed turn whose close is past the page\'s 256 reads ended, from its rows', async () => {
       const w = world();
       backlog(w);

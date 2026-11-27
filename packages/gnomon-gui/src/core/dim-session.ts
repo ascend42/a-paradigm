@@ -1526,6 +1526,8 @@ class LinkDown extends Error {}
 class Stale extends Error {}
 
 /** Aegis E3 r3 F-1: rows that say a session is gone (core/store.ts reads them so) */
+/** Aegis E3 r5: rows a RUNNING turn writes (never at send time: turn.sent, composer, send.refused are the person's) */
+const TURN_PRODUCED = new Set(['turn.event', 'turn.partial', 'turn.usage', 'tool.call', 'tool.brokered', 'approval.request']);
 const SESSION_GONE = new Set(['session.orphaned', 'session.exited', 'session.stop', 'session.exit', 'session.end', 'session.refused']);
 
 export class DimSessions {
@@ -1655,7 +1657,11 @@ export class DimSessions {
       if (!isPlainObject(r) || r.kind === 'turn.result') continue;
       const p = isPlainObject(r.payload) ? r.payload : {};
       const gone = SESSION_GONE.has(String(r.kind)) && typeof r.session === 'string' ? (r.session as string) : null;
-      const t = parseTurnRef(p.turn) ?? parseTurnRef(isPlainObject(p.relayedFor) ? p.relayedFor.turn : null);
+      // (Aegis E3 r5: only a row the later turn ITSELF produced proves the earlier one over; turn.sent, written when
+      // the person sends, names the next turn while this one may still run, as does any other send-time row)
+      const kind = String(r.kind);
+      const produced = TURN_PRODUCED.has(kind) || kind.startsWith('modns.');
+      const t = produced ? (parseTurnRef(p.turn) ?? parseTurnRef(isPlainObject(p.relayedFor) ? p.relayedFor.turn : null)) : null;
       if (!gone && !t) continue;
       for (const [dim, nb] of this.#notices) {
         if (nb.waiting === 0) continue;
