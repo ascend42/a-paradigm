@@ -100,9 +100,9 @@ if (existsSync(changelogPath)) {
 // ── 4. Plugin hooks.json ────────────────────────────────────
 console.log('\n\x1b[36m[Plugin]\x1b[0m');
 
-const pluginHooksPath = join(ROOT, 'plugins/paradigm/hooks.json');
+const pluginHooksPath = join(ROOT, 'plugins/paradigm/hooks/hooks.json');
 check('plugin hooks.json exists', () => {
-  if (!existsSync(pluginHooksPath)) throw new Error('plugins/paradigm/hooks.json not found');
+  if (!existsSync(pluginHooksPath)) throw new Error('plugins/paradigm/hooks/hooks.json not found');
 });
 
 if (existsSync(pluginHooksPath)) {
@@ -121,7 +121,8 @@ const paradigmDir = join(ROOT, '.paradigm');
 if (existsSync(paradigmDir)) {
   check('paradigm doctor passes', () => {
     try {
-      exec('npx paradigm doctor --quiet', { timeout: 30_000 });
+      // The built CLI of this checkout (`npx paradigm` at the root resolves the root package, and doctor has no --quiet).
+      exec(`node ${JSON.stringify(join(ROOT, 'packages/paradigm/dist/index.js'))} doctor`, { timeout: 30_000 });
     } catch {
       return 'warn';
     }
