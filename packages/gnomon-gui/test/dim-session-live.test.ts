@@ -306,4 +306,35 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 0, rows: f('drawn').rows + 1, sameAsMod: true, notices: [] });
     expect(f('undone').lastOps).toEqual(Array(pieces.length).fill('delete'));
   }, 300_000);
+
+  it('S1.4 E3 REQUIRED (Aegis): a real Delete of an agent-drawn mark and ONE real Cmd+Z go through the mod: the re-added mark keeps the agent\'s hand, drawn dashed', async () => {
+    const id = '01JD1MAGENT000000000000040';
+    const agentRow = `(() => { const payload = { v: 1, dim: ${DIM}, ops: [{ type: 'add', node: { id: '${id}', kind: 'rect', x: 120, y: 120, z: 'V', w: 160, h: 90 } }], relayedFor: { principal: 'p:7k2m9q4x/claude', surface: 'bridge', agent: 'claude', hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB', turn: 'turn:hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB/1' } }; const seq = ${L}.kernel.append('modns.gnomon.dimension.op', payload, undefined, { scope: { repo: 'repo:0123456789abcdef' } }); ${L}.mod.landedElsewhere({ seq, kind: 'modns.gnomon.dimension.op', payload }); return seq; })()`;
+    const a = await real(
+      [
+        { read: agentRow, as: 'agentSeq' }, { wait: 600 },
+        { read: `(${B}.select(['${id}']), ${B}.focus(), 1)`, as: 'asked' }, { wait: 400 }, { read: `${B}.state().selected`, as: 'picked' },
+        { key: 'Delete' }, { wait: 1200 }, facts('deleted'),
+        { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+        { read: `(() => { const rows = ${L}.dims.rows(${DIM}); const r = rows[rows.length - 1]; return JSON.stringify(r.payload.undo || null); })()`, as: 'marker' },
+        { read: `(() => { const st = ${L}.dims.stateAt(${DIM}); for (const [k, n] of st.nodes) if (n.restoredFrom) return JSON.stringify({ k, rf: n.restoredFrom }); return null; })()`, as: 'restored' },
+        { read: `JSON.stringify(${B}.marks().filter((m) => !m.labelOf).map((m) => m.author.cls))`, as: 'hands' },
+      ],
+      'empty',
+      'e3-cmdz-restore',
+    );
+    expect(a.errors).toEqual([]);
+    expect(a.picked).toBe(1);
+    expect((a.deleted as Facts).nodes).toBe(0);
+    const marker = JSON.parse(a.marker as string) as { of: { principal: string; act: string }; restored: unknown[][] };
+    expect(marker.of.act).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+    expect(marker.restored).toHaveLength(1);
+    expect(marker.restored[0]![1]).toBe(id);
+    expect(marker.restored[0]![2]).toMatchObject({ cls: 'agent', agent: 'claude' });
+    expect(JSON.parse(a.restored as string).rf.by).toMatchObject({ cls: 'agent', agent: 'claude' });
+    expect(a.undone as Facts).toMatchObject({ nodes: 1, sameAsMod: true, notices: [] });
+    // drawn in the agent's hand (dashed, sealed as the agent), never as the person's
+    expect(JSON.parse(a.hands as string)).toEqual(['agent']);
+  }, 120_000);
 });
+
