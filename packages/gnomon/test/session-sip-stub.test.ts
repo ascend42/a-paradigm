@@ -101,8 +101,9 @@ describe.runIf(process.platform === 'darwin' && MACOS_OK && SBX)('the real kerne
     if (!REAL.ok) {
       const err = await k.client.call('session.open', { cwd: w.cwd, attended: true }).then(() => null, (e: unknown) => e as { code?: string; message?: string; data?: Record<string, unknown> });
       expect(err).not.toBeNull();
-      expect(JSON.stringify(err)).toContain('sandbox-unavailable');
-      expect(JSON.stringify(err)).toMatch(/"floor":"sip"|floor: ?'?sip/);
+      // the kernel's session refusal carries the floor in its data: {sandbox: 'unavailable', profile: 'session', floor: 'sip'}
+      const data = (err as { refusal?: { data?: Record<string, unknown> } }).refusal?.data ?? (err as { data?: Record<string, unknown> }).data ?? {};
+      expect({ sandbox: data.sandbox, profile: data.profile, floor: data.floor }).toEqual({ sandbox: 'unavailable', profile: 'session', floor: 'sip' });
     } else {
       const s = await k.client.call<{ hsid: string }>('session.open', { cwd: w.cwd, attended: true });
       plain = sandboxRows(k, s.hsid)[0];
