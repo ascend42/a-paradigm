@@ -35,7 +35,9 @@ function partEl(doc: MiniDoc, p: TurnPart, turn: boolean): MiniEl {
     if (p.bidi) tail.setAttribute('dir', 'auto');
     return tail;
   }
-  const el = h(doc, 'span', { class: `${p.cls}${turn && p.cls === 'sep' && p.drop === 1 ? ' who-sep' : ''}`, ...drop }, p.text);
+  // (Mika E3 r4 F1: a leading space is its own child, so a wrapped line can start without it)
+  const lead = p.text.startsWith(' ') && p.cls !== 'sep' ? [h(doc, 'span', { class: 'sp' }, ' '), p.text.slice(1)] : [p.text];
+  const el = h(doc, 'span', { class: `${p.cls}${turn && p.cls === 'sep' && p.drop === 1 ? ' who-sep' : ''}`, ...drop }, ...lead);
   // dir=auto: an isolate, so an RTL message keeps its first words and a reply's direction cannot leak (Mika 2)
   if (p.bidi) el.setAttribute('dir', 'auto');
   return el;
@@ -251,7 +253,7 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     const right = Math.min(room?.right ?? strip.right, strip.right) - 4;
     m.style.maxWidth = '';
     m.style.right = `${Math.max(0, strip.right - k.right)}px`;
-    for (const r of m.querySelectorAll('.bd-menu-row')) r.classList.remove('m-1', 'm-2', 'm-3', 'm-4');
+    for (const r of m.querySelectorAll('.bd-menu-row')) r.classList.remove('m-1', 'm-2', 'm-3', 'm-4', 'm-wrap');
     const natural = m.scrollWidth;
     if (natural > k.right - left) {
       m.style.right = `${Math.max(0, strip.right - right)}px`;
@@ -263,6 +265,11 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       for (const level of [1, 2, 3, 4]) {
         if (w.scrollWidth <= w.clientWidth + 0.5) break;
         r.classList.add(`m-${level}`);
+      }
+      // Mika E3 r4 F2: the last resort: the row's words wrap between their parts, its time always whole
+      if (w.scrollWidth > w.clientWidth + 0.5) {
+        r.classList.add('m-wrap');
+        markLines(w);
       }
     }
   };
@@ -337,11 +344,23 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     pressWork(e);
   });
 
+  /** Mika E3 r4 F1: the parts that begin a wrapped line (a visible part lower than the one before it) */
+  function markLines(box: HTMLElement): void {
+    let top = -Infinity;
+    for (const sp of box.querySelectorAll<HTMLElement>(':scope > span')) {
+      sp.classList.remove('ln-start');
+      if (!sp.getClientRects().length) continue;
+      if (top !== -Infinity && sp.offsetTop > top) sp.classList.add('ln-start');
+      top = sp.offsetTop;
+    }
+  }
+
   /** a notice or mark row drops by core order (the time, then ' of your marks'), and last becomes two lines (R5) */
   function fitSlot(row: HTMLElement): void {
     row.classList.remove('tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5', 'tight-6', 'two-line', 'wrap');
     const line = row.querySelector<HTMLElement>('.bd-turn-line');
     if (!line) return;
+    for (const sp of line.querySelectorAll('.ln-start')) sp.classList.remove('ln-start');
     const over = (): boolean => line.scrollWidth > line.clientWidth + 0.5;
     // the notice: 1 time, 2 session cut, 3 session gone, 4 'before stopped', 5 ' of your marks', two lines, 6 the
     // name cut (Mika E3 r3 D3); the mark row: 1 time, 2 ' it'
@@ -354,7 +373,10 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
     if (row.classList.contains('bd-turn-mark')) return;
     row.classList.add('two-line');
     if (over()) row.classList.add('tight-6');
-    if (over()) row.classList.add('wrap');
+    if (over()) {
+      row.classList.add('wrap');
+      markLines(line);
+    }
   }
 
   /** the turn row drops by core order until it fits: reply (when it overflows or is cut to nothing), name, more */

@@ -62,9 +62,9 @@ const toDecide = [{ key: 'k', meta: true }, { wait: 200 }, ...type2('Layout: Dec
 const LONG = (n = 1) => turn(n, `return [{ type: 'delete', id: mine[1] }, { type: 'update', id: mine[0], patch: { color: 'leaf' } }];`, { extra: `{ undo: { of: { principal: 'p:7k2m9q4x/matt', act: acts[acts.length - 1] } } }` });
 /** every drawn part of the notice's words: is any cut inside (an ellipsis), and the words as painted */
 const PARTS = { read: `(() => { const row = document.querySelector('#board-turn .bd-turn-notice'); const line = row.querySelector('.bd-turn-line');
-  const parts = [...line.querySelectorAll('span')].filter((e) => getComputedStyle(e).display !== 'none' && e.getClientRects().length);
+  const parts = [...line.querySelectorAll(':scope > span')].filter((e) => getComputedStyle(e).display !== 'none' && e.getClientRects().length);
   const leaf = document.querySelector('.bd-host .bd-leaf');
-  return { leafW: Math.round(leaf.getBoundingClientRect().width), stripW: Math.round(document.querySelector('#board-turn').getBoundingClientRect().width), cut: parts.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent), painted: parts.filter((e) => !e.querySelector('span')).map((e) => e.textContent).join(''), over: line.scrollWidth > line.clientWidth + 0.5, cls: row.className }; })()`, as: 'parts' };
+  return { leafW: Math.round(leaf.getBoundingClientRect().width), stripW: Math.round(document.querySelector('#board-turn').getBoundingClientRect().width), cut: parts.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent), painted: parts.map((e) => e.textContent).join(''), over: line.scrollWidth > line.clientWidth + 0.5, cls: row.className }; })()`, as: 'parts' };
 type Parts = { leafW: number; stripW: number; cut: string[]; painted: string; over: boolean; cls: string };
 const BOX = (q: string) => `(() => { const e = document.querySelector(${JSON.stringify(q)}); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; })()`;
 const MENU_FOOT = { read: `({ menu: ${BOX('#board-turn .bd-undo-menu')}, foot: ${BOX('.bd-host .bd-foot')}, stage: ${BOX('.bd-host .bd-stage')}, more: ${BOX('#board-turn [data-undo-key^="more|"]')}, after: (() => { const m = document.querySelector('#board-turn .bd-undo-menu'); return m && m.previousElementSibling ? m.previousElementSibling.dataset.undoKey || null : null; })(), role: (() => { const m = document.querySelector('#board-turn .bd-undo-menu'); return m ? [m.getAttribute('role'), ...[...m.querySelectorAll('[role]')].map((e) => e.getAttribute('role'))] : null; })() })`, as: 'mf' };
@@ -166,7 +166,9 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
   const LONG_NAME = 'billing-totals-review-agent';
   /** the long form by an agent whose label is long */
   const LONGN = (n = 1) => { const t = LONG(n) as { read: string; as: string }; return { ...t, read: t.read.split("agent: 'claude'").join(`agent: '${LONG_NAME}'`).split('p:7k2m9q4x/claude').join(`p:7k2m9q4x/${LONG_NAME}`) }; };
-  const SHOTS_R3 = '../../.e3fix-logs/shots/r3';
+  /** the visible text that begins each wrapped line of the notice (Mika r4 F1) */
+  const STARTS = { read: `[...document.querySelectorAll('#board-turn .bd-turn-notice .bd-turn-line .ln-start')].map((e) => [...e.childNodes].filter((c) => !(c.nodeType === 1 && getComputedStyle(c).display === 'none')).map((c) => c.textContent).join(''))`, as: 'starts' };
+  const SHOTS_R3 = '../../.e3fix-logs/shots/r4';
   const realShot = async (actions: unknown[], o: { width: number; height: number; shot: string; theme?: string }): Promise<Record<string, unknown>> => {
     const { mkdirSync, writeFileSync } = await import('node:fs');
     const r = (await shootLeaf({ chrome, url: `${fixtureUrl(p.url, 'desk', o.theme ?? 'day', 'off')}&dim=1`, width: o.width, height: o.height, timeoutMs: 90_000, actions: [ERRORS, ...actions, { read: 'globalThis.__errs', as: 'errors' }] })) as { png: Buffer; acted: Record<string, unknown> };
@@ -177,7 +179,7 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
   for (const o of [{ leaf: 423, decide: false }, { leaf: 303, decide: true }])
     for (const theme of ['day', 'night'])
       it(`r3 D3 (real paint): at the ${o.leaf} leaf a long agent name is cut, never the counts or the undid lead (${theme})`, async () => {
-        const a = await realShot([...openBoard, ...rectAt(160, 160), ...rectAt(320, 160), LONGN(), ...(o.decide ? [{ press: '#composer-text' }, ...toDecide] : []), { wait: 700 }, PARTS], { width: 1024, height: 900, theme, shot: `long-name-${theme}-leaf${o.leaf}` });
+        const a = await realShot([...openBoard, ...rectAt(160, 160), ...rectAt(320, 160), LONGN(), ...(o.decide ? [{ press: '#composer-text' }, ...toDecide] : []), { wait: 700 }, PARTS, STARTS], { width: 1024, height: 900, theme, shot: `long-name-${theme}-leaf${o.leaf}` });
         expect(a.errors).toEqual([]);
         const s = a.parts as Parts;
         expect(Math.abs(s.leafW - o.leaf)).toBeLessThanOrEqual(2);
@@ -187,11 +189,15 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
         expect(s.painted).not.toContain(LONG_NAME);
         expect(s.painted).toMatch(/^billing-tota…/);
         expect(s.cls).toMatch(/two-line/);
+        // Mika r4 F1: a wrapped line never starts with a space
+        const starts = a.starts as string[];
+        if (s.cls.includes('wrap')) expect(starts.length).toBeGreaterThan(0);
+        for (const t of starts) expect(t.startsWith(' '), JSON.stringify(starts)).toBe(false);
       }, 120_000);
 
   const MENU_ROWS = { read: `(() => { const b = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }; const m = document.querySelector('#board-turn .bd-undo-menu');
     return { menu: b(m), stage: b(document.querySelector('.bd-host .bd-stage')), foot: b(document.querySelector('.bd-host .bd-foot')), leafW: Math.round(document.querySelector('.bd-host .bd-leaf').getBoundingClientRect().width),
-      rows: [...m.querySelectorAll('.bd-menu-row')].map((row) => { const w = row.querySelector('.bd-menu-words'); const parts = [...w.querySelectorAll('span')].filter((e) => getComputedStyle(e).display !== 'none'); return { key: b(row.querySelector('[data-undo-key^="undo|"]')), words: parts.map((e) => e.textContent).join(''), clipped: w.scrollWidth > w.clientWidth + 0.5 }; }) }; })()`, as: 'rows' };
+      rows: [...m.querySelectorAll('.bd-menu-row')].map((row) => { const w = row.querySelector('.bd-menu-words'); const parts = [...w.querySelectorAll(':scope > span')].filter((e) => getComputedStyle(e).display !== 'none'); return { key: b(row.querySelector('[data-undo-key^="undo|"]')), words: parts.map((e) => e.textContent).join(''), clipped: w.scrollWidth > w.clientWidth + 0.5 }; }) }; })()`, as: 'rows' };
   type MenuRows = { menu: NonNullable<Box>; stage: NonNullable<Box>; foot: NonNullable<Box>; leafW: number; rows: Array<{ key: NonNullable<Box>; words: string; clipped: boolean }> };
   const inside = (a: NonNullable<Box>, b: NonNullable<Box>): boolean => a.l >= b.l - 0.5 && a.r <= b.r + 0.5 && a.t >= b.t - 0.5 && a.b <= b.b + 0.5;
   for (const o of [{ leaf: 303, width: 1024, decide: true }, { leaf: 423, width: 1024, decide: false }, { leaf: 560, width: 1161, decide: false }])
@@ -210,4 +216,20 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 review fixes in the real a
           expect(r.clipped).toBe(false);
         }
       }, 120_000);
+
+  const LONG_RECOLOUR = (n: number, i: number) => { const t = turn(n, recolour(i)) as { read: string; as: string }; return { ...t, read: t.read.split("agent: 'claude'").join(`agent: '${LONG_NAME}'`).split('p:7k2m9q4x/claude').join(`p:7k2m9q4x/${LONG_NAME}`) }; };
+  for (const theme of ['day', 'night'])
+    it(`r4 F2: at the 303 leaf with a long agent name, every +k menu row's time is wholly visible (${theme})`, async () => {
+      const TIMES = { read: `(() => { const b = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }; const m = document.querySelector('#board-turn .bd-undo-menu');
+        return { menu: b(m), rows: [...m.querySelectorAll('.bd-menu-row')].map((row) => { const w = row.querySelector('.bd-menu-words'); const t = w.querySelector('.t'); return { words: b(w), t: t && getComputedStyle(t).display !== 'none' ? b(t) : null, key: b(row.querySelector('[data-undo-key^="undo|"]')), cls: row.className }; }) }; })()`, as: 'times' };
+      const a = await realShot([...openBoard, ...rectAt(30, 120), ...rectAt(110, 120), ...rectAt(190, 120), LONG_RECOLOUR(1, 0), LONG_RECOLOUR(2, 1), LONG_RECOLOUR(3, 2), { press: '#composer-text' }, ...toDecide, { wait: 600 }, ARM, { press: KEY('more') }, ARM, TIMES], { width: 1024, height: 900, theme, shot: `menu-${theme}-leaf303-long` });
+      expect(a.errors).toEqual([]);
+      const m = a.times as { menu: NonNullable<Box>; rows: Array<{ words: NonNullable<Box>; t: Box; key: NonNullable<Box>; cls: string }> };
+      expect(m.rows).toHaveLength(2);
+      for (const r of m.rows) {
+        expect(r.t, r.cls).not.toBeNull();
+        expect(inside(r.t!, r.words)).toBe(true);
+        expect(inside(r.key, m.menu)).toBe(true);
+      }
+    }, 120_000);
 });
