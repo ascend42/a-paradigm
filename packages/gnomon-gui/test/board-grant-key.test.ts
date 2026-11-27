@@ -34,9 +34,12 @@ const keep = (name: string, png: Buffer): void => {
 };
 
 const chrome = findChrome() as string | null;
-describe.skipIf(!!process.env.CI || !chrome)('S1.4 P4b the draw key and the removed mark, in a real engine', () => {
+// (GNOMON_BROWSER_TESTS=1, the `board-browser` job of .github/workflows/gnomon.yml on macos-15: runs, and a missing Chrome FAILS)
+const ASKED = process.env.GNOMON_BROWSER_TESTS === '1';
+describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('S1.4 P4b the draw key and the removed mark, in a real engine', () => {
   let p: { url: string; close: () => Promise<void> };
   beforeAll(async () => {
+    expect(chrome, 'GNOMON_BROWSER_TESTS=1 and no Chrome on this host (set GNOMON_CHROME to its path)').not.toBeNull();
     p = await startPreview({ port: 0 });
   }, 60_000);
   afterAll(() => p.close());
