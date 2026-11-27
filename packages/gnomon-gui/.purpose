@@ -24,6 +24,11 @@ description: >-
 components:
   gui-board:
     description: >-
+      S1.4 E-fix (T-2026-11-27-006): after the person's undo of an agent's
+      restyle and re-word the board draws no countermark and no words sign,
+      and the redo brings both back (the preview stand-in writes undo.prior as
+      the mod does; test/board-e3-app.test.ts). Mika's copy: the sandbox line
+      reads 'this Mac can’t sandbox it'.
       S1.4 D-list pass (design hands_foot.overflow, T-2026-11-26-004): the
       hands foot's '+<k> ▾' key (ui/board-leaf.ts moreKey, drawHandsMenu):
       hands that still do not fit after the give-way steps go behind it,

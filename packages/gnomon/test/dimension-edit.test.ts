@@ -266,7 +266,9 @@ describe('#dimension-mod E1 items 3 and 4: dim.undo of a held change-set (Arky Â
     const row = w.opRows().at(-1)!;
     const p = row.payload as Record<string, unknown>;
     expect(p.act).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/);
-    expect(p.undo).toEqual({ of: turnOf(B, 1), restored: [[back.node.id, ulid(3), { cls: 'human', principal: HUMAN }]] });
+    // E-fix (T-2026-11-27-006): the marks undone whole carry the attribution they had before the turn (none here)
+    expect(p.undo).toEqual({ of: turnOf(B, 1), restored: [[back.node.id, ulid(3), { cls: 'human', principal: HUMAN }]], prior: [[ulid(2), null, null], [ulid(1), null, null]] });
+    for (const id of [ulid(1), ulid(2)]) expect([page.nodes.get(id)!.otherBy, page.nodes.get(id)!.wordsBy]).toEqual([undefined, undefined]);
     expect((p.relayedFor as Record<string, unknown>).surface).toBe('gui');
     const turns = w.state().turns as unknown[][];
     expect(turns.find((e) => e[0] === B)![2]).toBe(4);
@@ -565,7 +567,7 @@ describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids 
     expect(dimAttrDigest(page)).not.toBe(chk.attr);
   });
 
-  it('changes entries carry their set id and, on an honoured undo row, undo: {of}; attribution is compact (indices into hands)', { timeout: 60_000 }, async () => {
+  it('changes entries carry their set id and, on an honoured undo row, undo: {of}; attribution is compact (indices into hands), and the person\'s full undo clears otherBy', { timeout: 60_000 }, async () => {
     const w = await editRig();
     const dim = await board(w);
     const act = ulid(4, '01JDAC');
@@ -584,7 +586,8 @@ describe('#dimension-mod E1 item 6: attr beside hash (Aegis G7); change-set ids 
     const hands = v.hands as Array<Record<string, unknown>>;
     expect(typeof n.changedBy).toBe('number');
     expect(hands[n.changedBy as number]).toEqual({ cls: 'human', principal: HUMAN });
-    expect(hands[n.otherBy as number]).toMatchObject({ cls: 'agent', agent: 'claude' });
+    // E-fix (T-2026-11-27-006): the person's own honoured full undo puts the mark's signs back to none
+    expect([n.otherBy, n.wordsBy]).toEqual([undefined, undefined]);
     expect(n.by).toEqual({ cls: 'human', principal: HUMAN });
   });
 

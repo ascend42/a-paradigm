@@ -9,7 +9,7 @@
  * file's order, with no keyframes, no state store and no cold read. The host around it (the gesture check, the
  * stamp, `hsid` and `repo`) is the fake kernel's.
  */
-import { DIM_KINDS, dimAttrDigest, dimChangeSetOf, dimMayDraw, emptyDimGrants, foldDim, planDimUndo } from '@a-company/gnomon-contracts';
+import { DIM_KINDS, dimAttrDigest, dimChangeSetOf, dimMayDraw, dimUndoPriorOf, emptyDimGrants, foldDim, planDimUndo } from '@a-company/gnomon-contracts';
 import type { DimChangeSet, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
 import { mintDimNodeId } from '../core/dim-session.js';
 // @ts-ignore the mod's own plain .mjs (no types): bundled into the preview only
@@ -219,7 +219,8 @@ export class PreviewDimMod {
 
   /**
    * STAND-IN of index.mjs `dim.undo` (S1.4 E1): the set's rows from the noted history, `planDimUndo` as the person,
-   * packed into rows each carrying a fresh act and the `undo` marker with its `restored` entries (G5). No pins, no
+   * packed into rows each carrying a fresh act and the `undo` marker with its `restored` entries (G5) and its `prior`
+ * entries (E-fix). No pins, no
    * continuation memory, no keyframes: a set not in the history is `undo-expired`.
    */
   #undo(a: { dim: string; of: DimChangeSet; ids?: string[] }, e: { state: DimState }, write: (kind: string, payload: Record<string, unknown>) => number | Answer, actor: { cls: 'human'; principal: string }, stamp: Record<string, string>): Answer {
@@ -244,7 +245,9 @@ export class PreviewDimMod {
     const payloadOf = (ops: DimOp[]): Record<string, unknown> => {
       const adds = new Set(ops.flatMap((o) => (o.type === 'add' ? [(o.node as { id: string }).id] : [])));
       const restored = plan.restored.filter((r) => adds.has(r[0]));
-      return { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}) } };
+      // E-fix (T-2026-11-27-006): the person's undo carries the prior attribution of the marks it undoes whole
+      const prior = dimUndoPriorOf(plan.prior, ops);
+      return { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}), ...(prior.length ? { prior } : {}) } };
     };
     // as index.mjs undoCore packs: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside
     // CALL_BYTES; what does not fit is left for the next press (`more`). An op that fits no row alone is refused.

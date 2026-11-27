@@ -367,9 +367,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(mcpJsonText(r.w).includes('gnomon-mods')).toBe(false);
     await r.k.client.call('session.stop', { hsid: s4.hsid });
   }, 180_000);
-  it.todo('B (E-fix T-2026-11-27-006: clear otherBy/wordsBy on the person\'s full undo): after the person\'s honoured full undo of an agent\'s turn, the restored mark carries no otherBy or wordsBy (Aegis I-1, after S1.4 P5)');
-
-  it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back under their own hand (G5); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
+  it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back under their own hand (G5), with no changed-by or words sign (E-fix); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
     const r = await boardRig('mbB-');
     const P = await guiPage(r.k, cleanups);
     const s = await r.k.client.call<{ hsid: string }>('session.open', { cwd: r.w.cwd, attended: true });
@@ -413,10 +411,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     const f2 = fold();
     const back = f2.nodes.get(H(1))! as unknown as Record<string, unknown>;
     expect([(back.node as Record<string, unknown>).label, (back.node as Record<string, unknown>).color, back.by]).toEqual(['API', undefined, humanBy]);
-    // Aegis I-1 (S1.4 P5 review): today otherBy/wordsBy survive the person's own honoured full undo, so the restored mark
-    // still carries the agent's changed-by sign. Task T-2026-11-27-006 ("E-fix: clear otherBy/wordsBy on the person's full undo") clears them;
-    // its expectation, which this test takes on then:
-    //   expect([back.otherBy, back.wordsBy]).toEqual([undefined, undefined]);
+    // E-fix (T-2026-11-27-006; Aegis I-1, S1.4 P5 review): the person's own honoured full undo puts H1's signs back to
+    // none (the undo row's `prior` entry, honoured by the fold), so the restored mark shows no changed-by or words sign
+    expect([back.otherBy, back.wordsBy]).toEqual([undefined, undefined]);
     const readded = [...f2.nodes.entries()].filter(([id]) => id !== H(1));
     expect(readded).toHaveLength(1);
     const [newId, h2] = readded[0]! as [string, Record<string, unknown>];
@@ -448,6 +445,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(t3.length).toBeGreaterThan(0);
     expect(t3.map((x) => (x.event.payload.undo as { of?: unknown } | undefined)?.of)).toEqual(t3.map(() => ({ principal: undoSet.principal, act: undoSet.act })));
     expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'Gateway', 10_000)).toBe(true);
+    // the agent's undo of the person's undo is the agent's change: its signs come back (E-fix redo rule)
+    const re = fold().nodes.get(H(1))! as unknown as Record<string, { cls?: string } | undefined>;
+    expect([re.otherBy?.cls, re.wordsBy?.cls]).toEqual(['agent', 'agent']);
     const pins3 = (await cmd('dim.check', {})).pins as Array<Record<string, unknown>>;
     expect(pins3.some((p) => p.hsid === hsid && p.turn === `turn:${hsid}/3`), JSON.stringify(pins3)).toBe(true); // pinned because it undid a person's set (the mod's internal undidPerson)
 
@@ -456,6 +456,9 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     const redo = await cmd('dim.undo', { of: { hsid, turn: `turn:${hsid}/3` } });
     expect(redo, JSON.stringify(redo)).toMatchObject({ ok: true });
     expect(await waitFor(() => fold().nodes.get(H(1))?.node.label === 'API', 10_000)).toBe(true);
+    // the person's redo is their honoured full undo of the agent's turn: the signs are cleared again
+    const again = fold().nodes.get(H(1))!;
+    expect([again.otherBy, again.wordsBy]).toEqual([undefined, undefined]);
     // Judge N2: the M4 sweep after B too: every turn-caused row of the dimension principal is .op or .draw.refused
     const turnCaused = [...r.k.handle.log.read({ reader: { class: 'human' } })].map((x) => (x as unknown as { event: { kind: string; principal: string; causes?: string[] } }).event).filter((e) => e.principal.endsWith('/mod-gnomon.dimension') && (e.causes ?? []).some((c) => c.startsWith('turn:')));
     expect(turnCaused.length).toBeGreaterThan(0);

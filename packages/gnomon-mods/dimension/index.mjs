@@ -12,7 +12,7 @@
 //  - every check, the 512 cap and the row-size check included, runs BEFORE the append;
 //  - mod state and the in-memory fold change only AFTER the append returned a seq;
 //  - a refusal is a code and a fixed sentence, never input.
-import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, dimOpOid, dimRowBy, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, planDimUndo, validateDimOps } from './dim-shape.mjs';
+import { DIM_AUX_KINDS, DIM_KINDS, DIM_LIMITS, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, dimOpOid, dimRowBy, dimUndoPriorOf, emptyDimGrants, emptyDimState, foldDim, foldDimGrants, planDimUndo, validateDimOps } from './dim-shape.mjs';
 import {
   ATTACH_CAP,
   DIM_CAP,
@@ -1157,7 +1157,8 @@ async function undoTool(host, dim, entry, actor, a, stamp, cancelled) {
  * E2, the agent's `dim-undo`. Plans the undo of one HELD change-set with the published `planDimUndo` as `o.actor`
  * (the undoer: never "as a human" for a tool), per-node validated (G3), against the newest fold; packs the plan into
  * at most CALL_ROWS rows inside the call's bytes, each row carrying `act` and the mod-built `undo` marker (its
- * restored entries only for the re-adds IN that row, as `dimUndoMarkOf` honours them); appends them through
+ * restored entries only for the re-adds IN that row, and on a person's undo its prior entries only for the marks
+ * that row updates or moves, as `dimUndoMarkOf` honours them); appends them through
  * `o.appendRow`, and moves the fold and the history after each returned seq only. `o.fit(planOps, restored)` (E2: charges
  * the turn and foreign budgets) answers how many of the plan's ops may be sent, after planning and before the first
  * append; `o.between()` (E2: the grant re-check, M9) runs before each row after the first and stops the rest when
@@ -1174,7 +1175,10 @@ async function undoCore(host, dim, entry, o) {
   const marker = (ops) => {
     const added = new Set(ops.filter((op) => op.type === 'add').map((op) => op.node.id));
     const restored = plan.restored.filter((e) => added.has(e[0])).map((e) => (e.length > 3 ? [e[0], e[1], e[2], e[3] ?? null, e[4] ?? null] : [e[0], e[1], e[2]]));
-    return { of: ofOf(o.cs), ...(o.ids ? { ids: [...o.ids] } : {}), ...(restored.length > 0 ? { restored } : {}) };
+    // E-fix (T-2026-11-27-006): on the PERSON's undo, the attribution each mark this row undoes whole had before the
+    // set, as dimUndoMarkOf honours it (an update or a move of this row); an agent's undo is a change and carries none
+    const prior = o.undoer?.cls === 'human' ? dimUndoPriorOf(plan.prior, ops) : [];
+    return { of: ofOf(o.cs), ...(o.ids ? { ids: [...o.ids] } : {}), ...(restored.length > 0 ? { restored } : {}), ...(prior.length > 0 ? { prior } : {}) };
   };
   const payloadOf = (ops) => opPayload(dim, ops, undefined, { act: o.act, undo: marker(ops) });
   // pack: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside CALL_BYTES

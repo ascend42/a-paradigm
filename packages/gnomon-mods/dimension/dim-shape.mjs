@@ -960,6 +960,35 @@ function applyOp(d, op, by, hsid, seq, restored) {
       return false;
   }
 }
+function personsUndo(mark, by) {
+  if (by.cls !== "human") return false;
+  return mark.of.kind === "turn" || mark.of.principal === by.principal;
+}
+function settlePrior(pre, now, e, of, undoer, seq, wroteWords) {
+  const original = now.restoredFrom?.by ?? now.by;
+  const ob = pre.otherBy;
+  const newestIsSet = ob !== void 0 && pre.changedSeq === pre.otherSeq && pre.changedBy !== void 0 && sameHand(pre.changedBy, ob) && (of.kind === "turn" ? ob.cls === "agent" && pre.changedHsid === of.hsid : sameHand(ob, undoer));
+  const out = { ...now };
+  const sign = (h) => !!h && h.cls !== "human" && !sameHand(h, original);
+  const put = (k, s, h) => {
+    if (h && !sameHand(h, original)) out[k] = h, out[s] = seq;
+    else delete out[k], delete out[s];
+  };
+  if (sign(e.otherBy)) put("otherBy", "otherSeq", e.otherBy);
+  else if (newestIsSet) put("otherBy", "otherSeq", e.otherBy);
+  if (sign(e.wordsBy)) put("wordsBy", "wordsSeq", e.wordsBy);
+  else if (newestIsSet && wroteWords && pre.wordsBy !== void 0 && sameHand(pre.wordsBy, ob) && pre.wordsSeq === pre.changedSeq) put("wordsBy", "wordsSeq", e.wordsBy);
+  return out;
+}
+function opTargets(op) {
+  if (!isPlainObject(op)) return { ids: [], words: false };
+  if (op.type === "update" && typeof op.id === "string" && isPlainObject(op.patch)) {
+    const patch = op.patch;
+    return { ids: [op.id], words: Object.keys(patch).some((k) => WORDS_KEYS.has(k) && patch[k] !== void 0) };
+  }
+  if (op.type === "move" && Array.isArray(op.ids)) return { ids: op.ids.filter((x) => typeof x === "string"), words: false };
+  return { ids: [], words: false };
+}
 function applyRow(d, row) {
   if (!row || typeof row.kind !== "string") return;
   const k = row.kind;
@@ -1000,9 +1029,25 @@ function applyRow(d, row) {
   const hsid = hsidOf(d.attached, p);
   const mark = own(p, "undo") !== void 0 ? dimUndoMarkOf(row) : null;
   const restored = mark && mark.restored.length > 0 ? new Map(mark.restored.map((r) => [r.newId, { id: r.oldId, by: r.by, ...r.wordsBy ? { wordsBy: r.wordsBy } : {}, ...r.otherBy ? { otherBy: r.otherBy } : {} }])) : void 0;
+  const prior = mark && mark.prior.length > 0 && personsUndo(mark, by) ? new Map(mark.prior.map((e) => [e.id, e])) : void 0;
+  const pre = /* @__PURE__ */ new Map();
+  const hit = /* @__PURE__ */ new Map();
+  if (prior) {
+    for (const id of prior.keys()) if (d.nodes.has(id)) pre.set(id, d.nodes.get(id));
+  }
   for (const op of p.ops) {
-    if (applyOp(d, op, by, hsid, d.seq, restored)) d.ops += 1;
-    else d.unapplied += 1;
+    const before = prior ? opTargets(op) : null;
+    const was = before ? before.ids.map((id) => d.nodes.get(id)) : [];
+    if (applyOp(d, op, by, hsid, d.seq, restored)) {
+      d.ops += 1;
+      if (before) before.ids.forEach((id, i) => pre.has(id) && d.nodes.get(id) !== was[i] && hit.set(id, (hit.get(id) ?? false) || before.words));
+    } else d.unapplied += 1;
+  }
+  if (prior) {
+    for (const [id, words] of hit) {
+      const now = d.nodes.get(id);
+      if (now) d.nodes.set(id, settlePrior(pre.get(id), now, prior.get(id), mark.of, by, d.seq, words));
+    }
   }
 }
 function foldDimRow(state, row) {
@@ -1579,7 +1624,7 @@ function dimRowBy(row) {
   }
 }
 var DIM_ACT_PATTERN = DIM_NODE_ID_PATTERN;
-var DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64 });
+var DIM_UNDO_MARK_LIMITS = Object.freeze({ ids: 64, restored: 64, prior: 64 });
 var TURN_N = /^[1-9][0-9]{0,14}$/;
 var HSID_MAX = 128;
 function opPayloadOf(row) {
@@ -1630,7 +1675,7 @@ function dimUndoMarkOf(row) {
     if (hand.cls === "human" && (own(r, "surface") !== "gui" || Object.prototype.hasOwnProperty.call(r, "agent"))) return null;
     const u = own(p, "undo");
     if (!isPlainObject(u)) return null;
-    for (const k of Object.keys(u)) if (k !== "of" && k !== "ids" && k !== "restored") return null;
+    for (const k of Object.keys(u)) if (k !== "of" && k !== "ids" && k !== "restored" && k !== "prior") return null;
     const o = own(u, "of");
     if (!isPlainObject(o)) return null;
     const ok = Object.keys(o).sort().join(",");
@@ -1645,7 +1690,7 @@ function dimUndoMarkOf(row) {
       if (!NON_EMPTY(principal) || principal.length > 256 || typeof act !== "string" || !DIM_ACT_PATTERN.test(act)) return null;
       of = { kind: "act", principal, act };
     } else return null;
-    const out = { of, restored: [] };
+    const out = { of, restored: [], prior: [] };
     const ids = own(u, "ids");
     if (ids !== void 0) {
       if (!Array.isArray(ids) || ids.length < 1 || ids.length > DIM_UNDO_MARK_LIMITS.ids || new Set(ids).size !== ids.length) return null;
@@ -1673,6 +1718,32 @@ function dimUndoMarkOf(row) {
         if (!added.has(newId) || seen.has(newId) || newId === oldId) continue;
         seen.add(newId);
         out.restored.push({ newId, oldId, by: dimViewBy(by), ...wordsBy != null ? { wordsBy: dimViewBy(wordsBy) } : {}, ...otherBy != null ? { otherBy: dimViewBy(otherBy) } : {} });
+      }
+    }
+    const prior = own(u, "prior");
+    if (prior !== void 0) {
+      if (!Array.isArray(prior) || prior.length > DIM_UNDO_MARK_LIMITS.prior) return null;
+      const ops = own(p, "ops");
+      const named = /* @__PURE__ */ new Set();
+      if (Array.isArray(ops)) {
+        for (const op of ops) {
+          if (!isPlainObject(op)) continue;
+          const type = own(op, "type");
+          const id = own(op, "id");
+          const ids2 = own(op, "ids");
+          if (type === "update" && typeof id === "string") named.add(id);
+          else if (type === "move" && Array.isArray(ids2)) {
+            for (const x of ids2) if (typeof x === "string") named.add(x);
+          }
+        }
+      }
+      const seen = /* @__PURE__ */ new Set();
+      for (const e of prior) {
+        if (!Array.isArray(e) || e.length !== 3) continue;
+        const [id, otherBy, wordsBy] = e;
+        if (typeof id !== "string" || !DIM_NODE_ID_PATTERN.test(id) || !named.has(id) || seen.has(id)) continue;
+        seen.add(id);
+        out.prior.push({ id, ...otherBy != null ? { otherBy: dimViewBy(otherBy) } : {}, ...wordsBy != null ? { wordsBy: dimViewBy(wordsBy) } : {} });
       }
     }
     return out;
@@ -1779,6 +1850,7 @@ function invertCore(rows, mint, current, o = {}) {
   const renamed = /* @__PURE__ */ new Map();
   const restored = /* @__PURE__ */ new Map();
   const skipped = /* @__PURE__ */ new Map();
+  const first = /* @__PURE__ */ new Map();
   const skip = (id, why) => {
     if (!skipped.has(id) || why === "gone") skipped.set(id, why);
   };
@@ -1790,6 +1862,9 @@ function invertCore(rows, mint, current, o = {}) {
     const since = (m, id) => (m?.get(id) ?? Number.NEGATIVE_INFINITY) > at;
     const fieldSince = (id, k) => (later?.fields.get(id)?.get(k) ?? Number.NEGATIVE_INFINITY) > at;
     const done = (id) => typeof id === "string" && !!later?.done.has(id);
+    const touch = (id) => {
+      if (!first.has(id)) first.set(id, { at, before: row.before.nodes.get(id) });
+    };
     for (const op of row.ops) {
       const inv = [];
       if (isPlainObject(op)) {
@@ -1803,6 +1878,7 @@ function invertCore(rows, mint, current, o = {}) {
         } else if (op.type === "update") {
           const cur = typeof op.id === "string" ? state.nodes.get(op.id) : void 0;
           if (cur && isPlainObject(op.patch) && inScope(op.id) && !done(op.id)) {
+            touch(op.id);
             const patch = {};
             for (const k of Object.keys(op.patch)) {
               if (k === "id" || k === "kind" || DROPPED_KEYS.has(k) || op.patch[k] === void 0) continue;
@@ -1817,6 +1893,7 @@ function invertCore(rows, mint, current, o = {}) {
           }
         } else if (op.type === "move") {
           let ids = Array.isArray(op.ids) ? op.ids.filter((id) => typeof id === "string" && state.nodes.has(id) && inScope(id) && !done(id)) : [];
+          for (const id of ids) touch(id);
           if (later) {
             ids = ids.filter((id) => {
               const moved = fieldSince(id, "x") || fieldSince(id, "y");
@@ -1889,13 +1966,21 @@ function invertCore(rows, mint, current, o = {}) {
     }
     out.push(e);
   }
-  return { entries: out, restored, skipped };
+  return { entries: out, restored, skipped, first };
 }
 function dimInvertRows(rows, mint, current) {
   return invertCore(rows, mint, current).entries.map((e) => e.op);
 }
+function dimUndoPriorOf(prior, ops) {
+  const named = /* @__PURE__ */ new Set();
+  for (const op of ops) {
+    if (op.type === "update") named.add(op.id);
+    else if (op.type === "move") for (const id of op.ids) named.add(id);
+  }
+  return prior.filter((e) => named.has(e[0])).map((e) => [e[0], e[1], e[2]]);
+}
 function planDimUndo(o) {
-  const empty = () => ({ ops: [], restored: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
+  const empty = () => ({ ops: [], restored: [], prior: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== "function") return empty();
     const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x) => Number.isSafeInteger(x)));
@@ -1961,7 +2046,14 @@ function planDimUndo(o) {
       const v = validateDimOps(o.current, ops, o.actor, opts);
       if (whole(v, ops.length)) {
         const { applied, ...skipped2 } = tally(keep);
-        return { ops: v.ok, restored: keep.flatMap((u) => inv.restored.has(u) ? [inv.restored.get(u)] : []), skipped: skipped2, applied, more };
+        const prior = keep.flatMap((u) => {
+          const id = u.slice(2);
+          const f = inv.first.get(id);
+          if (!f || inv.restored.has(u) || inv.skipped.has(id) || !o.current.nodes.has(id)) return [];
+          if ((later.touched.get(id) ?? Number.NEGATIVE_INFINITY) > f.at) return [];
+          return [[id, f.before?.otherBy ?? null, f.before?.wordsBy ?? null]];
+        });
+        return { ops: v.ok, restored: keep.flatMap((u) => inv.restored.has(u) ? [inv.restored.get(u)] : []), prior, skipped: skipped2, applied, more };
       }
       const bad = new Set(v.refused.map((r) => r.index >= 0 && r.index < entries.length ? entries[r.index].unit : "*"));
       if (bad.has("*")) break;
@@ -1970,7 +2062,7 @@ function planDimUndo(o) {
     }
     for (const u of keep) refused.add(u);
     const { applied: _none, ...skipped } = tally([]);
-    return { ops: [], restored: [], skipped, applied: 0, more };
+    return { ops: [], restored: [], prior: [], skipped, applied: 0, more };
   } catch {
     return empty();
   }
@@ -2093,6 +2185,7 @@ export {
   dimRowBy,
   dimTextForScan,
   dimUndoMarkOf,
+  dimUndoPriorOf,
   dimViewBy,
   dimViewOf,
   dimZBetween,
