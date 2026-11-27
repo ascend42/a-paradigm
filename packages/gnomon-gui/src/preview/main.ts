@@ -18,7 +18,8 @@ import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
 import { followLog, GnomonClient } from '../core/client.js';
 import { keepStateLine, noticeLine, removedLine } from '../core/board-leaf.js';
 import { DimSessions, type DimSession } from '../core/dim-session.js';
-import { DimStore } from '../core/dim-store.js';
+import { DimStore, type DimListing } from '../core/dim-store.js';
+import { dimensionRows, listingsFor, rowStillHolds, type ListCheck } from '../core/board-open.js';
 import { GuiStore } from '../core/store.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
 import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
@@ -42,6 +43,27 @@ document.addEventListener('securitypolicyviolation', (e) => {
  * The marks are rows folded by `foldDim` (src/preview/board-fixture.ts) and drawn with `handle.render`; an edit made
  * on the board is appended as a row of yours and rendered back, as the live leaf will do. Sized with CSSOM.
  */
+interface PreviewDims { listings: DimListing[]; hsid: string; repo: string | null; openDim: string | null; check: ListCheck | null; opening: { dim: string; title: string }[]; names: Record<string, string> }
+function previewDimsOptions(): { onDimensions: (cause: Event) => void; dimRows: () => ReturnType<typeof dimensionRows>; onChooseDim: (dim: string, cause: Event, seen: { ended: boolean; attached: readonly string[] }) => boolean } {
+  const g = globalThis as { gnomonPreviewDims?: PreviewDims; gnomonPreviewDimPresses?: unknown[]; gnomonPreviewPalette?: unknown[] };
+  const d = (): PreviewDims => (g.gnomonPreviewDims ??= { listings: [], hsid: 'hsid-preview', repo: null, openDim: null, check: null, opening: [], names: { 'hsid-preview': 'Totals are off by a cent' } });
+  return {
+    onDimensions: (cause) => void (g.gnomonPreviewPalette ??= []).push({ type: cause.type, trusted: cause.isTrusted }),
+    dimRows: () => {
+      const x = d();
+      return dimensionRows(listingsFor(x.listings, x.hsid, x.repo), x.hsid, x.opening, Date.now(), { sessionName: (h) => x.names[h] ?? null, openDim: x.openDim, check: x.check });
+    },
+    onChooseDim: (dim, cause, seen) => {
+      if (cause.isTrusted !== true) return false;
+      const l = d().listings.find((x) => x.dim === dim) ?? null;
+      if (l && !rowStillHolds(seen, l)) return false;
+      // (`gnomonPreviewDimRefuse`: the dock refused to send, the link down or words held: aegis N1)
+      if ((globalThis as { gnomonPreviewDimRefuse?: boolean }).gnomonPreviewDimRefuse) return false;
+      (g.gnomonPreviewDimPresses ??= []).push({ dim, attach: !!l && !l.attached.includes(d().hsid), type: cause.type });
+      return true;
+    },
+  };
+}
 async function openBoardFixture(key: PreviewKey): Promise<void> {
   const pane = document.getElementById('pane-transcript');
   const feed = pane?.querySelector('.feed') as HTMLElement | null;
@@ -93,6 +115,10 @@ async function openBoardFixture(key: PreviewKey): Promise<void> {
       // S1.4 P4b DEV: the draw keys the fixture says (`gnomonPreviewGrants`, a list of LeafGrant), and the presses
       // that reached the leaf's owner (`gnomonPreviewGrantPresses`), so a real-input test sees what a press sends
       grants: () => ((globalThis as { gnomonPreviewGrants?: LeafGrant[] }).gnomonPreviewGrants ?? []),
+      // S1.4 DEV (`&dims=1`, design dimension-list): the head key's own list over the fixture's listings
+      // (`gnomonPreviewDims`), through the real core/board-open.ts rows; a press is checked at the press as the dock
+      // checks it (aegis C4.5) and recorded in `gnomonPreviewDimPresses`; the palette's list in `gnomonPreviewPalette`
+      ...(new URLSearchParams(location.search).get('dims') === '1' ? previewDimsOptions() : {}),
       onGrant: (hsid, cause) => void ((globalThis as { gnomonPreviewGrantPresses?: unknown[] }).gnomonPreviewGrantPresses ??= []).push({ hsid, type: cause.type, trusted: cause.isTrusted }),
       // a copy, a paste: the leaf's own register over the fixture's fold; pasted ops go where the board's edits go
       view: () => fx.state(),

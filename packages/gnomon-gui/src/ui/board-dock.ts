@@ -20,13 +20,13 @@
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { DIM_KINDS } from '@a-company/gnomon-contracts';
-import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle, undoLine } from '../core/board-leaf.js';
+import { arrivalLine, CHECK_COPY, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle, undoLine } from '../core/board-leaf.js';
 import { markStripRow, noticeStripRow, type TurnStripRow } from '../core/board-turn.js';
 import { hhmm } from '../core/loops.js';
 /** S1.4 E3: the folded board's edge tab while a notice about your marks stands */
 const UNDO_TAB = ' · your marks changed';
 import { boardAgentName, cutoutAt, handName, sessionShort, traceOutCopy, traceOutOfView } from '../core/board-overlay.js';
-import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
+import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planListPress, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
 
@@ -81,7 +81,8 @@ export interface BoardDock {
   /** the Dimensions list's rows for the focused session's repo */
   rows(): DimensionRow[];
   /** a press on a row of the Dimensions list */
-  choose(dim: string, event: Event): void;
+  /** a press on a row; `seen` is what the row said when drawn (aegis C4.5). False when nothing was sent. */
+  choose(dim: string, event: Event, seen?: DimensionRow['seen']): boolean;
   /** Esc from outside the leaf: folds an open board, or says the held line of one it must not fold. True when one was open. */
   escape(event: Event): boolean;
   /**
@@ -228,6 +229,8 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     // words that are waiting are said for AS LONG AS they are held (a six-second line was gone before it was read)
     leaf.setKeep(words && s.link === 'up' ? KEEP_COPY.wordsWait : keepStateLine(s));
     const check = checkOf(session, s);
+    // the Dimensions list, when open, says the same check and who is attached now (words in place: mika D5)
+    leaf.refreshDims?.();
     leaf.setCheck(check, checkTone(s), { title: checkTitle(s), open: s.phase === 'open' });
     if (check !== lastCheck) {
       lastCheck = check;
@@ -367,6 +370,9 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
               if (cause.isTrusted !== true) return;
               d.dimensions?.(cause);
             },
+            // the head key's own list (design dimension-list): the rows, and a press on one (aegis C4.5 at the press)
+            dimRows: () => dockApi.rows(),
+            onChooseDim: (dim: string, cause: Event, seen: DimensionRow['seen']): boolean => cause.isTrusted && dockApi.choose(dim, cause, seen),
           }
         : {}),
       ...session.leafOptions(),
@@ -548,18 +554,18 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     } else if (cur && cur.session === e.session && !e.session.openedOk) drop();
   });
 
-  function carry(plan: BoardPlan, event: Event, altB = false, typed = false): void {
-    if (event.isTrusted !== true) return; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
+  function carry(plan: BoardPlan, event: Event, altB = false, typed = false): boolean {
+    if (event.isTrusted !== true) return false; // G-GUI-04: a board opens only on a person's own event (Aegis N2: and an untrusted one is told nothing)
     // a HELD key is one press: its repeats open, leave and drop nothing (checked before the open board is left)
-    if ((event as Partial<KeyboardEvent>).repeat === true) return;
-    if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info');
+    if ((event as Partial<KeyboardEvent>).repeat === true) return false;
+    if (plan.type === 'none') return d.say(plan.why === 'no-session' ? KEEP_COPY.noSession : KEEP_COPY.noBoard, 'info'), false;
     const hsid = d.focused();
-    if (!hsid) return;
-    if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn');
-    if (cur && cur.session.dim === plan.dim) return void cur.leaf.handle()?.focus();
+    if (!hsid) return false;
+    if (!d.sessions.linked) return d.say('The link is down · reconnect, then open the board', 'warn'), false;
+    if (cur && cur.session.dim === plan.dim) return cur.leaf.handle()?.focus(), false;
     // aegis F1: opening another board (a list row, ⌘K, /board, the menu) would take words held by a too-short board:
     // refused, and the held line said again, as a fold is
-    if (cur && cur.leaf.holdsWords()) return cur.leaf.sayHeld();
+    if (cur && cur.leaf.holdsWords()) return cur.leaf.sayHeld(), false;
     if (cur) {
       // one leaf: the open dimension is left first, and what it lost is said
       const old = cur.session;
@@ -577,11 +583,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     const session = d.sessions.open({ dim: plan.dim, hsid, opened: how, ...(fresh ? { title: fresh.title, titleFrom: fresh.titleFrom } : {}) }, event);
     mount(session, { title: plan.title, how });
     if (plan.type === 'open' && plan.reopens && !foldedHere.has(plan.dim)) cur?.leaf.say(KEEP_COPY.reopens);
+    return true;
   }
 
   tab.addEventListener('click', (e) => carry(planBoardKey(ask()), e));
 
-  return {
+  const dockApi: BoardDock = {
     command: (arg, event, typed = false) => carry(planBoardCommand(ask(), arg), event, false, typed),
     menu: (event) => carry(planBoardMenu(ask()), event),
     key(event) {
@@ -596,17 +603,21 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     rows() {
       const hsid = d.focused();
-      const rows = dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now());
-      // the check's second home (design check.place, aegis C2.5): the open board's row says 'open here · <the check>'
+      // the check's second home (design check.place, aegis C2.5, C4.4): the open board's row says 'open here · <the
+      // check>', from THIS page's session, never the listing; sessions by the host's label (the foot's function)
       const c = cur && cur.session.alive ? cur : null;
-      return c ? rows.map((r) => (r.dim === c.session.dim ? { ...r, check: checkOf(c.session, c.session.status()) } : r)) : rows;
+      const check = c ? checkOf(c.session, c.session.status()) : null;
+      return dimensionRows(listingsFor(store.list(), hsid, hsid ? d.sessionInfo(hsid).repo : null), hsid, [...opening].map(([dim, o]) => ({ dim, title: o.title })), now(), {
+        sessionName: (h: string) => d.sessionInfo(h).name || null,
+        openDim: c ? c.session.dim : null,
+        check: check ? { line: check, bad: check === CHECK_COPY.mismatch } : null,
+      });
     },
-    choose(dim, event) {
-      const l = listingOf(dim);
-      const pend = opening.get(dim);
-      const hsid = d.focused();
-      if (l) return carry(planBoardRow(l, hsid), event);
-      if (pend) carry(hsid ? { type: 'open', dim, attach: false, reopens: false, title: pend.title } : { type: 'none', why: 'no-session' }, event);
+    choose(dim, event, seen) {
+      // aegis C4.5 / I3: planned from the listing AT THE PRESS; a listed row with no `seen`, or whose ended or
+      // attached changed since it was drawn, sends nothing (the list redraws it). N1: true only when it was sent
+      const plan = planListPress(listingOf(dim) ?? null, opening.get(dim) ?? null, dim, d.focused(), seen);
+      return plan ? carry(plan, event) : false;
     },
     escape(event) {
       if (!cur || cur.leaf.el.contains(document.activeElement)) return false;
@@ -652,7 +663,11 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       }
       paintTab();
     },
-    repaint: paintTab,
+    repaint: () => {
+      paintTab();
+      // aegis N3: rows of other dimensions changed (who is attached, folded): the open list says so in place
+      cur?.leaf.refreshDims?.();
+    },
     hasBoard: () => !!cur || !!ask().last,
     isOpen: () => !!cur,
     cardBlocked() {
@@ -711,4 +726,5 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       if (cur && !d.cardFocused()) cur.leaf.focusBoard?.();
     },
   };
+  return dockApi;
 }

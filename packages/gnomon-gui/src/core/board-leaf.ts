@@ -34,7 +34,7 @@ export const LEAF_COPY = {
   medium: '› board',
   // (the head key and its title are the specimen's: specimen-board.html#leaf)
   dimensions: 'Dimensions ▾',
-  dimensionsTitle: 'Dimensions in this project (/boards)',
+  dimensionsTitle: 'Dimensions in this project',
   loading: 'opening the board…',
   yielded: 'A card has the keys · click the board to draw',
   // (design too_short.line: the dock passes the pinned count; a line never names a move that does nothing)

@@ -132,6 +132,20 @@ jobs:
           GNOMON_BROWSER_TESTS: '1'
         run: npx vitest run test/board-app.test.ts
 
+      # S1.4: the draw keys and the hands foot's +<k> menu (T-2026-11-26-004), and the Dimensions list under the head
+      # key, each alone, with the same ask: a missing Chrome fails, never skips
+      - name: The draw keys and the hands menu (real Chrome, real input)
+        working-directory: packages/gnomon-gui
+        env:
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/board-grant-key.test.ts
+
+      - name: The Dimensions list (real Chrome, real input)
+        working-directory: packages/gnomon-gui
+        env:
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/board-dims-list.test.ts
+
   # M1.0 probes runnable on hosted runners. PR-0 runs only the harness
   # self-test; PR-2 adds P03 (win), P08, P09, P11, P12 and the P06 smoke.
   # Results are uploaded as artifacts only — real results are committed from

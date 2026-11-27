@@ -24,6 +24,32 @@ description: >-
 components:
   gui-board:
     description: >-
+      S1.4 D-list pass (design hands_foot.overflow, T-2026-11-26-004): the
+      hands foot's '+<k> ▾' key (ui/board-leaf.ts moreKey, drawHandsMenu):
+      hands that still do not fit after the give-way steps go behind it,
+      from the last, each split starting from whole hands; its menu is the
+      leaf's .bd-menu, upward from the key, never over the foot, right after
+      the key in the DOM, no menu roles, aria-expanded and aria-controls; a
+      row is the hand whole with its OWN draw key (the same element and
+      press path); the split is frozen while it is open or focus is in the
+      foot (a new hand joins the end); Esc closes it only, focusout and an
+      outside press close it. The Dimensions list (design dimension-list,
+      #dimension-list): the head key's own menu (.bd-dims, menuitemradio
+      two-line rows, the note line, the find row), placed under the key,
+      the palette's list when the room is under 87px; order frozen while
+      open; trusted press on the row itself (C4.8); nothing sent while the
+      link is down (C4.7); refreshDims redraws words in place.
+      Review r2: too short (no room above the foot for one row) the hands
+      menu lists every hand over the foot (I6); a split frozen by focus is
+      redrawn when focus leaves (I4b); keyed hands are fitted alone and
+      unkeyed ones never move a key (I5); a menu row drops the shared name
+      before its session (F1). STATED LIMIT (I5): keyed hands are fitted
+      again only when '+<k> ▾' itself has no room beside them; then a key
+      can move as an unkeyed hand arrives (a clipped key would be worse).
+      Too short, ↑ from the first menu row closes the menu (WCAG 2.4.11).
+      before its session (F1). The list: held still for any reason
+      disables its rows (N2); a press closes it only when the dock sent
+      (N1); 117px with other rows (Mika 6); seen refreshed on repaint (N3).
       S1.4 E3: BoardMarkView gains changedBy, otherBy, wordsBy, restoredFrom, an
       open mark's lastRun and a bound label's labelBox; the overlay draws the
       countermark, the words sign, cut-outs and the trace (#gui-board-overlay).
@@ -997,6 +1023,19 @@ components:
       followBoth resets the dimension side when another log id is adopted.
       board.* and dimensions.* are not block-safe (core/commands.ts
       BLOCK_SAFE_COMMANDS is an allowlist).
+      S1.4 D-list pass (#dimension-list): dimensionRows takes the session
+      names, the open dimension and the page's check: the open row first
+      (mika D1), the mark (● ○ …), line 2 by case in fixed words and host
+      labels cut at 16 or counted (aegis C4.3), 'open here · <check>' from
+      the page (C4.4), seen (ended, attached) for the press; listTitle
+      (C4.2: the head's check, no control or format character, Untitled);
+      rowStillHolds (C4.5: the dock's choose sends nothing when a row's
+      ended or attached changed since it was drawn); listTime carries the
+      year when it is not this year; DIM_LIST_COPY.
+      Review r2: line 2 leads with 'opening attaches this session' (I2); a
+      folded dimension not attached reads 'folded · opening attaches this
+      session' (I1); planListPress (I3): a listed row with no or a changed
+      seen sends nothing.
     path: src/core/board-open.ts
     type: module
     tags: [gnomon, gui, dimension, board]

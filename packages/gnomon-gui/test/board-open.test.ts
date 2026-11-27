@@ -3,7 +3,7 @@
  * store `followLog` is handed, which feeds both the GUI store and the dimension sessions and resets both.
  */
 import { describe, expect, it } from 'vitest';
-import { boardTitleOf, dimensionRows, followBoth, listingsFor, listRepoOf, listTime, openedHowOf, parseBoardCommand, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk } from '../src/core/board-open.js';
+import { boardTitleOf, DIM_LIST_COPY, dimensionRows, listTitle, planListPress, rowStillHolds, followBoth, listingsFor, listRepoOf, listTime, openedHowOf, parseBoardCommand, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk } from '../src/core/board-open.js';
 import { followLog, RpcError } from '../src/core/client.js';
 import { DimStore, type DimListing } from '../src/core/dim-store.js';
 import { DimSessions } from '../src/core/dim-session.js';
@@ -63,6 +63,67 @@ describe('#gui-board-open: the Dimensions list', () => {
     expect(listTime('2026-11-20T14:09:00.000Z', now)).toMatch(/^Nov (19|20|21)$/);
     expect(listTime(null, now)).toBe('');
     expect(listTime('not a time', now)).toBe('');
+  });
+  it('S1.4 the list\'s rows (design dimension-list anatomy): the open row first (mika D1), line 2 by case, sessions by the host\'s label cut at 16 or counted (aegis C4.3), the check from the page (C4.4)', () => {
+    const name = (h: string): string | null => ({ 'hs-1': 'Totals are off by a cent', 'hs-2': 'billing-ui' } as Record<string, string>)[h] ?? null;
+    const rows = dimensionRows([
+      listing({ dim: 'dim:A', lastSeq: 50, attached: ['hs-2'] }),
+      listing({ dim: 'dim:B', lastSeq: 40, attached: ['hs-1', 'hs-2'] }),
+      listing({ dim: 'dim:C', lastSeq: 30, ended: true }),
+      listing({ dim: 'dim:D', lastSeq: 20, ended: true, partial: true }),
+      listing({ dim: 'dim:E', lastSeq: 10, partial: true, attached: ['hs-x', 'hs-y'] }),
+      listing({ dim: 'dim:F', lastSeq: 5 }),
+    ], 'hs-1', [{ dim: 'dim:P', title: '' }], now, { sessionName: name, openDim: 'dim:F', check: { line: 'doesn’t match the saved board', bad: true } });
+    expect(rows.map((r) => [r.dim, r.mark, `${r.lead}${r.line2}`, r.current, r.bad])).toEqual([
+      ['dim:F', '●', 'open here · doesn’t match the saved board', true, true],
+      ['dim:P', '…', DIM_LIST_COPY.wasOpening, false, false],
+      ['dim:A', '●', 'opening attaches this session · ◇ billing-ui', false, false],
+      ['dim:B', '●', 'attached ◇ Totals are off… +1', false, false],
+      ['dim:C', '○', 'folded · opening starts it again', false, false],
+      ['dim:D', '○', 'folded · opening shows part of it', false, false],
+      ['dim:E', '●', 'opening attaches this session · 2 sessions · part of it is shown', false, false],
+    ]);
+    // the open row's check is the page's, never the listing's; with none it reads 'open here'
+    expect(dimensionRows([listing({ dim: 'dim:F' })], 'hs-1', [], now, { openDim: 'dim:F' })[0]!.lead).toBe('open here');
+  });
+  it('S1.4 aegis C4.2: a title goes through the head\'s check; one that fails reads Untitled; control and format characters go', () => {
+    expect(listTitle('')).toBe('Untitled');
+    expect(listTitle('\u200B\u0000')).toBe('Untitled');
+    expect(listTitle('a\u0007b\u202Ec')).not.toMatch(/[\u0007\u202E]/);
+    expect(listTitle('  two\nlines  ')).toBe('two lines');
+    expect(dimensionRows([listing({ title: '' })], 'hs-1', [], now)[0]!.title).toBe('Untitled');
+  });
+  it('S1.4 aegis C4.5: a row still holds at the press only when ended and who is attached are as drawn', () => {
+    const seen = { ended: false, attached: ['hs-1', 'hs-2'] };
+    expect(rowStillHolds(seen, { ended: false, attached: ['hs-2', 'hs-1'] })).toBe(true);
+    expect(rowStillHolds(seen, { ended: true, attached: ['hs-1', 'hs-2'] })).toBe(false);
+    expect(rowStillHolds(seen, { ended: false, attached: ['hs-1'] })).toBe(false);
+    expect(rowStillHolds(seen, { ended: false, attached: ['hs-1', 'hs-3'] })).toBe(false);
+    expect(rowStillHolds(seen, null)).toBe(false);
+  });
+  it('S1.4 aegis I1 / mika 3: a folded dimension this session is not attached to says opening attaches it', () => {
+    const r = dimensionRows([listing({ ended: true, attached: ['hs-2'] }), listing({ dim: 'dim:G', ended: true, partial: true, attached: [] })], 'hs-1', [], now);
+    expect(r.map((x) => x.line2)).toEqual(['folded · opening attaches this session', 'folded · opening attaches this session']);
+  });
+  it('S1.4 aegis I3: a press on a listed row needs what it said when drawn; a change or a missing seen sends nothing; an unchanged row attaches exactly when line 2 says so', () => {
+    const l = listing({ attached: ['hs-2'] });
+    const row = dimensionRows([l], 'hs-1', [], now)[0]!;
+    expect(planListPress(l, null, l.dim, 'hs-1', undefined)).toBeNull();
+    expect(planListPress({ ...l, attached: ['hs-2', 'hs-3'] }, null, l.dim, 'hs-1', row.seen)).toBeNull();
+    expect(planListPress({ ...l, ended: true }, null, l.dim, 'hs-1', row.seen)).toBeNull();
+    const plan = planListPress(l, null, l.dim, 'hs-1', row.seen);
+    expect(plan).toMatchObject({ type: 'open', dim: l.dim, attach: true });
+    expect(row.line2.startsWith(DIM_LIST_COPY.attaches)).toBe(true);
+    const mine = listing();
+    const mineRow = dimensionRows([mine], 'hs-1', [], now)[0]!;
+    expect(planListPress(mine, null, mine.dim, 'hs-1', mineRow.seen)).toMatchObject({ attach: false });
+    expect(mineRow.line2.includes(DIM_LIST_COPY.attaches)).toBe(false);
+    // a dimension this page was opening (not listed yet) opens without attaching
+    expect(planListPress(null, { title: 'x' }, 'dim:P', 'hs-1', undefined)).toMatchObject({ type: 'open', attach: false });
+    expect(planListPress(null, null, 'dim:Q', 'hs-1', undefined)).toBeNull();
+  });
+  it('S1.4 mika: a date not this year carries its year', () => {
+    expect(listTime('2025-11-20T14:09:00.000Z', now)).toMatch(/^Nov (19|20|21) 2025$/);
   });
   it('the list is of the repo of a dimension the session is attached to, else the session’s own repo when the store knows it', () => {
     expect(listRepoOf([listing()], 'hs-1', null)).toBe('repo:aa');

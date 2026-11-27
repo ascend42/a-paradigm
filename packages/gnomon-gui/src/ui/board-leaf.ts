@@ -16,6 +16,7 @@ import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
 import { CHECK_GAP, CHECK_LONGEST, countSlot, GRANT_COPY, OUT_OF_DATE_FACT, UNCHECKED_LEAD, BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
+import { DIM_LIST_COPY, type DimensionRow } from '../core/board-open.js';
 import { footHands, handName, hoveredMark, overlayItems, selectionLine, type OverlayOptions } from '../core/board-overlay.js';
 import { DIM_GRANT_QUIET_MS } from '../core/dim-session.js';
 import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
@@ -64,6 +65,10 @@ export interface BoardLeafOptions {
    * with the press that asked. Without it (the dev fixtures) the key is drawn disabled.
    */
   onDimensions?: (cause: Event) => void;
+  /** design dimension-list (mika B1): the head key's own list. Its rows (core/board-open.ts dimensionRows), drawn as
+   * they are when it opens; a press on one with what the row said (aegis C4.5). True when something was sent. */
+  dimRows?: () => DimensionRow[];
+  onChooseDim?: (dim: string, cause: Event, seen: DimensionRow['seen']) => boolean;
   /** The leaf began or stopped holding words while too short (aegis F5): the check's words depend on it. */
   onHoldChange?: () => void;
   /** How many cards are pinned in this session now: the too-short line names deciding one only when there is one (design `too_short.line`). */
@@ -113,6 +118,8 @@ export interface BoardLeaf {
   focusBoard?(): void;
   /** S1.4 E3: draw the overlay again (the notices' cut-outs or trace moved) */
   redrawOver?(): void;
+  /** The Dimensions list, when it is open: its rows' words again, in place, the order kept (mika D5). */
+  refreshDims?(): void;
   el: HTMLElement;
   /** S1.4 P4b: one line to a screen reader only (the polite status line), never the keep line: the arrival line, a confirmed grant */
   speak(line: string): void;
@@ -219,6 +226,8 @@ const place = (e: HTMLElement | SVGElement, left: number, top: number): void => 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 const isField = (n: Element | null): boolean => !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA');
 
+/** the leaf's menus' ids (aria-controls), one per mount: a counter, not a random value */
+let menuIdSeq = 0;
 export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardLeaf {
   let handle: BoardHandle | null = null;
   let load: LeafLoad = 'loading';
@@ -368,8 +377,17 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     headKey.title = failed ? '' : o.onDimensions ? LEAF_COPY.dimensionsTitle : 'Type /boards for this project’s dimensions';
     if (failed || o.onDimensions) headKey.removeAttribute('aria-disabled');
     else headKey.setAttribute('aria-disabled', 'true');
-    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', 'dialog');
+    // design dimension-list.a11y / placement (mika D3): 'menu' when the key opens its own list, 'dialog' when the
+    // room under it is too small and it opens the palette's list instead
+    if (!failed && o.onDimensions) headKey.setAttribute('aria-haspopup', o.dimRows && dimsFits() ? 'menu' : 'dialog');
     else headKey.removeAttribute('aria-haspopup');
+    if (!failed && o.dimRows) {
+      headKey.setAttribute('aria-expanded', String(dimsOpen));
+      headKey.setAttribute('aria-controls', dimsMenuId);
+    } else {
+      headKey.removeAttribute('aria-expanded');
+      headKey.removeAttribute('aria-controls');
+    }
     // Mika R2: a line that STATES something in the keep line's place draws in ink (marks missing, part of the board,
     // words waiting), as the refusals and the held-still lines do; opening, folding and saving pass by quietly
     const stated = keepShown !== null && keepShown !== KEEP_COPY.opening && keepShown !== KEEP_COPY.folding && keepShown !== KEEP_COPY.saving;
@@ -897,7 +915,324 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     e.hint.hidden = e.session === null;
     if (e.session !== null) setText(e.hintName, e.session);
   }
+  // design dimension-list (S1.3 P4b-3 rulings; mika B1, D1-D6; aegis C4.1-C4.8): the head key's own list, its own
+  // builder (two-line menuitemradio rows, the mark, the note line, the find row), not menuOf
+  const DIMS_MIN_ROOM = 87;
+  /** mika 6 (amends D3): with other rows than the open one, the list needs room for one more row to be a list */
+  const DIMS_MIN_ROOM_ROWS = 117;
+  /** True when the list fits under the key. The rows are asked for only when the room is between 87 and 117px: never on
+   * every head draw (the dock builds them from the whole store, and the head draws on every key and mark) */
+  const dimsFits = (): boolean => {
+    const room = dimsRoom();
+    if (room >= DIMS_MIN_ROOM_ROWS) return true;
+    if (room < DIMS_MIN_ROOM) return false;
+    return (o.dimRows?.().length ?? 0) <= 1;
+  };
+  const DIMS_WIDTH = 344;
+  const dimsMenuId = `bd-dims-${++menuIdSeq}`;
+  const dimsMenu = h('div', 'bd-menu bd-dims', { role: 'menu', 'aria-label': DIM_LIST_COPY.menuLabel });
+  dimsMenu.id = dimsMenuId;
+  const dimsScroll = h('div', 'bd-dscroll', { role: 'none' });
+  const dimsEls = new Map<string, { row: HTMLButtonElement; sig: string; seen: DimensionRow['seen']; current: boolean }>();
+  let dimsOpen = false;
+  let dimsDrawing = false;
+  /** aegis C4.6 / mika D5: the order the rows had when the list opened; a dimension that appears joins the end */
+  let dimsOrder: string[] = [];
+  /** The room under the head key: from 4px below it to the foot less 8px (placement). */
+  function dimsRoom(): number {
+    const k = headKey.getBoundingClientRect();
+    const f = foot.getBoundingClientRect();
+    return f.top - 8 - (k.bottom + 4);
+  }
+  // aegis N2: held still for ANY reason of the link (down, or out of date): nothing can be opened from the list
+  const dimsDown = (): boolean => inert !== null;
+  function dimRowEl(r: DimensionRow): HTMLButtonElement {
+    const row = h('button', 'bd-dr', { type: 'button', role: 'menuitemradio', tabindex: '-1', 'data-dim': r.dim }) as HTMLButtonElement;
+    row.append(h('span', 'dm', { 'aria-hidden': 'true' }), h('span', 't', { dir: 'auto' }), h('span', 'at'), h('span', 'l2'));
+    return row;
+  }
+  /** A row's words, in place (a focused row is never rebuilt): set by textContent only (aegis C4.2). */
+  function paintDimRow(row: HTMLButtonElement, r: DimensionRow, down: boolean): void {
+    const [dm, t, at, l2] = [...row.children] as HTMLElement[];
+    setText(dm!, r.mark);
+    setText(t!, r.title);
+    setText(at!, r.time);
+    l2!.className = `l2${r.bad ? ' bad' : ''}`;
+    setText(l2!, `${r.lead}${r.line2}`);
+    row.classList.toggle('current', r.current);
+    row.setAttribute('aria-checked', String(r.current));
+    // the accessible name is the title, the time and the second line in full, cut or not
+    row.setAttribute('aria-label', [r.title, r.time, `${r.lead}${r.line2}`].filter(Boolean).join(', '));
+    if (down) row.setAttribute('aria-disabled', 'true');
+    else row.removeAttribute('aria-disabled');
+  }
+  function drawDims(): void {
+    if (!dimsOpen || !o.dimRows) return;
+    dimsDrawing = true;
+    try {
+      const fresh = o.dimRows();
+      for (const r of fresh) if (!dimsOrder.includes(r.dim)) dimsOrder.push(r.dim);
+      const at = (dim: string): number => dimsOrder.indexOf(dim);
+      const rows = [...fresh].sort((a, b) => at(a.dim) - at(b.dim));
+      const down = dimsDown();
+      const live = new Set(rows.map((r) => r.dim));
+      for (const dim of [...dimsEls.keys()]) if (!live.has(dim)) dimsEls.delete(dim);
+      const els = rows.map((r) => {
+        let e = dimsEls.get(r.dim);
+        if (!e) dimsEls.set(r.dim, (e = { row: dimRowEl(r), sig: '', seen: r.seen, current: r.current }));
+        const sig = JSON.stringify([r.mark, r.title, r.time, r.lead, r.line2, r.bad, r.current, down]);
+        if (e.sig !== sig) paintDimRow(e.row, r, down);
+        e.sig = sig;
+        // aegis N3: what the press compares is what the row says now
+        e.seen = r.seen;
+        e.current = r.current;
+        return e;
+      });
+      // the open board's row stands above the rows that scroll (mika D1); the rest scroll above the find row
+      const first = els[0]?.current ? els[0] : null;
+      const rest = (first ? els.slice(1) : els).map((e) => e.row);
+      syncKids(dimsScroll, rest);
+      const kids: Node[] = [];
+      if (down) kids.push(dimsNote(DIM_LIST_COPY.down, false));
+      else if (!rows.length) kids.push(dimsNote(DIM_LIST_COPY.empty, true));
+      if (first) kids.push(first.row);
+      kids.push(dimsScroll, dimsRule, dimsFind);
+      if (down) dimsFind.setAttribute('aria-disabled', 'true');
+      else dimsFind.removeAttribute('aria-disabled');
+      syncKids(dimsMenu, kids);
+      if (headKey.nextElementSibling !== dimsMenu) headKey.after(dimsMenu);
+      placeDims();
+      // mika D4: when 'open here · <the check>' would be cut, 'open here · ' goes; the check is never cut
+      if (first) {
+        const l2 = first.row.querySelector<HTMLElement>('.l2')!;
+        const r = rows[0]!;
+        setText(l2, `${r.lead}${r.line2}`);
+        if (r.lead && r.line2 && l2.scrollWidth > l2.clientWidth + 0.5) setText(l2, r.line2);
+      }
+    } finally {
+      dimsDrawing = false;
+    }
+  }
+  const dimsNoteEl = h('p', 'bd-dnote', { role: 'none' });
+  function dimsNote(text: string, quiet: boolean): HTMLElement {
+    dimsNoteEl.className = `bd-dnote${quiet ? ' quiet' : ''}`;
+    setText(dimsNoteEl, text);
+    return dimsNoteEl;
+  }
+  const dimsRule = h('div', 'menu-rule', { role: 'separator' });
+  const dimsFind = h('button', 'bd-mi bd-dfind', { type: 'button', role: 'menuitem', tabindex: '-1' }, DIM_LIST_COPY.find, h('kbd', '', {}, DIM_LIST_COPY.findHint)) as HTMLButtonElement;
+  /** Under the key, 4px below it, its right edge on the key's, inside the leaf; its rows up to the foot less 8px. */
+  function placeDims(): void {
+    const hd = head.getBoundingClientRect();
+    const k = headKey.getBoundingClientRect();
+    const leaf = el.getBoundingClientRect();
+    dimsMenu.style.top = `${k.bottom - hd.top + 4}px`;
+    dimsMenu.style.right = `${Math.max(0, hd.right - k.right)}px`;
+    dimsMenu.style.width = `${Math.min(DIMS_WIDTH, Math.max(0, Math.min(k.right - leaf.left - 14, leaf.width - 28)))}px`;
+    const room = dimsRoom();
+    dimsMenu.style.maxHeight = `${Math.max(0, room)}px`;
+    // the rows that scroll take what the open row, the note, the rule and the find row leave
+    dimsScroll.style.maxHeight = '';
+    // (its border and padding included: the menu's box less the rows' natural height)
+    // (the menu's box less the rows' box: the rows shrink to fit the menu's cap, the other parts are flex none)
+    const fixed = dimsMenu.getBoundingClientRect().height - dimsScroll.getBoundingClientRect().height;
+    const avail = Math.max(0, room - fixed);
+    // mika D2 (board-rail.menus_scroll): when the rows scroll, the cut passes through a line of text: whole rows
+    // plus 30px, so the last row shows part of its second line and the list is seen to go on
+    const r0 = dimsScroll.children[0]?.getBoundingClientRect();
+    const r1 = dimsScroll.children[1]?.getBoundingClientRect();
+    const rowH = (r0 && r1 ? r1.top - r0.top : r0?.height) || 42;
+    const cut = dimsScroll.scrollHeight > avail + 0.5 && avail >= rowH ? Math.floor((avail - 30) / rowH) * rowH + 30 : avail;
+    dimsScroll.style.maxHeight = `${Math.max(0, Math.min(avail, cut))}px`;
+    // (the menu's own cap may still shrink the rows a few px: then one row fewer, so the cut stays in a second line)
+    if (cut !== avail && dimsScroll.clientHeight < cut - 0.5 && cut - rowH >= 30) dimsScroll.style.maxHeight = `${cut - rowH}px`;
+  }
+  function openDims(): void {
+    dimsOpen = true;
+    dimsOrder = [];
+    dimsEls.clear();
+    headKey.setAttribute('aria-expanded', 'true');
+    drawDims();
+    // focus goes to the open board's row, else the first row (keyboard); kept in view
+    const to = dimsMenu.querySelector<HTMLElement>('.bd-dr.current') ?? dimsMenu.querySelector<HTMLElement>('.bd-dr') ?? dimsFind;
+    to.focus({ preventScroll: true });
+    to.scrollIntoView?.({ block: 'nearest' });
+  }
+  function closeDims(back: boolean): void {
+    if (!dimsOpen) return;
+    dimsOpen = false;
+    if (back) headKey.focus({ preventScroll: true });
+    dimsMenu.remove();
+    headKey.setAttribute('aria-expanded', 'false');
+  }
+  function onDimsPress(e: MouseEvent): void {
+    const row = (e.target as HTMLElement | null)?.closest?.('.bd-dr, .bd-dfind') as HTMLElement | null;
+    if (!row) return;
+    // aegis C4.8: a trusted press ON the row (a click, or Enter or Space on it: a held key's repeats are dropped in
+    // dimsKey). N6: no 'the key went down on this row' rule, which refused an assistive technology's activation
+    if (e.isTrusted !== true) return;
+    // aegis C4.7 / state-notes link-down: nothing is sent and nothing is queued; the line is said again
+    if (row.getAttribute('aria-disabled') === 'true') return void (dimsDown() && say(DIM_LIST_COPY.down));
+    if (row === dimsFind) {
+      closeDims(true);
+      return o.onDimensions?.(e);
+    }
+    const dim = row.dataset.dim ?? '';
+    const it = dimsEls.get(dim);
+    if (!it) return;
+    // the open board's row only closes the menu; the keys go to the board it names (as the palette's row did)
+    if (it.current) {
+      closeDims(!(handle && handle.isAlive()));
+      return void handle?.focus();
+    }
+    // aegis C4.5: the dock plans from the listing AT THE PRESS; changed since drawn sends nothing and the row redraws
+    if (!o.onChooseDim?.(dim, e, it.seen)) {
+      it.sig = '';
+      const fresh = o.dimRows?.().find((r) => r.dim === dim);
+      if (fresh) it.seen = fresh.seen;
+      return drawDims();
+    }
+    closeDims(true);
+    say(LEAF_COPY.loading);
+  }
+  /** design dimension-list.keyboard, inside the menu. True when the key was the menu's. */
+  function dimsKey(e: KeyboardEvent, active: HTMLElement): boolean {
+    const items = [...dimsMenu.querySelectorAll<HTMLElement>('.bd-dr, .bd-dfind')];
+    const at = items.indexOf(active);
+    const go = (i: number): void => {
+      const t = items[Math.max(0, Math.min(items.length - 1, i))];
+      t?.focus({ preventScroll: true });
+      t?.scrollIntoView?.({ block: 'nearest' });
+    };
+    const stop = (): true => (e.preventDefault(), e.stopPropagation(), true);
+    if (e.key === 'Escape') return closeDims(true), stop();
+    if (e.key === 'Tab') return closeDims(false), true;
+    if (e.key === 'ArrowDown') return go(at + 1), stop();
+    if (e.key === 'ArrowUp') return go(at - 1), stop();
+    if (e.key === 'Home') return go(0), stop();
+    if (e.key === 'End') return go(items.length - 1), stop();
+    // aegis I-1 / C4.8: only a fresh Enter or Space ON the row presses it (a held key, the key that opened the menu, never)
+    if (e.key === 'Enter' || e.key === ' ') return e.repeat && e.preventDefault(), true;
+    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // typeahead moves focus only: it never opens a row (aegis C4.8)
+      const ch = e.key.toLowerCase();
+      const n = items.length;
+      for (let j = 1; j <= n; j++) {
+        const t = items[(at + j) % n]!;
+        if ((t.querySelector('.t')?.textContent ?? '').toLowerCase().startsWith(ch)) return go((at + j) % n), stop();
+      }
+      return stop();
+    }
+    return false;
+  }
+  // the hands foot's '+<k> ▾' (design hands_foot.overflow; T-2026-11-26-004): the hands that do not fit, in the
+  // leaf's one menu component (.bd-menu, as the notices' +k menu: upward over the board, its right edge on its key,
+  // in the DOM right after the key; no menu roles, the key has aria-expanded and aria-controls)
+  let handsOpen = false;
+  let shownIds: Set<string> | null = null;
+  let behindHands: Node[] = [];
+  const handsMenuId = `bd-hands-menu-${++menuIdSeq}`;
+  let moreEl: HTMLButtonElement | null = null;
+  const handsMenu = h('div', 'bd-menu bd-hands-menu');
+  handsMenu.id = handsMenuId;
+  function moreKey(n: number): HTMLButtonElement {
+    if (!moreEl) {
+      moreEl = h('button', 'key quiet bd-hands-more', { type: 'button', 'aria-controls': handsMenuId, 'aria-expanded': 'false' }) as HTMLButtonElement;
+      moreEl.addEventListener('click', (e) => {
+        // the person's own press only; opening leaves focus on the key (aegis)
+        if (e.isTrusted !== true) return;
+        if (handsOpen) return closeHands(true);
+        handsOpen = true;
+        moreEl!.setAttribute('aria-expanded', 'true');
+        drawFoot();
+      });
+    }
+    setText(moreEl, `+${n} ▾`);
+    moreEl.setAttribute('aria-label', `${n} more ${n === 1 ? 'hand' : 'hands'}`);
+    return moreEl;
+  }
+  function closeHands(back: boolean): void {
+    if (!handsOpen) return;
+    handsOpen = false;
+    // focus first, then the rows go: a removed focused key would drop focus to the body
+    if (back && moreEl?.isConnected) moreEl.focus({ preventScroll: true });
+    handsMenu.replaceChildren();
+    handsMenu.remove();
+    moreEl?.setAttribute('aria-expanded', 'false');
+    drawFoot();
+  }
+  /** aegis I6: the room above the foot (to the head) cannot hold one 28px row with the menu's padding and border. */
+  const HANDS_ROW_ROOM = 28 + 10;
+  function handsNoRoom(): boolean {
+    return foot.getBoundingClientRect().top - 4 - (head.getBoundingClientRect().bottom + 4) < HANDS_ROW_ROOM;
+  }
+  /** One row per hand behind the key, in the foot's order, each whole: seal, name, ◇ session, count, its own key. */
+  function drawHandsMenu(): void {
+    if (!moreEl) return;
+    const rows = behindHands.map((k) => {
+      const ke = [...grantEls.values()].find((e) => e.hand === k);
+      if (ke) {
+        fullHand(ke);
+        ke.hand.removeAttribute('title');
+      }
+      const id = (k as HTMLElement).dataset.hand ?? '';
+      const row = [...handsMenu.children].find((r) => (r as HTMLElement).dataset.handRow === id) ?? h('div', 'bd-menu-row bd-hands-row', { 'data-hand-row': id });
+      syncKids(row as HTMLElement, [k]);
+      return row;
+    });
+    syncKids(handsMenu, rows);
+    if (handsMenu.previousElementSibling !== moreEl) moreEl.after(handsMenu);
+    // above the foot, never over it; its right edge on the key; inside the leaf (never past its left inset); its
+    // height up to the head's bottom, the rows scrolling inside (board-centre-only)
+    const f = foot.getBoundingClientRect();
+    const k = moreEl.getBoundingClientRect();
+    const top = head.getBoundingClientRect().bottom + 4;
+    // (as the notices' menu, Mika E3 r3) its right edge on the key while its rows fit left of it; else out to the
+    // foot's right inset; a row that still does not fit cuts its name and session with … (whole in title=)
+    const left = f.left + 14;
+    handsMenu.style.maxWidth = '';
+    handsMenu.style.right = `${Math.max(0, f.right - k.right)}px`;
+    const natural = handsMenu.scrollWidth;
+    const wide = natural > k.right - left;
+    handsMenu.style.right = `${wide ? 14 : Math.max(0, f.right - k.right)}px`;
+    handsMenu.style.maxWidth = `${Math.max(0, (wide ? f.right - 14 : k.right) - left)}px`;
+    // mika F1 (the foot's F1-a rule in a row): when the session is cut and the name is the shared one, the name goes
+    // and the session is measured again; a row whose name or session is cut or gone has both whole in title=
+    const isCut = (x: Element | null): boolean => !!x && (x as HTMLElement).scrollWidth > (x as HTMLElement).clientWidth + 0.5;
+    for (const r of handsMenu.children) {
+      const hand = r.firstElementChild as HTMLElement | null;
+      if (!hand) continue;
+      const name = hand.querySelector<HTMLElement>(':scope > bdi');
+      const sess = hand.querySelector<HTMLElement>(':scope > .bd-hand-s:not(.bd-hand-note)');
+      if (name) name.hidden = false;
+      const shared = !!sess && !sess.hidden;
+      if (shared && isCut(sess) && name) name.hidden = true;
+      const full = hand.querySelector('svg')?.getAttribute('aria-label') ?? '';
+      const gone = (!!name && name.hidden) || isCut(name) || (!!sess && !sess.hidden && isCut(sess));
+      if (gone && full) hand.title = full;
+      else hand.removeAttribute('title');
+    }
+    // aegis I6: too short, it takes the leaf's whole height (over the foot, and the head when it must), so every
+    // hand's row is in view; Esc or a press outside gives the leaf back
+    if (handsNoRoom()) {
+      const lb = el.getBoundingClientRect();
+      handsMenu.style.bottom = `${Math.round(f.bottom - (lb.bottom - 4))}px`;
+      handsMenu.style.maxHeight = `${Math.max(0, lb.height - 8)}px`;
+    } else {
+      handsMenu.style.bottom = '';
+      handsMenu.style.maxHeight = `${Math.max(0, f.top - 4 - top)}px`;
+    }
+  }
+  let footDrawing = false;
   function drawFoot(): void {
+    footDrawing = true;
+    try {
+      drawFootNow();
+    } finally {
+      footDrawing = false;
+    }
+  }
+  function drawFootNow(): void {
     const kids: Node[] = [];
     const marks = handle && handle.isAlive() ? handle.marks() : [];
     const hands = handle && handle.isAlive() ? footHands(marks, o.sessionName) : [{ hand: 'you' as const, n: 0 }];
@@ -964,10 +1299,10 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         const name = h('bdi', '', { title: f.session ? `${f.name}, ${f.session}` : f.name }, handName(f.name));
         // two agent hands that would read the same: each carries its session, ◇ and the name cut at 16 (session_hint)
         const hint = f.session ? [' ', h('span', 'bd-hand-s', { title: f.session }, '◇ ', h('bdi', '', {}, f.session))] : [];
-        kids.push(h('span', 'bd-hand', {}, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ' ', slot(f.n)));
-      } else if (f.hand === 'unknown') kids.push(h('span', 'bd-hand', {}, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} `, slot(f.n)));
+        kids.push(h('span', 'bd-hand', { 'data-hand': `agent:${f.id}` }, sealElement(f.seal, f.session ? `${f.name}, ${f.session}` : f.name), ' ', name, ...hint, ' ', slot(f.n)));
+      } else if (f.hand === 'unknown') kids.push(h('span', 'bd-hand', { 'data-hand': 'unknown' }, h('span', 'bd-pin unk inline', { 'aria-hidden': 'true' }), ` ${LEAF_COPY.unknownHand} `, slot(f.n)));
     }
-    syncKids(foot, kids);
+    // (the hands go into the foot through lay() below: a key in the open menu is never moved back first)
     // a pending change past its quiet: drawn again then
     const pend = grants.find((g) => g.since !== null && now - g.since < DIM_GRANT_QUIET_MS);
     if (pend && grantQuietTimer === null) grantQuietTimer = setTimeout(() => ((grantQuietTimer = null), drawFoot()), DIM_GRANT_QUIET_MS - (now - pend.since!) + 5);
@@ -975,39 +1310,103 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     // (0) a not-running note goes first, from the last hand back (its meaning stays in the key's sentence; ruling F1-b);
     // (1) from the last keyed hand back, its session's name is cut to 5 characters and …;
     // (2a, mika F1-a) on EVERY keyed hand that shows a session, at once, the shared name ('Claude') goes: the session
-    //     is what tells two Claudes apart; (2b) only then the session, from the last hand back, and last a lone name.
+    //     is what tells two Claudes apart; (2b) only then the session, from the last hand back, and last a lone name;
+    // (3) hands that still do not fit, from the last, go behind '+<k> ▾' (T-2026-11-26-004), whose menu holds them
+    //     whole, each keyed one with its own draw key. Each split starts again from whole hands (a hand put behind
+    //     gives the ones left their words back). 'you' and the first attached hand stay, except where even that
+    //     does not fit (hands_foot.narrow): then every hand is a menu row.
     // A hand whose words went carries them whole in title= (and in the seal's accessible name and the key's sentence)
     const over = (): boolean => foot.scrollWidth > foot.clientWidth + 0.5;
-    const back = [...keyedEls].reverse();
-    for (const e of back) {
-      if (!over()) break;
-      if (!e.note.hidden && e.key) e.note.hidden = true;
-    }
-    for (const e of back) {
-      if (!over()) break;
-      if (e.session !== null && [...e.session].length > SESSION_FLOOR) setText(e.hintName, `${[...e.session].slice(0, SESSION_FLOOR).join('').trimEnd()}…`);
-    }
-    if (over()) for (const e of keyedEls) if (e.session !== null) e.name.hidden = true;
-    for (const e of back) {
-      if (!over()) break;
-      e.hint.hidden = true;
-      e.name.hidden = true;
+    const fit = (shown: readonly KeyedHand[]): void => {
+      for (const e of shown) {
+        fullHand(e);
+        e.note.hidden = e.note.textContent === '';
+      }
+      const back = [...shown].reverse();
+      for (const e of back) {
+        if (!over()) break;
+        if (!e.note.hidden && e.key) e.note.hidden = true;
+      }
+      for (const e of back) {
+        if (!over()) break;
+        if (e.session !== null && [...e.session].length > SESSION_FLOOR) setText(e.hintName, `${[...e.session].slice(0, SESSION_FLOOR).join('').trimEnd()}…`);
+      }
+      if (over()) for (const e of shown) if (e.session !== null) e.name.hidden = true;
+      for (const e of back) {
+        if (!over()) break;
+        e.hint.hidden = true;
+        e.name.hidden = true;
+      }
+    };
+    const idOf = (k: Node): string => (k as HTMLElement).dataset?.hand ?? '';
+    const youEl = kids[0]!;
+    const rest = kids.slice(1);
+    const keyedOf = (k: Node): KeyedHand | undefined => keyedEls.find((e) => e.hand === k);
+    const lay = (shown: readonly Node[], behindN: number): void => {
+      syncKids(foot, [youEl, ...shown, ...(behindN > 0 ? [moreKey(behindN), ...(handsOpen ? [handsMenu] : [])] : [])]);
+      fit(shown.map(keyedOf).filter((e): e is KeyedHand => !!e));
+    };
+    // ORDER AND FOCUS: while the menu is open or focus is in the foot, the split is frozen (no hand moves in or out
+    // of the foot under the pointer or the focus); a hand that arrives then joins the end of the menu
+    const frozen = handsOpen || foot.contains(document.activeElement);
+    let behind: Node[];
+    if (handsOpen && handsNoRoom()) {
+      // aegis I6 (too short): the room above the foot cannot hold one row; the menu lists EVERY hand, those that
+      // were in the foot included, and may cover the foot, so each key is in it and in view
+      lay([], rest.length);
+      behind = rest;
+    } else if (frozen && shownIds) {
+      const shown = rest.filter((k) => shownIds!.has(idOf(k)));
+      behind = rest.filter((k) => !shownIds!.has(idOf(k)));
+      lay(shown, behind.length);
+    } else {
+      // aegis I5: an unkeyed hand arriving (a mark of an unattached agent) or going behind never moves a key. The keyed
+      // hands are fitted first, alone; unkeyed hands are then added after them while they fit, WITHOUT fitting the
+      // keyed ones again; the ones that do not fit go behind '+<k> ▾', placed after the keys as they stand. Only when
+      // that key itself has no room are the keyed hands fitted again with room for it (a clipped key is worse)
+      const keyedN = rest.filter((k) => !!keyedOf(k));
+      const unkeyed = rest.filter((k) => !keyedOf(k));
+      // the first attached hand stays while '+<k> ▾' has room beside it; a lone hand never goes (hands_foot.narrow)
+      const maxCut = rest.length < 2 ? 0 : keyedN.length;
+      const fitKeyed = (res: number): number => {
+        let c = 0;
+        lay(keyedN, res);
+        while (over() && c < maxCut) {
+          c++;
+          lay(keyedN.slice(0, keyedN.length - c), c + res);
+        }
+        return c;
+      };
+      const tail = (n: number): Node[] => (n > 0 ? [moreKey(n), ...(handsOpen ? [handsMenu] : [])] : []);
+      let cut = fitKeyed(0);
+      let added = 0;
+      if (unkeyed.length) {
+        const shownKeyed = keyedN.slice(0, keyedN.length - cut);
+        if (cut === 0) {
+          while (added < unkeyed.length) {
+            syncKids(foot, [youEl, ...shownKeyed, ...unkeyed.slice(0, added + 1), ...tail(unkeyed.length - added - 1)]);
+            if (over()) break;
+            added++;
+          }
+        }
+        syncKids(foot, [youEl, ...shownKeyed, ...unkeyed.slice(0, added), ...tail(cut + unkeyed.length - added)]);
+        if (over() && added > 0) {
+          added = 0;
+          syncKids(foot, [youEl, ...shownKeyed, ...tail(cut + unkeyed.length)]);
+        }
+        if (over()) cut = fitKeyed(unkeyed.length);
+      }
+      const shown = [...keyedN.slice(0, keyedN.length - cut), ...unkeyed.slice(0, added)];
+      behind = rest.filter((k) => !shown.includes(k));
+      shownIds = new Set(shown.map(idOf));
     }
     for (const e of keyedEls) {
       const gone = e.name.hidden || (e.session !== null && (e.hint.hidden || e.hintName.textContent !== e.session));
-      if (gone) e.hand.title = e.full;
+      if (gone && foot.contains(e.hand)) e.hand.title = e.full;
       else e.hand.removeAttribute('title');
     }
-    // hands that do not fit become '+<k> more', with every hand in title=; 'you' and every hand with a key stay
-    // (a draw key is never put out of reach: design hands_foot.overflow; the '+<k> ▾' menu is not built yet)
-    const cuttable = kids.filter((k) => !(k as HTMLElement).classList?.contains('bd-hand-keyed'));
-    const all = kids.map((k) => (k.textContent ?? '').trim()).join(' · ');
-    let cut = 0;
-    while (foot.scrollWidth > foot.clientWidth && cuttable.length - cut > 1) {
-      cut++;
-      const gone = new Set(cuttable.slice(cuttable.length - cut));
-      syncKids(foot, [...kids.filter((k) => !gone.has(k)), h('span', 'bd-hand bd-more-hands', { title: all }, `+${cut} more`)]);
-    }
+    behindHands = behind;
+    if (!behind.length && handsOpen) closeHands(false);
     // The check: decided by THE HANDS ALONE (design check.place). It is in the foot when its LONGEST wording and its
     // gap fit after the hands, whatever it says now; never cut, no short form. Measured with the foot's own paint.
     const used = foot.lastElementChild ? foot.lastElementChild.getBoundingClientRect().right - foot.getBoundingClientRect().left : 0;
@@ -1018,6 +1417,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     probe.remove();
     const fits = !!checkWords && foot.clientWidth > 0 && used + need <= foot.clientWidth - pad + 0.5;
     if (fits) foot.append(h('span', `bd-check${checkTone === 'bad' ? ' bad' : ''}`, { title: checkTitleText }, checkWords));
+    if (handsOpen && behind.length) drawHandsMenu();
     if (fits !== checkInFoot) {
       checkInFoot = fits;
       el.dataset.checkPlace = fits ? 'foot' : 'list';
@@ -1090,6 +1490,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       over.hidden = state === 'failed';
       // the foot first: whether the check is in it decides the line under the head's lead (check.signs.unchecked)
       drawFoot();
+      // (the list: words change in place, the order kept, a new dimension at the end: mika D5)
+      if (dimsOpen) drawDims();
       drawHead(state);
       fitHead();
       // aegis F5: the check reads differently while words are held: the owner paints it again on a flip
@@ -1229,6 +1631,25 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   };
   const onKey = (e: KeyboardEvent): void => {
     const active = document.activeElement;
+    // the Dimensions list (design dimension-list.keyboard): no letter typed here reaches the rail or the board
+    if (dimsOpen && active instanceof HTMLElement && dimsMenu.contains(active)) {
+      if (dimsKey(e, active)) return;
+    }
+    // the hands menu: Esc closes it ONLY and returns focus to '+<k> ▾' (the leaf stays open); ↓ from the key goes
+    // into its rows, ↑ ↓ move between the rows' keys
+    if (handsOpen && active instanceof HTMLElement && foot.contains(active)) {
+      if (e.key === 'Escape') return void (e.preventDefault(), e.stopPropagation(), closeHands(true));
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const keys = [...handsMenu.querySelectorAll<HTMLElement>('.bd-grant')];
+        const at = keys.indexOf(active);
+        // (mika 8: ↑ from the first row goes back to '+<k> ▾'; too short, the menu covers that key, so ↑ there closes
+        // the menu first, as Esc does: focus never lands on a key hidden under the menu, WCAG 2.4.11)
+        if (e.key === 'ArrowUp' && active !== moreEl && keys.indexOf(active) === 0 && handsNoRoom()) return void (e.preventDefault(), e.stopPropagation(), closeHands(true));
+        const next = active === moreEl ? (e.key === 'ArrowDown' ? keys[0] : undefined) : at === 0 && e.key === 'ArrowUp' ? (moreEl ?? undefined) : at >= 0 ? keys[at + (e.key === 'ArrowDown' ? 1 : -1)] : undefined;
+        if (next) next.focus();
+        if (active === moreEl || at >= 0) return void (e.preventDefault(), e.stopPropagation());
+      }
+    }
     const s = st();
     // held still (the link is down, the fold is out of date) Esc folds the leaf at once: there is no tool to leave
     // and the held-still line tells the person to fold (a text being typed while down keeps its field: guardTypedKey)
@@ -1390,13 +1811,46 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
   el.addEventListener('focusin', (e) => {
     if (e.target instanceof HTMLTextAreaElement && boardHost.contains(e.target)) for (const fn of [...textOpen]) fn();
   }, true);
-  headKey.addEventListener('click', (e) => (load === 'failed' ? start() : o.onDimensions?.(e)));
+  headKey.addEventListener('click', (e) => {
+    if (load === 'failed') return start();
+    if (dimsOpen) return closeDims(true);
+    // the list hangs under the key when there is room for its open row, the rule and the find row (mika D3)
+    if (o.dimRows && e.isTrusted && dimsFits()) return openDims();
+    o.onDimensions?.(e);
+  });
+  headKey.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' && !dimsOpen && o.dimRows && e.isTrusted && load !== 'failed' && dimsFits()) {
+      e.preventDefault();
+      openDims();
+    }
+  });
+  dimsMenu.addEventListener('click', onDimsPress);
+  const dimsFocusOut = (e: FocusEvent): void => {
+    if (!dimsOpen || dimsDrawing) return;
+    const to = e.relatedTarget;
+    if (to instanceof Node && (dimsMenu.contains(to) || to === headKey)) return;
+    closeDims(false);
+  };
+  dimsMenu.addEventListener('focusout', dimsFocusOut);
+  headKey.addEventListener('focusout', dimsFocusOut);
+  const outsideDims = (e: Event): void => void (dimsOpen && !(e.target instanceof Node && (dimsMenu.contains(e.target) || headKey.contains(e.target))) && closeDims(false));
+  document.addEventListener('pointerdown', outsideDims, true);
   escKey.addEventListener('click', foldAsk);
   // the leaf redraws on a focus move ONLY when the yield state flips (review B1: redrawing on every focusin replaced
   // the rail key under the pointer and looped with the redraw's own refocus)
   const onFocus = (): void => void queueMicrotask(() => yielded() !== wasYielded && draw());
   document.addEventListener('focusin', onFocus);
   document.addEventListener('focusout', onFocus);
+  // the hands menu closes where it is when focus leaves the foot and its menu, or on a press outside them
+  // (a redraw moves no focused key: a focusout it causes is not focus leaving)
+  foot.addEventListener('focusout', (e) => {
+    if (footDrawing || (e.relatedTarget instanceof Node && foot.contains(e.relatedTarget))) return;
+    if (handsOpen) return closeHands(false);
+    // aegis I4b: the split was frozen while focus was here; drawn again once it leaves, so nothing stays clipped
+    queueMicrotask(() => drawFoot());
+  });
+  const outsideHands = (e: Event): void => void (handsOpen && !(e.target instanceof Node && foot.contains(e.target)) && closeHands(false));
+  document.addEventListener('pointerdown', outsideHands, true);
   const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => draw());
   ro?.observe(el);
 
@@ -1412,6 +1866,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       requestAnimationFrame(() => void (saidLine.textContent = line));
     },
     drawFoot: () => drawFoot(),
+    refreshDims: () => drawDims(),
     handle: () => handle,
     state: leafState,
     setTheme(next) {
@@ -1529,6 +1984,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       clip.clear();
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('focusout', onFocus);
+      document.removeEventListener('pointerdown', outsideHands, true);
+      document.removeEventListener('pointerdown', outsideDims, true);
       cancelAnimationFrame(sceneFrame);
       ro?.disconnect();
       handle?.unmount();

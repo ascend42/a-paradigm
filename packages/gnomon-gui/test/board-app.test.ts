@@ -107,7 +107,7 @@ describe('the hash-mismatch hook is the PREVIEW mod\'s and is in nothing the ker
     // below is a real no (the files are there, decoded, and searchable)
     expect([...bundle.keys()]).toEqual(expect.arrayContaining(['app.js', 'board/board.js']));
     expect(has('app.js', 'not checked yet')).toBe(true);
-    expect(has('app.js', 'Dimensions in this project (/boards)')).toBe(true);
+    expect(has('app.js', 'Dimensions in this project')).toBe(true);
     expect(has('board/board.js', 'excalidraw')).toBe(true);
     let scanned = 0;
     for (const name of bundle.keys()) {
@@ -184,7 +184,7 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(list.composer).toBe('');
     expect(list.rows).toHaveLength(1);
     // the time is the kernel's `lastAt` (hh:mm today, else the date: the preview's clocks are not the same day)
-    expect(list.rows[0]).toMatch(/^Totals are off by a cent.*(\d\d:\d\d|[A-Z][a-z]{2} \d{1,2}) · folded$/);
+    expect(list.rows[0]).toMatch(/^○Totals are off by a cent.*(\d\d:\d\d|[A-Z][a-z]{2} \d{1,2}( \d{4})?) · folded · opening starts it again$/);
     // Enter on the row opens it on that press (typed: `command`)
     expect(f('fromList')).toMatchObject({ open: true, phase: 'open', nodes: 1, marks: 1, sameAsMod: true, frames: 6 });
     expect(f('fromList').rows.slice(-1)).toEqual(['session.start:command']);
@@ -717,14 +717,15 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
       { press: '#composer-text' }, ...type('/board plan B'), { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent === 'plan B'`, as: 'plan B open', timeoutMs: 30_000 }, { read: `${CUR}.session.dim`, as: 'dimB' }, ...foldByEsc,
       { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 1' }, { key: 'ArrowDown' }, { key: 'Enter' }, { until: `${BOARD_UP} && ${CUR}.leaf.el.querySelector('.title').textContent !== 'plan B'`, as: 'A open', timeoutMs: 30_000 }, { read: `${CUR}.session.dim`, as: 'dimA' },
       agentRow(`${JSON.stringify('')} || [...${A}.board.dock.rows()].find((r) => r.title === 'plan B').dim`),
-      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 2' }, { read: ROWS, as: 'before' },
-      // the person is on plan B's row (the first); an agent then writes on the open board A: it would re-sort A first
+      { press: '#composer-text' }, ...type('/boards'), { key: 'Enter' }, { until: `document.querySelectorAll('#palette-list [data-dim]').length >= 2`, as: 'list 2' }, { key: 'ArrowDown' }, { read: ROWS, as: 'before' },
+      // S1.4 (mika D1): the open board A's row is first; the person moves to plan B's row (the second); an agent then
+      // writes on plan B and on the open board A: a re-sort would move the rows under the selection
       agentRow(`${CUR}.session.dim`), { until: `(${A}.board.dock.rows()[0] || {}).dim === ${CUR}.session.dim && ${CUR}.session.view().nodes.size > 0`, as: 'rows() re-sorted by the agent row, and the open board drew it' }, { read: ROWS, as: 'after' },
       { key: 'Enter' }, { until: `document.getElementById('palette').hidden && !!${CUR} && ${CUR}.leaf.state() !== 'loading'`, as: 'what Enter opened is up', timeoutMs: 20_000 }, { read: `${CUR}.leaf.el.querySelector('.title').textContent`, as: 'opened' },
     ]);
     expect(b.errors).toEqual([]);
     type Row = { dim: string; title: string; sel: boolean };
-    expect((b.before as Row[])[0]).toMatchObject({ title: 'plan B', sel: true });
+    expect((b.before as Row[])[1]).toMatchObject({ title: 'plan B', sel: true });
     expect((b.after as Row[]).map((r) => r.dim)).toEqual((b.before as Row[]).map((r) => r.dim));
     expect((b.after as Row[]).find((r) => r.sel)!.title).toBe('plan B');
     expect(b.opened).toBe('plan B');
@@ -920,14 +921,14 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     expect(String(a.palRow)).toMatch(/^Open board/);
     expect(f('palette')).toMatchObject({ open: false, rows: [], frames: 0 });
     expect(a.placeholder).toBe('find a dimension');
-    expect(String(a.listRow)).toMatch(/^Totals are off/);
+    expect(String(a.listRow)).toMatch(/^[●○…]?Totals are off/);
     expect(f('list')).toMatchObject({ open: false, frames: 2 });
     // the second session, before it has a board of its own: its repo is unknown, and no other repo's board is listed
     expect(a.unknownRows).toMatchObject({ open: true, head: 'Dimensions' });
     expect((a.unknownRows as { rows: string[] }).rows).toEqual([]);
     // the second session lists both dimensions of the repo; the first session's says it is not this session's yet
     expect(a.rows as string[]).toHaveLength(2);
-    expect((a.filtered as string[])[0]).toMatch(/^Totals are off.*not this session’s yet$/);
+    expect((a.filtered as string[])[0]).toMatch(/Totals are off.*folded · opening attaches this session$/);
     // ONE press: dim.attach then dim.open, both on the same stamp
     expect(f('attached')).toMatchObject({ open: true, phase: 'open' });
     expect(f('attached').rows.slice(-2)).toEqual(['attach', 'session.start:command']);
@@ -939,14 +940,16 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
 
   it('the head\'s Dimensions ▾ key (design board-leaf anatomy) opens the same list as /boards on a real press; a synthetic press opens nothing; Esc closes the list and leaves the board open with focus back on the key; a row of the open board puts the keys on it', async () => {
     const KEY = `(() => { const k = [...document.querySelectorAll('.bd-host .bd-head .key')].find((x) => /^Dimensions/.test(x.textContent)); return k ? { text: k.textContent, title: k.title, disabled: k.getAttribute('aria-disabled'), popup: k.getAttribute('aria-haspopup'), focused: document.activeElement === k } : null; })()`;
-    const LIST = `({ open: !document.getElementById('palette').hidden, head: document.querySelector('#palette-list .menu-h')?.textContent ?? null, placeholder: document.getElementById('palette-input').placeholder, rows: [...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent) })`;
+    const PAL = `({ open: !document.getElementById('palette').hidden, head: document.querySelector('#palette-list .menu-h')?.textContent ?? null, placeholder: document.getElementById('palette-input').placeholder, rows: [...document.querySelectorAll('#palette-list [data-dim]')].map((r) => r.textContent) })`;
+    // S1.4 (design dimension-list): the key now opens the leaf's own list under it; the palette's list stays for /boards
+    const LIST = `(() => { const m = document.querySelector('.bd-dims'); return { open: !!m, head: m ? m.getAttribute('aria-label') : null, rows: m ? [...m.querySelectorAll('.bd-dr')].map((r) => r.textContent) : [] }; })()`;
     const a = await real([
       ...typeBoard, { read: KEY, as: 'key' },
       // a real press
-      { press: '.bd-host .bd-head .key[aria-haspopup="dialog"]' }, { wait: 400 }, { read: LIST, as: 'list' }, facts('listOpen'),
+      { press: '.bd-host .bd-head .key[aria-haspopup="menu"]' }, { wait: 400 }, { read: LIST, as: 'list' }, facts('listOpen'),
       { key: 'Escape' }, { wait: 400 }, { read: LIST, as: 'closed' }, facts('afterEsc'), { read: KEY, as: 'keyAfter' },
       // again, and Enter on its row: the board this session has open takes the keys (nothing is sent)
-      { press: '.bd-host .bd-head .key[aria-haspopup="dialog"]' }, { wait: 400 }, { key: 'Enter' }, { wait: 700 }, { read: LIST, as: 'chosen' }, facts('afterRow'),
+      { press: '.bd-host .bd-head .key[aria-haspopup="menu"]' }, { wait: 400 }, { key: 'Enter', text: '\r' }, { wait: 700 }, { read: LIST, as: 'chosen' }, facts('afterRow'),
     ]);
     // untrusted, in a run of its own (so this is the assertion that fails when the trusted rule goes, not the driver):
     // a synthetic click and a synthetic Enter on the key open nothing
@@ -960,10 +963,10 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
     const f = (k: string): Facts => a[k] as Facts;
     expect(a.errors).toEqual([]);
     // the specimen's key: its words, its title, a key that presses
-    expect(a.key).toMatchObject({ text: 'Dimensions ▾', title: 'Dimensions in this project (/boards)', disabled: null, popup: 'dialog' });
-    expect(a.list).toMatchObject({ open: true, head: 'Dimensions', placeholder: 'find a dimension' });
+    expect(a.key).toMatchObject({ text: 'Dimensions ▾', title: 'Dimensions in this project', disabled: null, popup: 'menu' });
+    expect(a.list).toMatchObject({ open: true, head: 'Dimensions in this project' });
     expect((a.list as { rows: string[] }).rows).toHaveLength(1);
-    expect((a.list as { rows: string[] }).rows[0]).toMatch(/^Totals are off by a cent/);
+    expect((a.list as { rows: string[] }).rows[0]).toMatch(/^●Totals are off by a cent/);
     // the list is over the board, not in its place: the board stays open and nothing was sent for it
     expect(f('listOpen')).toMatchObject({ open: true, frames: 1, rows: ['session.start:command'] });
     expect(a.closed).toMatchObject({ open: false });
@@ -976,11 +979,13 @@ describe.skipIf(ASKED ? false : !!process.env.CI || !chrome)('the board in the r
 
   it('a HELD Enter on the head\'s Dimensions ▾ key opens the list and chooses nothing: the repeats neither pick row 0 nor leave the open board; a synthetic click on the palette\'s "Dimensions: list" row opens nothing', async () => {
     const LIST = `({ open: !document.getElementById('palette').hidden, dims: document.getElementById('palette-input').placeholder === 'find a dimension', rows: document.querySelectorAll('#palette-list [data-dim]').length })`;
+    // S1.4: the head key opens the leaf's own list (design dimension-list)
+    const MENU = `(() => { const m = document.querySelector('.bd-dims'); return { open: !!m, dims: !!m, rows: m ? m.querySelectorAll('.bd-dr').length : 0 }; })()`;
     const a = await real([
       ...typeBoard, facts('before'),
-      { read: `(() => { const k = document.querySelector('.bd-host .bd-head .key[aria-haspopup="dialog"]'); k.focus(); return document.activeElement === k; })()`, as: 'onKey' },
+      { read: `(() => { const k = document.querySelector('.bd-host .bd-head .key[aria-haspopup="menu"]'); k.focus(); return document.activeElement === k; })()`, as: 'onKey' },
       // Enter pressed and HELD: the first key-down presses the key, three repeats follow before the release
-      { key: 'Enter', text: '\r', held: 3, settle: 400 }, { read: LIST, as: 'held' }, facts('afterHeld'),
+      { key: 'Enter', text: '\r', held: 3, settle: 400 }, { read: MENU, as: 'held' }, facts('afterHeld'),
       { key: 'Escape' }, { wait: 300 },
       // the palette's own row, by a synthetic click
       { key: 'k', meta: true }, { wait: 200 }, ...type('Dimensions: list'), { wait: 200 },
