@@ -1971,16 +1971,16 @@ function invertCore(rows, mint, current, o = {}) {
 function dimInvertRows(rows, mint, current) {
   return invertCore(rows, mint, current).entries.map((e) => e.op);
 }
-function dimUndoPriorOf(prior, ops) {
+function dimUndoPriorOf(prior, planOps, rowOps) {
+  const targets = (op) => op.type === "update" ? [op.id] : op.type === "move" ? op.ids : [];
+  const inRow = new Set(rowOps);
   const named = /* @__PURE__ */ new Set();
-  for (const op of ops) {
-    if (op.type === "update") named.add(op.id);
-    else if (op.type === "move") for (const id of op.ids) named.add(id);
-  }
+  for (const op of rowOps) for (const id of targets(op)) named.add(id);
+  for (const op of planOps) if (!inRow.has(op)) for (const id of targets(op)) named.delete(id);
   return prior.filter((e) => named.has(e[0])).map((e) => [e[0], e[1], e[2]]);
 }
 function planDimUndo(o) {
-  const empty = () => ({ ops: [], restored: [], prior: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
+  const empty = () => ({ ops: [], restored: [], prior: [], marks: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== "function") return empty();
     const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x) => Number.isSafeInteger(x)));
@@ -2053,7 +2053,7 @@ function planDimUndo(o) {
           if ((later.touched.get(id) ?? Number.NEGATIVE_INFINITY) > f.at) return [];
           return [[id, f.before?.otherBy ?? null, f.before?.wordsBy ?? null]];
         });
-        return { ops: v.ok, restored: keep.flatMap((u) => inv.restored.has(u) ? [inv.restored.get(u)] : []), prior, skipped: skipped2, applied, more };
+        return { ops: v.ok, restored: keep.flatMap((u) => inv.restored.has(u) ? [inv.restored.get(u)] : []), prior, marks: entries.map((e) => e.unit.slice(2)), skipped: skipped2, applied, more };
       }
       const bad = new Set(v.refused.map((r) => r.index >= 0 && r.index < entries.length ? entries[r.index].unit : "*"));
       if (bad.has("*")) break;
@@ -2062,7 +2062,7 @@ function planDimUndo(o) {
     }
     for (const u of keep) refused.add(u);
     const { applied: _none, ...skipped } = tally([]);
-    return { ops: [], restored: [], prior: [], skipped, applied: 0, more };
+    return { ops: [], restored: [], prior: [], marks: [], skipped, applied: 0, more };
   } catch {
     return empty();
   }

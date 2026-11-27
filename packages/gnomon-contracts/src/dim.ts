@@ -2068,15 +2068,19 @@ export function dimInvertRows(rows: ReadonlyArray<{ before: DimState; ops: reado
 }
 
 /**
- * The prior entries of a plan that one packed row may carry (E-fix): those whose id an update or a move of `ops`
- * names, as `dimUndoMarkOf` honours them. The mod and the page's stand-in write `undo.prior` from this only.
+ * The prior entries of a plan that one packed row may carry (E-fix): those whose id an update or a move of `rowOps`
+ * names, as `dimUndoMarkOf` honours them, and only when EVERY op of `planOps` naming that id is in `rowOps` (by
+ * reference: the rows are packed from the plan's own op objects). The mod and the page's stand-in pack by mark
+ * (`DimUndoPlan.marks`) and write `undo.prior` from this only.
  */
-export function dimUndoPriorOf(prior: readonly DimPriorEntry[], ops: readonly DimOp[]): DimPriorEntry[] {
+export function dimUndoPriorOf(prior: readonly DimPriorEntry[], planOps: readonly DimOp[], rowOps: readonly DimOp[]): DimPriorEntry[] {
+  const targets = (op: DimOp): string[] => (op.type === 'update' ? [op.id] : op.type === 'move' ? op.ids : []);
+  const inRow = new Set<DimOp>(rowOps);
   const named = new Set<string>();
-  for (const op of ops) {
-    if (op.type === 'update') named.add(op.id);
-    else if (op.type === 'move') for (const id of op.ids) named.add(id);
-  }
+  for (const op of rowOps) for (const id of targets(op)) named.add(id);
+  // Aegis I-1 (defence in depth): a mark any of whose plan ops is NOT in this row is never settled here: a later row
+  // holding the rest may never land
+  for (const op of planOps) if (!inRow.has(op)) for (const id of targets(op)) named.delete(id);
   return prior.filter((e) => named.has(e[0])).map((e) => [e[0], e[1], e[2]]);
 }
 
@@ -2098,6 +2102,11 @@ export interface DimUndoPlan {
    * (`dimUndoPriorOf`); the fold puts them back (see `DimFoldNode`).
    */
   prior: Array<DimPriorEntry>;
+  /**
+   * E-fix (Aegis I-1, Arky R1): the mark each op of `ops` belongs to (its node id; a re-add's OLD id, with its link
+   * re-points), parallel to `ops`. A caller that splits `ops` into rows keeps every op of one mark in one row.
+   */
+  marks: string[];
   /**
    * Counted per MARK, each mark once (a mark both updated and deleted by the set is one mark). These are the
    * inputs of the undo's answer line and of the page's notice (Luna's words, E-design): "N marks changed since were
@@ -2149,7 +2158,7 @@ export function planDimUndo(o: {
   ids?: readonly string[];
   scan?: (text: string) => readonly string[];
 }): DimUndoPlan {
-  const empty = (): DimUndoPlan => ({ ops: [], restored: [], prior: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
+  const empty = (): DimUndoPlan => ({ ops: [], restored: [], prior: [], marks: [], skipped: { changed: 0, gone: 0, refused: 0, partial: 0 }, applied: 0, more: false });
   try {
     if (!Array.isArray(o.rows) || !o.current || typeof o.mint !== 'function') return empty();
     const setSeqs = new Set(o.rows.map((r) => r.seq).filter((x): x is number => Number.isSafeInteger(x)));
@@ -2224,7 +2233,7 @@ export function planDimUndo(o: {
           if ((later.touched.get(id) ?? Number.NEGATIVE_INFINITY) > f.at) return [];
           return [[id, f.before?.otherBy ?? null, f.before?.wordsBy ?? null]];
         });
-        return { ops: v.ok, restored: keep.flatMap((u) => (inv.restored.has(u) ? [inv.restored.get(u)!] : [])), prior, skipped, applied, more };
+        return { ops: v.ok, restored: keep.flatMap((u) => (inv.restored.has(u) ? [inv.restored.get(u)!] : [])), prior, marks: entries.map((e) => e.unit.slice(2)), skipped, applied, more };
       }
       // drop every mark the whole batch refused (by op index), then try once more
       const bad = new Set(v.refused.map((r) => (r.index >= 0 && r.index < entries.length ? entries[r.index]!.unit : '*')));
@@ -2234,7 +2243,7 @@ export function planDimUndo(o: {
     }
     for (const u of keep) refused.add(u);
     const { applied: _none, ...skipped } = tally([]);
-    return { ops: [], restored: [], prior: [], skipped, applied: 0, more };
+    return { ops: [], restored: [], prior: [], marks: [], skipped, applied: 0, more };
   } catch {
     return empty();
   }

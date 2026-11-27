@@ -283,6 +283,9 @@ components:
 
   contract-dim-shape:
     description: >-
+      S1.4 E-fix round 2 (Aegis I-1): planDimUndo returns marks (each op's
+      mark, parallel to ops); dimUndoPriorOf(prior, planOps, rowOps) keeps an
+      entry only when every plan op naming that mark is in the row.
       S1.4 E-fix (T-2026-11-27-006, Aegis I-1 after P5): dimUndoMarkOf honours
       undo.prior ([id, otherBy, wordsBy], at most 64, each only for an update
       or move target of the same row); on a person's own honoured undo (human

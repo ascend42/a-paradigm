@@ -154,8 +154,9 @@ const FIRST_PARTY_PACKAGE_HASHES = new Set<string>([
   // approves the Update card; it can no longer be staged, decided or rolled back to.
   // S1.4 E3 re-pins 1.2.0: dim.open and dim.check answer `pins` (the sets still pinned, GUI answers only); the E3
   // review (Aegis A1) re-pins it again: a person's undo of their own act pins nothing. The E-fix (T-2026-11-27-006)
-  // re-pins 1.2.0 in place (unreleased): the person's undo row carries `undo.prior`, and dim-shape.mjs is rebuilt
-  'sha256:074c6d06f6e6b2f2ec8f411c78b67d2a75f4784b6024aba130301dca74c35a76', // packages/gnomon-mods/dimension 1.2.0 (gnomon.dimension)
+  // re-pins 1.2.0 in place (unreleased): the person's undo row carries `undo.prior`, and dim-shape.mjs is rebuilt;
+  // its round 2 packs the undo by mark (Aegis I-1) and re-pins in place again
+  'sha256:eb65fd571ea91ee0e17223c0175008ff010f959d7851e45c8e98961351cda927', // packages/gnomon-mods/dimension 1.2.0 (gnomon.dimension)
   // superseded format-2 pins: an existing install keeps its first-party tier (it is refused at init for its old
   // modAbiId echo, not re-tiered, until `gnomon mod install` refreshes it)
   ...SUPERSEDED_FIRST_PARTY_PINS.keys(),

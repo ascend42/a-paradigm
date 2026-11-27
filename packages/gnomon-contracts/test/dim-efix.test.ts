@@ -52,7 +52,7 @@ function undo(log: DimRow[], of: DimChangeSet, undoer: DimActor, o: { ids?: stri
     ...(o.ids ? { ids: o.ids } : {}),
   });
   const ofKey = of.kind === 'act' ? { principal: of.principal, act: of.act } : { hsid: of.hsid, turn: of.turn };
-  const prior = o.prior === false ? [] : dimUndoPriorOf(plan.prior, plan.ops);
+  const prior = o.prior === false ? [] : dimUndoPriorOf(plan.prior, plan.ops, plan.ops);
   const marker = { of: ofKey, ...(o.ids ? { ids: o.ids } : {}), ...(plan.restored.length ? { restored: plan.restored } : {}), ...(prior.length ? { prior } : {}) };
   const row = undoer.cls === 'human' ? person(plan.ops, { undo: marker }) : agent(undoer, o.n ?? 9, plan.ops, { undo: marker });
   return { row, plan };
@@ -217,6 +217,26 @@ describe('E-fix: the person\'s own honoured full undo clears otherBy and wordsBy
     const cli = { ...forged([{ type: 'update', id: id(1), patch: { color: null } }], { hsid: 'h2', turn: 'turn:h2/1' }) };
     (cli.payload as Record<string, unknown>).relayedFor = { principal: HUMAN, surface: 'cli' };
     expect(signs(foldDim([...log, cli]), 1)).toEqual([handOf(kit), handOf(claude)]);
+  });
+
+  it('Aegis I-1: a mark whose undo ops are split across two rows is never settled by the first; plan.marks keeps a mark\'s ops together', () => {
+    const log = board();
+    log.push(agent(claude, 1, [{ type: 'update', id: id(1), patch: { color: 'cobalt' } }, { type: 'update', id: id(2), patch: { color: 'lemon' } }, { type: 'update', id: id(1), patch: { label: 'Gateway' } }]));
+    const set = log.slice(-1);
+    const plan = planDimUndo({ rows: set.map((r) => ({ before: foldDim(log.filter((x) => x.seq < r.seq)), ops: (r.payload as { ops: unknown[] }).ops, seq: r.seq })), after: [], current: foldDim(log), actor: human, undoer: handOf(human), mint, of: turnOf('h1', 1) });
+    // the planner names each op's mark: both of id(1)'s inverses carry id(1)
+    expect(plan.marks).toHaveLength(plan.ops.length);
+    expect(plan.ops.map((op, i) => [(op as { id: string }).id, plan.marks[i]]).every(([a, b]) => a === b)).toBe(true);
+    expect(plan.marks.filter((m) => m === id(1))).toHaveLength(2);
+    // split by op (what packing by mark rules out): the first row holds ONE of id(1)'s ops and the second never lands
+    const first = plan.ops.filter((op, i) => plan.marks[i] === id(2) || op === plan.ops[plan.marks.indexOf(id(1))]);
+    expect(first.filter((op) => (op as { id: string }).id === id(1))).toHaveLength(1);
+    const prior = dimUndoPriorOf(plan.prior, plan.ops, first);
+    expect(prior.map((e) => e[0])).toEqual([id(2)]);
+    log.push(person(first, { undo: { of: { hsid: 'h1', turn: 'turn:h1/1' }, ...(prior.length ? { prior } : {}) } }));
+    const s = foldDim(log);
+    expect(signs(s, 1)).toEqual([handOf(claude), handOf(claude)]); // half undone: the signs stay
+    expect(signs(s, 2)).toEqual([undefined, undefined]);
   });
 
   it('dimUndoMarkOf honours prior entries only for an update or move of the same row, three items, within the cap', () => {
