@@ -24,6 +24,7 @@ import { DIM_KINDS, dimHash, foldDim } from '@a-company/gnomon-contracts';
 // @ts-expect-error plain .mjs dev script (no types)
 import { findChrome, shootLeaf } from '../../gnomon-gui/scripts/board-leaf-shots.mjs';
 import { followLog, GnomonClient, type Transport } from '../../gnomon-gui/src/core/client.js';
+import { CHECK_COPY } from '../../gnomon-gui/src/core/board-leaf.js';
 import { DimStore } from '../../gnomon-gui/src/core/dim-store.js';
 import { parseLaunchFragment } from '../../gnomon-gui/src/core/launch.js';
 import { GuiStore, rowOf } from '../../gnomon-gui/src/core/store.js';
@@ -136,9 +137,12 @@ describe.skipIf(!SANDBOX_OK || !CHROME || !!process.env.CI)('#gui-board-dock in 
 
     // the page: the leaf is open on the engine from the pinned chunk, under the kernel's CSP, with no error
     expect(opened).toMatchObject({ open: true, engine: true, inert: '', reconnect: false, csp: [], errs: [] });
-    expect(opened!.check).toMatch(/^Checked up to change \d+/);
+    // the check in words (9ad03947): an open board with no mark has nothing to check yet
+    expect(opened!.check).toBe(CHECK_COPY.empty);
     expect(drawn).toMatchObject({ open: true, inert: '', csp: [], errs: [] });
     expect(drawn!.foot).toMatch(/you 1/);
+    // S1.4 P4b: the person's own dim.op ok answer is a hash point, so after the drag the board is checked to its last change
+    expect(drawn!.check).toBe(CHECK_COPY.latest);
 
     // the log, read by the other client: one dimension of this session, opened by a typed command, holding ONE rect
     await waitFor(() => dims.list().some((l) => l.nodes === 1), 20_000, 20);
