@@ -87,20 +87,6 @@ describe('#gui-dim-live the write path', () => {
     expect(r.live.status().pending).toBe(0);
   });
 
-  it('8. the NEWEST stamp rides a coalesced batch, and a stamp-less edit never replaces a queued stamp', () => {
-    const r = rig();
-    const g1 = press(r.now());
-    const g2 = press(r.now());
-    const g3 = press(r.now());
-    r.live.local([rect(1)], g1);
-    r.live.local([rect(2)], g2);
-    r.live.local([rect(3)], g3);
-    expect(r.live.local([rect(4)], null).notice?.code).toBe('not-sent');
-    confirmNext(r);
-    expect(r.sent[0]!.gesture).toBe(g1);
-    expect(r.sent[1]).toMatchObject({ ops: [rect(2), rect(3)] });
-    expect(r.sent[1]!.gesture).toBe(g3);
-  });
 
   it('12. a row of mine that lands before its ack and differs from what was sent is never applied twice', () => {
     const r = rig({ connId: 'conn:me' });
@@ -219,38 +205,7 @@ describe('#gui-dim-live the write path', () => {
     expect(r.live.status().inFlight).toBe(true);
   });
 
-  it('one send in flight; a queued edit joins the batch still waiting when both fit one row, else it starts another (an action is never cut across two batches)', () => {
-    const r = rig();
-    r.live.local([rect(1)], press(r.now()));
-    r.live.local([rect(2)], press(r.now()));
-    r.live.local([rect(3), rect(4)], press(r.now()));
-    expect(r.sent).toHaveLength(1);
-    expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
-    const many: DimOp[] = [];
-    for (let i = 0; i < 62; i++) many.push(rect(100 + i));
-    r.live.local(many, press(r.now()));
-    expect(r.live.status().pending).toBe(3);
-    confirmNext(r);
-    expect(r.sent).toHaveLength(2);
-    expect(r.sent[1]!.ops).toEqual([rect(2), rect(3), rect(4)]);
-    expect(r.live.status()).toMatchObject({ pending: 2, inFlight: true });
-    expect(r.nodes()).toHaveLength(66);
-  });
 
-  it('a merge fills a batch to exactly 64 ops (3 + 61) and not one more', () => {
-    const r = rig();
-    r.live.local([rect(1)], press(r.now())); // in flight
-    r.live.local([rect(2), rect(3), rect(4)], press(r.now()));
-    r.live.local(Array.from({ length: 61 }, (_, i) => rect(100 + i)), press(r.now()));
-    expect(r.live.status().pending).toBe(2);
-    r.live.local([rect(500)], press(r.now()));
-    expect(r.live.status().pending).toBe(3);
-    confirmNext(r);
-    expect(r.sent[1]!.ops).toHaveLength(64);
-    expect(r.sent[1]!.ops.slice(0, 3)).toEqual([rect(2), rect(3), rect(4)]);
-    confirmNext(r);
-    expect(r.sent[2]!.ops).toEqual([rect(500)]);
-  });
 
   it('18. sends are spaced: a queued batch waits for the gap, and nextDeadline says when', () => {
     const r = rig();
@@ -514,8 +469,8 @@ describe('#gui-dim-live undo (Aegis B3)', () => {
     expect(r.live.undo(press(r.now())).changed).toBe(true);
     r.live.local([rect(3)], press(r.now()));
     r.live.local([rect(4)], press(r.now()));
-    // in flight: the undo; queued: one batch of the two edits
-    expect(r.live.status().pending).toBe(2);
+    // in flight: the undo; queued: the two edits, one batch each (S1.4 E3 item 7: one act per action, never merged)
+    expect(r.live.status().pending).toBe(3);
     expect(r.sent[2]!.ops).toHaveLength(1);
     expect(r.live.view().nodes.get(ULID(700))!.node).toMatchObject({ kind: 'rect', x: 1 });
     expect(r.live.view().gone.has(ULID(1))).toBe(true);
@@ -644,15 +599,6 @@ describe('#gui-dim-live rows that fit, and one action is one undo step (P4a)', (
     expect(r.nodes()).toEqual([]);
   });
 
-  it('a merged batch never goes over the row budget: a second heavy edit starts its own batch', () => {
-    const r = rig();
-    r.live.local([rect(900)], press(r.now())); // in flight
-    r.live.local([text(1, 3900), text(2, 3900)], press(r.now()));
-    r.live.local([text(3, 3900), text(4, 3900)], press(r.now()));
-    expect(r.live.status().pending).toBe(3);
-    r.live.local([rect(901)], press(r.now()));
-    expect(r.live.status().pending).toBe(3); // a light one still joins the last
-  });
 
   it('the inverse of a heavy delete is itself packed into rows; the entry leaves the list at its last row', () => {
     const r = rig();
@@ -756,15 +702,6 @@ describe('#gui-dim-live review of PR #118, group B: every action that is sent ca
     expect(r.nodes()).toHaveLength(5);
   });
 
-  it('B2: two edits merge into one batch only while the merged batch can still be undone as one', () => {
-    const r = rig();
-    r.live.local([rect(900)], press(r.now())); // in flight
-    r.live.local(Array.from({ length: 40 }, (_, i) => rect(1 + i)), press(r.now()));
-    r.live.local(Array.from({ length: 24 }, (_, i) => rect(100 + i)), press(r.now()));
-    expect(r.live.status().pending).toBe(2); // 40 + 24 = 64: one batch, undoable as one
-    r.live.local([rect(200)], press(r.now()));
-    expect(r.live.status().pending).toBe(3); // a 65th op starts its own
-  });
 
   it('B3: a group is undone row by row against the state just before each row: another hand\'s change between two rows is what comes back', () => {
     const r = rig();
@@ -787,12 +724,11 @@ describe('#gui-dim-live review of PR #118, group B: every action that is sent ca
     confirmNext(r);
     expect(r.live.status()).toMatchObject({ pending: 0, canUndo: true });
     expect(r.live.view().nodes.has(ULID(50))).toBe(false);
-    // ONE undo: X comes back with the words it had just before MY delete, not the words from before the action
-    expect(r.live.undo(press(r.now()))).toEqual(OK);
-    const inverse = r.sent[r.sent.length - 1]!.ops;
-    const readd = inverse.find((o) => o.type === 'add') as { node: { text: string } };
-    expect(readd.node.text).toBe('their newer words');
-    expect(inverse.filter((o) => o.type === 'delete')).toHaveLength(6);
+    // S1.4 E3 (Aegis, P4a review): X now carries another hand's words, so this ⌘Z is the MOD's to plan (it keeps
+    // their wordsBy on the re-add); the page's planner, row by row, is held by the earlier tests of this group
+    const u = r.live.undo(press(r.now()));
+    expect(u.delegate).toEqual({ act: r.sent[r.sent.length - 1]!.act, base: r.live.view().seq });
+    expect(r.live.status().canUndo).toBe(false);
   });
 
   it('B5: when the mod does not answer, the batch in flight and everything waiting behind it fall together, with one notice', () => {

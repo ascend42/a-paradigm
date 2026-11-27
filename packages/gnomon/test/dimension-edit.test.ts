@@ -426,6 +426,30 @@ describe('#dimension-mod E1 item 3: pins (Aegis G6, N1; the orchestrator\'s ruli
     expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: false, code: 'undo-expired' });
     expect(await w.run('dim.undo', { dim, of: turnOf(B, 2) })).toMatchObject({ ok: true, applied: 1 });
   });
+
+  it('S1.4 E3 the pins read: dim.check and a reopen answer pins (oldest first, the of shape, at most 8); dim.seen and a ninth pin leave it; no tool answers it', { timeout: 240_000 }, async () => {
+    const w = await editRig();
+    const dim = await board(w);
+    const ops = Array.from({ length: 10 }, (_, i) => rectOp(i + 1));
+    await w.run('dim.op', { dim, ops });
+    for (let t = 1; t <= 3; t++) await draw(w, dim, B, t, [{ type: 'update', id: ulid(t), patch: { color: 'graphite' } }]);
+    const chk = await w.run('dim.check', { dim });
+    expect(chk.pins).toEqual([turnOf(B, 1), turnOf(B, 2), turnOf(B, 3)]);
+    expect(await w.run('dim.seen', { dim, of: turnOf(B, 2) })).toMatchObject({ ok: true });
+    expect((await w.run('dim.check', { dim })).pins).toEqual([turnOf(B, 1), turnOf(B, 3)]);
+    // a reopen answers it too
+    const open = await w.run('dim.open', { dim, opened: 'menu' });
+    expect(open.pins).toEqual([turnOf(B, 1), turnOf(B, 3)]);
+    // cap 8: the ninth pushes the oldest out
+    for (let t = 4; t <= 10; t++) await draw(w, dim, B, t, [{ type: 'update', id: ulid(t), patch: { color: 'graphite' } }]);
+    const pins = (await w.run('dim.check', { dim })).pins as unknown[];
+    expect(pins).toHaveLength(8);
+    expect(pins).not.toContainEqual(turnOf(B, 1));
+    expect(pins.at(-1)).toEqual(turnOf(B, 10));
+    // an agent's view never carries it (GUI answers only)
+    const view = await w.tool('dim-view', { dim }, agentOf(B));
+    expect(JSON.stringify(view)).not.toContain('"pins"');
+  });
 });
 
 describe('#dimension-mod E1: a catch-up notes rows the mod did not answer for', () => {
@@ -1315,5 +1339,33 @@ describe('E1 re-check (Aegis R-1, N-a)', () => {
     expect(await w.run('dim.undo', { dim, of: turnOf(B, 1) })).toMatchObject({ ok: true });
     const acts = w.opRows().filter((r) => (r.payload as { undo?: { of: Record<string, string> } }).undo?.of.hsid === B).map((r) => (r.payload as { act: string }).act);
     expect(acts.at(-1)).not.toBe(first);
+  });
+});
+
+describe('E3 review A1 (Aegis): a person\'s undo of their own act pins nothing', () => {
+  const human = { cls: 'human', principal: HUMAN };
+  type H = { sets: Map<string, { pinned: boolean; undidPerson: boolean }>; pins: string[] };
+  const NOW = 1_000_000_000;
+  const setup = async () => {
+    const m = await loadModel();
+    const node = (id: string, by: unknown) => ({ node: { id, kind: 'rect', x: 0, y: 0, z: 'V', w: 1, h: 1 }, by, hsid: A, addedSeq: 1 });
+    const nodes = new Map<string, unknown>([[ulid(1), node(ulid(1), human)]]);
+    const state = { dim: dimId(1), title: 't', attached: [A, B], ended: false, nodes, gone: new Set(), seq: 1, ops: 0, unapplied: 0 };
+    const h = m.emptyHistory!('log:x') as H & Record<string, unknown>;
+    return { m, h, state };
+  };
+  const undoRow = (seq: number, act: string, of: string, relayedFor: Record<string, string>) => ({
+    seq,
+    payload: { v: 1, dim: dimId(1), ops: [{ type: 'update', id: ulid(1), patch: { color: 'graphite' } }], act, undo: { of: { principal: HUMAN, act: of } }, relayedFor },
+  });
+
+  it('a person\'s dim.undo (and redo) of their own act leaves h.pins unchanged; another hand\'s undo of it still pins', async () => {
+    const { m, h, state } = await setup();
+    const gui = { principal: HUMAN, connId: GUI.connId, surface: 'gui' };
+    for (let i = 0; i < 10; i++) m.noteHistoryRow!(h, state, undoRow(20 + i, ulid(40 + i, '01JDAC'), ulid(60 + i, '01JDAC'), gui), NOW);
+    expect(h.pins).toEqual([]);
+    for (const s of h.sets.values()) expect(s.undidPerson).toBe(false);
+    m.noteHistoryRow!(h, state, undoRow(40, ulid(80, '01JDAC'), ulid(60, '01JDAC'), { ...agentOf(B, 5) }), NOW);
+    expect(h.pins).toHaveLength(1);
   });
 });

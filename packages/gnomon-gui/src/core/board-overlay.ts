@@ -44,7 +44,7 @@ export type OverlayItem =
   /** the 6px ring (design author-seal seal.ring): a seal or hollow pin under 50%, and a mark too short to show its dash */
   | { type: 'ring'; id: string; left: number; top: number }
   /** the hand's name as a chip beside its seal or hollow pin, on hover and selection (design author-seal naming) */
-  | { type: 'chip'; id: string; left: number; top: number; name: string }
+  | { type: 'chip'; id: string; left: number; top: number; name: string; lead?: string }
   /**
    * round a text that is not yours: `box` the dashed box with its padding (at 50% and over, and on hover or
    * selection), `tight` the box 2px off the letters (under 50%), `rule` a dashed rule under the text when its
@@ -52,7 +52,18 @@ export type OverlayItem =
    */
   | { type: 'textbox'; id: string; left: number; top: number; width: number; height: number; form: 'box' | 'tight' | 'rule' }
   /** a stub's words, over its scrap */
-  | { type: 'stub'; id: string; left: number; top: number; width: number; height: number; kind: string; dashed: boolean };
+  | { type: 'stub'; id: string; left: number; top: number; width: number; height: number; kind: string; dashed: boolean }
+  /**
+   * S1.4 E3 (author-seal.other_hands.countermark): the hand that changed a mark of ANOTHER hand signs at its foot, a
+   * 6px ring for an agent or the unknown hand, a 6px filled disc for you (`disc`)
+   */
+  | { type: 'counter'; id: string; left: number; top: number; disc: boolean }
+  /** words by another hand in a mark (words_sign): a dashed rule along the bottom of the label box; its seal is a ring or seal item at its right end */
+  | { type: 'words'; id: string; left: number; top: number; width: number }
+  /** a removed mark of yours while its notice stands (turn_strip.notice.cut_out): four corner ticks, `arm` long; `traced` draws them in --ink */
+  | { type: 'cutout'; id: string; left: number; top: number; width: number; height: number; arm: number; traced: boolean }
+  /** board-trace: the hand edge 2px out round a traced mark (at most TRACE_MAX), no fill, no pointer, aria-hidden */
+  | { type: 'trace'; id: string; left: number; top: number; width: number; height: number; ring?: boolean };
 
 /**
  * The kinds whose stroke the engine draws dashed for a hand that is not yours. It does NOT dash a freehand stroke
@@ -203,7 +214,82 @@ export interface OverlayOptions {
   /** the engine id of the mark under the pointer (hoveredMark), if any */
   hovered?: string | null;
   theme?: BoardTheme;
+  /** S1.4 E3: removed marks of yours whose notice stands, by NODE id, with their last box (scene units) and remover */
+  cutouts?: ReadonlyArray<{ node: string; x: number; y: number; width: number; height: number; by: BoardAuthor }>;
+  /** S1.4 E3 board-trace: the NODE ids a hovered or focused notice (or hand) traces */
+  trace?: ReadonlySet<string>;
 }
+
+/**
+ * S1.4 E3 countermark geometry (design author-seal.other_hands.countermark; Mika R1, R2, measured on the engine's
+ * handles: the SE handle is [right, right+8] x [bottom, bottom+8] on the screen at every zoom).
+ */
+export const COUNTER = Object.freeze({ dx: 7, dy: 7, hoverDx: 13, hoverDy: 15, chipTop: 12, run: 0.8, side: 5, pastLabel: 4, clear: 4, half: 3 });
+/** board-trace: boxes 2px out, at most this many */
+export const TRACE_MAX = 64;
+export const TRACE_OUT = 2;
+/** board-trace.zoom (Mika E3 D2): under 50% the boxes stand 1px out; a box under 6px is the ring's 6px circle, dashed */
+export const TRACE_OUT_LOW = 1;
+export const TRACE_RING = 6;
+
+/** board-trace.limits: the words for `n` traced marks out of view */
+export const traceOutCopy = (n: number): string => `${n} of these marks ${n === 1 ? 'is' : 'are'} out of view`;
+
+/** board-trace.limits (Mika E3 D2): how many of the marks `ids` names (held and shown) lie wholly out of the view. */
+export function traceOutOfView(marks: readonly BoardMarkView[], view: BoardView, ids: ReadonlySet<string>): number {
+  let n = 0;
+  for (const m of marks) {
+    if (m.labelOf || m.node === null || !ids.has(m.node)) continue;
+    const b = markBox(view, m);
+    if (b.left + b.width < 0 || b.top + b.height < 0 || b.left > view.width || b.top > view.height) n++;
+  }
+  return n;
+}
+/** a cut-out's ticks: arms min(6, a quarter of the shorter side); a box under 12px on the screen ticks a 12px square */
+export const CUTOUT = Object.freeze({ arm: 6, min: 12 });
+
+/**
+ * Where a countermark stands (screen px, its centre). A CLOSED mark: (right - 7, bottom + 7), under the bottom edge
+ * and clear of the engine's SE handle. An OPEN mark (stroke, arrow): 80% of the way along its last run, 5px off on
+ * the lower side; with a bound label, past the label box's end edge + 4 when that is further along.
+ */
+export function countermarkPoint(m: BoardMarkView, view: BoardView): { left: number; top: number } {
+  const box = markBox(view, m);
+  if (!m.lastRun || (m.kind !== 'stroke' && m.kind !== 'arrow')) {
+    const p = { left: box.left + box.width - COUNTER.dx, top: box.top + box.height + COUNTER.dy };
+    if (!m.angle) return p;
+    // a rotated mark: its rotated corner, as the engine turns its own handles about the box's centre
+    const cx = box.left + box.width / 2;
+    const cy = box.top + box.height / 2;
+    const c = Math.cos(m.angle);
+    const s = Math.sin(m.angle);
+    return { left: cx + (p.left - cx) * c - (p.top - cy) * s, top: cy + (p.left - cx) * s + (p.top - cy) * c };
+  }
+  const a = toScreen(view, m.lastRun.x1, m.lastRun.y1);
+  const b = toScreen(view, m.lastRun.x2, m.lastRun.y2);
+  const dx = b.left - a.left;
+  const dy = b.top - a.top;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return { left: b.left, top: b.top + COUNTER.side };
+  const ux = dx / len;
+  const uy = dy / len;
+  let t: number = COUNTER.run;
+  if (m.labelBox) {
+    const l = toScreen(view, m.labelBox.x, m.labelBox.y);
+    const w = m.labelBox.width * view.zoom;
+    const hgt = m.labelBox.height * view.zoom;
+    const far = Math.max(...[[0, 0], [w, 0], [0, hgt], [w, hgt]].map(([cx, cy]) => ((l.left + cx! - a.left) * ux + (l.top + cy! - a.top) * uy) / len));
+    t = Math.min(1, Math.max(t, far + COUNTER.pastLabel / len));
+  }
+  // the lower side: the normal pointing down the screen (for a vertical run, to the right)
+  let nx = -uy;
+  let ny = ux;
+  if (ny < 0 || (ny === 0 && nx < 0)) (nx = -nx), (ny = -ny);
+  return { left: a.left + dx * t + nx * COUNTER.side, top: a.top + dy * t + ny * COUNTER.side };
+}
+
+/** Two hands are the same hand on the board (the same class, and the same agent key for an agent). */
+const sameHand = (a: BoardAuthor, b: BoardAuthor): boolean => a.cls === b.cls && (a.cls !== 'agent' || (b.cls === 'agent' && a.id === b.id));
 
 /** The chip stands this far to the right of the centre of the seal or hollow pin it names. */
 export const CHIP_OFF = SEAL_HALF + 4;
@@ -224,6 +310,31 @@ export const CHIP_HALF = 9;
 export const SELECTED_OFF = 7;
 export const SELECTED_BELOW = ENGINE_HANDLE_REACH + 2 + CHIP_HALF;
 
+/** A chip's agent name as the strip and the said lines read it (design board-leaf.said.by: 'claude' is 'Claude'). */
+export const chipNameOf = (label: string): string => {
+  const n = boardAgentName(label);
+  return n === 'claude' ? 'Claude' : n;
+};
+
+/** The gap between the words' rule and their sign (Mika E3 C3). */
+export const WORDS_SIGN_GAP = 2;
+
+/**
+ * Mika E3 C3: where the words sign (half-size `half`) stands for a label whose rule runs from `left` for `width` at
+ * screen `y`, inside the mark's box `box`, never over the words: its left edge at the rule's end + 2, at the rule's
+ * height; where the box's right edge would pull it back over the words, below the rule (its top at the rule + 2) at
+ * the rule's end, kept inside the box. Null when neither fits (the caller draws the ring).
+ */
+export function wordsSignAt(left: number, width: number, y: number, box: { left: number; top: number; width: number; height: number }, half: number): { left: number; top: number } | null {
+  const end = left + width;
+  const maxLeft = box.left + box.width - half - WORDS_SIGN_GAP;
+  const beside = end + WORDS_SIGN_GAP + half;
+  if (beside <= maxLeft) return { left: beside, top: Math.min(y, box.top + box.height - half - WORDS_SIGN_GAP) };
+  const below = { left: Math.min(end, maxLeft), top: y + WORDS_SIGN_GAP + half };
+  if (below.top + half <= box.top + box.height - WORDS_SIGN_GAP && below.left - half >= box.left) return below;
+  return null;
+}
+
 /**
  * Everything the host draws over the marks, in paint order. `left`/`top` of a pin, hollow pin, seal or ring is the
  * point it is CENTRED on; a chip's is its left edge and vertical centre. A label (the text inside a sticky or a
@@ -237,12 +348,12 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
   const out: OverlayItem[] = [];
   const low = view.zoom < LOW_ZOOM;
   // (Mika R2) the chip is kept whole in view: past the right edge it stands to the LEFT of its seal; its top is clamped
-  const chip = (id: string, at: { left: number; top: number }, half: number, name: string): void => {
-    const shown = handName(name);
+  const chip = (id: string, at: { left: number; top: number }, half: number, name: string, lead?: string): void => {
+    const shown = lead ? `${lead} ${handName(name)}` : handName(name);
     const w = chipWidth(shown);
     const right = at.left + half + 4;
     const left = right + w > view.width - 4 ? at.left - half - 4 - w : right;
-    out.push({ type: 'chip', id, left: Math.max(4, left), top: Math.min(view.height - 9, Math.max(9, at.top)), name });
+    out.push({ type: 'chip', id, left: Math.max(4, left), top: Math.min(view.height - 9, Math.max(9, at.top)), name, ...(lead ? { lead } : {}) });
   };
   const named = (m: BoardMarkView, at: { left: number; top: number }, on: 'pin' | 'text' | 'mark', shown: boolean, half: number): void => {
     if (m.author.cls === 'agent') {
@@ -254,8 +365,11 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
       if (shown) chip(m.id, at, PIN_HALF, 'unknown hand');
     }
   };
-  for (const m of marks) {
-    if (m.labelOf) continue;
+  for (const raw of marks) {
+    if (raw.labelOf) continue;
+    // S1.4 E3 item 2 (author-seal.other_hands.words_sign): a text is unboxed ONLY when its hand and the hand of its
+    // words are both the person's. Your text with an agent's words gets the whole agent box, sealed as that hand
+    const m: BoardMarkView = raw.kind === 'text' && raw.author.cls === 'human' && raw.wordsBy && raw.wordsBy.cls !== 'human' ? { ...raw, author: raw.wordsBy } : raw;
     const box = markBox(view, m);
     const hand = handOf(m.author);
     const shown = hand !== 'you' && (m.selected || m.hovered === true || opts.hovered === m.id);
@@ -289,6 +403,84 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
       else if (low || tooSmall(m, view.zoom)) out.push({ type: 'ring', id: m.id, ...(line ? lineRingPoint(m, view) : markSealPoint(m, view, RING_HALF)) });
       else if (SEAL_ALWAYS.has(m.kind) || !ENGINE_DASHES.has(m.kind)) named(m, markSealPoint(m, view, pinHalf), 'mark', false, pinHalf);
     }
+    // S1.4 E3: the countermark of the other hand that changed it (otherBy), and the words sign (wordsBy)
+    if (m.otherBy && !sameHand(m.otherBy, m.author)) {
+      const pointed = m.selected || m.hovered === true || opts.hovered === m.id;
+      if (pointed && m.otherBy.cls !== 'human') {
+        // the full head on hover or selection (R1): never inside the handle square; its chip to the right, 'changed
+        // by <Name>' (Mika E3 D1). An open mark (a line or an arrow) has its head at its countermark's place
+        const at = m.lastRun ? countermarkPoint(m, view) : { left: box.left + box.width - COUNTER.hoverDx, top: box.top + box.height + COUNTER.hoverDy };
+        named({ ...m, author: m.otherBy }, at, 'mark', false, SEAL_HALF);
+        chip(m.id, { left: at.left, top: m.lastRun ? at.top + SEAL_HALF + 9 : box.top + box.height + COUNTER.chipTop + 9 }, SEAL_HALF, m.otherBy.cls === 'agent' ? chipNameOf(m.otherBy.name) : 'unknown hand', 'changed by');
+      } else {
+        if (pointed) {
+          // Mika E3 D1: the person's own change of another hand's mark: the disc stays, its chip says 'changed by you'
+          const c = countermarkPoint(m, view);
+          chip(m.id, c, COUNTER.half, 'you', 'changed by');
+        }
+        let at = countermarkPoint(m, view);
+        // 4px clear of the owner's ring or seal on the same mark
+        for (const it of out) {
+          if (it.id !== m.id || (it.type !== 'ring' && it.type !== 'seal' && it.type !== 'pin' && it.type !== 'hollow')) continue;
+          const half = it.type === 'ring' ? RING_HALF : it.type === 'seal' ? SEAL_HALF : PIN_HALF;
+          const need = half + COUNTER.half + COUNTER.clear;
+          const d = Math.hypot(at.left - it.left, at.top - it.top);
+          if (d < need) at = { left: it.left - Math.sqrt(Math.max(0, need * need - (at.top - it.top) ** 2)), top: at.top };
+        }
+        out.push({ type: 'counter', id: m.id, ...at, disc: m.otherBy.cls === 'human' });
+      }
+    }
+    if (m.wordsBy && m.kind !== 'text' && !sameHand(m.wordsBy, m.author) && m.labelBox) {
+      const l = toScreen(view, m.labelBox.x, m.labelBox.y);
+      const w = Math.max(1, m.labelBox.width * view.zoom);
+      const y = l.top + m.labelBox.height * view.zoom;
+      out.push({ type: 'words', id: m.id, left: l.left, top: y, width: w });
+      // Mika E3 C3 (the orchestrator's ruling): the sign never covers the words. Its left edge at the rule's end + 2;
+      // where the mark's right edge would pull it back over the words, below the rule (its top at the rule + 2),
+      // inside the mark; where neither fits, the ring beside the rule's end
+      const human = m.wordsBy.cls === 'human';
+      const want = low || m.wordsBy.cls !== 'agent' ? (human ? COUNTER.half : RING_HALF) : SEAL_HALF;
+      const ring = (): void => void out.push({ type: human ? 'counter' : 'ring', id: m.id, ...(wordsSignAt(l.left, w, y, box, human ? COUNTER.half : RING_HALF) ?? { left: l.left + w + WORDS_SIGN_GAP + (human ? COUNTER.half : RING_HALF), top: y }), ...(human ? { disc: true } : {}) } as OverlayItem);
+      const at = wordsSignAt(l.left, w, y, box, want);
+      if (want !== SEAL_HALF) ring();
+      else if (at) named({ ...m, author: m.wordsBy }, at, 'mark', false, SEAL_HALF);
+      else ring();
+      // Mika E3 D1: pointed at, the words sign's chip says whose words they are
+      if ((m.selected || m.hovered === true || opts.hovered === m.id) && m.wordsBy.cls !== 'human') {
+        const sign = out.at(-1) as { left: number; top: number };
+        chip(m.id, sign, want, m.wordsBy.cls === 'agent' ? chipNameOf(m.wordsBy.name) : 'unknown hand', 'words by');
+      }
+    }
+  }
+  for (const c of opts.cutouts ?? []) {
+    const tl = toScreen(view, c.x, c.y);
+    let w = c.width * view.zoom;
+    let hgt = c.height * view.zoom;
+    let left = tl.left;
+    let top = tl.top;
+    if (w < CUTOUT.min || hgt < CUTOUT.min) {
+      left += w / 2 - CUTOUT.min / 2;
+      top += hgt / 2 - CUTOUT.min / 2;
+      w = hgt = CUTOUT.min;
+    }
+    out.push({ type: 'cutout', id: c.node, left: left - 2, top: top - 2, width: w + 4, height: hgt + 4, arm: Math.min(CUTOUT.arm, Math.min(w, hgt) / 4), traced: opts.trace?.has(c.node) ?? false });
+    const foot = { left: left + w - COUNTER.dx, top: top + hgt + COUNTER.dy };
+    out.push(c.by.cls === 'human' ? { type: 'counter', id: c.node, ...foot, disc: true } : { type: 'counter', id: c.node, ...foot, disc: false });
+  }
+  if (opts.trace && opts.trace.size > 0) {
+    let n = 0;
+    for (const m of marks) {
+      if (n >= TRACE_MAX) break;
+      if (m.labelOf || m.node === null || !opts.trace.has(m.node)) continue;
+      const box = markBox(view, m);
+      const d = low ? TRACE_OUT_LOW : TRACE_OUT;
+      if (box.width < TRACE_RING || box.height < TRACE_RING) {
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+        out.push({ type: 'trace', id: m.id, left: cx - TRACE_RING / 2, top: cy - TRACE_RING / 2, width: TRACE_RING, height: TRACE_RING, ring: true });
+      } else out.push({ type: 'trace', id: m.id, left: box.left - d, top: box.top - d, width: box.width + 2 * d, height: box.height + 2 * d });
+      n++;
+    }
   }
   return out;
 }
@@ -301,11 +493,22 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
 export function selectionLine(marks: readonly BoardMarkView[], sessionName?: SessionNameOf): string | null {
   const picked = marks.filter((m) => m.selected && !m.labelOf);
   if (picked.length !== 1) return null;
-  const a = picked[0]!.author;
-  if (a.cls === 'human') return null;
-  const name = a.cls === 'agent' ? boardAgentName(a.name) : 'unknown hand';
-  const session = a.cls === 'agent' && a.session ? sessionLabel(a.session, sessionName) : null;
-  return session ? `${name} · ◇ ${session}` : name;
+  const m = picked[0]!;
+  // S1.4 E3 (author-seal.other_hands.selection; Mika E3 D5): every hand in it, owner first, then words by, changed
+  // by and put back by: 'yours · words by claude · changed by kit'; 'claude · ◇ fix-auth · changed by you'. The
+  // owner of a mark an undo re-added is its original hand; the hand that re-added it put it back
+  const owner = m.restoredFrom ?? m.author;
+  const putBy = m.restoredFrom && !sameHand(m.restoredFrom, m.author) ? m.author : null;
+  // (Mika E3 r3, the orchestrator's ruling: the name spelled as the chips spell it, chipNameOf)
+  const who = (a: BoardAuthor): string => (a.cls === 'human' ? 'you' : a.cls === 'agent' ? chipNameOf(a.name) : 'unknown hand');
+  const extra: string[] = [];
+  if (m.wordsBy && !sameHand(m.wordsBy, owner)) extra.push(`words by ${who(m.wordsBy)}`);
+  if (m.otherBy && !sameHand(m.otherBy, owner)) extra.push(`changed by ${who(m.otherBy)}`);
+  if (putBy) extra.push(`put back by ${who(putBy)}`);
+  if (owner.cls === 'human' && extra.length === 0) return null;
+  const name = owner.cls === 'human' ? 'yours' : who(owner);
+  const session = owner.cls === 'agent' && owner.session ? sessionLabel(owner.session, sessionName) : null;
+  return [session ? `${name} · ◇ ${session}` : name, ...extra].join(' · ');
 }
 
 /** The page's own name for a host session id, or null when the page does not know that session (never from the fold). */
@@ -360,3 +563,20 @@ export function footHands(marks: readonly BoardMarkView[], sessionName?: Session
 /** The longest name shown beside a seal (a bidi-isolated text node; the whole name stays in title=). */
 export const HAND_NAME_MAX = 24;
 export const handName = (name: string): string => ([...name].length > HAND_NAME_MAX ? `${[...name].slice(0, HAND_NAME_MAX - 1).join('').trimEnd()}…` : name);
+
+/**
+ * S1.4 E3 (turn_strip.notice.cut_out_hit, Mika R7): the cut-out a press selects, or null. Only a STILL click
+ * (`still`), with Select in hand, where no mark's box lies (the engine's marks first), inside a cut-out's last box
+ * (the topmost, the newest). Screen point relative to the board's top-left. Everything else is the engine's.
+ */
+export function cutoutAt(at: { x: number; y: number }, o: { still: boolean; tool: string; marks: readonly BoardMarkView[]; view: BoardView; cutouts: ReadonlyArray<{ node: string; x: number; y: number; width: number; height: number }> }): string | null {
+  if (!o.still || o.tool !== 'select') return null;
+  const inside = (b: { left: number; top: number; width: number; height: number }): boolean => at.x >= b.left && at.x <= b.left + b.width && at.y >= b.top && at.y <= b.top + b.height;
+  if (o.marks.some((m) => !m.labelOf && inside(markBox(o.view, m)))) return null;
+  for (let i = o.cutouts.length - 1; i >= 0; i--) {
+    const c = o.cutouts[i]!;
+    const tl = toScreen(o.view, c.x, c.y);
+    if (inside({ left: tl.left, top: tl.top, width: c.width * o.view.zoom, height: c.height * o.view.zoom })) return c.node;
+  }
+  return null;
+}

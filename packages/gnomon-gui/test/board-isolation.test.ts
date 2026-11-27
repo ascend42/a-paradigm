@@ -115,7 +115,15 @@ describe('#gui-board isolation: core/ and ui/ never import React or board code',
     // the engine is megabytes: the app bundle did not grow by it
     // the engine is 1.3 MB on its own: the app bundle grew by the board's host layer (about 165 kB), not by the engine
     expect(shipped('board/board.js').length).toBeGreaterThan(1_200_000);
-    expect(app.length).toBeLessThan(1_400_000);
+    // S1.4 E3 raised the cap from 1_400_000 (measured per module with an esbuild metafile against b9059906: 1,376,337 ->
+    // 1,421,262 bytes, +44,925, all E3 code the page itself runs: dim-session +11,455, dim-notices +10,122, the strip
+    // +6,951, the overlay +4,610, the leaf's words +2,649, board-turn +2,103, contracts +2,107 (dimAttrDigest and the
+    // marker readers; planDimUndo is NOT in app.js), the rest under 2 kB each). The cap only has to catch the engine,
+    // which is 1.2 MB or more on its own
+    // The E3 review rounds (r1 to r4: the notices' fallbacks, the strip's ladders, the menu's place, chips) grew it to
+    // 1,450,552 at 802e05fb: the cap goes to 1_500_000, still far under the engine
+    expect(app.length).toBeLessThan(1_500_000);
+    expect(app).not.toMatch(/\bplanDimUndo\b/);
   });
 
   it.each(['index.html', 'boot.js', 'styles.css'])('the SHIPPED %s neither references the board chunk nor can load it', (name) => {

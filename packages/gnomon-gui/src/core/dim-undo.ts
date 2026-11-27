@@ -17,9 +17,11 @@
  * B3 bounds, held by `planUndo`: inverses come only from this page's own CONFIRMED batches (the caller passes the
  * ops of rows the log returned, never pending ones); the inverse goes through `validateDimOps` against the board
  * as it stands and is refused WHOLE when any op fails, when it is over DIM_UNDO_LIMITS.ops ops, or when it undoes
- * more than DIM_UNDO_LIMITS.rows rows. Stated consequence: undoing a delete of an agent's mark re-adds it as the
- * person's own (a human may already edit any mark; the re-add is theirs). The mod's undo of a change-set (S1.4 E1)
- * reverses this for its rows: `planDimUndo` records the original hand in the row's `restored` marker (Aegis G5).
+ * more than DIM_UNDO_LIMITS.rows rows. S1.4 E3 (Aegis, P4a review): this planner is used ONLY for an action whose
+ * deletes took none but the person's own marks. A ⌘Z of an action that deleted a mark drawn, restored, worded or
+ * changed by another hand is handed to the MOD (`dim.undo` of the person's act; core/dim-live.ts `delegate`), whose
+ * `planDimUndo` re-adds it in its ORIGINAL hand with its `wordsBy`/`otherBy` (the row's `restored` marker, G5). So
+ * no re-add here is ever another hand's mark, and this planner writes no marker (the page cannot: dim.op refuses one).
  *
  * The inverse itself is the shared contracts algorithm (`dimInvertRows`, S1.4 E0); this file keeps the page's B3
  * bounds and its all-or-nothing validation for Cmd+Z unchanged.

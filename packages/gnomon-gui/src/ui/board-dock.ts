@@ -20,8 +20,12 @@
  */
 import type { BoardModule, BoardTheme } from '../core/board.js';
 import { DIM_KINDS } from '@a-company/gnomon-contracts';
-import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle } from '../core/board-leaf.js';
-import { boardAgentName, handName, sessionShort } from '../core/board-overlay.js';
+import { arrivalLine, checkLine, checkTitle, checkTone, GRANT_COPY, KEEP_COPY, keepStateLine, linkDownLine, noticeLine, removedLine, tabTitle, undoLine } from '../core/board-leaf.js';
+import { markStripRow, noticeStripRow, type TurnStripRow } from '../core/board-turn.js';
+import { hhmm } from '../core/loops.js';
+/** S1.4 E3: the folded board's edge tab while a notice about your marks stands */
+const UNDO_TAB = ' · your marks changed';
+import { boardAgentName, cutoutAt, handName, sessionShort, traceOutCopy, traceOutOfView } from '../core/board-overlay.js';
 import { dimensionRows, listingsFor, openedHowOf, planBoardCommand, planBoardKey, planBoardMenu, planBoardRow, type BoardAsk, type BoardOpenedHow, type BoardPlan, type DimensionRow } from '../core/board-open.js';
 import { mintDimNodeId, type DimSession, type DimSessionNotice, type DimSessions, type DimSessionStatus } from '../core/dim-session.js';
 import { mountBoardLeaf, type BoardLeaf, type LeafGrant } from './board-leaf.js';
@@ -102,6 +106,27 @@ export interface BoardDock {
   setTheme(theme: BoardTheme): void;
   /** the open leaf and its session (tests and the app's layout checks) */
   current(): { leaf: BoardLeaf; session: DimSession } | null;
+  /** S1.4 E3: the open board's notice row and its +k menu rows, as the strip draws them; null with no board open */
+  noticeStrip(): NoticeStrip | null;
+  /** S1.4 E3: a strip key pressed (the strip checked U1); the session drops anything else */
+  noticeKey(what: 'undo' | 'redo' | 'dismiss' | 'bring', target: { key: string; rev: number; id?: string; own?: boolean }, event: Event): void;
+  /** S1.4 E3 (U2): the strip is hovered, focused or its menu open */
+  freezeNotices(on: boolean): void;
+  /** S1.4 E3 board-trace: the notice the pointer or focus is on, or null */
+  traceNotice(key: string | null): void;
+  /** S1.4 E3: a focused key's row left: focus goes to the board, never to another key */
+  focusBoard(): void;
+}
+
+/** S1.4 E3: what the turn strip draws of the open board's notices. */
+export interface NoticeStrip {
+  slot: TurnStripRow | null;
+  behind: TurnStripRow[];
+  /** every undo-family key is disabled: pending past 300 ms (`slow`), or held (link down, out of date, catching up) */
+  pending: { since: number } | null;
+  held: string | null;
+  /** R3: this session's own ended turn, undone from the turn row ONLY while the slot shows the you row (null otherwise) */
+  own: { key: string; rev: number } | null;
 }
 
 const two = (n: number): string => String(n).padStart(2, '0');
@@ -178,9 +203,15 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     d.turn?.();
     if (show) {
       const title = a.last!.title || 'Untitled';
-      tab.textContent = `${tabTitle(title)} · board`;
-      tab.title = `Open the board “${title}” (⌥B)`;
-      tab.setAttribute('aria-label', `${title} · board`);
+      // S1.4 E3 (turn_strip.notice.folded): a notice that touched your marks waits; the tab ends ' · your marks changed'
+      // and its title= has each notice line. Nothing pops up
+      const standing = d.sessions.standingFor(a.last!.dim).filter((n) => n.personal);
+      const changed = standing.length > 0 ? UNDO_TAB : '';
+      // (Mika E3 D1: the hand named as the strip names it, handNameOf)
+      const lines = standing.map((n) => noticeStripRow(n, handNameOf(null, n.of.hsid, n.agent), { others: [], more: 0, time: hhmm(new Date(n.at).toISOString()) }).title ?? '');
+      tab.textContent = `${tabTitle(title)} · board${changed}`;
+      tab.title = [`Open the board “${title}” (⌥B)`, ...lines].join('\n');
+      tab.setAttribute('aria-label', `${title} · board${changed}`);
       placeTab();
     }
   }
@@ -224,10 +255,11 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   }
 
   /** S1.4 P4b: a session's hand as the foot and the said lines name it: 'Claude', with its session when two would read the same. */
-  function handNameOf(session: DimSession, hsid: string, label: string | null = null): string {
+  function handNameOf(session: DimSession | null, hsid: string, label: string | null = null): string {
     // (aegis N-7: a label is shown through the board's own name rules and cut as every hand's name is)
-    const name = label ? handName(boardAgentName(label)) : 'Claude';
-    const attached = session.grantKeys().map((k) => k.hsid);
+    // (design board-leaf.said.by: the label 'claude' is shown as 'Claude', the turn strip's word)
+    const name = label ? (label === 'claude' ? 'Claude' : handName(boardAgentName(label))) : 'Claude';
+    const attached = session ? session.grantKeys().map((k) => k.hsid) : [];
     const same = attached.filter((h) => h !== hsid && !(d.localModel?.(h) ?? false)).length > 0;
     const where = same ? sessionShort(d.sessionInfo(hsid).name) : '';
     return where ? `${name} in ${where}` : name;
@@ -268,6 +300,12 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   /** One notice of the session, said once, in the leaf's words. */
   function tell(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): void {
     if (tellHand(session, leaf, n)) return;
+    // S1.4 E3 (said.undo): an undo-family key's answer, or a ninth notice pushing the oldest out (N2)
+    if (n.about === 'undo' && n.scope !== undefined || n.code === 'pushed-out' || n.code === 'no-longer' || n.code === 'redone') {
+      const line = undoLine(n, handNameOf(session, n.hsid ?? '', n.agent ?? null), (t) => hhmm(new Date(t).toISOString()));
+      if (line) leaf.say(line);
+      return;
+    }
     if (n.about === 'link' && n.code === 'link-down') {
       // the link went: what was being typed is held in page memory (the held-still line says so while it lasts)
       // (an out-of-date board can never store them: nothing is held for a rebuilt board to give back, aegis F6)
@@ -317,6 +355,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
       theme: d.theme(),
       load: d.load,
       cardFocused: d.cardFocused,
+      overlayExtras: () => session.boardMarks(),
       ...(d.pinned ? { pinned: d.pinned } : {}),
       kept: () => keptOpen(),
       onHoldChange: () => void (cur && cur.session.alive && paint(cur.session, cur.leaf, cur.session.status())),
@@ -347,6 +386,10 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
         paint(session, leaf, c.status);
         leaf.drawFoot();
         if (c.notice) tell(session, leaf, c.notice);
+        // S1.4 E3: the strip holds the board's notices; it is painted again with the session, and the overlay's
+        // cut-outs and trace with it
+        d.turn?.();
+        leaf.redrawOver?.();
       }),
       // held words go back ONLY into a text the person opens on this dimension, for the same principal, link up
       leaf.onTextOpen(() => {
@@ -381,6 +424,26 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
         session.select(hd.marks().filter((m) => m.selected && !m.labelOf && m.node !== null).map((m) => m.node as string), e);
       });
     };
+    // S1.4 E3 (turn_strip.notice.cut_out_hit, R7): a cut-out is selected ONLY by a still click with Select where no
+    // mark lies (engine marks first, the cut-out's box second). The press is only observed here, in the capture
+    // phase and never prevented: every press still reaches the engine, so a marquee or a tool over a cut-out
+    // behaves as if it were not there
+    let downAt: { x: number; y: number } | null = null;
+    const onDown = (e: PointerEvent): void => void (downAt = e.isTrusted ? { x: e.clientX, y: e.clientY } : null);
+    const onCut = (e: PointerEvent): void => {
+      const from = downAt;
+      downAt = null;
+      const hd = leaf.handle();
+      const host = leaf.el.querySelector<HTMLElement>('.bd-board');
+      if (!e.isTrusted || !session.alive || !hd || !hd.isAlive() || !host || !(e.target as Element | null)?.closest?.('.bd-board')) return;
+      const still = !!from && Math.hypot(e.clientX - from.x, e.clientY - from.y) < 3;
+      const r = host.getBoundingClientRect();
+      const pick = cutoutAt({ x: e.clientX - r.left, y: e.clientY - r.top }, { still, tool: hd.state().tool, marks: hd.marks(), view: hd.view(), cutouts: session.boardMarks().cutouts });
+      session.selectCutout(pick);
+    };
+    leaf.el.addEventListener('pointerdown', onDown, true);
+    leaf.el.addEventListener('pointerup', onCut, true);
+    off.push(() => (leaf.el.removeEventListener('pointerdown', onDown, true), leaf.el.removeEventListener('pointerup', onCut, true)));
     leaf.el.addEventListener('pointerup', onPress, true);
     leaf.el.addEventListener('keydown', onPress, true);
     off.push(() => (leaf.el.removeEventListener('pointerup', onPress, true), leaf.el.removeEventListener('keydown', onPress, true)));
@@ -604,5 +667,48 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
     },
     setTheme: (theme) => cur?.leaf.setTheme(theme),
     current: () => (cur ? { leaf: cur.leaf, session: cur.session } : null),
+    noticeStrip() {
+      if (!cur) return null;
+      const session = cur.session;
+      const v = session.noticeView();
+      // the hand's name, and the session's name apart (it is the second step of the ladder), as handNameOf decides it
+      const named = (hsid: string, agent: string | null): { name: string; session?: string } => {
+        const whole = handNameOf(session, hsid, agent);
+        const base = agent ? handName(boardAgentName(agent)) : 'Claude';
+        return whole.startsWith(`${base} in `) ? { name: base, session: whole.slice(base.length + 4) } : { name: whole };
+      };
+      const row = (n: NonNullable<typeof v.shown>, more: number): TurnStripRow => {
+        const w = named(n.of.hsid, n.agent);
+        return noticeStripRow(n, w.name, { others: n.others.map((o) => (o ? handName(boardAgentName(o)) : '')), more, time: hhmm(new Date(n.at).toISOString()), ...(w.session ? { session: w.session } : {}) });
+      };
+      // slot order (turn_strip.notice.slot_order): the mark row while one mark is selected, else the newest notice
+      const m = v.mark;
+      const mark = m ? markStripRow({ key: m.key, rev: m.rev, id: m.id, name: named(m.of.hsid, m.agent).name, removed: m.removed, time: m.at ? hhmm(new Date(m.at).toISOString()) : '' }) : null;
+      const slot = mark ?? (v.shown ? row(v.shown, v.behind.length) : null);
+      // board-trace.limits (Mika E3 D2): the slot's title says how many of its marks are out of view
+      const hd = cur.leaf.handle();
+      if (!mark && v.shown && slot && hd?.isAlive()) {
+        const out = traceOutOfView(hd.marks(), hd.view(), new Set(v.shown.ids));
+        if (out > 0) slot.title = `${slot.title ?? ''}\n${traceOutCopy(out)}`;
+      }
+      // (mika R3: one undo-family key in the strip at a time; the turn row's only while the slot shows the you row)
+      return { slot, behind: v.behind.map((n) => row(n, 0)), pending: v.pending ? { since: v.pending.since } : null, held: v.held, own: slot ? null : v.own };
+    },
+    noticeKey(what, target, event) {
+      const session = cur?.session;
+      if (!session || !event.isTrusted) return;
+      if (what === 'undo') {
+        if (target.own) session.undoOwn(target.key, target.rev, event);
+        else if (target.id) session.undoMark(target.id, target.key, target.rev, event);
+        else session.undoNotice(target.key, target.rev, event);
+      } else if (what === 'redo') session.redoNotice(target.key, event);
+      else if (what === 'dismiss') session.dismissNotice(target.key, event);
+      else session.bringNotice(target.key, event);
+    },
+    freezeNotices: (on) => cur?.session.freezeNotices(on),
+    traceNotice: (key) => cur?.session.traceNotice(key),
+    focusBoard: () => {
+      if (cur && !d.cardFocused()) cur.leaf.focusBoard?.();
+    },
   };
 }

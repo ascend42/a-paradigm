@@ -16,7 +16,7 @@ import type { DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardModule, BoardState, BoardTheme, BoardTool, BoardWeight } from '../core/board.js';
 import { DimClipboard, dimPastedWords, dimPasteTextOp } from '../core/dim-clipboard.js';
 import { CHECK_GAP, CHECK_LONGEST, countSlot, GRANT_COPY, OUT_OF_DATE_FACT, UNCHECKED_LEAD, BOARD_BODY_MIN, BOARD_MIN_HEIGHT, TOO_SHORT_SPEAK_MS, tooShortLine, failedCause, INERT_COPY, KEEP_COPY, KEEP_SLOW_MS, keepParts, type LeafInert, LEAF_COPY, leafStateOf, LOADING_QUIET_MS, CLIP_COPY, refusalLine, refusalLineOf, type LeafLoad, type LeafState, type OpenedHow } from '../core/board-leaf.js';
-import { footHands, handName, hoveredMark, overlayItems, selectionLine } from '../core/board-overlay.js';
+import { footHands, handName, hoveredMark, overlayItems, selectionLine, type OverlayOptions } from '../core/board-overlay.js';
 import { DIM_GRANT_QUIET_MS } from '../core/dim-session.js';
 import { MENU_CUT_TAIL, menuCutHeight, railDrawGroups, railKeyAction, railLayout, railTitle, railTool, zoomPercent, type RailTool } from '../core/board-rail.js';
 import { sealOf, SEAL_BEAD_RADIUS, SEAL_CENTRE, SEAL_POLYGONS, SEAL_ROUND_RADIUS, SEAL_VIEWBOX, sealBeadPoint, sealLetterBaseline, type Seal } from '../core/board-seal.js';
@@ -40,6 +40,8 @@ export interface BoardLeafOptions {
   load: () => Promise<BoardModule>;
   /** true while a card in the stack or the pinned zone has focus: the board then takes no key */
   cardFocused: () => boolean;
+  /** S1.4 E3: the cut-outs and the trace the overlay draws (the session's), when there are any */
+  overlayExtras?: () => Pick<OverlayOptions, 'cutouts' | 'trace'>;
   /** called once the engine is up (the fixture adds its marks here) */
   onReady?: (handle: BoardHandle) => void;
   /** Esc with nothing else to leave, or the head's esc key: with the trusted event that asked (the fold's gesture stamp is minted from it) */
@@ -107,6 +109,10 @@ export interface LeafGrant {
 }
 
 export interface BoardLeaf {
+  /** S1.4 E3: focus goes to the board (a focused strip key's row left) */
+  focusBoard?(): void;
+  /** S1.4 E3: draw the overlay again (the notices' cut-outs or trace moved) */
+  redrawOver?(): void;
   el: HTMLElement;
   /** S1.4 P4b: one line to a screen reader only (the polite status line), never the keep line: the arrival line, a confirmed grant */
   speak(line: string): void;
@@ -206,6 +212,8 @@ export function sealElement(seal: Seal, name: string, cls = ''): SVGElement {
 
 /** the marks that carry a fill (a label is never one) */
 const FILL_MARKS: ReadonlySet<string> = new Set(['sticky', 'rect', 'ellipse', 'diamond']);
+/** the overlay's element names the mark it signs (data-for): the goldens check each sign is inside the leaf */
+const forMark = <T extends HTMLElement | SVGElement>(e: T, id: string): T => (e.setAttribute('data-for', id), e);
 const place = (e: HTMLElement | SVGElement, left: number, top: number): void => void (e.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`);
 /** The platform's own shortcut modifier is ⌘ on macOS (the console is desktop only: Mac first, Windows later). */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
@@ -729,31 +737,56 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
     const marks = handle.marks();
     const view = handle.view();
     hovered = hoveredMark(marks, view, pointerAt);
-    for (const it of overlayItems(marks, view, { hovered, theme })) {
+    for (const it of overlayItems(marks, view, { hovered, theme, ...(o.overlayExtras?.() ?? {}) })) {
       if (it.type === 'pin' || it.type === 'hollow') {
         const p = h('span', `bd-pin${it.type === 'hollow' ? ' unk' : ''}${it.type === 'pin' && it.low ? ' low' : ''}`);
         place(p, it.left - 4, it.top - 4);
-        kids.push(p);
+        kids.push(forMark(p, it.id));
       } else if (it.type === 'ring') {
         // the seal's rim with everything taken out: no letter, no name, no title, no pointer (design author-seal seal.ring)
         const r = h('span', 'bd-ring');
         place(r, it.left - 3, it.top - 3);
-        kids.push(r);
+        kids.push(forMark(r, it.id));
       } else if (it.type === 'chip') {
         // the hand's name, a bidi-isolated text node cut at 24 characters; the name is the authority
-        const c = h('span', 'chip', {}, h('bdi', '', {}, handName(it.name)));
+        // (Mika E3 D1: 'changed by Claude', 'words by Claude': the lead is the page's words, the name an isolate)
+        const c = h('span', 'chip', {}, ...(it.lead ? [`${it.lead} `] : []), h('bdi', '', {}, handName(it.name)));
         place(c, it.left, it.top - 9);
-        kids.push(c);
+        kids.push(forMark(c, it.id));
       } else if (it.type === 'seal') {
         const s = sealElement(it.seal, it.name);
         place(s, it.left - 11, it.top - 11);
-        kids.push(s);
+        kids.push(forMark(s, it.id));
+      } else if (it.type === 'counter') {
+        // S1.4 E3 countermark: the ring's shape (a filled disc for you); nothing to press, no title, no pointer
+        const r = h('span', `bd-ring bd-counter${it.disc ? ' disc' : ''}`, { 'aria-hidden': 'true' });
+        place(r, it.left - 3, it.top - 3);
+        kids.push(forMark(r, it.id));
+      } else if (it.type === 'words') {
+        const w = h('span', 'bd-words', { 'aria-hidden': 'true' });
+        place(w, it.left, it.top);
+        w.style.width = `${Math.round(it.width)}px`;
+        kids.push(forMark(w, it.id));
+      } else if (it.type === 'cutout') {
+        // four corner ticks round the removed mark's last box: no fill, no words, nothing between the ticks
+        const c = h('div', `bd-cutout${it.traced ? ' traced' : ''}`, { 'aria-hidden': 'true' }, ...['tl', 'tr', 'bl', 'br'].map((k) => h('span', `bd-tick ${k}`)));
+        place(c, it.left, it.top);
+        c.style.width = `${Math.round(it.width)}px`;
+        c.style.height = `${Math.round(it.height)}px`;
+        c.style.setProperty('--arm', `${Math.max(1, Math.round(it.arm))}px`);
+        kids.push(forMark(c, it.id));
+      } else if (it.type === 'trace') {
+        const t = h('div', it.ring ? 'bd-trace ring' : 'bd-trace', { 'aria-hidden': 'true' });
+        place(t, it.left, it.top);
+        t.style.width = `${Math.round(it.width)}px`;
+        t.style.height = `${Math.round(it.height)}px`;
+        kids.push(forMark(t, it.id));
       } else if (it.type === 'textbox') {
         const b = h('div', `bd-textbox${it.form === 'box' ? '' : ` ${it.form}`}`);
         place(b, it.left, it.top);
         b.style.width = `${Math.round(it.width)}px`;
         b.style.height = `${Math.round(it.height)}px`;
-        kids.push(b);
+        kids.push(forMark(b, it.id));
       } else {
         // the only text taken from the node is its kind, pattern-checked by the contracts; the lead word is never dropped
         const name = dimKindName(it.kind);
@@ -761,7 +794,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         place(b, it.left, it.top);
         b.style.width = `${Math.round(it.width)}px`;
         b.style.height = `${Math.round(it.height)}px`;
-        kids.push(b);
+        kids.push(forMark(b, it.id));
       }
     }
     over.replaceChildren(...kids);
@@ -1369,6 +1402,8 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
 
   start();
   return {
+    focusBoard: () => handle?.focus(),
+    redrawOver: () => drawOver(),
     el,
     speak(line) {
       // a polite line only: the keep line stays the person's own (design said.arrival). Cleared, then set on the next

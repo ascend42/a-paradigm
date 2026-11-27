@@ -37,11 +37,12 @@
  *  - `reset()` (the log was replaced, `cursor-epoch`): the `DimStore` is reset and every session destroyed.
  *  - One session per dimension. A dimension switch is `destroy()` of one and `open()` of another.
  */
-import { DIM_MOD_ID, dimHash, dimMayDraw, isPlainObject } from '@a-company/gnomon-contracts';
+import { DIM_KINDS, DIM_MOD_ID, dimAttrDigest, dimChangeSetOf, dimHash, dimMayDraw, isPlainObject } from '@a-company/gnomon-contracts';
 import type { DimActor, DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardView } from './board.js';
 import type { GnomonClient } from './client.js';
 import { DIM_COMMAND_REFUSALS, DIM_LIVE_TIMEOUT_MS, DimLive, dimAckOf, type DimAck, type DimLiveBatch, type DimLiveResult, type DimLiveStatus, type DimNotice } from './dim-live.js';
+import { DIM_NOTICE_CAP, DimNotices, dimNoticeNeedsState, type DimStandingNotice } from './dim-notices.js';
 import { parseTurnRef, type DimStore, type DimTurnMarks } from './dim-store.js';
 import { gestureOf, type Gesture } from './gesture.js';
 import { modCommandFailure, sendModCommand } from './mod-command.js';
@@ -132,6 +133,11 @@ export interface DimSessionsDeps {
    * disabled. Default: every session is live.
    */
   live?: (hsid: string) => boolean;
+  /**
+   * Aegis E3 r4: the time of a `turn.result` the page's own rows hold for session `hsid` at turn `n` or later (the
+   * reverse of turnsUpTo), or null. Read when a pinned turn's close is not in the page's last 256 (a cold open).
+   */
+  closeOf?: (hsid: string, n: number) => number | null;
 }
 
 /** S1.4 P4b: a pending grant shows its working look only after this long (design draw-grant state-notes.pending). */
@@ -188,6 +194,11 @@ export interface DimSessionStatus extends DimLiveStatus {
   attr: { seq: number; attr: string } | null;
   /** S1.4 P4b: an agent turn ended with rows here and its hash point has not been asked for yet */
   checkDue: boolean;
+  /**
+   * S1.4 E3 (aegis A1, keep_words 1b): this page's attribution digest differs from the mod's at a check point where
+   * the HASH matched. False when the hash differed too (only the mismatch line), or no point compared yet.
+   */
+  attrOff: boolean;
 }
 
 /**
@@ -212,6 +223,30 @@ export interface DimSessionNotice extends DimNotice {
   change?: 'moving' | 'changing';
   /** `gone`: who removed it (aegis I-7): an agent, the person on another of their pages, another person, or unknown */
   who?: 'agent' | 'self' | 'person' | 'unknown';
+  /**
+   * S1.4 E3 `undo` codes of a notice's keys (said.undo): `undo-done` (`skipped` says what was left), `undo-more`,
+   * `undo-expired`, `undo-nothing`, `undo-busy`, `undo-other`, `redone`, `pushed-out` (a ninth notice unpinned the
+   * oldest: `agent` and `at` name it, N2). `scope`: the whole turn, or one mark (`mark`, with `removed` for put back).
+   */
+  skipped?: { changed: number; gone: number; refused: number };
+  at?: number;
+  scope?: 'turn' | 'mark' | 'own';
+  removed?: boolean;
+}
+
+/** S1.4 E3: what the strip draws of the board's standing notices. Data only: the strip owns the words. */
+export interface DimNoticeView {
+  shown: DimStandingNotice | null;
+  /** the notices behind the shown one, newest first (+k) */
+  behind: DimStandingNotice[];
+  /** an undo, redo, dismiss or draw key is pending: every key is disabled (the working look after 300 ms) */
+  pending: { key: string | null; since: number } | null;
+  /** the link is down, the board is out of date, or it has not caught up since the link came back: every key disabled */
+  held: 'link-down' | 'out-of-date' | 'catching-up' | null;
+  /** R3: this session's own ended turn that its turn-row key undoes, or null */
+  own: { key: string; rev: number } | null;
+  /** the mark row: one selected mark (or cut-out) and the set its key undoes */
+  mark: { key: string; rev: number; id: string; agent: string | null; removed: boolean; at: number; of: { hsid: string; turn: string } } | null;
 }
 
 export interface DimSessionChange {
@@ -245,12 +280,20 @@ export type DimSessionsEvent = { type: 'opened'; session: DimSession } | { type:
 export const DIM_SWITCH_WAIT_MS = 2000;
 
 interface Internals {
-  deps: Required<Pick<DimSessionsDeps, 'now' | 'setTimer' | 'clearTimer' | 'mint' | 'live'>> & { store: DimStore; limiter: DimSendLimiter };
+  deps: Required<Pick<DimSessionsDeps, 'now' | 'setTimer' | 'clearTimer' | 'mint' | 'live' | 'closeOf'>> & { store: DimStore; limiter: DimSendLimiter };
   link(): DimLink | null;
   verifiedAt(dim: string): { seq: number; hash: string } | null;
   setVerified(dim: string, v: { seq: number; hash: string }): void;
   gone(s: DimSession, why: DimSessionEnd): void;
   gate: StampGate;
+  /** S1.4 E3: the board's standing notices, kept by DimSessions so a reconnect's rebuilt session keeps them */
+  notices(dim: string, me: string): DimNotices;
+  /** S1.4 E3 (R3): the turn a session's latest turn.result closed, or null */
+  lastTurn(hsid: string): string | null;
+  /** S1.4 E3 (Aegis A2, N-1): when this page saw the turn `ref` close (its turn.result row's time), or null */
+  closedAt(ref: string): number | null;
+  /** S1.4 E3 (Aegis A3): the N2 lines of notices a ninth pushed out while the board was folded, drained once */
+  takeFoldedOut(dim: string): DimStandingNotice[];
 }
 
 /** Lets one stamp finish its commands before another stamp is first sent on the connection. */
@@ -340,6 +383,17 @@ export class DimSession {
   #selectFlying = false;
   #selectNext: { ids: string[]; g: Gesture } | null = null;
   #selectSent: string | null = '[]';
+  /** S1.4 E3: the standing notices (kept by DimSessions across a rebuild) */
+  readonly #notices: DimNotices;
+  /** S1.4 E3: the one undo-family press in flight (undo, redo, dismiss, a mark's undo, a ⌘Z the mod plans), or null */
+  #undoFlight: { key: string | null; since: number } | null = null;
+  #undoTimer: unknown = null;
+  #lapseTimer: unknown = null;
+  #doneTimer: unknown = null;
+  /** S1.4 E3 (undo-key link-down): after a rebuild the keys wait until a check point at or past every notice's rows */
+  #caughtUp: boolean;
+  /** S1.4 E3 (A1): the attr digest differed where the hash matched */
+  #attrOff = false;
   /** recent DELETES by another hand: node id → who (agent label and session, or null for a person / unknown) */
   readonly #removedBy = new Map<string, { who: 'agent' | 'self' | 'person' | 'unknown'; agent: string | null; hsid: string | null }>();
 
@@ -350,6 +404,8 @@ export class DimSession {
     this.hsid = o.hsid;
     this.#me = { cls: 'human', principal: o.link?.principal ?? '' };
     x.deps.store.pin(o.dim);
+    this.#notices = x.notices(o.dim, this.#me.principal);
+    this.#caughtUp = this.#notices.list().length === 0;
     this.#live = new DimLive({
       dim: o.dim,
       me: this.#me,
@@ -455,6 +511,8 @@ export class DimSession {
       if (!isPlainObject(r) || r.ok !== true) return fail('open-failed', refusalCodeOf(r));
       if (Number.isSafeInteger(r.seq) && typeof r.hash === 'string') this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
       this.#hashPoint(r);
+      this.#takePins(r);
+      for (const n of this.#x.takeFoldedOut(this.dim)) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
       const before = this.#grantsReady;
       this.#takeGrants(r);
       this.#phase = 'open';
@@ -475,44 +533,53 @@ export class DimSession {
   }
 
   /** Compare the fold at the mod's last answered seq with the hash it gave, once the store has that row. */
-  #check(): void {
+  /**
+   * Compare the fold at the last hash point. True when the check moved (a new point checked): the status changed,
+   * so a caller that would not emit anyway must (the check line reads `checkedSeq`; a moved check never emitted
+   * left the line one change behind: a person's own `dim.op` answer, after its row came back first).
+   */
+  #check(): boolean {
+    this.#compareAttr();
     const v = this.#x.verifiedAt(this.dim);
     const store = this.#x.deps.store;
     // checked already at this seq (the whole fold is not hashed again for every row), or already known wrong
-    if (!v || this.#verified === false || this.#checkedSeq === v.seq || store.stateAt(this.dim).seq < v.seq) return;
+    if (!v || this.#verified === false || this.#checkedSeq === v.seq || store.stateAt(this.dim).seq < v.seq) return false;
     const same = dimHash(store.stateAt(this.dim, v.seq)) === v.hash;
     this.#verified = same;
     this.#checkedSeq = v.seq;
-    if (same) return;
+    if (same) return true;
     // the page's fold is not the mod's: the board is READ-ONLY from here until the log is read again (reset)
     this.#readOnly = true;
     this.#leaf?.setInert?.('out-of-date');
     this.#emit({ about: 'check', code: 'hash-mismatch', field: 'dim', why: null, lost: 0 });
+    return false;
   }
 
   #sendBatch(batch: DimLiveBatch): void {
-    const settle = (ack: DimAck): void => {
+    const settle = (ack: DimAck): boolean => {
       // a row that failed takes the rest of its action with it: nothing more comes on that stamp
       if (!ack.ok) this.#release(batch.gesture);
-      if (!this.#dead) this.#after(this.#live.ack(batch.id, ack), 'edit', true);
+      return !this.#dead && this.#after(this.#live.ack(batch.id, ack), 'edit', true);
     };
     void this.#opened
       .then((ok) => {
-        if (!ok) return settle({ ok: false, code: 'not-open', why: null });
-        return this.#command(batch.gesture, 'dim.op', { ops: batch.ops }, batch.more, batch.id).then((r) => {
+        if (!ok) return void settle({ ok: false, code: 'not-open', why: null });
+        return this.#command(batch.gesture, 'dim.op', { ops: batch.ops, act: batch.act }, batch.more, batch.id).then((r) => {
           // the person's own answer is a hash point too (S1.4 P4b: `hash` on the dim.op ok answer); it vouches for
           // every row up to its seq, an agent's included
           if (isPlainObject(r) && r.ok === true && Number.isSafeInteger(r.seq) && typeof r.hash === 'string') {
             this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
             this.#hashPoint(r);
           }
-          settle(dimAckOf(r));
-          this.#check();
+          // checked BEFORE the settle emits: the row usually came back before this answer, so nothing else moves
+          // the check line to this point (it read one change behind until the next row)
+          const moved = this.#check();
+          if (!settle(dimAckOf(r)) && moved && !this.#dead) this.#emit(null);
         });
       })
       .catch((err: unknown) => {
         const f = this.#failure(err);
-        settle({ ok: false, code: f.code, why: f.why });
+        void settle({ ok: false, code: f.code, why: f.why });
       });
   }
 
@@ -535,8 +602,9 @@ export class DimSession {
   }
 
   /** `settling`: the result is of a batch that was already pending (an answer, the timer), not of something the person just did. */
-  #after(r: DimLiveResult, about: DimSessionNotice['about'], settling = false): void {
-    if (this.#dead) return;
+  /** True when it emitted. */
+  #after(r: DimLiveResult, about: DimSessionNotice['about'], settling = false): boolean {
+    if (this.#dead) return false;
     // the link is down and the board says so for as long as it lasts: what was pending falls under THAT line, not
     // under a notice of its own. It is counted, and said once when the link is back.
     if (settling && r.notice && this.#x.link() === null) {
@@ -547,8 +615,10 @@ export class DimSession {
     // refusal, or the check of what still holds): it has no more to send, so the gate goes NOW, whatever else waits
     if (this.#held && this.#heldFor === 'edit' && !this.#live.rides(this.#held)) this.#release(this.#held);
     if (r.changed || r.resync) this.#render();
-    if (r.changed || r.resync || r.notice) this.#emit(r.notice ? { ...r.notice, about } : null);
+    const emit = r.changed || r.resync || !!r.notice;
+    if (emit) this.#emit(r.notice ? { ...r.notice, about } : null);
     this.#arm();
+    return emit;
   }
 
   #emit(notice: DimSessionNotice | null): void {
@@ -593,7 +663,7 @@ export class DimSession {
   status(): DimSessionStatus {
     const store = this.#x.deps.store;
     const head = store.stateAt(this.dim);
-    return { ...this.#live.status(), dim: this.dim, hsid: this.hsid, phase: this.#phase, title: head.title, seq: head.seq, partial: this.#partial, dropped: store.stats().dropped, verified: this.#verified, checkedSeq: this.#checkedSeq, readOnly: this.#readOnly, attr: this.#attr, checkDue: this.#checkDue };
+    return { ...this.#live.status(), dim: this.dim, hsid: this.hsid, phase: this.#phase, title: head.title, seq: head.seq, partial: this.#partial, dropped: store.stats().dropped, verified: this.#verified, checkedSeq: this.#checkedSeq, readOnly: this.#readOnly, attr: this.#attr, checkDue: this.#checkDue, attrOff: this.#attrOff };
   }
 
   get alive(): boolean {
@@ -747,7 +817,74 @@ export class DimSession {
 
   /** Record a hash point's attr digest (G7 / E1). A mismatch of attr alone is E3's line: nothing is compared here. */
   #hashPoint(r: Record<string, unknown>): void {
-    if (Number.isSafeInteger(r.seq) && typeof r.attr === 'string') this.#attr = { seq: r.seq as number, attr: r.attr };
+    if (!Number.isSafeInteger(r.seq)) return;
+    const seq = r.seq as number;
+    if (typeof r.attr === 'string') this.#attr = { seq, attr: r.attr };
+    // a check point at or past every notice's rows: the keys may take presses again (undo-key link-down)
+    if (!this.#caughtUp && this.#notices.list().every((n) => n.base <= seq)) this.#caughtUp = true;
+    // aegis A1: the 1b line ONLY when the hash matched at this same point and only attr differs. The fold at `seq`
+    // must be held (a point ahead of the rows is compared when they arrive: #check)
+    this.#attrAt = typeof r.attr === 'string' && typeof r.hash === 'string' ? { seq, attr: r.attr, hash: r.hash } : null;
+    this.#compareAttr();
+  }
+
+  /**
+   * S1.4 E3: the mod's `pins` (open and check answers): the notices follow it. Only well-formed turn keys of
+   * `turn:<hsid>/<n>` are read (a person's act pin raises no notice: notices are agent turns), at most 8.
+   */
+  #takePins(r: Record<string, unknown>): void {
+    if (!Array.isArray(r.pins)) return;
+    const keys: string[] = [];
+    for (const o of r.pins.slice(0, 8)) {
+      if (!isPlainObject(o) || typeof o.hsid !== 'string' || typeof o.turn !== 'string') continue;
+      const t = parseTurnRef(o.turn);
+      if (t && t.hsid === o.hsid) keys.push(o.turn);
+    }
+    const store = this.#x.deps.store;
+    const seed = (turn: string): void => {
+      for (const row of store.rows(this.dim)) {
+        if (row.kind !== DIM_KINDS.op) continue;
+        const cs = dimChangeSetOf(row);
+        if (cs && cs.kind === 'turn' && cs.turn === turn) this.#notices.row(row, store.stateAt(this.dim, row.seq - 1));
+      }
+    };
+    // (Aegis E3 r4: a close the page's last 256 no longer hold is looked for in its rows)
+    const closed = (turn: string): number | null => {
+      const t = parseTurnRef(turn);
+      return this.#x.closedAt(turn) ?? (t ? this.#x.deps.closeOf(t.hsid, t.n) : null);
+    };
+    const f = this.#notices.follow(keys, seed, this.#x.deps.now(), closed, this.#undoFlight?.key ?? null);
+    // Aegis E3 A3: a notice that left without a press here is said once (N2), as a ninth's is
+    // (E3 r3, the orchestrator's ruling: a ninth's push-out keeps its words; a notice the mod let go says it left the strip)
+    for (const n of f.pushed) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    for (const n of f.gone) this.#emit({ about: 'undo', code: 'no-longer', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    if (f.moved && f.gone.length + f.pushed.length === 0) this.#emit(null);
+    // Aegis E3 r4: a pinned turn that has not closed is raised as stopped only when its session is not live; the
+    // clock alone is never evidence (a turn may run long): while the session lives the check only comes again
+    this.#lapseCheck();
+  }
+
+  #lapseCheck(): void {
+    const d = this.#x.deps;
+    if (this.#dead || this.#notices.waiting === 0) return;
+    this.noticesLapsed(this.#notices.lapse({ notLive: (h) => !d.live(h) }, d.now()));
+    if (this.#notices.waiting > 0 && this.#lapseTimer === null) {
+      this.#lapseTimer = d.setTimer(() => {
+        this.#lapseTimer = null;
+        this.#lapseCheck();
+      }, DIM_LIVE_TIMEOUT_MS);
+    }
+  }
+
+  #attrAt: { seq: number; attr: string; hash: string } | null = null;
+  #compareAttr(): void {
+    const a = this.#attrAt;
+    const store = this.#x.deps.store;
+    if (!a || store.stateAt(this.dim).seq < a.seq) return;
+    const st = store.stateAt(this.dim, a.seq);
+    // both differ: only the mismatch line (precedence 1) shows; the attr line stands until a later point's attr matches
+    this.#attrOff = dimHash(st) === a.hash && dimAttrDigest(st) !== a.attr;
+    this.#attrAt = null;
   }
 
   /**
@@ -774,7 +911,7 @@ export class DimSession {
    * when it was sent.
    */
   grant(hsid: string, cause: Event | null): boolean {
-    if (this.#dead || !cause || cause.isTrusted !== true) return false;
+    if (this.#dead || !cause || cause.isTrusted !== true || this.#undoFlight) return false;
     const key = this.grantKeys().find((k) => k.hsid === hsid);
     if (!key || key.state !== 'live') return false;
     const g = gestureOf(cause, Date.now());
@@ -807,6 +944,13 @@ export class DimSession {
       this.#shown.set(hsid, this.#effectiveWrite(hsid));
       if (this.#grantTimer !== null) d.clearTimer(this.#grantTimer);
       this.#grantTimer = null;
+      // S1.4 E3 (turn_strip.notice.stopped): a hand turned off while its turn runs brings that turn's notice AT ONCE
+      // when it has touched another hand's marks, so stop then undo is two presses
+      if (ok && !this.#effectiveWrite(hsid)) {
+        const run = this.#notices.runningOf(hsid);
+        const out = run ? this.#notices.ended(run, d.now(), { stopped: true }).pushedOut : null;
+        if (out) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: out.agent, at: out.at });
+      }
       if (ok) this.#emit({ about: 'grant', code: this.#effectiveWrite(hsid) ? 'grant-on' : 'grant-off', field: 'write', why: null, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
       else this.#emit({ about: 'grant', code: 'grant-refused', field: 'write', why, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
     };
@@ -837,6 +981,15 @@ export class DimSession {
    * DROPPED while an edit batch waits. Only this session's hsid is named (the host joins it): a selection is per hsid.
    */
   select(ids: readonly string[], cause: Event | null): void {
+    // S1.4 E3: the mark row reads the selection whatever is sent, from a TRUSTED event of the person's only (a
+    // selection of marks ends a cut-out's)
+    const untrusted = !cause || cause.isTrusted !== true;
+    if (!this.#dead && !untrusted) {
+      const was = JSON.stringify(this.#markSel);
+      this.#markSel = [...ids];
+      if (ids.length > 0) this.#cutSel = null;
+      if (JSON.stringify(this.#markSel) !== was) this.#emit(null);
+    }
     if (this.#dead || !cause || cause.isTrusted !== true || this.#readOnly || this.#phase !== 'open' || this.#x.link() === null) return;
     const list = [...new Set(ids.filter((id) => typeof id === 'string'))].slice(0, 64);
     const key = JSON.stringify(list);
@@ -884,6 +1037,7 @@ export class DimSession {
         if (!isPlainObject(r) || r.ok !== true || !Number.isSafeInteger(r.seq) || typeof r.hash !== 'string') return again();
         this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
         this.#hashPoint(r);
+        this.#takePins(r);
         this.#check();
         this.#emit(null);
       })
@@ -917,6 +1071,13 @@ export class DimSession {
     this.#emit(null);
   }
 
+  /** @internal Aegis E3 r3 F-1: notices raised by a lapse (DimNotices.lapse): a ninth's line, and the strip drawn */
+  noticesLapsed(r: { raised: number; pushedOut: readonly DimStandingNotice[] }): void {
+    if (this.#dead) return;
+    for (const n of r.pushedOut) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    if (r.raised > 0 && r.pushedOut.length === 0) this.#emit(null);
+  }
+
   /** @internal an agent turn closed (its `turn.result` row came): one arrival line, and its hash point is due */
   turnEnded(refs: readonly string[]): void {
     if (this.#dead) return;
@@ -928,6 +1089,11 @@ export class DimSession {
       // the person's own answer since may already vouch for those rows
       const v = this.#x.verifiedAt(this.dim);
       if (!v || v.seq < m.lastSeq) this.#checkDue = true;
+      // S1.4 E3: a turn that touched another hand's marks or undid a person's change stands as a notice; a ninth
+      // pushes the oldest out, said once naming its hand and time (N2), and sends NO dim.seen (S3)
+      const raised = this.#notices.ended(ref, this.#x.deps.now(), { at: this.#x.closedAt(ref) ?? this.#x.deps.now() });
+      if (raised.corrected) this.#emit(null);
+      if (raised.pushedOut) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: raised.pushedOut.agent, at: raised.pushedOut.at });
       // nothing landed (every op refused): nothing is said
       if (m.added + m.changed + m.removed === 0) continue;
       this.#emit({ about: 'hand', code: 'arrived', field: 'ops', why: null, lost: 0, agent: m.agent, hsid: t?.hsid ?? '', marks: { added: m.added, changed: m.changed, removed: m.removed } });
@@ -971,8 +1137,266 @@ export class DimSession {
   undo(event: Event | null): void {
     if (this.#dead) return;
     if (this.#readOnly || this.#phase === 'closing') return this.#emit({ about: 'undo', code: this.#readOnly ? 'out-of-date' : 'closing', field: 'ops', why: null, lost: 0 });
+    // one undo-family call at a time: a ⌘Z while a notice's key is pending is dropped
+    if (this.#undoFlight) return;
     const g = event ? gestureOf(event, Date.now()) : null;
-    this.#after(this.#live.undo(g), 'undo');
+    const r = this.#live.undo(g);
+    // Aegis (P4a review, required): a delete of another hand's mark is undone by the MOD (planDimUndo), so the
+    // re-added mark keeps its original hand and its wordsBy / otherBy (`restored`); the page's planner never writes one
+    if (r.delegate && g) {
+      const d = r.delegate;
+      this.#undoCall(g, null, { of: { principal: this.#me.principal, act: d.act }, base: d.base }, (out) => {
+        this.#after(this.#live.settleAway(d.act, out.kind === 'ok' && !out.more ? 'done' : out.kind === 'refused' && (out.code === 'undo-nothing' || out.code === 'undo-expired') ? 'done' : 'kept'), 'undo');
+        return out.kind === 'ok' && !out.more ? null : this.#undoLine(out, 'own', null);
+      });
+    }
+    this.#after(r, 'undo');
+  }
+
+  // ── S1.4 E3: the notices' keys (undo-key; Aegis U1 to U3, S1 to S3, N1 to N3) ───────────
+
+  /** What the strip draws of the standing notices. */
+  noticeView(): DimNoticeView {
+    const f = this.#undoFlight ?? (this.#grantFlight ? { key: null, since: this.#grantFlight.since } : null);
+    const held = this.#x.link() === null ? 'link-down' : this.#readOnly ? 'out-of-date' : !this.#caughtUp ? 'catching-up' : null;
+    return { shown: this.#notices.shown(), behind: this.#notices.behind(), pending: f, held, mark: this.#markRow(), own: this.#ownTurn() };
+  }
+
+  /** own turns this page undid from the turn row (their key leaves) */
+  readonly #ownUndone = new Set<string>();
+  /**
+   * R3 (turn_strip.notice.own_turn): this session's own latest ENDED turn, when it wrote rows here and raised no
+   * notice AT ALL (a turn that touched only its own marks; one whose notice was dismissed or pushed out keeps none:
+   * Aegis E3 N-3), and has not been undone from here. The strip shows its key on
+   * the turn row only while the slot shows the you row.
+   */
+  #ownTurn(): { key: string; rev: number } | null {
+    const key = this.#x.lastTurn(this.hsid);
+    if (!key || this.#ownUndone.has(key) || this.#notices.everRaised(key)) return null;
+    const held = this.#notices.held(key);
+    return held && held.rev > 0 ? { key, rev: held.rev } : null;
+  }
+
+  /** The turn row's own undo key (R3): dim.undo of this session's own turn, the target the row showed. */
+  undoOwn(key: string, rev: number, cause: Event | null): boolean {
+    const g = this.#mayPress(cause);
+    if (!g) return false;
+    const own = this.#ownTurn();
+    if (!own || own.key !== key || own.rev !== rev) return this.#emit(null), false;
+    const held = this.#notices.held(key)!;
+    this.#undoCall(g, null, { of: held.of, base: held.base }, (out) => {
+      if (out.kind === 'ok' && !out.more) this.#ownUndone.add(key);
+      return this.#undoLine(out, 'turn', { agent: held.agent });
+    });
+    return true;
+  }
+
+  /** the person's selection as last reported (node ids), and a cut-out they selected (a removed mark's node id) */
+  #markSel: string[] = [];
+  #cutSel: string | null = null;
+
+  /**
+   * The mark row (turn_strip.notice.mark_row): exactly one mark selected whose newest change-set is an agent turn
+   * this page tallied (standing, or pushed out and still held: N1), and that the person has not changed since; or a
+   * selected cut-out of the person's removed mark while its notice stands (put back). Else null.
+   */
+  #markRow(): DimNoticeView['mark'] {
+    const id = this.#cutSel ?? (this.#markSel.length === 1 ? this.#markSel[0]! : null);
+    if (!id) return null;
+    const set = this.#notices.setFor(id);
+    if (!set) return null;
+    if (this.#cutSel !== null) return set.removed && this.#notices.get(set.key)?.state === 'standing' ? { ...set, id, removed: true } : null;
+    const n = this.#x.deps.store.stateAt(this.dim).nodes.get(id);
+    // the person's own edit after it is the newest change: no row (⌘Z is theirs)
+    if (!n || set.removed || ((n.changedSeq ?? 0) > set.base && (n.changedBy as { cls?: unknown } | undefined)?.cls === 'human')) return null;
+    return { ...set, id, removed: false };
+  }
+
+  /** R7: the person selected a cut-out (a still click with Select where the engine hit no mark), or none (null) */
+  selectCutout(node: string | null): void {
+    if (this.#dead || this.#cutSel === node) return;
+    this.#cutSel = node;
+    this.#emit(null);
+  }
+
+  /** S1.4 E3: the cut-outs of the person's removed marks while their notice stands, and what a hovered notice traces */
+  boardMarks(): { cutouts: Array<{ node: string; x: number; y: number; width: number; height: number; by: { cls: 'agent'; id: string; name: string } }>; trace: ReadonlySet<string> } {
+    const cutouts = this.#notices.list().filter((n) => n.state === 'standing').flatMap((n) => n.removedBoxes.map((b) => ({ ...b, by: { cls: 'agent' as const, id: n.of.hsid, name: n.agent ?? 'claude' } })));
+    const t = this.#trace ? this.#notices.get(this.#trace) : null;
+    return { cutouts, trace: new Set(t ? t.ids : []) };
+  }
+
+  #trace: string | null = null;
+  /** board-trace: hovering or focusing a notice (or a +k menu row) traces that turn's marks; null ends it */
+  traceNotice(key: string | null): void {
+    if (this.#dead || this.#trace === key) return;
+    this.#trace = key;
+    this.#emit(null);
+  }
+
+  /** U2: the strip is hovered, focused or its menu is open (the slot holds), or no longer. */
+  freezeNotices(on: boolean): void {
+    if (this.#dead || this.#notices.frozen === on) return;
+    this.#notices.freeze(on);
+    this.#notices.holdDone(on, this.#x.deps.now());
+    this.#armDone();
+    this.#emit(null);
+  }
+
+  /** A +k menu row's words: that notice takes the slot. Releases nothing (aegis V1). */
+  bringNotice(key: string, cause: Event | null): void {
+    if (this.#dead || !cause || cause.isTrusted !== true) return;
+    if (this.#notices.bring(key)) this.#emit(null);
+  }
+
+  /**
+   * Whether a press may go now: a TRUSTED event that is not the second press of a double click (U1; the strip drops
+   * a press within 500 ms of the key being drawn), nothing undo-family or draw pending, the link up, the board caught
+   * up and not out of date, the board open. Dropped presses are never queued or replayed.
+   */
+  #mayPress(cause: Event | null): Gesture | null {
+    if (this.#dead || !cause || cause.isTrusted !== true) return null;
+    if (((cause as MouseEvent).detail ?? 0) > 1) return null;
+    if (this.#undoFlight || this.#grantFlight || this.#x.link() === null || this.#readOnly || !this.#caughtUp || this.#phase !== 'open') return null;
+    return gestureOf(cause, Date.now());
+  }
+
+  /**
+   * `undo` on a notice (the whole turn) or on a +k menu row: `dim.undo{of, base}` with the target the ROW showed.
+   * `rev` is the number of the set's rows the row was drawn from: a set that has changed since sends nothing and the
+   * row is drawn again. True when it was sent.
+   */
+  undoNotice(key: string, rev: number, cause: Event | null): boolean {
+    const n = this.#notices.get(key);
+    const g = this.#mayPress(cause);
+    if (!g) return false;
+    if (!n || n.state !== 'standing' || n.rev !== rev) return this.#emit(null), false;
+    this.#undoCall(g, key, { of: n.of, base: n.base }, (out) => {
+      if (out.kind === 'ok' && !out.more) this.#notices.undone(key, this.#x.deps.now());
+      else if (out.kind === 'refused' && (out.code === 'undo-expired' || out.code === 'undo-nothing')) this.#notices.remove(key);
+      this.#armDone();
+      return this.#undoLine(out, 'turn', n);
+    });
+    return true;
+  }
+
+  /** `redo` in a notice's redo window: names the PERSON's undo set (U3); the mod re-adds under G5. */
+  redoNotice(key: string, cause: Event | null): boolean {
+    const n = this.#notices.get(key);
+    const g = this.#mayPress(cause);
+    if (!g || !n || n.state !== 'done') return false;
+    const act = this.#notices.undoActOf(key);
+    if (!act) return this.#emit({ about: 'undo', code: 'undo-other', field: 'ops', why: null, lost: 0, agent: n.agent, scope: 'turn' }), false;
+    this.#undoCall(g, key, { of: { principal: this.#me.principal, act } }, (out) => {
+      if (out.kind === 'ok' || (out.kind === 'refused' && (out.code === 'undo-expired' || out.code === 'undo-nothing'))) this.#notices.remove(key);
+      this.#armDone();
+      return out.kind === 'ok' ? { about: 'undo', code: 'redone', field: 'ops', why: null, lost: 0, agent: n.agent, scope: 'turn' } : this.#undoLine(out, 'turn', n);
+    });
+    return true;
+  }
+
+  /**
+   * `dismiss`: `dim.seen{of}` (Aegis S1 to S3), from a TRUSTED press on dismiss ONLY: never from a ninth notice, a
+   * fold, a switch, a reconnect, a next message, an undo or a redo. The notice leaves once answered (`not-pinned`
+   * too: the board no longer held it, and the person said keep).
+   */
+  dismissNotice(key: string, cause: Event | null): boolean {
+    const n = this.#notices.get(key);
+    const g = this.#mayPress(cause);
+    if (!g) return false;
+    if (!n || n.state !== 'standing' || this.#notices.shown()?.key !== key) return this.#emit(null), false;
+    this.#flightStart(key);
+    void this.#command(g, 'dim.seen', { of: n.of })
+      .then((r) => {
+        if (isPlainObject(r) && (r.ok === true || r.code === 'not-pinned')) this.#notices.pressed(key), this.#notices.remove(key);
+      })
+      .catch(() => undefined)
+      .finally(() => this.#flightEnd());
+    return true;
+  }
+
+  /** The mark row's key: `dim.undo{of, ids: [id], base}` of the newest standing set that touched that mark (pointer only). */
+  undoMark(id: string, key: string, rev: number, cause: Event | null): boolean {
+    const n = this.#notices.get(key) ?? null;
+    const held = n ?? this.#notices.held(key);
+    const g = this.#mayPress(cause);
+    if (!g) return false;
+    if (!held || held.rev !== rev || !held.ids.includes(id)) return this.#emit(null), false;
+    const removed = n?.removedIds.includes(id) ?? false;
+    this.#undoCall(g, key, { of: held.of, ids: [id], base: held.base }, (out) => this.#undoLine(out, 'mark', { agent: held.agent, putBack: removed }));
+    return true;
+  }
+
+  #flightStart(key: string | null): void {
+    const d = this.#x.deps;
+    this.#undoFlight = { key, since: d.now() };
+    // the 300 ms quiet: the working look is drawn only once the answer is slow
+    if (this.#undoTimer !== null) d.clearTimer(this.#undoTimer);
+    this.#undoTimer = d.setTimer(() => {
+      this.#undoTimer = null;
+      if (!this.#dead && this.#undoFlight) this.#emit(null);
+    }, DIM_GRANT_QUIET_MS);
+    this.#emit(null);
+  }
+
+  #flightEnd(line: DimSessionNotice | null = null): void {
+    if (this.#undoTimer !== null) this.#x.deps.clearTimer(this.#undoTimer);
+    this.#undoTimer = null;
+    this.#undoFlight = null;
+    if (!this.#dead) this.#emit(line);
+  }
+
+  /** One `dim.undo` through the one sender. `then` maps the answer to the line said (or null) and moves the notices. */
+  #undoCall(g: Gesture, key: string | null, args: Record<string, unknown>, then: (out: UndoOutcome) => DimSessionNotice | null): void {
+    this.#flightStart(key);
+    void this.#command(g, 'dim.undo', args)
+      .then((r) => {
+        if (this.#dead) return;
+        if (isPlainObject(r) && r.ok === true) {
+          // (Aegis E3 r3 F-2: pressed only once the board took it: a refused press leaves a later line to be said)
+          if (key !== null) this.#notices.pressed(key);
+          if (Number.isSafeInteger(r.seq) && typeof r.hash === 'string') {
+            this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
+            this.#hashPoint(r);
+          }
+          const sk = isPlainObject(r.skipped) ? r.skipped : {};
+          const n = (v: unknown): number => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : 0);
+          // checked before the flight's end emits (the same order as the edit's answer)
+          this.#check();
+          this.#flightEnd(then({ kind: 'ok', more: r.more === true, skipped: { changed: n(sk.changed) + n(sk.partial), gone: n(sk.gone), refused: n(sk.refused) } }));
+          return;
+        }
+        const code = isPlainObject(r) && typeof r.code === 'string' ? r.code : 'refused';
+        this.#flightEnd(then({ kind: 'refused', code }));
+      })
+      .catch((err: unknown) => {
+        if (this.#dead) return;
+        this.#flightEnd(then({ kind: 'failed', code: this.#failure(err).code }));
+      });
+  }
+
+  /** The said.undo line of an answer. */
+  #undoLine(out: UndoOutcome, scope: 'turn' | 'mark' | 'own', n: { agent: string | null; putBack?: boolean } | null): DimSessionNotice {
+    const base = { about: 'undo' as const, field: 'ops', why: null, lost: 0, agent: n?.agent ?? null, scope, ...(n?.putBack ? { removed: true } : {}) };
+    if (out.kind === 'ok') return { ...base, code: out.more ? 'undo-more' : 'undo-done', skipped: out.skipped };
+    const code = out.code === 'undo-expired' || out.code === 'undo-nothing' ? out.code : out.code === 'append-busy' || out.code === 'busy' ? 'undo-busy' : out.code === 'link-down' ? 'link-down' : 'undo-other';
+    // (`why` keeps the closed code it came from: the line's words never show it)
+    return { ...base, code, why: out.code };
+  }
+
+  /** The redo window's one timer (a window that ran out gives way to the next notice). */
+  #armDone(): void {
+    const d = this.#x.deps;
+    if (this.#doneTimer !== null) d.clearTimer(this.#doneTimer);
+    this.#doneTimer = null;
+    const at = this.#notices.doneDeadline();
+    if (at === null || this.#dead) return;
+    this.#doneTimer = d.setTimer(() => {
+      this.#doneTimer = null;
+      if (this.#dead) return;
+      if (this.#notices.tick(d.now())) this.#emit(null);
+      this.#armDone();
+    }, Math.max(0, at - d.now()));
   }
 
   /** @internal rows of this dimension the store has just kept */
@@ -986,8 +1410,9 @@ export class DimSession {
       resync ||= r.resync;
       this.#noteRemover(row);
     }
-    this.#check();
-    this.#after({ changed, resync, notice: null }, 'edit');
+    // a check this row completed (its hash point answered first) is a status change of its own
+    const moved = this.#check();
+    if (!this.#after({ changed, resync, notice: null }, 'edit') && moved) this.#emit(null);
   }
 
   /** @internal the link went down */
@@ -1067,9 +1492,13 @@ export class DimSession {
     this.#release(this.#held);
     if (this.#phase !== 'closed' && this.#phase !== 'failed') this.#phase = 'closed';
     if (this.#timer !== null) this.#x.deps.clearTimer(this.#timer);
+    if (this.#lapseTimer !== null) this.#x.deps.clearTimer(this.#lapseTimer);
+    this.#lapseTimer = null;
     this.#timer = null;
     if (this.#grantTimer !== null) this.#x.deps.clearTimer(this.#grantTimer);
     this.#grantTimer = null;
+    for (const t of [this.#undoTimer, this.#doneTimer]) if (t !== null) this.#x.deps.clearTimer(t);
+    this.#undoTimer = this.#doneTimer = null;
     for (const off of this.#offs.splice(0)) off();
     this.#handle = null;
     const leaf = this.#leaf;
@@ -1089,14 +1518,24 @@ export class DimSession {
   }
 }
 
+type UndoOutcome = { kind: 'ok'; more: boolean; skipped: { changed: number; gone: number; refused: number } } | { kind: 'refused' | 'failed'; code: string };
+type DimRowLike = Parameters<DimNotices['row']>[0];
+
 class LinkDown extends Error {}
 /** The batch was dropped while its command waited its turn: nothing is sent. */
 class Stale extends Error {}
+
+/** Aegis E3 r3 F-1: rows that say a session is gone (core/store.ts reads them so) */
+/** Aegis E3 r5: rows a RUNNING turn writes (never at send time: turn.sent, composer, send.refused are the person's) */
+const TURN_PRODUCED = new Set(['turn.event', 'turn.partial', 'turn.usage', 'tool.call', 'tool.brokered', 'approval.request']);
+const SESSION_GONE = new Set(['session.orphaned', 'session.exited', 'session.stop', 'session.exit', 'session.end', 'session.refused']);
 
 export class DimSessions {
   readonly #deps: Internals['deps'];
   readonly #sessions = new Map<string, DimSession>();
   readonly #verified = new Map<string, { seq: number; hash: string }>();
+  /** S1.4 E3: each board's standing notices, from its first open on this page; fed while it is folded too */
+  readonly #notices = new Map<string, DimNotices>();
   readonly #listeners = new Set<(e: DimSessionsEvent) => void>();
   #link: DimLink | null = null;
   readonly #x: Internals;
@@ -1110,6 +1549,7 @@ export class DimSessions {
       mint: deps.mint ?? mintDimNodeId,
       limiter: deps.limiter ?? new DimSendLimiter(),
       live: deps.live ?? (() => true),
+      closeOf: deps.closeOf ?? (() => null),
     };
     this.#x = {
       deps: this.#deps,
@@ -1117,6 +1557,21 @@ export class DimSessions {
       verifiedAt: (dim) => this.#verified.get(dim) ?? null,
       setVerified: (dim, v) => void this.#verified.set(dim, v),
       gate: new StampGate(),
+      lastTurn: (hsid) => this.#lastResult.get(hsid) ?? null,
+      closedAt: (ref) => this.#closed.get(ref) ?? null,
+      takeFoldedOut: (dim) => {
+        const out = this.#foldedOut.get(dim) ?? [];
+        this.#foldedOut.delete(dim);
+        return out;
+      },
+      notices: (dim, me) => {
+        let n = this.#notices.get(dim);
+        if (!n) {
+          n = new DimNotices({ me });
+          this.#notices.set(dim, n);
+        }
+        return n;
+      },
       gone: (s, why) => {
         if (this.#sessions.get(s.dim) === s) this.#sessions.delete(s.dim);
         // a folded dimension's vouched hash is not kept: the next open answers a new one
@@ -1185,9 +1640,41 @@ export class DimSessions {
     }
     const store = this.#deps.store;
     const fresh = store.apply(flat);
+    // S1.4 E3: the notices count every op row of a board opened here, folded or not (with the state just before it)
+    for (const [dim, added] of fresh) {
+      const nb = this.#notices.get(dim);
+      // (the state before a row is read only for an agent row that changes or removes marks: no scrub per row)
+      if (nb) for (const row of added) if (row.kind === DIM_KINDS.op) nb.row(row as DimRowLike, dimNoticeNeedsState(row as DimRowLike) ? store.stateAt(dim, row.seq - 1) : null);
+    }
     for (const [dim, added] of fresh) this.#sessions.get(dim)?.rows(added);
     // a grant row moved a board's grant map: its keys are drawn again (a pending press ends on the answer or here)
     for (const dim of store.grantsMoved()) this.#sessions.get(dim)?.grantRows();
+    // Aegis E3 r3 F-1: a pinned turn whose result never came is raised as stopped when its session is gone, or when
+    // a later turn of that session writes any row
+    const now0 = this.#deps.now?.() ?? Date.now();
+    for (const r of flat) {
+      // (a turn.result closes its turns below: they end as themselves, never as stopped)
+      if (!isPlainObject(r) || r.kind === 'turn.result') continue;
+      const p = isPlainObject(r.payload) ? r.payload : {};
+      const gone = SESSION_GONE.has(String(r.kind)) && typeof r.session === 'string' ? (r.session as string) : null;
+      // (Aegis E3 r5: only a row the later turn ITSELF produced proves the earlier one over; turn.sent, written when
+      // the person sends, names the next turn while this one may still run, as does any other send-time row)
+      const kind = String(r.kind);
+      const produced = TURN_PRODUCED.has(kind) || kind.startsWith('modns.');
+      const t = produced ? (parseTurnRef(p.turn) ?? parseTurnRef(isPlainObject(p.relayedFor) ? p.relayedFor.turn : null)) : null;
+      if (!gone && !t) continue;
+      for (const [dim, nb] of this.#notices) {
+        if (nb.waiting === 0) continue;
+        const res = gone ? nb.lapse({ gone }, now0) : nb.lapse({ later: { hsid: t!.hsid, n: t!.n } }, now0);
+        const open = this.#sessions.get(dim);
+        if (open) {
+          if (res.raised > 0) open.noticesLapsed(res);
+        } else if (res.pushedOut.length > 0) {
+          // (Aegis E3 r4: a folded board's ninth is said at its next open, as the turn.result path keeps it)
+          this.#foldedOut.set(dim, [...(this.#foldedOut.get(dim) ?? []), ...res.pushedOut].slice(-DIM_NOTICE_CAP));
+        }
+      }
+    }
     // an agent turn ended (S1.4 P4b): what it did on each open board is said once, and its hash point is due
     for (const r of flat) {
       if (!isPlainObject(r) || r.kind !== 'turn.result' || !isPlainObject(r.payload)) continue;
@@ -1195,17 +1682,37 @@ export class DimSessions {
       if (!t) continue;
       this.#lastResult.set(t.hsid, r.payload.turn as string);
       if (this.#lastResult.size > 256) this.#lastResult.delete(this.#lastResult.keys().next().value as string);
+      const now = this.#deps.now?.() ?? Date.now();
+      // (Aegis N-1: the turn's own time, from its result row, where it has one)
+      const at = typeof r.at === 'string' && Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : now;
       const refs = store.turnsUpTo(t.hsid, t.n).filter((ref) => !this.#closed.has(ref));
       for (const ref of refs) {
-        this.#closed.add(ref);
-        if (this.#closed.size > 256) this.#closed.delete(this.#closed.values().next().value as string);
+        this.#closed.set(ref, at);
+        if (this.#closed.size > 256) this.#closed.delete(this.#closed.keys().next().value as string);
       }
       if (refs.length > 0) for (const s of this.#sessions.values()) s.turnEnded(refs);
+      // a folded board's notices stand too (its edge tab says so); a ninth's N2 line is kept and said at the next
+      // open (Aegis E3 A3), at most DIM_NOTICE_CAP of them
+      if (refs.length > 0) {
+        for (const [dim, nb] of this.#notices) {
+          if (this.#sessions.has(dim)) continue;
+          for (const ref of refs) {
+            // (Aegis E3 r3 F-3: a folded board's notice shows the result row's time too)
+            const out = nb.ended(ref, now, { at }).pushedOut;
+            if (!out) continue;
+            const q = this.#foldedOut.get(dim) ?? [];
+            q.push(out);
+            this.#foldedOut.set(dim, q.slice(-DIM_NOTICE_CAP));
+          }
+        }
+      }
     }
   }
 
-  /** turn refs whose end was told already (a result row read twice never says its line twice) */
-  readonly #closed = new Set<string>();
+  /** turn refs whose end was told already (a result row read twice never says its line twice) → when it closed */
+  readonly #closed = new Map<string, number>();
+  /** dim → the notices a ninth pushed out while that board was folded (said once at its next open: Aegis E3 A3) */
+  readonly #foldedOut = new Map<string, DimStandingNotice[]>();
   /** hsid → the turn its latest `turn.result` row closed */
   readonly #lastResult = new Map<string, string>();
 
@@ -1221,10 +1728,17 @@ export class DimSessions {
   }
 
   /** The log was replaced (`cursor-epoch`; call it wherever the GUI store resets): forget every row and destroy every session. */
+  /** S1.4 E3: the standing notices of a board (the edge tab's ' · your marks changed' while folded), newest first */
+  standingFor(dim: string): readonly DimStandingNotice[] {
+    return this.#notices.get(dim)?.list().filter((n) => n.state === 'standing') ?? [];
+  }
+
   reset(): void {
+    this.#notices.clear();
     for (const s of [...this.#sessions.values()]) s.destroy('reset');
     this.#verified.clear();
     this.#closed.clear();
+    this.#foldedOut.clear();
     this.#lastResult.clear();
     this.#deps.store.reset();
   }

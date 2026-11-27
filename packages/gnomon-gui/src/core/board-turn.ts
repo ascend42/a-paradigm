@@ -159,12 +159,27 @@ export interface TurnPart {
   lead?: boolean;
   /** the first tail of the row */
   first?: boolean;
-  drop?: 1 | 2 | 3;
+  drop?: 1 | 2 | 3 | 4 | 5 | 6;
+  /** S1.4 E3: shown ONLY from this tight level on (the short form a dropped part gives way to: ' it', ' before stopped') */
+  only?: 2 | 3 | 4 | 5 | 6;
   sub?: { text: string; drop: 4 | 5; lead: boolean };
 }
 
 export interface TurnStripRow {
-  kind: 'you' | 'turn';
+  /** S1.4 E3: `notice` and `mark` take the you row's slot (turn_strip.notice.rows) */
+  kind: 'you' | 'turn' | 'notice' | 'mark';
+  /**
+   * S1.4 E3 (undo-key.slot): the keys of a notice or mark row, in their fixed columns from the right: `right`
+   * (dismiss, or empty), `undo` (undo, redo, put back, or empty), `more` (+k, notice rows only). `aria` is each
+   * key's whole sentence; `title` the row's whole line (the words may be cut, the title never is).
+   */
+  keys?: { right: 'dismiss' | null; undo: 'undo' | 'redo' | 'put back' | null; more: number };
+  aria?: { undo?: string; right?: string; more?: string };
+  title?: string;
+  /** what a press names: the set, the rows it was drawn from, and the mark for a mark row */
+  target?: { key: string; rev: number; id?: string };
+  /** the notice row is in its redo window */
+  done?: boolean;
   /** the you row: a refusal; the turn row: the refused line in --fail */
   refused?: boolean;
   parts: TurnPart[];
@@ -213,14 +228,14 @@ export function turnStripRows(t: LatestTurn, agent: 'Claude' | 'local model', ro
 }
 
 /** The parts a tight row still shows at a drop level (0 shows all). The name's going also takes the first tail's lead. */
-export function partsAt(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5): Array<TurnPart & { noLead?: boolean }> {
-  const kept = parts.filter((p) => p.drop === undefined || p.drop > level).map((p) => (p.sub && p.sub.drop <= level ? (({ sub: _s, ...rest }) => rest)(p) : p));
+export function partsAt(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5 | 6): Array<TurnPart & { noLead?: boolean }> {
+  const kept = parts.filter((p) => (p.drop === undefined || p.drop > level) && (p.only === undefined || level >= p.only)).map((p) => (p.sub && p.sub.drop <= level ? (({ sub: _s, ...rest }) => rest)(p) : p));
   const named = kept.some((p) => p.cls === 'who');
   return kept.map((p, i) => (p.cls === 'tail' && p.lead && !named && kept.findIndex((x) => x.cls === 'tail') === i ? { ...p, noLead: true } : p));
 }
 
 /** The plain text a row reads at a drop level (tests and the accessible check). */
-export function rowText(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5 = 0): string {
+export function rowText(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5 | 6 = 0): string {
   return partsAt(parts, level)
     .map((p) => (p.cls === 'tail' ? `${p.lead && !p.noLead ? TURN_COPY.sep : ''}${p.sub?.lead ? p.sub.text : ''}${p.text}${p.sub && !p.sub.lead ? p.sub.text : ''}` : p.text))
     .join('');
@@ -232,4 +247,104 @@ export function rowText(parts: readonly TurnPart[], level: 0 | 1 | 2 | 3 | 4 | 5
  */
 export function escFoldsFromComposer(e: { key: string; repeat: boolean; isComposing: boolean; defaultPrevented: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }, o: { inComposer: boolean; cardFocused: boolean }): boolean {
   return e.key === 'Escape' && o.inComposer && !o.cardFocused && !e.repeat && !e.isComposing && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+}
+
+/* ── S1.4 E3: the notice row and the mark row (design board-leaf.turn_strip.notice, undo-key) ── */
+
+/** What a notice row is drawn from (core/dim-notices.ts DimStandingNotice, less what the strip never shows). */
+export interface NoticeFacts {
+  key: string;
+  rev: number;
+  state: 'standing' | 'done';
+  changed: number;
+  removed: number;
+  otherChanged: number;
+  otherRemoved: number;
+  lead: 'undid' | 'put-back' | null;
+  at: number;
+  stopped?: boolean;
+}
+
+/** Mika E3 r3 D3 (notice.tight): the agent's name cut to 12 characters and the session's to 5, each with … */
+export const NOTICE_NAME_MAX = 12;
+export const NOTICE_SESSION_MIN = 5;
+const cutTo = (s: string, n: number): string => `${[...s].slice(0, n).join('')}…`;
+
+/** 'a', 'a and b', 'a, b and c' */
+const joinAnd = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+
+const countsOf = (c: number, r: number): string => [c > 0 ? `changed ${c}` : '', r > 0 ? `removed ${r}` : ''].filter(Boolean).join(' · ');
+
+/**
+ * The notice row (turn_strip.notice): '<Name> changed 3 · removed 2 of your marks · 14:20'; the undid lead first and
+ * never dropped; other hands' marks when none were yours ('of Mika's marks', 'of other hands' marks'). Drop levels:
+ * 1 the time, 2 ' of your marks' (a notice about others' marks keeps its 'of …'). The two-line step is the UI's.
+ * In its redo window: 'Undone · Claude changed 3 · removed 2', redo in the undo column, the right column empty.
+ */
+export function noticeStripRow(n: NoticeFacts, name: string, o: { others: readonly string[]; more: number; time: string; session?: string }): TurnStripRow {
+  const mine = countsOf(n.changed, n.removed);
+  const theirs = countsOf(n.otherChanged, n.otherRemoved);
+  const othersOf = o.others.length === 1 && o.others[0] ? ` of ${o.others[0]}’s marks` : ' of other hands’ marks';
+  const lead = n.lead === 'undid' ? ' undid your change' : n.lead === 'put-back' ? ' put back what you undid' : '';
+  const parts: TurnPart[] = [];
+  if (n.state === 'done') {
+    parts.push({ cls: 'who', text: 'Undone · ' }, { cls: 'who', text: name }, { cls: 'said', text: ` ${mine || theirs}`.trimEnd() || lead });
+  } else {
+    // the ladder (turn_strip.notice.tight; Mika E3 r3 D3): 1 the time; 2 the session's name cut to 5 and …; 3 the
+    // session goes; 4 ' before it was stopped' becomes ' before stopped'; 5 ' of your marks'; then the UI's two-line
+    // step; 6 the agent's name cut to 12 and …. Never: the counts, the undid lead
+    if (name.length > NOTICE_NAME_MAX) parts.push({ cls: 'who', text: name, drop: 6 }, { cls: 'who', text: cutTo(name, NOTICE_NAME_MAX), only: 6 });
+    else parts.push({ cls: 'who', text: name });
+    if (o.session) {
+      if (o.session.length > NOTICE_SESSION_MIN) parts.push({ cls: 'said', text: ` in ${o.session}`, drop: 2 }, { cls: 'said', text: ` in ${cutTo(o.session, NOTICE_SESSION_MIN)}`, only: 2, drop: 3 });
+      else parts.push({ cls: 'said', text: ` in ${o.session}`, drop: 3 });
+    }
+    if (lead) parts.push({ cls: 'said', text: lead });
+    if (mine) parts.push({ cls: 'said', text: `${lead ? ' and' : ''} ${mine}` }, { cls: 'said', text: ' of your marks', drop: 5 });
+    else if (theirs && !lead) parts.push({ cls: 'said', text: ` ${theirs}` }, { cls: 'said', text: othersOf });
+    if (n.stopped) parts.push({ cls: 'said', text: ' before it was stopped', drop: 4 }, { cls: 'said', text: ' before stopped', only: 4 });
+    if (o.time) parts.push({ cls: 't', text: `${TURN_COPY.sep}${o.time}`, drop: 1 });
+  }
+  const line = parts.filter((p) => p.only === undefined).map((p) => p.text).join('');
+  const said = [lead.trim(), n.changed + n.otherChanged > 0 ? `changed ${n.changed + n.otherChanged}` : '', n.removed + n.otherRemoved > 0 ? `removed ${n.removed + n.otherRemoved}` : ''].filter(Boolean);
+  return {
+    kind: 'notice',
+    parts,
+    title: line,
+    done: n.state === 'done',
+    keys: { right: n.state === 'done' ? null : 'dismiss', undo: n.state === 'done' ? 'redo' : 'undo', more: n.state === 'done' ? 0 : o.more },
+    aria: {
+      // (Mika E3 D4: the undid lead is in the name too: 'Undo Claude's turn of 10:07 · it undid your change and changed 1')
+      // (Mika E3 r3: only the last part takes ' and': 'it undid your change, changed 1 and removed 1 of your marks')
+      undo: n.state === 'done' ? `Redo · put ${name}’s changes back` : `Undo ${name}’s turn of ${o.time}${said.length ? ` · it ${joinAnd(said)}${mine ? ' of your marks' : ''}` : ''}`,
+      ...(n.state === 'done' ? {} : { right: 'Dismiss · keep these changes' }),
+      ...(o.more > 0 ? { more: `${o.more} more ${o.more === 1 ? 'change' : 'changes'} you can undo` } : {}),
+    },
+    target: { key: n.key, rev: n.rev },
+  };
+}
+
+/**
+ * The mark row (turn_strip.notice.mark_row): one key in the undo column, the right column empty. 'Claude changed
+ * this mark · 14:20' (undo), 'Claude removed your mark · 14:20' (put back). Drop level 1: the time.
+ */
+export function markStripRow(o: { key: string; rev: number; id: string; name: string; removed: boolean; time: string }): TurnStripRow {
+  // (mark_row_final) 1 the time; 2 ' this mark' gives way to ' it'; never dropped: 'Claude changed it', 'Claude removed your mark'
+  const parts: TurnPart[] = o.removed
+    ? [{ cls: 'who', text: o.name }, { cls: 'said', text: ' removed your mark' }, ...(o.time ? [{ cls: 't' as const, text: `${TURN_COPY.sep}${o.time}`, drop: 1 as const }] : [])]
+    : [{ cls: 'who', text: o.name }, { cls: 'said', text: ' changed' }, { cls: 'said', text: ' this mark', drop: 2 }, { cls: 'said', text: ' it', only: 2 }, ...(o.time ? [{ cls: 't' as const, text: `${TURN_COPY.sep}${o.time}`, drop: 1 as const }] : [])];
+  return {
+    kind: 'mark',
+    parts,
+    title: parts.filter((p) => p.only === undefined).map((p) => p.text).join(''),
+    keys: { right: null, undo: o.removed ? 'put back' : 'undo', more: 0 },
+    aria: { undo: o.removed ? `Put back your mark that ${o.name} removed` : `Undo ${o.name}’s change to this mark` },
+    target: { key: o.key, rev: o.rev, id: o.id },
+  };
+}
+
+/** The strip with a notice or mark row in the you row's slot (it stays two rows while one stands, whatever the room). */
+export function withSlot(rows: readonly TurnStripRow[], slot: TurnStripRow | null): TurnStripRow[] {
+  if (!slot) return [...rows];
+  return [slot, ...rows.filter((r) => r.kind !== 'you')];
 }

@@ -1414,7 +1414,7 @@ body:has(.transcript.bd-open) #reconnect { align-items: flex-end; padding-top: 0
    the latest turn under an open board, a transcript-row variant (turn-strip). At most two one-line rows (you 24px,
    the turn 28px) on --sheet with a 1px --rule top edge, no box. Never overflow:hidden: show chat's focus ring sits
    outside the row. A tight turn row drops (.tight-N) the reply, then the name, then "more in the chat". */
-.bd-turn { flex: 0 0 auto; display: flex; flex-direction: column; padding: 0 14px; background: var(--sheet); border-top: 1px solid var(--rule); font-size: var(--fs-control); line-height: 18px; color: var(--ink2); }
+.bd-turn { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; padding: 0 14px; background: var(--sheet); border-top: 1px solid var(--rule); font-size: var(--fs-control); line-height: 18px; color: var(--ink2); }
 .bd-turn[hidden] { display: none; }
 .bd-turn-r { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .bd-turn-you { height: 24px; color: var(--ink); }
@@ -1927,6 +1927,67 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-over .bd-textbox.rule { border: 0; border-top: 1px dashed var(--ink2); height: 1px; }
 .bd-ring{position:absolute;width:6px;height:6px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--ink);background:var(--sheet);pointer-events:none}
 [data-theme="night"] .bd-ring{background:var(--ground)}
+/* S1.4 E3 (author-seal.other_hands, board-trace, turn_strip.notice.cut_out): host DOM, no pointer, no focus */
+.bd-counter{z-index:1}
+.bd-counter.disc{background:var(--ink)}
+.bd-words{position:absolute;height:0;border-bottom:1px dashed var(--ink2);pointer-events:none}
+.bd-cutout{position:absolute;pointer-events:none;--arm:6px}
+.bd-tick{position:absolute;width:var(--arm);height:var(--arm);border:0 solid var(--sec)}
+.bd-cutout.traced .bd-tick{border-color:var(--ink)}
+.bd-tick.tl{left:0;top:0;border-left-width:1px;border-top-width:1px}
+.bd-tick.tr{right:0;top:0;border-right-width:1px;border-top-width:1px}
+.bd-tick.bl{left:0;bottom:0;border-left-width:1px;border-bottom-width:1px}
+.bd-tick.br{right:0;bottom:0;border-right-width:1px;border-bottom-width:1px}
+.bd-trace{position:absolute;box-sizing:border-box;border:1px dashed var(--ink2);pointer-events:none}
+/* board-trace.zoom (Mika E3 D2): a box under 6px on the screen is the ring's 6px circle, dashed */
+.bd-trace.ring{border-radius:50%}
+/* S1.4 E3 (undo-key.slot; turn_strip.notice): three fixed columns from the right, the same on every row kind */
+.bd-turn-notice,.bd-turn-mark{display:flex;align-items:center;min-height:28px}
+.bd-turn-notice .bd-turn-line,.bd-turn-mark .bd-turn-line{flex:1 1 auto;min-width:0}
+/* the words' spans keep their own leading spaces (a flex item drops them: 'Claudechangedthis mark') */
+.bd-turn-notice .bd-turn-line > span,.bd-turn-mark .bd-turn-line > span{white-space:pre}
+.bd-turn-notice.done .who:first-child{color:var(--ink);font-weight:500}
+.bd-turn-keys{display:flex;flex:0 0 auto;gap:8px;margin-left:12px;align-items:center}
+.bd-col{display:flex;justify-content:flex-end}
+.bd-col.bd-undo-col{min-width:calc(8ch + 30px)}
+.bd-col.bd-right-col{min-width:calc(9ch + 18px)}
+.bd-col.bd-more-col{min-width:calc(5ch + 16px)}
+.bd-undo-key[aria-disabled="true"]{color:var(--sec);border-color:var(--rule)}
+.bd-turn-notice > .bd-turn-line [data-only],.bd-turn-mark > .bd-turn-line [data-only]{display:none}
+/* the ladders (Mika E3 r3 D3): a short form shows from its level (data-only) and may go at a later one (data-drop) */
+.bd-turn-mark.tight-2 > .bd-turn-line [data-only="2"],.bd-turn-notice.tight-2 > .bd-turn-line [data-only="2"],.bd-turn-notice.tight-4 > .bd-turn-line [data-only="4"],.bd-turn-notice.tight-6 > .bd-turn-line [data-only="6"]{display:inline}
+.bd-turn-notice.tight-1 > .bd-turn-line [data-drop="1"],.bd-turn-mark.tight-1 > .bd-turn-line [data-drop="1"],.bd-turn-notice.tight-2 > .bd-turn-line [data-drop="2"],.bd-turn-mark.tight-2 > .bd-turn-line [data-drop="2"],.bd-turn-notice.tight-3 > .bd-turn-line [data-drop="3"],.bd-turn-notice.tight-4 > .bd-turn-line [data-drop="4"],.bd-turn-notice.tight-5 > .bd-turn-line [data-drop="5"],.bd-turn-notice.tight-6 > .bd-turn-line [data-drop="6"]{display:none}
+.bd-turn-notice.two-line{flex-wrap:wrap;min-height:48px}
+/* R3: the turn row's own undo key in the undo column; its sixth drop level takes the key away, show chat stays */
+.bd-turn-turn .bd-col.bd-undo-col{margin-right:8px}
+.bd-turn-turn.tight-6 .bd-undo-col{display:none}
+.bd-turn-notice.two-line .bd-turn-line{flex-basis:100%;height:20px}
+/* Mika E3 r3 D3: the name cut and still too long, the words wrap between their parts: no part is ever cut */
+.bd-turn-notice.two-line.wrap .bd-turn-line{flex-wrap:wrap;height:auto;white-space:normal}
+.bd-turn-notice.two-line .bd-turn-keys{margin-left:auto}
+/* the +k menu opens UPWARD over the board, its right edge on the key column, never over the strip (board-centre-only) */
+/* Mika E3 B3: ui/board-turn.ts placeMenu sets right (the key's right edge), bottom (above the hands foot) and max-height */
+#board-turn .bd-undo-menu{position:absolute;top:auto;left:auto;right:14px;bottom:calc(100% + 4px);z-index:30;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
+/* Mika E3 B1: the notice and mark words are cut only by the ladder and the two-line step, never piece by piece */
+.bd-turn-notice .said,.bd-turn-mark .said{flex:none;overflow:visible}
+/* Mika E3 C4 (undo-key.state-notes.pending): the working mark before the words once the answer is slow */
+.bd-undo-key.working{display:inline-flex;align-items:center;gap:6px}
+.bd-undo-key .spin{width:9px;height:9px;flex:none;box-sizing:border-box;border:1.5px solid var(--rule);border-top-color:var(--key-edge);border-radius:50%;animation:turn-spin 0.9s linear infinite}
+[data-motion="reduced"] .bd-undo-key .spin{animation:none}
+.bd-menu-row{display:flex;align-items:center;gap:8px}
+.bd-menu-words{flex:1 1 auto;text-align:left;background:none;border:0;color:var(--ink2);font:inherit;padding:4px 8px;cursor:default}
+/* Mika E3 r3: the menu's rows shorten by the slot's ladder (m-1 ' of your marks', m-2 the session, m-3 'before
+   stopped', m-4 the name cut); the time is never dropped; the row's undo key never shrinks or clips */
+#board-turn .bd-undo-menu{min-width:0}
+.bd-menu-words{min-width:0;overflow:hidden;white-space:nowrap;display:flex;align-items:center}
+.bd-menu-words > span{white-space:pre;flex:none}
+.bd-menu-row > .bd-col{flex:none;min-width:0}
+.bd-menu-row [data-only]{display:none}
+.bd-menu-row.m-3 [data-only="4"],.bd-menu-row.m-4 [data-only="6"]{display:inline}
+.bd-menu-row.m-1 [data-drop="5"],.bd-menu-row.m-2 [data-drop="2"],.bd-menu-row.m-2 [data-drop="3"],.bd-menu-row.m-3 [data-drop="4"],.bd-menu-row.m-4 [data-drop="6"]{display:none}
+/* Mika E3 r4 F2: the menu's last resort wraps between parts; F1: a wrapped line never starts with a space */
+.bd-menu-row.m-wrap .bd-menu-words{flex-wrap:wrap;white-space:normal;height:auto}
+.bd-menu-row.m-wrap .ln-start > .sp,.bd-turn-notice.wrap .ln-start > .sp,.bd-menu-row.m-wrap .ln-start > .lsep,.bd-turn-notice.wrap .ln-start > .lsep{display:none}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
 .bd-hand-s{color:var(--sec)}
 .bd-over .chip{position:absolute;background:var(--sheet);pointer-events:none}

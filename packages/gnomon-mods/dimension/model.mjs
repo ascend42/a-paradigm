@@ -1196,7 +1196,9 @@ export function noteHistoryRow(h, before, row, now, after) {
       }
     }
     const mark = Object.hasOwn(r.payload, 'undo') ? dimUndoMarkOf(r) : null;
-    if (mark && mark.of.kind === 'act') set.undidPerson = true;
+    // Aegis E3 A1: a person's undo (or redo) of their OWN act is not a person's action undone by another hand: it
+    // pins nothing (eight of them would push out an agent's notice about the person's marks)
+    if (mark && mark.of.kind === 'act' && !(hand.cls === 'human' && hand.principal === mark.of.principal)) set.undidPerson = true;
     // Aegis N-a: a continuation must never add rows to an act someone has since undone
     if (mark && mark.of.kind === 'act') for (const [k, p] of h.pending) if (p.act === mark.of.act && p.principal === mark.of.principal) h.pending.delete(k);
     offerPin(h, set, now);
@@ -1234,6 +1236,22 @@ function offerPin(h, set, now) {
 export function notePresence(h, now) {
   h.presentAt = now;
   for (const set of h.sets.values()) if (!set.pinned && !set.offered && set.cs.kind === 'turn' && set.other) offerPin(h, set, now);
+}
+
+/**
+ * S1.4 E3 (the pins read): the sets this history holds PINNED, oldest pin first, as `of` (the shape `dim.undo` and
+ * `dim.seen` take), at most UNDO_PINS. GUI answers only (`dim.open`, `dim.check`): the page's standing notices follow
+ * it, so a dismissal or a ninth pin made elsewhere is seen, and a reload does not forget them. Memory only, like the
+ * pins: a cold open answers [] for sets it never held.
+ */
+export function pinList(h) {
+  if (!h) return [];
+  const out = [];
+  for (const k of h.pins) {
+    const set = h.sets.get(k);
+    if (set && set.pinned) out.push(ofOf(set.cs));
+  }
+  return out.slice(-UNDO_PINS);
 }
 
 /** Release one pinned set (dim.seen, or the person's undo of it). True when it was pinned. */

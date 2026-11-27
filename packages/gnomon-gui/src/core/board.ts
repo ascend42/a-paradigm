@@ -102,6 +102,21 @@ export interface BoardMarkView {
   stubKind?: string;
   /** the mark this text is the label of, when it is one */
   labelOf?: string;
+  /**
+   * S1.4 E3 item 1 (author-seal.other_hands, .restored; fold fields outside the hash): the newest hand that changed
+   * it, the newest OTHER hand that changed it (the countermark), the other hand whose words are in it, and the
+   * ORIGINAL hand of a mark an undo re-added. Each from the rendered fold only, as `author` is.
+   */
+  changedBy?: BoardAuthor;
+  otherBy?: BoardAuthor;
+  wordsBy?: BoardAuthor;
+  restoredFrom?: BoardAuthor;
+  /** S1.4 E3: the mark's rotation in radians (the fold's `rot`, as the engine draws it): the countermark turns with it */
+  angle?: number;
+  /** an open mark's (stroke, arrow) last run, scene units: the countermark stands at 80% of it (R2) */
+  lastRun?: { x1: number; y1: number; x2: number; y2: number };
+  /** a bound label's box, scene units: the words sign spans it (R9); an arrow's countermark stands past it (R2) */
+  labelBox?: { x: number; y: number; width: number; height: number };
 }
 
 /** The viewport: a scene point (x, y) is drawn at ((x + scrollX) * zoom, (y + scrollY) * zoom) from the board's top-left. */

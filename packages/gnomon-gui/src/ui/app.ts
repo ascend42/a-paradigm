@@ -75,7 +75,7 @@ import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
 import { loadBoard } from '../core/board.js';
 import { followBoth, parseBoardCommand, type DimensionRow } from '../core/board-open.js';
 import { DimSessions } from '../core/dim-session.js';
-import { DimStore } from '../core/dim-store.js';
+import { DimStore, parseTurnRef } from '../core/dim-store.js';
 import { mountBoardDock } from './board-dock.js';
 import { mountBoardTurn, type BoardTurnStrip } from './board-turn.js';
 import { escFoldsFromComposer, latestTurn, refusalBrief } from '../core/board-turn.js';
@@ -109,7 +109,21 @@ const store = new GuiStore();
  */
 // S1.4 P4b: a grant targets the focus hsid the host joins to a LIVE session, so a session that is not live has its
 // draw key disabled (never "may not edit")
-const dimSessions = new DimSessions({ store: new DimStore(), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen') });
+const dimSessions = new DimSessions({
+  store: new DimStore(),
+  live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'),
+  // Aegis E3 r4: a turn's close in the page's own rows (newest first): a turn.result of that session at turn n or later
+  closeOf: (hsid, n) => {
+    const rows = store.transcript(hsid);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i]!;
+      if (r.kind !== 'turn.result' || !r.payload || typeof r.payload !== 'object') continue;
+      const t = parseTurnRef((r.payload as { turn?: unknown }).turn);
+      if (t && t.hsid === hsid && t.n >= n) return typeof r.at === 'string' && Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : Date.now();
+    }
+    return null;
+  },
+});
 let boardRepaint: () => void = () => undefined;
 /** true while the page waits for a restart to reconnect by itself; false when the Reconnect dialog is the only way back */
 let linkComing = false;
@@ -872,6 +886,7 @@ function paintBoardTurnNow(): void {
     // the board's room measured WITHOUT the strip (Luna: two rows at 300px), so the switch cannot flicker
     room: () => (boardDock.current()?.leaf.room() ?? 0) + $('board-turn').offsetHeight,
     kept: boardDock.kept(),
+    notices: boardDock.noticeStrip(),
   });
   // (deferred: the ticker also runs while only the strip shows a running turn, the raw view's case)
   liveTicker.sync(hasLive(items) || strip.live());
@@ -2015,7 +2030,22 @@ const boardDock = mountBoardDock({
   localModel: (hsid) => backendWord(store.sessions.get(hsid)?.backend) === 'local model',
 });
 // #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
-turnStrip = mountBoardTurn({ el: $('board-turn'), onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)), onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)) });
+turnStrip = mountBoardTurn({
+  el: $('board-turn'),
+  onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)),
+  onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)),
+  // S1.4 E3: the notices' keys, the U2 freeze, and focus to the board when a focused key's row leaves
+  onNoticeKey: (what, target, e) => boardDock.noticeKey(what, target, e),
+  onFreeze: (on) => boardDock.freezeNotices(on),
+  onFocusBoard: () => boardDock.focusBoard(),
+  onTrace: (key) => boardDock.traceNotice(key),
+  // Mika E3 B3: the +k menu stays over the board's stage, above the hands foot (it never covers a draw key or the stop)
+  menuRoom: () => {
+    const foot = document.querySelector('.bd-host .bd-foot')?.getBoundingClientRect();
+    const stage = document.querySelector('.bd-host .bd-stage')?.getBoundingClientRect();
+    return foot && stage ? { top: stage.top, bottom: foot.top, left: stage.left, right: stage.right } : null;
+  },
+});
 boardRepaint = () => boardDock.repaint();
 boardLook = (t) => boardDock.setTheme(t);
 const loopsView = mountLoopsView({

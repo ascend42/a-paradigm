@@ -24,6 +24,15 @@ description: >-
 components:
   gui-board:
     description: >-
+      S1.4 E3: BoardMarkView gains changedBy, otherBy, wordsBy, restoredFrom, an
+      open mark's lastRun and a bound label's labelBox; the overlay draws the
+      countermark, the words sign, cut-outs and the trace (#gui-board-overlay).
+      E3 review (Mika C3, D1, D2, D5): the words sign beside the rule's end or
+      below it, never over the words, else the ring (wordsSignAt); chips read
+      'changed by Claude', 'words by Claude', 'changed by you', an open mark
+      has its hover head; the trace stands 1px out under 50%, a box under 6px
+      is the dashed ring, traceOutOfView counts for the slot's title; the
+      selection line names every hand, the person's own marks too.
       P4b-4 (design-foot, components.board-rail.fold and board-leaf.too_short):
       a chosen folded tool is a guest in the displaced tool's row, so the
       rail's need is the unchosen layout's (railNeed, railDrawGroups); the
@@ -588,6 +597,9 @@ components:
       - test/dim-map.test.ts
   gui-dim-store:
     description: >-
+      S1.4 E3 item 0, verified: the store keeps every followed row's payload by
+      reference, so relayedFor.turn, relayedFor.hsid, act and the undo marker
+      reach dimActOf, dimChangeSetOf and dimUndoMarkOf (test dim-e3-rows).
       #gui-dim-store (boards S1.3 pass P3a, s1.3-draft point 6 read path;
       oracle G-DDL-01) - the dimensions the page has read from the log. PURE:
       no DOM, socket or timer. DimStore.apply(rows) takes the rows the GUI
@@ -675,6 +687,8 @@ components:
       - test/mod-command.test.ts
   gui-dim-live:
     description: >-
+      S1.4 E3 item 7: one act per action (dim.op act, its own minter), never
+      merged; delegate + settleAway for a Cmd+Z the mod plans.
       #gui-dim-live (boards S1.3 pass P3a, s1.3-draft point 6 write path;
       Mika's open items 1 and 2; Aegis B3) - the live loop of one open
       dimension as a PURE controller: no DOM, no socket and no timer; the
@@ -728,6 +742,17 @@ components:
       - test/dim-live.test.ts
   gui-dim-session:
     description: >-
+      S1.4 E3: one sender for dim.undo and dim.seen (both added to #gui-mod-
+      command's closed list); undoNotice / redoNotice / dismissNotice / undoMark
+      take the target the row showed (set, rev, base) and drop an untrusted
+      press, a detail > 1 click, and any press while an undo-family or draw key
+      is pending, the link is down, the board out of date or not caught up since
+      a rebuild; dim.seen only from a trusted dismiss (Aegis S3). A Cmd+Z that
+      #gui-dim-live delegates goes as dim.undo of the person's act (Aegis, P4a
+      review). status().attrOff is the A1 flag. DimSessions keeps each board's
+      #gui-dim-notices across a rebuild and a fold. The page cannot read the
+      mod's pins (memory only): the notices are the page's mirror of the mod's
+      rule.
       #gui-dim-session (boards S1.3 pass P4a, s1.3-draft point 6) - the LIVE
       loop of the open dimensions as one unit. Since pass P4b-1 ui/app.ts
       makes the page's ONE DimSessions (the GnomonClient itself to connect()
@@ -874,6 +899,33 @@ components:
       - ../gnomon/test/dimension-board-browser.test.ts
   gui-board-turn:
     description: >-
+      E3 r3 (Mika D3, menu): the notice ladder is time, session cut to 5 and …,
+      session, 'before stopped', ' of your marks', two lines, the agent's name
+      cut to 12 and …, then wrapping between parts; the +k menu's rows shorten
+      by that ladder and keep their time, and the menu's right edge goes out to
+      the stage's when its rows do not fit left of the key.
+      E3 review (Mika B1 to C5): notice and mark words cut only by the ladder or
+      the two-line step; a key's row and column keep focus across a repaint
+      (undo becomes redo) and a held Enter never presses again; the +k menu sits
+      right after its key, its right edge on it, above the hands foot (menuRoom),
+      scrolling when short, closed by focus leaving or a press outside, with no
+      menu roles; a notice brought from it focuses the slot's undo; the pressed
+      key is aria-busy and shows the working mark after 300 ms; a held key's
+      title and description name the real hold and give its own title back.
+      Round 3: R3, this session's own ended turn (only its own marks, no notice)
+      has its undo on the turn row only while the slot shows the you row; the
+      sixth drop level takes it away. The label 'claude' is shown as 'Claude'
+      (#gui-board-dock).
+      Round 2: the mark row on the selection and on a selected cut-out (put
+      back); cutoutAt (R7: a still click with Select where no mark lies; the
+      press is only observed, never prevented); ' this mark' gives way to ' it';
+      the notice ladder time, session name, ' before stopped', ' of your marks';
+      the countermark turns with a rotated mark (angle).
+      S1.4 E3: row kinds notice and mark in the you row's slot, three fixed key
+      columns (right, undo, +k), the notice ladder and the two-line step, the
+      redo window's words, U1 arming (500 ms, detail > 1 dropped), the U2
+      freeze, focus to the board when a focused key's row leaves, the +k menu
+      (.bd-menu upward, releases nothing), board-trace on hover or focus.
       #gui-board-turn (boards S1.3 pass P4b-2 item 1; design component
       board-leaf.turn_strip, a turn-strip variant of transcript-row;
       Luna's rulings of 2026-11-24) - the latest turn under an open board,
@@ -951,8 +1003,46 @@ components:
     related: ["#gui-board-dock", "#gui-dim-store", "#gui-dim-session"]
     tests:
       - test/board-open.test.ts
+  gui-dim-notices:
+    description: >-
+      E3 r4 (Aegis F-1 reworked): the clock is never evidence; a pinned turn
+      that has not closed is raised stopped only when its session is gone or
+      not live, ended when a later turn of it wrote a row (stopped only if
+      tallied live) or when its close is in the page's rows (closeOf); a late
+      turn.result corrects stopped to ended.
+      E3 r3 (Aegis F-1, F-2): lapse() raises a pinned turn that never closed as
+      stopped (its session gone, a later turn's row, the live timeout); follow
+      splits a ninth's push-out from a notice the mod let go ('no-longer');
+      pressed only once the board took the press.
+      E3 review (Aegis A2, A3, N-1, N-3): follow raises a pinned turn only once
+      the page saw its turn.result, at that row's time; a notice it removes that
+      this page never pressed, and a ninth pushed out while the board is folded
+      (said at the next open), get the N2 line; everRaised(key) keeps R3's
+      own-turn key off a turn that ever raised a notice.
+      Round 2: follow(pins) at each dim.open / dim.check answer (a notice stands
+      only while the mod pins its set; a pinned turn with no notice is raised
+      from held rows); setFor(id) for the mark row; runningOf(hsid) for ' before
+      it was stopped'.
+      #gui-dim-notices (S1.4 E3; design board-leaf.turn_strip.notice,
+      undo-key; Aegis G2, G6, N1 to N3, U2, S3, V1) - the standing notices of
+      one board, PURE. An agent turn that changed or removed another hand's
+      marks, or undid a person's change, raises one at its end, counted from
+      rows through the contracts' readers (changed and removed apart; the
+      undid lead only from a marker naming a person act the page saw). Cap 8
+      per dimension on the mod's personal-first rule; newest first, frozen
+      while held; a redo window after an undo; +k rows; cut-out boxes and
+      trace ids.
+    path: src/core/dim-notices.ts
+    type: module
+    tags: [gnomon, gui, dimension, undo, pure]
+    tests:
+      - test/dim-e3-session.test.ts
   gui-dim-undo:
     description: >-
+      S1.4 E3: used only for an action whose deletes took none but the person's
+      own marks; a Cmd+Z of a delete of another hand's mark is planned by the
+      mod (planDimUndo keeps the original hand, wordsBy and otherBy). This
+      planner never writes a marker.
       S1.4 E0: the inverse algorithm now lives in contracts (dimInvertRows);
       invertDimOps / invertDimRows here wrap it, and planUndo keeps the B3 bounds
       and all-or-nothing Cmd+Z validation unchanged. The mod's change-set undo
@@ -3069,7 +3159,10 @@ components:
 # reconnect, with the backlog read before connect), select(ids, cause) (dim.select: lowest priority, latest wins,
 # dropped while an edit batch waits, own hsid only), touch(cause) (the hash point after an agent turn: dim.check rides
 # on the person's NEXT trusted press, because every GUI mod.command needs a gesture stamp; once per turn; hash and attr
-# recorded, attr only recorded), dim.op ok answers are hash points too, turnEnded (one `arrived` notice per agent turn)
+# recorded, attr only recorded), dim.op ok answers are hash points too (the fold is checked BEFORE the answer's settle
+# emits, and a check that a later row completes emits on its own: a moved check is always an emitted status, so the
+# check line never stays one change behind after the person's own drag; dim.undo's answer the same), turnEnded (one
+# `arrived` notice per agent turn)
 # and gone(id) (the remover from recent foreign deletes). DimSessions.drewFor(hsid) gives #gui-board-turn the tail
 # ' · drew N on the board' from rows of the latest ended turn (drop levels 4 ' on the board' and 5 'stopped: ').
 # #gui-board: onGone, a held mark another hand removed yields no op at the drop. The leaf (#gui-board, ui/board-leaf.ts)

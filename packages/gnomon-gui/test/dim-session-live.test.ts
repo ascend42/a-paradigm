@@ -99,6 +99,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
         { key: 'Delete' }, { wait: 1500 }, facts('deleted'),
         { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows.slice(${'-'}6).map((r) => (r.payload.ops || []).map((o) => o.type)); })()`, as: 'tail' },
         { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+        // S1.4 E3: the fixture's marks are another principal's (p:preview/matt, not the page's), so this Cmd+Z is the
+        // MOD's: count the restored entries the rows since the delete carry
+        { read: `(() => { const rows = ${L}.dims.rows(${DIM}); let n = 0, marked = 0, all = 0; for (const r of rows.slice(-4)) { if (!r.payload.ops || r.payload.ops[0].type !== 'add') continue; all++; if (r.payload.undo) { marked++; n += (r.payload.undo.restored || []).length; } } return JSON.stringify({ n, marked, all }); })()`, as: 'restored' },
         { key: 'z', meta: true }, { wait: 400 }, facts('again'),
       ],
       'many',
@@ -117,6 +120,10 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(deletes).toEqual(Array(64).fill('delete'));
     // ONE undo takes the whole delete back: 64 marks, the mod's fold, on the board
     expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 64, marks: 64, sameAsMod: true, drift: 0, notices: [] });
+    // through the mod, at size: every re-add row carries the marker, 64 restored entries in all (rows packed WITH the marker)
+    const rs = JSON.parse(a.restored as string) as { n: number; marked: number; all: number };
+    expect(rs.n).toBe(64);
+    expect(rs.marked).toBeGreaterThan(1);
     // and that was the whole of it: a second Cmd+Z has nothing left of the delete to undo
     expect(f('again')).toMatchObject({ nodes: 64, marks: 64, rows: f('undone').rows });
   }, 120_000);
@@ -306,4 +313,35 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 0, rows: f('drawn').rows + 1, sameAsMod: true, notices: [] });
     expect(f('undone').lastOps).toEqual(Array(pieces.length).fill('delete'));
   }, 300_000);
+
+  it('S1.4 E3 REQUIRED (Aegis): a real Delete of an agent-drawn mark and ONE real Cmd+Z go through the mod: the re-added mark keeps the agent\'s hand, drawn dashed', async () => {
+    const id = '01JD1MAGENT000000000000040';
+    const agentRow = `(() => { const payload = { v: 1, dim: ${DIM}, ops: [{ type: 'add', node: { id: '${id}', kind: 'rect', x: 120, y: 120, z: 'V', w: 160, h: 90 } }], relayedFor: { principal: 'p:7k2m9q4x/claude', surface: 'bridge', agent: 'claude', hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB', turn: 'turn:hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB/1' } }; const seq = ${L}.kernel.append('modns.gnomon.dimension.op', payload, undefined, { scope: { repo: 'repo:0123456789abcdef' } }); ${L}.mod.landedElsewhere({ seq, kind: 'modns.gnomon.dimension.op', payload }); return seq; })()`;
+    const a = await real(
+      [
+        { read: agentRow, as: 'agentSeq' }, { wait: 600 },
+        { read: `(${B}.select(['${id}']), ${B}.focus(), 1)`, as: 'asked' }, { wait: 400 }, { read: `${B}.state().selected`, as: 'picked' },
+        { key: 'Delete' }, { wait: 1200 }, facts('deleted'),
+        { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+        { read: `(() => { const rows = ${L}.dims.rows(${DIM}); const r = rows[rows.length - 1]; return JSON.stringify(r.payload.undo || null); })()`, as: 'marker' },
+        { read: `(() => { const st = ${L}.dims.stateAt(${DIM}); for (const [k, n] of st.nodes) if (n.restoredFrom) return JSON.stringify({ k, rf: n.restoredFrom }); return null; })()`, as: 'restored' },
+        { read: `JSON.stringify(${B}.marks().filter((m) => !m.labelOf).map((m) => m.author.cls))`, as: 'hands' },
+      ],
+      'empty',
+      'e3-cmdz-restore',
+    );
+    expect(a.errors).toEqual([]);
+    expect(a.picked).toBe(1);
+    expect((a.deleted as Facts).nodes).toBe(0);
+    const marker = JSON.parse(a.marker as string) as { of: { principal: string; act: string }; restored: unknown[][] };
+    expect(marker.of.act).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+    expect(marker.restored).toHaveLength(1);
+    expect(marker.restored[0]![1]).toBe(id);
+    expect(marker.restored[0]![2]).toMatchObject({ cls: 'agent', agent: 'claude' });
+    expect(JSON.parse(a.restored as string).rf.by).toMatchObject({ cls: 'agent', agent: 'claude' });
+    expect(a.undone as Facts).toMatchObject({ nodes: 1, sameAsMod: true, notices: [] });
+    // drawn in the agent's hand (dashed, sealed as the agent), never as the person's
+    expect(JSON.parse(a.hands as string)).toEqual(['agent']);
+  }, 120_000);
 });
+

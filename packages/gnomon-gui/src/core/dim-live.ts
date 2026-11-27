@@ -24,10 +24,9 @@
  *  - An edit needs a gesture stamp. `local` and `undo` with no stamp change nothing and answer a `not-sent` notice:
  *    nothing is ever shown optimistically that the sender would refuse to send.
  *  - One send is in flight per dimension, and sends are spaced DIM_LIVE_SEND_GAP_MS apart (the mod may append 20
- *    rows a second; the caller's shared limiter holds that across dimensions). Edits made meanwhile queue, and a
- *    queued edit that fits ONE row is merged into the single-row batch still waiting before it when both fit one
- *    row together (core/dim-rows.ts; an undo and a multi-row action are never merged with anything). The NEWEST
- *    stamp rides a merged batch.
+ *    rows a second; the caller's shared limiter holds that across dimensions). Edits made meanwhile queue. S1.4 E3
+ *    item 7: ONE ACT PER ACTION, NEVER MERGED. Every action gets its own act id (`dim.op`'s `act`, the mod's
+ *    change-set `(principal, act)`), and its rows carry that id alone: two actions are never merged into one row.
  *  - ROWS THAT FIT. One action whose ops do not fit one row (more than DIM_LIMITS.opsPerRow ops, or over the row
  *    budget of core/dim-rows.ts) becomes several rows, in order, on the SAME stamp: a GROUP. A group is at most
  *    DIM_ACTION_ROWS rows (the stamp's fan-out, and B3's rows per undo); an action that needs more, or one op that
@@ -57,7 +56,7 @@
  */
 import { DIM_FIELDS, DIM_KINDS, DIM_LIMITS, DIM_REFUSAL_CODES, canonicalJson, foldDim, isPlainObject, validateDimOps } from '@a-company/gnomon-contracts';
 import type { DimActor, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
-import { DIM_ACTION_ROWS, fitsOneDimRow, packDimRows } from './dim-rows.js';
+import { DIM_ACTION_ROWS, packDimRows } from './dim-rows.js';
 import { DIM_UNDO_LIMITS, invertDimOps, planUndo } from './dim-undo.js';
 import type { Gesture } from './gesture.js';
 
@@ -88,6 +87,12 @@ export interface DimNotice {
 export interface DimLiveResult {
   /** `view()` or `status()` answers differently now */
   changed: boolean;
+  /**
+   * S1.4 E3 (Aegis, P4a review, required): this ⌘Z is the MOD's to plan. The action deleted a mark drawn by another
+   * hand (or carrying another hand's words or change), so the page's planner would re-add it as the person's own;
+   * the caller sends `dim.undo{of: {principal, act}, base}` instead and settles it with `settleAway`.
+   */
+  delegate?: { act: string; base: number };
   /** the engine may show something the view does not hold (a refused or rolled-back mark): render from `view()` */
   resync: boolean;
   notice: DimNotice | null;
@@ -104,6 +109,8 @@ export interface DimLiveBatch {
   gesture: Gesture;
   /** more rows of the same action follow on this stamp: the caller lets no other stamp be sent on the connection until the last one has gone */
   more: boolean;
+  /** S1.4 E3 item 7 (Aegis ruling 3): the ONE action this row is (a row of), a ULID minted per action; sent as `dim.op`'s `act` */
+  act: string;
 }
 
 export interface DimLiveDeps {
@@ -117,6 +124,8 @@ export interface DimLiveDeps {
   /** start sending a batch; the caller reports how it settled with `ack(batch.id, …)`. Must not call back synchronously. */
   send(batch: DimLiveBatch): void;
   now(): number;
+  /** S1.4 E3: a fresh act id (a ULID) per action; its own minter, so node ids are never spent on it (default: random) */
+  mintAct?: () => string;
   /** a fresh node id (a ULID), for a node an undo re-adds */
   mint(): string;
   /**
@@ -142,6 +151,8 @@ export interface DimLiveStatus {
 interface UndoEntry {
   /** the group the rows came from (one action that became several rows), or null */
   group: number | null;
+  /** the action's act id: the mod's change-set `(principal, act)` of these rows */
+  act: string;
   /** this page's confirmed rows of one action, oldest first */
   rows: Array<{ seq: number; ops: DimOp[] }>;
   /** a row of this entry's inverse has landed: it can no longer be planned whole */
@@ -161,6 +172,8 @@ interface Pending {
   undo: UndoEntry | null;
   /** the action this row is one of several rows of, or null */
   group: number | null;
+  /** the action's act id (every row of one action carries the same one; no two actions share one) */
+  act: string;
   /** the last row of its group (or a batch with no group) */
   last: boolean;
   /** `canonicalJson(ops)`, for matching the row that carries them */
@@ -170,6 +183,20 @@ interface Pending {
 }
 
 const NONE: DimLiveResult = Object.freeze({ changed: false, resync: false, notice: null });
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+/** A ULID-shaped act id: the time, then random bits (DIM_ACT_PATTERN is the node id pattern). */
+export function mintActId(now: number): string {
+  let t = '';
+  let ms = Math.max(0, Math.floor(now));
+  for (let i = 0; i < 10; i++) {
+    t = CROCKFORD[ms % 32]! + t;
+    ms = Math.floor(ms / 32);
+  }
+  const r = new Uint8Array(16);
+  crypto.getRandomValues(r);
+  for (let i = 0; i < 16; i++) t += CROCKFORD[r[i]! % 32]!;
+  return t;
+}
 const own = (o: Record<string, unknown>, k: string): unknown => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 
 /** The dimension mod's command refusal codes (`{ok: false, code, fix}`), closed. */
@@ -218,6 +245,8 @@ export class DimLive {
   #seen: DimRow[] = [];
   /** this page's own confirmed rows, oldest first */
   #undo: UndoEntry[] = [];
+  /** the act of a ⌘Z handed to the mod (`delegate`) and not answered yet: no other undo meanwhile */
+  #away: string | null = null;
 
   constructor(deps: DimLiveDeps) {
     this.#d = deps;
@@ -284,7 +313,7 @@ export class DimLive {
       link: this.#linkUp ? 'up' : 'down',
       pending: pending.length,
       inFlight: this.#flight !== null,
-      canUndo: this.#undo.length > 0 && pending.length === 0,
+      canUndo: this.#undo.length > 0 && pending.length === 0 && this.#away === null,
       since: pending.length > 0 ? Math.min(...pending.map((b) => b.at)) : null,
     };
   }
@@ -298,7 +327,7 @@ export class DimLive {
     this.#lastSentAt = now;
     this.#flight = next;
     this.#seen = [];
-    this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture, more: !next.last });
+    this.#d.send({ id: next.id, ops: next.ops, gesture: next.gesture, more: !next.last, act: next.act });
   }
 
   /** Why these ops, applied to `base`, could not be undone within the undo bound; null when they can. */
@@ -314,23 +343,13 @@ export class DimLive {
   /** Queue the rows of ONE action (already packed). All or nothing: false when they do not all fit the pending bound. */
   #enqueue(rows: DimOp[][], gesture: Gesture, undo: UndoEntry | null): boolean {
     const now = this.#d.now();
-    const last = this.#queue[this.#queue.length - 1];
-    if (rows.length === 1 && !undo && last && !last.undo && last.group === null) {
-      // one row's worth joins the single-row batch still waiting, when both fit one row together
-      const merged = [...last.ops, ...rows[0]!];
-      // (the merged batch is one undo entry: it must stay undoable as one)
-      if (merged.length <= DIM_LIMITS.opsPerRow && fitsOneDimRow(merged) && !this.#notUndoable(this.#fold(this.#overlay().filter((b) => b !== last)), merged)) {
-        last.ops = merged;
-        last.key = canonicalJson(merged);
-        // the NEWEST stamp rides the batch: it has the most life and uses left, and stamps are sent in rising order
-        last.gesture = gesture;
-        return true;
-      }
-    }
+    // S1.4 E3 item 7: ONE act per action, never merged. Each action is its own row (or group), so no row ever carries
+    // two actions and an undo of one act never takes another with it (Aegis ruling 3; the E3 half of E1's trap line)
     if (this.#pending().length + rows.length > DIM_LIVE_LIMITS.pending) return false;
     const group = rows.length > 1 ? this.#nextGroup++ : null;
+    const act = this.#d.mintAct ? this.#d.mintAct() : mintActId(this.#d.now());
     rows.forEach((ops, i) => {
-      this.#queue.push({ id: this.#nextId++, ops, gesture, at: now, sentAt: null, ackSeq: null, ackAt: null, undo, group, last: i === rows.length - 1, key: canonicalJson(ops), landed: null });
+      this.#queue.push({ id: this.#nextId++, ops, gesture, at: now, sentAt: null, ackSeq: null, ackAt: null, undo, group, act, last: i === rows.length - 1, key: canonicalJson(ops), landed: null });
     });
     return true;
   }
@@ -391,10 +410,16 @@ export class DimLive {
   undo(gesture: Gesture | null): DimLiveResult {
     const fail = (code: string, field = 'ops', why: string | null = null, changed = false): DimLiveResult => ({ changed, resync: false, notice: { code, field, why, lost: 0 } });
     if (!gesture) return fail('not-sent', 'ops', 'gesture-missing');
-    if (this.#pending().length > 0) return NONE;
+    if (this.#pending().length > 0 || this.#away !== null) return NONE;
     const entry = this.#undo[this.#undo.length - 1];
     if (!entry) return fail('undo-nothing');
     if (!this.#linkUp) return fail('link-down');
+    // Aegis (P4a review, required in E3): a delete of another hand's mark is undone by the mod's planner, which
+    // re-adds it in its ORIGINAL hand with its words and change signs (`restored`); this page's planner writes no marker
+    if (this.#crossesHands(entry)) {
+      this.#away = entry.act;
+      return { changed: true, resync: false, notice: null, delegate: { act: entry.act, base: this.#confirmed().seq } };
+    }
     // each row is inverted against the state just before THAT row: what another hand changed between two rows of
     // the action is what comes back, never an older value
     const plan = planUndo({ before: this.#d.stateAt(entry.rows[0]!.seq - 1), befores: entry.rows.map((r) => this.#d.stateAt(r.seq - 1)), rows: entry.rows.map((r) => r.ops), current: this.view(), actor: this.#d.me, mint: this.#d.mint });
@@ -410,6 +435,34 @@ export class DimLive {
       return fail('undo-too-large', 'ops', null, true);
     }
     return this.#local(plan.ops, gesture, entry);
+  }
+
+  /** True when one of the entry's rows deleted a mark that is not purely this person's (drawn, restored, worded or changed by another hand). */
+  #crossesHands(entry: UndoEntry): boolean {
+    const me = this.#d.me;
+    const mine = (b: unknown): boolean => isPlainObject(b) && b.cls === 'human' && b.principal === me.principal;
+    for (const r of entry.rows) {
+      const before = this.#d.stateAt(r.seq - 1);
+      for (const op of r.ops) {
+        if (op.type !== 'delete') continue;
+        const n = before.nodes.get(op.id);
+        if (!n) continue;
+        if (!mine(n.by) || (n.restoredFrom !== undefined && !mine(n.restoredFrom.by)) || (n.wordsBy !== undefined && !mine(n.wordsBy)) || (n.otherBy !== undefined && !mine(n.otherBy))) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The mod answered a ⌘Z handed to it (`delegate`). `done`: the act is undone (or there is nothing left of it, or
+   * it is too old): its entry leaves, so the next press reaches the one before. `kept`: it stays (`more`, busy, a
+   * failure): the next press asks again.
+   */
+  settleAway(act: string, outcome: 'done' | 'kept'): DimLiveResult {
+    if (this.#away !== act) return NONE;
+    this.#away = null;
+    if (outcome === 'done') this.#undo = this.#undo.filter((e) => e.act !== act);
+    return { changed: true, resync: false, notice: null };
   }
 
   /** Drop a pending batch, then make every later one hold against the new view. One notice for all of it. */
@@ -452,7 +505,7 @@ export class DimLive {
       // the rows of one action are ONE entry
       if (batch.group !== null && top && top.group === batch.group) top.rows.push({ seq, ops });
       else {
-        this.#undo.push({ group: batch.group, rows: [{ seq, ops }], partly: false });
+        this.#undo.push({ group: batch.group, act: batch.act, rows: [{ seq, ops }], partly: false });
         if (this.#undo.length > DIM_LIVE_LIMITS.undo) this.#undo.shift();
       }
     }

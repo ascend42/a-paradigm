@@ -100,7 +100,7 @@ describe('#gui-mod-command sendModCommand', () => {
   });
 
   it('18. takes a closed list of command ids for the dimension mod', async () => {
-    expect([...MOD_COMMANDS.entries()]).toEqual([['gnomon.dimension', ['dim.open', 'dim.attach', 'dim.op', 'dim.close', 'dim.grant', 'dim.select', 'dim.check']]]);
+    expect([...MOD_COMMANDS.entries()]).toEqual([['gnomon.dimension', ['dim.open', 'dim.attach', 'dim.op', 'dim.close', 'dim.grant', 'dim.select', 'dim.check', 'dim.undo', 'dim.seen']]]);
     const c = client();
     const g = press(0);
     for (const id of ['dim.delete', 'dim.op ', 'DIM.OP', 'tool.call', 'toString', '', 'dim-draw']) expect(await whyOf(sendModCommand(c, g, DIM_MOD_ID, id, {}, 0))).toBe('command-id');

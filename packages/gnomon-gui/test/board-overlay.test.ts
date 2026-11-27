@@ -247,8 +247,8 @@ describe('#gui-board S1.4 P4a: the ring, the too-small rule, the text forms, hov
     const claude: BoardAuthor = { cls: 'agent', id: handKey('p:gnomon/s1', 'claude'), name: 'claude', principal: 'p:gnomon/s1', session: 'a-very-long-session-name-here' };
     // (Mika R5) the page's NAME for the session, cut at 16; a session the page does not know: its short id
     const names = (h: string): string | null => (h === 'a-very-long-session-name-here' ? 'Totals are off by a cent' : null);
-    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })], names)).toBe(`claude · ◇ ${sessionShort('Totals are off by a cent')}`);
-    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })])).toBe(`claude · ◇ ${hsidShort('a-very-long-session-name-here')}`);
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })], names)).toBe(`Claude · ◇ ${sessionShort('Totals are off by a cent')}`);
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, selected: true })])).toBe(`Claude · ◇ ${hsidShort('a-very-long-session-name-here')}`);
     expect(hsidShort('a-very-long-session-name-here')).toBe('ame-here');
     expect(sessionLabel('h1', () => 'fix-auth')).toBe('fix-auth');
     expect([...sessionShort('a-very-long-session-name-here')]).toHaveLength(16);
@@ -315,3 +315,17 @@ describe('#gui-board a cut name has no space before its ellipsis (Mika C1)', () 
   });
 });
 
+
+describe('E3 review D5 (author-seal.other_hands.selection): the selection line names every hand', () => {
+  const claude: BoardAuthor = { cls: 'agent', id: handKey('p:gnomon/s1', 'claude'), name: 'claude', principal: 'p:gnomon/s1', session: 'h1' };
+  const kit: BoardAuthor = { cls: 'agent', id: handKey('p:gnomon/s2', 'kit'), name: 'kit', principal: 'p:gnomon/s2' };
+  const you: BoardAuthor = { cls: 'human' };
+  const names = (): string => 'fix-auth';
+  it('owner first, then words by, changed by, put back by; the person\'s own marks too', () => {
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: you, wordsBy: claude, otherBy: kit, selected: true })], names)).toBe('yours · words by Claude · changed by kit');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, otherBy: you, selected: true })], names)).toBe('Claude · ◇ fix-auth · changed by you');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: you, restoredFrom: claude, selected: true })], names)).toBe('Claude · ◇ fix-auth · put back by you');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, restoredFrom: you, selected: true })], names)).toBe('yours · put back by Claude');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: you, selected: true })], names)).toBeNull();
+  });
+});
