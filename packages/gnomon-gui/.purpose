@@ -899,6 +899,11 @@ components:
       - ../gnomon/test/dimension-board-browser.test.ts
   gui-board-turn:
     description: >-
+      E3 r3 (Mika D3, menu): the notice ladder is time, session cut to 5 and …,
+      session, 'before stopped', ' of your marks', two lines, the agent's name
+      cut to 12 and …, then wrapping between parts; the +k menu's rows shorten
+      by that ladder and keep their time, and the menu's right edge goes out to
+      the stage's when its rows do not fit left of the key.
       E3 review (Mika B1 to C5): notice and mark words cut only by the ladder or
       the two-line step; a key's row and column keep focus across a repaint
       (undo becomes redo) and a held Enter never presses again; the +k menu sits
@@ -1000,6 +1005,10 @@ components:
       - test/board-open.test.ts
   gui-dim-notices:
     description: >-
+      E3 r3 (Aegis F-1, F-2): lapse() raises a pinned turn that never closed as
+      stopped (its session gone, a later turn's row, the live timeout); follow
+      splits a ninth's push-out from a notice the mod let go ('no-longer');
+      pressed only once the board took the press.
       E3 review (Aegis A2, A3, N-1, N-3): follow raises a pinned turn only once
       the page saw its turn.result, at that row's time; a notice it removes that
       this page never pressed, and a ninth pushed out while the board is folded
