@@ -9,6 +9,7 @@
  */
 import { DIM_LIMITS, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { DimListing } from './dim-store.js';
+import { sessionShort, type SessionNameOf } from './board-overlay.js';
 
 /** `command`: a typed command. `menu`: every pointer entry and ⌥B. (The enum is hashed: no other value.) */
 export type BoardOpenedHow = 'command' | 'menu';
@@ -87,21 +88,34 @@ export function planBoardRow(l: Pick<DimListing, 'dim' | 'title' | 'ended' | 'at
   return { type: 'open', dim: l.dim, attach: !l.attached.includes(hsid), reopens: l.ended, title: l.title };
 }
 
-/** One row of the Dimensions list as it is drawn. */
+/** One row of the Dimensions list as it is drawn (design components.dimension-list.anatomy). */
 export interface DimensionRow {
   dim: string;
+  /** line 1: the title through the title check (aegis C4.2), 'Untitled' when it fails */
   title: string;
-  /** hh:mm (today) or the date, from the listing's `lastAt` (the kernel's time of its last row); '' when unknown */
+  /** hh:mm (today), 'Nov 24', or 'Nov 24 2025' when not this year, from the listing's `lastAt`; '' when unknown */
   time: string;
-  /** what the row says after its time: ended, partly held, still opening, not this session's */
+  /** the older short facts (the palette's first form): ended, partly held, still opening, not this session's */
   notes: string[];
   ended: boolean;
   attached: boolean;
   /** the open board's check (core/board-leaf.ts checkLine, from this page's session): its row reads 'open here · <check>' */
   check?: string;
+  /** the mark: ● open somewhere, ○ folded, … was opening when the link dropped (ink only) */
+  mark: '●' | '○' | '…';
+  /** line 2: fixed words and host labels only (aegis C4.2, C4.3) */
+  line2: string;
+  /** the words line 2 drops first when it would be cut ('open here · '): the check is never cut (mika D4) */
+  lead: string;
+  /** line 2 is a mismatch's fact, in --fail */
+  bad: boolean;
+  /** this is the board open in this leaf: always the first row (mika D1), aria-checked */
+  current: boolean;
+  /** the attached sessions as the row was drawn (aegis C4.5: a press compares them with the listing at the press) */
+  seen: { ended: boolean; attached: readonly string[] };
 }
 
-/** `lastAt` as the list prints it: hh:mm when it is today (by `now`), else `Mon D`. */
+/** `lastAt` as the list prints it: hh:mm when it is today (by `now`), else `Mon D`, and `Mon D YYYY` when not this year (mika). */
 export function listTime(lastAt: string | null, now: number): string {
   const t = lastAt ? Date.parse(lastAt) : Number.NaN;
   if (!Number.isFinite(t)) return '';
@@ -109,24 +123,86 @@ export function listTime(lastAt: string | null, now: number): string {
   const n = new Date(now);
   const two = (v: number): string => String(v).padStart(2, '0');
   if (d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()) return `${two(d.getHours())}:${two(d.getMinutes())}`;
-  return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}`;
+  const md = `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}`;
+  return d.getFullYear() === n.getFullYear() ? md : `${md} ${d.getFullYear()}`;
+}
+
+/** A listed title as line 1 shows it (aegis C4.2): the leaf head's check, then no control or format character; 'Untitled' when nothing is left. */
+export function listTitle(title: string): string {
+  return boardTitleOf(String(title ?? '')).replace(/[\p{Cc}\p{Cf}]/gu, '').trim() || 'Untitled';
+}
+
+/** What the open board's row says of its check (from this page's session, never the listing: aegis C4.4). */
+export interface ListCheck {
+  line: string;
+  bad: boolean;
+}
+
+/** The words of the list (design dimension-list anatomy line 2, state-notes). */
+export const DIM_LIST_COPY = {
+  openHere: 'open here · ',
+  attaches: 'opening attaches this session',
+  folded: 'folded · opening starts it again',
+  foldedPart: 'folded · opening shows part of it',
+  partShown: 'part of it is shown',
+  wasOpening: 'didn’t finish opening · a press tries again',
+  menuLabel: 'Dimensions in this project',
+  find: 'Find a dimension…',
+  findHint: '/boards',
+  empty: 'No dimensions here yet · /board opens one',
+  noSession: 'Open a session first',
+  down: 'Not connected · nothing can be opened yet',
+  opening: 'opening the board…',
+} as const;
+
+/** Who is attached, in line 2's form: this session first; a session the page cannot name is counted (aegis C4.3). */
+function whoLine(attached: readonly string[], hsid: string | null, name: SessionNameOf | undefined): string {
+  const order = hsid && attached.includes(hsid) ? [hsid, ...attached.filter((a) => a !== hsid)] : [...attached];
+  if (!order.length) return '';
+  const first = name?.(order[0]!) ?? null;
+  if (!first) return `${order.length} ${order.length === 1 ? 'session' : 'sessions'}`;
+  return `◇ ${sessionShort(first)}${order.length > 1 ? ` +${order.length - 1}` : ''}`;
 }
 
 /**
- * The Dimensions list: this repo's dimensions, newest first. `opening` are dimensions this page asked to open whose
- * rows it has not read (a session still opening when the link went: its `dim.open` may have landed): they are
- * listed too, so none is lost from sight.
+ * The Dimensions list: this repo's dimensions. The board open in this leaf first (mika D1), then the dimensions this
+ * page asked to open whose rows it has not read (a session still opening when the link went: its `dim.open` may
+ * have landed; listed so none is lost from sight), then the rest, newest first. Nothing in a row comes from a mark,
+ * an agent's own words or a last row: the title, fixed words and the host's labels only (aegis 4).
  */
-export function dimensionRows(listings: readonly DimListing[], hsid: string | null, opening: readonly { dim: string; title: string }[], now: number): DimensionRow[] {
+export function dimensionRows(listings: readonly DimListing[], hsid: string | null, opening: readonly { dim: string; title: string }[], now: number, o: { sessionName?: SessionNameOf; openDim?: string | null; check?: ListCheck | null } = {}): DimensionRow[] {
   const rows: DimensionRow[] = [...listings]
     .sort((a, b) => b.lastSeq - a.lastSeq)
     .map((l) => {
       const attached = !!hsid && l.attached.includes(hsid);
-      return { dim: l.dim, title: l.title || 'Untitled', time: listTime(l.lastAt, now), ended: l.ended, attached, notes: [...(l.ended ? ['folded'] : []), ...(l.partial ? ['partly held'] : []), ...(attached ? [] : ['not this session’s yet'])] };
+      const current = !!o.openDim && l.dim === o.openDim;
+      const who = whoLine(l.attached, hsid, o.sessionName);
+      let lead = '';
+      let line2: string;
+      let bad = false;
+      if (current) {
+        lead = DIM_LIST_COPY.openHere;
+        line2 = o.check?.line ?? '';
+        bad = !!o.check?.bad;
+        if (!line2) lead = 'open here';
+      } else if (l.ended) line2 = l.partial ? DIM_LIST_COPY.foldedPart : DIM_LIST_COPY.folded;
+      else if (attached) line2 = `attached ${who.startsWith('◇') ? who : `· ${who}`}`;
+      else line2 = who ? `${who} · ${DIM_LIST_COPY.attaches}` : DIM_LIST_COPY.attaches;
+      if (!l.ended && l.partial) line2 = line2 ? `${line2} · ${DIM_LIST_COPY.partShown}` : DIM_LIST_COPY.partShown;
+      const row: DimensionRow = { dim: l.dim, title: listTitle(l.title), time: listTime(l.lastAt, now), ended: l.ended, attached, notes: [...(l.ended ? ['folded'] : []), ...(l.partial ? ['partly held'] : []), ...(attached ? [] : ['not this session’s yet'])], mark: l.ended ? '○' : '●', line2, lead, bad, current, seen: { ended: l.ended, attached: [...l.attached] } };
+      if (current && o.check) row.check = o.check.line;
+      return row;
     });
   const have = new Set(rows.map((r) => r.dim));
-  const pending = opening.filter((o) => !have.has(o.dim)).map((o) => ({ dim: o.dim, title: o.title || 'Untitled', time: '', ended: false, attached: true, notes: ['was opening when the link went'] }));
-  return [...pending, ...rows];
+  const pending: DimensionRow[] = opening.filter((p) => !have.has(p.dim)).map((p) => ({ dim: p.dim, title: listTitle(p.title), time: '', ended: false, attached: true, notes: ['was opening when the link went'], mark: '…', line2: DIM_LIST_COPY.wasOpening, lead: '', bad: false, current: false, seen: { ended: false, attached: [] } }));
+  const cur = rows.filter((r) => r.current);
+  return [...cur, ...pending, ...rows.filter((r) => !r.current)];
+}
+
+/** aegis C4.5: what the row said when it was drawn still holds at the press (ended, and who is attached). */
+export function rowStillHolds(seen: DimensionRow['seen'], now: Pick<DimListing, 'ended' | 'attached'> | null): boolean {
+  if (!now) return false;
+  return now.ended === seen.ended && now.attached.length === seen.attached.length && now.attached.every((a) => seen.attached.includes(a));
 }
 
 /**

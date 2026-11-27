@@ -2067,3 +2067,29 @@ button.bd-well:focus-visible { outline: 2px solid var(--key-edge); outline-offse
 .bd-hands-menu .bd-hand > .bd-hand-s > bdi { white-space: nowrap; }
 .bd-hands-menu .bd-hand > .bd-seal, .bd-hands-menu .bd-hand > .bd-count, .bd-hands-menu .bd-hand > .bd-grant, .bd-hands-menu .bd-hand > .bd-hand-note { flex: none; }
 .bd-hands-menu .bd-hand > .bd-grant { margin-left: auto; }
+/* design dimension-list (S1.3 P4b-3 rulings; specimen-board.html#foot-pass): the head key's own list, hung under it
+   inside the leaf. Rows are set apart by spacing; no box, no project edge, no key. The specimen's proposal CSS */
+.bd-head { position: relative; z-index: 20; }
+.bd-menu.bd-dims { position: absolute; left: auto; bottom: auto; box-sizing: border-box; min-width: 0; gap: 0; overflow: hidden; z-index: 30; }
+.bd-dr { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 6px; align-items: baseline; box-sizing: border-box; width: 100%; min-height: 42px; padding: 4px 8px 4px 6px; background: none; border: 0; border-left: 2px solid transparent; border-radius: 0; font: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+.bd-dr .dm { grid-row: 1 / span 2; align-self: start; font-size: var(--fs-control); line-height: 18px; color: var(--ink); }
+.bd-dr .t { font-size: var(--fs-control); line-height: 18px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-dr .at { font-size: var(--fs-label); line-height: 18px; color: var(--sec); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bd-dr .l2 { grid-column: 2 / span 2; font-size: var(--fs-label); line-height: 16px; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-dr .l2.bad { color: var(--fail); }
+.bd-dr:hover { background: var(--fold); }
+.bd-dr:focus-visible { background: var(--fold); outline: none; box-shadow: inset 0 0 0 2px var(--key-edge); }
+.bd-dr.current { border-left-color: var(--key-edge); }
+.bd-dr.current .t { font-weight: 600; }
+/* the open row takes no fold fill, so a mismatch's failed colour stays on the sheet (mika D6) */
+.bd-dr.current:hover, .bd-dr.current:focus-visible { background: none; }
+.bd-dr[aria-disabled="true"] { cursor: default; }
+.bd-dr[aria-disabled="true"] .t, .bd-dr[aria-disabled="true"] .dm { color: var(--sec); }
+.bd-dims .bd-mi[aria-disabled="true"] { color: var(--sec); cursor: default; }
+.bd-dims .menu-rule { flex: none; height: 1px; margin: 4px 0; background: var(--rule); }
+.bd-dims .bd-dfind { flex: none; width: 100%; box-sizing: border-box; }
+.bd-dnote { flex: none; margin: 0; padding: 6px 8px; font-size: var(--fs-label); line-height: 16px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-dnote.quiet { color: var(--sec); }
+.bd-dscroll { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.bd-dims > .bd-dr { flex: none; }
+.pal-kbd.bad { color: var(--fail); }

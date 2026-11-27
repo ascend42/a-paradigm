@@ -4054,7 +4054,8 @@ function paintPalette(): void {
     const list = $('palette-list');
     clear(list);
     list.appendChild(h(doc, 'div', { class: 'menu-h', role: 'presentation' }, 'Dimensions') as unknown as HTMLElement);
-    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim }, h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: 'pal-kbd' }, [...(r.check ? ['open here', r.check] : []), r.time, ...r.notes].filter(Boolean).join(' · '))) as unknown as HTMLElement));
+    // (design dimension-list.slash_boards: the palette's rows take the menu's words: the mark, the title, the time, line 2)
+    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim, ...(r.current ? { 'aria-current': 'true' } : {}) }, h(doc, 'span', { class: 'pal-title' }, `${r.mark} ${r.title}`), h(doc, 'span', { class: `pal-kbd${r.bad ? ' bad' : ''}` }, [r.time, `${r.lead}${r.line2}`].filter(Boolean).join(' · '))) as unknown as HTMLElement));
     // none at all, or none that match what was typed: two different things, said as what they are
     if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? 'This session has no dimensions yet · /board opens one' : 'Open a session first')) as unknown as HTMLElement);
     return;
@@ -4678,7 +4679,7 @@ function wire(): void {
       if (e.repeat) return;
       if (!row) return;
       closePalette();
-      return boardDock.choose(row.dim, e);
+      return void boardDock.choose(row.dim, e, row.seen);
     } else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted, e);
     else if (e.key === 'Escape') {
       if (dict.grace) return; // "Sending… Esc keeps it" wins: the document handler keeps the draft, the palette stays
@@ -4693,8 +4694,9 @@ function wire(): void {
     const dimRow = (e.target as HTMLElement).closest('[data-dim]') as HTMLElement | null;
     if (dimRow) {
       const dim = dimRow.dataset.dim!;
+      const seen = palDims?.find((r) => r.dim === dim)?.seen;
       closePalette();
-      return boardDock.choose(dim, e);
+      return void boardDock.choose(dim, e, seen);
     }
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
     if (r) run(r.dataset.id!, e.isTrusted, e);
