@@ -390,6 +390,8 @@ export const UNDO_COPY = Object.freeze({
   catchingUp: 'Catching up with the board · this can be pressed in a moment',
   outOfDate: 'This board is out of date · fold it and open it again',
   pushedOut: (name: string, at: string): string => `An older change of ${name}’s from ${at} can’t be undone in one step now`,
+  /** E3 r3 (the orchestrator's words, for Luna): a notice dismissed on another page, or unpinned by the mod */
+  noLonger: (name: string, at: string): string => `${name}’s change from ${at} is no longer on the strip`,
   attrOff: 'Who changed what couldn’t be checked · the marks themselves match',
   /** the partial tail: changed since, removed since, couldn't be put back, joined by ', ' */
   skipped: (k: { changed: number; gone: number; refused: number }): string =>
@@ -420,6 +422,7 @@ export function undoLine(n: { code: string; scope?: 'turn' | 'mark' | 'own'; rem
   if (n.code === 'undo-other') return UNDO_COPY.other;
   if (n.code === 'redone') return UNDO_COPY.redone(name);
   if (n.code === 'pushed-out') return UNDO_COPY.pushedOut(name, typeof n.at === 'number' ? hhmm(n.at) : '');
+  if (n.code === 'no-longer') return UNDO_COPY.noLonger(name, typeof n.at === 'number' ? hhmm(n.at) : '');
   if (n.code === 'link-down') return UNDO_COPY.linkDown;
   return null;
 }

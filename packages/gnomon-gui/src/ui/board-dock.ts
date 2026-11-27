@@ -301,7 +301,7 @@ export function mountBoardDock(d: BoardDockDeps): BoardDock {
   function tell(session: DimSession, leaf: BoardLeaf, n: DimSessionNotice): void {
     if (tellHand(session, leaf, n)) return;
     // S1.4 E3 (said.undo): an undo-family key's answer, or a ninth notice pushing the oldest out (N2)
-    if (n.about === 'undo' && n.scope !== undefined || n.code === 'pushed-out' || n.code === 'redone') {
+    if (n.about === 'undo' && n.scope !== undefined || n.code === 'pushed-out' || n.code === 'no-longer' || n.code === 'redone') {
       const line = undoLine(n, handNameOf(session, n.hsid ?? '', n.agent ?? null), (t) => hhmm(new Date(t).toISOString()));
       if (line) leaf.say(line);
       return;

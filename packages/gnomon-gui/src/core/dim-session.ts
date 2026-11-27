@@ -842,10 +842,12 @@ export class DimSession {
         if (cs && cs.kind === 'turn' && cs.turn === turn) this.#notices.row(row, store.stateAt(this.dim, row.seq - 1));
       }
     };
-    const f = this.#notices.follow(keys, seed, this.#x.deps.now(), (turn) => this.#x.closedAt(turn));
+    const f = this.#notices.follow(keys, seed, this.#x.deps.now(), (turn) => this.#x.closedAt(turn), this.#undoFlight?.key ?? null);
     // Aegis E3 A3: a notice that left without a press here is said once (N2), as a ninth's is
-    for (const n of f.gone) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
-    if (f.moved && f.gone.length === 0) this.#emit(null);
+    // (E3 r3, the orchestrator's ruling: a ninth's push-out keeps its words; a notice the mod let go says it left the strip)
+    for (const n of f.pushed) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    for (const n of f.gone) this.#emit({ about: 'undo', code: 'no-longer', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    if (f.moved && f.gone.length + f.pushed.length === 0) this.#emit(null);
   }
 
   #attrAt: { seq: number; attr: string; hash: string } | null = null;
@@ -1272,7 +1274,7 @@ export class DimSession {
     this.#flightStart(key);
     void this.#command(g, 'dim.seen', { of: n.of })
       .then((r) => {
-        if (isPlainObject(r) && (r.ok === true || r.code === 'not-pinned')) this.#notices.remove(key);
+        if (isPlainObject(r) && (r.ok === true || r.code === 'not-pinned')) this.#notices.pressed(key), this.#notices.remove(key);
       })
       .catch(() => undefined)
       .finally(() => this.#flightEnd());
@@ -1293,7 +1295,6 @@ export class DimSession {
 
   #flightStart(key: string | null): void {
     const d = this.#x.deps;
-    if (key !== null) this.#notices.pressed(key);
     this.#undoFlight = { key, since: d.now() };
     // the 300 ms quiet: the working look is drawn only once the answer is slow
     if (this.#undoTimer !== null) d.clearTimer(this.#undoTimer);
@@ -1318,6 +1319,8 @@ export class DimSession {
       .then((r) => {
         if (this.#dead) return;
         if (isPlainObject(r) && r.ok === true) {
+          // (Aegis E3 r3 F-2: pressed only once the board took it: a refused press leaves a later line to be said)
+          if (key !== null) this.#notices.pressed(key);
           if (Number.isSafeInteger(r.seq) && typeof r.hash === 'string') {
             this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
             this.#hashPoint(r);
@@ -1626,7 +1629,8 @@ export class DimSessions {
         for (const [dim, nb] of this.#notices) {
           if (this.#sessions.has(dim)) continue;
           for (const ref of refs) {
-            const out = nb.ended(ref, now).pushedOut;
+            // (Aegis E3 r3 F-3: a folded board's notice shows the result row's time too)
+            const out = nb.ended(ref, now, { at }).pushedOut;
             if (!out) continue;
             const q = this.#foldedOut.get(dim) ?? [];
             q.push(out);

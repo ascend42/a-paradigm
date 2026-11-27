@@ -51,7 +51,7 @@ function world() {
     push(DIM_KINDS.op, { ops: plan.ops, act: ULID(n++), undo: { of, ...(plan.restored.length ? { restored: plan.restored } : {}) }, relayedFor: human });
     return { ok: true, dim: DIM, seq, hash: dimHash(store.stateAt(DIM)), applied: plan.applied, skipped: plan.skipped };
   };
-  const hold = { undo: false, seen: false };
+  const hold = { undo: false, seen: false, refuse: false };
   const o = { check: {} as { hash?: string; attr?: string }, turns: 0, pins: null as Array<{ hsid: string; turn: string }> | null };
   const waiting: Array<() => void> = [];
   const client = {
@@ -68,7 +68,7 @@ function world() {
           const row = push(DIM_KINDS.op, { ops: a.ops, ...(a.act ? { act: a.act } : {}), relayedFor: human });
           return { ok: true, dim: DIM, seq: row.seq, applied: (a.ops as unknown[]).length, refused: [] };
         }
-        if (p.commandId === 'dim.undo') return undo(a);
+        if (p.commandId === 'dim.undo') return hold.refuse ? { ok: false, code: 'append-busy' } : undo(a);
         if (p.commandId === 'dim.seen') return { ok: true, dim: DIM, released: true };
         if (p.commandId === 'dim.check') return { ok: true, dim: DIM, seq: store.stateAt(DIM).seq, hash: o.check.hash ?? dimHash(store.stateAt(DIM)), attr: o.check.attr ?? dimAttrDigest(store.stateAt(DIM)), ...(o.pins ? { pins: o.pins } : {}) };
         return { ok: true, already: true, dim: DIM, seq };
@@ -440,7 +440,7 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
     const nb = new DimNotices({ me: ME });
     for (const r of w.store.rows(DIM)) if (r.kind === DIM_KINDS.op) nb.row(r, w.store.stateAt(DIM, r.seq - 1));
     const k = `turn:${AG}/1`;
-    expect(nb.follow([k], () => undefined, 5, () => null)).toEqual({ moved: false, gone: [] });
+    expect(nb.follow([k], () => undefined, 5, () => null)).toEqual({ moved: false, gone: [], pushed: [] });
     expect(nb.shown()).toBeNull();
     const f = nb.follow([k], () => undefined, 9, (t) => (t === k ? Date.parse(AT) : null));
     expect(f.moved).toBe(true);
@@ -488,9 +488,9 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
     s.touch(press());
     await flush(200);
     expect(s.noticeView().shown!.key).toBe(k3);
-    const out = notices.filter((n) => n.code === 'pushed-out');
+    const out = notices.filter((n) => n.code === 'no-longer' || n.code === 'pushed-out');
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ agent: 'claude', at: expect.any(Number) });
+    expect(out[0]).toMatchObject({ code: 'no-longer', agent: 'claude', at: expect.any(Number) });
     w.release();
     void k1;
   });
@@ -508,5 +508,51 @@ describe('E3 review group A (Aegis A2, A3, N-1)', () => {
     await flush(50);
     expect(s.noticeView().shown).toBeNull();
     expect(s.noticeView().own).toBeNull();
+  });
+
+  it('r3 item 5: a ninth keeps the push-out words; a notice the mod let go says it is no longer on the strip', async () => {
+    const w = world();
+    const { s, notices } = await opened(w);
+    const keys: string[] = [];
+    for (let t = 1; t <= DIM_NOTICE_CAP; t++) keys.push(await withNotice(w, s, t, 10 + t));
+    // turn 9 of another page's session: its rows land here, its notice is raised by the pins (a reload's way)
+    expect(notices.filter((n) => n.code === 'pushed-out')).toHaveLength(0);
+    const k9 = await withNotice(w, s, DIM_NOTICE_CAP + 1, 30);
+    expect(notices.filter((n) => n.code === 'pushed-out')).toHaveLength(1);
+    w.pins = [...keys.slice(2), k9].map((turn) => ({ hsid: AG, turn }));
+    s.touch(press());
+    await flush(200);
+    const gone = notices.filter((n) => n.code === 'no-longer');
+    expect(gone).toHaveLength(1);
+    expect(gone[0]).toMatchObject({ about: 'undo', agent: 'claude', at: expect.any(Number) });
+  });
+
+  it('r3 F-2: a refused press does not silence the line said when the mod later lets that notice go', async () => {
+    const w = world();
+    const { s, notices } = await opened(w);
+    await withNotice(w, s, 1, 10);
+    const k2 = await withNotice(w, s, 2, 11);
+    w.hold.refuse = true;
+    const v = s.noticeView().shown!;
+    expect(s.undoNotice(k2, v.rev, press())).toBe(true);
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    expect(w.of('dim.undo')).toHaveLength(1);
+    expect(s.noticeView().shown!.key).toBe(k2);
+    await withNotice(w, s, 3, 12);
+    w.pins = [{ hsid: AG, turn: `turn:${AG}/3` }];
+    s.touch(press());
+    await flush(200);
+    expect(notices.filter((n) => n.code === 'no-longer')).toHaveLength(2);
+  });
+
+  it('r3 F-3: a folded board\'s notice shows its turn.result row\'s time', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    s.edit([rect(40)], press());
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    expect(await s.fold(press('keydown'))).toBe(true);
+    w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(40), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 1) });
+    w.sessions.apply([{ seq: 800, kind: 'turn.result', at: AT, payload: { turn: `turn:${AG}/1` } }]);
+    expect(w.sessions.standingFor(DIM)[0]).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
   });
 });

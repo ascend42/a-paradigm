@@ -294,14 +294,17 @@ export class DimNotices {
    * Aegis E3 A3: `gone` lists the notices that left here although this page never pressed them, and the person never
    * undid them in the rows: their N2 line is said once (a dismissal on another page writes no row, so it is said too).
    */
-  follow(pinned: readonly string[], seed: (turn: string) => void, now: number, closedAt: (turn: string) => number | null = () => null): { moved: boolean; gone: DimStandingNotice[] } {
+  follow(pinned: readonly string[], seed: (turn: string) => void, now: number, closedAt: (turn: string) => number | null = () => null, flying: string | null = null): { moved: boolean; gone: DimStandingNotice[]; pushed: DimStandingNotice[] } {
     let moved = false;
+    // `gone`: left because the mod no longer pins it (dismissed elsewhere, unpinned); `pushed`: a ninth raised here pushed it out
     const gone: DimStandingNotice[] = [];
+    const pushed: DimStandingNotice[] = [];
     for (const n of [...this.#list]) {
       if (n.state === 'standing' && !pinned.includes(n.key)) {
         this.remove(n.key);
         moved = true;
-        if (!this.#pressed.has(n.key) && !this.#undoActs.has(n.key)) gone.push(n);
+        // (a press in flight on it is the person's own doing too, until its answer says otherwise)
+        if (!this.#pressed.has(n.key) && !this.#undoActs.has(n.key) && n.key !== flying) gone.push(n);
       }
     }
     for (const k of pinned) {
@@ -311,9 +314,9 @@ export class DimNotices {
       if (at === null) continue;
       const r = this.ended(k, now, { at });
       if (r.raised) moved = true;
-      if (r.pushedOut) gone.push(r.pushedOut);
+      if (r.pushedOut) pushed.push(r.pushedOut);
     }
-    return { moved, gone };
+    return { moved, gone, pushed };
   }
 
   /** This page pressed undo, redo or dismiss on the set `key` (follow says no N2 line when it then leaves). */

@@ -62,3 +62,11 @@ describe('E3 review D4 (Mika): the +k and undo keys\' names', () => {
     expect(noticeStripRow(N({ lead: 'undid', changed: 0 }), 'Claude', { others: [], more: 0, time: '10:07' }).aria?.undo).toBe('Undo Claude’s turn of 10:07 · it undid your change');
   });
 });
+
+describe('E3 r3 item 5: the words of a notice the mod let go', () => {
+  it('"<Name>\'s change from <time> is no longer on the strip"; the ninth keeps the push-out words', async () => {
+    const { undoLine } = await import('../src/core/board-leaf.js');
+    expect(undoLine({ code: 'no-longer', at: 0 }, 'Claude', () => '14:20')).toBe('Claude’s change from 14:20 is no longer on the strip');
+    expect(undoLine({ code: 'pushed-out', at: 0 }, 'Claude', () => '14:20')).toBe('An older change of Claude’s from 14:20 can’t be undone in one step now');
+  });
+});
