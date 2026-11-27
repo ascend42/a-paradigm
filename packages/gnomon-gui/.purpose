@@ -1005,6 +1005,11 @@ components:
       - test/board-open.test.ts
   gui-dim-notices:
     description: >-
+      E3 r4 (Aegis F-1 reworked): the clock is never evidence; a pinned turn
+      that has not closed is raised stopped only when its session is gone or
+      not live, ended when a later turn of it wrote a row (stopped only if
+      tallied live) or when its close is in the page's rows (closeOf); a late
+      turn.result corrects stopped to ended.
       E3 r3 (Aegis F-1, F-2): lapse() raises a pinned turn that never closed as
       stopped (its session gone, a later turn's row, the live timeout); follow
       splits a ninth's push-out from a notice the mod let go ('no-longer');
