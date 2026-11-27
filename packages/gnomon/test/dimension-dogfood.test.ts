@@ -20,6 +20,7 @@ import { webcrypto } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIM_KINDS, dimHash, foldDim, type DimOp } from '@a-company/gnomon-contracts';
+import { GRANT_COPY } from '../../gnomon-gui/src/core/board-leaf.js';
 import { followLog, GnomonClient, type Transport } from '../../gnomon-gui/src/core/client.js';
 import { DIM_SEND_LIMITS, DimSessions, modAnswerOf, type DimSession, type DimSessionNotice } from '../../gnomon-gui/src/core/dim-session.js';
 import { DimStore } from '../../gnomon-gui/src/core/dim-store.js';
@@ -190,6 +191,11 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
     expect(k.handle.mods.running()).toContain(DIMENSION);
     expect(await waitFor(() => a.status().verified === true, 10_000, 5)).toBe(true);
     expect(a.status()).toMatchObject({ phase: 'open', title: 'Dogfood', keep: 'saved', link: 'up' });
+    // S1.4 P4b (Aegis D1, N-9): this open MADE the dimension, so the first attached session's default grant is said
+    // ONCE, and nothing else is; the board dock says it as these words (one Claude session: 'Claude')
+    expect(A.notices).toEqual([{ about: 'grant', code: 'grant-default', field: 'write', why: null, lost: 0, hsid, write: true }]);
+    expect(GRANT_COPY.spokenOn('Claude')).toBe('Claude may edit this board: it can change and remove any mark');
+    A.notices.length = 0;
     say(`open: dim.open accepted on stamp 1; the start row came back on the followed log at seq ${a.status().seq}; the fold hashes as the mod said`);
 
     /* ── ops through sendModCommand with real stamps; rows through the followed log ── */
@@ -319,7 +325,11 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
     }
     const burst = A.sent.slice(from).filter((c) => c.commandId === 'dim.op');
     const busiest = Math.max(...burst.map((c) => burst.filter((x) => x.at >= c.at && x.at < c.at + 1000).length));
-    expect(A.notices).toEqual([]); // nothing refused: no append-failed, no row-too-large, no timeout
+    // nothing refused: no append-failed, no row-too-large, no timeout. The two burst opens MADE dimensions 2 and 3,
+    // so each says its default grant once (Aegis D1, N-9); the reopen of the first says nothing
+    const grantDefault = { about: 'grant', code: 'grant-default', field: 'write', why: null, lost: 0, hsid, write: true };
+    expect(A.notices).toEqual([grantDefault, grantDefault]);
+    A.notices.length = 0;
     expect(burst.length).toBeGreaterThan(20);
     // the limiter SCHEDULES at most perWindow a second (held exactly on an injected clock in gnomon-gui
     // test/dim-session.test.ts); on this wall clock a late timer can move one send into the next window, so the
@@ -349,7 +359,7 @@ describe.skipIf(!SANDBOX_OK)('#gui-dim-session ⇄ the real kernel and the real 
     expect(unfolded.view().nodes.size).toBe(marksAtFold);
     unfolded.edit([rect(900)], press());
     expect(await saved(unfolded)).toBe(true);
-    expect(A.notices).toEqual([]);
+    expect(A.notices).toEqual([]); // the unfold is a reopen (created: false): no grant line
     expect(await waitFor(() => C.dims.stateAt(last.dim).nodes.size === marksAtFold + 1, 10_000, 5)).toBe(true);
     say(`fold and unfold: dim.close ended the dimension and destroyed the session; dim.open on it un-ended it with its ${marksAtFold} marks, the hash matched, and a new mark was kept`);
 
