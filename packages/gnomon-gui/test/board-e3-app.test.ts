@@ -144,9 +144,9 @@ describe.skipIf(!!process.env.CI || !chrome)('S1.4 E3 in the real app: the notic
     const a = await real([
       ...openBoard, ...rectAt(220, 180), turn(1, `return [{ type: 'delete', id: mine[0] }];`), { wait: 600 }, strip('cut'),
       // a rect drawn across the cut-out: a new mark, no cut-out selected
-      ...rectAt(230, 190), strip('drawn'),
+      ...rectAt(270, 210), strip('drawn'),
       // Select, then a still click inside the cut-out where no mark lies (its lower right corner)
-      { press: '.bd-host [data-key="tool:select"]' }, { press: '.bd-host .bd-stage', at: [224, 184] }, { wait: 500 }, strip('picked'),
+      { press: '.bd-host [data-key="tool:select"]' }, { press: '.bd-host .bd-stage', at: [240, 195] }, { wait: 500 }, strip('picked'),
     ]);
     expect(a.errors).toEqual([]);
     expect(S(a, 'cut').nodes).toBe(0);

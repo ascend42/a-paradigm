@@ -45,7 +45,25 @@ export class PreviewDimMod {
   readonly #dims = new Map<string, { repo: string; state: DimState }>();
   /** S1.4 E3 stand-in of the mod's undo history: each dimension's op rows with the state just before each (newest 512) */
   readonly #hist = new Map<string, Array<{ row: DimRow; before: DimState }>>();
+  /** STAND-IN of the mod's pins (model.mjs offerPin): an agent turn that touched another hand's mark, oldest first, cap 8 */
+  readonly #pins = new Map<string, Array<{ hsid: string; turn: string }>>();
   #note(dim: string, row: DimRow, before: DimState): void {
+    const cs = dimChangeSetOf(row);
+    if (cs && cs.kind === 'turn') {
+      const by = (row.payload as { relayedFor?: { agent?: string } }).relayedFor?.agent;
+      const ops = (row.payload as { ops?: Array<{ type: string; id?: string; ids?: string[] }> }).ops ?? [];
+      const other = ops.some((o) => (o.type === 'move' ? o.ids ?? [] : o.type === 'update' || o.type === 'delete' ? [o.id ?? ''] : []).some((id) => {
+        const n = before.nodes.get(id);
+        const hand = n ? (n.restoredFrom?.by ?? n.by) : null;
+        return !!hand && (hand.cls !== 'agent' || (hand as { agent?: string }).agent !== by);
+      }));
+      const pins = this.#pins.get(dim) ?? [];
+      if (other && !pins.some((p) => p.turn === cs.turn)) {
+        pins.push({ hsid: cs.hsid, turn: cs.turn });
+        while (pins.length > 8) pins.shift();
+        this.#pins.set(dim, pins);
+      }
+    }
     const list = this.#hist.get(dim) ?? [];
     list.push({ row, before });
     if (list.length > 512) list.shift();
@@ -135,7 +153,7 @@ export class PreviewDimMod {
       const seq = append(S.DIM_KINDS.start, payload);
       entry = { repo: a.repo, state: M.landed(S.emptyDimState(a.dim), S.DIM_KINDS.start, payload, stamp, seq) };
       this.#dims.set(a.dim, entry);
-      return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: S.dimHash(entry.state), ...this.#answerOf(entry.state) };
+      return { ok: true, created: true, dim: a.dim, title: t.title, firstSeq: seq, seq, hash: S.dimHash(entry.state), ...this.#answerOf(entry.state, a.dim) };
     }
     if (!entry) return M.refusal('dim-unknown');
     if (entry.repo !== a.repo) return M.refusal('repo-mismatch');
@@ -159,7 +177,7 @@ export class PreviewDimMod {
     if (!attached) return M.refusal('not-attached');
     if (commandId === 'dim.open') {
       const seq = write(S.DIM_KINDS.start, M.startPayload(a.dim, a.hsid, a.opened));
-      return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: e.state.title, seq, hash: S.dimHash(e.state), ...this.#answerOf(e.state) } : seq;
+      return typeof seq === 'number' ? { ok: true, created: false, dim: a.dim, title: e.state.title, seq, hash: S.dimHash(e.state), ...this.#answerOf(e.state, a.dim) } : seq;
     }
     if (commandId === 'dim.close') {
       if (state.ended) return { ok: true, already: true, dim: a.dim, seq: state.seq, ops: state.ops, nodes: state.nodes.size, hash: S.dimHash(state) };
@@ -167,11 +185,17 @@ export class PreviewDimMod {
       const seq = write(S.DIM_KINDS.end, payload);
       return typeof seq === 'number' ? { ok: true, already: false, dim: a.dim, seq, ops: payload.ops, nodes: payload.nodes, hash: S.dimHash(e.state) } : seq;
     }
-    // S1.4 E3 stand-in of index.mjs dim.check: the hash point, no write (this stand-in keeps no pins: [])
-    if (commandId === 'dim.check') return { ok: true, dim: a.dim, seq: state.seq, hash: S.dimHash(state), ...this.#answerOf(state) };
+    // S1.4 E3 stand-in of index.mjs dim.check: the hash point, no write, with the stand-in's pins
+    if (commandId === 'dim.check') return { ok: true, dim: a.dim, seq: state.seq, hash: S.dimHash(state), ...this.#answerOf(state, a.dim) };
     if (state.ended) return M.refusal('dim-ended');
-    // S1.4 E3 stand-in: no pins are kept here, so a dismiss always releases
-    if (commandId === 'dim.seen') return { ok: true, dim: a.dim, released: true };
+    if (commandId === 'dim.seen') {
+      const of = (a as unknown as { of: DimChangeSet }).of;
+      const pins = this.#pins.get(a.dim) ?? [];
+      const i = of.kind === 'turn' ? pins.findIndex((p) => p.turn === of.turn) : -1;
+      if (i < 0) return M.refusal('not-pinned');
+      pins.splice(i, 1);
+      return { ok: true, dim: a.dim, released: true };
+    }
     if (commandId === 'dim.undo') return this.#undo(a as never, e, write, actor, stamp);
     if (this.refuseNext) {
       const code = this.refuseNext;
@@ -189,8 +213,8 @@ export class PreviewDimMod {
   }
 
   /** what index.mjs answers beside the hash: the attribution digest, the grant map (no grant rows here: the shared default) and the pins */
-  #answerOf(state: DimState): Record<string, unknown> {
-    return { attr: dimAttrDigest(state), grants: state.attached.map((hsid) => ({ hsid, write: dimMayDraw(state, emptyDimGrants(), hsid) })), pins: [] };
+  #answerOf(state: DimState, dim: string): Record<string, unknown> {
+    return { attr: dimAttrDigest(state), grants: state.attached.map((hsid) => ({ hsid, write: dimMayDraw(state, emptyDimGrants(), hsid) })), pins: [...(this.#pins.get(dim) ?? [])] };
   }
 
   /**
@@ -257,6 +281,11 @@ export class PreviewDimMod {
       if (typeof seq !== 'number') return seq;
     }
     const more = plan.more || i < plan.ops.length;
+    if (!a.ids && !more && a.of.kind === 'turn') {
+      const pins = this.#pins.get(a.dim) ?? [];
+      const at = pins.findIndex((p) => p.turn === (a.of as { turn: string }).turn);
+      if (at >= 0) pins.splice(at, 1);
+    }
     void stamp;
     return { ok: true, dim: a.dim, seq: e.state.seq, hash: S.dimHash(e.state), applied: rows.flat().length, skipped: { ...plan.skipped, refused: plan.skipped.refused + unfit }, ...(more ? { more: true } : {}) };
   }
