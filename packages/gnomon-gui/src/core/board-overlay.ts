@@ -476,11 +476,21 @@ export function overlayItems(marks: readonly BoardMarkView[], view: BoardView, o
 export function selectionLine(marks: readonly BoardMarkView[], sessionName?: SessionNameOf): string | null {
   const picked = marks.filter((m) => m.selected && !m.labelOf);
   if (picked.length !== 1) return null;
-  const a = picked[0]!.author;
-  if (a.cls === 'human') return null;
-  const name = a.cls === 'agent' ? boardAgentName(a.name) : 'unknown hand';
-  const session = a.cls === 'agent' && a.session ? sessionLabel(a.session, sessionName) : null;
-  return session ? `${name} · ◇ ${session}` : name;
+  const m = picked[0]!;
+  // S1.4 E3 (author-seal.other_hands.selection; Mika E3 D5): every hand in it, owner first, then words by, changed
+  // by and put back by: 'yours · words by claude · changed by kit'; 'claude · ◇ fix-auth · changed by you'. The
+  // owner of a mark an undo re-added is its original hand; the hand that re-added it put it back
+  const owner = m.restoredFrom ?? m.author;
+  const putBy = m.restoredFrom && !sameHand(m.restoredFrom, m.author) ? m.author : null;
+  const who = (a: BoardAuthor): string => (a.cls === 'human' ? 'you' : a.cls === 'agent' ? boardAgentName(a.name) : 'unknown hand');
+  const extra: string[] = [];
+  if (m.wordsBy && !sameHand(m.wordsBy, owner)) extra.push(`words by ${who(m.wordsBy)}`);
+  if (m.otherBy && !sameHand(m.otherBy, owner)) extra.push(`changed by ${who(m.otherBy)}`);
+  if (putBy) extra.push(`put back by ${who(putBy)}`);
+  if (owner.cls === 'human' && extra.length === 0) return null;
+  const name = owner.cls === 'human' ? 'yours' : who(owner);
+  const session = owner.cls === 'agent' && owner.session ? sessionLabel(owner.session, sessionName) : null;
+  return [session ? `${name} · ◇ ${session}` : name, ...extra].join(' · ');
 }
 
 /** The page's own name for a host session id, or null when the page does not know that session (never from the fold). */

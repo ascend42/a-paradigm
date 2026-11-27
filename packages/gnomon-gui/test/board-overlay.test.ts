@@ -315,3 +315,17 @@ describe('#gui-board a cut name has no space before its ellipsis (Mika C1)', () 
   });
 });
 
+
+describe('E3 review D5 (author-seal.other_hands.selection): the selection line names every hand', () => {
+  const claude: BoardAuthor = { cls: 'agent', id: handKey('p:gnomon/s1', 'claude'), name: 'claude', principal: 'p:gnomon/s1', session: 'h1' };
+  const kit: BoardAuthor = { cls: 'agent', id: handKey('p:gnomon/s2', 'kit'), name: 'kit', principal: 'p:gnomon/s2' };
+  const you: BoardAuthor = { cls: 'human' };
+  const names = (): string => 'fix-auth';
+  it('owner first, then words by, changed by, put back by; the person\'s own marks too', () => {
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: you, wordsBy: claude, otherBy: kit, selected: true })], names)).toBe('yours · words by claude · changed by kit');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, otherBy: you, selected: true })], names)).toBe('claude · ◇ fix-auth · changed by you');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: you, restoredFrom: claude, selected: true })], names)).toBe('claude · ◇ fix-auth · put back by you');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: claude, restoredFrom: you, selected: true })], names)).toBe('yours · put back by claude');
+    expect(selectionLine([mark({ id: 'a', kind: 'rect', author: you, selected: true })], names)).toBeNull();
+  });
+});
