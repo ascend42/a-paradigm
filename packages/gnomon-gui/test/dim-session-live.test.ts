@@ -99,6 +99,9 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
         { key: 'Delete' }, { wait: 1500 }, facts('deleted'),
         { read: `(() => { const rows = ${L}.dims.rows(${DIM}); return rows.slice(${'-'}6).map((r) => (r.payload.ops || []).map((o) => o.type)); })()`, as: 'tail' },
         { key: 'z', meta: true }, { wait: 1500 }, facts('undone'),
+        // S1.4 E3: the fixture's marks are another principal's (p:preview/matt, not the page's), so this Cmd+Z is the
+        // MOD's: count the restored entries the rows since the delete carry
+        { read: `(() => { const rows = ${L}.dims.rows(${DIM}); let n = 0, marked = 0, all = 0; for (const r of rows.slice(-4)) { if (!r.payload.ops || r.payload.ops[0].type !== 'add') continue; all++; if (r.payload.undo) { marked++; n += (r.payload.undo.restored || []).length; } } return JSON.stringify({ n, marked, all }); })()`, as: 'restored' },
         { key: 'z', meta: true }, { wait: 400 }, facts('again'),
       ],
       'many',
@@ -117,6 +120,10 @@ describe.skipIf(!!process.env.CI || !chrome)('the live loop on a real engine: dr
     expect(deletes).toEqual(Array(64).fill('delete'));
     // ONE undo takes the whole delete back: 64 marks, the mod's fold, on the board
     expect(f('undone')).toMatchObject({ keep: 'saved', pending: 0, nodes: 64, marks: 64, sameAsMod: true, drift: 0, notices: [] });
+    // through the mod, at size: every re-add row carries the marker, 64 restored entries in all (rows packed WITH the marker)
+    const rs = JSON.parse(a.restored as string) as { n: number; marked: number; all: number };
+    expect(rs.n).toBe(64);
+    expect(rs.marked).toBeGreaterThan(1);
     // and that was the whole of it: a second Cmd+Z has nothing left of the delete to undo
     expect(f('again')).toMatchObject({ nodes: 64, marks: 64, rows: f('undone').rows });
   }, 120_000);

@@ -10,8 +10,7 @@
  * stamp, `hsid` and `repo`) is the fake kernel's.
  */
 import { DIM_KINDS, dimChangeSetOf, foldDim, planDimUndo } from '@a-company/gnomon-contracts';
-import type { DimChangeSet, DimRow, DimState } from '@a-company/gnomon-contracts';
-import { packDimRows } from '../core/dim-rows.js';
+import type { DimChangeSet, DimOp, DimRow, DimState } from '@a-company/gnomon-contracts';
 import { mintDimNodeId } from '../core/dim-session.js';
 // @ts-ignore the mod's own plain .mjs (no types): bundled into the preview only
 import * as model from '../../../gnomon-mods/dimension/model.mjs';
@@ -26,6 +25,9 @@ interface Model {
   refusal(code: string, extra?: Record<string, unknown>): Answer;
   titleFor(title: unknown, fromSession: boolean | undefined): { title?: string; problem?: string };
   rowProblem(payload: unknown, stamp: unknown): string | null;
+  rowBytes(payload: unknown, stamp: unknown): number | null;
+  CALL_ROWS: number;
+  CALL_BYTES: number;
   apply(state: DimState, ops: unknown, actor: unknown, opts: { stamp: unknown }): { ok: unknown[]; refused: unknown[]; secret: boolean; tooLarge: boolean };
   landed(state: DimState, kind: string, payload: unknown, stamp: unknown, seq: number): DimState;
   startPayload(dim: string, hsid: string, opened: unknown, title?: string): Record<string, unknown>;
@@ -206,16 +208,49 @@ export class PreviewDimMod {
       ...(a.ids ? { ids: a.ids } : {}),
     });
     if (plan.ops.length === 0) return M.refusal('undo-nothing', { skipped: plan.skipped });
-    const rows = packDimRows(plan.ops) ?? [plan.ops];
     const act = mintDimNodeId();
     const of = a.of.kind === 'act' ? { principal: a.of.principal, act: a.of.act } : { hsid: a.of.hsid, turn: a.of.turn };
-    for (const ops of rows) {
+    const payloadOf = (ops: DimOp[]): Record<string, unknown> => {
       const adds = new Set(ops.flatMap((o) => (o.type === 'add' ? [(o.node as { id: string }).id] : [])));
       const restored = plan.restored.filter((r) => adds.has(r[0]));
-      const seq = write(S.DIM_KINDS.op, { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}) } });
+      return { ...M.opPayload(a.dim, ops), act, undo: { of, ...(a.ids ? { ids: a.ids } : {}), ...(restored.length ? { restored } : {}) } };
+    };
+    // as index.mjs undoCore packs: op by op, each row measured WITH its marker, at most CALL_ROWS rows inside
+    // CALL_BYTES; what does not fit is left for the next press (`more`). An op that fits no row alone is refused.
+    const rows: DimOp[][] = [];
+    let cur: DimOp[] = [];
+    let used = 0;
+    let curBytes = 0;
+    let i = 0;
+    let unfit = 0;
+    while (i < plan.ops.length) {
+      const op = plan.ops[i]!;
+      const b = M.rowBytes(payloadOf([...cur, op]), stamp);
+      if (b !== null && used + b <= M.CALL_BYTES) {
+        cur.push(op);
+        curBytes = b;
+        i++;
+        continue;
+      }
+      if (cur.length === 0) {
+        unfit++;
+        i++;
+        continue;
+      }
+      if (rows.length + 1 >= M.CALL_ROWS) break;
+      rows.push(cur);
+      used += curBytes;
+      cur = [];
+      curBytes = 0;
+    }
+    if (cur.length > 0) rows.push(cur);
+    if (rows.length === 0) return M.refusal(unfit > 0 ? 'undo-nothing' : 'row-too-large');
+    for (const ops of rows) {
+      const seq = write(S.DIM_KINDS.op, payloadOf(ops));
       if (typeof seq !== 'number') return seq;
     }
+    const more = plan.more || i < plan.ops.length;
     void stamp;
-    return { ok: true, dim: a.dim, seq: e.state.seq, hash: S.dimHash(e.state), applied: plan.applied, skipped: plan.skipped, ...(plan.more ? { more: true } : {}) };
+    return { ok: true, dim: a.dim, seq: e.state.seq, hash: S.dimHash(e.state), applied: rows.flat().length, skipped: { ...plan.skipped, refused: plan.skipped.refused + unfit }, ...(more ? { more: true } : {}) };
   }
 }
