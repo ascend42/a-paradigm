@@ -367,7 +367,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     expect(mcpJsonText(r.w).includes('gnomon-mods')).toBe(false);
     await r.k.client.call('session.stop', { hsid: s4.hsid });
   }, 180_000);
-  it.todo('B (E-fix: clear otherBy/wordsBy on the person\'s full undo): after the person\'s honoured full undo of an agent\'s turn, the restored mark carries no otherBy or wordsBy (Aegis I-1, after S1.4 P5)');
+  it.todo('B (E-fix T-2026-11-27-006: clear otherBy/wordsBy on the person\'s full undo): after the person\'s honoured full undo of an agent\'s turn, the restored mark carries no otherBy or wordsBy (Aegis I-1, after S1.4 P5)');
 
   it('B: the agent restyles, re-words and deletes a person\'s marks (E0/E1 attribution, the pinned notice); one press undoes the turn and gives the person their marks back under their own hand (G5); the agent undoes the person\'s undo once per turn, and the person\'s redo restores it', async () => {
     const r = await boardRig('mbB-');
@@ -414,7 +414,7 @@ describe.skipIf(!SANDBOX_OK)('#mod-tool-bridge ⇄ the real gnomon.dimension mod
     const back = f2.nodes.get(H(1))! as unknown as Record<string, unknown>;
     expect([(back.node as Record<string, unknown>).label, (back.node as Record<string, unknown>).color, back.by]).toEqual(['API', undefined, humanBy]);
     // Aegis I-1 (S1.4 P5 review): today otherBy/wordsBy survive the person's own honoured full undo, so the restored mark
-    // still carries the agent's changed-by sign. Task "E-fix: clear otherBy/wordsBy on the person's full undo" clears them;
+    // still carries the agent's changed-by sign. Task T-2026-11-27-006 ("E-fix: clear otherBy/wordsBy on the person's full undo") clears them;
     // its expectation, which this test takes on then:
     //   expect([back.otherBy, back.wordsBy]).toEqual([undefined, undefined]);
     const readded = [...f2.nodes.entries()].filter(([id]) => id !== H(1));

@@ -140,9 +140,8 @@ describe.runIf(process.platform === 'darwin' && MACOS_OK && SBX)('the MOD floor 
     cleanups.push(m.done);
     // what the host passes when modSipStub is on: modLaunchPlan(input, platform, undefined, () => true)
     const stubbed = modLaunchPlan(m.input, 'darwin', undefined, () => true);
-    const sipTrue = modLaunchPlan(m.input, 'darwin', undefined, () => true as boolean | null);
     const pick = (p: typeof stubbed) => ({ command: p.command, args: p.args, env: p.env, sandbox: p.sandbox, profile: p.profile, profileHash: p.profileHash });
-    expect(pick(stubbed)).toEqual(pick(sipTrue));
+    // the real equality: a stubbed plan against the real probe's plan, only provable on a SIP-on host (the recorded local run is the gate)
     if (REAL.ok) expect(pick(modLaunchPlan(m.input, 'darwin'))).toEqual(pick(stubbed)); // and the real probe on a SIP-on host
     // the macOS floor stays real under the stub
     expect(() => modLaunchPlan(m.input, 'darwin', () => 14, () => true)).toThrow(/macOS 15\+/);

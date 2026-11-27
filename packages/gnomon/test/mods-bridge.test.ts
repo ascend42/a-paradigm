@@ -786,7 +786,7 @@ describe('#mod-tool-bridge: source facts that hold on every platform (G-MOD-19; 
     const spawn = sup.slice(sup.indexOf('async #spawnClaude('), sup.indexOf('async #onLine('));
     expect(spawn).toContain('[MOD_BRIDGE_SERVER]: { ...MOD_BRIDGE_ENTRY }');
     for (const f of [...files(path.join(SRC, 'kernel', 'local')), path.join(SRC, 'kernel', 'supervisor', 'local-session.ts')]) {
-      expect([rel(f), /mcp-bridge|MOD_BRIDGE|gnomon-mods/.test(fs.readFileSync(f, 'utf8'))]).toEqual([rel(f), false]);
+      expect([rel(f), /mcp-bridge|MOD_BRIDGE|gnomon-mods|ModHost|modhost\//.test(fs.readFileSync(f, 'utf8'))]).toEqual([rel(f), false]);
     }
   });
 });
