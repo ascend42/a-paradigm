@@ -42,7 +42,7 @@ import type { DimActor, DimOp, DimState } from '@a-company/gnomon-contracts';
 import type { BoardHandle, BoardView } from './board.js';
 import type { GnomonClient } from './client.js';
 import { DIM_COMMAND_REFUSALS, DIM_LIVE_TIMEOUT_MS, DimLive, dimAckOf, type DimAck, type DimLiveBatch, type DimLiveResult, type DimLiveStatus, type DimNotice } from './dim-live.js';
-import { DimNotices, dimNoticeNeedsState, type DimStandingNotice } from './dim-notices.js';
+import { DIM_NOTICE_CAP, DimNotices, dimNoticeNeedsState, type DimStandingNotice } from './dim-notices.js';
 import { parseTurnRef, type DimStore, type DimTurnMarks } from './dim-store.js';
 import { gestureOf, type Gesture } from './gesture.js';
 import { modCommandFailure, sendModCommand } from './mod-command.js';
@@ -285,6 +285,10 @@ interface Internals {
   notices(dim: string, me: string): DimNotices;
   /** S1.4 E3 (R3): the turn a session's latest turn.result closed, or null */
   lastTurn(hsid: string): string | null;
+  /** S1.4 E3 (Aegis A2, N-1): when this page saw the turn `ref` close (its turn.result row's time), or null */
+  closedAt(ref: string): number | null;
+  /** S1.4 E3 (Aegis A3): the N2 lines of notices a ninth pushed out while the board was folded, drained once */
+  takeFoldedOut(dim: string): DimStandingNotice[];
 }
 
 /** Lets one stamp finish its commands before another stamp is first sent on the connection. */
@@ -502,6 +506,7 @@ export class DimSession {
       if (Number.isSafeInteger(r.seq) && typeof r.hash === 'string') this.#x.setVerified(this.dim, { seq: r.seq as number, hash: r.hash });
       this.#hashPoint(r);
       this.#takePins(r);
+      for (const n of this.#x.takeFoldedOut(this.dim)) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
       const before = this.#grantsReady;
       this.#takeGrants(r);
       this.#phase = 'open';
@@ -837,7 +842,10 @@ export class DimSession {
         if (cs && cs.kind === 'turn' && cs.turn === turn) this.#notices.row(row, store.stateAt(this.dim, row.seq - 1));
       }
     };
-    if (this.#notices.follow(keys, seed, this.#x.deps.now())) this.#emit(null);
+    const f = this.#notices.follow(keys, seed, this.#x.deps.now(), (turn) => this.#x.closedAt(turn));
+    // Aegis E3 A3: a notice that left without a press here is said once (N2), as a ninth's is
+    for (const n of f.gone) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: n.agent, at: n.at });
+    if (f.moved && f.gone.length === 0) this.#emit(null);
   }
 
   #attrAt: { seq: number; attr: string; hash: string } | null = null;
@@ -912,7 +920,8 @@ export class DimSession {
       // when it has touched another hand's marks, so stop then undo is two presses
       if (ok && !this.#effectiveWrite(hsid)) {
         const run = this.#notices.runningOf(hsid);
-        if (run) this.#notices.ended(run, d.now(), { stopped: true });
+        const out = run ? this.#notices.ended(run, d.now(), { stopped: true }).pushedOut : null;
+        if (out) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: out.agent, at: out.at });
       }
       if (ok) this.#emit({ about: 'grant', code: this.#effectiveWrite(hsid) ? 'grant-on' : 'grant-off', field: 'write', why: null, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
       else this.#emit({ about: 'grant', code: 'grant-refused', field: 'write', why, lost: 0, hsid, write: this.#effectiveWrite(hsid) });
@@ -1047,7 +1056,7 @@ export class DimSession {
       if (!v || v.seq < m.lastSeq) this.#checkDue = true;
       // S1.4 E3: a turn that touched another hand's marks or undid a person's change stands as a notice; a ninth
       // pushes the oldest out, said once naming its hand and time (N2), and sends NO dim.seen (S3)
-      const raised = this.#notices.ended(ref, this.#x.deps.now());
+      const raised = this.#notices.ended(ref, this.#x.deps.now(), { at: this.#x.closedAt(ref) ?? this.#x.deps.now() });
       if (raised.pushedOut) this.#emit({ about: 'undo', code: 'pushed-out', field: 'ops', why: null, lost: 0, agent: raised.pushedOut.agent, at: raised.pushedOut.at });
       // nothing landed (every op refused): nothing is said
       if (m.added + m.changed + m.removed === 0) continue;
@@ -1121,12 +1130,13 @@ export class DimSession {
   readonly #ownUndone = new Set<string>();
   /**
    * R3 (turn_strip.notice.own_turn): this session's own latest ENDED turn, when it wrote rows here and raised no
-   * notice (a turn that touched only its own marks), and has not been undone from here. The strip shows its key on
+   * notice AT ALL (a turn that touched only its own marks; one whose notice was dismissed or pushed out keeps none:
+   * Aegis E3 N-3), and has not been undone from here. The strip shows its key on
    * the turn row only while the slot shows the you row.
    */
   #ownTurn(): { key: string; rev: number } | null {
     const key = this.#x.lastTurn(this.hsid);
-    if (!key || this.#ownUndone.has(key) || this.#notices.get(key)) return null;
+    if (!key || this.#ownUndone.has(key) || this.#notices.everRaised(key)) return null;
     const held = this.#notices.held(key);
     return held && held.rev > 0 ? { key, rev: held.rev } : null;
   }
@@ -1283,6 +1293,7 @@ export class DimSession {
 
   #flightStart(key: string | null): void {
     const d = this.#x.deps;
+    if (key !== null) this.#notices.pressed(key);
     this.#undoFlight = { key, since: d.now() };
     // the 300 ms quiet: the working look is drawn only once the answer is slow
     if (this.#undoTimer !== null) d.clearTimer(this.#undoTimer);
@@ -1502,6 +1513,12 @@ export class DimSessions {
       setVerified: (dim, v) => void this.#verified.set(dim, v),
       gate: new StampGate(),
       lastTurn: (hsid) => this.#lastResult.get(hsid) ?? null,
+      closedAt: (ref) => this.#closed.get(ref) ?? null,
+      takeFoldedOut: (dim) => {
+        const out = this.#foldedOut.get(dim) ?? [];
+        this.#foldedOut.delete(dim);
+        return out;
+      },
       notices: (dim, me) => {
         let n = this.#notices.get(dim);
         if (!n) {
@@ -1594,20 +1611,36 @@ export class DimSessions {
       if (!t) continue;
       this.#lastResult.set(t.hsid, r.payload.turn as string);
       if (this.#lastResult.size > 256) this.#lastResult.delete(this.#lastResult.keys().next().value as string);
+      const now = this.#deps.now?.() ?? Date.now();
+      // (Aegis N-1: the turn's own time, from its result row, where it has one)
+      const at = typeof r.at === 'string' && Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : now;
       const refs = store.turnsUpTo(t.hsid, t.n).filter((ref) => !this.#closed.has(ref));
       for (const ref of refs) {
-        this.#closed.add(ref);
-        if (this.#closed.size > 256) this.#closed.delete(this.#closed.values().next().value as string);
+        this.#closed.set(ref, at);
+        if (this.#closed.size > 256) this.#closed.delete(this.#closed.keys().next().value as string);
       }
       if (refs.length > 0) for (const s of this.#sessions.values()) s.turnEnded(refs);
-      // a folded board's notices stand too (its edge tab says so); nothing is said for them
-      const now = this.#deps.now?.() ?? Date.now();
-      if (refs.length > 0) for (const [dim, nb] of this.#notices) if (!this.#sessions.has(dim)) for (const ref of refs) nb.ended(ref, now);
+      // a folded board's notices stand too (its edge tab says so); a ninth's N2 line is kept and said at the next
+      // open (Aegis E3 A3), at most DIM_NOTICE_CAP of them
+      if (refs.length > 0) {
+        for (const [dim, nb] of this.#notices) {
+          if (this.#sessions.has(dim)) continue;
+          for (const ref of refs) {
+            const out = nb.ended(ref, now).pushedOut;
+            if (!out) continue;
+            const q = this.#foldedOut.get(dim) ?? [];
+            q.push(out);
+            this.#foldedOut.set(dim, q.slice(-DIM_NOTICE_CAP));
+          }
+        }
+      }
     }
   }
 
-  /** turn refs whose end was told already (a result row read twice never says its line twice) */
-  readonly #closed = new Set<string>();
+  /** turn refs whose end was told already (a result row read twice never says its line twice) → when it closed */
+  readonly #closed = new Map<string, number>();
+  /** dim → the notices a ninth pushed out while that board was folded (said once at its next open: Aegis E3 A3) */
+  readonly #foldedOut = new Map<string, DimStandingNotice[]>();
   /** hsid → the turn its latest `turn.result` row closed */
   readonly #lastResult = new Map<string, string>();
 
@@ -1633,6 +1666,7 @@ export class DimSessions {
     for (const s of [...this.#sessions.values()]) s.destroy('reset');
     this.#verified.clear();
     this.#closed.clear();
+    this.#foldedOut.clear();
     this.#lastResult.clear();
     this.#deps.store.reset();
   }

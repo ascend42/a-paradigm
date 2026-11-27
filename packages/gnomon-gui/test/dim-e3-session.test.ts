@@ -428,3 +428,85 @@ describe('E3 round 3: R3, this session\'s own turn', () => {
   });
 });
 
+
+describe('E3 review group A (Aegis A2, A3, N-1)', () => {
+  const AT = '2023-11-14T10:00:00.000Z';
+  it('A2: a pin naming a running turn raises no notice until the page saw it close; N-1: it shows that time', () => {
+    const w = world();
+    w.push(DIM_KINDS.start, { title: 'Plan', attached: [HSID, AG], opened: 'command', relayedFor: w.human });
+    w.push(DIM_KINDS.op, { ops: [rect(10)], act: ULID(90), relayedFor: w.human });
+    // the agent's first row touches the person's mark: the mod pins it now, while the turn runs
+    w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(10), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 1) });
+    const nb = new DimNotices({ me: ME });
+    for (const r of w.store.rows(DIM)) if (r.kind === DIM_KINDS.op) nb.row(r, w.store.stateAt(DIM, r.seq - 1));
+    const k = `turn:${AG}/1`;
+    expect(nb.follow([k], () => undefined, 5, () => null)).toEqual({ moved: false, gone: [] });
+    expect(nb.shown()).toBeNull();
+    const f = nb.follow([k], () => undefined, 9, (t) => (t === k ? Date.parse(AT) : null));
+    expect(f.moved).toBe(true);
+    expect(nb.shown()).toMatchObject({ key: k, changed: 1, at: Date.parse(AT) });
+  });
+
+  it('N-1: a notice raised by follow at a reload shows the turn\'s own time, not the reload\'s', async () => {
+    const w = world();
+    w.push(DIM_KINDS.start, { title: 'Plan', attached: [HSID, AG], opened: 'command', relayedFor: w.human });
+    w.push(DIM_KINDS.op, { ops: [rect(10)], act: ULID(90), relayedFor: w.human });
+    w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(10), patch: { color: 'cobalt' } }], relayedFor: w.agentStamp('claude', 1) });
+    w.sessions.apply([{ seq: 400, kind: 'turn.result', at: AT, payload: { turn: `turn:${AG}/1` } }]);
+    w.pins = [{ hsid: AG, turn: `turn:${AG}/1` }];
+    const { s } = await opened(w);
+    expect(s.noticeView().shown).toMatchObject({ key: `turn:${AG}/1`, at: Date.parse(AT) });
+  });
+
+  it('A3: a ninth pushed out while the board is folded is said at the next open, once', async () => {
+    const w = world();
+    const first = await opened(w);
+    first.s.edit([rect(30)], press());
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    for (let t = 1; t <= DIM_NOTICE_CAP; t++) await withNotice(w, first.s, t, 10 + t);
+    expect(await first.s.fold(press('keydown'))).toBe(true);
+    w.turn('claude', 9, [{ type: 'update', id: ULID(30), patch: { color: 'cobalt' } } as DimOp]);
+    const lines: DimSessionNotice[] = [];
+    const s = w.sessions.open({ dim: DIM, hsid: HSID, opened: 'command', title: 'Plan' }, press('click'));
+    s.onChange((c) => void (c.notice && lines.push(c.notice)));
+    await flush(DIM_SEND_LIMITS.gapMs);
+    expect(await s.opened()).toBe(true);
+    expect(lines.filter((n) => n.code === 'pushed-out')).toEqual([expect.objectContaining({ about: 'undo', agent: 'claude', at: expect.any(Number) })]);
+  });
+
+  it('A3: a notice follow removes that this page never pressed is said once (N2); one this page dismissed is not', async () => {
+    const w = world();
+    const { s, notices } = await opened(w);
+    const k1 = await withNotice(w, s, 1, 10);
+    const k2 = await withNotice(w, s, 2, 11);
+    // dismiss the shown one (k2) here, its answer held; then a third turn, and a check that pins only the third
+    w.hold.seen = true;
+    expect(s.dismissNotice(k2, press())).toBe(true);
+    await flush(10);
+    const k3 = await withNotice(w, s, 3, 12);
+    w.pins = [{ hsid: AG, turn: k3 }];
+    s.touch(press());
+    await flush(200);
+    expect(s.noticeView().shown!.key).toBe(k3);
+    const out = notices.filter((n) => n.code === 'pushed-out');
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ agent: 'claude', at: expect.any(Number) });
+    w.release();
+    void k1;
+  });
+
+  it('N-3: an own turn whose notice was dismissed shows no own-turn key (it raised a notice once)', async () => {
+    const w = world();
+    const { s } = await opened(w);
+    s.edit([rect(60)], press());
+    await flush(DIM_SEND_LIMITS.gapMs * 2);
+    const own = { principal: 'p:00000000/claude', surface: 'bridge', agent: 'claude', hsid: HSID, turn: `turn:${HSID}/1` };
+    w.push(DIM_KINDS.op, { ops: [{ type: 'update', id: ULID(60), patch: { color: 'cobalt' } }], relayedFor: own });
+    w.sessions.apply([{ seq: 9_000, kind: 'turn.result', payload: { turn: `turn:${HSID}/1` } }]);
+    expect(s.noticeView().shown!.key).toBe(`turn:${HSID}/1`);
+    expect(s.dismissNotice(`turn:${HSID}/1`, press())).toBe(true);
+    await flush(50);
+    expect(s.noticeView().shown).toBeNull();
+    expect(s.noticeView().own).toBeNull();
+  });
+});

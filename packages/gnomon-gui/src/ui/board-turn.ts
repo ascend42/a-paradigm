@@ -306,7 +306,8 @@ export function mountBoardTurn(o: { el: HTMLElement; onShowChat: (e: Event) => v
       // S1.4 E3: a standing notice takes the you row's slot (and the strip is two rows while it stands)
       const rows = withSlot(turnStripRows(v.turn, v.agent, room), v.notices?.slot ?? null);
       working = rows.find((r) => r.working)?.working ?? null;
-      const next = stripSig(rows) + JSON.stringify(v.notices?.behind.map((r) => r.target) ?? []);
+      // (Aegis E3 N-3: R3's own-turn key is in the signature: its coming or going repaints)
+      const next = stripSig(rows) + JSON.stringify(v.notices?.behind.map((r) => r.target) ?? []) + JSON.stringify(v.notices?.own ?? null);
       if (next !== sig) {
         sig = next;
         const had = document.activeElement;

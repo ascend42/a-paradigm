@@ -122,6 +122,10 @@ export class DimNotices {
   #list: DimStandingNotice[] = [];
   #slot: string | null = null;
   #frozen = false;
+  /** sets this page pressed undo, redo or dismiss on (a notice the mod then unpins was the person's own doing) */
+  readonly #pressed = new Set<string>();
+  /** sets that ever raised a notice here (Aegis E3 N-3: R3's own-turn key is for a turn that raised none at all) */
+  readonly #raised = new Set<string>();
 
   constructor(o: { me: string }) {
     this.#me = o.me;
@@ -223,13 +227,15 @@ export class DimNotices {
    * The turn `turn` ended (its `turn.result` row). Raises its notice when it touched another hand's marks or undid a
    * person's change. Returns the notice raised and the one a ninth pushed out (said once, N2; never a `dim.seen`).
    */
-  ended(turn: string, now: number, o: { stopped?: boolean } = {}): { raised: DimStandingNotice | null; pushedOut: DimStandingNotice | null } {
+  ended(turn: string, now: number, o: { stopped?: boolean; at?: number } = {}): { raised: DimStandingNotice | null; pushedOut: DimStandingNotice | null } {
     const t = this.#tallies.get(turn);
     if (!t || this.#list.some((x) => x.key === turn)) return { raised: null, pushedOut: null };
     const face = this.#face(t);
     if (face.lead === null && face.changed + face.removed + face.otherChanged + face.otherRemoved === 0) return { raised: null, pushedOut: null };
-    const n: DimStandingNotice = { key: t.key, of: t.of, agent: t.agent, at: now, state: 'standing', ...face, ...(o.stopped ? { stopped: true } : {}) };
+    const n: DimStandingNotice = { key: t.key, of: t.of, agent: t.agent, at: o.at ?? now, state: 'standing', ...face, ...(o.stopped ? { stopped: true } : {}) };
     this.#list.push(n);
+    this.#raised.add(n.key);
+    while (this.#raised.size > DIM_NOTICE_MEMORY.acts) this.#raised.delete(this.#raised.values().next().value as string);
     let pushedOut: DimStandingNotice | null = null;
     if (this.#list.length > DIM_NOTICE_CAP) {
       // the mod's rule (Probe F1): the oldest that is not a person's goes first; else the oldest
@@ -279,22 +285,41 @@ export class DimNotices {
   /**
    * The mod's pins (an open or check answer): turn keys, oldest pin first. A standing notice whose set is not pinned
    * leaves (dismissed on another page, pushed out); a pinned turn with no notice is raised, its rows tallied first by
-   * `seed(turn)` when the page has not tallied them. A notice in its redo window is left alone. True when it moved.
+   * `seed(turn)` when the page has not tallied them. A notice in its redo window is left alone.
+   *
+   * Aegis E3 A2: the mod pins at the FIRST row that touches the person's mark, while the turn still runs. A pinned
+   * turn is raised here only once this page has seen it close (`closedAt` answers its `turn.result` time, which the
+   * notice shows: N-1); a running one is only tallied, and its `turn.result` raises it (the grant-off path raises a
+   * running turn on its own, `stopped`).
+   * Aegis E3 A3: `gone` lists the notices that left here although this page never pressed them, and the person never
+   * undid them in the rows: their N2 line is said once (a dismissal on another page writes no row, so it is said too).
    */
-  follow(pinned: readonly string[], seed: (turn: string) => void, now: number): boolean {
+  follow(pinned: readonly string[], seed: (turn: string) => void, now: number, closedAt: (turn: string) => number | null = () => null): { moved: boolean; gone: DimStandingNotice[] } {
     let moved = false;
+    const gone: DimStandingNotice[] = [];
     for (const n of [...this.#list]) {
       if (n.state === 'standing' && !pinned.includes(n.key)) {
         this.remove(n.key);
         moved = true;
+        if (!this.#pressed.has(n.key) && !this.#undoActs.has(n.key)) gone.push(n);
       }
     }
     for (const k of pinned) {
       if (this.get(k)) continue;
       if (!this.#tallies.has(k)) seed(k);
-      if (this.ended(k, now).raised) moved = true;
+      const at = closedAt(k);
+      if (at === null) continue;
+      const r = this.ended(k, now, { at });
+      if (r.raised) moved = true;
+      if (r.pushedOut) gone.push(r.pushedOut);
     }
-    return moved;
+    return { moved, gone };
+  }
+
+  /** This page pressed undo, redo or dismiss on the set `key` (follow says no N2 line when it then leaves). */
+  pressed(key: string): void {
+    this.#pressed.add(key);
+    while (this.#pressed.size > DIM_NOTICE_MEMORY.acts) this.#pressed.delete(this.#pressed.values().next().value as string);
   }
 
   /** A +k menu row's words were pressed: that notice takes the slot (the shown one goes back behind, still standing). */
@@ -354,6 +379,13 @@ export class DimNotices {
     this.#tallies.clear();
     this.#acts.clear();
     this.#undoActs.clear();
+    this.#pressed.clear();
+    this.#raised.clear();
+  }
+
+  /** True when the set `key` raised a notice on this page at any time (standing now or not). */
+  everRaised(key: string): boolean {
+    return this.#raised.has(key);
   }
 
   /** The newest standing notice whose set touched `id` (the mark row; N1 keeps a pushed-out set's marks reachable through `held`). */
