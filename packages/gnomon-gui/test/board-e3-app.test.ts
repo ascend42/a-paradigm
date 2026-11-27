@@ -21,7 +21,7 @@ const ERRORS = { read: "(globalThis.__errs = [], addEventListener('error', (e) =
 const COUNT = { read: `(() => { const k = ${A}.kernel; if (!k.__g) { k.__g = []; const send = k.send.bind(k); k.send = (s) => { if (String(s).includes('"mod.command"')) { try { const m = JSON.parse(s); k.__g.push(m.params.commandId); } catch {} } return send(s); }; } return 1; })()`, as: 'counting' };
 /** everything the leaf speaks from here on (the polite status line) */
 const SPOKEN = { read: `(() => { globalThis.__said = []; const last = new WeakMap(); new MutationObserver(() => { for (const e of document.querySelectorAll('.sr-only[role="status"]')) { const t = e.textContent; if (t && last.get(e) !== t) { last.set(e, t); globalThis.__said.push(t); } } }).observe(document.body, { subtree: true, childList: true, characterData: true }); return 1; })()`, as: 'spoken' };
-const DESELECT = [{ press: '.bd-host [data-key="tool:select"]' }, { press: '.bd-host .bd-stage', at: [640, 30] }, { wait: 300 }];
+const DESELECT = [{ press: '.bd-host [data-key="tool:select"]' }, { press: '.bd-host .bd-stage', at: [120, 12] }, { wait: 300 }];
 const type = (s: string): unknown[] => [...s].map((k) => ({ key: k, settle: 25 }));
 const BOARD_UP = `(() => { const c = ${CUR}; if (!c) return false; const hd = c.leaf.handle(); return c.leaf.state() !== 'loading' && !!hd && hd.isAlive() && c.session.status().phase !== 'opening'; })()`;
 const openBoard = [{ press: '#composer-text' }, ...type('/board'), { key: 'Enter' }, { until: BOARD_UP, as: 'board up', timeoutMs: 30_000 }, { wait: 300 }];

@@ -1942,6 +1942,8 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 /* S1.4 E3 (undo-key.slot; turn_strip.notice): three fixed columns from the right, the same on every row kind */
 .bd-turn-notice,.bd-turn-mark{display:flex;align-items:center;min-height:28px}
 .bd-turn-notice .bd-turn-line,.bd-turn-mark .bd-turn-line{flex:1 1 auto;min-width:0}
+/* the words' spans keep their own leading spaces (a flex item drops them: 'Claudechangedthis mark') */
+.bd-turn-notice .bd-turn-line > span,.bd-turn-mark .bd-turn-line > span{white-space:pre}
 .bd-turn-notice.done .who:first-child{color:var(--ink);font-weight:500}
 .bd-turn-keys{display:flex;flex:0 0 auto;gap:8px;margin-left:12px;align-items:center}
 .bd-col{display:flex;justify-content:flex-end}
@@ -1958,7 +1960,8 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bd-turn-turn.tight-6 .bd-undo-col{display:none}
 .bd-turn-notice.two-line .bd-turn-line{flex-basis:100%;height:20px}
 .bd-turn-notice.two-line .bd-turn-keys{margin-left:auto}
-.bd-undo-menu{position:absolute;right:0;bottom:100%;z-index:3}
+/* the +k menu opens UPWARD over the board, its right edge on the key column, never over the strip (board-centre-only) */
+#board-turn .bd-undo-menu{position:absolute;top:auto;left:auto;right:14px;bottom:calc(100% + 4px);z-index:30}
 .bd-menu-row{display:flex;align-items:center;gap:8px}
 .bd-menu-words{flex:1 1 auto;text-align:left;background:none;border:0;color:var(--ink2);font:inherit;padding:4px 8px;cursor:default}
 [data-theme="night"] .bd-pin.low{background:var(--ink);box-shadow:none}
