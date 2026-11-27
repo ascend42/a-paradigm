@@ -212,6 +212,8 @@ export function sealElement(seal: Seal, name: string, cls = ''): SVGElement {
 
 /** the marks that carry a fill (a label is never one) */
 const FILL_MARKS: ReadonlySet<string> = new Set(['sticky', 'rect', 'ellipse', 'diamond']);
+/** the overlay's element names the mark it signs (data-for): the goldens check each sign is inside the leaf */
+const forMark = <T extends HTMLElement | SVGElement>(e: T, id: string): T => (e.setAttribute('data-for', id), e);
 const place = (e: HTMLElement | SVGElement, left: number, top: number): void => void (e.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`);
 /** The platform's own shortcut modifier is ⌘ on macOS (the console is desktop only: Mac first, Windows later). */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
@@ -739,32 +741,32 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
       if (it.type === 'pin' || it.type === 'hollow') {
         const p = h('span', `bd-pin${it.type === 'hollow' ? ' unk' : ''}${it.type === 'pin' && it.low ? ' low' : ''}`);
         place(p, it.left - 4, it.top - 4);
-        kids.push(p);
+        kids.push(forMark(p, it.id));
       } else if (it.type === 'ring') {
         // the seal's rim with everything taken out: no letter, no name, no title, no pointer (design author-seal seal.ring)
         const r = h('span', 'bd-ring');
         place(r, it.left - 3, it.top - 3);
-        kids.push(r);
+        kids.push(forMark(r, it.id));
       } else if (it.type === 'chip') {
         // the hand's name, a bidi-isolated text node cut at 24 characters; the name is the authority
         // (Mika E3 D1: 'changed by Claude', 'words by Claude': the lead is the page's words, the name an isolate)
         const c = h('span', 'chip', {}, ...(it.lead ? [`${it.lead} `] : []), h('bdi', '', {}, handName(it.name)));
         place(c, it.left, it.top - 9);
-        kids.push(c);
+        kids.push(forMark(c, it.id));
       } else if (it.type === 'seal') {
         const s = sealElement(it.seal, it.name);
         place(s, it.left - 11, it.top - 11);
-        kids.push(s);
+        kids.push(forMark(s, it.id));
       } else if (it.type === 'counter') {
         // S1.4 E3 countermark: the ring's shape (a filled disc for you); nothing to press, no title, no pointer
         const r = h('span', `bd-ring bd-counter${it.disc ? ' disc' : ''}`, { 'aria-hidden': 'true' });
         place(r, it.left - 3, it.top - 3);
-        kids.push(r);
+        kids.push(forMark(r, it.id));
       } else if (it.type === 'words') {
         const w = h('span', 'bd-words', { 'aria-hidden': 'true' });
         place(w, it.left, it.top);
         w.style.width = `${Math.round(it.width)}px`;
-        kids.push(w);
+        kids.push(forMark(w, it.id));
       } else if (it.type === 'cutout') {
         // four corner ticks round the removed mark's last box: no fill, no words, nothing between the ticks
         const c = h('div', `bd-cutout${it.traced ? ' traced' : ''}`, { 'aria-hidden': 'true' }, ...['tl', 'tr', 'bl', 'br'].map((k) => h('span', `bd-tick ${k}`)));
@@ -772,19 +774,19 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         c.style.width = `${Math.round(it.width)}px`;
         c.style.height = `${Math.round(it.height)}px`;
         c.style.setProperty('--arm', `${Math.max(1, Math.round(it.arm))}px`);
-        kids.push(c);
+        kids.push(forMark(c, it.id));
       } else if (it.type === 'trace') {
         const t = h('div', it.ring ? 'bd-trace ring' : 'bd-trace', { 'aria-hidden': 'true' });
         place(t, it.left, it.top);
         t.style.width = `${Math.round(it.width)}px`;
         t.style.height = `${Math.round(it.height)}px`;
-        kids.push(t);
+        kids.push(forMark(t, it.id));
       } else if (it.type === 'textbox') {
         const b = h('div', `bd-textbox${it.form === 'box' ? '' : ` ${it.form}`}`);
         place(b, it.left, it.top);
         b.style.width = `${Math.round(it.width)}px`;
         b.style.height = `${Math.round(it.height)}px`;
-        kids.push(b);
+        kids.push(forMark(b, it.id));
       } else {
         // the only text taken from the node is its kind, pattern-checked by the contracts; the lead word is never dropped
         const name = dimKindName(it.kind);
@@ -792,7 +794,7 @@ export function mountBoardLeaf(parent: HTMLElement, o: BoardLeafOptions): BoardL
         place(b, it.left, it.top);
         b.style.width = `${Math.round(it.width)}px`;
         b.style.height = `${Math.round(it.height)}px`;
-        kids.push(b);
+        kids.push(forMark(b, it.id));
       }
     }
     over.replaceChildren(...kids);

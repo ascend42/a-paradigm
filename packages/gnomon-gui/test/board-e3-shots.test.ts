@@ -70,13 +70,19 @@ describe.skipIf(!process.env.GNOMON_E3_SHOTS || !chrome)('S1.4 E3 shots for Mika
           expect(r.png.length).toBeGreaterThan(1000);
         }, 120_000);
 
-  // another-hand-is-signed (E3 review E1: every case drawn, none skipped). The person's own rows add an unlabelled
-  // rect, a labelled one-run arrow and a sticky; Claude restyles the rect, writes into the sticky, recolours the
-  // arrow, adds a 14px box and a text, removes that text, and carries a forged restoredFrom; the person puts the text
-  // back (an undo marker naming Claude's turn, the restored hand Claude's) and changes the 14px box; Mika restyles the
-  // sticky. The rect is selected so the engine's handles show. A missing case throws.
+  // another-hand-is-signed (E3 review E1; Mika r3 item 3): the cases sit in EMPTY board space below the fixture's frame
+  // (origin 40, 640), never on its own marks. The person's own rows add an unlabelled rect, a labelled one-run arrow
+  // and a labelled rect (a sticky); Claude restyles the rect, writes into the sticky, recolours the arrow, adds a 14px box and a text,
+  // removes that text, and carries a forged restoredFrom; the person puts the text back (an undo marker naming
+  // Claude's turn, the restored hand Claude's) and changes the 14px box; Mika restyles the sticky. The rect is
+  // selected so the engine's handles show; the view is centred on the cases' bounds; every sign of a case must be
+  // inside the stage before the shot. A missing case throws.
+  const OX = 40;
+  const OY = 640;
+  const CASES = { w: 220, h: 172 };
+  const caseId = (t: string): string => ('01JD1ME1' + t).padEnd(26, '0');
   const signed = (zoom: number) => [
-    { read: `(() => { const s = ${L}.session; const k = ${L}.kernel; const dim = '${FIXTURE_DIM}';
+    { read: `(() => { const s = ${L}.session; const k = ${L}.kernel; const dim = '${FIXTURE_DIM}'; const X = ${OX}, Y = ${OY};
         const scope = { repo: 'repo:0123456789abcdef' };
         const me = [...s.view().nodes.values()].find((v) => v.by.cls === 'human');
         if (!me) throw new Error('no person mark in the fixture');
@@ -87,38 +93,45 @@ describe.skipIf(!process.env.GNOMON_E3_SHOTS || !chrome)('S1.4 E3 shots for Mika
         const id = (t) => ('01JD1ME1' + t).padEnd(26, '0');
         const R = id('RECT'), AR = id('ARRW'), ST = id('STKY'), BX = id('BXAA'), TX = id('TEXT'), TX2 = id('TEXTB'), FG = id('FRGD');
         land({ v: 1, dim, act: id('ACTA'), relayedFor: human, ops: [
-          { type: 'add', node: { id: R, kind: 'rect', x: 380, y: 40, z: 'W1', w: 120, h: 70 } },
-          { type: 'add', node: { id: AR, kind: 'arrow', x: 380, y: 160, z: 'W2', points: [0, 0, 140, 0], label: 'flows to' } },
-          { type: 'add', node: { id: ST, kind: 'sticky', x: 560, y: 40, z: 'W3', w: 140, h: 90, label: 'my words' } } ] });
+          { type: 'add', node: { id: R, kind: 'rect', x: X, y: Y, z: 'W1', w: 64, h: 40 } },
+          { type: 'add', node: { id: AR, kind: 'arrow', x: X, y: Y + 100, z: 'W2', points: [0, 0, 70, 0], label: 'to' } },
+          { type: 'add', node: { id: ST, kind: 'rect', x: X + 130, y: Y, z: 'W3', w: 90, h: 50, fill: 'lemon', label: 'my words' } } ] });
         land({ v: 1, dim, relayedFor: stamp('claude', 1), ops: [
           { type: 'update', id: R, patch: { color: 'raspberry' } },
           { type: 'update', id: ST, patch: { label: 'words by claude' } },
           { type: 'update', id: AR, patch: { color: 'cobalt' } },
-          { type: 'add', node: { id: BX, kind: 'rect', x: 40, y: 330, z: 'W4', w: 14, h: 14 } },
-          { type: 'add', node: { id: TX, kind: 'text', x: 560, y: 200, z: 'W5', text: 'claude wrote this' } },
-          { type: 'add', node: { id: FG, kind: 'rect', x: 600, y: 330, z: 'W6', w: 60, h: 40 } } ],
+          { type: 'add', node: { id: BX, kind: 'rect', x: X, y: Y + 150, z: 'W4', w: 14, h: 14 } },
+          { type: 'add', node: { id: TX, kind: 'text', x: X + 140, y: Y + 96, z: 'W5', text: 'claude' } },
+          { type: 'add', node: { id: FG, kind: 'rect', x: X + 60, y: Y + 146, z: 'W6', w: 40, h: 26 } } ],
           undo: { of: { principal: me.by.principal, act: '01JD1M0000000000000000ACT9' }, restored: [[FG, id('NEVER'), { cls: 'human', principal: me.by.principal }]] } });
         land({ v: 1, dim, relayedFor: stamp('claude', 2), ops: [{ type: 'delete', id: TX }] });
-        land({ v: 1, dim, act: id('ACTB'), relayedFor: human, ops: [{ type: 'add', node: { id: TX2, kind: 'text', x: 560, y: 200, z: 'W7', text: 'claude wrote this' } }],
+        land({ v: 1, dim, act: id('ACTB'), relayedFor: human, ops: [{ type: 'add', node: { id: TX2, kind: 'text', x: X + 140, y: Y + 96, z: 'W7', text: 'claude' } }],
           undo: { of: { hsid: AG, turn: 'turn:' + AG + '/2' }, restored: [[TX2, TX, { cls: 'agent', principal: 'p:7k2m9q4x/claude', agent: 'claude' }]] } });
         land({ v: 1, dim, act: id('ACTC'), relayedFor: human, ops: [{ type: 'update', id: BX, patch: { color: 'leaf' } }] });
         land({ v: 1, dim, relayedFor: stamp('mika', 3), ops: [{ type: 'update', id: ST, patch: { fill: 'sky' } }] });
         return 1; })()`, as: 'put' },
     { wait: 900 },
     { read: `(() => { const v = ${L}.session.view().nodes; const id = (t) => ('01JD1ME1' + t).padEnd(26, '0'); const tx = v.get(id('TEXTB'));
-        return JSON.stringify({ need: { rect: v.has(id('RECT')), arrow: v.has(id('ARRW')), sticky: v.has(id('STKY')), box: v.has(id('BXAA')), putBack: !!tx && !!tx.restoredFrom, forged: v.has(id('FRGD')) }, errs: ${L}.notices.slice(-4) }); })()`, as: 'drawn' },
-    { read: `(() => { const R = ('01JD1ME1' + 'RECT').padEnd(26, '0'); ${B}.select([R]); ${B}.setView({ zoom: ${zoom}, scrollX: 0, scrollY: 0 }); return 1; })()`, as: 'set' },
+        return JSON.stringify({ need: { rect: v.has(id('RECT')), arrow: v.has(id('ARRW')), sticky: v.has(id('STKY')), box: v.has(id('BXAA')), putBack: !!tx && !!tx.restoredFrom, forged: v.has(id('FRGD')) } }); })()`, as: 'drawn' },
+    // centred on the cases' bounds at this zoom
+    { read: `(() => { const v = ${B}.view(); const z = ${zoom}; ${B}.select(['${caseId('RECT')}']); ${B}.setView({ zoom: z, scrollX: v.width / (2 * z) - (${OX} + ${CASES.w} / 2), scrollY: v.height / (2 * z) - (${OY} + ${CASES.h} / 2) }); return 1; })()`, as: 'set' },
     { wait: 900 },
-    { read: `document.querySelectorAll('.bd-over .bd-ring, .bd-over .bd-counter, .bd-over [class*="seal"]').length`, as: 'signs' },
+    { read: `(() => { const ids = new Set(${JSON.stringify(['RECT', 'ARRW', 'STKY', 'BXAA', 'TEXTB', 'FRGD'].map(caseId))}); const marks = ${B}.marks().filter((m) => ids.has(m.node)).map((m) => m.id);
+        const stage = document.querySelector('.bd-stage').getBoundingClientRect();
+        const signs = [...document.querySelectorAll('.bd-over [data-for]')].filter((e) => marks.includes(e.getAttribute('data-for')) && !e.classList.contains('bd-trace'));
+        const out = signs.filter((e) => { const r = e.getBoundingClientRect(); return r.left < stage.left - 0.5 || r.right > stage.right + 0.5 || r.top < stage.top - 0.5 || r.bottom > stage.bottom + 0.5; }).map((e) => e.className + ' ' + e.getAttribute('data-for'));
+        return JSON.stringify({ count: signs.length, out }); })()`, as: 'signs' },
   ];
   for (const theme of ['day', 'night'] as const)
     for (const zoom of [0.25, 0.49, 0.5, 1, 4])
       it(`another-hand-is-signed ${theme} ${zoom * 100}%`, async () => {
-        const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'live', theme, 'sample'), width: 1440, height: 900, timeoutMs: 90_000, actions: signed(zoom) })) as { png: Buffer; acted: Record<string, unknown> };
+        const r = (await shootLeaf({ chrome, url: leafUrl(p.url, 'live', theme, 'sample'), width: 1700, height: 1200, timeoutMs: 90_000, actions: signed(zoom) })) as { png: Buffer; acted: Record<string, unknown> };
         // E3 review E1: every case is drawn, or the shot fails loudly
         const drawn = JSON.parse(String(r.acted.drawn)) as { need: Record<string, boolean> };
         expect(drawn.need).toEqual({ rect: true, arrow: true, sticky: true, box: true, putBack: true, forged: true });
-        expect(r.acted.signs).toBeGreaterThan(0);
+        const signs = JSON.parse(String(r.acted.signs)) as { count: number; out: string[] };
+        expect(signs.count).toBeGreaterThan(5);
+        expect(signs.out).toEqual([]);
         mkdirSync(CAND, { recursive: true });
         writeFileSync(path.join(CAND, `another-hand-is-signed-${theme}-${Math.round(zoom * 100)}.png`), r.png);
         expect(r.png.length).toBeGreaterThan(1000);
