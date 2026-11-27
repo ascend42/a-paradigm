@@ -92,7 +92,7 @@ export function noticeLine(n: { about: string; code: string; lost: number; why?:
   if (n.code === 'link-down' && n.about !== 'link') return 'The link is down · that change wasn’t saved';
   if (n.code === 'redo-unavailable') return 'Redo isn’t on the board yet';
   // S1.4 P5 review: the mod profile could not be applied on this host (kernel ModRefusal SANDBOX): trying again fails the same way
-  if (n.code === 'sandbox-unavailable') return 'The board can’t run here · this Mac can’t apply its sandbox';
+  if (n.code === 'sandbox-unavailable') return 'The board can’t run here · this Mac can’t sandbox it';
   if (n.code === 'undo-nothing') return 'Nothing to undo';
   // (design check.signs.never_implied, aegis C2.3 and F7: "everything here is saved" only for a board that is checked)
   if (n.code === 'reconnected') return n.verified === true ? 'Reconnected · everything here is saved' : KEEP_COPY.reconnected;

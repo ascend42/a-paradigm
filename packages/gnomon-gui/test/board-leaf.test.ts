@@ -249,7 +249,7 @@ describe('#gui-board lines of the leaf fit one row at a 1024 window (about 59 ch
     ].flatMap((n) => [noticeLine({ ...n, lost: 1 }), noticeLine({ ...n, lost: 64 })]);
     const { INERT_COPY, keepStateLine } = await import('../src/core/board-leaf.js');
     expect(noticeLine({ about: 'edit', code: 'not-undoable', why: 'delete', lost: 65 })).toBe('Nothing was deleted · a delete takes 64 marks at most');
-    expect(noticeLine({ about: 'open', code: 'sandbox-unavailable', why: 'SANDBOX', lost: 0 })).toBe('The board can’t run here · this Mac can’t apply its sandbox');
+    expect(noticeLine({ about: 'open', code: 'sandbox-unavailable', why: 'SANDBOX', lost: 0 })).toBe('The board can’t run here · this Mac can’t sandbox it');
     // Mika P0b S2b: a colour the contrast rule refused is named, in the tray's words; a malformed why says nothing new
     expect(noticeLine({ about: 'edit', code: 'colour-bad', why: 'pair-line', lost: 1 })).toBe("That colour wasn’t kept · it would not show against this mark's fill");
     expect(noticeLine({ about: 'edit', code: 'colour-bad', why: 'faint-fill:night', lost: 1 })).toBe('That colour wasn’t kept · words would be too faint on it at night');
