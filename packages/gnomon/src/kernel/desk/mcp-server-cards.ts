@@ -338,6 +338,8 @@ export interface McpServersOptions {
   listedOf?: (id: string) => (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null;
   /** slice C5'a1: the kernel's TrustBook (absent: request.mcp.trust refuses, status says untrusted) */
   trust?: McpTrustStore;
+  /** #mcp-setup (Aegis items-1-2 Q3): the mod launch overrides in force (#mcp-passthrough overrideLaunches) */
+  modLaunches?: () => ReadonlyArray<{ id: string; command: string; args: readonly string[] }>;
 }
 
 const bad = (field: string, msg: string, data: Record<string, unknown> = {}): RpcRefusal => new RpcRefusal('BAD_REQUEST', 'bad-params', `#mcp-servers: ${msg}`, { field, ...data });
@@ -407,6 +409,20 @@ export class McpServers {
       add(fp.dir, 'subpath', FIRST_PARTY_PARADIGM);
       add(fp.node, 'literal', FIRST_PARTY_PARADIGM);
     }
+    // #mcp-setup (Aegis items-1-2 Q3): every mod launch override's command and absolute-path args, the same rule
+    const protect = (id: string, command: string, args: readonly string[]): void => {
+      add(realOr(command), 'literal', id);
+      for (const a of args) {
+        if (!path.isAbsolute(a) || a.includes('${')) continue;
+        try {
+          const st = fs.statSync(a);
+          add(realOr(a), st.isDirectory() ? 'subpath' : 'literal', id);
+        } catch {
+          /* not a path on disk: nothing to protect */
+        }
+      }
+    };
+    for (const l of this.#o.modLaunches?.() ?? []) protect(l.id, l.command, l.args);
     // TD-2026-10-23-361 (M3): every enabled `all` server's resolved command and absolute-path args are write-denied in
     // every session, so no session can swap what the next session's server runs (a repo-scoped one runs only there)
     const store = readMcpServersStore(this.#o.home);
@@ -416,16 +432,7 @@ export class McpServers {
         if (d.transport !== 'stdio' || !d.resolved || d.problems.length) continue;
         const hash = declHash(d, this.#o.launchKey);
         if (!all.some((e) => e.id === d.id && e.launchHash === hash)) continue;
-        add(realOr(d.resolved), 'literal', d.id);
-        for (const a of d.args) {
-          if (!path.isAbsolute(a) || a.includes('${')) continue;
-          try {
-            const st = fs.statSync(a);
-            add(realOr(a), st.isDirectory() ? 'subpath' : 'literal', d.id);
-          } catch {
-            /* not a path on disk: nothing to protect */
-          }
-        }
+        protect(d.id, d.resolved, d.args);
       }
     }
     return out;

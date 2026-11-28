@@ -168,7 +168,8 @@ import { toolRulePaused, type ToolRulePauseSource } from '../local/tool-broker.j
 import { McpTrust, trustSourceOf } from '../local/trust-book.js';
 import { ResultPolicy, resultPolicySourceOf, rulePassesOf } from '../local/result-policy.js';
 import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
-import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
+import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, overrideLaunches, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
+import { ModSetup } from '../desk/mcp-setup.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
 import { ModsAdmin, type ModAsker } from '../modhost/mods-admin.js';
 import { DeskTally } from '../desk/desk-stats.js';
@@ -1196,6 +1197,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // slice C5'a1 (Arky 6): request.mcp.trust previews and commits against the lane's newest listing; trust rows
     listedOf: (id) => mcpListCache.newest(id),
     trust: mcpTrust,
+    // #mcp-setup (Aegis items-1-2 Q3): a mod launch override's command and absolute-path args are write-denied too
+    modLaunches: () => overrideLaunches(deskMods.list(), readMcpOverrides(home)),
   });
   // Aegis L3: a trusted server that is on nowhere any more is dropped again (a disabled drop row that failed to write)
   mcpServers.reconcileTrust();
@@ -1585,12 +1588,24 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const deskTally = new DeskTally({ log, kernelPrincipal });
   // #turn-economy: the derived per-turn economy view (no log kind of its own), seeded on first read, fed by onCommit
   const economyTally = new EconomyTally({ log, kernelPrincipal });
+  // #mcp-setup (8.2 fixes item 1): set up a needs-config mod's server from the human's Claude Code config (^mod-mcp-config)
+  const modSetup = new ModSetup({
+    home,
+    broker,
+    mods: () => deskMods.list(),
+    userHome: mcpUserHome,
+    pathDirs: mcpPathDirs,
+    liveRepos: () => supervisor.liveScopes().map((x) => x.cwd),
+    launchKey: deskLaunchKey(home),
+    emit: (e) => emit({ kind: 'daemon.desk', ...e } as DaemonEvent),
+  });
   const modsAdmin = new ModsAdmin({
     home,
     trust: authority,
     host: mods,
     scan: () => modPickup.scan(),
     scanConfig: () => mcpCards.scan(),
+    setup: modSetup,
     raised: () => modPickup.raised(),
     desk: deskTally,
     logRequest: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload, connId: ids.connId }).then(() => undefined),

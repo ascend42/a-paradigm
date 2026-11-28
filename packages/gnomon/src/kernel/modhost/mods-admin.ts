@@ -18,6 +18,10 @@
  *        request.mod.start   {name}                   `gnomon mod start <name>`     requestStart
  *        request.mod.uninstall {name}                 `gnomon mod uninstall <name>` requestUninstall
  *        request.mod.config  {name, command?, args?, env?}  `gnomon mod config`     requestMcpConfig
+ *        request.mod.setup   {items:[{name, from, …}]}     `gnomon mod config --from-claude`  #mcp-setup ModSetup
+ *      (8.2 fixes item 1: the setup request copies a server from the person's Claude Code config on the kernel side;
+ *      one grouped root-class card; ^mod-mcp-config.) status.mods.installed[].mcp shows the EFFECTIVE launch (args
+ *      through shownArgs), `launch: ok | needs-config` and, for a needs-config mod, `setup[]` (names only).
  *      Then the kernel's own scans run at once (StagedCardPickup, McpConfigCards), so the install / uninstall /
  *      config card is raised in the stack before the request answers, with its cardId. Every card is the normal
  *      one: re-derived from the pinned snapshot, root key + fresh presence to decide. `source:'git'` is S4 and is
@@ -40,7 +44,9 @@ import { ManifestRefusal, noEvents } from '../manifest/refusal.js';
 import { hashSourceTree, pinnedDir } from '../manifest/snapshot.js';
 import { userMcpServerNames } from '../manifest/user-mcp.js';
 import { appBundleOf } from '../lifecycle/app-bundle.js';
-import { readDeskMods, readMcpConfigRequest, readMcpOverrides, requestMcpConfig, serverNameOf } from '../desk/mcp-passthrough.js';
+import { effectiveLaunch, isAbsoluteCommand, readDeskMods, readMcpConfigRequest, readMcpOverrides, requestMcpConfig, serverNameOf } from '../desk/mcp-passthrough.js';
+import { shownArgs } from '../desk/mcp-servers.js';
+import { MOD_SETUP_REQUEST, type ModSetup, type SetupRow } from '../desk/mcp-setup.js';
 import type { DeskTallyView } from '../desk/desk-stats.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { isUserPaused, requestStart, requestUninstall, uninstallRequested, writePause } from './control.js';
@@ -53,7 +59,7 @@ export const MOD_START_REQUEST = 'request.mod.start' as const;
 export const MOD_UNINSTALL_REQUEST = 'request.mod.uninstall' as const;
 export const MOD_CONFIG_REQUEST = 'request.mod.config' as const;
 /** The human's mod requests dispatch.ts routes here (gui / device human connections only). */
-export const MOD_ADMIN_REQUESTS: readonly string[] = Object.freeze([MOD_INSTALL_REQUEST, MOD_LINK_REQUEST, MOD_PAUSE_REQUEST, MOD_START_REQUEST, MOD_UNINSTALL_REQUEST, MOD_CONFIG_REQUEST]);
+export const MOD_ADMIN_REQUESTS: readonly string[] = Object.freeze([MOD_INSTALL_REQUEST, MOD_LINK_REQUEST, MOD_PAUSE_REQUEST, MOD_START_REQUEST, MOD_UNINSTALL_REQUEST, MOD_CONFIG_REQUEST, MOD_SETUP_REQUEST]);
 export type ModAdminRequest = (typeof MOD_ADMIN_REQUESTS)[number];
 
 /** The first-party catalog folder name beside this kernel's package (packages/gnomon-mods). */
@@ -122,7 +128,12 @@ export interface InstalledModView {
   /** HOST-COMPOSED, never mod text: why a stopped mod is not running (today only: it was refused ABI at init) */
   note: string | null;
   uninstallRequested: boolean;
-  mcp: { server: string; overridden: boolean; configRequested: boolean; configurable: { command: boolean; args: boolean; env: string[]; secret: string[] }; command: string; args: string[] } | null;
+  /**
+   * command / args: the EFFECTIVE launch (the override when one is in force), args through shownArgs (Aegis condition
+   * 9). launch: needs-config when that command is not absolute (never launched). setup: the Claude Code servers it
+   * can be set up from (needs-config mods only; names only). setupPending: the waiting setup card.
+   */
+  mcp: { server: string; overridden: boolean; configRequested: boolean; configurable: { command: boolean; args: boolean; env: string[]; secret: string[] }; command: string; args: string[]; launch: 'ok' | 'needs-config'; setup: SetupRow[]; setupPending: string | null } | null;
   offers: Array<{ kind: string; title: string }>;
   desk: DeskTallyView;
   /** the shipped first-party tree differs from the pin: installing it raises a re-pin (Update) card */
@@ -138,6 +149,8 @@ export interface ModsAdminOptions {
   scan: () => Promise<void>;
   /** McpConfigCards.scan (raises the mod.mcp.config card) */
   scanConfig: () => Promise<void>;
+  /** #mcp-setup: the setup offers and request.mod.setup (absent: no offers, the request is UNSUPPORTED) */
+  setup?: ModSetup;
   /** the staged card ids the broker raised (pickup.raised()) */
   raised?: () => string[];
   desk?: { of(mod: string): DeskTallyView };
@@ -265,6 +278,7 @@ export class ModsAdmin {
     const running = new Set((host.running ?? []).map((r) => r.name).filter((n): n is string => typeof n === 'string'));
     const paused = new Map((host.paused ?? []).filter((p) => typeof p.name === 'string').map((p) => [p.name as string, typeof p.why === 'string' ? p.why : 'user']));
     const overrides = readMcpOverrides(home);
+    const offers = this.#o.setup?.offers() ?? new Map<string, SetupRow[]>();
     const catalog = this.catalog();
     const byName = new Map(catalog.map((c) => [c.name, c]));
     const installed: InstalledModView[] = [];
@@ -284,6 +298,7 @@ export class ModsAdmin {
       const state: InstalledModView['state'] = !manifest ? 'error' : running.has(name) ? 'running' : userPaused || paused.has(name) ? 'paused' : 'stopped';
       const entry = manifest?.provides?.mcp?.[0];
       const cfg = entry?.config;
+      const eff = entry ? effectiveLaunch(entry, overrides[name]).launch : null;
       const shipped = byName.get(name);
       installed.push({
         name,
@@ -304,8 +319,11 @@ export class ModsAdmin {
               overridden: Object.hasOwn(overrides, name),
               configRequested: readMcpConfigRequest(home, name) !== null,
               configurable: { command: cfg?.command === true, args: cfg?.args === true, env: [...(cfg?.env ?? [])], secret: [...(cfg?.secret ?? [])] },
-              command: entry.command,
-              args: [...(entry.args ?? [])],
+              command: eff!.command,
+              args: shownArgs(eff!.args),
+              launch: isAbsoluteCommand(eff!.command) ? 'ok' : 'needs-config',
+              setup: offers.get(name) ?? [],
+              setupPending: this.#o.setup?.pendingOf(name) ?? null,
             }
           : null,
         offers: (manifest?.provides?.offers ?? []).map((o) => ({ kind: String((o as { kind?: unknown }).kind ?? ''), title: String((o as { title?: unknown }).title ?? '') })),
@@ -347,6 +365,9 @@ export class ModsAdmin {
       }
       case MOD_CONFIG_REQUEST:
         return this.#config(payload);
+      case MOD_SETUP_REQUEST:
+        if (!this.#o.setup) throw new RpcRefusal('UNSUPPORTED', 'no-setup', `${kind} is not available in this kernel`);
+        return this.#o.setup.request(asker, payload);
       default:
         throw new RpcRefusal('BAD_REQUEST', 'bad-kind', `${kind} is not a mod request`);
     }
@@ -410,6 +431,7 @@ export class ModsAdmin {
     try {
       requestMcpConfig(this.#o.home, mod, config, this.#o.now?.());
     } catch (err) {
+      // the refusal names fields, never a value (manifest.ts validateMcpUserConfig and MCP_SECRET_ARG_REFUSAL)
       throw new RpcRefusal('FORBIDDEN', 'not-declared', (err as Error).message.slice(0, 300), { name });
     }
     await this.#o.scanConfig();

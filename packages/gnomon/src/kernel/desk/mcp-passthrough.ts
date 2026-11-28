@@ -43,6 +43,7 @@ import { checkAgainstGrants, effectiveInstall, grantsPath, pinDirKey, readGrants
 import { MANIFEST_FILE, readManifest, resolveMcpLaunch, validateMcpUserConfig, type ManifestMcp, type ManifestV2, type McpUserConfig, type TrustTier } from '../manifest/manifest.js';
 import { computePackageHash, hashPinnedTree, modDir, pinnedDir } from '../manifest/snapshot.js';
 import { isUserPaused, modNames } from '../modhost/control.js';
+import { shownArgs } from './mcp-servers.js';
 
 /** An installed, granted, unpaused mod as the Desk sees it (manifest read from its pinned snapshot). */
 export interface DeskMod {
@@ -226,7 +227,7 @@ export function isAbsoluteCommand(cmd: string): boolean {
   if (cmd.startsWith('//') || cmd.startsWith('\\\\')) return false;
   return cmd.startsWith('/') || /^[A-Za-z]:[\\/]/.test(cmd);
 }
-export const UNCONFIGURED_HINT = 'set it with gnomon mod config <mod> --command <abs> --args …';
+export const UNCONFIGURED_HINT = 'set it with gnomon mod config <mod> --command <abs> --args … (or --from-claude), or press Set up in Mods';
 
 export interface PassthroughResult {
   servers: Record<string, unknown>;
@@ -296,6 +297,22 @@ export function repoServersOnly(repo: Record<string, unknown>, distro: Record<st
   return { servers, dropped };
 }
 
+/**
+ * Aegis items-1-2 Q3 (P1): the launches a session must not be able to rewrite: every mod whose override is in force
+ * (checkMcpOverride passes and the command is absolute). McpServers.sessionDenies write-denies each command and its
+ * absolute-path args, as it does for `all` servers (a copied launch often points into a dev checkout).
+ */
+export function overrideLaunches(mods: readonly DeskMod[], overrides: McpOverrides, platform: string = process.platform): Array<{ id: string; command: string; args: string[] }> {
+  const out: Array<{ id: string; command: string; args: string[] }> = [];
+  for (const m of mods) {
+    const e = m.manifest.provides?.mcp?.[0];
+    if (!e || overrides[m.name] === undefined) continue;
+    const { launch, overridden } = effectiveLaunch(e, overrides[m.name], platform);
+    if (overridden && isAbsoluteCommand(launch.command)) out.push({ id: `mod:${m.name}`, command: launch.command, args: launch.args });
+  }
+  return out;
+}
+
 /* ── the human-only config request → card → store ────────────────────────── */
 
 export interface McpConfigRequest {
@@ -307,11 +324,17 @@ function requestPath(home: string, mod: string): string {
   return path.join(modDir(home, mod), MCP_CONFIG_REQUEST);
 }
 
+/** Why a request with a secret-looking arg is refused (names no value). */
+export const MCP_SECRET_ARG_REFUSAL = 'mcp config: an argument looks like a secret, and the card would print it; put it in an env name the mod declares';
+
 /** The CLI half: write the request (the kernel raises the card). Validates against the installed manifest first. */
 export function requestMcpConfig(home: string, mod: DeskMod, config: unknown, at = new Date(), platform: string = process.platform): McpConfigRequest {
   const entry = mod.manifest.provides?.mcp?.[0];
   if (!entry) throw new TypeError(`${mod.name} declares no mcp server`);
   const checked = checkMcpOverride(entry, config, platform);
+  // Aegis items-1-2 Q5: the card prints args raw, so a secret-looking arg is refused on every request path (never at
+  // launch: a stored override keeps launching)
+  if (shownArgs(checked.args ?? []).some((a, i) => a !== checked.args![i])) throw new TypeError(MCP_SECRET_ARG_REFUSAL);
   const req: McpConfigRequest = { config: checked, at: at.toISOString() };
   const p = requestPath(home, mod.name);
   fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
@@ -383,7 +406,8 @@ export class McpConfigCards {
       let launch: McpLaunch;
       try {
         if (!mod || !entry) throw new TypeError('not an installed server');
-        checkMcpOverride(entry, req.config, this.#o.platform);
+        const checked = checkMcpOverride(entry, req.config, this.#o.platform);
+        if (shownArgs(checked.args ?? []).some((a, i) => a !== checked.args![i])) throw new TypeError(MCP_SECRET_ARG_REFUSAL); // a hand-written request file too
         launch = resolveMcpLaunch(entry, req.config);
       } catch {
         dropRequest(home, name); // refused: nothing the request says reaches a card
