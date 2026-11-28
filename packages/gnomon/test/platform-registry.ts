@@ -246,5 +246,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/voice-v2e.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: the voice supervisor, env and principal run on every platform; marked only because the voice log\'s 0600/0700 modes are asserted off win32 (POSIX modes; owner-only is an ACL in the parity phase, P8-D78)' },
   { test: 'test/voice-v2e-speak.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: the speakable row, the voice projection, the mic meter, input choice and reply mode run on every platform; marked only because the persisted files\' 0600 mode is asserted off win32 (POSIX modes; owner-only is an ACL in the parity phase, P8-D78)' },
   // T-2026-10-17-011: runs on ALL three platforms; marked only because it branches on process.platform.
+  // #mcp-setup (8.2 fixes item 1): run everywhere; marked only because the resolved-command fixtures need an .exe on win32
+  { test: 'test/mcp-setup.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: matching, the copy, the card and the canary run on every platform; marked only because a fixture command is node.exe on win32 (an override command must be an .exe there)' },
+  { test: 'test/mods-admin.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: the Mods requests and status run on every platform; marked only because the #mcp-setup fixture command is node.exe on win32' },
   { test: 'test/boot-session.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: one file asserts every platform inline — a UUID on macOS (kern.bootsessionuuid) / Linux (boot_id), `unknown` on win32 until the helper boot id of the parity phase (P8-D78, P8-D83)' },
 ];

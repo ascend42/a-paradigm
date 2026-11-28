@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux, win32
 /**
  * #mods-admin: the GUI Mods panel's kernel half. Each request does what its `gnomon mod` verb does (and signs
  * nothing); the card is raised by the kernel's own scans; status.mods.installed / available read from the grant
@@ -18,6 +19,10 @@ import { foldDeskStats as cliFold } from '../src/cli/desk-cli.js';
 import { readStaged, stageInstall } from '../src/kernel/manifest/install.js';
 import { mintTestPresence, withPinTablesForTest } from '../src/kernel/testing.js';
 import { privateTmpRoot } from './daemon-helpers.js';
+import { readDeskMods, readMcpConfigRequest, readMcpOverrides, writeMcpOverride } from '../src/kernel/desk/mcp-passthrough.js';
+import { ModSetup } from '../src/kernel/desk/mcp-setup.js';
+import { runModConfig } from '../src/cli/desk-cli.js';
+import { createKernelDispatcher } from '../src/kernel/socket/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 const MODS = path.resolve(PKG_ROOT, '..', 'gnomon-mods');
@@ -133,8 +138,8 @@ describe('#mods-admin requests mirror `gnomon mod`', () => {
     await expect(t.admin.request(GUI, 'request.mod.link', { path: WORKSHOP })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN', data: { reason: 'manifest-publisher' } } });
   });
 
-  it('the request kinds are the six verbs', () => {
-    expect(MOD_ADMIN_REQUESTS).toEqual(['request.mod.install', 'request.mod.link', 'request.mod.pause', 'request.mod.start', 'request.mod.uninstall', 'request.mod.config']);
+  it('the request kinds are the six verbs plus #mcp-setup', () => {
+    expect(MOD_ADMIN_REQUESTS).toEqual(['request.mod.install', 'request.mod.link', 'request.mod.pause', 'request.mod.start', 'request.mod.uninstall', 'request.mod.config', 'request.mod.setup']);
   });
 });
 
@@ -234,5 +239,122 @@ describe('the pickup and a retired first-party build (S1.4 P0 review, Aegis N-a)
     if (ok.state !== 'staged') throw new Error(`expected staged, got ${ok.state}`);
     await t.scan();
     expect(t.broker.card(ok.cardId)?.state).toBe('pending');
+  });
+});
+
+describe('#mcp-setup through #mods-admin (8.2 fixes item 1)', () => {
+  const CANARY = 'CANARY-vault-5e0b21aa';
+  const EXE = process.platform === 'win32' ? '.exe' : '';
+  async function setupRig() {
+    const t = rig();
+    const bin = path.join(t.root, 'bin');
+    fs.mkdirSync(bin);
+    const node = path.join(bin, `node${EXE}`);
+    fs.writeFileSync(node, '', { mode: 0o755 });
+    fs.writeFileSync(path.join(t.root, '.claude.json'), JSON.stringify({ mcpServers: { neurons: { command: node, args: ['/x/main.js', 'mcp'], env: { NEURONS_VAULT: CANARY } } } }));
+    const res = await t.admin.request(GUI, 'request.mod.install', { source: 'folder', path: path.join(MODS, 'neurons') });
+    await t.decide(res.cardId as string, 'install');
+    const events: Array<Record<string, unknown>> = [];
+    const setup = new ModSetup({ home: t.home, broker: t.broker, mods: () => readDeskMods(t.home, t.auth), userHome: t.root, pathDirs: () => [bin], launchKey: Buffer.alloc(32, 3), emit: (e) => events.push(e) });
+    const admin = new ModsAdmin({ home: t.home, trust: t.auth, host: { status: () => ({ running: [], paused: [] }) }, scan: async () => undefined, scanConfig: async () => undefined, firstPartyRoot: MODS, userHome: t.root, setup });
+    return { ...t, bin, node, admin2: admin, setup, events };
+  }
+
+  it('status shows needs-config with the Claude Code candidate, names only (the canary never appears)', async () => {
+    const t = await setupRig();
+    const m = t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!;
+    expect(m.mcp).toMatchObject({ launch: 'needs-config', command: 'neurons', args: ['mcp'], setupPending: null });
+    expect(m.mcp!.setup).toEqual([expect.objectContaining({ declId: 'user::neurons', source: 'user', match: 'name', oneTap: true, preselected: true, envNames: ['NEURONS_VAULT'], problem: null })]);
+    expect(JSON.stringify(t.admin2.status())).not.toContain(CANARY);
+  });
+
+  it('status shows the EFFECTIVE launch, args through shownArgs (Aegis condition 9)', async () => {
+    const t = await setupRig();
+    writeMcpOverride(t.home, 'gnomon.neurons', { command: t.node, args: ['/x/main.js', '--api-key', 'sk-live-0123456789abcdef'] });
+    const m = t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!;
+    expect(m.mcp).toMatchObject({ launch: 'ok', command: t.node, setup: [] });
+    expect(m.mcp!.args).toEqual(['/x/main.js', '--api-key', '(hidden: looks like a secret)']);
+    expect(JSON.stringify(m)).not.toContain('sk-live-0123456789abcdef');
+  });
+
+  it('one press: request.mod.setup through the real broker raises the card; allow (root key + presence) writes the override', async () => {
+    const t = await setupRig();
+    const res = await t.admin2.request(GUI, 'request.mod.setup', { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] });
+    expect(res).toMatchObject({ pending: true });
+    const card = t.broker.card(res.cardId as string)!;
+    expect(card).toMatchObject({ kind: 'grant', state: 'pending' });
+    expect(t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!.mcp!.setupPending).toBe(res.cardId);
+    expect(JSON.stringify(card)).not.toContain(CANARY);
+    await t.decide(res.cardId as string, 'allow');
+    expect(readMcpOverrides(t.home)['gnomon.neurons']).toEqual({ command: t.node, args: ['/x/main.js', 'mcp'], env: { NEURONS_VAULT: CANARY } });
+    expect(t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!.mcp).toMatchObject({ launch: 'ok', setup: [] });
+    expect(JSON.stringify(t.events)).not.toContain(CANARY);
+  });
+
+  it('N3: status names nothing skipped by default (setupSkipped null)', async () => {
+    const t = await setupRig();
+    expect(t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!.mcp).toMatchObject({ setupSkipped: null });
+  });
+
+  it('N8: a config request is refused card-pending while a setup card waits for the same mod', async () => {
+    const t = await setupRig();
+    const res = await t.admin2.request(GUI, 'request.mod.setup', { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] });
+    await expect(t.admin2.request(GUI, 'request.mod.config', { name: 'gnomon.neurons', args: ['x'] })).rejects.toMatchObject({ refusal: { data: { why: 'card-pending', cardId: res.cardId } } });
+    expect(readMcpConfigRequest(t.home, 'gnomon.neurons')).toBeNull();
+  });
+
+  it('I1: --from-claude says when the command was found on the default session PATH', async () => {
+    const t = await setupRig();
+    fs.writeFileSync(path.join(t.root, '.claude.json'), JSON.stringify({ mcpServers: { neurons: { command: 'node', args: ['/x/main.js', 'mcp'] } } }));
+    const out: string[] = [];
+    const io = { stdout: { write: (s: string) => void out.push(s) }, stderr: { write: () => undefined } } as never;
+    expect(runModConfig(['gnomon.neurons', '--from-claude'], io, { home: t.home, trust: t.auth, env: {}, userHome: t.root, pathDirs: [t.bin] })).toBe(0);
+    expect(out.join('')).toContain(`NOTE       node was found on the default session PATH as ${t.node}`);
+  });
+
+  it('N5: through the real dispatcher, neither the reply, a refusal nor the dispatcher log carries a value', async () => {
+    const t = await setupRig();
+    const logged: unknown[] = [];
+    const d = createKernelDispatcher({
+      authenticator: {
+        now: () => Date.now(),
+        checkToken: () => ({ ok: true }),
+        authenticate: (s: Record<string, unknown>) => {
+          s.phase = 'authenticated';
+          s.principal = HUMAN;
+          Object.assign(s, { principalKind: 'human', deviceId: 'dev:local/mac', credential: 'gui' });
+          return { ok: true, credential: 'gui', principal: HUMAN, deviceId: 'dev:local/mac', via: 'launch', guiToken: 'g', commit: () => undefined, abort: () => undefined };
+        },
+      } as never,
+      status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: 'k', custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: null }) },
+      log: async (kind: string, payload: Record<string, unknown>) => void logged.push({ kind, payload }),
+      requests: { status: () => ({}), mods: t.admin2 } as never,
+    } as never);
+    const ctx = { connId: 'conn:test-1', closed: false, close() {}, authenticated() {}, notify: () => true, writableLength: () => 0, writeHighWater: 1 << 16 };
+    d.onConnect(ctx as never);
+    await d.handle({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'auth', params: { who: { kind: 'human', credential: 'gui' } } }, ctx as never);
+    let rid = 1;
+    const call = (params: unknown) => d.handle({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: ++rid, method: 'log.append', params }, ctx as never).catch((e: unknown) => ({ refused: e, message: (e as Error).message }));
+    const refused = await call({ kind: 'request.mod.setup', payload: { items: [{ name: 'gnomon.neurons', from: 'user::neurons', args: ['--token', CANARY] }] } });
+    const ok = await call({ kind: 'request.mod.setup', payload: { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] } });
+    expect(JSON.stringify(refused)).toContain('secret-arg');
+    expect(JSON.stringify(ok), JSON.stringify(ok).slice(0, 900)).toContain('pending');
+    expect(JSON.stringify([refused, ok, logged])).not.toContain(CANARY);
+  });
+
+  it('gnomon mod config --from-claude writes the same copy through the request file', async () => {
+    const t = await setupRig();
+    const out: string[] = [];
+    const err: string[] = [];
+    const io = { stdout: { write: (s: string) => void out.push(s) }, stderr: { write: (s: string) => void err.push(s) } } as never;
+    const code = runModConfig(['gnomon.neurons', '--from-claude'], io, { home: t.home, trust: t.auth, env: {}, userHome: t.root, pathDirs: [t.bin] });
+    expect(err.join('')).toBe('');
+    expect(code).toBe(0);
+    expect(readMcpConfigRequest(t.home, 'gnomon.neurons')!.config).toEqual({ command: t.node, args: ['/x/main.js', 'mcp'], env: { NEURONS_VAULT: CANARY } });
+    expect(out.join('')).toContain('FROM       your neurons server (user)');
+    expect(out.join('')).not.toContain(CANARY);
+    // the request-file card (unverified source) never claims the Claude Code config
+    expect(out.join('')).not.toContain('from your Claude Code config');
+    expect(runModConfig(['gnomon.neurons', '--from-claude', 'nope'], io, { home: t.home, trust: t.auth, env: {}, userHome: t.root, pathDirs: [t.bin] })).toBe(1);
   });
 });

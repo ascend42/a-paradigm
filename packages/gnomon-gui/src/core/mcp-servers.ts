@@ -31,6 +31,7 @@
  * Keys name their press as `mcp:<verb>` (data-lm-act) with the server id (or the card id) as the value; the sheet routes
  * `mcp:` presses here, never through SETTINGS_RUNS.
  */
+import { modsViewOf } from './mods.js';
 import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { FormKey, ResultView, SettingRow, SettingsSection } from './settings.js';
 
@@ -533,6 +534,9 @@ export function mcpSection(i: McpSectionInput): SettingsSection {
     const k: FormKey[] = fp.available ? [{ act: fp.on ? 'mcp:fp-off' : 'mcp:fp-on', value: MCP_FIRST_PARTY, label: fp.on ? 'Turn off' : 'Turn on', quiet: fp.on, ...(i.ui.busy ? { disabled: true } : {}) }] : [];
     rows.push({ kind: 'readonly', id: 'mcp-paradigm', label: 'Paradigm MCP · first-party', value: !fp.available ? 'not installed' : fp.on ? `on in every session${fp.version ? ` · paradigm ${fp.version}` : ''}` : 'off', how: fp.available ? [fp.dir || fp.autoAllowed.length ? MCP_COPY.fpHow.replace(/\.$/, '') : MCP_COPY.fpHow, ...(fp.dir ? [`runs from ${fp.dir}${fp.linked ? ' (linked: it runs live as that folder changes, and sessions working in that folder can edit it)' : ''}`] : []), ...(fp.autoAllowed.length ? [autoAllowWords(fp.autoAllowed)] : [])].join(' · ') : MCP_COPY.fpMissing, ...(fp.available ? (fp.on ? { mark: '✓' } : {}) : { mark: '✕' }), ...(k.length ? { keys: k } : {}), ...(fp.trust ? { chip: trustChipOf(fp.trust)! } : {}) });
   }
+  // #gui-mod-setup (8.2 fixes item 1): mod servers are set up in Mods, not here; this row says so and goes there
+  const waitingMods = modsViewOf(i.status).installed.filter((m) => m.mcp?.launch === 'needs-config' && m.state !== 'paused');
+  if (waitingMods.length) rows.push({ kind: 'readonly', id: 'mcp-mods', label: 'Mod servers', value: `${waitingMods.length} ${waitingMods.length === 1 ? "isn't" : "aren't"} set up`, how: `${waitingMods.map((m) => m.mcp!.server).join(', ')} · a mod's server is set up in Mods, from your Claude Code config`, mark: '✕', grp: true, keys: [{ act: 'mcp:mods', value: 'mods', label: 'Set up in Mods' }] });
   const repo = i.hsid ? (v.repos.find((r) => r.hsids.includes(i.hsid!)) ?? null) : null;
   const pendingIds = new Set(v.pending.map((p) => p.id));
   if (i.ui.request) for (const id of i.ui.request.ids ?? []) pendingIds.add(id);

@@ -235,7 +235,29 @@ export const SOURCE_TEXT: Readonly<Record<McpServerRow['source'], string>> = Obj
   plugin: 'a Claude Code plugin you enabled',
 });
 
+/**
+ * Relay prep (TD-2026-11-28-361): where a server's process runs. `session` today (inside the session's sandbox);
+ * `mod-mcp` when every mod server moves to its own sandbox. The lines that depend on it come from RUNS_IN_TEXT only.
+ */
+export type McpRunsIn = 'session' | 'mod-mcp';
+export const RUNS_IN_TEXT: Readonly<Record<McpRunsIn, { sandbox: string; values: string; starts: string }>> = Object.freeze({
+  session: {
+    sandbox: "inside the session's sandbox: the same files and network as the session, nothing more",
+    values: "env and header values are written to this session's mcp.json and readable by the session",
+    starts: 'every new session in every repo starts this command as you, under the session sandbox',
+  },
+  'mod-mcp': {
+    sandbox: "inside its own mod sandbox, not the session's: only the files and network its profile grants",
+    values: "env values are written to the mod server's own launch file, which the session cannot read",
+    starts: "every new session in every repo starts this command as you, under the mod server's own sandbox",
+  },
+});
+/** The env names a mod marks secret are never copied (one constant: the card and the GUI say the same). */
+export const ENV_SECRET_LINE = (names: readonly string[]): string => `not copied (marked secret; Gnomon cannot store a secret for a mod yet): ${names.join(', ')}`;
+
 export interface McpCardFacts {
+  /** relay prep: default 'session' */
+  runsIn?: McpRunsIn;
   scope: McpScope;
   via: 'settings' | 'terminal';
   at: number;
@@ -265,7 +287,7 @@ export function mcpServerFactLines(r: McpServerRow, f: McpCardFacts): string[] {
     `from ${SOURCE_TEXT[r.source]}${r.plugin ? ` · ${r.plugin.id}${r.plugin.version ? ` ${r.plugin.version}` : ''}${f.pluginRoot ? ` at ${f.pluginRoot}` : ''}` : ''}`,
     ...(f.scope !== 'all' ? [`folder ${f.scope.repo}`] : []),
     ...(r.transport === 'stdio'
-      ? [`runs ${r.command ?? '?'}${r.args.length ? ` ${r.args.join(' ')}` : ''}`, "inside the session's sandbox: the same files and network as the session, nothing more"]
+      ? [`runs ${r.command ?? '?'}${r.args.length ? ` ${r.args.join(' ')}` : ''}`, RUNS_IN_TEXT[f.runsIn ?? 'session'].sandbox]
       : [`connects to ${r.host ?? '?'} (${r.url ?? r.transport}) from the session: tool calls send data there`]),
     ...(r.shell ? [`runs a shell (${r.shell}): Gnomon cannot see what that command line starts`] : []),
     ...(r.fetches ? [`downloads what it runs at every launch (${r.fetches}): what runs can change without a new card`] : []),
@@ -274,7 +296,7 @@ export function mcpServerFactLines(r: McpServerRow, f: McpCardFacts): string[] {
     ...(r.envNames.length ? [`env names ${r.envNames.join(', ')} (values not shown)`] : []),
     ...(r.headerNames.length ? [`header names ${r.headerNames.join(', ')} (values not shown)`] : []),
     ...(r.needs.length ? [`takes ${r.needs.join(', ')} from ${LOOP_ENV_SHOWN}`] : []),
-    ...(anyValue ? ["env and header values are written to this session's mcp.json and readable by the session"] : []),
+    ...(anyValue ? [RUNS_IN_TEXT[f.runsIn ?? 'session'].values] : []),
     // TD-2026-10-23-361 (H1, founder): the human's own Claude Code allow rules are honoured, and named here
     ...(f.autoAllowed?.length ? [`your Claude Code settings auto-allow: ${allowRuleWords(f.autoAllowed)}; those tools run with no card`] : []),
     `its other tools ask like any tool (cards and Always rules); Gnomon adds no allow rule, and its tool descriptions are the server's words, not Gnomon's`,
@@ -338,6 +360,8 @@ export interface McpServersOptions {
   listedOf?: (id: string) => (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null;
   /** slice C5'a1: the kernel's TrustBook (absent: request.mcp.trust refuses, status says untrusted) */
   trust?: McpTrustStore;
+  /** #mcp-setup (Aegis items-1-2 Q3): the mod launch overrides in force (#mcp-passthrough overrideLaunches) */
+  modLaunches?: () => ReadonlyArray<{ id: string; command: string; args: readonly string[] }>;
 }
 
 const bad = (field: string, msg: string, data: Record<string, unknown> = {}): RpcRefusal => new RpcRefusal('BAD_REQUEST', 'bad-params', `#mcp-servers: ${msg}`, { field, ...data });
@@ -407,6 +431,20 @@ export class McpServers {
       add(fp.dir, 'subpath', FIRST_PARTY_PARADIGM);
       add(fp.node, 'literal', FIRST_PARTY_PARADIGM);
     }
+    // #mcp-setup (Aegis items-1-2 Q3): every mod launch override's command and absolute-path args, the same rule
+    const protect = (id: string, command: string, args: readonly string[]): void => {
+      add(realOr(command), 'literal', id);
+      for (const a of args) {
+        if (!path.isAbsolute(a) || a.includes('${')) continue;
+        try {
+          const st = fs.statSync(a);
+          add(realOr(a), st.isDirectory() ? 'subpath' : 'literal', id);
+        } catch {
+          /* not a path on disk: nothing to protect */
+        }
+      }
+    };
+    for (const l of this.#o.modLaunches?.() ?? []) protect(l.id, l.command, l.args);
     // TD-2026-10-23-361 (M3): every enabled `all` server's resolved command and absolute-path args are write-denied in
     // every session, so no session can swap what the next session's server runs (a repo-scoped one runs only there)
     const store = readMcpServersStore(this.#o.home);
@@ -416,16 +454,7 @@ export class McpServers {
         if (d.transport !== 'stdio' || !d.resolved || d.problems.length) continue;
         const hash = declHash(d, this.#o.launchKey);
         if (!all.some((e) => e.id === d.id && e.launchHash === hash)) continue;
-        add(realOr(d.resolved), 'literal', d.id);
-        for (const a of d.args) {
-          if (!path.isAbsolute(a) || a.includes('${')) continue;
-          try {
-            const st = fs.statSync(a);
-            add(realOr(a), st.isDirectory() ? 'subpath' : 'literal', d.id);
-          } catch {
-            /* not a path on disk: nothing to protect */
-          }
-        }
+        protect(d.id, d.resolved, d.args);
       }
     }
     return out;

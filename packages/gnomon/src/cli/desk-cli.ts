@@ -19,14 +19,42 @@
  *       under the Gnomon home; the running kernel raises a root-class card showing the effective launch (command,
  *       args, env names, launch hash) and only `allow` writes the kernel-owned store. Refused from a kernel-spawned
  *       shell (GNOMON_HSID, advisory: the session sandbox cannot write the home anyway).
+ *
+ *   gnomon mod config <mod> --from-claude [<server>]
+ *       (#mcp-setup, 8.2 fixes item 1) The same request, with the copy built from the matching server in your Claude
+ *       Code config (the server named, else the preselected one). It goes through the same request-file card, which
+ *       cannot verify where the request came from, so that card never claims "from your Claude Code config". The
+ *       command resolves on the default session PATH (the CLI does not read the daemon's config). Aegis I1 (conditions
+ *       1, 2, 6): with no server named, only a ONE-PRESS candidate is taken (a first-party mod; a user source, or a
+ *       plugin matched by command and name); anything else is refused with the candidates listed, and the person
+ *       names one. The lines that card cannot carry (plugin third-party and outlives lines, a local scope line, the
+ *       default-PATH line) are printed before the request is written.
  */
+
+/** Aegis I1: the candidate `--from-claude [<server>]` takes, or why not (names only). */
+export function pickFromClaude(cs: readonly SetupCandidate[], server: string | true): { pick: SetupCandidate } | { why: string; list: string[] } {
+  const list = cs.map((c) => `${c.decl.name} (${c.decl.source}${c.decl.plugin ? ` ${c.decl.plugin.id}` : ''})${c.problem ? `: ${SETUP_PROBLEM_TEXT[c.problem]}` : ''}`).slice(0, 8);
+  if (!cs.length) return { why: 'no server in your Claude Code config matches this mod', list };
+  if (server === true) {
+    const one = cs.find((c) => c.oneTap && !c.problem && c.config);
+    return one ? { pick: one } : { why: 'none of these is safe to take without naming it: name one with --from-claude <server>', list };
+  }
+  const named = cs.find((c) => c.decl.name === server || c.decl.id === server);
+  if (!named) return { why: `no matching server is named ${server.slice(0, 64)}`, list };
+  if (!named.config) return { why: named.problem ? SETUP_PROBLEM_TEXT[named.problem] : 'it cannot be copied as it is', list };
+  return { pick: named };
+}
 import * as path from 'node:path';
 import { kernelPrincipalOf, resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import { readKernelPubs } from '../kernel/identity/index.js';
 import { KeyRing, verifyLog } from '../kernel/log/index.js';
 import { daemonState } from '../kernel/lifecycle/pidfile.js';
 import { isModId, OFFER_SUPPRESS_REASONS } from '@a-company/gnomon-contracts';
-import { deskLaunchKey, launchCardLines, readDeskMods, requestMcpConfig, serverNameOf } from '../kernel/desk/mcp-passthrough.js';
+import os from 'node:os';
+import { deskLaunchKey, launchCardLines, readDeskMods, readMcpOverrides, requestMcpConfig, serverNameOf } from '../kernel/desk/mcp-passthrough.js';
+import { PLUGIN_OUTLIVES, PLUGIN_THIRD_PARTY, setupCandidates, SETUP_PROBLEM_TEXT, type SetupCandidate } from '../kernel/desk/mcp-setup.js';
+import { discoverMcpServers } from '../kernel/desk/mcp-servers.js';
+import { sessionPathFor } from '../kernel/runner/env.js';
 import { resolveMcpLaunch } from '../kernel/manifest/manifest.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
 import { GNOMON_VERSION } from '../version.js';
@@ -130,7 +158,7 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
 }
 
 /** `gnomon mod config …` (mod-cli delegates here; home and trust already resolved). */
-export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr: Out }, ctx: { home: string; trust: RowVerifier; env: NodeJS.ProcessEnv; now?: () => Date }): number {
+export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr: Out }, ctx: { home: string; trust: RowVerifier; env: NodeJS.ProcessEnv; now?: () => Date; userHome?: string; pathDirs?: readonly string[]; platform?: string }): number {
   const [name, ...rest] = argv;
   if (!name || !isModId(name)) {
     refused(io.stderr, 'usage', 'bad-name', 'gnomon mod config needs a mod name (a-z, 0-9, -)', ['gnomon mod config <mod> --command <abs> --args …']);
@@ -141,10 +169,12 @@ export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr:
     return DESK_EXIT_REFUSED;
   }
   let server: string | undefined;
-  const config: { command?: string; args?: string[]; env?: Record<string, string> } = {};
+  let fromClaude: string | true | undefined;
+  let config: { command?: string; args?: string[]; env?: Record<string, string> } = {};
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
     if (a === '--server' && rest[i + 1] !== undefined) server = rest[++i];
+    else if (a === '--from-claude') fromClaude = rest[i + 1] !== undefined && !rest[i + 1]!.startsWith('--') ? rest[++i]! : true;
     else if (a === '--command' && rest[i + 1] !== undefined) config.command = rest[++i];
     else if (a === '--args') {
       config.args ??= [];
@@ -162,8 +192,12 @@ export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr:
       return DESK_EXIT_USAGE;
     }
   }
-  if (config.command === undefined && config.args === undefined && config.env === undefined) {
-    refused(io.stderr, 'usage', 'nothing-to-set', 'give --command, --args or --env');
+  if (fromClaude !== undefined && (config.command !== undefined || config.args !== undefined || config.env !== undefined)) {
+    refused(io.stderr, 'usage', 'bad-argument', '--from-claude copies the launch; set fields with --command / --args / --env instead, or press Review first in Mods');
+    return DESK_EXIT_USAGE;
+  }
+  if (fromClaude === undefined && config.command === undefined && config.args === undefined && config.env === undefined) {
+    refused(io.stderr, 'usage', 'nothing-to-set', 'give --command, --args, --env or --from-claude');
     return DESK_EXIT_USAGE;
   }
   const mod = readDeskMods(ctx.home, ctx.trust).find((m) => m.name === name);
@@ -177,6 +211,33 @@ export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr:
   if (!entry || (server !== undefined && server !== serverName)) {
     refused(io.stderr, 'not_found', 'no-server', entry ? `${name}'s mcp server is ${serverName}` : `${name} declares no mcp server`, entry ? [`--server ${serverName}`] : ['gnomon mod list']);
     return DESK_EXIT_USAGE;
+  }
+  if (fromClaude !== undefined) {
+    const platform = ctx.platform ?? process.platform;
+    const userHome = ctx.userHome ?? os.homedir();
+    const joined = ctx.pathDirs ? null : sessionPathFor(null, { home: userHome });
+    const pathDirs = ctx.pathDirs ?? (joined ? joined.split(platform === 'win32' ? ';' : ':').filter(Boolean) : []);
+    const decls = discoverMcpServers({ userHome, repos: [process.cwd()], pathDirs, platform });
+    const cs = setupCandidates({ mods: [mod], decls, overrides: readMcpOverrides(ctx.home), platform }).get(name);
+    if (!cs) {
+      refused(io.stderr, 'forbidden', 'configured', `${name} already launches; it is not waiting for setup`, ['gnomon mod config <mod> --command <abs> --args … to change it']);
+      return DESK_EXIT_REFUSED;
+    }
+    const r = pickFromClaude(cs, fromClaude);
+    if ('why' in r) {
+      refused(io.stderr, 'not_found', 'no-candidate', r.why, r.list.length ? [...r.list, `gnomon mod config ${name} --from-claude <server>`] : []);
+      return DESK_EXIT_REFUSED;
+    }
+    const pick = r.pick;
+    config = pick.config!;
+    io.stdout.write(`FROM       your ${pick.decl.name} server (${pick.decl.source})${pick.envDropped.length ? ` · not copied: ${pick.envDropped.join(', ')}` : ''}${pick.envSecret.length ? ` · secret, not copied: ${pick.envSecret.join(', ')}` : ''}\n`);
+    // Aegis I1: what the request-file card cannot carry, said here before anything is written
+    const notes = [
+      ...(pick.decl.plugin ? [PLUGIN_THIRD_PARTY(pick.decl.plugin.id, pick.decl.plugin.version, pick.decl.plugin.root), PLUGIN_OUTLIVES] : []),
+      ...(pick.scopeNote ? [pick.scopeNote] : []),
+      ...(pick.decl.command && !path.isAbsolute(pick.decl.command) ? [`${pick.decl.command} was found on the default session PATH as ${pick.decl.resolved}`] : []),
+    ];
+    for (const l of notes) io.stdout.write(`NOTE       ${l}\n`);
   }
   try {
     requestMcpConfig(ctx.home, mod, config, ctx.now?.());

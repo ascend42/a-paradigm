@@ -2339,7 +2339,18 @@ components:
   gui-mods-panel:
     description: >-
       The Mods panel (founder dogfood 2026-10-21: "Install Workshop does
-      nothing; no way to see which mods are on"). core/mods.ts (PURE):
+      nothing; no way to see which mods are on"). #gui-mod-setup (8.2 fixes
+      item 1): a needs-config row's key "Set up from your Claude Code config"
+      sends one request.mod.setup (the card is the review), "Review first"
+      opens the form filled from the kernel's row (names only), a banner sends
+      every one-press mod on one card, Settings > MCP servers points at Mods,
+      and modServerNotices gives the session's kernel-voiced line (isn't set
+      up / waits on its card / failed to start in this session; GUI words and
+      short names only, never a cause). Review fixes: keys follow the items
+      (Set up <ready> + Review the rest in Mods, or Open Mods); open(mod)
+      scrolls to and focuses the row; focus returns to Review first on Cancel;
+      the review form leads with the scope note and groups source, command and
+      env; the setup key comes first and Configure steps aside. core/mods.ts (PURE):
       modsViewOf(status, stack cards) gives installed / available / pending;
       request builders for request.mod.install|link|pause|start|uninstall|
       config; folderPathError; configRequest (only manifest-declared fields,

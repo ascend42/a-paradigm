@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Gnomon: set up a mod's MCP server from your Claude Code config** (T-2026-11-28-001). A mod whose server is not set up now says so in the Mods panel, in Settings › MCP servers and in the session ("gm_gnomon_neurons isn't set up, so this session doesn't have it"). One press, **Set up from your Claude Code config**, copies the matching server from your `~/.claude.json` or plugin into the mod's launch, on one card you allow in the stack. **Review first** shows what would be copied. Values never leave the kernel: the card and status show names only. `gnomon mod config <mod> --from-claude` is the terminal form.
+- **Gnomon: a mod's launch can no longer be rewritten by a session.** The command and script paths of a mod launch override are write-denied in every session, as enabled MCP servers already were.
+- **Gnomon: a secret-looking argument is refused** when you set a mod's launch, because the card would print it.
+- **Gnomon: the Mods panel shows the launch in force**, not the manifest's default, and hides secret-looking arguments.
+- A mod server that fails to start now reads "neurons failed to start in this session · Gnomon can't see why from here" in the session, with **Open Mods**, instead of the model guessing why. A setup card that is waiting says so, with **Show the card**.
+- `gnomon mod config --from-claude` takes a server without being named only when it is safe in one press; otherwise it lists the candidates and asks you to name one.
+
 ## [8.2.1] — 2026-11-28
 
 A fix release for Gnomon. Use 8.2.1, not 8.2.0.

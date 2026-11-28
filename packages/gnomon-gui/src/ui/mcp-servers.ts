@@ -230,6 +230,8 @@ export interface McpDeps {
   focused?: () => string | null;
   /** C5'b: the trust preview's expiry timer (default setTimeout) */
   timer?: TrustFlowDeps['timer'];
+  /** #gui-mod-setup: open the Mods sheet (the mod servers that need setup are set up there) */
+  openMods?: () => void;
 }
 
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -348,6 +350,7 @@ export class McpServersController {
   press(act: string, value: string | null, trusted: boolean): void {
     if (!trusted || value === null) return; // G-GUI-04
     if (act === 'mcp:decide') return this.#d.decide(value);
+    if (act === 'mcp:mods') return this.#d.openMods?.();
     if (act.startsWith('mcp:trust') || act === 'mcp:untrust') return this.#trustPress(act, value);
     if (this.#ui.busy) return;
     if (act === 'mcp:marking') {
