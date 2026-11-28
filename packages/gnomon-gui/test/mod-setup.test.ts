@@ -96,6 +96,9 @@ describe('#gui-mod-setup the Mods row', () => {
   it('a local or project candidate is never one press, whatever a status claims; a project one is a disabled line, not in Review first', () => {
     const v = modsViewOf(statusOf(mod('gnomon.neurons', [offer({ source: 'project', declId: 'project:/r:neurons', problem: "it comes from a repo's .mcp.json" }), offer({ source: 'local', declId: 'local:/r:neurons', scopeNote: 'was for folder r only' })])));
     expect(oneTapOffer(v.installed[0]!)).toBeNull();
+    // each field is guarded on its own (a status claiming one press for these is never believed)
+    expect(v.installed[0]!.mcp!.setup.map((o) => [o.source, o.oneTap])).toEqual([['project', false], ['local', false]]);
+    expect(v.installed[0]!.mcp!.setup.map((o) => [o.source, o.preselected])).toEqual([['project', false], ['local', false]]);
     expect(reviewOffers(v.installed[0]!).map((o) => o.source)).toEqual(['local']);
     const b = painted(statusOf(mod('gnomon.neurons', [offer({ source: 'project', declId: 'project:/r:neurons', problem: "it comes from a repo's .mcp.json" })])));
     const off = row(b, 'gnomon.neurons').all().find((e) => e.className === 'meta mod-offer-off')!;
