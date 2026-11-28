@@ -52,6 +52,13 @@ components:
       (LAYOUT.mods, required by missingFromLayout); the dry-run test checks
       the moved app's kernel finds them and each still hashes to a
       FIRST_PARTY_PACKAGE_HASHES pin.
+      8.2.1: copyIntoPlatformPackage(zip, sha, dir, arch, version) refuses a
+      zip whose app's kernel package.json or dist/build-id.json is not
+      `version`, and a platform package of another version, before copying
+      (#app-version); a real build checks the assembled app the same way.
+      Any failure exits 1 with failureBanner's RELEASE FAILED banner, naming
+      what the platform package's Gnomon.app.zip still holds and saying not
+      to seal or publish (8.2.0's notarize stopped before stapling unnoticed).
     path: scripts/release-darwin.mjs
     type: script
     tags: [release, distribution, signing]
@@ -127,6 +134,12 @@ components:
       release.yml's `changeset publish` is stopped by gnomon's prepack and
       prepublishOnly gate instead, and never sees the platform packages
       (not workspaces).
+      8.2.1: 8.2.0 shipped a stale, notarized 8.0.0 app in the platform
+      package. The gate's platformPackageProblems and seal-npm-release's
+      sealProblems now refuse an app whose kernel version (package.json, the
+      path the shim reads, and dist/build-id.json) is not the package's:
+      "the packaged Gnomon.app is 8.0.0, not 8.2.1: rebuild with
+      release-darwin.mjs --notarize" (#app-version).
     path: scripts/prepack.mjs
     type: script
     tags: [release, distribution, npm, gnomon]
@@ -139,3 +152,20 @@ components:
       - test/gate-gnomon-publish.test.ts
       - test/release-darwin.test.ts
       - test/release-excludes-gnomon.test.ts
+  app-version:
+    description: >-
+      #app-version (8.2.1) — scripts/app-version.mjs: appVersionProblems(app,
+      want) reads an unpacked Gnomon.app's Contents/Resources/kernel/package.json
+      (the shim's LAYOUT.kernelPackage) and kernel/dist/build-id.json and
+      returns a problem unless both say `want`; appZipVersionProblems(zip, want)
+      unpacks a Gnomon.app.zip with ditto into a fresh temp dir first (macOS).
+      Used by scripts/gate-gnomon-publish.mjs, seal-npm-release.mjs and
+      release-darwin.mjs, so a stale app (8.2.0 shipped 8.0.0's) is refused at
+      every step.
+    path: scripts/app-version.mjs
+    type: script
+    tags: [release, distribution, npm, gnomon]
+    related: ["#gnomon-npm-packaging", "#release-darwin", "#gnomon-shim"]
+    tests:
+      - test/gate-gnomon-publish.test.ts
+      - test/release-darwin.test.ts

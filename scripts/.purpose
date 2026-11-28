@@ -23,6 +23,13 @@ components:
     tags:
       - release
       - gnomon
+  gate-gnomon-publish:
+    description: 'The Gnomon publish gate (#gnomon-npm-packaging), run first by `npm run publish:gnomon` and as gnomon''s prepublishOnly: lockstep, each platform package''s files and scripts, its Gnomon.app.zip unpacked and verified with codesign -R (team SW4BMQ8PNL), stapler and spctl, and (8.2.1) the app''s kernel package.json and dist/build-id.json version equal to the package''s (packages/gnomon/scripts/app-version.mjs; 8.2.0 shipped a notarized 8.0.0 app), then a release dist pinning each zip''s sha256. Tested by packages/gnomon/test/gate-gnomon-publish.test.ts.'
+    type: utility
+    file: gate-gnomon-publish.mjs
+    tags:
+      - release
+      - gnomon
   pre-publish-check:
     description: Pre-publish sanity checks run before npm publish (build, version pairs, CHANGELOG entry, plugins/paradigm/hooks/hooks.json, and this checkout's built `paradigm doctor`).
     type: utility

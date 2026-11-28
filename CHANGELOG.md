@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.2.1] — 2026-11-28
+
+A fix release for Gnomon. Use 8.2.1, not 8.2.0.
+
+### Fixed
+- **8.2.0's platform package carried a stale 8.0.0 app, so `gnomon` refused to update** (`#gnomon-npm-packaging`, `#release-darwin`). `@a-company/gnomon-darwin-arm64@8.2.0` shipped the Gnomon.app.zip of 8.0.0 (kernel `package.json` 8.0.0, build stamp commit e9fb52f9). The 8.2.0 notarize run stopped before stapling, so no 8.2.0 zip was made and the old one stayed in the package. That app was properly signed and notarized, so the publish gate let it through, and nothing checked its version. After `npm i -g @a-company/paradigm@latest`, `gnomon` stopped with `the unpacked Gnomon.app is 8.0.0, not 8.2.0`. The publish gate (`scripts/gate-gnomon-publish.mjs`) and the seal (`seal-npm-release.mjs`) now refuse an app whose kernel `package.json` or `dist/build-id.json` version differs from the package's: `the packaged Gnomon.app is 8.0.0, not 8.2.1: rebuild with release-darwin.mjs --notarize`. `release-darwin.mjs` runs the same check before it copies a zip into the platform package. Any failure, a failed notarize or staple included, now exits 1 with a `RELEASE FAILED` banner that says what the platform package still holds and not to seal or publish.
+- **Deprecate 8.2.0** of `@a-company/gnomon`, `@a-company/gnomon-darwin-arm64` and `@a-company/paradigm`: they cannot update Gnomon. Install 8.2.1.
+
 ## [8.2.0] — 2026-11-27
 
 Gnomon dimensions: agents can view, draw on, edit and undo on a board; edit-anything with symmetric undo; the gnomon-mods bridge on. Ships with `@a-company/warpline` 0.3.2.
