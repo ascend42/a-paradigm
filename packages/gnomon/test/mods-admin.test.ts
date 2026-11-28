@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux, win32
 /**
  * #mods-admin: the GUI Mods panel's kernel half. Each request does what its `gnomon mod` verb does (and signs
  * nothing); the card is raised by the kernel's own scans; status.mods.installed / available read from the grant

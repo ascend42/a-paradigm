@@ -16,6 +16,33 @@ context:
     Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
     relative to packages/gnomon, the package root.
 components:
+  mcp-setup:
+    description: >-
+      #mcp-setup (8.2 fixes item 1, T-2026-11-28-001; Aegis items-1-2
+      conditions 1-12; ^mod-mcp-config). src/kernel/desk/mcp-setup.ts:
+      setupCandidates pairs every needs-config DeskMod with the matching
+      Claude Code servers (by name, then by command basename; no manifest
+      match field), user then plugin then local; a project .mcp.json server is
+      a disabled row only. Disqualified: a declaration problem, non-stdio,
+      inline, a ${NAME} ref, a secret-looking arg, a copy the manifest's
+      config does not permit. The copy (PATH-found command on the session
+      PATH, args, declared non-secret env) stays kernel side; status rows are
+      names only. One press only for first-party mods with a user or a
+      command-and-name plugin candidate; local never preselected. ModSetup
+      serves request.mod.setup (1..8 items): validate all first, ONE
+      root-class grant card mod.mcp.setup with a field block per mod, a real
+      requested-via line, every fact line on the MERGED launch, edited-by-you,
+      plugin third-party lines, the local scope line, a duplicate warning;
+      the size cap refuses; allow re-checks each launch hash, skips a changed
+      item by name and writes exactly the hashed config. Events:
+      mcp.setup.offered (on change only), requested, set, skipped.
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mcp, paradigm-8]
+    gates: [^mod-mcp-config]
+    tests:
+      - test/mcp-setup.test.ts
+      - test/mods-admin.test.ts
   desk-guidance:
     description: >-
       #desk-guidance (TD-2026-10-20-812 A1, slice S1; spec §12.9).

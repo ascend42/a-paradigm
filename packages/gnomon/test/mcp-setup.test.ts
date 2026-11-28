@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux, win32
 /**
  * #mcp-setup (8.2 fixes item 1, T-2026-11-28-001): set up a needs-config mod's MCP server from the person's Claude
  * Code config. Every behaviour rule of the design and Aegis's conditions 1-12 has a test that fails at its own

@@ -14,7 +14,10 @@ components:
   mods-admin:
     description: >-
       #mods-admin (the GUI Mods panel's kernel half; founder dogfood
-      2026-10-21). src/kernel/modhost/mods-admin.ts: status() merges
+      2026-10-21). 8.2 fixes item 1: status.mods.installed[].mcp shows the
+      EFFECTIVE launch (args through shownArgs), launch ok|needs-config,
+      setup[] (#mcp-setup, names only) and setupPending; request.mod.setup
+      routes to #mcp-setup ModSetup (^mod-mcp-config). src/kernel/modhost/mods-admin.ts: status() merges
       installed / available / catalog into the human class's status.mods
       (pin, tier, source, version, run state, MCP server, offers, Desk counts,
       a shipped first-party tree that is not the pin = update; available =
