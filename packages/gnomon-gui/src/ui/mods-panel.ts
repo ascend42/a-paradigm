@@ -295,7 +295,7 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     if (overlay.hidden) return;
     const active = document.activeElement as HTMLElement | null;
     const ffHost = active && body.contains(active) ? (active.closest('[data-ff]') as HTMLElement | null)?.dataset.ff : undefined;
-    const keep = active && body.contains(active) ? { name: active.getAttribute('name'), act: active.dataset?.modAct, mod: active.dataset?.modName, ff: ffHost, ffAct: active.dataset?.ffAct, ffTyped: active.dataset?.ffTyped !== undefined } : null;
+    const keep = active && body.contains(active) ? { name: active.getAttribute('name'), act: active.dataset?.modAct, mod: active.dataset?.modName, row: active.dataset?.mod, result: active.dataset?.resultFor, ff: ffHost, ffAct: active.dataset?.ffAct, ffTyped: active.dataset?.ffTyped !== undefined } : null;
     ui.addView = fieldView(addField, 'compact');
     ui.addWhy = addField.whyOff();
     ui.cmdView = fieldView(cmdField, 'compact');
@@ -305,7 +305,8 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
       const host = body.querySelector(`[data-ff="${CSS.escape(keep.ff)}"]`);
       (host?.querySelector(keep.ffTyped ? '[data-ff-typed]' : keep.ffAct ? `[data-ff-act="${CSS.escape(keep.ffAct)}"]` : '[data-ff-act]') as HTMLElement | null)?.focus();
     } else if (keep) {
-      const sel = keep.name ? `[name="${CSS.escape(keep.name)}"]` : keep.act ? `[data-mod-act="${CSS.escape(keep.act)}"]${keep.mod ? `[data-mod-name="${CSS.escape(keep.mod)}"]` : ''}` : null;
+      // Mika A3/A4: a focused row or result line keeps focus across a repaint too
+      const sel = keep.row !== undefined ? `[data-mod="${CSS.escape(keep.row)}"]` : keep.result !== undefined ? `[data-result-for="${CSS.escape(keep.result)}"]` : keep.name ? `[name="${CSS.escape(keep.name)}"]` : keep.act ? `[data-mod-act="${CSS.escape(keep.act)}"]${keep.mod ? `[data-mod-name="${CSS.escape(keep.mod)}"]` : ''}` : null;
       const el = sel ? (body.querySelector(sel) as HTMLElement | null) : null;
       el?.focus();
     }

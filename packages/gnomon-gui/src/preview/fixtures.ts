@@ -824,7 +824,7 @@ const loopsFx = (name: string, title: string, kind: 'desk' | 'paused' | 'many' |
  * user-scope, one-press candidate. paradigm-context: a plugin matched by name only (review only). ledger: a local
  * candidate (review only, the scope line) and a repo .mcp.json server (a disabled row). workshop: configured.
  */
-function modSetupStatus(): Record<string, unknown> {
+function modSetupStatus(o: { pending?: boolean } = {}): Record<string, unknown> {
   const H = (c: string): string => `sha256:${c.repeat(64)}`;
   const cfg = (env: string[] = [], secret: string[] = []) => ({ command: true, args: true, env, secret });
   const offer = (o: Record<string, unknown>) => ({ plugin: null, match: 'name', realCommand: null, envNames: [], envDropped: [], envSecret: [], problem: null, scopeNote: null, oneTap: false, preselected: false, ...o });
@@ -842,7 +842,7 @@ function modSetupStatus(): Record<string, unknown> {
           offer({ declId: 'local:/Users/matt/code/billing:ledger', name: 'ledger', source: 'local', command: node, realCommand: real, args: ['/Users/matt/code/ledger/dist/mcp.js'], scopeNote: 'was for folder billing only (/Users/matt/code/billing); a mod launch applies to every repo' }),
           offer({ declId: 'project:/Users/matt/code/billing:ledger', name: 'ledger', source: 'project', command: node, args: ['./tools/ledger.js'], problem: "it comes from a repo's .mcp.json, written by the repo: a mod's launch applies to every repo, so it is never copied" }),
         ] }),
-        m('gnomon.neurons', 'gm_gnomon_neurons', { configurable: cfg(['NEURONS_VAULT', 'NEURONS_TOKEN'], ['NEURONS_TOKEN']), command: 'neurons', args: ['mcp'], launch: 'needs-config', setup: [
+        m('gnomon.neurons', 'gm_gnomon_neurons', { configurable: cfg(['NEURONS_VAULT', 'NEURONS_TOKEN'], ['NEURONS_TOKEN']), command: 'neurons', args: ['mcp'], launch: 'needs-config', ...(o.pending ? { setupPending: 'card:01PREVIEWSETUP0000000000000' } : {}), setup: [
           offer({ declId: 'user::neurons', name: 'neurons', source: 'user', command: node, realCommand: real, args: ['/Users/matt/code/a-neurons/dist/cli/main.js', 'mcp'], envNames: ['NEURONS_VAULT'], envDropped: ['NEURONS_DEBUG'], oneTap: true, preselected: true }),
         ] }),
         m('gnomon.paradigm-context', 'gm_gnomon_paradigm-context', { configurable: cfg(), command: 'paradigm-context', args: [], launch: 'needs-config', setup: [
@@ -862,6 +862,7 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   // failed to start). The preview-mod-setup.mjs driver presses Review first with a trusted CDP press.
   'mods-setup': fixture('mods-setup', 'Mods: three mod servers need setup (one press, plugin and local review only, a project row disabled)', deskChain(), { ...statusOf(VOICE_RUNNING), ...modSetupStatus() }, BILLING, false, { open: 'mods' }),
   'mods-setup-mcp': fixture('mods-setup-mcp', 'Settings › MCP servers: the mod servers that need setup point at Mods', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus(), ...modSetupStatus() }, BILLING, false, { open: 'mcp' }),
+  'mods-setup-pending': fixture('mods-setup-pending', "The session's line while neurons' setup card waits in the stack", deskChain({ modFail: true }), { ...statusOf(VOICE_RUNNING), ...modSetupStatus({ pending: true }) }, BILLING),
   'mods-setup-session': fixture('mods-setup-session', "The session's line: two mod servers aren't set up, one failed to start", deskChain({ modFail: true }), { ...statusOf(VOICE_RUNNING), ...modSetupStatus() }, BILLING),
   desk: fixture('desk', 'Desk: 5 active, 12 past, the billing chat, 4 cards', deskChain(), statusOf(VOICE_RUNNING), BILLING),
   // #gui-board (boards S1.0, DEV ONLY): the stock engine mounted over the transcript through the real lazy loader,
