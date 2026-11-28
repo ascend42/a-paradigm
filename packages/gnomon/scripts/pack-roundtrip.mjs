@@ -102,7 +102,8 @@ export function packRoundTrip({ arch = 'arm64', zip, keep = false } = {}) {
     const pkg = path.join(work, 'pkg');
     mkdirSync(pkg);
     for (const f of ['package.json', 'index.js', 'README.md']) copyFileSync(path.join(src, f), path.join(pkg, f));
-    copyIntoPlatformPackage(zip, zipSha, pkg, arch);
+    // 8.2.1: the app in the zip must be the platform package's (= gnomon's, lockstep) version
+    copyIntoPlatformPackage(zip, zipSha, pkg, arch, JSON.parse(readFileSync(path.join(pkg, 'package.json'), 'utf8')).version);
     // 3. npm pack (prepack/postpack only; prepublishOnly does not run)
     const tarDir = path.join(work, 'tarball');
     mkdirSync(tarDir);

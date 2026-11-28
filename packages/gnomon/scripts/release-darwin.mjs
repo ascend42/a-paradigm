@@ -59,8 +59,11 @@
  *   8. sign the app (Entitlements.plist: none, hardened runtime, no --deep: nested code is already signed), verify
  *      --strict --deep and the wrapper requirement; optionally notarize + staple;
  *   9. `ditto -c -k --keepParent` → Gnomon-<version>-darwin-<arch>.zip and a .sha256 beside it;
- *  10. copy both into the platform package (--package-dir; see above).
+ *  10. copy both into the platform package (--package-dir; see above), only after the ZIP's kernel package.json and
+ *      dist/build-id.json are checked to be this version (8.2.1: 8.2.0 shipped a stale 8.0.0 app; app-version.mjs).
  * Output: one JSON summary on stdout (paths, pins, signed, notarized, zip, sha256).
+ * Any failure (a notarize or staple step included) exits 1 with a RELEASE FAILED banner on stderr that says what the
+ * platform package's Gnomon.app.zip still holds and not to seal or publish (8.2.1: a failed notarize went unnoticed).
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -69,6 +72,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { appVersionProblems, appZipVersionProblems } from './app-version.mjs';
 import { checkReleaseDist } from './prepack.mjs';
 
 export const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -438,11 +442,19 @@ function placeholderApp(dir, name, exeRel, { framework = false } = {}) {
   return app;
 }
 
-/** Copy a release zip and its sha256 into an npm platform package as Gnomon.app.zip(.sha256). Returns the two paths. */
-export function copyIntoPlatformPackage(zip, zipSha, packageDir, arch) {
+/**
+ * Copy a release zip and its sha256 into an npm platform package as Gnomon.app.zip(.sha256). Returns the two paths.
+ * 8.2.1: refused unless the app inside the zip is `version` (its kernel package.json and build stamp), and the platform
+ * package is `version` too, so a stale app never lands in a package that gets published.
+ */
+export function copyIntoPlatformPackage(zip, zipSha, packageDir, arch, version) {
   const pj = path.join(packageDir, 'package.json');
-  const name = existsSync(pj) ? JSON.parse(readFileSync(pj, 'utf8')).name : undefined;
-  if (name !== `@a-company/gnomon-darwin-${arch}`) throw new Error(`${packageDir} is not the @a-company/gnomon-darwin-${arch} package (have ${name ?? 'no package.json'})`);
+  const meta = existsSync(pj) ? JSON.parse(readFileSync(pj, 'utf8')) : {};
+  if (meta.name !== `@a-company/gnomon-darwin-${arch}`) throw new Error(`${packageDir} is not the @a-company/gnomon-darwin-${arch} package (have ${meta.name ?? 'no package.json'})`);
+  if (typeof version !== 'string') throw new Error('copyIntoPlatformPackage needs the release version');
+  if (meta.version !== version) throw new Error(`REFUSING TO PACKAGE: ${packageDir} is ${meta.version}, not ${version} (node scripts/sync-gnomon-versions.mjs)`);
+  const stale = appZipVersionProblems(zip, version);
+  if (stale.length) throw new Error(`REFUSING TO PACKAGE ${zip}: ${stale.join('; ')}`);
   const dstZip = path.join(packageDir, 'Gnomon.app.zip');
   copyFileSync(zip, dstZip);
   if (sha256File(dstZip) !== zipSha) throw new Error(`${dstZip} does not hash to the release zip`);
@@ -520,6 +532,7 @@ export async function release(argv) {
       const k = path.join(stage, LAYOUT.kernel);
       mkdirSync(path.join(k, 'dist', 'cli'), { recursive: true });
       writeFileSync(path.join(k, 'dist', 'cli', 'gnomon.js'), '// placeholder kernel\n');
+      writeFileSync(path.join(k, 'dist', 'build-id.json'), `${JSON.stringify({ schemaVersion: 'gnomon-build:v1', version, commit: 'placeholder' })}\n`);
       copyFileSync(path.join(PKG, 'package.json'), path.join(k, 'package.json'));
     } else stageKernel(PKG, stage);
     if (!o.dryRun) await assertReleaseKernel(path.join(stage, LAYOUT.kernel), version, o.arch);
@@ -584,6 +597,12 @@ export async function release(argv) {
     if (!o.dryRun) await assertReleaseKernel(path.join(outApp, 'Contents', LAYOUT.kernel), version, o.arch);
     const missing = missingFromLayout(outApp);
     if (missing.length) throw new Error(`the assembled app is missing ${missing.join(', ')}`);
+    // 8.2.1: the app carries THIS version's kernel (package.json and build stamp), before anything is signed. A
+    // --dry-run stages the dist as it is (no build step runs); its zip is still checked before any --package-dir copy.
+    if (!o.dryRun) {
+      const wrongVersion = appVersionProblems(outApp, version);
+      if (wrongVersion.length) throw new Error(`REFUSING TO SHIP: ${wrongVersion.join('; ')}`);
+    }
     // 8. sign the app (no --deep: nested code is signed already), verify, notarize
     let notarized = false;
     await step(`codesign ${o.unsigned ? 'ad-hoc' : 'Developer ID'} ${APP_NAME} (Entitlements.plist, hardened runtime)`, () => {
@@ -634,7 +653,7 @@ export async function release(argv) {
     let packaged = null;
     if (packageDir) {
       plan.push(`copy ${zipName} (+ .sha256) → ${packageDir}/Gnomon.app.zip`);
-      if (zipped) packaged = copyIntoPlatformPackage(zip, zipSha, packageDir, o.arch);
+      if (zipped) packaged = copyIntoPlatformPackage(zip, zipSha, packageDir, o.arch, version);
     }
     return { app: outApp, arch: o.arch, version, node: { version: lock.version, tarballSha256: lock.sha256 }, pins, signed, notarized, stapled, zip: zipped ? zip : null, zipSha256: zipSha, packaged, dryRun: o.dryRun, plan };
   } finally {
@@ -642,12 +661,36 @@ export async function release(argv) {
   }
 }
 
+/**
+ * The banner a failed release prints (8.2.1): the error, then what the platform package's Gnomon.app.zip STILL holds
+ * (a failed run never copies, so it is the previous release's, or none), and not to seal or publish.
+ */
+export function failureBanner(err, { arch = process.arch, packageDir = path.join(PACKAGES, `gnomon-darwin-${arch}`), version = JSON.parse(readFileSync(path.join(PKG, 'package.json'), 'utf8')).version } = {}) {
+  const zip = path.join(packageDir, 'Gnomon.app.zip');
+  let held = 'no Gnomon.app.zip';
+  if (existsSync(zip)) {
+    const p = appZipVersionProblems(zip, version);
+    held = p.length ? `a Gnomon.app.zip that is NOT ${version} (${p[0]})` : `a ${version} Gnomon.app.zip from an earlier run; check it is the one you mean to ship`;
+  }
+  const rule = '='.repeat(78);
+  return [rule, `release-darwin: RELEASE FAILED: ${err instanceof Error ? err.message : String(err)}`, `release-darwin: ${packageDir} still holds ${held}.`, 'release-darwin: do NOT seal or publish. Fix the error above and re-run release-darwin.mjs --notarize.', rule, ''].join('\n');
+}
+
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-  release(process.argv.slice(2)).then(
+  const argv = process.argv.slice(2);
+  release(argv).then(
     (r) => process.stdout.write(`${JSON.stringify(r, null, 2)}\n`),
     (e) => {
-      process.stderr.write(`release-darwin: ${e instanceof Error ? e.message : String(e)}\n`);
       process.exitCode = 1;
+      const i = argv.indexOf('--arch');
+      const j = argv.indexOf('--package-dir');
+      let banner;
+      try {
+        banner = failureBanner(e, { arch: i >= 0 ? argv[i + 1] : process.arch, ...(j >= 0 ? { packageDir: path.resolve(argv[j + 1]) } : {}) });
+      } catch {
+        banner = `release-darwin: RELEASE FAILED: ${e instanceof Error ? e.message : String(e)}\n`;
+      }
+      process.stderr.write(banner);
     },
   );
 }

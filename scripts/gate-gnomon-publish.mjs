@@ -9,7 +9,9 @@
  *   2. each platform package (packages/gnomon-darwin-arm64; Apple silicon only in 8.0): exactly its files, no scripts, a Gnomon.app.zip that
  *      unpacks (ditto -x -k, into a fresh temp dir) to a Gnomon.app passing
  *        codesign --verify --deep --strict -R=<the wrapper requirement: Developer ID, team OU SW4BMQ8PNL>,
- *        xcrun stapler validate, and spctl -a -t exec -vv;
+ *        xcrun stapler validate, and spctl -a -t exec -vv, and whose kernel (Contents/Resources/kernel/package.json, the
+ *      path the shim reads, and dist/build-id.json) is THIS package's version (8.2.1: 8.2.0 shipped a stale, genuinely
+ *      notarized 8.0.0 app because nothing checked it; packages/gnomon/scripts/app-version.mjs);
  *   3. @a-company/gnomon's dist is a RELEASE build (__GNOMON_RELEASE__ with a valid compiled manifest, for this version)
  *      whose compiled appZips sha256 equals each platform package's zip (scripts/seal-npm-release.mjs).
  *
@@ -21,6 +23,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { appVersionProblems } from '../packages/gnomon/scripts/app-version.mjs';
 import { gnomonVersionDrift, REPO } from './sync-gnomon-versions.mjs';
 
 // Apple silicon only in 8.0 (TD-2026-10-22-310); x64 is not published.
@@ -53,6 +56,8 @@ export function platformPackageProblems(dir, arch, requirement) {
     const x = spawnSync('/usr/bin/ditto', ['-x', '-k', zip, work], { encoding: 'utf8' });
     const app = path.join(work, 'Gnomon.app');
     if (x.status !== 0 || !existsSync(app)) return [...problems, `${at}: the zip does not unpack to Gnomon.app (${tail(x)})`];
+    // 8.2.1: a signed, notarized, stapled app of ANOTHER version is still the wrong app (8.2.0 shipped 8.0.0's)
+    problems.push(...appVersionProblems(app, pj.version).map((p) => `${at}: ${p}`));
     const cs = spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', `-R=${requirement}`, app], { encoding: 'utf8' });
     if (cs.status !== 0) problems.push(`${at}: codesign --verify --deep --strict -R (team ${TEAM}) failed: ${tail(cs)}`);
     const st = spawnSync('/usr/bin/xcrun', ['stapler', 'validate', app], { encoding: 'utf8' });
@@ -97,7 +102,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   gateProblems().then(
     (problems) => {
       if (problems.length === 0) {
-        process.stdout.write('gate-gnomon-publish: ok (signed, notarized, stapled zips; release dist pins them; versions in lockstep)\n');
+        process.stdout.write('gate-gnomon-publish: ok (signed, notarized, stapled zips of this version; release dist pins them; versions in lockstep)\n');
         return;
       }
       process.stderr.write(`gate-gnomon-publish: refused, nothing published\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);

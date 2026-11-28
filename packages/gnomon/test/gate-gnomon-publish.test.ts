@@ -11,7 +11,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // @ts-expect-error -- a plain .mjs script, no declarations
-import { gateProblems } from '../../../scripts/gate-gnomon-publish.mjs';
+import { gateProblems, platformPackageProblems } from '../../../scripts/gate-gnomon-publish.mjs';
+// @ts-expect-error -- a plain .mjs script, no declarations
+import { sealProblems } from '../scripts/seal-npm-release.mjs';
 import { MIN_HELPER_VERSION } from '../src/kernel/identity/helper.js';
 import { MIN_VOICE_IO_VERSION } from '../src/kernel/voice/voice-install.js';
 import { PKG_ROOT } from './helpers.js';
@@ -107,5 +109,73 @@ describe('gate-gnomon-publish', () => {
     } finally {
       fs.writeFileSync(f, orig);
     }
+  });
+});
+
+/**
+ * 8.2.1: 8.2.0's platform package carried a stale, genuinely notarized 8.0.0 app (kernel package.json 8.0.0, build
+ * stamp commit e9fb52f9) and nothing checked its version. A fixture app zip with a chosen kernel version.
+ */
+function appZip(dir: string, kernel: string, stamp: string | null): string {
+  const app = path.join(dir, 'build', 'Gnomon.app');
+  fs.rmSync(path.join(dir, 'build'), { recursive: true, force: true });
+  fs.mkdirSync(path.join(app, 'Contents', 'Resources', 'kernel', 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(app, 'Contents', 'Resources', 'kernel', 'package.json'), JSON.stringify({ name: '@a-company/gnomon', version: kernel }));
+  if (stamp) fs.writeFileSync(path.join(app, 'Contents', 'Resources', 'kernel', 'dist', 'build-id.json'), JSON.stringify({ schemaVersion: 'gnomon-build:v1', version: stamp, commit: 'e9fb52f9' }));
+  const zip = path.join(dir, 'Gnomon.app.zip');
+  fs.rmSync(zip, { force: true });
+  const z = spawnSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, zip], { encoding: 'utf8' });
+  if (z.status !== 0) throw new Error(z.stderr);
+  return zip;
+}
+
+describe('8.2.1: the app inside the platform package must be this version', () => {
+  const versionProblems = (ps: string[]): string[] => ps.filter((p) => /packaged Gnomon\.app/.test(p));
+  function platformDir(): string {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-gate-version-')));
+    fs.mkdirSync(path.join(d, 'packages', 'gnomon-darwin-arm64'), { recursive: true });
+    fs.copyFileSync(path.join(PACKAGES, 'gnomon-darwin-arm64', 'package.json'), path.join(d, 'packages', 'gnomon-darwin-arm64', 'package.json'));
+    return d;
+  }
+
+  it('the gate refuses a stale app (the 8.2.0 incident) and a stale build stamp, and passes a matching one', () => {
+    const d = platformDir();
+    const pkg = path.join(d, 'packages', 'gnomon-darwin-arm64');
+    try {
+      appZip(pkg, '8.0.0', '8.0.0');
+      const stale = versionProblems(platformPackageProblems(pkg, 'arm64', 'identifier "gnomon.wrapper"'));
+      expect(stale).toContain(`@a-company/gnomon-darwin-arm64: the packaged Gnomon.app is 8.0.0, not ${RELEASE}: rebuild with release-darwin.mjs --notarize`);
+      expect(stale.join('\n')).toMatch(new RegExp(`kernel build stamp .* is 8\\.0\\.0 from commit e9fb52f9, not ${RELEASE.replace(/\./g, '\\.')}`));
+      appZip(pkg, RELEASE, '8.0.0');
+      expect(versionProblems(platformPackageProblems(pkg, 'arm64', 'identifier "gnomon.wrapper"'))).toEqual([expect.stringMatching(/kernel build stamp .* is 8\.0\.0/)]);
+      appZip(pkg, RELEASE, null);
+      expect(versionProblems(platformPackageProblems(pkg, 'arm64', 'identifier "gnomon.wrapper"')).join('\n')).toMatch(/no readable Contents\/Resources\/kernel\/dist\/build-id\.json version/);
+      appZip(pkg, RELEASE, RELEASE);
+      expect(versionProblems(platformPackageProblems(pkg, 'arm64', 'identifier "gnomon.wrapper"'))).toEqual([]);
+    } finally {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  it('seal-npm-release refuses to seal a stale app, and seals a matching one', () => {
+    const d = platformDir();
+    const pkg = path.join(d, 'packages', 'gnomon-darwin-arm64');
+    try {
+      expect((sealProblems(path.join(d, 'packages'), RELEASE) as string[]).join('\n')).toMatch(/no .*Gnomon\.app\.zip; run release-darwin\.mjs --notarize/);
+      appZip(pkg, '8.0.0', '8.0.0');
+      expect((sealProblems(path.join(d, 'packages'), RELEASE) as string[]).join('\n')).toContain(`the packaged Gnomon.app is 8.0.0, not ${RELEASE}: rebuild with release-darwin.mjs --notarize`);
+      appZip(pkg, RELEASE, RELEASE);
+      expect(sealProblems(path.join(d, 'packages'), RELEASE)).toEqual([]);
+    } finally {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  it('the seal CLI exits 1 and seals nothing when it refuses (no build-release run)', () => {
+    const zip = path.join(PACKAGES, 'gnomon-darwin-arm64', 'Gnomon.app.zip');
+    if (fs.existsSync(zip)) return; // a release checkout holding a real zip: the function tests above cover it
+    const r = spawnSync(process.execPath, [path.join(PKG_ROOT, 'scripts', 'seal-npm-release.mjs')], { encoding: 'utf8', timeout: 30_000 });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/seal-npm-release: REFUSED, nothing sealed/);
   });
 });

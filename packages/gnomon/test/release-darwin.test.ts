@@ -213,6 +213,45 @@ describe('#release-darwin --dry-run --unsigned', () => {
     expect(existsSync(s.packaged.zip)).toBe(true);
   }, 180_000);
 
+  it('8.2.1: copyIntoPlatformPackage refuses a zip whose app is another version, and never copies it', () => {
+    const d = tmp();
+    const pkgDir = path.join(d, 'pkg');
+    mkdirSync(pkgDir);
+    const version = (JSON.parse(readFileSync(path.join(rel.PKG, 'package.json'), 'utf8')) as { version: string }).version;
+    writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@a-company/gnomon-darwin-arm64', version }));
+    const zipOf = (kernel: string): { zip: string; sha: string } => {
+      const app = path.join(d, `app-${kernel}`, 'Gnomon.app');
+      mkdirSync(path.join(app, 'Contents/Resources/kernel/dist'), { recursive: true });
+      writeFileSync(path.join(app, 'Contents/Resources/kernel/package.json'), JSON.stringify({ name: '@a-company/gnomon', version: kernel }));
+      writeFileSync(path.join(app, 'Contents/Resources/kernel/dist/build-id.json'), JSON.stringify({ version: kernel, commit: 'e9fb52f9' }));
+      const zip = path.join(d, `Gnomon-${kernel}.zip`);
+      const z = spawnSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, zip], { encoding: 'utf8' });
+      expect(z.status, z.stderr).toBe(0);
+      return { zip, sha: createHash('sha256').update(readFileSync(zip)).digest('hex') };
+    };
+    const stale = zipOf('8.0.0');
+    expect(() => rel.copyIntoPlatformPackage(stale.zip, stale.sha, pkgDir, 'arm64', version)).toThrow(`REFUSING TO PACKAGE ${stale.zip}: the packaged Gnomon.app is 8.0.0, not ${version}: rebuild with release-darwin.mjs --notarize`);
+    expect(existsSync(path.join(pkgDir, 'Gnomon.app.zip'))).toBe(false);
+    // a platform package of another version is refused too (run sync-gnomon-versions first)
+    const good = zipOf(version);
+    expect(() => rel.copyIntoPlatformPackage(good.zip, good.sha, pkgDir, 'arm64', '9.9.9')).toThrow(/REFUSING TO PACKAGE: .* is .*, not 9\.9\.9/);
+    expect(rel.copyIntoPlatformPackage(good.zip, good.sha, pkgDir, 'arm64', version).zip).toBe(path.join(pkgDir, 'Gnomon.app.zip'));
+    // a failed release says plainly what the package still holds, and not to seal or publish
+    const banner = rel.failureBanner(new Error('node notarize-darwin.mjs --app failed (exit 1)'), { arch: 'arm64', packageDir: pkgDir, version: '9.9.9' }) as string;
+    expect(banner).toMatch(/RELEASE FAILED: node notarize-darwin\.mjs --app failed \(exit 1\)/);
+    expect(banner).toMatch(new RegExp(`still holds a Gnomon\\.app\\.zip that is NOT 9\\.9\\.9 \\(the packaged Gnomon\\.app is ${version.replace(/\./g, '\\.')}, not 9\\.9\\.9`));
+    expect(banner).toMatch(/do NOT seal or publish/);
+    expect(rel.failureBanner(new Error('x'), { packageDir: path.join(d, 'nowhere'), version })).toMatch(/still holds no Gnomon\.app\.zip/);
+  });
+
+  it('8.2.1: any failure exits 1 with the RELEASE FAILED banner (never exit 0, never a quiet line)', () => {
+    const r = spawnSync(process.execPath, [SCRIPT, '--notarize', '--unsigned', '--out', tmp()], { encoding: 'utf8', timeout: 30_000 });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toBe('');
+    expect(r.stderr).toMatch(/release-darwin: RELEASE FAILED: --notarize needs a signed build/);
+    expect(r.stderr).toMatch(/do NOT seal or publish/);
+  });
+
   it('refuses --arch x64 in 8.0 (Apple silicon only, TD-2026-10-22-310) unless --experimental-x64, before building anything', () => {
     for (const extra of [[], ['--dry-run']]) {
       const r = spawnSync(process.execPath, [SCRIPT, '--unsigned', '--arch', 'x64', '--out', tmp(), ...extra], { encoding: 'utf8', timeout: 30_000 });
