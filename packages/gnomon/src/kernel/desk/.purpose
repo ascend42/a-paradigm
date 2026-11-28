@@ -35,7 +35,13 @@ components:
       plugin third-party lines, the local scope line, a duplicate warning;
       the size cap refuses; allow re-checks each launch hash, skips a changed
       item by name and writes exactly the hashed config. Events:
-      mcp.setup.offered (on change only), requested, set, skipped.
+      mcp.setup.offered (on change only; local candidates never re-fire it),
+      requested, set, skipped. Review fixes: status.setupSkipped names a skip;
+      the allow re-check re-applies only the typed edits; status reads share a
+      discovery cached on file stamps and a 5 s TTL; one launch card per mod
+      (config and setup refuse each other card-pending); relay prep runsIn
+      'session' | 'mod-mcp' (RUNS_IN_TEXT) for TD-2026-11-28-361. The CLI
+      --from-claude takes only a one-press candidate unless one is named.
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, paradigm-8]

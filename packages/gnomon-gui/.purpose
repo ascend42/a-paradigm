@@ -2345,7 +2345,12 @@ components:
       opens the form filled from the kernel's row (names only), a banner sends
       every one-press mod on one card, Settings > MCP servers points at Mods,
       and modServerNotices gives the session's kernel-voiced line (isn't set
-      up / failed to start; GUI words and the server name only). core/mods.ts (PURE):
+      up / waits on its card / failed to start in this session; GUI words and
+      short names only, never a cause). Review fixes: keys follow the items
+      (Set up <ready> + Review the rest in Mods, or Open Mods); open(mod)
+      scrolls to and focuses the row; focus returns to Review first on Cancel;
+      the review form leads with the scope note and groups source, command and
+      env; the setup key comes first and Configure steps aside. core/mods.ts (PURE):
       modsViewOf(status, stack cards) gives installed / available / pending;
       request builders for request.mod.install|link|pause|start|uninstall|
       config; folderPathError; configRequest (only manifest-declared fields,
