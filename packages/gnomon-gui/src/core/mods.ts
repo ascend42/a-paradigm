@@ -349,6 +349,30 @@ export function modServerNotices(v: Pick<ModsView, 'installed'>, rows: Iterable<
   return out;
 }
 
+/** The names as one phrase: "a", "a and b", "a, b and c". */
+const listed = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+
+/**
+ * The session's line(s), grouped (the design's ONE kernel-voiced line per kind): every server that isn't set up on one
+ * line whose key sends every one-press mod on one card (none: it opens Mods), every failed server on one line whose key
+ * opens Mods. GUI words and server names only.
+ */
+export function noticeLines(ns: readonly ModServerNotice[], v: Pick<ModsView, 'installed'>): Array<{ state: 'unset' | 'failed'; text: string; key: string; items: Array<{ name: string; from: string }> }> {
+  const out: Array<{ state: 'unset' | 'failed'; text: string; key: string; items: Array<{ name: string; from: string }> }> = [];
+  const unset = ns.filter((n) => n.state === 'unset');
+  const failed = ns.filter((n) => n.state === 'failed');
+  if (unset.length) {
+    const items = unset.flatMap((n) => {
+      const m = v.installed.find((x) => x.name === n.mod);
+      const o = m ? oneTapOffer(m) : null;
+      return m && o ? [{ name: m.name, from: o.declId }] : [];
+    }).slice(0, 8);
+    out.push({ state: 'unset', text: unset.length === 1 ? unset[0]!.text : `${listed(unset.map((n) => n.server))} aren't set up, so this session doesn't have them`, key: SETUP_COPY.key, items });
+  }
+  if (failed.length) out.push({ state: 'failed', text: `${listed(failed.map((n) => n.server))} failed to start`, key: SETUP_COPY.failedKey, items: [] });
+  return out;
+}
+
 /** An absolute folder path the kernel will accept (POSIX `/…`, Windows `X:\…` / `X:/…`); the error, else null. */
 export function folderPathError(raw: string): string | null {
   const s = raw.trim();

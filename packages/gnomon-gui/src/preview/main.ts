@@ -11,7 +11,7 @@
  */
 import { PREVIEW } from './env.js'; // FIRST: stubs matchMedia and the surface before app.ts evaluates
 import { PIN_KEY } from '../core/launch.js';
-import { devArmOfferOnce, devBoard, devRulesState, main } from '../ui/app.js';
+import { devArmOfferOnce, devBoard, devOpenMods, devRulesState, main } from '../ui/app.js';
 import { FakeKernel, fakeWebSocketClass, previewKey, signRows, type PreviewKey } from './fake-kernel.js';
 import { FIXTURES, PREVIEW_LOG_ID } from './fixtures.js';
 import { PREVIEW_DIM_REPO, PreviewDimMod } from './dim-mod.js';
@@ -293,6 +293,7 @@ async function boot(): Promise<void> {
   // opening needs no trust; its controls do (board header-5b: Settings… lives in the Gnomon menu and ⌘,)
   if (fx.open === 'settings') document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true }));
   if (fx.open === 'app-menu') document.getElementById('wordmark-btn')?.click();
+  if (fx.open === 'mods') devOpenMods(); // #gui-mod-setup: the Mods sheet (its menu item needs a trusted press)
   // #gui-rules-view: Settings › Permissions › Rules, optionally in a staged state (DEV ONLY hook)
   if (fx.open === 'rules') devRulesState(fx.rulesState ?? 'none');
   // #gui-voice-ladder / #gui-voice-settings: opening the ladder or the sheet needs no trust; a rung or a sheet press does

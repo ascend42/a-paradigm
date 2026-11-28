@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { GnomonClient } from '../src/core/client.js';
-import { bannerText, mcpText, modCards, modServerNotices, modsViewOf, oneTapOffer, reviewOffers, setupBanner, SETUP_COPY, setupRequest } from '../src/core/mods.js';
+import { bannerText, mcpText, noticeLines, modCards, modServerNotices, modsViewOf, oneTapOffer, reviewOffers, setupBanner, SETUP_COPY, setupRequest } from '../src/core/mods.js';
 import { emptyMcpUi, mcpSection } from '../src/core/mcp-servers.js';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
 import type { StackCard } from '../src/core/store.js';
@@ -187,5 +187,17 @@ describe('#gui-mod-setup the session line', () => {
 
   it('mcpText says the server is not set up', () => {
     expect(mcpText(v.installed[0]!)).toBe("gm_gnomon_neurons · isn't set up, so sessions don't get it");
+  });
+});
+
+describe('#gui-mod-setup the session line is grouped', () => {
+  it('every unset server on one line whose key sends the one-press mods on one card; failed on its own line', () => {
+    const v = modsViewOf(statusOf(mod('gnomon.neurons', [offer({})]), mod('gnomon.ledger', [offer({ declId: 'local:/r:ledger', source: 'local', oneTap: false, preselected: false })])));
+    const init = { kind: 'turn.event', payload: { line: JSON.stringify({ type: 'system', subtype: 'init', mcp_servers: [{ name: 'gm_gnomon_constellation', status: 'failed' }] }) } };
+    const ls = noticeLines(modServerNotices(v, [init]), v);
+    expect(ls).toEqual([
+      { state: 'unset', text: "gm_gnomon_neurons and gm_gnomon_ledger aren't set up, so this session doesn't have them", key: SETUP_COPY.key, items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] },
+      { state: 'failed', text: 'gm_gnomon_constellation failed to start', key: SETUP_COPY.failedKey, items: [] },
+    ]);
   });
 });

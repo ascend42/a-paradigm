@@ -1369,7 +1369,8 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .mod-choose { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 /* the session's kernel-voiced line for a mod server it does not have (above the pinned cards) */
 .mod-notice { border-top: 1px solid var(--rule); padding: 6px 20px 0; }
-.mod-notice-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--sec); }
+.mod-notice-line { margin: 0 0 4px; color: var(--sec); }
+.mod-notice-line .key { margin-left: 2px; }
 .mod-field { display: flex; flex-direction: column; gap: 2px; }
 .mod-folder { display: flex; gap: 6px; align-items: center; }
 .mod-folder .field { flex: 1; min-width: 0; }

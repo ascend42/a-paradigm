@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules' | 'mcp' | 'board';
+  open?: 'mods' | 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules' | 'mcp' | 'board';
   /** #gui-rules-view: the Rules block's staged state for the shot (none, off-open, staged, tighten, close, refused, waiting) */
   rulesState?: string;
 }
@@ -303,7 +303,7 @@ export const OFFER_ID = `offer:${ulid('offer constellation')}`;
 const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
 const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
 
-function deskChain(o: { ask?: boolean; always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices' | 'multi'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted'; host?: 'slips' | 'long' } = {}): Chain {
+function deskChain(o: { modFail?: boolean; ask?: boolean; always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices' | 'multi'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted'; host?: 'slips' | 'long' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -328,6 +328,8 @@ function deskChain(o: { ask?: boolean; always?: boolean; extraCards?: boolean; m
     ev(key, at.replace(/\.000Z$/, '.400Z'), userLine(text));
   };
 
+  // #gui-mod-setup: billing's session started with a mod server that failed (Claude's init lists it failed)
+  if (o.modFail) ev('billing', T('13:58:02'), JSON.stringify({ type: 'system', subtype: 'init', model: 'claude-opus', mcp_servers: [{ name: 'paradigm', status: 'connected' }, { name: 'gm_gnomon_constellation', status: 'failed' }] }));
   // atelier: idle
   ask('atelier', T('13:30:10'), 'Tighten the tells copy on the landing card.');
   ev('atelier', T('13:49'), textLine('Done: the landing card now reads "Your tells, kept in one place." I left the longer version in tells.md.'));
@@ -817,7 +819,50 @@ function gitChain(): Chain {
 
 const loopsFx = (name: string, title: string, kind: 'desk' | 'paused' | 'many' | 'none', cards = true): Fixture => fixture(name, title, loopsChain(cards), { ...statusOf(VOICE_RUNNING), loops: loopsStatus(kind) }, BILLING);
 
+/**
+ * #gui-mod-setup (8.2 fixes item 1): status.mods as #mods-admin builds it for three needs-config mods. neurons: a
+ * user-scope, one-press candidate. paradigm-context: a plugin matched by name only (review only). ledger: a local
+ * candidate (review only, the scope line) and a repo .mcp.json server (a disabled row). workshop: configured.
+ */
+function modSetupStatus(): Record<string, unknown> {
+  const H = (c: string): string => `sha256:${c.repeat(64)}`;
+  const cfg = (env: string[] = [], secret: string[] = []) => ({ command: true, args: true, env, secret });
+  const offer = (o: Record<string, unknown>) => ({ plugin: null, match: 'name', realCommand: null, envNames: [], envDropped: [], envSecret: [], problem: null, scopeNote: null, oneTap: false, preselected: false, ...o });
+  const node = '/opt/homebrew/bin/node';
+  const real = '/opt/homebrew/Cellar/node/25.1.0/bin/node';
+  const m = (name: string, server: string, mcp: Record<string, unknown> | null, extra: Record<string, unknown> = {}) => ({ name, publisher: 'gnomon', version: '1.1.0', description: null, tier: 'first-party', source: 'package', packageHash: H(name.length.toString(16).slice(-1)), dev: false, state: 'running', pausedWhy: null, note: null, uninstallRequested: false, mcp: mcp ? { server, overridden: false, configRequested: false, setupPending: null, ...mcp } : null, offers: [], desk: { shown: 0, suppressed: 0, kept: 0 }, update: null, ...extra });
+  return {
+    mods: {
+      modAbiId: 'preview',
+      running: [{ name: 'gnomon.neurons' }, { name: 'gnomon.paradigm-context' }, { name: 'gnomon.ledger' }, { name: 'gnomon.workshop' }],
+      paused: [],
+      views: [],
+      installed: [
+        m('gnomon.ledger', 'gm_gnomon_ledger', { configurable: cfg(), command: 'ledger-mcp', args: [], launch: 'needs-config', setup: [
+          offer({ declId: 'local:/Users/matt/code/billing:ledger', name: 'ledger', source: 'local', command: node, realCommand: real, args: ['/Users/matt/code/ledger/dist/mcp.js'], scopeNote: 'was for folder billing only (/Users/matt/code/billing); a mod launch applies to every repo' }),
+          offer({ declId: 'project:/Users/matt/code/billing:ledger', name: 'ledger', source: 'project', command: node, args: ['./tools/ledger.js'], problem: "it comes from a repo's .mcp.json, written by the repo: a mod's launch applies to every repo, so it is never copied" }),
+        ] }),
+        m('gnomon.neurons', 'gm_gnomon_neurons', { configurable: cfg(['NEURONS_VAULT', 'NEURONS_TOKEN'], ['NEURONS_TOKEN']), command: 'neurons', args: ['mcp'], launch: 'needs-config', setup: [
+          offer({ declId: 'user::neurons', name: 'neurons', source: 'user', command: node, realCommand: real, args: ['/Users/matt/code/a-neurons/dist/cli/main.js', 'mcp'], envNames: ['NEURONS_VAULT'], envDropped: ['NEURONS_DEBUG'], oneTap: true, preselected: true }),
+        ] }),
+        m('gnomon.paradigm-context', 'gm_gnomon_paradigm-context', { configurable: cfg(), command: 'paradigm-context', args: [], launch: 'needs-config', setup: [
+          offer({ declId: 'plugin:paradigm-context@a-company:paradigm-context', name: 'paradigm-context', source: 'plugin', plugin: { id: 'paradigm-context@a-company', version: '2.4.0' }, command: node, realCommand: real, args: ['/Users/matt/.claude/plugins/cache/a-company/paradigm-context/2.4.0/server.js'], preselected: true }),
+        ] }),
+        m('gnomon.workshop', '', null),
+      ],
+      available: [],
+      catalog: { root: '/Applications/Gnomon.app/Contents/Resources/gnomon-mods' },
+    },
+  };
+}
+
 export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
+  // #gui-mod-setup (8.2 fixes item 1, Mika's review): the Mods row's one press, the banner, review-only plugin and
+  // local candidates, a disabled project row; Settings › MCP servers' pointer; the session's line (isn't set up and
+  // failed to start). The preview-mod-setup.mjs driver presses Review first with a trusted CDP press.
+  'mods-setup': fixture('mods-setup', 'Mods: three mod servers need setup (one press, plugin and local review only, a project row disabled)', deskChain(), { ...statusOf(VOICE_RUNNING), ...modSetupStatus() }, BILLING, false, { open: 'mods' }),
+  'mods-setup-mcp': fixture('mods-setup-mcp', 'Settings › MCP servers: the mod servers that need setup point at Mods', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus(), ...modSetupStatus() }, BILLING, false, { open: 'mcp' }),
+  'mods-setup-session': fixture('mods-setup-session', "The session's line: two mod servers aren't set up, one failed to start", deskChain({ modFail: true }), { ...statusOf(VOICE_RUNNING), ...modSetupStatus() }, BILLING),
   desk: fixture('desk', 'Desk: 5 active, 12 past, the billing chat, 4 cards', deskChain(), statusOf(VOICE_RUNNING), BILLING),
   // #gui-board (boards S1.0, DEV ONLY): the stock engine mounted over the transcript through the real lazy loader,
   // under the kernel's CSP (scripts/preview.mjs). No product code opens a board yet; the reskin is S1.1.

@@ -61,7 +61,7 @@ import { CLIENT_POLL_MS, clientOf, clientPillOf, micTitleLine, clientPollWanted,
 import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, placeWords, plainAppend, type TextRange, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, uncheckedWords, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods, requestMod } from './mods-panel.js';
-import { modServerNotices, modsViewOf, oneTapOffer, setupRequest } from '../core/mods.js';
+import { modServerNotices, modsViewOf, noticeLines, setupRequest } from '../core/mods.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { mountTierPicker, type TierPicker } from './tier-picker.js';
 import { KeptFlow, mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
@@ -2099,26 +2099,25 @@ document.getElementById('pinned')?.before(modNotice);
 let modNoticeKey = '';
 function paintModNotice(): void {
   const view = modsViewOf(status, store.cards.values());
-  const ns = focused ? modServerNotices(view, store.transcript(focused)) : [];
-  const k = JSON.stringify(ns.map((n) => [n.server, n.state]));
+  const ls = focused ? noticeLines(modServerNotices(view, store.transcript(focused)), view) : [];
+  const k = JSON.stringify(ls);
   if (k === modNoticeKey) return;
   modNoticeKey = k;
   while (modNotice.firstChild) modNotice.removeChild(modNotice.firstChild);
-  modNotice.hidden = ns.length === 0;
-  for (const n of ns) {
-    const b = h(document as unknown as MiniDoc, 'button', { class: 'key quiet', type: 'button', 'data-notice-server': n.server, 'data-notice-mod': n.mod ?? '', 'data-notice-state': n.state }, n.key);
-    modNotice.appendChild(h(document as unknown as MiniDoc, 'p', { class: 'meta k-line kernel-owned mod-notice-line' }, `${n.text} · `, b) as unknown as Node);
+  modNotice.hidden = ls.length === 0;
+  for (const l of ls) {
+    const b = h(document as unknown as MiniDoc, 'button', { class: 'key quiet', type: 'button', 'data-notice-items': JSON.stringify(l.items) }, l.key);
+    modNotice.appendChild(h(document as unknown as MiniDoc, 'p', { class: 'meta k-line kernel-owned mod-notice-line' }, `${l.text} · `, b) as unknown as Node);
   }
 }
 modNotice.addEventListener('click', (e) => {
   if (!e.isTrusted) return; // G-GUI-04
-  const b = (e.target as HTMLElement).closest('[data-notice-server]') as HTMLButtonElement | null;
+  const b = (e.target as HTMLElement).closest('[data-notice-items]') as HTMLButtonElement | null;
   if (!b || b.disabled) return;
-  const m = modsViewOf(status, store.cards.values()).installed.find((x) => x.name === b.dataset.noticeMod);
-  const tap = m && b.dataset.noticeState === 'unset' ? oneTapOffer(m) : null;
-  if (!m || !tap) return void modsPanel.open();
+  const items = JSON.parse(b.dataset.noticeItems ?? '[]') as Array<{ name: string; from: string }>;
+  if (!items.length) return void modsPanel.open();
   b.disabled = true;
-  void requestMod(client, setupRequest([{ name: m.name, from: tap.declId }])).then((r) => {
+  void requestMod(client, setupRequest(items)).then((r) => {
     toasts().show(r.text, { kind: r.fail ? 'fail' : 'info' });
     b.disabled = false;
     return refreshStatus();
@@ -2568,6 +2567,7 @@ function focus(hsid: string | null): void {
   focused = hsid;
   boardDock.sessionChanged(); // the board leaf follows the session: the open dimension is left and what it lost is said
   modPanelsFocus(hsid); // K3: the mod panels re-render for the new focus (the host joins it to the repo); first, so a later paint error never skips it
+  paintModNotice(); // #gui-mod-setup: the line is the focused session's
   if (hsid) feedView = false;
   closeDrawers();
   closeModeMenu();
@@ -4842,6 +4842,12 @@ export function devBoard(): { dock: typeof boardDock; sessions: DimSessions; foc
 }
 
 /** DEV ONLY (#gui-preview rules-*): open Settings › Rules in a staged state for the reference shots (presses need trust). */
+/** #gui-mod-setup DEV ONLY: open the Mods sheet for a preview fixture (its menu item takes a trusted press). */
+export function devOpenMods(): void {
+  if (!__GNOMON_PREVIEW__) return; // false in scripts/build.mjs: the served bundle drops it
+  modsPanel.open();
+}
+
 export function devRulesState(kind: string): void {
   if (!__GNOMON_PREVIEW__) return; // false in scripts/build.mjs: the served bundle drops it
   const rs = rulesStatusOf(status);
