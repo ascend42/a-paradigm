@@ -224,6 +224,16 @@ describe('#gui-mod-setup the session line', () => {
   });
 });
 
+describe('Aegis N6: the Review first field holds the args quoted', () => {
+  it('a spaced arg is quoted in the field, so splitArgs reads the same list back', () => {
+    const args = ['--vault', '/Users/me/My Vault', 'mcp'];
+    const b = painted(statusOf(mod('gnomon.neurons', [offer({ args })])), [], { ...emptyUi(), reviewOpen: 'gnomon.neurons' });
+    const field = b.all().find((e) => e.attrs.get('name') === 'review-args')!;
+    expect(field.attrs.get('value')).toBe('--vault "/Users/me/My Vault" mcp');
+    expect(splitArgs(field.attrs.get('value')!)).toEqual(args);
+  });
+});
+
 describe('Aegis N6: Review first args round-trip', () => {
   it('quoteArgs then splitArgs gives the same list', () => {
     for (const a of [['/x/main.js', 'mcp'], ['--dir', '/Users/me/My Vault', "it's"], ['say "hi"', 'plain'], []]) expect(splitArgs(quoteArgs(a))).toEqual(a);
