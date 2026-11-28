@@ -2103,7 +2103,7 @@ function paintModNotice(): void {
   const k = JSON.stringify(ns.map((n) => [n.server, n.state]));
   if (k === modNoticeKey) return;
   modNoticeKey = k;
-  modNotice.replaceChildren();
+  while (modNotice.firstChild) modNotice.removeChild(modNotice.firstChild);
   modNotice.hidden = ns.length === 0;
   for (const n of ns) {
     const b = h(document as unknown as MiniDoc, 'button', { class: 'key quiet', type: 'button', 'data-notice-server': n.server, 'data-notice-mod': n.mod ?? '', 'data-notice-state': n.state }, n.key);
