@@ -3,16 +3,17 @@
  *
  * Subcommands:
  *   (default)                    Show enforcement status table
- *   set <level>                  Set preset level (strict/balanced/minimal)
+ *   set <level>                  Set preset level (strict/balanced/minimal/none)
  *   override <check-id> <sev>   Set a per-check severity override
  *   reset <check-id>            Remove a per-check override
  *   resolve --json               Output full resolved severity map
  */
 
 import chalk from 'chalk';
-import { out, success, error, header, kv, json as jsonOut } from '../utils/cli-output.js';
+import { out, success, error, dim, header, kv, json as jsonOut } from '../utils/cli-output.js';
 import {
   CHECK_IDS,
+  ENFORCEMENT_LEVELS,
   loadEnforcementConfig,
   resolveAllChecks,
   setEnforcementLevel,
@@ -80,13 +81,24 @@ export async function enforcementStatusCommand(options: { json?: boolean }) {
   out('');
 }
 
+/**
+ * Printed after `enforcement set`. The generated CLAUDE.md states the level, so
+ * it is now out of date; but `paradigm sync` rewrites the whole file (only the
+ * Warpline block survives), so the note must not send a user with a
+ * hand-written CLAUDE.md to run it blind.
+ */
+export const ENFORCEMENT_SYNC_NOTE: readonly string[] = [
+  'A generated CLAUDE.md still states the old level.',
+  '`paradigm sync` regenerates CLAUDE.md: hand edits to that file are overwritten.',
+];
+
 // ═══════════════════════════════════════════════════════════════════
 // SET LEVEL
 // ═══════════════════════════════════════════════════════════════════
 
 export async function enforcementSetCommand(level: string) {
   if (!isValidLevel(level)) {
-    error(`Invalid level: ${level}. Must be one of: strict, balanced, minimal`);
+    error(`Invalid level: ${level}. Must be one of: ${ENFORCEMENT_LEVELS.join(', ')}`);
     process.exitCode = 1;
     return;
   }
@@ -95,6 +107,7 @@ export async function enforcementSetCommand(level: string) {
   try {
     setEnforcementLevel(cwd, level);
     success(`Enforcement level set to ${colorLevel(level)}`);
+    for (const line of ENFORCEMENT_SYNC_NOTE) dim('  ' + line);
   } catch (e) {
     error(`Failed to set level: ${(e as Error).message}`);
     process.exitCode = 1;

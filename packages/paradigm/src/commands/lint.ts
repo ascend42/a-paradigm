@@ -250,6 +250,17 @@ function lintFile(filePath: string, rootDir: string, options: LintOptions): File
     errors.push(issue);
   }
   
+  // Corrections the parser made: a key that repeats its section's prefix
+  // (flows: { $checkout: … }) is read as the plain id, and reported here.
+  for (const warning of parseResult.warnings ?? []) {
+    warnings.push({
+      message: `${relativePath}: ${warning.message}`,
+      path: warning.path,
+      type: 'warning',
+      fixable: false,
+    });
+  }
+
   // If we have valid data, run semantic validation
   if (parseResult.data) {
     const validationResult = validatePurposeFile(parseResult.data, relativePath);

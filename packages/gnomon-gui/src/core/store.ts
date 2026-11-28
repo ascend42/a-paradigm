@@ -57,6 +57,8 @@ export interface Row {
   turn?: string;
   /** review M1: this page's composer echo whose send was refused or failed on the network: it is not a turn */
   unsent?: boolean;
+  /** #gui-board-turn: this page's send.refused line as the turn strip says it (refusal.message, never the code) */
+  brief?: string;
 }
 
 export interface StackCard {
@@ -153,6 +155,20 @@ export function rowOf(w: unknown): Row | null {
   if (o.view === 'oversize') return { seq, kind: str(o.kind) ?? 'unknown', view: 'oversize' };
   if (o.view === undefined && typeof o.kind === 'string') return o as unknown as Row; // already flat (the page's own lines, tests)
   return { seq, kind: 'unknown', view: str(o.view) ?? 'unknown' };
+}
+
+/**
+ * Aegis L1 (review of PR #120): a row as it comes from the WIRE (a log page, a live event, a dimension session's
+ * rows). The fields only this page sets on its own lines (`brief`, `unsent`, `mark`, `turn`, and `connId: 'local'`)
+ * are never taken from the wire: a flat row passed through `rowOf` would otherwise carry them into the chat as if the
+ * page had written them (a forged refusal line, a forged composer echo).
+ */
+export function wireRowOf(w: unknown): Row | null {
+  const r = rowOf(w);
+  if (!r) return null;
+  const { brief: _b, unsent: _u, mark: _m, turn: _t, ...rest } = r;
+  if (rest.connId === 'local') delete rest.connId;
+  return rest;
 }
 
 export class GuiStore {
@@ -257,7 +273,7 @@ export class GuiStore {
   apply(rows: readonly unknown[]): Set<string> {
     const what = new Set<string>();
     for (const w of rows) {
-      const r = rowOf(w);
+      const r = wireRowOf(w);
       if (r) this.#applyOne(r, what);
     }
     this.#emit(what);
@@ -737,6 +753,8 @@ export interface ChatItem {
   runKey?: string;
   /** #gui-slash-runs: a "/" run from the kernel's tool.brokered{author:'human'} row (history: no result kept) */
   runRow?: RunWords;
+  /** #gui-board-turn: a refused send's line as the turn strip says it (this page's send.refused row only) */
+  brief?: string;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -1375,7 +1393,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       } else {
         // a refused send stays with the message it refused
         const last = waiting[waiting.length - 1];
-        push(r, 0, { role: 'error', text: String(r.payload ?? '') }, 'tail');
+        const it = push(r, 0, { role: 'error', text: String(r.payload ?? '') }, 'tail');
+        if (r.kind === 'send.refused' && typeof r.brief === 'string') it.brief = r.brief;
         if (last && last.idx[last.idx.length - 1] === items.length - 2) last.idx.push(items.length - 1);
       }
       continue;

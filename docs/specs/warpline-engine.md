@@ -80,7 +80,7 @@ Keyed by `stableKey` = `SymbolEntry.id` (survives rename), payloads carry essenc
 Tests: `essence` (rename→identical contentId; contract change→different; determinism across two runs byte-identical), `absorb` (two refs; identical meaning→identical stateId; zero-delta on identical), `oracle` (runs on two real branches, produces a verdict; ideally construct a fixture that yields a `divergeMeaningOnly`).
 
 ## Deferred (not Phase 1)
-Any write/merge path (Oracle is read-only forever in P1); WARP GC/packing/refs/binary format; real signing; sub-symbol/AST granularity; CBOR/blake3 hardening + Merkle-tree stateId + fixpoint SCC; human-authored Justifications; the full VCS / WEAVE / projection.
+Any write/merge path (in P1 the Oracle never changes git history or the user's files; it does record its result under `.warpline/`); WARP GC/packing/refs/binary format; real signing; sub-symbol/AST granularity; CBOR/blake3 hardening + Merkle-tree stateId + fixpoint SCC; human-authored Justifications; the full VCS / WEAVE / projection.
 
 ## Resolved open questions
 - Same symbol modified both sides to **identical** contentId → autoClean (convergent meaning, not a knot).

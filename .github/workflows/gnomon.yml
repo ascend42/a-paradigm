@@ -96,6 +96,111 @@ jobs:
           npm run typecheck --workspace=@a-company/gnomon
           npm run typecheck --workspace=@a-company/gnomon-gui
 
+  # The board in the REAL APP, in a real Chrome (T-2026-11-25-001 item 7; boards S1.3 P4b-3). test/board-app.test.ts
+  # drives the dev preview's real ui/app.ts with real pointer and key input over the DevTools protocol; until this job
+  # it ran only on a developer Mac, because it skipped whenever CI was set. It runs ALONE in its own job (the suite
+  # times out on a loaded machine) on macos-15, whose image carries Google Chrome at the path the suite looks for
+  # (the `test` job's gui-browser-darwin suite already uses it). GNOMON_BROWSER_TESTS=1 is the ask: with it a missing
+  # Chrome FAILS the run, it never skips. No retry, no longer timeouts and no assertion differs from a local run.
+  #
+  # NOT here: packages/gnomon/test/dimension-board-browser.test.ts (the same page served by the real kernel with a
+  # real session) needs the darwin session floor, which SIP-off runners fail; it runs in `gnomon-e2e-sip-stubbed`.
+  board-browser:
+    name: board in a real Chrome (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
+        run: npm run build:gnomon
+
+      - name: The board in the real app (real Chrome, real input; G-DDL-08)
+        working-directory: packages/gnomon-gui
+        env:
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/board-app.test.ts
+
+      # S1.4: the draw keys and the hands foot's +<k> menu (T-2026-11-26-004), and the Dimensions list under the head
+      # key, each alone, with the same ask: a missing Chrome fails, never skips
+      - name: The draw keys and the hands menu (real Chrome, real input)
+        working-directory: packages/gnomon-gui
+        env:
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/board-grant-key.test.ts
+
+      - name: The Dimensions list (real Chrome, real input)
+        working-directory: packages/gnomon-gui
+        env:
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/board-dims-list.test.ts
+
+  # S1.4 P5 (Aegis ruling 1(a), 1(b); T-2026-11-27-001): the real-kernel e2e that gates the board bridge. GitHub's
+  # macOS runners have SIP off, so the kernel refuses every session there (floor sip). This job passes ONE test-only
+  # seam, `DaemonSeams.supervisor.sessionSipStub` (GNOMON_E2E_SIP_STUB=1, read by the tests, never by src): it
+  # answers only the SESSION and MOD floors' SIP probe, only with a claudePath seam (tests pass the fake); the macOS
+  # floor, the sandbox-exec check, the generated profiles and their argv stay real. It exercises the real profiles under
+  # a stubbed SIP answer: it is NOT proof that the sandbox enforces, and NOT the merge gate. GNOMON_E2E_REQUIRED=1 makes a skip FAIL.
+  # The first step proves the unstubbed kernel still refuses sandbox-unavailable{floor:'sip'} here, and that a
+  # stubbed plan is the same launch. The merge gate is the recorded local run on a SIP-on Mac. Required status check for the integration branch and main.
+  gnomon-e2e-sip-stubbed:
+    name: gnomon-e2e-sip-stubbed (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
+        run: npm run build:gnomon
+
+      - name: The unstubbed kernel refuses floor sip; a stubbed launch is the same launch
+        working-directory: packages/gnomon
+        env:
+          GNOMON_E2E_REQUIRED: '1'
+        run: npx vitest run test/session-sip-stub.test.ts
+
+      - name: The bridge e2e (G-MOD-19..22, G-DDL-03, G-DDL-09, M2, the E-case)
+        working-directory: packages/gnomon
+        env:
+          GNOMON_E2E_SIP_STUB: '1'
+          GNOMON_E2E_REQUIRED: '1'
+        run: npx vitest run test/dimension-bridge-e2e.test.ts
+
+      - name: The dimension dogfood rig
+        working-directory: packages/gnomon
+        env:
+          GNOMON_E2E_SIP_STUB: '1'
+          GNOMON_E2E_REQUIRED: '1'
+        run: npx vitest run test/dimension-dogfood.test.ts
+
+      - name: The board in a real Chrome on the real kernel
+        working-directory: packages/gnomon
+        env:
+          GNOMON_E2E_SIP_STUB: '1'
+          GNOMON_E2E_REQUIRED: '1'
+          GNOMON_BROWSER_TESTS: '1'
+        run: npx vitest run test/dimension-board-browser.test.ts
+
   # M1.0 probes runnable on hosted runners. PR-0 runs only the harness
   # self-test; PR-2 adds P03 (win), P08, P09, P11, P12 and the P06 smoke.
   # Results are uploaded as artifacts only — real results are committed from
@@ -124,18 +229,42 @@ jobs:
         shell: bash
         run: node packages/gnomon/probes/run.mjs p-harness --out-dir "$RUNNER_TEMP/probe-results"
 
+      # P12 runs two pages: the pinned board bytes (zero deps) and a probe
+      # build made in memory for its edit checks, which needs the workspace
+      # dependencies (esbuild and the board engine). The harness self-test
+      # above stays zero-deps; this install is for P12's probe build only.
+      - name: Install workspace dependencies (P12 probe build)
+        shell: bash
+        run: npm ci
+
       # P09 + P12 on hosted runners (mechanics only; the runner's Chrome).
-      # Exit 2 (partial: no Safari/Firefox/WKWebView row on CI) is expected;
-      # only a fail (exit 1) or a harness error fails the step.
-      - name: Probes P09, P12 (browser engines under the §11.2 CSP)
+      # Exit 2 (partial: a missing optional engine, or a non-darwin host) is
+      # accepted; a fail (exit 1) or a harness error fails the step. On macOS
+      # P12 itself fails when it has no WKWebView row (the wrapper's engine),
+      # and the step checks the written result for that row as well.
+      - name: Probe P09 (Ed25519 in browser engines under the §11.2 CSP)
         shell: bash
         run: |
+          code=0
+          node packages/gnomon/probes/run.mjs p09-ed25519-matrix --timeout 900000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then exit 1; fi
+
+      # P12's own budget (T-2026-11-25-002): 3 runs x 2 pages in each of 4
+      # engines took 11 to 14 min on macos-15, against the 15 min it shared
+      # with P09. A page that misses its report is retried once per engine,
+      # which can add up to ~2 min an engine; 30 min covers that with room,
+      # and the run count and every check stay as they are.
+      - name: Probe P12 (the board under the §11.2 CSP)
+        shell: bash
+        timeout-minutes: 35
+        run: |
           status=0
-          for id in p09-ed25519-matrix p12-excalidraw-csp; do
-            code=0
-            node packages/gnomon/probes/run.mjs "$id" --timeout 900000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
-            if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then status=1; fi
-          done
+          code=0
+          node packages/gnomon/probes/run.mjs p12-excalidraw-csp --timeout 1800000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then status=1; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const w=r.evidence&&r.evidence.engines&&r.evidence.engines.wkwebview;if(!w||!w.clean||w.mountedRuns!==w.runs){console.error("P12: no clean WKWebView row on macOS");process.exit(1)}' "$RUNNER_TEMP/probe-results/p12-excalidraw-csp.darwin.json" || status=1
+          fi
           exit $status
 
       - name: Upload probe results

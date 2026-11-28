@@ -21,7 +21,7 @@ import {
 } from '../src/index.js';
 
 /** Update ONLY on a deliberate mod-ABI change (and record it in the review). M1.11 slice 2: callId binding (was sha256:00ae702b…). */
-const PINNED_MOD_ABI_ID = 'sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082';
+const PINNED_MOD_ABI_ID = 'sha256:fb9bd26ac5577300dee3d6dc9c3dbe1e5927eca0655e976d7f4f372c273d3f66';
 
 describe('mod-abi:v1 (§12.3)', () => {
   it('G-MOD-01: ≤ 8 RPCs, lifecycle init/shutdown/cancel, the two client relays', () => {
@@ -36,7 +36,7 @@ describe('mod-abi:v1 (§12.3)', () => {
     expect(MOD_ABI_ID).toBe(PINNED_MOD_ABI_ID);
     const ids = JSON.parse(readFileSync(fileURLToPath(new URL('../schemas/client-api.ids.json', import.meta.url)), 'utf8'));
     expect(CLIENT_API_ID).toBe(ids.clientApiId);
-    expect(CLIENT_API_ID).toBe('sha256:af070b92e89fe985cb43d7b6f5a720d1f43e7ee0f6aa08d0c87db3e713a4f060');
+    expect(CLIENT_API_ID).toBe('sha256:e21ffbb2ca618808d3692028d0457a8bf1010f23698e56bd1dd3c115d60142ea');
   });
 
   it('A24-2: a mod-RPC change moves only modAbiId; a kit change moves both', () => {

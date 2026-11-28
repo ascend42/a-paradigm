@@ -14,6 +14,8 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import * as yaml from 'js-yaml';
+import { out, header, kv } from '../utils/cli-output.js';
+import { describeFileListSource } from '../core/project-files.js';
 import {
   loadHabits,
   evaluateHabits,
@@ -114,6 +116,59 @@ interface ComplianceCheckResult {
   violations: string[];
   structuredViolations: Violation[];
   postflight?: PostflightResult | null;
+  /** Present only with --timings. */
+  timings?: ComplianceTimings;
+}
+
+/** One timed section. A dotted name ("habits.git-status") is part of its parent ("habits"). */
+export interface SectionTiming {
+  section: string;
+  ms: number;
+}
+
+export interface ComplianceTimings {
+  /**
+   * Where the portal check's file list came from. 'walk' with a fallbackReason
+   * means git was not used; absent when the portal check did not run.
+   */
+  fileList?: { source: 'git' | 'walk'; files: number; fallbackReason?: string };
+  /** Process start to the command body: Node start-up, the CLI entry file and this module's imports. */
+  startupMs: number;
+  /** The command body, start to the point the result is ready to print. */
+  commandMs: number;
+  sections: SectionTiming[];
+}
+
+/**
+ * Section timer for --timings. Top-level sections run one after another, so
+ * commandMs minus their sum is time spent between them.
+ */
+export class SectionTimer {
+  readonly sections: SectionTiming[] = [];
+  fileList?: ComplianceTimings['fileList'];
+  fileListText?: string;
+
+  record(section: string, ms: number): void {
+    this.sections.push({ section, ms: Math.round(ms * 10) / 10 });
+  }
+
+  async time<T>(section: string, fn: () => T | Promise<T>): Promise<T> {
+    const start = performance.now();
+    try {
+      return await fn();
+    } finally {
+      this.record(section, performance.now() - start);
+    }
+  }
+
+  timeSync<T>(section: string, fn: () => T): T {
+    const start = performance.now();
+    try {
+      return fn();
+    } finally {
+      this.record(section, performance.now() - start);
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -137,18 +192,19 @@ function extractFilePath(message: string): string | undefined {
 async function runHabitsCheck(
   rootDir: string,
   trigger: HabitTrigger,
+  timer: SectionTimer,
 ): Promise<HabitsResult | null> {
   try {
-    const habits = loadHabits(rootDir);
+    const habits = timer.timeSync('habits.load', () => loadHabits(rootDir));
 
     // Get modified files from git
     let filesModified: string[] = [];
     try {
-      const output = execSync('git diff --name-only HEAD', {
+      const output = timer.timeSync('habits.git-diff', () => execSync('git diff --name-only HEAD', {
         cwd: rootDir,
         encoding: 'utf8',
         timeout: 5000,
-      });
+      }));
       filesModified = output.trim().split('\n').filter(Boolean);
     } catch {
       // Git not available
@@ -157,11 +213,11 @@ async function runHabitsCheck(
     // Check git clean status
     let gitClean: boolean | undefined;
     try {
-      const status = execSync('git status --porcelain', {
+      const status = timer.timeSync('habits.git-status', () => execSync('git status --porcelain', {
         cwd: rootDir,
         encoding: 'utf8',
         timeout: 5000,
-      });
+      }));
       gitClean = status.trim() === '';
     } catch {
       // Git not available
@@ -190,10 +246,11 @@ async function runHabitsCheck(
       gitClean,
     });
 
-    const evaluation = evaluateHabits(habits, trigger, evalContext);
+    const evaluation = timer.timeSync('habits.evaluate', () => evaluateHabits(habits, trigger, evalContext));
 
     // Record practice events (best-effort)
     let recordedCount = 0;
+    const recordStart = performance.now();
     if (evaluation.evaluations.length > 0) {
       try {
         const sentinelDir = path.join(rootDir, '.paradigm', 'sentinel');
@@ -219,6 +276,7 @@ async function runHabitsCheck(
         // Recording is best-effort
       }
     }
+    timer.record('habits.sentinel-record', performance.now() - recordStart);
 
     // Write/clear .habits-blocking marker
     const markerPath = path.join(rootDir, '.paradigm', '.habits-blocking');
@@ -299,14 +357,20 @@ async function runDriftCheck(
 // Portal check (inline — no subprocess)
 // ════════════════════════════════════════════════════════════════════
 
-async function runPortalCheck(rootDir: string): Promise<PortalResult | null> {
+async function runPortalCheck(rootDir: string, timer: SectionTimer): Promise<PortalResult | null> {
   if (!fs.existsSync(path.join(rootDir, 'portal.yaml'))) {
     return null;
   }
 
   try {
     const { checkPortalCompliance } = await import('../core/portal-compliance.js');
-    const report = await checkPortalCompliance(rootDir);
+    const report = await checkPortalCompliance(rootDir, {
+      onTiming: (section, ms) => timer.record(`portal.${section}`, ms),
+      onFileList: (list) => {
+        timer.fileList = { source: list.source, files: list.files.length, ...(list.fallbackReason ? { fallbackReason: list.fallbackReason } : {}) };
+        timer.fileListText = describeFileListSource(list);
+      },
+    });
 
     return {
       status: report.status,
@@ -356,7 +420,11 @@ export async function complianceCheckCommand(options: {
   autoHeal?: boolean;
   trigger?: string;
   learn?: boolean;
+  timings?: boolean;
 }): Promise<void> {
+  // performance.now() counts from process start, so this is the start-up cost
+  const startupMs = performance.now();
+  const timer = new SectionTimer();
   const rootDir = process.cwd();
   const trigger = (options.trigger || 'on-stop') as HabitTrigger;
   const autoHeal = options.autoHeal !== false;
@@ -364,9 +432,9 @@ export async function complianceCheckCommand(options: {
   const structuredViolations: Violation[] = [];
 
   // Run all three checks sequentially in the same process
-  const habitsResult = await runHabitsCheck(rootDir, trigger);
-  const driftResult = await runDriftCheck(rootDir, autoHeal);
-  const portalResult = await runPortalCheck(rootDir);
+  const habitsResult = await timer.time('habits', () => runHabitsCheck(rootDir, trigger, timer));
+  const driftResult = await timer.time('drift', () => runDriftCheck(rootDir, autoHeal));
+  const portalResult = await timer.time('portal', () => runPortalCheck(rootDir, timer));
 
   // Collect violations from habits
   if (habitsResult?.evaluation.blocksCompletion) {
@@ -439,8 +507,17 @@ export async function complianceCheckCommand(options: {
   // Run postflight learning pass (non-blocking, after compliance checks)
   let postflightResult: PostflightResult | null = null;
   if (options.learn) {
-    postflightResult = await runPostflightLearn(rootDir);
+    postflightResult = await timer.time('learn', () => runPostflightLearn(rootDir));
   }
+
+  const timings: ComplianceTimings | undefined = options.timings
+    ? {
+        startupMs: Math.round(startupMs * 10) / 10,
+        commandMs: Math.round((performance.now() - startupMs) * 10) / 10,
+        sections: timer.sections,
+        ...(timer.fileList ? { fileList: timer.fileList } : {}),
+      }
+    : undefined;
 
   const result: ComplianceCheckResult = {
     habits: habitsResult,
@@ -449,6 +526,8 @@ export async function complianceCheckCommand(options: {
     violations,
     structuredViolations,
     postflight: options.learn ? postflightResult : undefined,
+    // Only with --timings: the default JSON the Stop hooks parse is unchanged
+    ...(timings ? { timings } : {}),
   };
 
   if (options.json) {
@@ -523,6 +602,17 @@ export async function complianceCheckCommand(options: {
     }
 
     console.log();
+
+    if (timings) {
+      header('Timings');
+      kv('start-up', `${timings.startupMs.toFixed(0)} ms`);
+      for (const t of timings.sections) {
+        kv(t.section.includes('.') ? `  ${t.section}` : t.section, `${t.ms.toFixed(0)} ms`);
+      }
+      kv('command', `${timings.commandMs.toFixed(0)} ms`);
+      if (timer.fileListText) kv('file list', timer.fileListText);
+      out('');
+    }
   }
 
   // Exit code 1 if violations

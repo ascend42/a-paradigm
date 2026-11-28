@@ -26,7 +26,9 @@
  *   - name ≠ a kernel namespace token (NAME);
  *   - `kind: adapter | provider` only from the first-party tier (TIER, A23-2);
  *     a provider ships ONLY `provides.knowledge` (§4.3);
- *   - provides.*: tool effects ⊆ read|write|network|spend; view slots and the
+ *   - provides.*: tool effects ⊆ read|write|network|spend; a command's optional
+ *     `effects` ⊆ read|write (S1.4: `network` or `spend` on a command is
+ *     refused, COMMAND_EFFECTS); view slots and the
  *     append-only rule for `card.*` / `status.mod` (S22-H5); event kinds under
  *     `modns.<name>.*`; keybindings bind declared command ids and never the
  *     reserved decision keys (§12.2); knowledge entries (§8.10);
@@ -79,6 +81,12 @@ export const FIRST_PARTY_ONLY_KINDS: readonly ManifestKind[] = Object.freeze(['a
 
 export const TOOL_EFFECTS = ['read', 'write', 'network', 'spend'] as const;
 export type ToolEffect = (typeof TOOL_EFFECTS)[number];
+/**
+ * S1.4 (Aegis A7): the effects a COMMAND may declare. `network` and `spend` are tool-only: a command naming either
+ * is refused at manifest load, so no command can open a tunnel or draw a permit by declaring it.
+ */
+export const COMMAND_EFFECTS = ['read', 'write'] as const satisfies readonly ToolEffect[];
+export type CommandEffect = (typeof COMMAND_EFFECTS)[number];
 
 /** §12.2 reserved decision keys (and the digits): never bindable by a mod (`G-MOD-06`). */
 export const RESERVED_DECISION_KEYS = Object.freeze(['y', 'n', 'a', 'd', 'enter', 'esc', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
@@ -123,6 +131,11 @@ export interface ManifestCommand {
   id: string;
   title: string;
   args?: Record<string, unknown>;
+  /**
+   * S1.4 (Aegis A7): the effects this command runs with, from COMMAND_EFFECTS only. Absent ⇒ the command keeps the
+   * union of the mod's tool effects (modhost/effects.ts). The command read cap stays the outer cap either way.
+   */
+  effects?: CommandEffect[];
 }
 export interface ManifestKeybinding {
   key: string;
@@ -606,6 +619,12 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   offers.forEach((e, i) => {
     const errors = validateOfferSpecV1(e);
     if (errors.length) fail('SCHEMA', `provides.offers[${i}] is not offer-spec:v1: ${errors.slice(0, 3).join('; ')}`, { field: `provides.offers[${i}]`, errors });
+    // C7 (S1.2, G-DSK-09): `canvas` is published in offer-spec:v1 and INERT. Refused here by name at every tier, so
+    // at install AND at load, until boards raised by an offer ship (S1.5). Fail closed: anything but `mcp` is refused.
+    const reach = (e as OfferSpecV1).reach;
+    if (reach !== 'mcp') {
+      fail('SCHEMA', `provides.offers[${i}]: reach "${reach === 'canvas' ? 'canvas' : 'unknown'}" is reserved until boards raised by offer ship (S1.5)`, { field: `provides.offers[${i}].reach`, reach: reach === 'canvas' ? 'canvas' : 'unknown' });
+    }
     const k = (e as OfferSpecV1).kind;
     // S0b §2: the whole mcp__<server>__<tool> fits 64 (checked here, so at install AND at load)
     const q = qualifiedToolName(id, (e as OfferSpecV1).handoffTool);
@@ -664,12 +683,28 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   const commandIds = new Set<string>();
   arr(provides.commands, 'provides.commands').forEach((e, i) => {
     const o = obj(e, `provides.commands[${i}]`);
-    closed(o, ['id', 'title', 'args'], `provides.commands[${i}]`);
+    closed(o, ['id', 'title', 'args', 'effects'], `provides.commands[${i}]`);
     const id = str(o.id, `provides.commands[${i}].id`, DOTTED_ID);
     if (commandIds.has(id)) fail('SCHEMA', `duplicate command ${id}`);
     commandIds.add(id);
     str(o.title, `provides.commands[${i}].title`);
     if (o.args !== undefined) obj(o.args, `provides.commands[${i}].args`);
+    // S1.4 (Aegis A7): optional; when present it is a non-empty list of distinct COMMAND_EFFECTS. `network` and
+    // `spend` are refused here, at load, never narrowed in silence. The refusal never echoes the manifest's value.
+    if (o.effects !== undefined) {
+      if (!Array.isArray(o.effects)) fail('SCHEMA', `provides.commands[${i}].effects must be a list`, { command: id });
+      const effects = o.effects as unknown[];
+      if (effects.length === 0) fail('SCHEMA', `provides.commands[${i}].effects must name at least one effect`, { command: id });
+      const seen = new Set<unknown>();
+      for (const ef of effects) {
+        if (!(COMMAND_EFFECTS as readonly unknown[]).includes(ef)) {
+          const toolOnly = (TOOL_EFFECTS as readonly unknown[]).includes(ef);
+          fail('SCHEMA', toolOnly ? `command effect ${String(ef)} is tool-only; a command may declare ${COMMAND_EFFECTS.join('|')}` : `provides.commands[${i}].effects holds a value outside ${COMMAND_EFFECTS.join('|')}`, { command: id });
+        }
+        if (seen.has(ef)) fail('SCHEMA', `provides.commands[${i}].effects names an effect twice`, { command: id });
+        seen.add(ef);
+      }
+    }
   });
   arr(provides.keybindings, 'provides.keybindings').forEach((e, i) => {
     const o = obj(e, `provides.keybindings[${i}]`);
@@ -806,7 +841,14 @@ function surface(m: ManifestV2 | null): Record<WideningField, Set<string>> {
   const p = m?.provides ?? {};
   const eg = m?.requires?.egress;
   return {
-    effects: new Set((p.tools ?? []).flatMap((t) => t.effects.map((e) => `${t.name}:${e}`))),
+    // S1.4 (Aegis A7): a command's DECLARED effects are part of the surface as `cmd:<id>:<effect>`, so a tree that
+    // adds `write` to a command raises an Update card that shows it. A tool key has one colon and a command key two
+    // (neither a tool name nor a command id can hold one), so the two never collide. A command with NO `effects`
+    // field adds no key: since S1.4 P3 absent means `read` only (G-MOD-20), so dropping the field only narrows.
+    effects: new Set([
+      ...(p.tools ?? []).flatMap((t) => t.effects.map((e) => `${t.name}:${e}`)),
+      ...(p.commands ?? []).flatMap((c) => (Object.hasOwn(c, 'effects') && Array.isArray(c.effects) ? c.effects.map((e) => `cmd:${c.id}:${e}`) : [])),
+    ]),
     egress: new Set(Array.isArray(eg) ? eg.map((e) => checkEgressHost(e.host).host) : []),
     capabilities: new Set(m?.requires?.capabilities ?? []),
     events: new Set(p.events ?? []),

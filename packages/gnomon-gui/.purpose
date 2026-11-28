@@ -22,6 +22,1132 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-board:
+    description: >-
+      S1.4 E-fix (T-2026-11-27-006): after the person's undo of an agent's
+      restyle and re-word the board draws no countermark and no words sign,
+      and the redo brings both back (the preview stand-in writes undo.prior as
+      the mod does; test/board-e3-app.test.ts). Mika's copy: the sandbox line
+      reads 'this Mac can’t sandbox it'.
+      S1.4 D-list pass (design hands_foot.overflow, T-2026-11-26-004): the
+      hands foot's '+<k> ▾' key (ui/board-leaf.ts moreKey, drawHandsMenu):
+      hands that still do not fit after the give-way steps go behind it,
+      from the last, each split starting from whole hands; its menu is the
+      leaf's .bd-menu, upward from the key, never over the foot, right after
+      the key in the DOM, no menu roles, aria-expanded and aria-controls; a
+      row is the hand whole with its OWN draw key (the same element and
+      press path); the split is frozen while it is open or focus is in the
+      foot (a new hand joins the end); Esc closes it only, focusout and an
+      outside press close it. The Dimensions list (design dimension-list,
+      #dimension-list): the head key's own menu (.bd-dims, menuitemradio
+      two-line rows, the note line, the find row), placed under the key,
+      the palette's list when the room is under 87px; order frozen while
+      open; trusted press on the row itself (C4.8); nothing sent while the
+      link is down (C4.7); refreshDims redraws words in place.
+      Review r2: too short (no room above the foot for one row) the hands
+      menu lists every hand over the foot (I6); a split frozen by focus is
+      redrawn when focus leaves (I4b); keyed hands are fitted alone and
+      unkeyed ones never move a key (I5); a menu row drops the shared name
+      before its session (F1). STATED LIMIT (I5): keyed hands are fitted
+      again only when '+<k> ▾' itself has no room beside them; then a key
+      can move as an unkeyed hand arrives (a clipped key would be worse).
+      Too short, ↑ from the first menu row closes the menu (WCAG 2.4.11).
+      before its session (F1). The list: held still for any reason
+      disables its rows (N2); a press closes it only when the dock sent
+      (N1); 117px with other rows (Mika 6); seen refreshed on repaint (N3).
+      S1.4 E3: BoardMarkView gains changedBy, otherBy, wordsBy, restoredFrom, an
+      open mark's lastRun and a bound label's labelBox; the overlay draws the
+      countermark, the words sign, cut-outs and the trace (#gui-board-overlay).
+      E3 review (Mika C3, D1, D2, D5): the words sign beside the rule's end or
+      below it, never over the words, else the ring (wordsSignAt); chips read
+      'changed by Claude', 'words by Claude', 'changed by you', an open mark
+      has its hover head; the trace stands 1px out under 50%, a box under 6px
+      is the dashed ring, traceOutOfView counts for the slot's title; the
+      selection line names every hand, the person's own marks too.
+      P4b-4 (design-foot, components.board-rail.fold and board-leaf.too_short):
+      a chosen folded tool is a guest in the displaced tool's row, so the
+      rail's need is the unchosen layout's (railNeed, railDrawGroups); the
+      tight rail keeps its graduations; a leaf menu that scrolls is cut half a
+      row into a row (menuCutHeight). Too short is BOARD_MIN_HEIGHT =
+      railNeed(tight) = 140px and is its OWN held-still flag (never setInert):
+      no rail, the board shown, the foot kept, no key reaching the engine or an
+      open text (its words held in the field, never committed while short),
+      Esc and the head keys working, the line ('No room to draw · ...' by the
+      dock's pinned count) spoken once per entry, a drag in hand said. Under
+      56px of board the body is not drawn.
+      The check (design board-leaf.check, aegis C1/C2): DimStore.rowsAfter
+      gives k; core/board-leaf.ts checkLine is the ONE wording for the foot
+      and the palette's open-board row ('open here · <check>'); no log row on
+      the face, the rows in title=; the foot shows it only when its longest
+      wording and 16px fit after the hands; unchecked and not in the foot the
+      line under the head leads 'not checked yet · '; the out-of-date fact is
+      --fail at 500; Reconnected says nothing of saving while unchecked.
+      Keep words (design keep_words): quiet readouts lower case, stated lines
+      sentences in ink with contractions; precedence out of date, link down,
+      too short, yielded, missing marks, passing states, the keep line.
+      The narrow head (design widths_narrow): fitHead puts the glyph and esc
+      back, measures the title, and drops the glyph, then esc (under 340px,
+      only while show chat folds: the dock's kept), title cut last.
+      Review fixes (aegis F1 to F7, mika 1 to 3): no leave takes held words
+      silently (carry refuses, a switch says them); the palette's Dimensions
+      list freezes its order and keeps its selection by dim; an out-of-date
+      board folds with held words; the lead follows the fact on the
+      missing-marks lines; data-check-place is set at mount.
+      #gui-board (spec §12.7 "The GUI hosts the canvas directly", §11.2 rule
+      6; boards S1.0, s1-build-plan §2) - the board engine as a LAZY chunk of
+      the pinned bundle. src/board/index.ts is the only module that imports
+      React (19.3.1) and @excalidraw/excalidraw (0.18.1), both exact
+      devDependencies of this private package; scripts/board-build.mjs
+      bundles it as one ES module (board/board.js + board/board.css, no code
+      splitting, React's production build, minified, never a sourcemap) and
+      scripts/build.mjs adds board/* to the SAME gnomon-bundle-tree:v1 hash
+      and embed as app.js. core/board.ts is the whole surface core/ and ui/
+      may use: loadBoard() adds the stylesheet link and import()s the module
+      (resolves only when both loaded; a failure removes the link and is not
+      cached), mountBoard(host, {onError, timeoutMs, theme}) resolves a handle
+      and rejects on an engine throw or a timeout. NOTHING the kernel serves
+      calls loadBoard yet: the engine is reachable only from the dev preview
+      fixture `board` until the S1.3 board leaf.
+      scripts/board-patches.mjs holds the build-time patches, each pinned to
+      the engine file's sha256 and to an exact match count (a version bump
+      throws PatchError by name): the engine's font registrations removed and
+      the 230 font names blanked (S1.1 registers one bundled face, below);
+      the esm.sh fallback removed;
+      the font subsetter and worker, pica / image-blob-reduce, the Mermaid
+      importer, all locales but English and the build-env chunk (the
+      excalidraw.com backends, a Firebase config) replaced by src/board/stubs
+      stand-ins that fail closed; data: images in JS become blob: URLs and in
+      CSS become board/asset-<sha>.{png,svg} files; setAttribute("style") and
+      SVG style attributes replaced; every fetch( refused; embed allowlists
+      emptied; the stock Library trigger, tab and panel removed (its previews
+      use innerHTML with inline style); lodash's Function("return this")
+      replaced; every remaining http(s) host literal stripped from the
+      minified output. board/LICENSES.txt carries a notice per bundled
+      package (vendored MIT notices where the tarball ships none; an unknown
+      licence stops the build). Budget 4 MB raw (1,529,836 bytes after S1.1,
+      by `--check`);
+      `--check` names an unpinned board file, a sourcemap or an over-budget
+      chunk. Review round 1 (2026-11-24): mountBoard resolves only once the
+      engine has cleared its loading flag (a mark added in the same tick used
+      to be wiped moments later); an engine error after mount goes to the
+      handle's onError listeners or, with none, to reportError; the handle
+      says isAlive() false after a crash or unmount and its methods then
+      throw; loadBoard fails after LOAD_TIMEOUT_MS. Root overrides scoped
+      under @excalidraw/excalidraw (nanoid 3.3.20, lodash-es 4.18.1, katex
+      0.19.1) keep a fresh install at 0 audit findings. Probe's
+      test/board-hardening.test.ts pins the patch manifest by id, file and
+      count, scans the shipped chunk by stricter rules than the P12 scanner
+      and proves the served page has no loader that could reach the chunk.
+      The kernel's bundle scan pins the chunk's HTML sinks by exact count
+      (packages/gnomon/test/web-units.test.ts).
+      Boards S1.1, pass A (the engine side of the reskin; oracle G-DDL-07,
+      design rule engine-wears-the-system): the engine is a bare drawing
+      surface driven through the handle. Counted patches: layer-ui-removed
+      (the whole stock UI layer renders nothing: tool island and More tools,
+      main menu and its links, properties panel, zoom and undo island, Help,
+      hint line, welcome-screen tunnels, dialogs, sidebar, phone menu);
+      loading-message-removed; phone-layout-removed (the breakpoint is never
+      met, so a narrow or short pane keeps the same layout); toast-removed,
+      link-popup-removed, context-menu-removed; image-tool-removed (the tool
+      list entry and its 9 key) and image-insert-refused (the function every
+      file-based insert goes through returns before adding an element);
+      key-actions-allowlist (only undo, redo, delete, select all, zoom in,
+      out and 100%, and finalize run from a key), key-dialogs-removed,
+      key-tools-removed (the engine's letter and number tool keys; Space
+      still pans), text-size-keys-removed; api-run-action (one API method
+      that runs a registered action by name, used for zoom; undo and redo
+      left it in S1.3).
+      One text face: font-family-table, font-defaults, font-metrics,
+      font-family-string and font-registry-empty make JetBrains Mono at 13.5
+      the only family, registered from the bundle's own
+      fonts/JetBrainsMono-Regular.woff2 (its OFL notice is
+      fonts/OFL-JetBrainsMono.txt in the same tree); the canvas font string
+      is the constant '"JetBrains Mono", monospace' and mountBoard resolves
+      only after that face has loaded. roughness-zero plus the handle's
+      current-item state (solid, roughness 0, square corners) for exact
+      strokes; no stroke-style input exists. Colour: the engine stays in its
+      light theme; src/board/skin.ts derives a skin per theme from
+      CONTENT_THEME_TOKENS (gnomon-contracts) and patches skin-selection,
+      skin-point-hover, skin-point-handles, skin-binding, skin-box-highlight,
+      skin-transform-handles, skin-guides, skin-guide-literals, skin-frame,
+      skin-marquee and eraser-cursor make the engine read it at draw time;
+      css-engine-violets replaces the five engine violets in the stylesheet
+      with the key-edge token; src/board/skin.css dresses the surface and
+      the text being typed. Every mark carries its content-palette tokens in
+      customData.gnomon and is painted with resolveContentColour for the
+      active theme (setTheme repaints all marks); S1.4 P0b: board/normal.ts
+      paintOf rechecks the pair at paint (resolveContentPair; a text mark's
+      colour at the text floor; a failing line draws as ink, a failing fill as
+      none, a failing pair's line as ink; nothing stored is rewritten), used by
+      normalOf, dim-map and the restyle; the canvas is transparent
+      so the host's ground shows, and exportPng fills the host's --ground.
+      The handle: add, count, setTool (select, sticky, text, rect, ellipse,
+      arrow, frame, stroke, hand; anything else throws), setStyle (line, fill
+      and weight tokens; a colour that fails contentColourCheck is refused
+      and nothing changes), setTheme, zoomIn/zoomOut/zoomReset/zoomToFit,
+      undo/redo, state/onState, exportPng, onError, isAlive, unmount. The
+      board chunk bundles only src/content-palette.ts of gnomon-contracts
+      (the build throws on any other contracts input).
+      scripts/board-patches.mjs COLOUR_ALLOWLIST lists every colour literal
+      of the shipped chunk inside the palette's minimum distance of a
+      reserved colour, each with the patch that takes its use off the screen;
+      test/board-reskin.test.ts compares it with the bytes in both
+      directions and checks the committed day and night goldens
+      (test/goldens/board) as decoded pixels.
+      Not done in pass A, stated: the stock UI components are unrendered but
+      still in the bytes (board.js did not shrink); the laser cursor keeps
+      its engine colours (no laser tool exists); paste, and a dropped
+      .excalidraw scene file, still reach the engine (condition C8, S1.3).
+      Boards S1.1, pass B (the host layer; design components board-leaf,
+      board-rail, content-tray, author-seal, pin, fallback-node, all
+      proposed). Carried fixes: the font-metrics patch is built from
+      BOARD_FONT_METRICS, which scripts/board-font.mjs reads from
+      static/fonts/JetBrainsMono-Regular.woff2 (1000 units per em, ascender
+      1020, descender -300, line gap 0, so a 1.32 line); the build and
+      test/board-font.test.ts fail when file and patch disagree. A refused
+      image insert reaches the host through handle.onRefused (the engine
+      shows nothing). scripts/preview-shots.mjs --chrome captures in real
+      time over the DevTools protocol, waiting for data-preview=ready (under
+      Chrome's virtual-time screenshot the board fixture never finished
+      mounting; the cause was not found).
+      Handle additions: marks() (id, kind, box, first point, author,
+      selected, a stub's kind, a label's owner), view(), onScene, focus,
+      hasFocus, onAttempt (a paste or a drop is reported from the capture
+      phase), onRefusal. A mark's author
+      (human, agent with id and name, unknown), whether it is a sticky or a
+      stub, and a stub's kind live in a record of the handle's own, keyed by
+      element id and written only by add (and, for a sticky you draw, by the
+      tool you drew it with). Nothing of them is read from an element: an
+      element's customData holds its two colour tokens and anything else
+      there is stripped, so pasted, dropped or copied content is a plain
+      solid mark of yours. A mark that is not yours is drawn with the
+      engine's dashed stroke, derived from that record on every change. A stub (a node of a kind this build cannot draw) is an
+      engine rectangle of at least 156 by 52 that setStyle leaves alone.
+      Host layer, PURE models with tests: core/board-seal.ts (FNV-1a, cut,
+      bead, letter; the design's ten vectors pass, hex cuts included),
+      core/board-rail.ts (tools, letters, glyph paths, railKeyAction,
+      railLayout folding at 472 and 408 and then one tool per row),
+      core/board-tray.ts (wells from the palette's names; customEntry
+      through contentColourCheck, a refusal offers the nearest swatch and
+      stores nothing; S1.4 P0b: customEntry takes the tool's context, the text
+      floor for the text tool and the mark's other colour for the pair, and a
+      contrast refusal uses CONTENT_CONTRAST_WORDS with ' at night' and its
+      own offer, 'Use ink' or 'Use paper' for a pair; P0b review: judgeToken, heldRefusals and trayRefusalLine ('✕ not used as a <role> · <why>'); the leaf judges a tool's held style before its first mark (the tool waits on the refusal row), the selection's other colours under select, both roles' reasons each with its key, the tray scrolls inside the stage), core/board-overlay.ts (screen transform, pins, seals,
+      the box round a text that is not yours, stub words, the hands foot),
+      core/board-leaf.ts (states and the design's copy). ui/board-leaf.ts
+      draws them (head, keep line, rail, tray, overlay, notes, foot) and
+      touches the engine only through the handle; static/styles.css carries
+      the bd-* rules moved from the specimen. Letters act only with focus in
+      the board, never while a text is typed or a card is focused; a press
+      on a yielded board only wakes it, and only if trusted. NOTHING the app
+      entry imports reaches any of it (test/board-isolation.test.ts walks
+      the import graph; test/board-leaf.test.ts checks the shipped app.js):
+      only the dev preview fixture mounts the leaf.
+      Not built, stated: the scrap shadow (the overlay's frame rate while
+      panning was not measured, so per the design's engine note pins and
+      seals ship and the shadow waits); claimed sub-agent seals (S1.4); the
+      6px low-zoom ring (S1.4); the seal on hover or keyboard focus of a
+      drawn mark (it shows on selection); rename, the Dimensions list, the
+      edge tab and the working line (S1.3); dash lengths are the engine's,
+      not the design's 6 4; a stub's words are screen-size text over a rect
+      that scales with zoom. The image-refused line is not in the design
+      (proposed copy in core/board-leaf.ts).
+      Mika's review of pass A (2026-11-24), folded in. (1) A drop that
+      carries files is stopped in the capture phase and never reaches the
+      engine (a dropped scene file replaced the board with the stock look);
+      dragover sets dropEffect none; the handle reports scene-file,
+      library-file, image or file. (2) add() is never an undo step (the first
+      undo after it used to empty the board). (3) Every element is held to
+      one normal form on every change (src/board/normal.ts: solid unless the
+      host names another hand, roughness 0, solid fill, opacity 100, square,
+      no link, the nearest of the weights 2, 4, 8, text in the one face and
+      size); an element that is not a rectangle, ellipse, arrow, frame,
+      freedraw or text is deleted and reported. (4) Patches
+      frame-name-editor, frame-name-editor-ink, frame-name-editor-keys and
+      frame-name-title: the frame title editor is 11.5 / 600 JetBrains Mono
+      in the theme ink, square; Esc and Enter end it; the title is weight
+      600 and carries title=. (5) setTool for a drawing tool clears the
+      selection, so the first click draws. (6) Patch stroke-exact: a
+      freehand stroke is as wide as its weight, with no taper. (7) A label
+      inside a sticky or a shape is always the default ink. (8) The golden
+      rule is strict: on the ink-only goldens one chromatic pixel that is
+      not a mix of the theme's own colours fails, none may sit near a
+      reserved colour, and colours-day / colours-night hold a mark in each
+      of the 14 content colours and allow exactly those. state().selected
+      counts existing marks and state().marks leaves labels out. Rulings:
+      the selection is --ink in both themes (night --key-edge sits inside
+      the reserved distance of sea-grey); the three derived alphas, all of
+      the ink, are 0.4 (a hovered line point), 0.14 (the binding highlight)
+      and 0.06 (the marquee wash); resetZoom left the key allowlist and
+      Cmd+0 is the host's fit; diamond left FILLABLE. The board surface has
+      a 2px --key-edge ring at :focus-visible; in the leaf it is a named
+      region (role application, aria-label, aria-description) and a refusal
+      is said in a status line under the head.
+      A paste of engine clipboard content (a dashed, rough, hachured,
+      translucent, rounded rectangle with a diamond and a line) is replayed
+      live in WKWebView by the P12 harness: one solid ink rectangle stays
+      and the other two are removed and reported. In Chrome the synthetic
+      paste event did not reach the engine's paste handler, so the harness
+      reports it as unsupported there; the rule itself is unit-tested in
+      test/board-normal.test.ts. Not fixed: double-clicking an arrow made
+      through add() logs "Linear element is not normalized"; the canvas
+      fallback text is still the engine's "Drawing canvas".
+      Review round 1 of S1.1 (PR #107), fixed. Leaf: it redraws on a focus
+      move only when the yield state flips, the rail and the tray are rebuilt
+      only when what they show changes, and focus returns to the same
+      control by a data-key on every rail and tray control (a press on a rail
+      key was lost, the tray could not be opened by pointer, Tab into the
+      rail overflowed the stack, and choosing a well dropped focus to the
+      body); under 148px of board no state draws the body or the foot and
+      the leaf clips to its own box; while yielded every press, the wheel, a
+      double-click, a drop and a paste are stopped, and the waking press
+      holds the engine off for the length of a double-click (WAKE_HOLD_MS
+      in ui/board-leaf.ts) so its own double-click starts no text. Engine: authorship is the handle's record (above); every drop is
+      refused, with or without files; patch paste-types-filtered removes
+      elements that are not board types before the engine commits a paste or
+      an insert; the api-run-action patch carries its closed list of
+      actions (six in S1.1, four since S1.3); a pasted lock and stock arrowheads are normalised away. Each
+      is tested with real pointer and key events over the DevTools protocol
+      (test/board-leaf-golden.test.ts) or replayed in the P12 harness, which
+      now paces synthetic moves by animation frame and reports which engine
+      exercised each paste and drop check (an engine that reports a check as
+      unsupported did not run it; every check must have run somewhere).
+      Also from the review: a refusal is said in the keep line's place, with
+      an always-present status node; the custom colour offers a well per
+      role it passes for; a seal on a text that is not yours no longer
+      covers its first line; a stub with no size is 288 wide; one tab stop
+      per tray row; the golden tolerance is 16 per channel. NOT done from
+      the review's follow-up list: the rail menus still use .bd-menu (not
+      .mode-menu); a stub smaller than its words is clipped, not shortened
+      line by line, and its words do not scale with the board.
+      Review round 2 (PR #107). R1: add() now passes regenerateIds: false to
+      the engine's convertToExcalidrawElements. Round 1 keyed the authorship
+      record by the id skeletonOf made, and the engine replaced every id, so
+      every host-added mark came back as a plain mark of yours (no pins, no
+      seals, no dashed strokes, no stub words) and the eight leaf goldens
+      re-taken in round 1 recorded that broken board. They are re-taken and
+      were looked at. The golden test now counts the fixture's 3 seals, 2
+      stubs with their words, 2 pins, the boxed text and the five hands of
+      the foot before it compares pixels, and the P12 harness adds an
+      agent's mark, an unknown hand's mark, a stub, a sticky and an agent's
+      text through the real engine and checks what marks() reports and that
+      the agent's edge is dashed. R2: a menu item returns focus to the
+      board. R3: the custom-colour lines name a role once and quote a night
+      value only for a role the colour is offered in. R4: while it loads,
+      and when it is too short to draw on, the leaf's focus is on its head
+      key (never taken from a focused card). R5, checked and not changed:
+      every image call site (a pasted image file, SVG source, mixed HTML, a
+      drop, the tool) goes through insertImageElement, which patch
+      image-insert-refused returns from before scene.insertElement, so no
+      image element enters the scene; a real paste of SVG source in Chrome
+      adds no element and no img node. R6: touchmove, touchend and
+      touchcancel are stopped while yielded; the engine's keyup and Safari
+      gesture listeners are on the document and are NOT stopped.
+      Boards S1.3, pass P3b-1 (the handle on a folded dimension): the board
+      is a VIEW of a dim-shape:v1 state. handle.render(state) maps with
+      #gui-dim-map, completes every element through normalOf BEFORE the
+      engine sees it, passes the new ones through the engine's own
+      restoreElements (which measures every text), and updates the scene
+      with CaptureUpdateAction.NEVER; an element whose mapped content and
+      engine version are unchanged is kept as it is, and a mark in hand
+      (being drawn, dragged or typed, or changed and not yet reported) is
+      left alone. handle.onEdit(ops, cause) fires once a gesture has ended
+      (pointer-up, a text commit, a delete, a restyle of the selection)
+      with elementsToOps against EXACTLY the state last rendered; `cause`
+      is the trusted pointerup or keydown that ended it, for the leaf's
+      gesture stamp. The signal for "a real edit" is the engine's own
+      element `version` (raised on every mutation and on nothing else),
+      compared with the versions recorded at the last render or report,
+      and only after a person's input since then: render() never fires
+      onEdit (Aegis A1), nor does a selection, a marquee, a pan, a zoom or
+      a hover, also on a board holding a malformed order key. A change
+      that maps to no op (a fallback mark moved) is put back. A delete is
+      never reported for a node the engine could not hold. Engine ids are
+      minted by the handle (`g-<uuid>`), never the node id. Authorship,
+      sticky and stub are read from the rendered state only: the
+      authorship record, add(), BoardMark, undo() and redo() are removed,
+      and a fallback's words have one owner (the leaf's overlay; the map's
+      label is not given to the engine). normal.ts and dim-map.ts agree:
+      diamond is a board type and takes a fill (no rail tool: a stored
+      diamond is drawn and edited); an arrow keeps the heads its `head`
+      says (none, end, both) and normalOf fixes only the head's shape. The
+      engine dashes rectangle, ellipse, diamond and arrow for a hand that
+      is not yours and does NOT dash a stroke, a frame or a text: for
+      those the overlay's seal or hollow pin is always on
+      (core/board-overlay.ts ENGINE_DASHES; test/board-dim.test.ts compares
+      the engine's pixels per kind). Undo: `undo` and `redo` left the key
+      allowlist and patch api-run-action; handle.onUndoKey hands Cmd+Z to
+      the host; the engine still records history for its own captured
+      changes, so the handle empties it at every render and report.
+      handle.setYielded: four counted patches (yield-keyup,
+      yield-gesture-start, -change, -end) make the engine's document-level
+      listeners return at once; refusal listeners and the handle's window
+      listeners are removed at unmount. src/board/simplify.ts fits a new
+      freehand stroke to a size one row may carry before it is read (the
+      numbers and the rule are in the review-batch paragraph below).
+      The board build's contracts allowlist is content-palette.ts, dim.ts,
+      secret-rules.ts and internal.ts, exactly; the chunk re-exports
+      foldDim and emptyDimState for a page that has only the chunk (the
+      P12 harness). Preview and harness boards are rows folded by foldDim.
+      Goldens added: matrix-day, matrix-night (every kind and style per
+      hand) and zoom400-day (a stroke drawn at 400%: whole-unit rounding
+      shows as short straight runs at that zoom, judged acceptable; the
+      contract is unchanged).
+      Review batch of PR #116 (Aegis, Probe, Mika; 2026-11-24). An edit
+      reports ONLY the marks whose engine version moved (a malformed order
+      key on another mark is not re-keyed in the person's edit), and a mark
+      in hand is compared with the node it was drawn from, so a remote
+      change that lands mid-gesture is kept and the drop is the person's
+      own delta. A put-back rebases first and stops after two in a row, so
+      an engine change nobody made, or one made while yielded, is put back
+      once and never spins. Only TRUSTED events count as input (the P12
+      harness alone sets the probe-only mount option syntheticInput); a
+      gesture that changed nothing leaves nothing armed; `cause` is
+      cleared after every report; setStyle(style, by) takes the rail's own
+      event and a restyle without one is put back. A text opened and
+      closed with the words it had reports nothing. A stored bound arrow
+      keeps its stored geometry: an end follows only what its own shape
+      moved. Cmd+Z with a mark in hand does not reach the host.
+      handle.drift() is the unfiltered whole-scene diff (tests and
+      diagnostics; never sent). Strokes: lastCommittedPoint is set after
+      the engine's restore, so a stroke is drawn to its last point; a
+      stored stroke of one point is a dot; simplify.ts drops non-finite
+      points, takes the smallest tolerance that fits (budget 1,900 points
+      and 12 KiB per stroke), never passes a ceiling of 4 board units, and
+      SPLITS a stroke that cannot fit into several that share their end
+      points (its work is bounded by windows of 1,024 points and tested by
+      counting); a stroke drawn above 100% zoom gets the half-unit pass.
+      Display: the seal or hollow pin of a drawn mark stands 2px clear of
+      the first point (a frame: its top edge at the right corner) and is
+      clamped into the part of the mark that is in view
+      (core/board-overlay.ts markSealPoint); a fallback mark is locked in
+      the engine (no drag, no handles, no selection) and a press on it is
+      a refusal the leaf says (`fallback`, proposed copy); a long kind
+      stays on one line; the foot is 32px; an agent's name has control and
+      format characters removed and never reads as `you` or `unknown hand`
+      (core/board-overlay.ts boardAgentName, through the contracts
+      sanitizer); engine ids come from
+      crypto.getRandomValues; the yielded flag is per board (the patches
+      pass the engine's container). Still module-wide: the refusal
+      listeners in skin.ts. For the next pass: a split stroke is several
+      add ops in ONE onEdit call, and a row over 16 KiB is refused whole,
+      so the sender must put pieces in separate rows when their sum is
+      too large.
+      Still open for the next passes: paste and copy interception (C8),
+      the leaf's live wiring, the wake hold that swallows a drag or a wheel
+      begun shortly after waking, a real-paste test on CI.
+      A pen's pressure is not stored, so a stroke re-rendered from the
+      fold has the simulated taper.
+      For S1.4 (recorded from the reviews, not built): opening the tray by
+      Enter should put focus on its chosen line well; a custom colour in
+      use has no chosen ring; the too-short and crashed lines at 424px; the
+      tray covers the board at a 1024 window; whether a new sticky goes
+      straight into its text; dash lengths by a counted patch, and a small
+      agent mark must not render as [ ] (the night key shape);
+      screen-reader names in the hands foot; hover seals, the low-zoom ring
+      and the scrap shadow (Mika timed the overlay's frames with 208
+      overlay nodes in headless Chromium on the founder's Mac; the figure
+      is in her review, not here, and WKWebView has not been timed);
+      refusal listeners in skin.ts are module-wide, so two boards on one
+      page would hear each other; the
+      binding highlight is under 3:1; Alt-drag duplicates a mark while
+      Cmd+D is off; drawing by keyboard alone is impossible; Luna's open
+      questions (square or rounded handles, stroke taper, sticky text size,
+      whether layer order, grouping and alignment are gone on purpose); the
+      stub's fixed line does not fit the design's 156 by 52 minimum;
+      contracts' dimKindName answers `unknown` for a kind that fails the
+      grammar, a word the stub design forbids; the refusal lines are
+      proposed copy, not the design's; agents have no display name yet (the
+      seal's name is the agent id).
+      Known and left for later slices: React and Excalidraw carry HTML sinks
+      (the kernel's bundle scan exempts board/* from that one clause);
+      react-style-singleton can inject a <style> for a modal popover.
+      Boards S1.3 pass P3b-2 (condition C8; Aegis A5, A6): paste, copy, cut,
+      drop and duplicate are contained BEFORE the engine by per-board capture
+      listeners on the document (matched by containment, removed at unmount).
+      A paste is never parsed: the handle hands the plain text on with
+      onPasteText(text, cause) and adds nothing; a file, a paste with no plain
+      text and words over the limit are refused; a paste into a text being
+      typed is the field's own plain-text paste. onCopy / onCut report the
+      selected node ids and put only the caller's plain text on the system
+      clipboard (a cut deletes through the edit path); onCopyOutside reports
+      a copy made elsewhere. Six more counted patches: the engine's paste,
+      copy and cut handlers count and return (boardEngineRuns), the text
+      editor's paste handler is not installed, Alt+drag is a move and the
+      duplicate action does nothing. `syntheticInput` is honoured only by a
+      probe build (define __GNOMON_BOARD_PROBE__, false in what ships; the
+      pinned bytes do not contain the word). An edit reports only what the
+      person had in hand; what the engine changed elsewhere stands until the
+      next render and is taken out of later edits; one handle shows one
+      dimension. ui/board-leaf.ts owns one #gui-dim-clipboard register (no
+      kernel wiring yet): a paste of its own copy is clones, any other text
+      is one text mark, and the stand-in line with nothing held adds nothing
+      and says so. test/board-c8.test.ts holds every recorded repro in a
+      real Chrome with real paste, copy, cut, drags and an IME composition.
+      Review of PR #117: handle.select(nodeIds) selects the pasted marks
+      once rendered; onCut answers {text, ids} and exactly those nodes are
+      deleted (a frame travels with its children; over the 64 cap the cut
+      is refused whole and a copy says what it left out); a copy or cut of
+      a mark not stored yet is refused `clipboard:not-stored`; a paste into
+      a text being typed is refused at paste time when it would pass the
+      limit. Three more counted patches (nine for C8): engine-drop-removed,
+      flowchart-keys-removed, flowchart-navigate-removed; a guard on the
+      document from before the engine renders until unmount; Cmd/Ctrl/Alt+
+      Arrow and Cmd/Ctrl+D never reach the engine or the browser; mount
+      option `chrome` makes a paste with focus on the leaf's rail the
+      board's. Pasted clones and text land in view; clipboard words are
+      cleaned of control and format characters.
+      PASS P4a (review of PR #117): the leaf's chrome keeps the paste, copy
+      and cut of ANY input, textarea, select or editable element (N2); a
+      copy with words selected in the chrome outside the board is left to
+      the browser and never gives the marks (N3); select() skips fallback
+      stubs; a pasted text is measured AFTER it is cleaned and refused
+      too-long with a line (N1); one paste step for words and clones, which
+      starts again after any other action; the same line is not announced
+      twice while it shows. The leaf gains say(line) and forget(), and
+      onFold carries the trusted event the fold's stamp is minted from;
+      core/board-leaf.ts noticeLine is a STAND-IN table of plain words for
+      the live loop's notices (the keep line's words belong to the pass
+      that mounts the leaf in the app).
+      REVIEW OF PR #118: the handle gains setView (pan and zoom of an
+      earlier view(); never an edit); the leaf gains setInert(why) (held
+      still while the link is down or the fold is out of date: the picture
+      stays, the rail is dimmed, no press, paste or key draws, the line
+      stays for as long as it lasts) and setKeep(line) (the live loop's
+      keep state in the keep line's place; a save shows only once slow).
+      core/board-leaf.ts keepStateLine and INERT_COPY are stand-in words.
+      Boards S1.3 pass P4b-3 (T-2026-11-25-004, G-DDL-08): the rail is never
+      taller than its room. core/board-rail.ts railLayout draws the fullest of
+      its steps whose railNeed (rows, ticks, gaps and padding from
+      RAIL_METRICS, held to the real paint by test/board-leaf-golden.test.ts)
+      fits the board: whole (472), + and − in the percent key's menu (408),
+      then tools into ⋯ from the bottom of the list down to the design's
+      always-visible Select, Sticky and Text (230). Below that, which the
+      design record does not rule and a board may reach (148 is the least a
+      leaf draws), the same fold goes on: Text, then Sticky, then the
+      graduations, ticks and spacer (the tight rail: Select or the chosen
+      tool, ⋯, line-and-fill, the percent; 140). A folded tool that is chosen
+      takes the last visible slot and never adds a row. An open rail menu is
+      kept inside the board's own area and scrolls inside itself when taller.
+      The leaf's room() is the body it draws (the foot is 32px; it was counted
+      as 29), and no row or tick of the rail shrinks.
+      Boards S1.3 pass P4b-3 (the keep line and the check; conditions P4 and
+      after-P4a): core/board-leaf.ts keepStateLine reads both keep and link
+      and never answers a bare 'Not saved' (it is said only with the link
+      down, as 'Not saved · reconnecting' or 'Not saved · not connected');
+      partial and dropped have their lines while no passing state is said.
+      checkLine reads 'Checked up to change N[ of M]', 'Not checked yet' for
+      verified null, 'Did not match at change N'; BoardLeaf.setCheck(line,
+      tone) draws it whole at the right end of the foot (.bd-check; the hands
+      give way to it; tone bad in the failed colour). It was a hover title on
+      the head's glyph. The words of KEEP_COPY and CHECK_COPY are not in the
+      design record: they are the plainest that fit the 424px leaf, for Luna
+      to rule.
+      Boards S1.3 pass P4b-3 (keys while held still): with the leaf inert
+      (link down, out of date) the leaf's capture listener lets no key from
+      the board reach the engine and no letter choose a tool; the zoom keys
+      and Tab pass. Before, a tool letter changed the tool and Cmd+A selected
+      every mark through the engine's own key handler (setYielded covers only
+      its document-level listeners). Held by test/board-app.test.ts in both
+      inert states, with focus on the board and off it.
+      Review fixes of PR #123: the check gives way with an ellipsis inside the
+      foot and carries its whole words in title= (a mismatch keeps 'Did not
+      match' whole and only its number gives way; other hands fold before the
+      check loses a letter); a keep-state line that states something (dropped,
+      partial, words waiting) draws in ink through bd-said-line while opening,
+      folding and saving stay quiet; the head and the keep line are flex none,
+      so one abrupt shrink cannot leave the rail on a layout taller than its
+      room; rail menu rows do not wrap; held still, the app's own shortcuts
+      (the palette, the board key, Settings, New session, the bare mic key)
+      pass to the page.
+    path: src/board/
+    type: module
+    tags: [gnomon, gui, board, doodle, csp, lazy-chunk]
+    oracles: [G-DDL-06, G-DDL-07, G-WEB-06]
+    tests:
+      - test/board-reskin.test.ts
+      - test/board-font.test.ts
+      - test/board-normal.test.ts
+      - test/board-seal.test.ts
+      - test/board-rail.test.ts
+      - test/board-tray.test.ts
+      - test/board-overlay.test.ts
+      - test/board-leaf.test.ts
+      - test/board-leaf-golden.test.ts
+      - test/board-patches.test.ts
+      - test/board-isolation.test.ts
+      - test/board-scan.test.ts
+      - test/board-loader.test.ts
+      - test/board-csp.test.ts
+      - test/board-preview.test.ts
+      - test/board-hardening.test.ts
+      - test/board-dim.test.ts
+      - test/board-simplify.test.ts
+      - test/board-grant-key.test.ts
+  gui-dim-map:
+    description: >-
+      #gui-dim-map (boards S1.3 pass P3a, s1.3-draft point 5; conditions C4
+      and Aegis A6) - the two-way map between a folded dimension
+      (#contract-dim-shape) and the board engine's elements. PURE: no DOM and
+      no engine import, not even a type (the element shape is the structural
+      EngineElement), so the tests load it in Node. dimToElements(state,
+      theme, ids) emits elements in dimZCompare order, a label straight after
+      its mark, each BUILT from the closed list DIM_ENGINE_KEYS: no node key
+      is copied, so a stored link, embeddable, free customData or prototype
+      key never reaches the engine. The stroke is solid ONLY when the fold
+      says a human drew the node; an agent, an unknown hand, a missing author
+      or a class this build does not know is dashed. dimIsSticky (a rect with a
+      named fill and a label key) is paint only and never changes that. A
+      node of a non-core kind, a core node missing what it is drawn from, or
+      one whose points or text are over DIM_LIMITS, is a fixed rectangle
+      labelled by dimFallbackLabel(kind). Coordinates
+      are rounded; a stroke or arrow is emitted with its first point at the
+      origin. elementsToOps(prev, elements, ids, style) diffs the engine's
+      scene against the state it was rendered from, reading both sides the
+      same way, so fields the engine does not carry (refs, rel, a text's size
+      and w) are never patched. It yields add, update, move (one op for a
+      pure translation of several marks) and delete; a new or reordered mark
+      gets its order key from dimZPlace of its neighbours (never the throwing
+      form), the longest run of well-formed keys already in order keeps its
+      keys, and a kept mark a placed key landed above is re-keyed in the same
+      diff, so one diff leaves the stored order equal to the order on screen.
+      A patch that names x, y or points of a stroke or arrow restates all
+      three in the engine's terms (a pure drag stays a relative move). A text
+      whose containerId names no live carrier is a mark of its own. It
+      agrees with normal.ts since pass P3b (diamond is a board type and
+      takes a fill; an arrow keeps its heads), held by test over the whole
+      kind and style matrix per hand. It writes nothing for a fallback
+      mark, a deleted id, an engine type the board does not have or an empty
+      text, and validates nothing (the caller runs validateDimOps).
+      src/board/index.ts renders from it and reports edits with it since
+      pass P3b; the app does not import the board yet.
+    path: src/board/dim-map.ts
+    type: module
+    tags: [gnomon, gui, board, dimension, pure]
+    tests:
+      - test/dim-map.test.ts
+  gui-dim-store:
+    description: >-
+      S1.4 E3 item 0, verified: the store keeps every followed row's payload by
+      reference, so relayedFor.turn, relayedFor.hsid, act and the undo marker
+      reach dimActOf, dimChangeSetOf and dimUndoMarkOf (test dim-e3-rows).
+      #gui-dim-store (boards S1.3 pass P3a, s1.3-draft point 6 read path;
+      oracle G-DDL-01) - the dimensions the page has read from the log. PURE:
+      no DOM, socket or timer. DimStore.apply(rows) takes the rows the GUI
+      store follows, keeps those of the four DIM_KINDS per dimension (rows
+      already seen are skipped, so a resumed read cannot double them) and
+      returns the newly kept rows by dimension. It holds the state at the
+      head and a kept state every 512 rows; stateAt(dim, seq?) folds forward
+      from the nearest kept state with ONE foldDim call and never uses the
+      row-by-row fold (a source scan holds that). list(repo?) answers the
+      dimensions whose rows carry that repo scope; lastDimOf(hsid) the
+      dimension a session last opened or was attached to; stats() counts the
+      rows a scrub folded. Stated bounds: 512 dimensions, where one more
+      evicts the least recently written (an ended one first), never one the
+      caller pinned with pin(dim) (the open board) and never one written in
+      the same page; a row is dropped and counted only when nothing may be
+      evicted, and an evicted dimension written again is listed partial; rows
+      kept by reference for every held dimension; at most 64 kept states per
+      dimension, after which that dimension's spacing doubles. A listing
+      carries firstAt and lastAt from the log row's at. stateAt throws
+      DimSeqError for a seq that is not a safe integer. reset() forgets
+      everything but the pins when the log is replaced.
+      ui/app.ts holds it and feeds it the followed rows (S1.3 P4).
+    path: src/core/dim-store.ts
+    type: module
+    tags: [gnomon, gui, dimension, pure]
+    oracles: [G-DDL-01]
+    tests:
+      - test/dim-store.test.ts
+      - test/dim-grant.test.ts
+  gui-gesture:
+    description: >-
+      #gui-gesture (boards S1.3 pass P3a, s1.3-draft point 2; Aegis A1;
+      G-GUI-04) - the gesture stamp. gestureOf(e, now) mints a stamp only for
+      a trusted pointerup, keydown, click or paste (kinds pointer, key, menu,
+      paste); a synthetic event and a repeated keydown give null. It proves
+      nothing about a human: it fails closed against a GUI code path that
+      forgot the gate and against replay on one connection, and any script
+      in the page can mint it. It is never stored in a row, passed to a mod
+      or reused for approvals or grants. A stamp is numbered at its FIRST
+      send on a connection, one above the last stamp sent there, from a
+      module-private counter PER CONNECTION that starts at 1 (the connection
+      is the client object: one GnomonClient is one socket), so the number
+      never skips ahead and starts again after a reconnect; only n and kind
+      are sent, the mint time stays in the page. takeGesture(g, now, conn)
+      counts a use and refuses a stamp that is missing (null, or an object
+      gestureOf did not mint), older than 10 s by the caller's clock, used 4
+      times in all, or numbered below a stamp sent since on that connection.
+      A use is never given back and a failed send is never retried on the
+      same stamp. No DOM and no timer. Only #gui-mod-command calls
+      takeGesture.
+    path: src/core/gesture.ts
+    type: module
+    tags: [gnomon, gui, gesture, pure]
+    oracles: [G-GUI-04]
+    tests:
+      - test/gesture.test.ts
+  gui-mod-command:
+    description: >-
+      #gui-mod-command (boards S1.3 pass P3a, s1.3-draft point 2; Aegis A1
+      and B1; G-GUI-04) - the ONE sender of the mod command relay.
+      sendModCommand(client, gesture, name, commandId, args, now?) sends
+      {name, commandId, args: {...args, gesture: {n, kind}}} and nothing
+      else. It sends nothing and rejects with a typed ModCommandRefusal when
+      the mod or the command id is not on the closed list MOD_COMMANDS (only
+      gnomon.dimension with dim.open, dim.attach, dim.op, dim.close; the
+      kernel does not hold this list), when args is not a plain object,
+      carries hsid, repo, paradigm or gesture (the host composes the first
+      three from args.focus), carries an own key __proto__, constructor,
+      prototype or toJSON at any depth (refused, never stripped), or gives
+      focus as anything but {hsid}, or when #gui-gesture refuses the stamp.
+      A client that throws instead of rejecting still yields one rejected
+      promise.
+      modCommandFailure(err) reads a rejected send into a closed list of
+      codes: not-sent, gesture-refused (with the kernel's why), read-only
+      (the host's command read cap), link-down, no-answer, refused. It never
+      retries: the kernel spends a use even when the command then fails. The
+      stamp is numbered per client object, so a reconnect needs no wiring. A static
+      test holds that the relay's name occurs under src/ only in this file
+      and the preview's fake kernel. Nothing in the app calls it yet.
+      S1.4 P5 review: modCommandFailure reads data.modCode SANDBOX (the
+      kernel could not apply the mod profile) as code sandbox-unavailable,
+      why SANDBOX; the leaf says the board cannot run here.
+    path: src/core/mod-command.ts
+    type: module
+    tags: [gnomon, gui, gesture, relay]
+    oracles: [G-GUI-04]
+    tests:
+      - test/mod-command.test.ts
+  gui-dim-live:
+    description: >-
+      S1.4 E3 item 7: one act per action (dim.op act, its own minter), never
+      merged; delegate + settleAway for a Cmd+Z the mod plans.
+      #gui-dim-live (boards S1.3 pass P3a, s1.3-draft point 6 write path;
+      Mika's open items 1 and 2; Aegis B3) - the live loop of one open
+      dimension as a PURE controller: no DOM, no socket and no timer; the
+      clock, the sender, the confirmed state (#gui-dim-store stateAt), the
+      page's connId and the id minter are injected. Events: local(ops,
+      gesture), ack(id, outcome), row(row), timeout(), plus link(up) and
+      undo(gesture). Every result says changed, resync (the engine may show a
+      mark the view does not hold: render from view()) and at most one
+      notice. view() is the confirmed fold plus every pending batch folded as
+      rows stamped as me, and never applies an edit twice: an in-flight batch
+      stops being overlaid once a row of mine for it has arrived, and the
+      confirmed fold is read only as far as row() has been told, so the store
+      may fold a row before or after row() is called. An edit or an undo
+      with no gesture stamp changes nothing and answers not-sent. One send is
+      in flight per dimension and sends are spaced DIM_LIVE_SEND_GAP_MS apart;
+      a queued edit that fits one row joins the single-row batch still
+      waiting when both fit one row together (an undo and a multi-row action
+      are never merged) and the newest stamp rides a merged batch. ROWS THAT
+      FIT (pass P4a, core/dim-rows.ts): one action over a row's limits (64
+      ops, the row budget under the host's 16 KiB and 4,096 values) becomes a
+      GROUP of at most DIM_ACTION_ROWS (4) rows on one stamp, in order; an
+      action that needs more, or one op that fits no row, is refused whole
+      with a notice (too-large, row-too-large); a dropped row of a group
+      takes the rows of that action still waiting with it, under the one
+      notice. The rows of one action are ONE undo entry, undone by one
+      inverse that is itself packed into rows and leaves the list at its
+      last row. A batch says `more` when rows of its action follow. A batch is
+      confirmed when the row with the acked seq arrives, in either order; a
+      row of mine (own-key stamp: my principal, the GUI surface, and my
+      connId when both sides name one) confirms at once when it carries
+      exactly the in-flight ops, and otherwise waits for the ack; if the ack
+      never comes the row stands and the ops it lacks are reported. A
+      refusal, or the injected clock passing DIM_LIVE_TIMEOUT_MS with no ack
+      and no row, drops the batch, validates later pending batches again and
+      yields ONE notice naming the field and the code, with the count of ops
+      lost. Link down: nothing is sent, a new edit is refused with a notice,
+      pending rolls back at the timeout (no offline queue in S1.3). status()
+      answers the keep line's state and since (when the oldest unsaved batch
+      was queued); nextDeadline() tells the caller when to tick. Undo keeps
+      only this page's own confirmed rows (at most 64), does nothing while
+      anything of mine is pending, removes an entry only when its inverse is
+      confirmed, and drops an entry that can never apply with one notice.
+      dimAckOf reads the dimension mod's replies exactly (ok with seq and
+      refused; ok false with a code of DIM_COMMAND_REFUSALS). Stated bounds:
+      16 pending batches, 256 early rows, 64 undo entries. core/dim-session.ts
+      drives it (one per open dimension, S1.3 P4a).
+    path: src/core/dim-live.ts
+    type: module
+    tags: [gnomon, gui, dimension, pure]
+    tests:
+      - test/dim-live.test.ts
+  gui-dim-session:
+    description: >-
+      S1.4 E3: one sender for dim.undo and dim.seen (both added to #gui-mod-
+      command's closed list); undoNotice / redoNotice / dismissNotice / undoMark
+      take the target the row showed (set, rev, base) and drop an untrusted
+      press, a detail > 1 click, and any press while an undo-family or draw key
+      is pending, the link is down, the board out of date or not caught up since
+      a rebuild; dim.seen only from a trusted dismiss (Aegis S3). A Cmd+Z that
+      #gui-dim-live delegates goes as dim.undo of the person's act (Aegis, P4a
+      review). status().attrOff is the A1 flag. DimSessions keeps each board's
+      #gui-dim-notices across a rebuild and a fold. The page cannot read the
+      mod's pins (memory only): the notices are the page's mirror of the mod's
+      rule.
+      #gui-dim-session (boards S1.3 pass P4a, s1.3-draft point 6) - the LIVE
+      loop of the open dimensions as one unit. Since pass P4b-1 ui/app.ts
+      makes the page's ONE DimSessions (the GnomonClient itself to connect()
+      on every socket, onClose to linkDown(), the cursor-epoch reset to
+      reset(), every followed row to apply()) and #gui-board-dock mounts
+      each session's leaf. A refused delete keeps its selection.
+      DimSessions is the one place sessions are made; a DimSession is ONE
+      open dimension: it pins the dimension in #gui-dim-store, owns a
+      #gui-dim-live (Session.connId passed as its connId), and wires: the
+      followed rows (apply(rows), the same rows GuiStore.apply takes) to
+      live.row; live's sends to the ONE sender #gui-mod-command
+      (sendModCommand with the GnomonClient itself and no `now` argument,
+      'dim.op' with {dim, ops, focus:{hsid}}) and the answer to live.ack
+      (dimAckOf); one timer from nextDeadline() to timeout(); changed or
+      resync to handle.render(live.view()); the handle's onEdit and the
+      leaf's onOps to live.local with a stamp minted at that moment from the
+      listener's own event and Date.now() (#gui-gesture); onUndoKey to
+      live.undo. No stamp, no change: such an edit is put back by a render
+      and said in a notice; nothing is ever retried (spent and replayed mean
+      a new gesture). dim.open is sent ONCE (dim.attach before it on the same
+      stamp when the store shows the session is not attached); a session
+      rebuilt after a reconnect is RESUMED with no command, and the fold at
+      the mod's last answered seq is compared with the hash it gave
+      (status().verified, notice hash-mismatch). fold(cause) sends dim.close
+      after what is pending has settled. One DimSendLimiter for every command
+      of every session keeps the page under the host's per-mod append limit;
+      a stamp gate lets one stamp send all its commands (the rows of a
+      multi-row action, attach then open) before another stamp is first sent
+      on the connection, so no stamp number goes backwards. linkDown():
+      nothing is sent, new edits are refused with a notice, pending rolls
+      back at the timeout, the leaf forgets its copy; connect(link) DESTROYS
+      every session and builds it again (a new DimLive, the leaf and its copy
+      register destroyed); reset() (cursor-epoch) empties the DimStore and
+      destroys every session. status() answers keep, link, since, pending,
+      canUndo, phase, title, seq, partial, dropped and verified; notices are
+      data (about, code, field, why, lost), never words. core/dim-rows.ts
+      packs one action's ops into rows that fit.
+      REVIEW OF PR #118: the wait for an answer is counted from when a
+      command LEAVES (DimLive left(id), flying(id)), so a batch still waiting
+      its turn is never said lost and then sent; the stamp gate is let go as
+      soon as the held stamp rides no pending batch and when the stamp's last
+      command is handed to the sender; connect() resumes only sessions whose
+      dim.open was accepted, and open() replaces a failed one; what a
+      reconnect or a switch (leave(), bounded by DIM_SWITCH_WAIT_MS) throws
+      away is counted on the destroyed and rebuilt events and said as one
+      notice; an edit while folding is refused; a hash-mismatch makes the
+      board READ-ONLY until reset() (status: verified null is unchecked,
+      checkedSeq, readOnly); at link loss the leaf is held still
+      (setInert('link-down')) with ONE notice, what was pending is counted
+      and said when the link is back, and the rebuilt board opens where the
+      old one was looking (handle.setView). The limiter holds its limit
+      against the times commands really left (ready()). #gui-dim-live:
+      every action that is sent can be undone (an action whose inverse is
+      over 64 ops or 4 rows is refused whole, code not-undoable); the rows
+      of a group are inverted each against the state before that row
+      (#gui-dim-undo invertDimRows); a stalled queue falls together under
+      one notice; an unsendable undo entry is dropped, never wedged.
+    path: src/core/dim-session.ts
+    type: module
+    tags: [gnomon, gui, dimension, live]
+    related: ["#gui-dim-live", "#gui-dim-store", "#gui-mod-command", "#gui-gesture", "#gui-board", "#dimension-mod"]
+    tests:
+      - test/dim-session.test.ts
+      - test/dim-session-live.test.ts
+      - ../gnomon/test/dimension-dogfood.test.ts
+      - test/dim-grant.test.ts
+  gui-board-dock:
+    description: >-
+      #gui-board-dock (boards S1.3 pass P4b-1, s1.3-draft point 7; design
+      component board-leaf) - where the board leaf lives in the shipped
+      app. Owns the leaf's place over the centre column (the chat header
+      and the chat; its height is set from the feed's bottom, so it stops
+      above the pinned cards and the composer), the edge tab
+      "<title> · board" (under the Loops tab when both show) and the ONE
+      leaf of the focused session's open dimension. Carries out the plans
+      of #gui-board-open on the trusted event that asked, through
+      DimSessions.open (the gesture stamp is minted from that event);
+      fold is session.fold (dim.close), or the page's own fold while the
+      board is held still (link down, out of date: nothing is sent); a
+      session switch is session.leave() and says what was lost; a rebuilt
+      session gets a new leaf. Words being typed when the link goes are
+      held in page memory only (Aegis option b): cleaned and bounded by
+      the leaf, kept per dimension and principal, put back only into a
+      text the person opens on the rebuilt board, never committed here,
+      dropped on reset, switch, fold, hash mismatch or principal change.
+      With a card focused ⌥B leaves an open board alone, and app.ts runs
+      no programmatic card focus during a board text edit (G-DDL-08).
+      After the review of PR #119: Esc from OUTSIDE the leaf never folds a
+      held-still board that holds words or unsaved changes; a fold from the
+      leaf reads the words and session.unsaved BEFORE the destroy and says
+      them; held words dropped anywhere are said once; the waiting cue is
+      the keep line for as long as words are held; the held-still line
+      says Not connected unless the page reconnects by itself; a fold
+      needs a trusted event; a failed open says why as a toast and closes
+      its leaf; what lies under an open leaf is inert and the leaf comes
+      before the pinned cards and the composer in the focus order; the
+      Reconnect dialog sits at the foot of the window while a board is
+      open (styles.css). No ambient event: every opener is handed the
+      event of its own press (run(id, trusted, event)).
+      After the low items of that review: an untrusted press is told
+      nothing (the trust check comes before the no session / no board
+      line); an Esc from outside the leaf on a held-still board it must
+      not fold says the leaf's held line again (leaf.sayHeld), never
+      folds; a board folded on an earlier page reopens with "That board
+      was folded · opening it starts it again"; command(arg, event,
+      typed) records the send key's click on a typed /board as command.
+      P4b-2 item 1: showChat(event, then) folds like Esc on a trusted
+      press only (the trust check comes first) and runs `then` once the
+      leaf is gone; on a held board with words or unsaved changes it does
+      not fold and says the held line (kept() gives the strip's title).
+      escape() checks isTrusted BEFORE the held line. A fold returns
+      focus to its opener only when the fold took the focus (it was in
+      the leaf). The Loops edge tab is inert while a board is open.
+      P4b-2 item 4: while the board's or the Loops edge tab shows, the
+      chat's rows take a 14px right inset (styles.css --edge-tab-inset;
+      the rows are absolutely placed, so viewport padding never moved
+      them) and clear the tab by 8px; app.ts lays the rows out at the
+      viewport width less the inset and re-lays them when a tab class
+      changes.
+      Review of PR #120: a second show chat while the first fold is on its
+      way keeps the first one's focus move; the leaf's board stage is
+      observed while mounted, so the strip's row count follows a size
+      change inside the leaf.
+      Not built here: the Dimensions list surface (/boards is the palette
+      pattern for now), the keep line's final words, G-DDL-08 across
+      layout presets.
+      Boards S1.3 pass P4b-3: the leaf head's Dimensions ▾ key (design board-
+      leaf anatomy: 'this project's dimensions, the same list as /boards') is
+      live. BoardDockDeps.dimensions is called only for a trusted press and
+      opens the app's Dimensions list (the palette's, as /boards and the
+      palette row do); the list is over the board, Esc closes it and focus
+      returns to the key, and a row of the open board puts the keys on it with
+      nothing sent. A Dimensions list surface of its own is NOT built: the
+      design record names the key and where the list is reached, and gives no
+      component for the list (its place, rows and states are for Luna to
+      rule).
+    path: src/ui/board-dock.ts
+    type: module
+    tags: [gnomon, gui, dimension, board]
+    related: ["#gui-board-open", "#gui-dim-session", "#gui-board", "#gui", "#dimension-mod"]
+    tests:
+      - test/board-app.test.ts
+      - test/board-isolation.test.ts
+      - ../gnomon/test/dimension-board-browser.test.ts
+  gui-board-turn:
+    description: >-
+      E3 r3 (Mika D3, menu): the notice ladder is time, session cut to 5 and …,
+      session, 'before stopped', ' of your marks', two lines, the agent's name
+      cut to 12 and …, then wrapping between parts; the +k menu's rows shorten
+      by that ladder and keep their time, and the menu's right edge goes out to
+      the stage's when its rows do not fit left of the key.
+      E3 review (Mika B1 to C5): notice and mark words cut only by the ladder or
+      the two-line step; a key's row and column keep focus across a repaint
+      (undo becomes redo) and a held Enter never presses again; the +k menu sits
+      right after its key, its right edge on it, above the hands foot (menuRoom),
+      scrolling when short, closed by focus leaving or a press outside, with no
+      menu roles; a notice brought from it focuses the slot's undo; the pressed
+      key is aria-busy and shows the working mark after 300 ms; a held key's
+      title and description name the real hold and give its own title back.
+      Round 3: R3, this session's own ended turn (only its own marks, no notice)
+      has its undo on the turn row only while the slot shows the you row; the
+      sixth drop level takes it away. The label 'claude' is shown as 'Claude'
+      (#gui-board-dock).
+      Round 2: the mark row on the selection and on a selected cut-out (put
+      back); cutoutAt (R7: a still click with Select where no mark lies; the
+      press is only observed, never prevented); ' this mark' gives way to ' it';
+      the notice ladder time, session name, ' before stopped', ' of your marks';
+      the countermark turns with a rotated mark (angle).
+      S1.4 E3: row kinds notice and mark in the you row's slot, three fixed key
+      columns (right, undo, +k), the notice ladder and the two-line step, the
+      redo window's words, U1 arming (500 ms, detail > 1 dropped), the U2
+      freeze, focus to the board when a focused key's row leaves, the +k menu
+      (.bd-menu upward, releases nothing), board-trace on hover or focus.
+      #gui-board-turn (boards S1.3 pass P4b-2 item 1; design component
+      board-leaf.turn_strip, a turn-strip variant of transcript-row;
+      Luna's rulings of 2026-11-24) - the latest turn under an open board,
+      in at most two one-line rows between the leaf's tab and the pinned
+      cards (#board-turn). The you row: 'you · <message> · hh:mm', or
+      'waiting' while it is queued. The turn row: the working key while
+      the turn runs (no caret, no aria-expanded, named '<what> · show its
+      steps in the chat'), then '<Claude|local model> · <reply>' with the
+      result line's own end words (STOP_LABEL / CLAUDE_RESULT_LABEL) and
+      ' · needs you' or ' · more in the chat'; a refused send's
+      refusal.message (never the code) alone; 'nothing sent yet' before
+      the first send. Two rows at 300px of board room measured without
+      the strip, else the turn row alone. A tight row drops the reply,
+      the name, then 'more'. Never a stale reply; live choices, slips and
+      run rows are never copied. Text nodes only through h(), dir=auto on
+      the words, no title= on them, no live region. show chat and the
+      working key fold through the dock (trusted only) and put focus in
+      the chat at its latest row (the working key: its steps unfolded and
+      focus on that key). Esc in the composer folds an open board and
+      leaves focus there (after the slash menu, dictation grace and
+      stop-speaking; never on repeat, IME, a taken Esc, a modifier or a
+      focused card). The strip reads the chat's own items even in the raw
+      view. No palette or block-safe command.
+      Review of PR #120: the repaint signature (stripSig) includes the
+      working step's label and since, so a new step names itself at once;
+      the strip paints only in the next frame; show chat keeps its focus
+      across a repaint; an end reason the labels do not know is dir=auto;
+      the you row and the chat rows say local time (hhmm); between a send
+      and turn.sent the turn row says 'waiting'.
+    path: src/ui/board-turn.ts
+    type: module
+    tags: [gnomon, gui, dimension, board]
+    related: ["#gui-board-dock", "#gui-turn-steps", "#gui"]
+    tests:
+      - test/board-turn.test.ts
+      - test/board-app.test.ts
+      - test/dim-grant.test.ts
+  gui-wire-row:
+    description: >-
+      wireRowOf (core/store.ts; Aegis L1, review of PR #120) - a row read
+      off the wire never carries the fields only this page sets on its own
+      lines (brief, unsent, mark, turn, connId 'local'). GuiStore.apply,
+      DimSessions.apply and the live event notification read through it.
+    path: src/core/store.ts
+    type: function
+    tags: [gnomon, gui, security]
+    related: ["#gui-board-turn", "#gui-dim-session", "#gui"]
+    tests:
+      - test/board-turn.test.ts
+  gui-board-open:
+    description: >-
+      #gui-board-open (boards S1.3 pass P4b-1) - how a board is opened, as
+      PURE plans: /board (the session's last dimension, else a new one
+      titled with the session's name, titleFrom session), /board <title>
+      (a new one, titleFrom user), the menu row, ⌥B (reopens only), a row
+      of the Dimensions list (attach then open when the session is not
+      attached; an ended dimension says it reopens); opened is command for
+      a typed command (the send key's click on a typed /board included)
+      and menu for a pointer or ⌥B entry. Also the
+      Dimensions list rows (time from lastAt, ended, partly held, a
+      dimension still opening at link loss) and followBoth, the ONE store
+      followLog is handed: every row the GUI store takes also goes to the
+      dimension sessions, and a cursor-epoch reset resets both. lastDim
+      and the listings are display hints, never access decisions.
+      After the review of PR #119: listingsFor shows a repo's dimensions
+      only when the repo can be told from a dimension the session is
+      attached to, else ONLY the session's own; boardTitleOf cleans a
+      title with the contracts' display sanitizer before it is sent;
+      followBoth resets the dimension side when another log id is adopted.
+      board.* and dimensions.* are not block-safe (core/commands.ts
+      BLOCK_SAFE_COMMANDS is an allowlist).
+      S1.4 D-list pass (#dimension-list): dimensionRows takes the session
+      names, the open dimension and the page's check: the open row first
+      (mika D1), the mark (● ○ …), line 2 by case in fixed words and host
+      labels cut at 16 or counted (aegis C4.3), 'open here · <check>' from
+      the page (C4.4), seen (ended, attached) for the press; listTitle
+      (C4.2: the head's check, no control or format character, Untitled);
+      rowStillHolds (C4.5: the dock's choose sends nothing when a row's
+      ended or attached changed since it was drawn); listTime carries the
+      year when it is not this year; DIM_LIST_COPY.
+      Review r2: line 2 leads with 'opening attaches this session' (I2); a
+      folded dimension not attached reads 'folded · opening attaches this
+      session' (I1); planListPress (I3): a listed row with no or a changed
+      seen sends nothing.
+    path: src/core/board-open.ts
+    type: module
+    tags: [gnomon, gui, dimension, board]
+    related: ["#gui-board-dock", "#gui-dim-store", "#gui-dim-session"]
+    tests:
+      - test/board-open.test.ts
+  gui-dim-notices:
+    description: >-
+      E3 r4 (Aegis F-1 reworked): the clock is never evidence; a pinned turn
+      that has not closed is raised stopped only when its session is gone or
+      not live, ended when a later turn of it wrote a row (stopped only if
+      tallied live) or when its close is in the page's rows (closeOf); a late
+      turn.result corrects stopped to ended.
+      E3 r3 (Aegis F-1, F-2): lapse() raises a pinned turn that never closed as
+      stopped (its session gone, a later turn's row, the live timeout); follow
+      splits a ninth's push-out from a notice the mod let go ('no-longer');
+      pressed only once the board took the press.
+      E3 review (Aegis A2, A3, N-1, N-3): follow raises a pinned turn only once
+      the page saw its turn.result, at that row's time; a notice it removes that
+      this page never pressed, and a ninth pushed out while the board is folded
+      (said at the next open), get the N2 line; everRaised(key) keeps R3's
+      own-turn key off a turn that ever raised a notice.
+      Round 2: follow(pins) at each dim.open / dim.check answer (a notice stands
+      only while the mod pins its set; a pinned turn with no notice is raised
+      from held rows); setFor(id) for the mark row; runningOf(hsid) for ' before
+      it was stopped'.
+      #gui-dim-notices (S1.4 E3; design board-leaf.turn_strip.notice,
+      undo-key; Aegis G2, G6, N1 to N3, U2, S3, V1) - the standing notices of
+      one board, PURE. An agent turn that changed or removed another hand's
+      marks, or undid a person's change, raises one at its end, counted from
+      rows through the contracts' readers (changed and removed apart; the
+      undid lead only from a marker naming a person act the page saw). Cap 8
+      per dimension on the mod's personal-first rule; newest first, frozen
+      while held; a redo window after an undo; +k rows; cut-out boxes and
+      trace ids.
+    path: src/core/dim-notices.ts
+    type: module
+    tags: [gnomon, gui, dimension, undo, pure]
+    tests:
+      - test/dim-e3-session.test.ts
+  gui-dim-undo:
+    description: >-
+      S1.4 E3: used only for an action whose deletes took none but the person's
+      own marks; a Cmd+Z of a delete of another hand's mark is planned by the
+      mod (planDimUndo keeps the original hand, wordsBy and otherBy). This
+      planner never writes a marker.
+      S1.4 E0: the inverse algorithm now lives in contracts (dimInvertRows);
+      invertDimOps / invertDimRows here wrap it, and planUndo keeps the B3 bounds
+      and all-or-nothing Cmd+Z validation unchanged. The mod's change-set undo
+      uses contracts planDimUndo (E1).
+      #gui-dim-undo (boards S1.3 pass P3a, s1.3-draft point 6 undo; Aegis B3)
+      - undo as ops; the engine's own history is bypassed. PURE.
+      invertDimOps(before, ops, mint): add inverts to delete, update to an
+      update with the prior values (null for a key that was absent), move to
+      the negated move, and delete to an add with a NEW id (ids are never
+      reused) plus updates of every from, to and parent that pointed at the
+      old id; every later mention of the old id is renamed, and re-adds come
+      first (frames, marks, arrows). An op the fold skipped has no inverse.
+      Given the board as it stands, the inverse is fitted to it: a re-added
+      node carries no link to a node that has since gone, a restored link to
+      one becomes no link, and only a link that STILL names the old id is
+      re-pointed (a re-point made since is left alone).
+      planUndo is all or nothing: the inverse goes through validateDimOps
+      against the board as it stands and is refused whole when any op fails,
+      when it is over 64 ops, or when it undoes more than 4 rows. Stated:
+      undoing a delete of an agent's mark re-adds it as the person's own.
+    path: src/core/dim-undo.ts
+    type: module
+    tags: [gnomon, gui, dimension, undo, pure]
+    tests:
+      - test/dim-undo.test.ts
+      - test/dim-live.test.ts
+  gui-dim-clipboard:
+    description: >-
+      #gui-dim-clipboard (boards S1.3 pass P3a, s1.3-draft point 4 copy and
+      cut; condition C8; Aegis A6) - the in-memory copy register of a board.
+      PURE: no DOM and no clipboard access; the caller wires the events.
+      DimClipboard.copy(state, nodeIds) remembers a snapshot of the selected
+      core nodes (the first 64 in paint order, and says how many it left out)
+      and answers the plain text for the system clipboard: their words, one
+      per line, or a fixed line when they have none; skipped counts the
+      distinct ids asked for that were not copied. paste(text, current, mint)
+      answers {kind: clones, ops} only when the text EQUALS the register's
+      (line ends normalised to LF; an empty register or an empty text never
+      matches), {kind: nothing-held} for a stand-in line the register does
+      not hold, and {kind: text} otherwise. Every clone has a new
+      id, sits 16 units further for each paste and on top; from, to and
+      parent are renamed to the clone when the target was copied too; from
+      and to are dropped otherwise, and a parent to a frame that was NOT
+      copied is kept only on a paste into the same dimension, while that
+      frame still stands and the clone's whole box (its points included)
+      lands inside it (pass P4a: a deleted frame, another dimension or a
+      clone landing outside all drop it). paste takes the leaf's `repeat`
+      (pastes made one after another), so the step starts again after any
+      other action and a set centred on the view steps too; only the closed list DIM_CLIPBOARD_KEYS is carried
+      (shape, words, colour; no author, refs, rel or carried-through field).
+      The clones are ordinary adds, so whoever pastes is their author.
+      clear() forgets the register (window blur, unmount). ui/board-leaf.ts
+      holds it and intercepts copy, cut and paste (S1.3 P3b).
+    path: src/core/dim-clipboard.ts
+    type: module
+    tags: [gnomon, gui, dimension, clipboard, pure]
+    tests:
+      - test/dim-clipboard.test.ts
   gui-rules-view:
     description: >-
       8.0:rules-view (founder: see the list of rules, revert a bad call,
@@ -831,7 +1957,9 @@ components:
       filter); core/virtual.ts is the Fenwick-tree virtualized transcript
       with per-width height caches; core/commands.ts the palette, layout
       presets and theme/motion resolution. ui/app.ts wires the page: launch,
-      Reconnect, backlog paging + follow subscription, sessions sidebar with
+      Reconnect (only the LIVE socket feeds the page and ends the link; a
+      gui.reconnect closes the socket it replaced once the new one is live,
+      Aegis M2/N1 of PR #119), backlog paging + follow subscription, sessions sidebar with
       new session (session.open), composer (session.send), decision stack
       (approve on trusted gestures; an ask-user card with a verified
       `answer` key gets a picker built ONLY from askDetailOf: the card block's
@@ -1109,6 +2237,30 @@ components:
       host (the GUI {focus:{hsid}} joined to a fixture K1 slice by hsid,
       other keys ignored) through the REAL mod model
       (src/preview/paradigm-context.ts), drawn by the real mod-panel path.
+      Boards S1.0: fixture pages are served under the kernel's rule 6
+      Content-Security-Policy (previewCsp, compared with the kernel's in
+      test/board-preview.test.ts); the page POSTs every
+      securitypolicyviolation to /diag, which the server keeps (bounded,
+      truncated, control characters stripped) and lists at GET /diag with a
+      CSP row count; /board/* serves the #gui-board chunk from a fresh
+      scripts/board-build.mjs build by its exact pinned-tree names. Fixture
+      `board` mounts the chunk over the transcript through the real loader
+      and posts a `board ready` row once its marks have stayed. Boards S1.1:
+      the fixture mounts in the page's theme on the --ground token (it set a
+      white background before) and adds a frame, a sticky and marks in
+      content-palette colours. Pass B: the fixture mounts the board LEAF
+      (ui/board-leaf.ts) over the chat header and the chat, with sample
+      authors of its own, and `?board=` picks open, tray, empty, yielded,
+      loading, failed, crashed, short or tiny;
+      scripts/board-leaf-shots.mjs captures them from an installed Chrome.
+      `?board=live` (boards S1.3 pass P4a) shows the REAL live loop: the
+      page's own GnomonClient on its own fake-kernel connection, followLog,
+      #gui-dim-session and the leaf mounted with the session's wiring. The
+      fake kernel answers the mod-command relay for gnomon.dimension with
+      the kernel's stamp rule and the mod's REAL checks, rows and fold
+      (packages/gnomon-mods/dimension/model.mjs, bundled into the preview
+      only; src/preview/dim-mod.ts restates the command flow of the mod's
+      index.mjs and says so); rows come back on the followed log.
     path: src/preview/
     type: module
     tags: [gnomon, gui, dev-tool, preview]
@@ -1198,6 +2350,9 @@ components:
       (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts
       installWorkshop) now sends request.mod.install or opens the panel;
       it was a disabled constant with the command in title= only.
+      S1.2: the state line of a stopped mod shows the kernel-composed note when there
+      is one (needs an update for this Gnomon: the host refused the mod's ABI at
+      start); the note is shown only as plain words of bounded length, else dropped.
     tags: [gui, mods]
     signals: []
     tests:
@@ -2031,3 +3186,44 @@ components:
     tests:
       - test/settings.test.ts
       - test/voice-client.test.ts
+
+# S1.4 P4a (an agent's hand on the board): #gui-board and #gui-dim-map gain the engine `line` for a non-human
+# stroke (dim-map DIM_AGENT_STROKE_TYPE, dimIsAgentStroke; normal.ts isBoardType, Aegis question 6), the overlay's
+# ring, too-small, text forms, hoveredMark, selectionLine and the foot's session hint (core/board-overlay.ts), and four
+# counted patches (dash-two-three, frame-edge-dashed, dash-screen-floor, library-components-stubbed). Real-engine
+# proofs: test/board-agent-hand.test.ts. No new symbol ids.
+# Known gap (S1.4 P4a, Mika L3): on a 1x display an agent frame's vertical sides at 25% land on a half pixel (2.14:1
+# day, 2.45:1 night, under 3:1); fix before Windows or 1x support. Noted, no change (L4): between 41% and 49% a lone
+# side dash can stand beside a text's first and last letters. The rough dash now runs on across a polyline's short
+# runs (patches dash-runs-*), and a restored mark is drawn in the non-human of its two hands (dimHandOf).
+# Known gap (S1.4 P4a, Mika L5): an agent stroke's last point can fall in a gap of its dash, so its end is not drawn.
+
+# S1.4 P4b "GUI live" (no new symbol ids). #gui-dim-store folds grant rows through the shared foldDimGrants (never into
+# the published rows) and counts an agent's tool-surface op rows per turn ref in `causes` (turnMarks). #gui-dim-session:
+# grantKeys() and grant(hsid, cause) (the draw key: an explicit write target from what the board last confirmed,
+# focus {hsid: target}; a press while pending, link-down, held, before the grant map arrived or for a session that is
+# not live is dropped, never queued; the map arrives with the dim.open answer or, for a session resumed after a
+# reconnect, with the backlog read before connect), select(ids, cause) (dim.select: lowest priority, latest wins,
+# dropped while an edit batch waits, own hsid only), touch(cause) (the hash point after an agent turn: dim.check rides
+# on the person's NEXT trusted press, because every GUI mod.command needs a gesture stamp; once per turn; hash and attr
+# recorded, attr only recorded), dim.op ok answers are hash points too (the fold is checked BEFORE the answer's settle
+# emits, and a check that a later row completes emits on its own: a moved check is always an emitted status, so the
+# check line never stays one change behind after the person's own drag; dim.undo's answer the same), turnEnded (one
+# `arrived` notice per agent turn)
+# and gone(id) (the remover from recent foreign deletes). DimSessions.drewFor(hsid) gives #gui-board-turn the tail
+# ' · drew N on the board' from rows of the latest ended turn (drop levels 4 ' on the board' and 5 'stopped: ').
+# #gui-board: onGone, a held mark another hand removed yields no op at the drop. The leaf (#gui-board, ui/board-leaf.ts)
+# draws one hand per attached session with its draw key ('may edit' / 'may not edit', E-design edit_anything) and
+# 4ch count slots, keeping key elements so nothing but a press focuses a key; #gui-board-dock says the lines.
+# Review fixes (Aegis I-1 to I-7, N-1, N-3, N-7 to N-9; Mika F1 to F10): keyed hands are built once and named from
+# the session; they give way (session cut to 5, then name) before a key is clipped; a held Enter presses once; an
+# answer before its own row holds (later grant rows fold over it); an unanswered change leaves the key `unsure` until
+# a row; a flip from another page is spoken; a failed backlog read leaves keys disabled; every delete is recorded
+# with who (agent, self, person, unknown); a refused check stays due; resize/rotate/typing/restyle read 'changing'.
+# Not built (recorded): the '+<k> ▾' hands menu: with two agents at a 1024 window or three at 1440 a key is still
+# clipped (a todo test pins it). Held words of a text whose mark another hand removed are NOT kept (aegis N-4, stated).
+# Round 2 (Mika F1-a, F1-b, F3-a; Aegis F-1, F-2): the not-running note gives way first, then sessions are cut, then
+# the shared name goes on every hand showing a session at once, then sessions from the last hand back; a hand whose
+# words went carries them in title=. The 4ch count slot is only for 'you' and keyed hands. An unsure key is settled
+# only by a grant row for its session later than its send point, or an answer at or after it.
+# Tests: test/dim-grant.test.ts, test/board-grant-key.test.ts.

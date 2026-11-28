@@ -103,13 +103,13 @@ describe('G-ID-09 counts: exactly one presence per decision', () => {
   it('install with ALL FIVE grant rows (trust, capability, egress, publisher binding, install): 1', async () => {
     const home = tmp();
     const r = rig();
-    const src = path.join(tmp(), 'board');
+    const src = path.join(tmp(), 'panel');
     fs.mkdirSync(src, { recursive: true });
-    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify({ manifest: 2, publisher: 'acme', kind: 'mod', name: 'board', version: '1.0.0', abi: 'mod-abi:v1', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: ['log.append:modns.acme.board.*'], egress: [{ host: 'api.example.com', purpose: 'p' }] } }));
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify({ manifest: 2, publisher: 'acme', kind: 'mod', name: 'panel', version: '1.0.0', abi: 'mod-abi:v1', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: ['log.append:modns.acme.panel.*'], egress: [{ host: 'api.example.com', purpose: 'p' }] } }));
     const verify = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: new FakeHelper(GEN).publicPem('root') }, {});
-    const st = stageInstall({ home, source: src, via: 'git', git: { url: 'https://gitlab.com/acme/board', commit: 'b'.repeat(40) }, requestedBy: HUMAN, trust: verify });
+    const st = stageInstall({ home, source: src, via: 'git', git: { url: 'https://gitlab.com/acme/panel', commit: 'b'.repeat(40) }, requestedBy: HUMAN, trust: verify });
     if (st.state !== 'staged') throw new Error('expected staged');
-    const card = await raiseInstallCard(r.broker, { home, name: 'acme.board', cardId: st.cardId, authority: r.root });
+    const card = await raiseInstallCard(r.broker, { home, name: 'acme.panel', cardId: st.cardId, authority: r.root });
     r.mark();
     await r.broker.approve(gui(), { cardId: card.cardId, decision: 'install' });
     expect(r.prompts()).toBe(1);

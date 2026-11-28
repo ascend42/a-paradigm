@@ -2,6 +2,13 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  unique-record:
+    description: 'unique-record.ts writeUniqueRecord(dir, idFor, contentFor, ext): writes a NEW record file and never overwrites one. The file is created exclusively (flag wx), so a taken id is detected by the filesystem, across processes too. Suffix order: a random 3-digit suffix (the historical id shape), then the following suffixes in order until all 999 are tried, then a random 6-digit suffix (readers match the suffix as \d+). Used by recordJournalEntry (LJ-<date>-<hhmmss>-<n>: two entries in one second used to collide about once in 999 and the second replaced the first), recordDecision (TD-<date>-<n>) and recordWorkLog (WL-<agent>-<date>-<n>), whose id space was 999 per DAY. Not yet covered: writeCompanionLoreEntry in decision-loader.ts (second + 3 digits, .lore file), and the ms + 4-digit ids in event-stream.ts and nomination-engine.ts.'
+    type: utility
+    file: packages/paradigm-mcp/src/utils/unique-record.ts
+    tags: [learning, journal, decisions, data-integrity]
+    tests:
+      - packages/paradigm-mcp/src/utils/unique-record.test.ts
   warpline-status:
     description: "T-2026-11-12-001 getWarplineStatus(rootDir) — the paradigm_status warpline field: {mode: native|git, start: 'warpline orient', synced: CLAUDE.md has exactly one whole-line block outside fenced code (hasSingleWarplineBlock)}, or null. Mirrors packages/paradigm core/warpline-detect.ts (the MCP server does not depend on the CLI package): .warpline/ dir or .warpignore file, git mode when .git exists in the root or any ancestor folder, integrations.warpline.guidance off hides it. File reads only, never throws; a test pins the begin marker to the CLI constant."
     file: warpline-status.ts
@@ -155,7 +162,7 @@ components:
     description: 'The Classroom decay pass (TD-2026-06-19-007, Phase 2; gated by TD-2026-07-01-401 / T-2026-11-03-001). Time may decay confidence, never mint evidence, and survival never waits on it (F2): EVERY pending cert, whatever its age, is offered to surviveCertification, which flips to survived only on exercise evidence and owns the break rule (an attributable break at/after the cert ts blocks; an older one does not, so no broken-entry pre-filter, F8). SURVIVAL_WINDOW_DAYS (14d, from premise-core) is only a label: an aged cert that did not survive is counted certsUnproven (derived, never written; the row stays pending). decayPassLogLevel: the summary logs at info only when something happened or the unproven count moved since the previous pass over the root, else debug (ruling 6). Gently decays confidence of entries idle past IDLE_WINDOW (30d) with low appliedCount (silence is signal; never deletes). runDecayPass is best-effort/idempotent, wired into ambient postflight right after runFieldFailureReducer. decay.test.ts carries the spec §1 guard: a fixture that clears the floor at t0 survives at t0, then with activity frozen and the clock advanced no new survivals (plus a separate zero-probe case).'
     type: service
     anchors:
-      - decay.ts:1-215
+      - decay.ts
     tags:
       - feature
       - classroom
@@ -165,7 +172,7 @@ components:
     type: service
     anchors:
       - field-failures.ts:1-490
-      - field-failure-reducer.ts:1-270
+      - field-failure-reducer.ts
     tags:
       - feature
       - classroom
@@ -287,7 +294,7 @@ components:
       - data-policy
       - sovereignty
   work-log-loader:
-    description: Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/
+    description: "Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/. workLogDateFromId reads the date folder from WL-<agent>-<date>-<suffix> and allows hyphens in the agent id (ui-builder); tests in work-log-loader.test.ts"
     type: loader
     tags:
       - feature

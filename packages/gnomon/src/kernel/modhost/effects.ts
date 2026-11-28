@@ -7,38 +7,116 @@
  * (state.set, `log.append` of `modns.<name>.*`) · `network` (only with an
  * egress grant, through the kernel's loopback proxy) · `spend` (drawn from the
  * calling session's permit). The DECLARED set of a mod is the union of its
- * tools' `effects` (manifest:v1 declares effects per tool; views and commands
- * carry none). The set in force for a mod → host call is the set of the
+ * tools' `effects` and of the `effects` its commands declare (S1.4: a command
+ * may declare `read` and `write` only; views carry none). The set in force for a mod → host call is the set of the
  * host → mod call it is BOUND to by its echoed `callId` (M1.11 slice 2): a
  * request naming the call in force gets that call's set; one carrying no
  * `callId` is idle (read, which only narrows); one naming any other call —
  * ended, foreign or guessed — is refused (host.ts, FORBIDDEN `CALL`):
  *   - `tool.call{name}` → that tool's effects;
- *   - `command.run`     → the mod's declared set (a user command, §12.3);
+ *   - `command.run`     → for a human on the GUI and a `gnomon`-published
+ *                         mod: exactly the command's own `effects` when its
+ *                         manifest entry declares them (S1.4, Aegis A7), else
+ *                         `read` only (G-MOD-20: a command writes only with
+ *                         declared `effects`); `read` only for
+ *                         every other command context, declared or not
+ *                         (commandCap, S1.3, G-MOD-17: the outer cap);
  *   - `view.render`     → `read` only (views are pure, §12.2);
  *   - idle / `event`    → `read` only.
  * A dev-mode mod is capped at `read` whatever it declares (§12.5).
  * `approve` is never proxied; a verb whose §5 mod cell is ✗ is refused.
  */
 import { VERBS } from '@a-company/gnomon-contracts';
-import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
+import { COMMAND_EFFECTS, type ManifestV2, type ToolEffect } from '../manifest/manifest.js';
 import { ModRefusal } from './refusal.js';
 
-export type CallContext = { kind: 'tool'; tool: string; hsid?: string } | { kind: 'command' } | { kind: 'view' } | { kind: 'idle' };
+/**
+ * What the HOST knows about the call a mod request is bound to (S1.2 C1, G-MOD-12): the `relayedFor` it sent the
+ * mod (built by `pickRelayedFor`, so the row holds exactly what the mod was told) and, for an entitled tool call,
+ * the turn that caused it. The bridge writes these onto every row the mod appends inside the call. Never mod input.
+ */
+export interface CallStamp {
+  relayedFor: Record<string, string>;
+  causes?: string[];
+  /**
+   * S1.3 (Aegis A4): the repo scope (`repo:<16 hex>`) of the session a first-party command was focused on, joined
+   * by the host (host.ts #composeRelayedArgs). The bridge writes it on the ENVELOPE `scope` of every row appended
+   * inside the call, so "listed by repo" is a read filter. Never mod input: `scope` is not in MOD_APPEND_FIELDS.
+   */
+  scope?: { repo: string };
+}
 
-export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
+/**
+ * `commandId` (S1.4): the id of the command the host is running, set by the host from the id it checked against the
+ * manifest (host.ts runCommand). HOST-INTERNAL: it picks the command's declared effects and is never mod input.
+ * A command context without it (no production caller builds one) is read-only.
+ */
+export type CallContext = { kind: 'tool'; tool: string; hsid?: string; stamp?: CallStamp } | { kind: 'command'; commandId?: string; stamp?: CallStamp } | { kind: 'view' } | { kind: 'idle' };
+
+/** The union of a mod's TOOL effects (the launch plan's base; a command never inherits it since S1.4 P3). */
+export function toolEffects(m: ManifestV2): Set<ToolEffect> {
   const out = new Set<ToolEffect>();
   for (const t of m.provides?.tools ?? []) for (const e of t.effects) out.add(e);
   return out;
 }
 
-/** The effects in force for a call context (∩ the dev cap). */
+/**
+ * What the LAUNCH PLAN reads (host.ts: the `write` flag of the `mod` profile, the egress proxy): the mod's tool
+ * effects, plus the `effects` its commands declare ONLY when the mod's publisher is `gnomon` (S1.4). A command
+ * writes only for a gnomon-published mod (commandCap), so a third-party command's declared `write` can never be in
+ * force and must not open the mod's write paths: a third-party mod with read-only tools launches without them
+ * whatever its commands declare. The install card and the widening surface still show the declaration (they read
+ * the manifest, not this). A command adds `read` or `write` only (manifest COMMAND_EFFECTS), never `network` or
+ * `spend`.
+ */
+export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
+  const out = toolEffects(m);
+  if (m.publisher === 'gnomon') for (const c of m.provides?.commands ?? []) for (const e of c.effects ?? []) out.add(e);
+  return out;
+}
+
+/**
+ * The set a command runs with BEFORE the caps (S1.4, Aegis A7). A command whose manifest entry has an own `effects`
+ * list gets exactly that list, cut to COMMAND_EFFECTS again here (the loader already refuses anything else, so the
+ * cut only matters for a manifest object that did not come through the loader). A command WITHOUT the field is
+ * read-only for every mod (S1.4 P3, G-MOD-20): it no longer inherits the union of the tool effects, so a tree that
+ * predates the field (the S1.3 dimension tree) cannot write through a command. A context with no command id, and an
+ * id the manifest does not declare, get `read` only too: it fails closed, and no production caller builds either (host.ts runCommand
+ * checks the id against the manifest first).
+ */
+export function commandEffects(m: ManifestV2, commandId: string | undefined): Set<ToolEffect> {
+  const c = commandId === undefined ? undefined : m.provides?.commands?.find((x) => x.id === commandId);
+  if (!c) return new Set<ToolEffect>(['read']);
+  if (Object.hasOwn(c, 'effects') && Array.isArray(c.effects)) {
+    return new Set<ToolEffect>(c.effects.filter((e) => (COMMAND_EFFECTS as readonly string[]).includes(e)));
+  }
+  return new Set<ToolEffect>(['read']);
+}
+
+/**
+ * The command READ CAP (S1.3, Aegis A2 and B1; G-MOD-17), generic to every mod. A command runs with its mod's
+ * declared set only when BOTH hold:
+ *   - the stamp the host built for the call (the `pickRelayedFor` output, never the request) has an own
+ *     `surface: 'gui'`: the caller is a human on the GUI credential (socket/dispatch.ts relaySurfaceOf);
+ *   - the mod's publisher is `gnomon` (the loader keeps publisher gnomon ⇔ the first-party tier).
+ * Everything else is capped at `read`, and it fails CLOSED because the full set is the exception here, not the
+ * default: a command context with no stamp (a direct `runCommand` with no `relayedFor`), a stamp without a surface
+ * (an agent, session, voice or mod caller), `surface: 'cli'` (a human on a device key) and a third-party mod on any
+ * surface can never `state.set` or `log.append` through a command.
+ */
+export function commandCap(m: ManifestV2, ctx: Extract<CallContext, { kind: 'command' }>): 'read' | null {
+  const rf = ctx.stamp?.relayedFor;
+  const gui = rf !== undefined && rf !== null && Object.hasOwn(rf, 'surface') && rf.surface === 'gui';
+  return gui && m.publisher === 'gnomon' ? null : 'read';
+}
+
+/** The effects in force for a call context (∩ the command read cap ∩ the dev cap). */
 export function effectsFor(m: ManifestV2, ctx: CallContext, dev: boolean): Set<ToolEffect> {
   let set: Set<ToolEffect>;
   if (ctx.kind === 'tool') set = new Set(m.provides?.tools?.find((t) => t.name === ctx.tool)?.effects ?? []);
-  else if (ctx.kind === 'command') set = declaredEffects(m);
+  else if (ctx.kind === 'command') set = commandEffects(m, ctx.commandId);
   else set = new Set<ToolEffect>(['read']);
-  if (dev) set = new Set([...set].filter((e) => e === 'read'));
+  if (dev || (ctx.kind === 'command' && commandCap(m, ctx) === 'read')) set = new Set([...set].filter((e) => e === 'read'));
   return set;
 }
 

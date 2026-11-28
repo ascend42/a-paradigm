@@ -1,0 +1,46 @@
+id: L-2026-11-24-ascend-064322-002
+type: review
+timestamp: '2026-11-24T06:43:22.386Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Mika renders the half-built S1.0 board under the CSP and finds a refusal the probe missed
+summary: 'The Atelier UI gate flagged Kit''s in-progress build script. Instead of a waiver, Mika rendered Kit''s board bundle in headless Chrome under the verbatim CSP and found a CSP refusal in Excalidraw''s stock Library sidebar, a serif font fallback, and two loader defects. Verdict: approved-with-fixes, scoped to an unreachable engine fixture.'
+symbols_touched:
+  - '#gui-board'
+  - '#doodle-mod'
+learnings:
+  - A waiver written by the orchestrator for its own builder's change is self-review; let the independent reviewer decide what is visual
+  - Build scripts that rewrite a third-party engine's styles, fonts and images are visual in effect even though they live in scripts/
+  - CSP probes must walk the engine's secondary UI (sidebars, dialogs, exporters), not only load, draw and export
+  - UI gate reviews must name screenshots by absolute path
+verification:
+  status: partial
+  details:
+    note: Chrome only, on the 22:29 build; fixes sent to Kit, not yet confirmed landed
+tags:
+  - gnomon
+  - dimensions
+  - s1.0
+  - atelier
+  - csp
+  - ui-gate
+  - T-2026-11-24-001
+body: |-
+  How it came about: the Stop hook's UI gate flagged packages/gnomon-gui/scripts/board-patches.mjs. The orchestrator tried to write a waiver ("build script, not visual"); the permission classifier refused that as undermining oversight. Mika then judged for herself: the script IS visual in effect, since four of its patches change what is drawn.
+
+  Findings (rendered unless noted):
+  - Select an element, press Library: style-src-attr and style-src-elem violations, because the sidebar writes an exported SVG preview with innerHTML. Thirteen other interactions were clean. This breaks S1.0's zero-refusals bar; the P12 probe did not walk this path.
+  - The font-registry-empty patch leaves board text and PNG export in the UA default serif, measured differently per OS. S1.1 registers a bundled face.
+  - The board bytes are embedded in the kernel's GUI bundle and served, but nothing mounts them; nothing enforced that yet. The isolation test must prove app.js cannot reach the chunk before the reskin.
+  - By reading: loadBoard can mount before its stylesheet applies and never retries a failed stylesheet (core/board.ts:70-86); mountBoard cannot report a crash after mount (board/index.ts:33-37).
+  - A 560px host flips the engine to its phone layout; S1.1 needs a minimum pane width.
+
+  The gate then rejected her review once on form: the Rendered section must name screenshots by paths that exist on disk (relative names resolve against the repo root).
+linked_tasks:
+  - T-2026-11-24-001
+git_context:
+  ref: 53b5a636c15a78bb8f3b5acf48d3630e7a62a77d
+  branch: feat/gnomon-boards-s1.0
+  dirty: true

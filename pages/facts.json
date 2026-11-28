@@ -1,0 +1,1896 @@
+{
+  "as_of": "2026-11-23",
+  "measured_at": {
+    "checkout_branch": "feat/gnomon-boards-s1.0",
+    "commit": "d4dd05b7",
+    "cli": "paradigm 8.1.3, warpline 0.3.1, gnomon 8.1.0",
+    "note": "Commands were run read-only in the main checkout. The dossier was measured the same day at 53b5a636; values that moved are noted on the fact."
+  },
+  "excerpts_pinned_to": {
+    "branch": "feat/hero-pages",
+    "commit": "6f29f25aea36ca64642cac0032e1ee5792f15033",
+    "note": "Re-pinned by the builder on 2026-11-23. Every excerpt, capture link and source link points at this commit; stamp.mjs reads the files as they are there."
+  },
+  "stale_after_days": 90,
+  "kinds": [
+    "verified today",
+    "recorded earlier",
+    "design, not measured"
+  ],
+  "standing_states": [
+    "built",
+    "did-not-hold",
+    "in progress",
+    "untested",
+    "not built"
+  ],
+  "facts": [
+    {
+      "id": "paradigm.version",
+      "value": "8.1.3",
+      "claim": "is the current release on npm.",
+      "source": "npm view @a-company/paradigm version; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.symbols-total",
+      "value": 1770,
+      "unit": "symbols",
+      "claim": "indexed in Paradigm's own repository.",
+      "source": "paradigm status; pages/captures/paradigm-status.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "Changed since the dossier: 1,769 earlier the same day. The count moves with every change; re-stamp before release."
+    },
+    {
+      "id": "paradigm.symbols-breakdown",
+      "value": {
+        "components": 1247,
+        "flows": 106,
+        "gates": 42,
+        "signals": 137,
+        "aspects": 238
+      },
+      "claim": "components, flows, gates, signals and aspects make up the total.",
+      "source": "paradigm status; pages/captures/paradigm-status.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "Changed since the dossier: components were 1,246. paradigm doctor counts 20 gates in portal.yaml; status counts gates declared in .purpose files too (the dossier's reading, not measured)."
+    },
+    {
+      "id": "paradigm.purpose-files",
+      "value": 129,
+      "unit": ".purpose files",
+      "claim": "hold that map, next to the code they describe.",
+      "source": "paradigm status; pages/captures/paradigm-status.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "paradigm doctor and the status footer say 131 files; status's own table says 129. Print 129 with the command."
+    },
+    {
+      "id": "paradigm.tools-default",
+      "value": 32,
+      "unit": "MCP tools",
+      "claim": "listed by the MCP server by default.",
+      "source": "packages/paradigm-mcp/src/tools/tools-list-budget.test.ts (run); pages/captures/mcp-budget-test.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.tools-tokens",
+      "value": 7793,
+      "unit": "tokens (estimated)",
+      "claim": "is the estimated size of that tool list on this repo.",
+      "source": "same test run; estimate is JSON length / 4, tools-list-budget.test.ts:77",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "An estimate, not a tokenizer count. Say 'about 7,800'."
+    },
+    {
+      "id": "paradigm.tools-budget",
+      "value": {
+        "tools": 40,
+        "tokens": 8000
+      },
+      "claim": "is the ceiling: a test fails the build above it.",
+      "source": "packages/paradigm-mcp/src/tools/tools-list-budget.test.ts:18-19",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.budget-test",
+      "value": "15 of 15",
+      "claim": "tests in the budget file pass.",
+      "source": "cd packages/paradigm-mcp && npx vitest run src/tools/tools-list-budget.test.ts --reporter=verbose; pages/captures/mcp-budget-test.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.tools-before",
+      "value": {
+        "tools": 134,
+        "tokens": 30000
+      },
+      "claim": "was the tool list before 7.13.0 (about 134 tools, about 30k tokens).",
+      "source": "CHANGELOG.md:441",
+      "measured": "2026-09-29",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "The 'before' is the changelog's own figure and was not re-measured. The 'after' is re-measured today."
+    },
+    {
+      "id": "paradigm.tools-on-demand",
+      "value": 14,
+      "claim": "more tools load only when a project turns them on.",
+      "source": "packages/paradigm-mcp/src/tools/families.ts:5",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "README.md:91 says 13 and CHANGELOG.md:445 says 12. The code says 14."
+    },
+    {
+      "id": "paradigm.audit-vulns",
+      "value": 0,
+      "unit": "vulnerabilities",
+      "claim": "known vulnerabilities in a fresh lockfile install of 8.1.3.",
+      "source": "npm install --package-lock-only --ignore-scripts @a-company/paradigm@8.1.3 && npm audit; pages/captures/npm-audit.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "True on the date shown. A new advisory can change it any day; always print the date and command."
+    },
+    {
+      "id": "paradigm.npm-versions",
+      "value": 123,
+      "unit": "published versions",
+      "claim": "versions published on npm.",
+      "source": "npm view @a-company/paradigm versions --json; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "CHANGELOG.md has 271 version headings and the repo has 0 git tags. Print the npm number for 'published'."
+    },
+    {
+      "id": "paradigm.git-tags",
+      "value": 0,
+      "claim": "git tags: a release cannot yet be rebuilt from a tag.",
+      "source": "git tag | wc -l; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "paradigm.enforcement-default",
+      "value": "none",
+      "claim": "is the default enforcement level. Every check is off until you choose a level.",
+      "source": "packages/paradigm/src/core/enforcement/loader.ts:21",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "README.md:6 and :14 and the generated CLAUDE.md say the Stop hook blocks. On a fresh project it does not."
+    },
+    {
+      "id": "paradigm.enforcement-levels",
+      "value": [
+        "minimal",
+        "balanced",
+        "strict"
+      ],
+      "claim": "are the levels you can set.",
+      "source": "paradigm enforcement set --help",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.enforcement-balanced-blocks",
+      "value": "purpose-coverage",
+      "claim": "is the check that blocks at the balanced level.",
+      "source": "paradigm enforcement status on this repo; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "On this repo, habits-blocking also shows block at balanced, and orchestration-required blocks by a local override. The teaching audit names purpose-coverage as the one a newcomer meets."
+    },
+    {
+      "id": "paradigm.stop-hook-fix",
+      "value": "about 1 s",
+      "claim": "is how long the Stop hook takes since 7.15.2. Before that it hit its 30 s timeout, so its checks did not run to the end.",
+      "source": "CHANGELOG.md:311",
+      "measured": "2026-10-22",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.stop-hook-timing",
+      "value": "p50 0.10 s, p95 0.23 s over 9 runs",
+      "claim": "is the Stop hook's measured time on one machine.",
+      "source": "paradigm doctor; pages/captures/paradigm-doctor.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "Changed since the dossier: 'p50 0.09s, p95 4.72s, max 4.72s over 14 run(s)' earlier the same day. One machine and a handful of runs. Not fit for a headline."
+    },
+    {
+      "id": "paradigm.ripple-example",
+      "value": 2,
+      "unit": "dependents",
+      "claim": "direct dependents of #init-handler: #shift-command and #init-command.",
+      "source": "paradigm ripple '#init-handler'; pages/captures/paradigm-ripple.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.ripple-false-safe",
+      "value": "0 dependents and \"safe to proceed\"",
+      "claim": "is what paradigm_ripple reported for a gate that was in use, until 7.15.0 fixed it.",
+      "source": "CHANGELOG.md:347",
+      "measured": "2026-10-14",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.gates-for-route",
+      "value": "empty list",
+      "claim": "is what paradigm_gates_for_route returns today: it cannot see the routes in portal.yaml.",
+      "source": "CHANGELOG.md:301; task T-2026-10-22-002 (open)",
+      "measured": "2026-10-24",
+      "kind": "recorded earlier",
+      "standing": "in progress"
+    },
+    {
+      "id": "paradigm.portal",
+      "value": {
+        "gates": 20,
+        "routes": 140
+      },
+      "claim": "gates and routes are declared in this repo's portal.yaml.",
+      "source": "paradigm doctor; pages/captures/paradigm-doctor.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.study-outcomes",
+      "value": "28 of 28, both",
+      "claim": "tests passed with Paradigm and without it, in the one paired study in the repo.",
+      "source": "case-study/compare.md:12",
+      "measured": "2026-02-06",
+      "kind": "recorded earlier",
+      "standing": "untested or not built",
+      "note": "Paradigm v2, a 15-file project, one run per variant. The study calls itself underpowered."
+    },
+    {
+      "id": "paradigm.study-tool-calls",
+      "value": {
+        "without": 71,
+        "with": 95
+      },
+      "unit": "tool calls",
+      "claim": "tool calls for the same task. Paradigm made more.",
+      "source": "case-study/compare.md:40",
+      "measured": "2026-02-06",
+      "kind": "recorded earlier",
+      "standing": "untested or not built",
+      "note": "The 'with' figure is written '~95' in the study. Print 'about 95'."
+    },
+    {
+      "id": "paradigm.study-file-reads",
+      "value": {
+        "without": 31,
+        "with": 25
+      },
+      "unit": "file reads",
+      "claim": "file reads for the same task. Paradigm made fewer.",
+      "source": "case-study/compare.md (dossier section 3A, P12)",
+      "measured": "2026-02-06",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "paradigm.outcome-data",
+      "value": "none",
+      "claim": "No measurement in the repo shows Paradigm reduces defects, tokens or time in use.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (3A, P12; section 2)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "untested or not built",
+      "note": "Verified absence, by the dossier's author. The site's '90% less context' has no source and must not appear."
+    },
+    {
+      "id": "paradigm.learning-liveness",
+      "value": "FLATLINE: 0 journals / 20 completions",
+      "claim": "is what paradigm doctor reports for the learning loop on Paradigm's own repo.",
+      "source": "paradigm doctor; pages/captures/paradigm-doctor.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "paradigm.learning-survival",
+      "value": "no exercise events recorded yet",
+      "claim": "No certified learning on this repo has the evidence it needs to survive.",
+      "source": "paradigm doctor; pages/captures/paradigm-doctor.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "paradigm.learning-gate",
+      "value": "two confirmed scenario runs, by a different agent",
+      "claim": "is what a certified learning needs before it counts as survived, since 8.1.1.",
+      "source": "CHANGELOG.md:51",
+      "measured": "2026-11-04",
+      "kind": "design, not measured",
+      "standing": "in progress",
+      "note": "The rule is built. It has no outcome data. TBD-FOUNDER: learning-story covers whether promotion is automatic or gated."
+    },
+    {
+      "id": "paradigm.calibration-data",
+      "value": "none recorded",
+      "claim": "paradigm calibrate exists; this repo holds no recorded usage for it to rebuild from.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (3A, P12)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "paradigm.purpose-coverage",
+      "value": "65% (186 of 288 source directories)",
+      "claim": "of Paradigm's own repo is covered by a .purpose file. Its own threshold is 80%.",
+      "source": "paradigm doctor; pages/captures/paradigm-doctor.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "in progress"
+    },
+    {
+      "id": "paradigm.own-repo-findings",
+      "value": {
+        "isolated_symbols": 580,
+        "dead_path_references": 15,
+        "portal_routes_without_implementation": 4,
+        "always_on_chars": 16606,
+        "always_on_cap": 12000
+      },
+      "claim": "are what paradigm doctor finds wrong on Paradigm's own repo today.",
+      "source": "paradigm doctor; pages/captures/paradigm-doctor.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "in progress",
+      "note": "Changed since the dossier: isolated symbols were 579."
+    },
+    {
+      "id": "paradigm.agents-bundled",
+      "value": 68,
+      "unit": "agent profiles",
+      "claim": "agent profiles ship with the CLI.",
+      "source": "ls packages/paradigm/templates/agents/*.agent | wc -l; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.decisions",
+      "value": 138,
+      "unit": "decisions",
+      "claim": "decision files are recorded in this repo.",
+      "source": "ls .paradigm/decisions | wc -l; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "134 are tracked by git on the measuring branch."
+    },
+    {
+      "id": "paradigm.lore",
+      "value": 710,
+      "unit": "lore entries",
+      "claim": "lore entries are recorded in this repo.",
+      "source": "find .paradigm/lore/entries -type f | wc -l; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "Changed since the dossier: 707 earlier the same day. 700 are tracked by git on the measuring branch."
+    },
+    {
+      "id": "paradigm.protocols",
+      "value": 41,
+      "unit": "protocols",
+      "claim": "recorded protocols in this repo.",
+      "source": "ls .paradigm/protocols | wc -l; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "paradigm.supersession",
+      "value": "0 of 138",
+      "claim": "decision files use the structured supersedes fields. One has status: superseded.",
+      "source": "grep -l '^supersedes:\\|^superseded_by:' .paradigm/decisions/*.yaml | wc -l",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "untested or not built",
+      "note": "DIRECTION.md asks the 'one session' section to show a decision that supersedes another. The repo holds none in structured form. That row has no example."
+    },
+    {
+      "id": "paradigm.ci",
+      "value": "disabled",
+      "claim": "The general CI and Release workflows are disabled on GitHub. No active workflow runs the CLI and MCP test suites.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (section 5; gh workflow list --all)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "Not re-run for this file. The second sentence is the dossier's inference."
+    },
+    {
+      "id": "paradigm.tests-recorded",
+      "value": {
+        "paradigm": 725,
+        "paradigm-mcp": 774,
+        "premise-core": 127,
+        "purpose-core": 11
+      },
+      "claim": "tests passed at 7.15.0.",
+      "source": "CHANGELOG.md:371",
+      "measured": "2026-10-14",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "Not re-run. Print with the date or leave out."
+    },
+    {
+      "id": "paradigm.security-fixes",
+      "value": "8.0.4",
+      "claim": "fixed command injection through file names, found by the project's own security review. Versions up to 8.0.4 had it.",
+      "source": "CHANGELOG.md:157",
+      "measured": "2026-10-28",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.version",
+      "value": "8.1.0",
+      "claim": "is the current Gnomon release on npm.",
+      "source": "npm view @a-company/gnomon version; gnomon --version; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.notarized",
+      "value": "accepted, source=Notarized Developer ID",
+      "claim": "is what macOS says about the published app.",
+      "source": "spctl -a -vv Gnomon.app on @a-company/gnomon-darwin-arm64@8.1.0; pages/captures/gnomon-verification.txt",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "Run by the dossier's author on 2026-11-23. Not re-downloaded for this file."
+    },
+    {
+      "id": "gnomon.sha256",
+      "value": "45eb7ad6d3b627776537b93b3c167a0b266c2a16cd19c7bb2d32b3f583d693c6",
+      "claim": "is the published hash, and the downloaded zip matches it.",
+      "source": "shasum -a 256 Gnomon.app.zip; pages/captures/gnomon-verification.txt",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.stapled",
+      "value": "The validate action worked!",
+      "claim": "is the stapler's answer: the notarization ticket is attached to the app.",
+      "source": "xcrun stapler validate Gnomon.app; pages/captures/gnomon-verification.txt",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.verify-commands",
+      "value": 4,
+      "unit": "commands",
+      "claim": "commands let anyone check the app: npm pack, shasum, spctl, stapler.",
+      "source": "pages/captures/gnomon-verification.txt",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.threats",
+      "value": 32,
+      "unit": "threats",
+      "claim": "threats are listed in the spec, each with what is still exposed.",
+      "source": "docs/specs/gnomon.md:1887-1923",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.spec-lines",
+      "value": 2486,
+      "unit": "lines",
+      "claim": "lines in the build spec.",
+      "source": "wc -l docs/specs/gnomon.md; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.spec-ids",
+      "value": 340,
+      "unit": "test ids",
+      "claim": "test ids are named in the build spec.",
+      "source": "grep -oE '\\bG-[A-Z]+-[0-9]+[a-z]?\\b' docs/specs/gnomon.md | sort -u | wc -l; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "Changed since the dossier: 339 at its HEAD (53b5a636); 340 at d4dd05b7 on the boards branch, which adds one id. Across the three Gnomon specs: 368 today, 367 in the dossier."
+    },
+    {
+      "id": "gnomon.spec-ids-tested",
+      "value": {
+        "in_specs": 367,
+        "referenced_by_tests": 223,
+        "no_test": 144
+      },
+      "claim": "of the test ids in the three Gnomon specs are referenced by a test file; the rest are not.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (3B, G2)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "Not re-run (the spec total has since moved to 368). 'Referenced by a test file' is weaker than 'the test passes'. The largest untested groups belong to features that are not built."
+    },
+    {
+      "id": "gnomon.first-release-days",
+      "value": 7,
+      "unit": "days",
+      "claim": "days from the first package commit (2026-10-17) to the first npm release (8.0.2, 2026-10-24).",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (3B, G8); CHANGELOG.md:212",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "Pace is a fact. It is not a quality claim."
+    },
+    {
+      "id": "gnomon.ci-latest",
+      "value": "7 of 8",
+      "claim": "CI jobs passed on the latest run on main. The probes job on macOS failed.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (3B, G5; gh run view 43286257168 --json jobs)",
+      "measured": "2026-11-12",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "Last fully green Gnomon run on main: 2026-11-04."
+    },
+    {
+      "id": "gnomon.ci-matrix",
+      "value": [
+        "macos-15",
+        "windows-latest",
+        "ubuntu-latest"
+      ],
+      "claim": "is the test matrix.",
+      "source": ".github/workflows/gnomon.yml:45",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.contracts-tests",
+      "value": "634 of 634",
+      "claim": "tests passed in the contracts package.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (3B, G3; cd packages/gnomon-contracts && npx vitest run)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "Run by the dossier's author today. The kernel suite was not run."
+    },
+    {
+      "id": "gnomon.probes",
+      "value": {
+        "results": 35,
+        "pass": 22,
+        "partial": 7,
+        "fail": 2,
+        "no_verdict": 3,
+        "from_one_mac": 33,
+        "from_windows": 2
+      },
+      "claim": "measurements were taken before building. Two failed, and changed the design.",
+      "source": "packages/gnomon/probes/results; .paradigm/research/hero-pages/evidence-dossier.md (3B, G4)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "The file count (35) was re-counted today. The verdict split is the dossier's."
+    },
+    {
+      "id": "gnomon.one-machine",
+      "value": "33 of 35",
+      "claim": "probe results come from one Apple M4 Mac. No report from an outside user is in the repo.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (section 5)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "gnomon.log-append",
+      "value": "p99 0.055 ms over 1,000,000 appends",
+      "claim": "is the measured cost of writing to the log on that Mac.",
+      "source": "packages/gnomon/probes/results/p-log-fsync-armG-1e6.darwin.json",
+      "measured": "2026-10-17",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.spend",
+      "value": "measures and does not enforce",
+      "claim": "is how the changelog describes the budget meter. Gnomon shows spending. It does not cap it.",
+      "source": "CHANGELOG.md:235; docs/specs/gnomon.md:1893",
+      "measured": "2026-10-24",
+      "kind": "recorded earlier",
+      "standing": "untested or not built",
+      "note": "README.md:54 says 'A budget fuse. A spending limit'. The pages must not repeat it."
+    },
+    {
+      "id": "gnomon.helper-caller",
+      "value": "not built",
+      "claim": "The Mac helper does not yet check which program calls it. Every signature still needs Touch ID or your password.",
+      "source": "CHANGELOG.md:298; README.md:69",
+      "measured": "2026-10-24",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "gnomon.platform",
+      "value": "Apple silicon, macOS 15 or later",
+      "claim": "is the only platform Gnomon runs on. Intel, Windows and Linux are refused.",
+      "source": "CHANGELOG.md:295; README.md:64",
+      "measured": "2026-10-24",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.loops",
+      "value": "off in release builds",
+      "claim": "Loops are specified and switched off in the app you install.",
+      "source": "CHANGELOG.md:130",
+      "measured": "2026-10-29",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "gnomon.requirements",
+      "value": [
+        "An Apple silicon Mac with macOS 15 or later and System Integrity Protection on",
+        "Claude Code from the native installer, signed in with your Claude subscription",
+        "Touch ID or your login password",
+        "Node 24 or later"
+      ],
+      "claim": "are the four requirements. Gnomon refuses API-key billing.",
+      "source": "README.md:62-67",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "packages/gnomon/README.md:19 says Node 22.14+ also works. The teaching audit could not settle it; the pages follow the root README."
+    },
+    {
+      "id": "gnomon.setup-prompts",
+      "value": 2,
+      "unit": "prompts",
+      "claim": "Touch ID or password prompts during setup.",
+      "source": "README.md:47; CHANGELOG.md:231",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "gnomon.sandbox-denies",
+      "value": [
+        "~/.gnomon",
+        "~/.ssh",
+        "~/.aws",
+        "other credential stores"
+      ],
+      "claim": "are denied to every session by the sandbox profile.",
+      "source": "CHANGELOG.md:238; docs/specs/gnomon.md:1936-1946",
+      "measured": "2026-10-24",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "Specified, and a test file names it (packages/gnomon/test/session-sandbox.test.ts). The dossier did not run it or exercise the sandbox."
+    },
+    {
+      "id": "gnomon.boards",
+      "value": "first slice on a branch",
+      "claim": "Boards are being built. They are not released.",
+      "source": "decision TD-2026-11-24-500; branch feat/gnomon-boards-s1.0",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "in progress",
+      "note": "session.yaml asks the founder whether to say this in public yet."
+    },
+    {
+      "id": "warpline.version",
+      "value": "0.3.1",
+      "claim": "is the current Warpline release on npm. It is labelled experimental.",
+      "source": "npm view @a-company/warpline versions; warpline --version; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "in progress"
+    },
+    {
+      "id": "warpline.npm-versions",
+      "value": 4,
+      "unit": "published versions",
+      "claim": "versions published: 0.2.1, 0.2.2, 0.3.0, 0.3.1.",
+      "source": "npm view @a-company/warpline versions; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "in progress"
+    },
+    {
+      "id": "warpline.commands",
+      "value": 40,
+      "unit": "commands",
+      "claim": "top-level commands.",
+      "source": "warpline --help; pages/captures/counts.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built"
+    },
+    {
+      "id": "warpline.base-rate",
+      "value": {
+        "count": "17 of 275",
+        "rate": "6.2%"
+      },
+      "claim": "git-clean merges in zod, nest and xstate were flagged as changing what the code means.",
+      "source": ".paradigm/research/warpline-guard-base-rate/results.md:38-47",
+      "measured": "2026-07-01",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "Three repos; most hits come from zod's 2021-2022 history. 360 oracle runs, 0 errors, 0 timeouts."
+    },
+    {
+      "id": "warpline.ground-truth",
+      "value": {
+        "hits": 18,
+        "real_break_at_merge": 0,
+        "fixed_by_a_human_within_a_day": 3,
+        "benign": 15
+      },
+      "claim": "is what those flags turned out to be.",
+      "source": ".paradigm/research/warpline-guard-base-rate/ground-truth.md:13-27",
+      "measured": "2026-07-02",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "18 hits includes one from the nest TypeScript stratum. Precision is 3 of 18 at best. No hit was a defect created by the merge itself."
+    },
+    {
+      "id": "warpline.tsc",
+      "value": "0 of 18",
+      "claim": "of those flags would have been caught by the TypeScript compiler.",
+      "source": ".paradigm/research/warpline-guard-base-rate/ground-truth.md:15-21",
+      "measured": "2026-07-02",
+      "kind": "recorded earlier",
+      "standing": "in progress"
+    },
+    {
+      "id": "warpline.llm-judge",
+      "value": "1 of 3",
+      "claim": "of the real defects was caught by a blind LLM reviewer given the same cases.",
+      "source": ".paradigm/research/warpline-llm-judge-falsifier/results.md:4-43",
+      "measured": "2026-07-15",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "36 blind judges, one per case. The dossier names the model (Claude Sonnet); the page says 'a blind LLM reviewer'."
+    },
+    {
+      "id": "warpline.missed",
+      "value": 1,
+      "unit": "missed defect",
+      "claim": "real defect created by a merge was missed by Warpline and found by the LLM reviewer. It crosses two symbols, which Warpline cannot represent.",
+      "source": ".paradigm/research/warpline-llm-judge-falsifier/results.md:45-64",
+      "measured": "2026-07-15",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "warpline.seeded-run",
+      "value": "32 of 144 (22.2%)",
+      "claim": "seeded changes were decided by meaning where git alone gave the wrong or no answer. Every case was planted by us.",
+      "source": ".paradigm/research/warpline-dogfood/run-results-full.md (sections 0-4)",
+      "measured": "2026-07-15",
+      "kind": "recorded earlier",
+      "standing": "in progress",
+      "note": "Not a rate in the wild; the run record says so. 3 false knots, all pre-declared. 8 raw false-cleans attributed to seed authoring."
+    },
+    {
+      "id": "warpline.k3",
+      "value": "fired (76.7% vs 79.3%, p = 0.756)",
+      "claim": "The test we set in advance for per-codebase calibration failed: the linked group did no better than the independent one.",
+      "source": ".paradigm/research/warpline-dogfood/run-results-full.md (sections 0-4)",
+      "measured": "2026-07-15",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "warpline.field-test",
+      "value": "not run",
+      "claim": "The field test written down in advance has not been run.",
+      "source": "CHANGELOG.md:686; docs/guides/warpline-field-test-runbook.md:3",
+      "measured": "2026-08-24",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "warpline.server-run",
+      "value": "not run",
+      "claim": "A full run with a server, end to end, has not been done. Nor has a run at scale.",
+      "source": "founder, 2026-11-23 (DIRECTION.md, quoted)",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "warpline.own-repo",
+      "value": "UNSOUND: 63 failures of 374",
+      "claim": "is what warpline health reports on this repo. We stopped dogfooding here on 2026-11-09 and moved testing to a separate server.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (section 5; warpline health); commit 96e234ef",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "untested or not built",
+      "note": "Not re-run. The decision file TD-2026-11-09-865 is not tracked on the pages branch, so the link target is the commit (#97)."
+    },
+    {
+      "id": "warpline.lens",
+      "value": "TypeScript only",
+      "claim": "is the only language Warpline reads for meaning today.",
+      "source": ".paradigm/research/hero-pages/evidence-dossier.md (section 5); docs/guides/warpline-project-setup.md",
+      "measured": "2026-11-23",
+      "kind": "recorded earlier",
+      "standing": "in progress"
+    },
+    {
+      "id": "warpline.oracle-example",
+      "value": {
+        "autoClean": 107,
+        "knots": 0,
+        "dangling": 0,
+        "score": 1,
+        "verdict": "CONVERGENT",
+        "wall_time": "2 min 11 s"
+      },
+      "claim": "is the answer for two real branches of this repo: Warpline predicted a clean merge and git agreed.",
+      "source": "warpline oracle origin/fix/onboarding-truth origin/feat/gnomon-boards-s1.0 (scratch clone); pages/captures/warpline-oracle.txt",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "An agreement, not a catch. The time is one run on one Apple silicon Mac."
+    },
+    {
+      "id": "warpline.oracle-writes",
+      "value": ".warpline/",
+      "claim": "is a folder the oracle creates in the repo (oracle.jsonl, states/, warp/). It does not touch git or your files.",
+      "source": "pages/captures/warpline-oracle.txt (last line: 'appended → .warpline/oracle.jsonl')",
+      "measured": "2026-11-23",
+      "kind": "verified today",
+      "standing": "built",
+      "note": "The teaching audit and warpline --help call the oracle read-only. It leaves a 97,516-byte record on this repo. `warpline init` is what keeps .warpline/ out of git; before init, the folder shows as untracked."
+    },
+    {
+      "id": "warpline.tests-recorded",
+      "value": "1328 to 1330 of 1333",
+      "claim": "tests passed at 7.15.0; the failures were 60-second timeouts under load.",
+      "source": "CHANGELOG.md:372",
+      "measured": "2026-10-14",
+      "kind": "recorded earlier",
+      "standing": "built",
+      "note": "Not re-run."
+    },
+    {
+      "id": "warpline.fabric-branch",
+      "value": "warpline/fabric",
+      "claim": "is the protected git branch where Warpline 0.3.0 keeps its record, with verified adoption on a fresh clone.",
+      "source": "CHANGELOG.md:26",
+      "measured": "2026-11-06",
+      "kind": "recorded earlier",
+      "standing": "built"
+    },
+    {
+      "id": "learn.level0-time",
+      "value": "about 10 minutes",
+      "claim": "is the teaching audit's estimate for the first level. Nobody has timed it.",
+      "source": ".paradigm/research/hero-pages/teaching-audit.md:65",
+      "measured": "2026-11-23",
+      "kind": "design, not measured",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "learn.gnomon-time",
+      "value": "about 5 minutes",
+      "claim": "is the audit's estimate for the first Gnomon card, if the requirements hold. Not timed.",
+      "source": ".paradigm/research/hero-pages/teaching-audit.md:73",
+      "measured": "2026-11-23",
+      "kind": "design, not measured",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "learn.warpline-time",
+      "value": "about 3 minutes",
+      "claim": "is the audit's estimate for the Warpline track. Our one oracle run on this repo took 2 min 11 s by itself.",
+      "source": ".paradigm/research/hero-pages/teaching-audit.md:80; pages/captures/warpline-oracle.txt",
+      "measured": "2026-11-23",
+      "kind": "design, not measured",
+      "standing": "untested or not built"
+    },
+    {
+      "id": "learn.university-usage",
+      "value": "0 uses in 30 days",
+      "claim": "is why the path is not a course: the built-in University recorded no use.",
+      "source": "decision TD-2026-09-26-846 (teaching-audit.md:93)",
+      "measured": "2026-09-26",
+      "kind": "recorded earlier",
+      "standing": "untested or not built"
+    }
+  ],
+  "standing": {
+    "paradigm": {
+      "line": [
+        {
+          "state": "built",
+          "what": "the symbol map, the hooks, the MCP server; 8.1.3 on npm; a fresh install audits at 0 vulnerabilities",
+          "evidence": "npm audit, 2026-11-23",
+          "facts": [
+            "paradigm.version",
+            "paradigm.audit-vulns"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "whether what agents learn improves their work: no outcome data yet",
+          "evidence": "paradigm doctor on this repo, 2026-11-23",
+          "facts": [
+            "paradigm.learning-liveness"
+          ]
+        }
+      ],
+      "ledger": [
+        {
+          "state": "built",
+          "what": "The map: .purpose files and portal.yaml, indexed into five kinds of symbol",
+          "evidence": "paradigm status",
+          "facts": [
+            "paradigm.symbols-total",
+            "paradigm.purpose-files"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "The MCP server, with a tool list held under a tested budget",
+          "evidence": "tools-list-budget.test.ts, run 2026-11-23",
+          "facts": [
+            "paradigm.tools-default",
+            "paradigm.tools-budget"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "Impact analysis: paradigm ripple and its MCP tool",
+          "evidence": "real answer in pages/captures/paradigm-ripple.txt; a false 'safe' was fixed in 7.15.0",
+          "facts": [
+            "paradigm.ripple-example",
+            "paradigm.ripple-false-safe"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "Hooks and enforcement levels. Off by default; you choose minimal, balanced or strict",
+          "evidence": "loader.ts:21; CHANGELOG.md:311",
+          "facts": [
+            "paradigm.enforcement-default",
+            "paradigm.stop-hook-fix"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "Decisions and lore kept in the repo",
+          "evidence": "ls and find, 2026-11-23",
+          "facts": [
+            "paradigm.decisions",
+            "paradigm.lore"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "A clean dependency audit on install",
+          "evidence": "npm audit, 2026-11-23",
+          "facts": [
+            "paradigm.audit-vulns"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Looking up the gates for a route: the tool returns an empty list today",
+          "evidence": "CHANGELOG.md:301; task T-2026-10-22-002 is open",
+          "facts": [
+            "paradigm.gates-for-route"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Gated learning: the rules are built (8.1.1); nothing has passed through them on this repo",
+          "evidence": "CHANGELOG.md:51; paradigm doctor",
+          "facts": [
+            "paradigm.learning-gate",
+            "paradigm.learning-survival"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Purpose coverage on our own repo is 65% (186 of 288 directories), below its own 80% line",
+          "evidence": "paradigm doctor, 2026-11-23",
+          "facts": [
+            "paradigm.purpose-coverage",
+            "paradigm.own-repo-findings"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "CI for the CLI and MCP test suites: the general workflows are disabled",
+          "evidence": "gh workflow list --all (dossier, 2026-11-23)",
+          "facts": [
+            "paradigm.ci"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "A CLI command to rebuild the index (paradigm reindex)",
+          "evidence": "companion branch; not on main"
+        },
+        {
+          "state": "untested",
+          "what": "Whether Paradigm saves tokens or improves results in use",
+          "evidence": "the one paired study: same results, more tool calls, too small",
+          "facts": [
+            "paradigm.study-outcomes",
+            "paradigm.study-tool-calls"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Whether what agents learn improves their work",
+          "evidence": "paradigm doctor: FLATLINE, no survival evidence",
+          "facts": [
+            "paradigm.learning-liveness"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Journals from the learning loop on this repo: none recorded",
+          "evidence": "paradigm doctor, 2026-11-23: \"FLATLINE: 0 journals / 20 completions\"; pages/captures/paradigm-doctor.txt",
+          "facts": [
+            "paradigm.learning-liveness"
+          ],
+          "added": "builder, from the evidence dossier, fact 10 and line 244"
+        },
+        {
+          "state": "untested",
+          "what": "Token estimates rebuilt from measured use: the command exists, this repo has no data for it",
+          "evidence": "dossier 3A, P12",
+          "facts": [
+            "paradigm.calibration-data"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Decisions that replace earlier ones, as structured records: the fields exist, 0 of 138 files use them",
+          "evidence": "grep, 2026-11-23",
+          "facts": [
+            "paradigm.supersession"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "A working example of Warpline on this repo: our own ledger fails `warpline health` since we stopped using it here on 2026-11-09",
+          "evidence": "warpline health (dossier, 2026-11-23): UNSOUND, 63 failures of 374; decision TD-2026-11-09-865; commit 96e234ef",
+          "facts": [
+            "warpline.own-repo"
+          ],
+          "added": "builder, from the evidence dossier, fact 10 and line 242"
+        },
+        {
+          "state": "not built",
+          "what": "Releases you can rebuild from a git tag: there are no tags",
+          "evidence": "git tag | wc -l",
+          "facts": [
+            "paradigm.git-tags"
+          ]
+        }
+      ]
+    },
+    "gnomon": {
+      "line": [
+        {
+          "state": "built",
+          "what": "signed and notarized app, Apple silicon Macs only",
+          "evidence": "spctl on the npm package (dossier, 2026-11-23)",
+          "facts": [
+            "gnomon.notarized",
+            "gnomon.platform"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "boards (first slice on a branch)",
+          "evidence": "git log; TD-2026-11-24-500",
+          "facts": [
+            "gnomon.boards"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "on any Mac but the one it was built on",
+          "evidence": "33 of 35 probe results from one machine",
+          "facts": [
+            "gnomon.one-machine"
+          ]
+        }
+      ],
+      "ledger": [
+        {
+          "state": "built",
+          "what": "The app: Developer ID signed, notarized, stapled, hash-matched",
+          "evidence": "four commands in pages/captures/gnomon-verification.txt",
+          "facts": [
+            "gnomon.notarized",
+            "gnomon.sha256",
+            "gnomon.stapled"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "The decision stack: requests arrive as cards, silence means deny, each answer is signed",
+          "evidence": "CHANGELOG.md:231-238; packages/gnomon/test/approval-broker.test.ts (named, not run by us today)"
+        },
+        {
+          "state": "built",
+          "what": "The hash-chained log: a changed, deleted or cut-off row is detected",
+          "evidence": "docs/specs/gnomon.md section 3.2; packages/gnomon/test/kernel-log.test.ts (named, not run by us today)",
+          "facts": [
+            "gnomon.log-append"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "Sandboxed sessions: credential folders denied",
+          "evidence": "CHANGELOG.md:238; packages/gnomon/test/session-sandbox.test.ts (named, not run by us today)",
+          "facts": [
+            "gnomon.sandbox-denies"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "Subscription only: refuses to start a session that would bill API credits",
+          "evidence": "docs/specs/gnomon.md:1338; packages/gnomon/test/session-preflight.test.ts (named)"
+        },
+        {
+          "state": "built",
+          "what": "Local models with tools, under the same cards",
+          "evidence": "CHANGELOG.md:75"
+        },
+        {
+          "state": "built",
+          "what": "A published threat list with what is still exposed for each",
+          "evidence": "docs/specs/gnomon.md:1887-1923",
+          "facts": [
+            "gnomon.threats"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Boards",
+          "evidence": "branch feat/gnomon-boards-s1.0; TD-2026-11-24-500",
+          "facts": [
+            "gnomon.boards"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Test coverage of the spec: 223 of 367 test ids are referenced by a test file",
+          "evidence": "dossier 3B, G2",
+          "facts": [
+            "gnomon.spec-ids-tested"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "CI: 7 of 8 jobs passed on the latest run on main; the macOS probes job failed",
+          "evidence": "gh run view 43286257168 (2026-11-12)",
+          "facts": [
+            "gnomon.ci-latest"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Windows: tested in CI and probes, not shipped",
+          "evidence": "CHANGELOG.md:295; .github/workflows/gnomon.yml:45",
+          "facts": [
+            "gnomon.ci-matrix"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Loops: specified, off in the app you install",
+          "evidence": "CHANGELOG.md:130",
+          "facts": [
+            "gnomon.loops"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Any machine but the founder's: no outside reports yet",
+          "evidence": "dossier section 5",
+          "facts": [
+            "gnomon.one-machine"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "A spending cap. Gnomon meters spending and does not stop it",
+          "evidence": "CHANGELOG.md:235; docs/specs/gnomon.md:1893",
+          "facts": [
+            "gnomon.spend"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "The helper checking which program calls it",
+          "evidence": "CHANGELOG.md:298",
+          "facts": [
+            "gnomon.helper-caller"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "Spawning from contracts, kernel linking, CI signing: specified, not built",
+          "evidence": "CHANGELOG.md:302"
+        },
+        {
+          "state": "not built",
+          "what": "Intel Macs and Linux: refused. Windows is under In progress",
+          "evidence": "CHANGELOG.md:295",
+          "facts": [
+            "gnomon.platform"
+          ]
+        }
+      ]
+    },
+    "warpline": {
+      "line": [
+        {
+          "state": "in progress",
+          "what": "0.3.1 on npm, experimental",
+          "evidence": "npm view, 2026-11-23",
+          "facts": [
+            "warpline.version"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "not yet run end to end with a server, or at scale",
+          "evidence": "founder, 2026-11-23",
+          "facts": [
+            "warpline.server-run"
+          ]
+        }
+      ],
+      "ledger": [
+        {
+          "state": "built",
+          "what": "The command line: init, orient, and the save cycle (fork, propose, admit)",
+          "evidence": "CHANGELOG.md:13 (the agent guide names the save cycle); CHANGELOG.md:14 (warpline orient); warpline --help",
+          "facts": [
+            "warpline.commands"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "The forecast: warpline oracle on two branches of any git repo",
+          "evidence": "ran on this repo 2026-11-23; pages/captures/warpline-oracle.txt",
+          "facts": [
+            "warpline.oracle-example"
+          ]
+        },
+        {
+          "state": "built",
+          "what": "The record kept on its own protected git branch, with verified adoption on a fresh clone",
+          "evidence": "CHANGELOG.md:26 (Warpline 0.3.0)",
+          "facts": [
+            "warpline.fabric-branch"
+          ]
+        },
+        {
+          "state": "did-not-hold",
+          "what": "An advantage from calibrating to one codebase. We set the bar before the run, and the run did not clear it",
+          "evidence": "recorded 2026-07-15, not re-run; seeded run, 144 scored admissions; gate K3 fired: 76.7% against 79.3% survival, p = 0.756; .paradigm/research/warpline-dogfood/run-results-full.md (evidence dossier, W4)",
+          "facts": [
+            "warpline.k3",
+            "warpline.seeded-run"
+          ]
+        },
+        {
+          "state": "in progress",
+          "what": "Languages: TypeScript only",
+          "evidence": "docs/guides/warpline-project-setup.md",
+          "facts": [
+            "warpline.lens"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "Whether an agent with no prior knowledge can use it from the shipped guide alone",
+          "evidence": "CHANGELOG.md:20 (the F4 cold-agent runs are set up); no result is recorded"
+        },
+        {
+          "state": "untested",
+          "what": "The field test we wrote down in advance",
+          "evidence": "not run; CHANGELOG.md:686",
+          "facts": [
+            "warpline.field-test"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "A full run with a server, end to end",
+          "evidence": "not run; founder, 2026-11-23",
+          "facts": [
+            "warpline.server-run"
+          ]
+        },
+        {
+          "state": "untested",
+          "what": "What it looks like at large: many agents, large repositories",
+          "evidence": "not run; founder, 2026-11-23",
+          "facts": [
+            "warpline.server-run"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "Defects that cross two symbols: it missed the one in the study",
+          "evidence": "warpline-llm-judge-falsifier/results.md:45-64",
+          "facts": [
+            "warpline.missed"
+          ]
+        },
+        {
+          "state": "not built",
+          "what": "A working example on this repo: our own ledger reads UNSOUND since we stopped using it here",
+          "evidence": "warpline health (dossier, 2026-11-23); commit 96e234ef",
+          "facts": [
+            "warpline.own-repo"
+          ]
+        }
+      ]
+    }
+  },
+  "tbd_founder": {
+    "warpline-tagline": {
+      "default": "No tagline. The page says in a plain sentence what it does: Warpline checks a merge by what the code means.",
+      "used_in": [
+        "warpline.md section 1",
+        "hub.md sections 1 and 2"
+      ]
+    },
+    "learning-story": {
+      "default": "The pages describe the gate as the design and say outcome data is not in yet. No page says a learning is promoted automatically or that agents improve.",
+      "used_in": [
+        "paradigm.md section 2 (Calibration)",
+        "learn.md level 3",
+        "learn.md practice 9"
+      ]
+    },
+    "tutorial": {
+      "default": "`paradigm tutorial` is not referenced anywhere in the path.",
+      "used_in": [
+        "learn.md level 1 (by omission)"
+      ]
+    },
+    "default-enforcement": {
+      "default": "Stays `none`. Every page says checks are off until you turn them on.",
+      "used_in": [
+        "hub.md section 1",
+        "paradigm.md sections 1, 2, 6 and 7",
+        "learn.md level 2 and practice 3"
+      ]
+    },
+    "pages-direction": {
+      "default": "Section order and components follow DIRECTION.md as proposed.",
+      "used_in": [
+        "all five content files"
+      ]
+    }
+  },
+  "excerpts": {
+    "paradigm.init-command": {
+      "path": "packages/paradigm/.purpose",
+      "lines": [
+        29,
+        40
+      ],
+      "used_in": [
+        "hub.md section 1 (lines 32-39)",
+        "paradigm.md section 3"
+      ],
+      "note": "Runs to line 40 so it ends where the components list ends (Mika, 2026-11-23). The hub shows lines 32 to 40."
+    },
+    "paradigm.enforcement-default": {
+      "path": "packages/paradigm/src/core/enforcement/loader.ts",
+      "lines": [
+        21,
+        21
+      ],
+      "used_in": [
+        "paradigm.md section 4, row 3"
+      ]
+    },
+    "paradigm.budget-test": {
+      "path": "packages/paradigm-mcp/src/tools/tools-list-budget.test.ts",
+      "lines": [
+        18,
+        19
+      ],
+      "used_in": [
+        "paradigm.md section 3"
+      ]
+    },
+    "paradigm.ripple-answer": {
+      "path": "pages/captures/paradigm-ripple.txt",
+      "lines": null,
+      "used_in": [
+        "paradigm.md section 4, row 1",
+        "learn.md level 0"
+      ]
+    },
+    "paradigm.study": {
+      "path": "case-study/compare.md",
+      "lines": [
+        12,
+        40
+      ],
+      "used_in": [
+        "paradigm.md section 3 (before and after)"
+      ]
+    },
+    "gnomon.verification": {
+      "path": "pages/captures/gnomon-verification.txt",
+      "lines": null,
+      "used_in": [
+        "gnomon.md section 3"
+      ]
+    },
+    "gnomon.threat-row-3": {
+      "path": "docs/specs/gnomon.md",
+      "lines": [
+        1893,
+        1893
+      ],
+      "used_in": [
+        "gnomon.md section 2, row 3"
+      ]
+    },
+    "warpline.oracle": {
+      "path": "pages/captures/warpline-oracle.txt",
+      "lines": null,
+      "used_in": [
+        "warpline.md section 3",
+        "learn.md Warpline track"
+      ]
+    },
+    "warpline.guide": {
+      "path": "docs/guides/warpline-project-setup.md",
+      "lines": null,
+      "label": "The setup guide",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    },
+    "warpline.changelog": {
+      "path": "CHANGELOG.md",
+      "lines": null,
+      "label": "The changelog",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    },
+    "warpline.studies": {
+      "path": ".paradigm/research/warpline-guard-base-rate/results.md",
+      "lines": null,
+      "label": "The studies",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    },
+    "learn.guide-quick-start": {
+      "path": "docs/guides/quick-start.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-agents": {
+      "path": "docs/guides/agents.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-learning-scopes": {
+      "path": "docs/guides/learning-scopes.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-gnomon": {
+      "path": "packages/gnomon/README.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "learn.guide-warpline": {
+      "path": "docs/guides/warpline-project-setup.md",
+      "lines": null,
+      "used_in": [
+        "learn page"
+      ]
+    },
+    "warpline.package": {
+      "path": "packages/warpline/README.md",
+      "lines": null,
+      "label": "The package",
+      "used_in": [
+        "warpline page, the way back"
+      ]
+    }
+  },
+  "lately": {
+    "source": "CHANGELOG.md",
+    "capture": "pages/captures/lately.txt",
+    "paradigm": [
+      {
+        "version": "8.1.3",
+        "date": "2026-11-12",
+        "line": 10,
+        "lead": "Agents now know when a project uses Warpline."
+      },
+      {
+        "version": "8.1.2",
+        "date": "2026-11-06",
+        "line": 26,
+        "lead": "Commits no longer leave your tree dirty."
+      },
+      {
+        "version": "8.1.1",
+        "date": "2026-11-04",
+        "line": 51,
+        "lead": "The learning loop now tells the truth about what it knows.",
+        "moved": "gated learning: design -> in progress"
+      },
+      {
+        "version": "8.0.3",
+        "date": "2026-10-24",
+        "line": 206,
+        "lead": "A clean `npm audit` for anyone installing Paradigm.",
+        "moved": "clean audit: in progress -> built"
+      },
+      {
+        "version": "7.15.2",
+        "date": "2026-10-22",
+        "line": 311,
+        "lead": "The Stop hook finishes in about 1 s, and read-only commands write nothing.",
+        "moved": "hooks: in progress -> built"
+      }
+    ],
+    "gnomon": [
+      {
+        "version": "8.1.0",
+        "date": "2026-10-29",
+        "line": 75,
+        "lead": "Local models in Gnomon can use tools, and you stay in charge of every one."
+      },
+      {
+        "version": "8.0.2",
+        "date": "2026-10-24",
+        "line": 231,
+        "lead": "Gnomon, the Paradigm 8.0 kernel, ships as a signed Mac app installed through npm.",
+        "moved": "the app: not built -> built"
+      },
+      {
+        "version": "8.0.2",
+        "date": "2026-10-24",
+        "line": 214,
+        "lead": "Gnomon 8.0 for testers, with loops switched off for this round."
+      }
+    ],
+    "warpline": [
+      {
+        "version": "0.3.1 (in Paradigm 8.1.3)",
+        "date": "2026-11-12",
+        "line": 10,
+        "lead": "Agents now know when a project uses Warpline."
+      },
+      {
+        "version": "0.3.0 (in Paradigm 8.1.2)",
+        "date": "2026-11-06",
+        "line": 26,
+        "lead": "Commits no longer leave your tree dirty."
+      }
+    ],
+    "hub": [
+      "paradigm 8.1.3",
+      "paradigm 8.1.2",
+      "paradigm 8.1.1"
+    ],
+    "note": "The hub wants the three most recent releases across the products. The three most recent changelog entries are all Paradigm releases; 8.1.3 and 8.1.2 carried Warpline 0.3.1 and 0.3.0. The most recent Gnomon release is 8.1.0 (2026-10-29), the fourth entry. Warpline has no changelog of its own."
+  },
+  "placeholders": [
+    {
+      "id": "TBD-FOUNDER: warpline-tagline",
+      "kind": "founder decision",
+      "where": "warpline.md section 1; hub.md",
+      "default_shown": "No tagline. The page says in a plain sentence what it does: Warpline checks a merge by what the code means.",
+      "fills_it": "The founder picks one of the three taglines in use, or keeps none."
+    },
+    {
+      "id": "TBD-FOUNDER: learning-story",
+      "kind": "founder decision",
+      "where": "paradigm.md section 2; learn.md level 3 and practice 9",
+      "default_shown": "The pages describe the gate as the design and say outcome data is not in yet. No page says a learning is promoted automatically or that agents improve.",
+      "fills_it": "A ruling on automatic versus signed-off promotion; then one sentence changes in each place."
+    },
+    {
+      "id": "TBD-FOUNDER: tutorial",
+      "kind": "founder decision",
+      "where": "learn.md level 1",
+      "default_shown": "`paradigm tutorial` is not referenced anywhere in the path.",
+      "fills_it": "Revive `paradigm tutorial` as the day-one exercise, or remove the command."
+    },
+    {
+      "id": "TBD-FOUNDER: default-enforcement",
+      "kind": "founder decision",
+      "where": "hub.md; paradigm.md; learn.md level 2",
+      "default_shown": "Stays `none`. Every page says checks are off until you turn them on.",
+      "fills_it": "If shift starts defaulting above `none`, every 'off until you turn it on' line changes, and level 2's exercise starts from the new default."
+    },
+    {
+      "id": "TBD-FOUNDER: pages-direction",
+      "kind": "founder decision",
+      "where": "all pages",
+      "default_shown": "Section order and components follow DIRECTION.md as proposed.",
+      "fills_it": "The founder accepts or changes Luna's direction and enables GitHub Pages."
+    },
+    {
+      "id": "session: warpline-measured-results-form",
+      "kind": "open question in session.yaml (needs_founder), no TBD-FOUNDER id",
+      "where": "warpline.md section 1 (ledger and the block under it)",
+      "default_shown": "Three states. The base-rate study sits in the ledger as 'in progress'; the failed calibration test and the missed defect sit as 'untested or not built'; the numbers are fact lines under the ledger.",
+      "fills_it": "The founder chooses three states or a fourth ('measured, did not hold')."
+    },
+    {
+      "id": "session: boards-in-public",
+      "kind": "open question in session.yaml (needs_founder), no TBD-FOUNDER id",
+      "where": "hub.md section 1; gnomon.md sections 1, 5 and 6",
+      "default_shown": "Boards are named as in progress, on a branch.",
+      "fills_it": "The founder says whether boards may be named in public yet. If not, remove the row and the standing line."
+    },
+    {
+      "id": "session: study-as-first-chart",
+      "kind": "open question in session.yaml (needs_founder), no TBD-FOUNDER id",
+      "where": "paradigm.md section 3",
+      "default_shown": "The paired study is shown as a before and after: 71 tool calls without Paradigm, about 95 with.",
+      "fills_it": "The founder confirms showing it."
+    },
+    {
+      "id": "depends: paradigm-reindex",
+      "kind": "depends on a merge",
+      "where": "paradigm.md section 4 (row 2) and section 6 (ledger); learn.md level 1",
+      "default_shown": "`paradigm reindex` is shown as the command that rebuilds the index.",
+      "fills_it": "The companion branch that adds `paradigm reindex` merges. It is not in CLI 8.1.3 (`paradigm --help` has no reindex). If it does not merge, use the sentence 'ask your agent to reindex' (the MCP tool paradigm_reindex exists)."
+    },
+    {
+      "id": "slot: gnomon-card-and-log-row",
+      "kind": "empty slot",
+      "where": "gnomon.md section 1 (plate) and section 3 (proof excerpt)",
+      "default_shown": "Nothing. The section's proof is the four verification commands instead.",
+      "fills_it": "One real decision card and the signed log row it produced, from `gnomon replay` or `gnomon trace` on a real session, with prompt text removed, and the chain head `gnomon replay` prints."
+    },
+    {
+      "id": "slot: paradigm-stop-hook-blocks",
+      "kind": "empty slot",
+      "where": "paradigm.md section 3 (fourth fact line)",
+      "default_shown": "Nothing; the section runs with three fact lines.",
+      "fills_it": "How often the Stop hook blocked a session that left its description behind, on a repo with enforcement on: the event log, the period and the query."
+    },
+    {
+      "id": "slot: paradigm-supersession-example",
+      "kind": "empty slot",
+      "where": "paradigm.md section 4, row 4",
+      "default_shown": "The row shows a real decision and its lore entry, and says plainly that no decision in the repo uses the supersedes fields.",
+      "fills_it": "One decision file with `supersedes:` filled in, pointing at the decision it replaces."
+    },
+    {
+      "id": "slot: paradigm-session-block-output",
+      "kind": "empty slot",
+      "where": "paradigm.md section 4, row 3; learn.md level 2 ('you should see')",
+      "default_shown": "The row describes the block in words and shows loader.ts:21 as its excerpt.",
+      "fills_it": "The Stop hook's real output when it blocks, captured on a scratch project with enforcement set to balanced. It was not captured: it needs a write to a project, which this task did not allow in the checkout."
+    },
+    {
+      "id": "slot: warpline-catch-example",
+      "kind": "empty slot",
+      "where": "warpline.md section 3",
+      "default_shown": "The real run shown is an agreement (CONVERGENT). The page says so.",
+      "fills_it": "A real `warpline oracle` run where meaning and git disagree, on a public repo, with the two refs named. The base-rate study holds such cases for zod (results.md); none was re-run."
+    },
+    {
+      "id": "slot: warpline-cold-agent-result",
+      "kind": "empty slot",
+      "where": "warpline.md section 1, ledger row 'an agent with no prior knowledge'",
+      "default_shown": "The row says no result is recorded.",
+      "fills_it": "The recorded result of the F4 cold-agent runs. The dossier does not hold one."
+    },
+    {
+      "id": "slot: level-times",
+      "kind": "empty slot",
+      "where": "learn.md, every station's time",
+      "default_shown": "The audit's estimates, each marked as an estimate that nobody has timed.",
+      "fills_it": "A timed run of each level by someone who has not used Paradigm."
+    },
+    {
+      "id": "slot: learn-you-should-see",
+      "kind": "empty slot",
+      "where": "learn.md levels 1, 2 and 3 and the Gnomon track",
+      "default_shown": "Described in words. Level 0 and the Warpline track show real captures from this repo.",
+      "fills_it": "Real output for each: a .purpose diff and a commit with a Symbols: trailer (level 1), a block and its clearing (level 2), a notebook entry applied (level 3), a first card (Gnomon)."
+    },
+    {
+      "id": "slot: step-chart",
+      "kind": "empty slot",
+      "where": "paradigm.md section 3",
+      "default_shown": "No chart.",
+      "fills_it": "One series with five or more dated measurements taken the same way. The dossier holds none."
+    }
+  ],
+  "refs": {
+    "_note": "Structural references that appear in page prose and hold a digit: a release, a level, a requirement. Each names where it is written down. Stamped with <!-- ref:id -->.",
+    "release.tool-budget": {
+      "value": "7.13.0",
+      "source": "CHANGELOG.md:441"
+    },
+    "release.gated-learning": {
+      "value": "8.1.1",
+      "source": "CHANGELOG.md:51"
+    },
+    "release.ripple-fix": {
+      "value": "7.15.0",
+      "source": "CHANGELOG.md:347"
+    },
+    "study.paradigm-version": {
+      "value": "v2",
+      "source": "case-study/compare.md; facts paradigm.study-outcomes note"
+    },
+    "study.project-size": {
+      "value": "15-file",
+      "source": "case-study/compare.md; facts paradigm.study-outcomes note"
+    },
+    "paradigm.node": {
+      "value": "Node 24",
+      "source": "packages/paradigm/package.json:93"
+    },
+    "learn.level-work": {
+      "value": "level 1",
+      "source": ".atelier/sessions/2026-11-23-hero-pages/DIRECTION.md (the levels table); pages/content/learn.md"
+    },
+    "learn.level-trust": {
+      "value": "Level 2",
+      "source": ".atelier/sessions/2026-11-23-hero-pages/DIRECTION.md (the levels table); pages/content/learn.md"
+    },
+    "hub.fit-sources": {
+      "value": ".paradigm/research/hero-pages/evidence-dossier.md, section 7; CHANGELOG.md:209; CHANGELOG.md:231; .paradigm/research/hero-pages/teaching-audit.md:81",
+      "source": "pages/content/hub.md (the provenance line for \"How the three fit\")"
+    },
+    "repo.slug": {
+      "value": "ascend42/a-paradigm",
+      "source": "pages/build/pages.json (repo); README.md"
+    },
+    "gnomon.proof-stack": {
+      "value": "CHANGELOG.md:231; packages/gnomon/test/approval-broker.test.ts",
+      "source": "facts standing.gnomon.ledger; pages/content/gnomon.md"
+    },
+    "gnomon.proof-log": {
+      "value": "docs/specs/gnomon.md, section 3.2; packages/gnomon/test/kernel-log.test.ts",
+      "source": "facts standing.gnomon.ledger; pages/content/gnomon.md"
+    },
+    "gnomon.proof-sandbox": {
+      "value": "CHANGELOG.md:238; packages/gnomon/test/session-sandbox.test.ts",
+      "source": "facts standing.gnomon.ledger; pages/content/gnomon.md"
+    },
+    "gnomon.desk-source": {
+      "value": ".atelier/systems/gnomon/DESIGN.md:36-46",
+      "source": "pages/content/gnomon.md section 4"
+    },
+    "gnomon.run-id": {
+      "value": "gh run view 43286257168",
+      "source": "facts gnomon.ci-latest"
+    },
+    "warpline.stopped-here": {
+      "value": "2026-11-09",
+      "source": "decision TD-2026-11-09-865; commit 96e234ef"
+    },
+    "warpline.install": {
+      "value": "npm i -g @a-company/warpline",
+      "source": "pages/content/warpline.md section 3"
+    },
+    "learn.p2-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/claude.ts:110",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p3-evidence": {
+      "value": "packages/paradigm/src/core/enforcement/loader.ts:21; docs/guides/v6-migration.md:337-341",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p3-quote": {
+      "value": "largest silent behavioral change in v6.x",
+      "source": "docs/guides/v6-migration.md:337-341"
+    },
+    "learn.p5-evidence": {
+      "value": "docs/guides/v6-migration.md:113-120",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p6-evidence": {
+      "value": "docs/guides/decisions.md, section 3",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p7-evidence": {
+      "value": "docs/guides/agents.md:79",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p8-quote": {
+      "value": "Orchestration threshold: 3 files",
+      "source": "paradigm enforcement status on this repo; pages/captures/counts.txt"
+    },
+    "learn.p10-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/claude.ts:118",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p11-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/index.ts:308-322",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.p12-evidence": {
+      "value": "packages/paradigm/src/core/ide-adapters/claude.ts:157-169",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.guide-default": {
+      "value": "docs/guides/v6-migration.md, section 11",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.guide-decisions": {
+      "value": "docs/guides/decisions.md, sections 1 to 5",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    },
+    "learn.level-trust-short": {
+      "value": "Level 2",
+      "source": "pages/content/learn.md; .paradigm/research/hero-pages/teaching-audit.md"
+    }
+  },
+  "standing_states_note": "Five printed words over four marks (design system, status_roles). \"not built\" prints the words Not built under the untested mark: the thing does not exist yet, so calling it untested would be untrue. \"did-not-hold\" is a claim measured against a bar set beforehand that did not clear it."
+}

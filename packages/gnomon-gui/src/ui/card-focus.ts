@@ -43,3 +43,11 @@ export function uncoverStack(sheets: readonly CoveringSheet[]): number {
     }
   return n;
 }
+
+/**
+ * True while focus is inside a card of the stack or of this session's pinned zone (design board-leaf `yielded`,
+ * oracle G-DDL-08): the board then takes no keyboard input, and its first press only wakes it.
+ */
+export function cardHasFocus(doc: { activeElement: { closest(sel: string): unknown } | null }): boolean {
+  return !!doc.activeElement && !!doc.activeElement.closest('.card');
+}

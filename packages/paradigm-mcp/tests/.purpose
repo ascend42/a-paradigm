@@ -6,7 +6,7 @@ components:
     description: Regression suite for addGateToPortal/addRouteToPortal covering Array→{} normalization, read-back verification, and silent-no-op protection on v2 scaffold shapes
     type: test
     anchors:
-      - portal-writer.test.ts:1-400
+      - portal-writer.test.ts
     tags:
       - test
       - regression
@@ -15,7 +15,7 @@ components:
     description: Regression suite for safeLoad — missing / unparseable / invalid / ok discriminated union; SECURITY assertion that unparseable detail does NOT contain raw file contents, gate names, or route paths. Added v5.37.12.
     type: test
     anchors:
-      - yaml-validator.test.ts:1-200
+      - yaml-validator.test.ts
     tags:
       - test
       - regression
@@ -34,7 +34,7 @@ components:
     description: Regression suite for v6.0 decision-store migration — wisdom-decisions → TD-streams, lore type=decision rewriting to type=insight with references.decision_id, idempotency on re-run, companion-lore for recordDecision (D3). Added v5.39.0 sub-phase 3.
     type: test
     anchors:
-      - decision-migration.test.ts:1-260
+      - decision-migration.test.ts
     tags:
       - test
       - regression

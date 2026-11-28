@@ -7,6 +7,8 @@ import {
   getSymbol,
   getSymbolsByType,
   getSymbolCounts,
+  splitDeclared,
+  resolveSymbol,
   getAllSymbols,
   type SymbolType,
 } from '@a-company/premise-core';
@@ -35,7 +37,8 @@ export function registerSymbolResources(server: Server, getContext: () => Projec
       // paradigm://symbols - Overview of all symbols
       if (path === 'symbols') {
         const counts = getSymbolCounts(ctx.index);
-        const symbols = getAllSymbols(ctx.index);
+        // `total` and `symbols` both cover declared symbols; stubs are listed apart.
+        const { declared: symbols, undeclared } = splitDeclared(getAllSymbols(ctx.index));
         
         return {
           contents: [{
@@ -51,6 +54,7 @@ export function registerSymbolResources(server: Server, getContext: () => Projec
                 description: s.description,
                 filePath: s.filePath,
               })),
+              undeclaredReferences: undeclared.map(s => s.symbol),
             }, null, 2),
           }],
         };
@@ -59,7 +63,7 @@ export function registerSymbolResources(server: Server, getContext: () => Projec
       // paradigm://symbol/@feature-name - Single symbol details
       if (path.startsWith('symbol/')) {
         const symbolStr = decodeURIComponent(path.replace('symbol/', ''));
-        const entry = getSymbol(ctx.index, symbolStr);
+        const entry = getSymbol(ctx.index, symbolStr) ?? resolveSymbol(ctx.index, symbolStr).entry;
         
         if (!entry) {
           return {

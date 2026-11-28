@@ -18,8 +18,8 @@
  * built-ins (cc, gkey, dev, permit, card, contract, node, pev) at their
  * milestones. Refused UNSUPPORTED: `peer:` (resolved only to a copy a brief
  * carried, §3.9 — no link exists), package schemes (sym wl n s td l t spec
- * knot doodle: their resolvers are userland, registered by their packages)
- * and unknown schemes. Malformed refs, dropped schemes (`voice`) and an `@rev`
+ * knot dim: their resolvers are userland, registered by their packages)
+ * and unknown schemes. Malformed refs, dropped schemes (`voice`, `doodle`) and an `@rev`
  * on an immutable event are BAD_REQUEST.
  */
 import { isHsid, isId, KERNEL_REF_SCHEMES, parseRef, formatRef, type ParsedRef, type RefusalCode, type RefusalData } from '@a-company/gnomon-contracts';

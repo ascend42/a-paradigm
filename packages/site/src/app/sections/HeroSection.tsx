@@ -34,7 +34,7 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: EASE }}
         >
-          The Context Engineering Framework
+          Structure for AI-assisted development
         </motion.p>
 
         <motion.h1
@@ -44,7 +44,7 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
         >
           Structure your codebase so{' '}
-          <span className={styles.gradient}>AI&nbsp;agents understand&nbsp;it</span>
+          <span className={styles.gradient}>AI&nbsp;agents can read&nbsp;it</span>
         </motion.h1>
 
         <motion.p
@@ -53,9 +53,10 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2, ease: EASE }}
         >
-          Five symbols. Structured context. AI&nbsp;agents that actually know
-          your&nbsp;codebase.<br />Paradigm turns your project into a&nbsp;living
-          map that every tool can&nbsp;read.
+          Five symbols. One symbol graph, built from files in your&nbsp;repo.
+          Hooks that are scripts, not&nbsp;instructions.<br />Paradigm keeps your
+          project&apos;s structure and decisions on record, where every agent
+          can&nbsp;read&nbsp;them.
         </motion.p>
 
         <motion.div

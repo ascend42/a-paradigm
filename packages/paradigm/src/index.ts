@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'node:module';
 import { registerUtilCommands } from './commands/util/index.js';
+import { ENFORCEMENT_SET_DESCRIPTION } from './core/enforcement/types.js';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
@@ -360,6 +361,17 @@ program
     await indexCommand(path, options);
   });
 
+// paradigm reindex — the CLI form of the MCP tool paradigm_reindex
+program
+  .command('reindex [path]')
+  .description('Rebuild the symbol index (scan-index.json, navigator.yaml, flow index) from .purpose files and portal.yaml')
+  .option('--json', 'Output the rebuild summary as JSON')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { reindexCommand } = await import('./commands/reindex/index.js');
+    await reindexCommand(path, options);
+  });
+
 // paradigm probe <subcommand>
 const probeCmd = program
   .command('probe')
@@ -454,8 +466,8 @@ program
 // paradigm cost
 program
   .command('cost [path]')
-  .description('Analyze token costs for AI context')
-  .option('-d, --detailed', 'Show detailed breakdown by file')
+  .description('Show the size of the project Paradigm files in estimated tokens (characters / 3.5). Sizes only: it does not measure what a session loads')
+  .option('-d, --detailed', 'List the five largest .purpose files')
   .option('--json', 'Output as JSON')
   .action(async (path, options) => {
     const { costCommand } = await import('./commands/cost.js');
@@ -3258,7 +3270,7 @@ const enforcementCmd = program
 
 enforcementCmd
   .command('set <level>')
-  .description('Set enforcement level preset (strict, balanced, minimal)')
+  .description(ENFORCEMENT_SET_DESCRIPTION)
   .action(async (level) => {
     const { enforcementSetCommand } = await import('./commands/enforcement.js');
     await enforcementSetCommand(level);
@@ -3315,6 +3327,7 @@ program
   .option('--auto-heal', 'Auto-heal drift violations')
   .option('--trigger <event>', 'Trigger context (e.g., on-stop)', 'on-stop')
   .option('--learn', 'Run postflight learning pass (convert session verdicts to journal entries)')
+  .option('--timings', 'Report how long each section took (adds a "timings" key to --json)')
   .action(async (options) => {
     const { complianceCheckCommand } = await import('./commands/compliance.js');
     await complianceCheckCommand(options);

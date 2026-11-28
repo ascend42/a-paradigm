@@ -14,6 +14,8 @@ import { GIT_HOOK_VERSION, outdatedGitHooks } from '../hooks/git-hook-state.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
+import { listProjectFiles, hasDirSegment, describeFileListSource, type ProjectFileList } from '../../core/project-files.js';
+import { collectProjectCounts, countLoreEntries, describeGateCounts, type ProjectCounts } from '../../core/project-counts.js';
 import {
   computeRepeatFailureRate,
   NO_EXERCISE_WRITER_NOTICE,
@@ -190,6 +192,9 @@ export function readLearningLivenessRecords(rootDir: string): LearningLivenessRe
     .map(x => x.r);
 }
 
+/** Project-relative troubleshooting doc; doctor names it only when it exists. */
+const TROUBLESHOOTING_DOC = '.paradigm/docs/troubleshooting.md';
+
 export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
   const cwd = options.rootDir || process.cwd();
   const results: CheckResult[] = [];
@@ -206,6 +211,21 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   }
 
   const tracker = log.command('doctor').start('Running health checks');
+
+  // One file list for the whole run (#project-files): every check that needs the
+  // project's files filters this instead of walking the tree itself.
+  let projectFiles: ProjectFileList | undefined;
+  const getProjectFiles = (): ProjectFileList => (projectFiles ??= listProjectFiles(cwd));
+  // The shared numbers (#project-counts): the same module `paradigm status` prints
+  // from, so the two commands cannot disagree. Null when the index cannot be built.
+  let projectCounts: Promise<ProjectCounts | null> | undefined;
+  let projectCountsError: string | undefined;
+  const getProjectCounts = (): Promise<ProjectCounts | null> =>
+    (projectCounts ??= collectProjectCounts(cwd, getProjectFiles()).catch((e: unknown) => {
+      // Built once per run. The context audit reports this; it does not try again.
+      projectCountsError = e instanceof Error ? e.message : String(e);
+      return null;
+    }));
 
   // ──────────────────────────────────────────────────────────────────────
   // Core health checks (skipped when --context is specified)
@@ -256,7 +276,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
             name: '.paradigm/config.yaml',
             status: 'missing',
             message: 'Config file not found',
-            fix: 'paradigm init --force',
+            fix: 'paradigm shift --force',
           });
         }
 
@@ -368,7 +388,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
               name: '.paradigm/scan-index.json',
               status: 'warn',
               message: `Stale (${ageHours} hours old)`,
-              fix: 'paradigm index',
+              fix: 'paradigm reindex',
             });
           } else {
             results.push({
@@ -382,14 +402,14 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
             name: 'scan-index',
             status: 'warn',
             message: 'Using legacy location',
-            fix: 'paradigm index',
+            fix: 'paradigm reindex',
           });
         } else {
           results.push({
             name: '.paradigm/scan-index.json',
             status: 'missing',
             message: 'Not generated',
-            fix: 'paradigm index',
+            fix: 'paradigm reindex',
           });
         }
       }
@@ -398,7 +418,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         name: '.paradigm/',
         status: 'missing',
         message: 'Not initialized',
-        fix: 'paradigm init',
+        fix: 'paradigm shift',
       });
     }
 
@@ -455,7 +475,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         name: '.purpose',
         status: 'warn',
         message: 'Root .purpose not found',
-        fix: 'paradigm init',
+        fix: 'paradigm shift',
       });
     }
 
@@ -513,26 +533,27 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     const clarificationMarkerRegex = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
     let clarificationCount = 0;
 
-    function findPurposeFilesRecursive(dir: string): string[] {
-      const found: string[] = [];
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') continue;
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            found.push(...findPurposeFilesRecursive(fullPath));
-          } else if (entry.name === '.purpose') {
-            found.push(fullPath);
-          }
-        }
-      } catch {
-        // Skip directories we can't read
-      }
-      return found;
+    // Say where this run's file list came from, so a fallback to the walk is never silent.
+    // Not being a git repository is normal; any other reason for the walk is worth a warning.
+    {
+      const list = getProjectFiles();
+      const expected = list.source === 'git' || list.fallbackReason === 'not-a-git-repo';
+      results.push({
+        name: 'Project file list',
+        status: expected ? 'ok' : 'warn',
+        message: describeFileListSource(list),
+        ...(expected ? {} : {
+          fix: list.fallbackReason === 'gate-files-ignored'
+            ? 'A git ignore rule matches .purpose or portal.yaml by name (run `git check-ignore -v --no-index .purpose portal.yaml`); un-ignore them with `!.purpose` and `!portal.yaml`, or narrow the pattern. Until then every check walks the tree, which is slower.'
+            : 'Checks walk the directory tree instead of asking git, which is slower. Run `git status` in the project to see what git reports.',
+        }),
+      });
     }
 
-    const purposeFiles = findPurposeFilesRecursive(cwd);
+    const purposeSkipDirs = new Set(['node_modules', 'dist', '.git']);
+    const purposeFiles = getProjectFiles().files
+      .filter((rel) => (rel === '.purpose' || rel.endsWith('/.purpose')) && !hasDirSegment(rel, purposeSkipDirs))
+      .map((rel) => path.join(cwd, ...rel.split('/')));
     for (const pf of purposeFiles) {
       try {
         const content = fs.readFileSync(pf, 'utf8');
@@ -572,7 +593,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           results.push({
             name: 'portal.yaml',
             status: 'ok',
-            message: `Valid (${gateCount} gates, ${routeCount} routes)`,
+            message: `Valid (${gateCount} gate${gateCount === 1 ? '' : 's'} in this file, ${routeCount} routes)`,
           });
         } else {
           results.push({
@@ -592,11 +613,25 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
+    // Gates across the whole project, counted where `paradigm status` counts them:
+    // a gate may be declared in the root portal.yaml, in a package's portal.yaml,
+    // or in a .purpose `gates:` section, and counts once.
+    {
+      const counts = await getProjectCounts();
+      if (counts && counts.gates.total > 0) {
+        results.push({
+          name: 'Gates',
+          status: 'ok',
+          message: `${describeGateCounts(counts.gates)}; same count as paradigm status`,
+        });
+      }
+    }
+
     // Check portal gate compliance (declared vs used)
     if (fs.existsSync(portalPath)) {
       try {
         const { checkPortalCompliance, getComplianceSummary } = await import('../../core/portal-compliance.js');
-        const complianceReport = await checkPortalCompliance(cwd);
+        const complianceReport = await checkPortalCompliance(cwd, { projectFiles: getProjectFiles() });
         const summary = getComplianceSummary(complianceReport);
         results.push({
           name: 'Portal compliance',
@@ -713,12 +748,12 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
-    // Check lore health
+    // Check lore health. Entries are `.lore` files under .paradigm/lore/entries/<date>/.
     const loreDir = path.join(cwd, '.paradigm', 'lore');
     if (fs.existsSync(loreDir)) {
       try {
-        const loreFiles = fs.readdirSync(loreDir).filter((f) => f.endsWith('.yaml'));
-        if (loreFiles.length === 0) {
+        const loreEntries = countLoreEntries(cwd) ?? 0;
+        if (loreEntries === 0) {
           results.push({
             name: 'Lore entries',
             status: 'warn',
@@ -729,7 +764,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           results.push({
             name: 'Lore entries',
             status: 'ok',
-            message: `${loreFiles.length} lore file${loreFiles.length > 1 ? 's' : ''}`,
+            message: `${loreEntries} lore entr${loreEntries > 1 ? 'ies' : 'y'}`,
           });
         }
       } catch {
@@ -1281,7 +1316,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     try {
       const { hookHealthChecks } = await import('./hook-health.js');
       const os = await import('os');
-      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: options.homeDir ?? os.homedir() }));
+      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: options.homeDir ?? os.homedir(), projectFiles: getProjectFiles() }));
     } catch {
       // hook health is advisory
     }
@@ -1387,7 +1422,13 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // ──────────────────────────────────────────────────────────────────────
 
   const { runContextAudit } = await import('./context-audit.js');
-  const contextResults = await runContextAudit(cwd, { quiet, homeDir: options.homeDir });
+  const contextResults = await runContextAudit(cwd, {
+    quiet,
+    homeDir: options.homeDir,
+    projectFiles: getProjectFiles(),
+    isolated: (await getProjectCounts())?.isolated,
+    indexError: projectCountsError,
+  });
 
   let contextErrorCount = 0;
   let contextWarnCount = 0;
@@ -1468,7 +1509,16 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
 
       console.log(`${parts.join(', ')} found.\n`);
       console.log(chalk.gray('Run the suggested commands to fix issues.'));
-      console.log(chalk.gray('Troubleshooting guide: .paradigm/docs/troubleshooting.md\n'));
+      // Point only at help that exists: not every project has the
+      // troubleshooting doc (shift and init create it; older or hand-made
+      // projects may not), so name it only when the file is really there.
+      if (fs.existsSync(path.join(cwd, TROUBLESHOOTING_DOC))) {
+        console.log(chalk.gray(`Troubleshooting guide: ${TROUBLESHOOTING_DOC}`));
+      }
+      if (!options.explain) {
+        console.log(chalk.gray('Explain each issue: paradigm doctor --explain'));
+      }
+      console.log('');
     }
   }
 
@@ -1505,6 +1555,19 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     } catch {
       // Gap narrations are advisory — do not fail if narrator cannot load
+    }
+  }
+
+  // --explain covers every check that failed, warned or raised an advisory (the
+  // narrator above knows four check names), and says so when there is nothing.
+  if (!quiet && options.explain) {
+    const { explainFindings } = await import('./explain.js');
+    console.log(chalk.blue('\n  Explanations (--explain)\n'));
+    for (const line of explainFindings([
+      ...results,
+      ...contextResults.map((r) => ({ name: r.check, status: r.status, message: r.message, details: r.details, fix: r.fix })),
+    ])) {
+      out(line ? `  ${line}` : '');
     }
   }
 

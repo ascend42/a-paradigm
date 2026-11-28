@@ -226,10 +226,23 @@ export interface ParseError {
   type: 'yaml' | 'schema' | 'file';
 }
 
+/** Something the parser accepted and corrected; never makes a file invalid. */
+export interface ParseWarning {
+  message: string;
+  path?: string;
+  /**
+   * `redundant-prefix`: a key repeats its section's symbol prefix (`flows: { $x: … }`).
+   * `wrong-section-prefix`: a key carries another section's prefix (`flows: { ^x: … }`).
+   */
+  type: 'redundant-prefix' | 'wrong-section-prefix';
+}
+
 export interface ParseResult {
   data: PurposeFile | null;
   errors: string[];
   detailedErrors: ParseError[];
+  /** Corrections the parser made while reading the file. */
+  warnings?: ParseWarning[];
   rawContent?: string;
   isYamlValid: boolean;
 }

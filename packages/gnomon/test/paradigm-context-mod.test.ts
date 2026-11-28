@@ -19,7 +19,7 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { effectiveInstall, readGrants, removeTree } from '../src/kernel/manifest/index.js';
-import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { firstPartyPins, isFirstPartyPin } from '../src/kernel/manifest/install.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { StagedCardPickup } from '../src/kernel/modhost/control.js';
 import type { ModHost, ModHostOptions } from '../src/kernel/modhost/host.js';
@@ -170,12 +170,12 @@ describe('#paradigm-context-mod through the host', () => {
   it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
     const h = hashSourceTree(CTX, 'gnomon.paradigm-context', () => undefined).packageHash;
     // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
-    expect([...FIRST_PARTY_PACKAGE_HASHES], `the Paradigm Context tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
+    expect(firstPartyPins(), `the Paradigm Context tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
   });
 
   it('installs as tier first-party', async () => {
     const w = await installed();
-    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.1 (mod) by gnomon from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.2 (mod) by gnomon from package, tier first-party');
     const g = readGrants(w.home, w.auth);
     expect(g.trust.get(effectiveInstall(g, 'gnomon.paradigm-context')!.manifestHash)).toBe('first-party');
   });

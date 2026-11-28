@@ -49,7 +49,7 @@ import * as path from 'node:path';
 import { authTokenMessage, crockford, parsePrincipalId, type NegotiatedHello } from '@a-company/gnomon-contracts';
 import { ed25519KeyId, KeyRing, SoftwareEd25519Signer } from '../log/signer.js';
 import { ensureKeysDir, keysDir } from './device-key.js';
-import type { RowVerifier } from './registry.js';
+import { RESERVED_PRINCIPAL_NAMES, type RowVerifier } from './registry.js';
 import type { RootAuthority } from './root-authority.js';
 
 export const READ_TOKENS_FILE = 'read-tokens.jsonl';
@@ -121,7 +121,7 @@ function checkRow(row: unknown, ns: string): string | null {
     return 'key';
   }
   const p = typeof row.principalId === 'string' ? parsePrincipalId(row.principalId) : undefined;
-  if (!p || p.foreign || p.ns !== ns || p.name === 'kernel') return 'principal';
+  if (!p || p.foreign || p.ns !== ns || p.name === 'kernel' || RESERVED_PRINCIPAL_NAMES.includes(p.name)) return 'principal';
   const created = isoMs(row.createdAt);
   const expires = isoMs(row.expiresAt);
   if (created === undefined || expires === undefined || expires <= created) return 'expiresAt';

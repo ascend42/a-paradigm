@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn Paradigm: four levels, one exercise each, on your own repo</title>
+<meta name="description" content="A path, not a course. Four levels and two product tracks, each ending in something you can see in your own code, then thirteen practices with their reasons and a field card that prints on one sheet.">
+<!-- Copy: pages/content/learn.md. Numbers: pages/facts.json, stamped by pages/build/stamp.mjs. Do not type a digit into this file: station numbers and practice numbers are counted by the stylesheet. -->
+<!-- frame:head -->
+<script>try{var t=localStorage.getItem("pages-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preload" href="../assets/fonts/Fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/pages.css">
+<script src="../assets/pages.js" defer></script>
+<!-- /frame -->
+</head>
+<body>
+<div class="wrap">
+<!-- frame:mast -->
+  <a class="key skip" href="#main">Skip to the page</a>
+  <header class="mast">
+    <a class="mast-name" href="../index.html">Paradigm</a>
+    <nav aria-label="Pages">
+      <a href="../index.html">Overview</a>
+      <a href="../paradigm/index.html">Paradigm</a>
+      <a href="../gnomon/index.html">Gnomon</a>
+      <a href="../warpline/index.html">Warpline</a>
+      <a href="../learn/index.html" aria-current="page">Learn</a>
+    </nav>
+    <div class="mast-side">
+      <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+    </div>
+  </header>
+<!-- /frame -->
+
+  <main id="main">
+    <div class="lead-wide">
+      <h1 class="display">Four levels. One exercise each, on your own repo.</h1>
+      <p class="lede">This is a path, not a course. Every level ends with something you can see in your own code. Most exercises are a sentence you say to your agent, because that is how Paradigm is used: you ask, the agent does the bookkeeping, and the checks hold it to that.</p>
+      <!-- No timed runs exist (placeholder level-times in facts.json): every time on this page is an estimate and says so. -->
+      <p class="plain">The times are our estimates. Nobody has timed them yet.</p>
+      <p class="plain">We built a course first. It recorded <!-- fact:learn.university-usage -->0 uses in 30 days<!-- /fact -->. So the path lives here, in the open, and the quizzes are optional. <span class="mono quiet"><!-- src:learn.university-usage -->recorded 2026-09-26, not re-run · decision TD-2026-09-26-846 (teaching-audit.md:93)<!-- /src --></span></p>
+    </div>
+
+    <section class="lead-block" id="path" aria-labelledby="path-h">
+      <h2 class="vh" id="path-h">The path</h2>
+      <ol class="path">
+
+        <li class="station level current" id="see-it">
+          <details open>
+            <summary><span class="station-n" aria-hidden="true"></span><h3 class="station-head"><span class="station-name">See it</span><span class="station-when"><!-- fact:learn.level0-time -->about 10 minutes<!-- /fact --> (estimate)</span><span class="station-gets">You get an impact answer on your own code, from the first prompt.</span></h3></summary>
+            <div class="station-body">
+              <p><b>After this,</b> you have asked “what does this change touch?” about a module you know, and judged the answer yourself.</p>
+              <h4 class="h3">The exercise</h4>
+              <p>Install, set up a real project of yours, and add the plugin in Claude Code:</p>
+              <div class="cmds">
+                <div class="cmd"><code>npm install -g @a-company/paradigm</code></div>
+                <div class="cmd"><code>paradigm shift</code><span class="where">in your project</span></div>
+                <div class="cmd agent"><code>/plugin marketplace add <!-- ref:repo.slug -->ascend42/a-paradigm<!-- /ref --></code></div>
+                <div class="cmd agent"><code>/plugin install paradigm@a-paradigm</code></div>
+              </div>
+              <div class="say">
+                <span class="say-who">then say to your agent</span>
+                <q>Map this codebase with Paradigm: draft .purpose files for the main directories, then tell me what would be affected if I changed <var>a module you know</var>.</q>
+              </div>
+              <h4 class="h3">You should see</h4>
+              <p>An answer that names files and components you recognise. This is the same question asked of Paradigm's own repo, from the command line:</p>
+              <figure class="proof">
+                <!-- capture:paradigm-ripple lines=5|21|29-30 -->
+<div class="proof-head"><span>pages/captures/paradigm-ripple.txt</span><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-ripple.txt">captured 2026-11-23 ↗</a></div>
+<pre tabindex="0">$ paradigm ripple '<b class="s-c">#</b>init-handler'
+
+  Components:  <b class="s-c">#</b>shift-command, <b class="s-c">#</b>init-command
+
+  Direct dependents: 2
+  Impact level:      Medium</pre>
+<!-- /capture -->
+                <figcaption class="prov"><b>real</b><span><!-- src:paradigm.ripple-example -->real · paradigm ripple '#init-handler'; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-ripple.txt">pages/captures/paradigm-ripple.txt</a> · run 2026-11-23<!-- /src --></span></figcaption>
+              </figure>
+              <p>If the answer on your code is wrong or empty, that is worth knowing after ten minutes and not after a week. Run <code>paradigm doctor</code> and read what it says.</p>
+              <h4 class="h3">The practice that belongs here: <a href="#p-map-first">P<!-- pn:p-map-first -->1<!-- /pn --></a></h4>
+              <dl class="do">
+                <div><dt>Do</dt><dd>Have the agent map the code before you ask it to change the code.</dd></div>
+                <div><dt>Instead of</dt><dd>Asking for a change and letting the agent find its own way through the files.</dd></div>
+                <div><dt>Why</dt><dd>The agent can only ask the map what a change touches once the map exists.</dd></div>
+              </dl>
+              <p>Good to know before you start: run <code>paradigm shift</code> on a branch. It writes new files and regenerates instruction files such as <code>CLAUDE.md</code>. Read the diff before you commit.</p>
+              <p class="mono">Full guide: <!-- loc:learn.guide-quick-start --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/quick-start.md">docs/guides/quick-start.md</a><!-- /loc --></p>
+            </div>
+          </details>
+        </li>
+
+        <li class="station spur" id="gnomon-track">
+          <details>
+            <summary><span class="station-n" aria-hidden="true">G</span><h3 class="station-head"><span class="station-name">Gnomon track</span><span class="station-when"><!-- fact:learn.gnomon-time -->about 5 minutes<!-- /fact --> (estimate), then ongoing</span><span class="station-gets">You approve your first card on the stack.</span></h3></summary>
+            <div class="station-body">
+              <p><b>After this,</b> your sessions ask in one place and your answers are signed.</p>
+              <h4 class="h3">Before you start</h4>
+              <p>All four must hold, or Gnomon refuses:</p>
+              <ol class="preflight">
+                <!-- rows:gnomon.requirements -->
+<li>An Apple silicon Mac with macOS 15 or later and System Integrity Protection on</li>
+<li>Claude Code from the native installer, signed in with your Claude subscription</li>
+<li>Touch ID or your login password</li>
+<li>Node 24 or later</li>
+<!-- /rows -->
+              </ol>
+              <h4 class="h3">The exercise</h4>
+              <div class="cmd"><code>gnomon</code><span class="where">in a repo</span></div>
+              <p>The first run sets up your Mac and asks for Touch ID or your password <!-- fact:gnomon.setup-prompts -->2<!-- /fact --> times. Start a session and ask it to do something that needs permission.</p>
+              <h4 class="h3">You should see</h4>
+              <p>A card on the decision stack. Approve it with Touch ID or your password.</p>
+              <h4 class="h3">Practice for this track</h4>
+              <dl class="do">
+                <div><dt>Do</dt><dd>Read each card before you approve it.</dd></div>
+                <div><dt>Instead of</dt><dd>Making “Always allow” rules early to quiet the stack.</dd></div>
+                <div><dt>Why</dt><dd>Gnomon shows spending and does not cap it, so the cards are the control you have.</dd></div>
+              </dl>
+              <p class="mono">Full guide: <a href="../gnomon/index.html">the Gnomon page</a>; <!-- loc:learn.guide-gnomon --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/README.md">packages/gnomon/README.md</a><!-- /loc --> · <!-- src:gnomon.requirements -->real · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/README.md#L62-L67">README.md:62-67</a> · run 2026-11-23<!-- /src --></p>
+            </div>
+          </details>
+        </li>
+
+        <li class="station spur" id="warpline-track">
+          <details>
+            <summary><span class="station-n" aria-hidden="true">W</span><h3 class="station-head"><span class="station-name">Warpline track</span><span class="station-when"><!-- fact:learn.warpline-time -->about 3 minutes<!-- /fact --> (estimate), then ongoing</span><span class="station-gets">You run a merge forecast on two of your own branches.</span></h3></summary>
+            <div class="station-body">
+              <p><b>After this,</b> you have seen what Warpline says about a real merge of yours, and you know it is experimental.</p>
+              <h4 class="h3">The exercise</h4>
+              <p>In a TypeScript repo with two branches:</p>
+              <div class="cmds">
+                <div class="cmd"><code><!-- ref:warpline.install -->npm i -g @a-company/warpline<!-- /ref --></code></div>
+                <div class="cmd"><code>warpline oracle &lt;branchA&gt; &lt;branchB&gt;</code></div>
+              </div>
+              <h4 class="h3">You should see</h4>
+              <p>A prediction, git's real result, and a verdict on whether they agree. On two branches of this repo:</p>
+              <figure class="proof">
+                <!-- capture:warpline-oracle lines=14-17|19|27 -->
+<div class="proof-head"><span>pages/captures/warpline-oracle.txt</span><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/warpline-oracle.txt">captured 2026-11-23 ↗</a></div>
+<pre tabindex="0">PREDICTION (from meaning):
+  autoClean 107
+  knots     0
+  dangling  0
+
+GIT REALITY: clean  (0 path(s), 0 symbol(s))
+
+  VERDICT             CONVERGENT</pre>
+<!-- /capture -->
+                <figcaption class="prov"><b>real</b><span>That run took <!-- fact:warpline.oracle-example.wall_time -->2 min 11 s<!-- /fact -->. The oracle does not change your branches or files. It does leave a <code><!-- fact:warpline.oracle-writes -->.warpline/<!-- /fact --></code> folder in the repo. <!-- src:warpline.oracle-example -->real · warpline oracle origin/fix/onboarding-truth origin/feat/gnomon-boards-s1.0 (scratch clone); <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/warpline-oracle.txt">pages/captures/warpline-oracle.txt</a> · run 2026-11-23<!-- /src --></span></figcaption>
+              </figure>
+              <h4 class="h3">Practice for this track</h4>
+              <dl class="do">
+                <div><dt>Do</dt><dd>Treat a flag as a reason to look.</dd></div>
+                <div><dt>Instead of</dt><dd>Treating it as a verdict.</dd></div>
+                <div><dt>Why</dt><dd>In our study, <!-- fact:warpline.ground-truth.fixed_by_a_human_within_a_day -->3<!-- /fact --> of <!-- fact:warpline.ground-truth.hits -->18<!-- /fact --> flags were real defects and <!-- fact:warpline.ground-truth.benign -->15<!-- /fact --> were harmless.</dd></div>
+                <div class="ev"><dt>Evidence</dt><dd><!-- src:warpline.ground-truth -->recorded 2026-07-02, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/warpline-guard-base-rate/ground-truth.md#L13-L27">.paradigm/research/warpline-guard-base-rate/ground-truth.md:13-27</a><!-- /src --></dd></div>
+              </dl>
+              <p class="mono">Full guide: <a href="../warpline/index.html">the Warpline page</a>; <!-- loc:learn.guide-warpline --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/warpline-project-setup.md">docs/guides/warpline-project-setup.md</a><!-- /loc --></p>
+            </div>
+          </details>
+        </li>
+
+        <li class="station level" id="work-with-it">
+          <details>
+            <summary><span class="station-n" aria-hidden="true"></span><h3 class="station-head"><span class="station-name">Work with it</span><span class="station-when">day one</span><span class="station-gets">You ship one small change with its <code>.purpose</code> kept current and a <code>Symbols:</code> trailer.</span></h3></summary>
+            <div class="station-body">
+              <p><b>After this,</b> you can read a <code>.purpose</code> file and a <code>portal.yaml</code>, and you know what the agent maintains for you and what is not enforced yet.</p>
+              <h4 class="h3">The exercise</h4>
+              <p>Pick a small, real change.</p>
+              <div class="say">
+                <span class="say-who">say to your agent</span>
+                <q>Make this change: <var>your change</var>. Update the .purpose file for the code you touch in the same change. Then show me the .purpose diff and commit with a Symbols: trailer.</q>
+              </div>
+              <p>Read the <code>.purpose</code> diff yourself. It is short. That is the point of this level: you learn the five kinds of symbol by reading them, not by memorising them.</p>
+              <h4 class="h3">You should see</h4>
+              <p>A commit whose subject names its main symbol and whose last line lists every symbol it touched. A real one from this repo:</p>
+              <figure class="proof">
+                <!-- capture:commit-trailer lines=5|8 -->
+<div class="proof-head"><span>pages/captures/commit-trailer.txt</span><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/commit-trailer.txt">captured 2026-11-23 ↗</a></div>
+<pre tabindex="0">d4a92798 2026-11-05 feat(<b class="s-c">#</b>fabric-mirror): Warpline 0.3.0 records the ledger on a protected branch; release 8.1.2 (#96)
+
+Symbols: <b class="s-c">#</b>fabric-mirror, <b class="s-c">#</b>fabric-mirror-sync, <b class="s-c">#</b>fabric-writer, <b class="s-c">#</b>fabric-adopt, <b class="s-c">#</b>mirror-audit, <b class="s-c">#</b>git-run, <b class="s-c">#</b>fabric-lock, <b class="s-c">#</b>fabric-verify, #hook, #release</pre>
+<!-- /capture -->
+                <figcaption class="prov"><b>real</b><span>That commit also changed two <code>.purpose</code> files.</span></figcaption>
+              </figure>
+              <!-- DEPENDS paradigm-reindex: the command has merged into the integration branch and will ship; it is not in the released CLI yet. -->
+              <p>If the map looks out of date afterwards, rebuild the index: <code>paradigm reindex</code>. That command is not in <!-- fact:paradigm.version -->8.1.3<!-- /fact --> yet; until it ships, ask your agent to reindex.</p>
+              <h4 class="h3">The practice that belongs here: <a href="#p-same-change">P<!-- pn:p-same-change -->2<!-- /pn --></a></h4>
+              <dl class="do">
+                <div><dt>Do</dt><dd>Let the agent update <code>.purpose</code> in the same change as the code.</dd></div>
+                <div><dt>Instead of</dt><dd>A tidy-up pass afterwards.</dd></div>
+                <div><dt>Why</dt><dd>Once you turn the checks on at <code>balanced</code>, a <code>.purpose</code> file left behind is what blocks the session.</dd></div>
+              </dl>
+              <!-- TBD-FOUNDER: tutorial (the built-in paradigm tutorial is not part of this station) -->
+              <p>What is not enforced yet: nothing is. At this level every check is still off. You are relying on the agent following its instructions. <a href="#trust-it"><!-- ref:learn.level-trust-short -->Level 2<!-- /ref --></a> changes that.</p>
+              <p class="mono">Full guide: <!-- loc:learn.guide-quick-start --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/quick-start.md">docs/guides/quick-start.md</a><!-- /loc --></p>
+            </div>
+          </details>
+        </li>
+
+        <li class="station level" id="trust-it">
+          <details>
+            <summary><span class="station-n" aria-hidden="true"></span><h3 class="station-head"><span class="station-name">Trust it</span><span class="station-when">week one</span><span class="station-gets">You choose an enforcement level, trigger a block on purpose, and clear it.</span></h3></summary>
+            <div class="station-body">
+              <p><b>After this,</b> the checks are on because you turned them on, and you have seen one stop a session.</p>
+              <h4 class="h3">The exercise</h4>
+              <p>Turn the checks on, and look at what you chose:</p>
+              <div class="cmds">
+                <div class="cmd"><code>paradigm enforcement set balanced</code></div>
+                <div class="cmd"><code>paradigm enforcement status</code></div>
+              </div>
+              <p>Then trigger a block on purpose.</p>
+              <div class="say">
+                <span class="say-who">say to your agent</span>
+                <q>Change one source file in <var>a directory with a .purpose file</var>, and do not update the .purpose file. Then stop.</q>
+              </div>
+              <h4 class="h3">You should see</h4>
+              <!-- No block message was captured (placeholder paradigm-session-block-output in facts.json), so there is no excerpt here. -->
+              <p>The session refuses to stop, and says which description was left behind. Now say “update the .purpose file”, and it stops cleanly. We have not captured a real block message for this page, so there is no excerpt here yet.</p>
+              <p><code>paradigm enforcement status</code> prints a table of checks. At <code>balanced</code>, <code><!-- fact:paradigm.enforcement-balanced-blocks -->purpose-coverage<!-- /fact --></code> is set to block and most others warn.</p>
+              <h4 class="h3">The practice that belongs here: <a href="#p-enforcement">P<!-- pn:p-enforcement -->4<!-- /pn --></a></h4>
+              <!-- TBD-FOUNDER: default-enforcement (the default stays none) -->
+              <dl class="do">
+                <div><dt>Do</dt><dd>Turn enforcement on deliberately, and pick the level.</dd></div>
+                <div><dt>Instead of</dt><dd>Assuming the hooks are already checking.</dd></div>
+                <div><dt>Why</dt><dd>The default level is <code><!-- fact:paradigm.enforcement-default -->none<!-- /fact --></code>.</dd></div>
+              </dl>
+              <p>Also at this level: <a href="#p-affects">P<!-- pn:p-affects -->3<!-- /pn --></a> (ask what a change affects), <a href="#p-gates">P<!-- pn:p-gates -->5<!-- /pn --></a> (gates before endpoints), <a href="#p-record">P<!-- pn:p-record -->6<!-- /pn --></a> (decisions and lore as you go), <a href="#p-team">P<!-- pn:p-team -->7<!-- /pn --></a> (the team for larger work).</p>
+              <p class="mono">Full guides: <!-- ref:learn.guide-default --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/v6-migration.md">docs/guides/v6-migration.md</a>, section 11<!-- /ref --> explains the default · <!-- ref:learn.guide-decisions --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/decisions.md">docs/guides/decisions.md</a>, sections 1 to 5<!-- /ref --></p>
+            </div>
+          </details>
+        </li>
+
+        <li class="station level" id="compound-it">
+          <details>
+            <summary><span class="station-n" aria-hidden="true"></span><h3 class="station-head"><span class="station-name">Compound it</span><span class="station-when">month one</span><span class="station-gets">You teach one agent one rule, gate it, and see it applied.</span></h3></summary>
+            <div class="station-body">
+              <p><b>After this,</b> one thing you know about your codebase is written where an agent will read it next time, and you signed it off.</p>
+              <!-- TBD-FOUNDER: learning-story (the gate is described as the design; no claim that agents improve) -->
+              <p><b>Read this first.</b> This is the least proven level. The rules for gated learning are built. We have no evidence yet that what agents learn improves their work: on our own repo the loop reads “<!-- fact:paradigm.learning-liveness -->FLATLINE: 0 journals / 20 completions<!-- /fact -->”. The class skill is still marked as a draft. Treat this level as a way to write down rules you already trust, with a gate in front of them.</p>
+              <h4 class="h3">The exercise</h4>
+              <p>Pick one rule you keep repeating to your agent. In Claude Code, give it the rule and the agent it is for. Then hold a class term, where the rule is tested before it is kept.</p>
+              <div class="cmds">
+                <div class="cmd agent"><code>/paradigm:teach</code><span class="where">in Claude Code</span></div>
+                <div class="cmd agent"><code>/paradigm:class</code></div>
+              </div>
+              <h4 class="h3">You should see</h4>
+              <p>A notebook entry for that agent, carrying your rule, that you approved. In a later session, the agent applies it without being told.</p>
+              <h4 class="h3">The practice that belongs here: <a href="#p-provisional">P<!-- pn:p-provisional -->9<!-- /pn --></a></h4>
+              <dl class="do">
+                <div><dt>Do</dt><dd>Treat what an agent learned as provisional until you sign it off.</dd></div>
+                <div><dt>Instead of</dt><dd>Trusting a learning because it was recorded.</dd></div>
+                <div><dt>Why</dt><dd>Since <!-- ref:release.gated-learning -->8.1.1<!-- /ref --> a learning counts as survived only after <!-- fact:paradigm.learning-gate -->two confirmed scenario runs, by a different agent<!-- /fact -->.</dd></div>
+              </dl>
+              <p>Also at this level: <a href="#p-roster">P<!-- pn:p-roster -->8<!-- /pn --></a> (a small roster), <a href="#p-protocol">P<!-- pn:p-protocol -->10<!-- /pn --></a> (protocols), <a href="#p-sync">P<!-- pn:p-sync -->11<!-- /pn --></a> (regenerate, don't hand-edit), <a href="#p-stores">P<!-- pn:p-stores -->12<!-- /pn --></a> (typed stores), <a href="#p-doctor">P<!-- pn:p-doctor -->13<!-- /pn --></a> (doctor after upgrades).</p>
+              <p class="mono">Full guides: <!-- loc:learn.guide-agents --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/agents.md">docs/guides/agents.md</a><!-- /loc --> · <!-- loc:learn.guide-learning-scopes --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/learning-scopes.md">docs/guides/learning-scopes.md</a><!-- /loc --> · <!-- src:paradigm.learning-liveness -->real · paradigm doctor; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a> · run 2026-11-23<!-- /src --></p>
+            </div>
+          </details>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section" id="practices" aria-labelledby="practices-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="practices-h">Thirteen practices, each with its reason.</h2>
+        <p class="prose">Do, instead of, and why. Where the reason is measured, the measurement is named. Where it is our guidance and nothing more, we say that.</p>
+        <div class="pgroups">
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#see-it">See it</a><small>the first prompt</small></h3>
+            <ol class="practices">
+          <li class="practice" id="p-map-first">
+            <h4 class="practice-name">Map first.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Have the agent map the code before you ask it to change the code.</dd></div>
+              <div><dt>Instead of</dt><dd>Asking for a change and letting the agent read its way in.</dd></div>
+              <div><dt>Why</dt><dd>Impact questions only work on mapped code. On our repo, <code>paradigm ripple '#init-handler'</code> names its <!-- fact:paradigm.ripple-example -->2<!-- /fact --> dependents at once.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- loc:paradigm.ripple-answer --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-ripple.txt">pages/captures/paradigm-ripple.txt</a><!-- /loc -->. Not measured: any saving in tokens or time. Our one study found fewer file reads and more tool calls with Paradigm.</dd></div>
+            </dl>
+          </li>
+            </ol>
+          </div>
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#work-with-it">Work with it</a><small>day one</small></h3>
+            <ol class="practices">
+          <li class="practice" id="p-same-change">
+            <h4 class="practice-name">Keep <code>.purpose</code> current in the same change.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Have the agent update <code>.purpose</code> with the code.</dd></div>
+              <div><dt>Instead of</dt><dd>A catch-up pass later.</dd></div>
+              <div><dt>Why</dt><dd>At <code>balanced</code>, <code><!-- fact:paradigm.enforcement-balanced-blocks -->purpose-coverage<!-- /fact --></code> is the check that blocks.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- src:paradigm.enforcement-balanced-blocks -->real · paradigm enforcement status on this repo; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src --></dd></div>
+            </dl>
+          </li>
+            </ol>
+          </div>
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#trust-it">Trust it</a><small>week one</small></h3>
+            <ol class="practices">
+          <li class="practice" id="p-affects">
+            <h4 class="practice-name">Ask what it affects before a change that is not trivial.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Say “what does this affect?” before the change.</dd></div>
+              <div><dt>Instead of</dt><dd>Finding out from a failing test.</dd></div>
+              <div><dt>Why</dt><dd>The instructions Paradigm generates for your agent ask for it before each task, and there is a skill for it, <code>/paradigm:ripple</code>.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p2-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/src/core/ide-adapters/claude.ts#L110">packages/paradigm/src/core/ide-adapters/claude.ts:110</a><!-- /ref -->. A caution we owe you: until <!-- ref:release.ripple-fix -->7.15.0<!-- /ref -->, ripple could report <!-- fact:paradigm.ripple-false-safe -->0 dependents and &quot;safe to proceed&quot;<!-- /fact --> for a gate in use. Update before you rely on it.</dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-enforcement">
+            <h4 class="practice-name">Turn enforcement on deliberately.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Choose a level with <code>paradigm enforcement set</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Assuming the Stop hook already blocks.</dd></div>
+              <div><dt>Why</dt><dd>The default is <code><!-- fact:paradigm.enforcement-default -->none<!-- /fact --></code>. Our own migration guide calls that default the “<!-- ref:learn.p3-quote -->largest silent behavioral change in v6.x<!-- /ref -->”.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p3-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/src/core/enforcement/loader.ts#L21">packages/paradigm/src/core/enforcement/loader.ts:21</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/v6-migration.md#L337-L341">docs/guides/v6-migration.md:337-341</a><!-- /ref --></dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-gates">
+            <h4 class="practice-name">Declare gates in <code>portal.yaml</code> before adding an endpoint.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Write the gate, then the route.</dd></div>
+              <div><dt>Instead of</dt><dd>Adding auth checks in code and documenting them afterwards.</dd></div>
+              <div><dt>Why</dt><dd>The gate file is the record of who may do what. A <code>portal.yaml</code> that cannot be parsed now fails closed; before that fix, our migration guide calls it “a documented auth-bypass”.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p5-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/v6-migration.md#L113-L120">docs/guides/v6-migration.md:113-120</a><!-- /ref -->. A limit we owe you: the tool that looks up the gates for a route returns an <!-- fact:paradigm.gates-for-route -->empty list<!-- /fact --> today, so have the agent read <code>portal.yaml</code> itself.</dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-record">
+            <h4 class="practice-name">Record the why as a decision and what happened as lore, as you go.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Ask the agent to record a decision when a choice is made, and lore when the work is done.</dd></div>
+              <div><dt>Instead of</dt><dd>Reconstructing it at the end of the week.</dd></div>
+              <div><dt>Why</dt><dd>The next session reads these. This repo holds <!-- fact:paradigm.decisions -->138<!-- /fact --> decisions and <!-- fact:paradigm.lore -->710<!-- /fact --> lore entries.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p6-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/decisions.md">docs/guides/decisions.md</a>, section 3<!-- /ref -->; the <code>lore-required</code> check. Counts: <!-- src:paradigm.decisions -->real · ls .paradigm/decisions | wc -l; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src --></dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-team">
+            <h4 class="practice-name">Use the team for work across three or more files, and say so when you go solo.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Let the agent plan larger work with the team, or declare a solo session with <code>paradigm solo &lt;reason&gt;</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Skipping the team without a record.</dd></div>
+              <div><dt>Why</dt><dd>There is a check for it, <code>orchestration-required</code>, with a threshold of three files.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><code>paradigm enforcement status</code> on this repo (“<!-- ref:learn.p8-quote -->Orchestration threshold: 3 files<!-- /ref -->”).</dd></div>
+            </dl>
+          </li>
+            </ol>
+          </div>
+          <div class="pgroup">
+            <h3 class="pgroup-h"><a href="#compound-it">Compound it</a><small>month one</small></h3>
+            <ol class="practices">
+          <li class="practice" id="p-roster">
+            <h4 class="practice-name">Keep the roster small: three or four agents for a task.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Bench the agents you do not need, with <code>paradigm agent bench &lt;id&gt;</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Keeping all <!-- fact:paradigm.agents-bundled -->68<!-- /fact --> bundled profiles active.</dd></div>
+              <div><dt>Why</dt><dd>Our guidance is that past five the cost outweighs the value.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p7-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/guides/agents.md#L79">docs/guides/agents.md:79</a><!-- /ref -->. This is guidance from our own use. It has not been measured.</dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-provisional">
+            <h4 class="practice-name">Treat what agents learn as provisional until you sign it off.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Review learnings in a class term.</dd></div>
+              <div><dt>Instead of</dt><dd>Trusting the automatic loop alone.</dd></div>
+              <div><dt>Why</dt><dd>On our own repo the loop reads “<!-- fact:paradigm.learning-liveness -->FLATLINE: 0 journals / 20 completions<!-- /fact -->”. It cannot be relied on by itself.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- src:paradigm.learning-liveness -->real · paradigm doctor; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a> · run 2026-11-23<!-- /src --></dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-protocol">
+            <h4 class="practice-name">Check for a protocol before repeating a pattern, and record one after.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Ask “is there a protocol for this?” first. There is a skill, <code>/paradigm:protocol</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Solving the same pattern a second way.</dd></div>
+              <div><dt>Why</dt><dd>It is step zero in the instructions Paradigm generates for your agent. This repo has <!-- fact:paradigm.protocols -->41<!-- /fact --> recorded.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p10-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/src/core/ide-adapters/claude.ts#L118">packages/paradigm/src/core/ide-adapters/claude.ts:118</a><!-- /ref -->; <!-- src:paradigm.protocols -->real · ls .paradigm/protocols | wc -l; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/counts.txt">pages/captures/counts.txt</a> · run 2026-11-23<!-- /src --></dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-sync">
+            <h4 class="practice-name">Regenerate instruction files with <code>paradigm sync</code>. Do not hand-edit them.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Change the source, then run <code>paradigm sync</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Editing the generated <code>CLAUDE.md</code> directly.</dd></div>
+              <div><dt>Why</dt><dd>The next sync rewrites the file, and your edit is gone.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p11-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/src/core/ide-adapters/index.ts#L308-L322">packages/paradigm/src/core/ide-adapters/index.ts:308-322</a><!-- /ref --></dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-stores">
+            <h4 class="practice-name">Put durable facts in the typed store, not in the agent's native memory.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>What happened goes to lore, a rule to habits, a reason to a decision.</dd></div>
+              <div><dt>Instead of</dt><dd>Letting everything pile up in one memory file.</dd></div>
+              <div><dt>Why</dt><dd>Typed records can be found and checked. <code>paradigm memory review</code> flags what has piled up.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- ref:learn.p12-evidence --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/paradigm/src/core/ide-adapters/claude.ts#L157-L169">packages/paradigm/src/core/ide-adapters/claude.ts:157-169</a><!-- /ref --></dd></div>
+            </dl>
+          </li>
+          <li class="practice" id="p-doctor">
+            <h4 class="practice-name">Run <code>paradigm doctor</code> after every upgrade.</h4>
+            <dl class="do">
+              <div><dt>Do</dt><dd>Upgrade, then <code>paradigm doctor</code>.</dd></div>
+              <div><dt>Instead of</dt><dd>Assuming an upgrade migrated everything.</dd></div>
+              <div><dt>Why</dt><dd>On our own repo, doctor found <!-- fact:paradigm.own-repo-findings.dead_path_references -->15<!-- /fact --> dead path references and a list of tool names in permission files that no longer match a tool.</dd></div>
+              <div class="ev"><dt>Evidence</dt><dd><!-- src:paradigm.own-repo-findings -->real · paradigm doctor; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/paradigm-doctor.txt">pages/captures/paradigm-doctor.txt</a> · run 2026-11-23<!-- /src --></dd></div>
+            </dl>
+          </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section field-sheet" id="field-card" aria-labelledby="field-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="field-h">The field card.</h2>
+        <p class="prose">Everything above, on one sheet. Print this page and only the card prints.</p>
+        <div class="field-card">
+          <p class="field-title">Paradigm, on one page.</p>
+          <div>
+            <h3 class="h3">The first prompt</h3>
+            <p class="field-say">Map this codebase with Paradigm: draft .purpose files for the main directories, then tell me what would be affected if I changed &lt;a module you know&gt;.</p>
+          </div>
+          <div class="field-cols">
+            <div>
+              <h3 class="h3">Commands</h3>
+<pre>npm install -g @a-company/paradigm
+paradigm shift
+paradigm status
+paradigm ripple '#&lt;symbol&gt;'
+paradigm enforcement set balanced
+paradigm enforcement status
+paradigm sync
+paradigm doctor
+paradigm solo &lt;reason&gt;
+gnomon
+warpline oracle &lt;branchA&gt; &lt;branchB&gt;</pre>
+            </div>
+            <div>
+              <h3 class="h3">The thirteen, as pairs</h3>
+              <ol>
+                <li>Map first, then change.</li>
+                <li><code>.purpose</code> in the same change.</li>
+                <li>Ask what it affects, before the change.</li>
+                <li>Turn enforcement on. It starts off.</li>
+                <li>Gate first, then the endpoint.</li>
+                <li>Decision for the why, lore for what happened.</li>
+                <li>Team for three files or more. Say so when solo.</li>
+                <li>Three or four agents, not all of them.</li>
+                <li>A learning is provisional until you sign it.</li>
+                <li>Look for a protocol first. Record one after.</li>
+                <li><code>paradigm sync</code>. Do not hand-edit generated files.</li>
+                <li>Typed stores, not one memory file.</li>
+                <li><code>paradigm doctor</code> after every upgrade.</li>
+              </ol>
+            </div>
+          </div>
+          <p class="field-foot">Checks are off until you turn them on. Facts last stamped <!-- fact:as_of -->2026-11-23<!-- /fact -->.</p>
+        </div>
+      </div>
+    </section>
+
+    <nav class="onward" aria-label="Where to go next">
+      <p class="entry-name"><a href="../index.html"><small>Back to</small>Overview</a></p>
+      <a class="key pri" href="#see-it">Start at the first station</a>
+    </nav>
+  </main>
+
+<!-- frame:foot -->
+  <footer class="foot">
+    <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+    <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md">Changelog ↗</a>
+    <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/LICENSE">MIT licence ↗</a>
+    <span>Facts last stamped 2026-11-23</span>
+  </footer>
+<!-- /frame -->
+</div>
+</body>
+</html>

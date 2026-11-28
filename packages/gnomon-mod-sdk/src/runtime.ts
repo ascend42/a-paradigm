@@ -15,15 +15,20 @@
  * log goes to stderr (`ctx.log`), which the host keeps as a tail.
  */
 import * as net from 'node:net';
-import { MOD_ABI_ID, MOD_ABI_V1, type RelayedFor } from '@a-company/gnomon-contracts';
+import { MOD_ABI_ID, MOD_ABI_V1, type RelayedFor, type ToolRelayedFor } from '@a-company/gnomon-contracts';
 
 export type Block = Record<string, unknown>;
 
 export interface CallContext {
   /** aborted when the host sends `cancel{cancelToken}` for this call */
   signal: AbortSignal;
-  /** host-stamped on relayed view/command inputs; a mod can never assert who acted */
-  relayedFor?: RelayedFor;
+  /**
+   * Host-stamped; a mod can never assert who acted. On a relayed view or command: {principal, connId} and, for a
+   * command, `surface` (gui | cli). On a tool call: {principal, surface (bridge | voice), agent} and, only for a
+   * first-party mod or one granted `log.read`, {hsid, turn}. The host writes the same object into `payload.relayedFor`
+   * of every row the mod appends inside the call, and removes one the mod supplies.
+   */
+  relayedFor?: RelayedFor | ToolRelayedFor;
 }
 
 export interface ViewContext extends CallContext {
@@ -33,7 +38,12 @@ export interface ViewContext extends CallContext {
 
 export interface ModApi {
   state: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> };
-  /** `kernel.call{verb, params}` (§12.3) — proxied under the mod's principal; `approve` is never proxied */
+  /**
+   * `kernel.call{verb, params}` (§12.3) — proxied under the mod's principal; `approve` is never proxied.
+   * A refusal rejects with a ModCallError whose `data` is the host's refusal object. A `log.append` over an append
+   * budget has `err.data.data.modCode === 'APPEND_BUDGET'` with `written: false`: the row was NOT written and may be
+   * sent again (after `retryAfterMs` for a row budget). Any other failed append may or may not have been written.
+   */
   kernel(verb: string, params?: Record<string, unknown>): Promise<unknown>;
   /** stderr line (the host's stderr tail); never stdout */
   log(message: string): void;
@@ -117,7 +127,7 @@ export function serveMod(def: ModDefinition, io: Io = { input: process.stdin, ou
         if (token) inflight.set(token, ac);
         const callApi = apiFor(typeof p.callId === 'string' ? p.callId : null);
         try {
-          const base: CallContext = { signal: ac.signal, ...(p.relayedFor ? { relayedFor: p.relayedFor as RelayedFor } : {}) };
+          const base: CallContext = { signal: ac.signal, ...(p.relayedFor ? { relayedFor: p.relayedFor as RelayedFor | ToolRelayedFor } : {}) };
           if (method === 'view.render') {
             const fn = def.views?.[String(p.viewId)];
             if (!fn) throw new ModCallError(-32601, `no view ${String(p.viewId)}`);

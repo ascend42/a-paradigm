@@ -16,7 +16,13 @@
  *        knot   ∧ gitClean    → divergeMeaningOnly   ★ (THE headline)
  *   7. append OracleRecord to .warpline/oracle.jsonl; return it.
  *
- * READ-ONLY forever in Phase 1. The two ★ cells are the experimental result.
+ * READ-ONLY TOWARD GIT AND THE USER'S FILES, forever in Phase 1: no commit, ref,
+ * index or working-tree change. It is NOT write-free: each run records under
+ * `.warpline/` in the repo it runs in (the oracle.jsonl row above, plus the
+ * absorbed states in `states/` and their objects in `warp/`), and reads each
+ * ref through a temporary `git worktree` that it removes. Say "leaves git
+ * history and your files alone", never "writes nothing".
+ * The two ★ cells are the experimental result.
  *
  * Library code: no console output (the CLI prints).
  */

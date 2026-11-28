@@ -240,13 +240,17 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:2e1672f9d0ce25a517e111adb67027dd147386620ef7e695a4d237b472621505');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:f93bbc284eb2dd81cb197bb64f95abb9d395c27bfb19d2c43e48cd3af0b6fd67');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
     expect(treeHashOf(f)).not.toBe(GUI_BUNDLE_HASH);
-    expect([...guiBundleFiles().keys()].sort()).toEqual([
-      'app.js', 'boot.js',
+    // boards S1.0: the lazy #gui-board chunk is in the SAME pinned tree (Aegis S1 risk d); its data-URL images are
+    // real files with content-hashed names
+    expect([...guiBundleFiles().keys()].sort().map((n) => n.replace(/^board\/asset-[0-9a-f]{16}\./, 'board/asset-<sha>.'))).toEqual([
+      'app.js',
+      'board/LICENSES.txt', 'board/asset-<sha>.png', 'board/asset-<sha>.svg', 'board/asset-<sha>.svg', 'board/board.css', 'board/board.js',
+      'boot.js',
       'fonts/Fraunces-opsz-wght.woff2', 'fonts/JetBrainsMono-Medium.woff2', 'fonts/JetBrainsMono-Regular.woff2', 'fonts/JetBrainsMono-SemiBold.woff2',
       'fonts/OFL-Fraunces.txt', 'fonts/OFL-JetBrainsMono.txt',
       'grain.svg', 'index.html', 'styles.css',
@@ -272,6 +276,20 @@ describe('G-WEB-08 bundle pin', () => {
       rmSync(home, { recursive: true, force: true });
     }
   });
+  it('boards S1.0 (G-WEB-06 Excalidraw fixture): the board chunk is static files of known types, no sourcemap, no wasm', () => {
+    const board = [...guiBundleFiles()].filter(([n]) => n.startsWith('board/'));
+    expect(board.map(([n]) => n)).toEqual(expect.arrayContaining(['board/board.js', 'board/board.css', 'board/LICENSES.txt']));
+    expect(staticContentType('board/board.js')).toBe('text/javascript; charset=utf-8');
+    expect(staticContentType('board/board.css')).toBe('text/css; charset=utf-8');
+    expect(staticContentType('board/LICENSES.txt')).toBe('text/plain; charset=utf-8');
+    for (const [n, b] of board) {
+      expect(n, n).toMatch(/^board\/(board\.js|board\.css|LICENSES\.txt|asset-[0-9a-f]{16}\.(png|svg))$/);
+      expect(n, n).not.toMatch(/\.(map|wasm)$/);
+      expect(b.length, n).toBeGreaterThan(0);
+    }
+    expect(board.reduce((a, [, b]) => a + b.length, 0)).toBeLessThanOrEqual(4 * 1024 * 1024); // the S1.0 budget
+    expect(bundlePath('/board/board.js')).toBe('board/board.js');
+  });
   it('M1.10: the #gui bundle has no inline script, no eval, no data: URL, no HTML sinks and no remote load (rule-6 CSP)', () => {
     const files = guiBundleFiles();
     const html = files.get('index.html')!.toString();
@@ -287,7 +305,15 @@ describe('G-WEB-08 bundle pin', () => {
         continue;
       }
       if (n.endsWith('.svg')) expect(s, n).not.toMatch(/<script|foreignObject|\son[a-z]+=|href/i); // Aegis S1 L2: an SVG is an image, never active
-      expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
+      expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|document\.write/);
+      // HTML sinks: none in the GUI's own code. The board chunk is a third-party engine whose sinks cannot be
+      // removed without a fork (React's DOM renderer, Excalidraw's SVG export and library previews), so they are
+      // PINNED BY EXACT COUNT in board.js and absent everywhere else under board/: a new sink from an engine bump
+      // fails here and is read before it ships. `dangerouslySetInnerHTML:` counts props PASSED (0: the 13 bare
+      // mentions are React's own prop handling); Gnomon's board code hands the engine no HTML.
+      const sinks = { innerHTML: (s.match(/\.innerHTML\b/g) ?? []).length, outerHTML: (s.match(/\.outerHTML\b/g) ?? []).length, insertAdjacentHTML: (s.match(/insertAdjacentHTML/g) ?? []).length, dangerouslySetInnerHTMLProp: (s.match(/dangerouslySetInnerHTML:/g) ?? []).length };
+      if (n === 'board/board.js') expect(sinks, n).toEqual({ innerHTML: 4, outerHTML: 3, insertAdjacentHTML: 0, dangerouslySetInnerHTMLProp: 0 }); // S1.4 P4a: the Library unit's sinks left with library-components-stubbed
+      else expect(s, n).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }
   });

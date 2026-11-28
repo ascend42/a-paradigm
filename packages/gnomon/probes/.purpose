@@ -28,6 +28,74 @@ components:
       group SW4BMQ8PNL.gnomon.probe; an unentitled signed binary is refused),
       built from _shared/kernel/KernelProbe.swift by _shared/kernel-probe.mjs.
       GNOMON_PROBE_ADHOC=1 forces ad-hoc signing.
+      Boards S1.0: p12-excalidraw-csp no longer installs anything; it decodes
+      the shipped board chunk (board/*) from the kernel's pinned embed and
+      loads it under the rule 6 CSP through p12-excalidraw-csp/harness.mjs
+      (static scan, mount, draw, tools, select-then-Library, PNG export),
+      shared with oracle G-DDL-06 (packages/gnomon-gui/test/board-csp.test.ts).
+      Boards S1.1 (oracle G-DDL-07): the harness page walks the Gnomon rail's
+      tools through the handle and adds phases for the command palette keys,
+      a dropped library file, the absent image tool (its key and a dropped
+      image file), the engine's old tool keys, the stock nodes in the DOM,
+      the canvas font strings and font faces, and day and night captures of
+      selection, marquee, multi-select, binding highlight and guides plus the
+      board at 374 x 304; reskinProblems is its predicate. It also serves
+      the bundle's fonts/JetBrainsMono-Regular.woff2 from the same embed. The
+      result file keeps each capture's size, not its bytes.
+      T-2026-11-25-002 (P12 on CI): every run is two pages and the retry is
+      per PAGE: a page that sends no report (the pinned page included, which
+      used to sit outside the retry) is re-run alone, at most once per engine,
+      and each attempt stays in launchRetries with its page; a page that sent
+      any report, on time or late, or asked for anything outside the bundle
+      (strayRequests, STRAY_OK) is never retried. _shared/browser.mjs runPage
+      says why a page missed (exited, never-requested within loadDeadlineMs,
+      no-report), when the page was first requested, the browser's exit, and
+      any report that came after the wait (lateReport, judged in full, never
+      counted as a report); reports still in flight are drained before the
+      server closes (attachLateReports) and a retried attempt that turns out
+      to have reported is judged too. The page's watchdog fires 5 s before a
+      launch-fixed deadline (?deadline= epoch ms, 80 s into the 90 s wait,
+      inside the WKWebView host's 85 s; it was 45 s from the driver's start,
+      which cut off the probe build's page on a slow macos-15 runner) and
+      each report carries phaseAt and sentAt. Residual risk: a page whose
+      main thread hangs before posting is a retryable 'no-report' miss, so a
+      CSP row it never posted is not seen; the retry scope is narrowed to
+      the miss class CI evidence shows once it shows one. The result counts a run as
+      mounted only if both pages mounted, lists every non-reporting page in
+      nonReportingRuns (run, page, wallMs, miss, launcherTail, handoff), and
+      gives per-page timings (pinnedBytes, probeTimings). harness.mjs
+      runAccounting (which also counts a retried attempt's late CSP rows in
+      violationCount and violatedDirectives), engineProblems, retryable,
+      strayRequests, attachLateReports and runMounted are pure and tested in
+      test/p12-run-accounting.test.ts. P12 has its own CI step (30 min).
+      The browser, not the launcher (T-2026-11-25-002, macos-15 CI 2026-11-26:
+      the Firefox launcher exited 0 at 2 s, the browser it started loaded the
+      pinned page and reported after the page had been called 'exited' and
+      retried): _shared/browser.mjs launch() follows a hand-off. The
+      processes whose command line holds the launch's unique profile
+      directory name are the browser (holdersFrom, profileHolders: ps on
+      macOS and Linux, Win32_Process on Windows); `gone` resolves when the
+      launcher and all of them have ended, runPage's early end and its
+      'exited' miss wait on `gone`, and kill() stops them before the profile
+      is removed. Every runPage result carries `handoff` {launcherExit, pids,
+      stopped} when a launcher exited with its browser alive. Tested with a
+      stub launcher in test/p12-browser-handoff.test.ts
+      (test/fixtures/handoff-launcher.mjs).
+      Pass B: the page also checks that a dropped image is reported to the
+      host (onRefused, onAttempt) and reads the handle's marks and view.
+      S1.1 CI round: the two paste checks are a REAL paste in Chromium-family
+      engines (Chrome, Edge): the harness server writes the clipboard and
+      presses the platform's paste chord over the DevTools protocol
+      (_shared/browser.mjs devtools, realPaste; Meta on macOS, Control on
+      Windows and Linux), because a synthetic paste event never reaches the
+      engine's paste handler there. WKWebView and Firefox get a synthetic
+      event. A check that ran in no engine fails the probe, and the result
+      says which engine exercised each and how its paste was made. Chromium
+      engines are launched with a loopback DevTools port for this.
+      _shared/wkwebview-load.swift turns window occlusion detection off so an
+      offscreen page stays visible and requestAnimationFrame runs
+      (T-2026-11-06-003), and prints the page's visibility and phase on a
+      timeout.
       Unsigned macOS probes: p10m-sbx-deny-mac (S29-03/04 sandbox-exec session
       denies + escape matrix), p11-ws-framing (RFC 6455 over node:http with a
       forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS
@@ -78,7 +146,20 @@ components:
       back to back, inside a Stop-hook continuation) and for a blocking Stop
       hook with and without --include-hook-events; finding: the replay line is
       written on consumption, never on receipt, and hook_response lines appear
-      only with --include-hook-events (exit_code 2, outcome 'error'). probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
+      only with --include-hook-events (exit_code 2, outcome 'error').
+      p-two-sdk-servers (S1.4 P2 prerequisite for #mod-tool-bridge, darwin,
+      real claude 2.1.332, haiku, zero deps, the buildClaudeArgv flags): two
+      `type: sdk` servers (`gnomon`, `gnomon-mods`) in one mcp.json, both
+      answered by stubs with one `echo` tool; four short turns in three
+      processes. Findings: both connect and each gets its own initialize /
+      tools/list / tools/call as mcp_message with its server_name; can_use_tool
+      precedes the tools/call in permission mode default, for a sub-agent too;
+      an allow rule in the --settings file SKIPS can_use_tool, and one in an
+      untrusted project layer is ignored; notifications/tools/list_changed
+      sent by the server makes claude ask tools/list again and the next turn
+      lists the new tool; a sub-agent's mcp_message carries nothing that names
+      it, its can_use_tool carries agent_id, and both carry the same tool use
+      id (params._meta 'claudecode/toolUseId'). probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
       cleanups on SIGINT/SIGTERM/ctx.signal for founder-run probes, ask()
       rejects on abort — wkwebview-load.swift, helper/) is shared code, not a
       probe id. p12 pins its whole tree with a committed package-lock.json
@@ -88,3 +169,5 @@ components:
     tags: [gnomon, probes, m1.0]
     tests:
       - test/probe-harness.test.ts
+      - test/p12-run-accounting.test.ts
+      - test/p12-browser-handoff.test.ts

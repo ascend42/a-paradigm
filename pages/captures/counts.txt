@@ -1,0 +1,92 @@
+# Captured 2026-11-23 in the main checkout, branch feat/gnomon-boards-s1.0, HEAD d4dd05b7. Counts by ls, grep and git, as the dossier shows.
+# Dossier values the same day, where they differ: lore files 707, G ids 339 and 367, commits 2,406 (dossier HEAD 53b5a636).
+
+$ ls packages/paradigm/templates/agents/*.agent | wc -l
+68
+
+$ ls .paradigm/decisions | wc -l
+138
+
+$ git ls-files .paradigm/decisions | wc -l
+134
+
+$ find .paradigm/lore/entries -type f | wc -l
+710
+
+$ git ls-files .paradigm/lore/entries | wc -l
+700
+
+$ ls .paradigm/protocols | wc -l
+41
+
+$ ls plugins/paradigm/skills | wc -l
+21
+
+$ grep -cE '^## \[[0-9]' CHANGELOG.md
+271
+
+$ git tag | wc -l
+0
+
+$ git rev-list --count HEAD
+2418
+
+$ wc -l < docs/specs/gnomon.md
+2486
+
+$ grep -oE 'G-[A-Z]+-[0-9]+[a-z]?' docs/specs/gnomon.md | sort -u | wc -l
+340
+
+$ grep -ohE 'G-[A-Z]+-[0-9]+[a-z]?' docs/specs/gnomon.md docs/specs/gnomon-loops.md docs/specs/gnomon-client-api.md | sort -u | wc -l
+368
+
+$ ls packages/gnomon/probes/results | wc -l
+35
+
+$ paradigm --help | awk '/^Commands:/{f=1;next} f && /^  [a-z]/{print $1}' | wc -l
+75
+
+$ warpline --help | awk '/^Commands:/{f=1;next} f && /^  [a-z]/{print $1}' | wc -l
+40
+
+$ sed -n 21p packages/paradigm/src/core/enforcement/loader.ts
+const DEFAULT_LEVEL: EnforcementLevel = 'none';
+
+$ sed -n '18,19p' packages/paradigm-mcp/src/tools/tools-list-budget.test.ts
+const TOKEN_BUDGET = 8000;
+const TOOL_BUDGET = 40;
+
+$ sed -n '4,5p' packages/paradigm-mcp/src/tools/families.ts
+* Default tier = 11 anchors + 21 families (always listed).
+* On-demand tier = 14 tools, listed only when named in config.yaml
+
+$ paradigm --version
+8.1.3
+
+$ warpline --version
+0.3.1
+
+$ gnomon --version
+gnomon 8.1.0
+
+$ npm view @a-company/paradigm version
+8.1.3
+
+$ npm view @a-company/warpline versions
+[ '0.2.1', '0.2.2', '0.3.0', '0.3.1' ]
+
+$ npm view @a-company/gnomon version
+8.1.0
+
+$ npm view @a-company/paradigm versions --json | grep -c '"'
+123
+
+$ paradigm enforcement status | sed -n '2,8p'
+Enforcement Configuration
+
+Level: balanced
+Orchestration threshold: 3 files
+Detection: breadcrumb
+Overrides: 1
+
+

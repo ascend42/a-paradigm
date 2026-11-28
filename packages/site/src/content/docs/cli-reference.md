@@ -14,9 +14,10 @@ npm install -g @a-company/paradigm
 
 | Command | Description |
 |---------|-------------|
-| `paradigm init` | Initialize Paradigm in a project |
-| `paradigm shift` | Configure project settings and install hooks |
-| `paradigm scan` | Rebuild symbol index from .purpose files |
+| `paradigm shift` | Set up or update a project (init, team, scan, instruction files, hooks) |
+| `paradigm reindex` | Rebuild symbol index from .purpose files |
+| `paradigm scan auto` | Draft `.purpose` files from existing code |
+| `paradigm enforcement set <level>` | Turn compliance checks on (`minimal`, `balanced`, `strict`); they are off by default |
 | `paradigm status` | Show project overview and symbol counts |
 | `paradigm doctor` | Health check — validate setup and find issues |
 
@@ -24,7 +25,7 @@ npm install -g @a-company/paradigm
 
 | Command | Description |
 |---------|-------------|
-| `paradigm search <query>` | Search symbols by name, description, or tag |
+| `paradigm ripple <symbol>` | Show what a change to a symbol affects |
 | `paradigm graph` | Launch interactive symbol graph visualization |
 
 ## Documentation
@@ -42,7 +43,6 @@ npm install -g @a-company/paradigm
 | `paradigm lore list` | List recent lore entries |
 | `paradigm lore show <id>` | View a lore entry |
 | `paradigm lore timeline` | Visual timeline of project history |
-| `paradigm lore serve` | Launch lore viewer UI |
 
 ## Multi-Agent Orchestration
 

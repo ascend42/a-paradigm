@@ -17,11 +17,12 @@ import path from 'node:path';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, loadDeviceKey, readKernelPubs, readRegistry, registerDevice, registerKernelKey, RootVerifier, writeNewDeviceKey } from '../src/kernel/identity/index.js';
 import { startDaemon, type DaemonEvent } from '../src/kernel/lifecycle/index.js';
 import { KeyRing, SoftwareEd25519Signer, verifyLog } from '../src/kernel/log/index.js';
-import { EXAMPLE_MOD, install, writeModFolder, probeManifest } from './mod-helpers.js';
+import { EXAMPLE_MOD, FIRST_PARTY_PROBE, host as modHost, install, installFirstParty, rig as modRig, writeModFolder, probeManifest } from './mod-helpers.js';
+import { unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { runModCommand } from '../src/cli/mod-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { connectGnomon } from '../src/kernel/socket/index.js';
-import { createModKernelCall } from '../src/kernel/modhost/index.js';
+import { connectGnomon, createKernelDispatcher, listenSocket, SocketAuthenticator } from '../src/kernel/socket/index.js';
+import { createModKernelCall, createModRelayPort, type ModAppendRow } from '../src/kernel/modhost/index.js';
 import type { PrincipalKind } from '@a-company/gnomon-contracts';
 import { tempHome } from './daemon-helpers.js';
 
@@ -78,14 +79,14 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     const { d, ns } = await rig();
     const p = `p:${ns}/mod-acme.probe`;
     const call = createModKernelCall({ callAs: (pr, v, pa) => d.dispatcher.callAs(pr, v, pa), append: async () => ({ seq: 0 }) });
-    const st = (await call({ name: 'acme.probe', principal: p, verb: 'status', params: {} })) as Record<string, unknown>;
+    const st = (await call({ name: 'acme.probe', principal: p, verb: 'status', params: {}, callKind: 'idle' })) as Record<string, unknown>;
     expect(st).toMatchObject({ principal: p, principalKind: 'mod', modAbiId: MOD_ABI_ID });
     expect(st.daemon).toBeUndefined(); // own view only
-    const page = (await call({ name: 'acme.probe', principal: p, verb: 'log.read', params: {} })) as { projection: string };
+    const page = (await call({ name: 'acme.probe', principal: p, verb: 'log.read', params: {}, callKind: 'idle' })) as { projection: string };
     expect(page.projection).toBe('mod');
-    await expect(call({ name: 'acme.probe', principal: p, verb: 'log.read', params: { follow: true } })).rejects.toMatchObject({ refusal: { data: { reason: 'bad-follow' } } });
+    await expect(call({ name: 'acme.probe', principal: p, verb: 'log.read', params: { follow: true }, callKind: 'idle' })).rejects.toMatchObject({ refusal: { data: { reason: 'bad-follow' } } });
     await expect(d.dispatcher.callAs(p, 'log.append', { kind: 'modns.acme.probe.x' })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
-    await expect(call({ name: 'acme.probe', principal: p, verb: 'session.send', params: { hsid: 'h' }, hsid: 'h' })).rejects.toMatchObject({ refusal: { code: 'ENGINE' } });
+    await expect(call({ name: 'acme.probe', principal: p, verb: 'session.send', params: { hsid: 'h' }, hsid: 'h', callKind: 'tool' })).rejects.toMatchObject({ refusal: { code: 'ENGINE' } });
   });
 
   it('F4: status.mods goes in full to the human class only; an agent gets counts', async () => {
@@ -107,6 +108,26 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     expect(ev.causes ?? []).toEqual([]);
     expect(ev.idem).toBeUndefined();
     await expect(d.modKernelCall({ name: 'acme.probe', principal: p, verb: 'log.append', params: { kind: 'modns.acme.probe.x', audience: 'team' } })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN', data: { reason: 'label-relaxed' } } });
+  });
+
+  it('G-MOD-17 row scope: the real log takes the host-stamped scope.repo on a userland mod row, a scope filter finds it, and the chain verifies offline', async () => {
+    const { d, ns, home } = await rig();
+    const p = `p:${ns}/mod-gnomon.probe`;
+    const repo = 'repo:0123456789abcdef';
+    const stamp = { relayedFor: { principal: `p:${ns}/founder`, connId: 'conn-7', surface: 'gui' }, scope: { repo } };
+    // the mod supplies ANOTHER scope: only the stamp's reaches the envelope
+    await d.modKernelCall({ name: 'gnomon.probe', principal: p, verb: 'log.append', params: { kind: 'modns.gnomon.probe.x', payload: { a: 1 }, scope: { repo: 'repo:fedcba9876543210' } }, stamp });
+    await d.modKernelCall({ name: 'gnomon.probe', principal: p, verb: 'log.append', params: { kind: 'modns.gnomon.probe.x', payload: { a: 2 }, scope: { repo } }, stamp: { relayedFor: stamp.relayedFor } });
+    const events = [...d.log.read({ reader: { class: 'human' }, kinds: ['modns.gnomon.probe.x'] })].map((v) => (v as { event: Record<string, unknown> }).event);
+    expect(events.map((e) => e.scope)).toEqual([{ org: null, team: null, repo }, undefined]);
+    expect(events[0]).toMatchObject({ principal: p, payload: { a: 1, relayedFor: stamp.relayedFor } });
+    await d.shutdown('signal');
+    const ring = new KeyRing();
+    const pubs = readKernelPubs(home);
+    for (const k of pubs) ring.addEd25519(k.publicKeyPem);
+    const rep = verifyLog(home, { keyRing: ring, kernelPrincipal: d.kernelPrincipal, kernelKeyIds: pubs.map((k) => k.keyId) });
+    expect(rep.failures).toEqual([]);
+    expect(rep.ok).toBe(true);
   });
 
   it('reviewer: an OFFLINE chain verify accepts the userland row with a mod principal signed by the kernel key', async () => {
@@ -160,4 +181,91 @@ describe('gnomon mod pickup in startDaemon (M1.11 slice 3, #mod-cli)', () => {
     expect(kinds).toContain('manifest.staged');
     expect(d.modPickup.raised()).toEqual([cardId]);
   });
+});
+
+/*
+ * S1.3 P1 (Aegis B4): the read cap per caller class over REAL unix-socket connections. Each class is a registered
+ * device key that does hello + auth against the real dispatcher (the daemon's own mod launcher is sandboxed, so the
+ * dispatcher here is stood up beside a mod host on the unsandboxed launcher seam; everything between the socket and
+ * the mod is the real code). The GUI credential is a WebSocket launch token: test/relay-gesture.test.ts.
+ */
+describe('G-MOD-17: the command read cap over a real unix socket, per caller class', () => {
+  it('human on a device key (cli), agent, session, voice and mod: every command is read-only for both mods; no row, no state; a gesture stamp buys nothing', async () => {
+    const r = modRig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
+    installFirstParty(r);
+    const rows: ModAppendRow[] = [];
+    const LIVE = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+    const { h } = modHost(r, { launcher: unsandboxedModLauncher }, { kernelCall: createModKernelCall({ callAs: async () => ({}), append: async (row) => (rows.push(row), { seq: rows.length }) }), callTimeoutMs: 10_000, focusRepo: (hsid) => (hsid === LIVE ? 'repo:0123456789abcdef' : null), focusPrincipal: () => null });
+    cleanups.push(() => h.stopAll());
+    await h.start('acme.probe');
+    await h.start(FIRST_PARTY_PROBE);
+
+    const t = tempHome('gmc-');
+    cleanups.push(t.cleanup);
+    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    registerKernelKey(t.home, root, kernel.publicKeyPem);
+    const classes: Array<[PrincipalKind, string]> = [['human', 'founder'], ['agent', 'kit'], ['session', 's-01hzzzzz'], ['voice', 'voice'], ['mod', 'mod-acme.other']];
+    const creds = classes.map(([kind, name], i) => {
+      const signer = SoftwareEd25519Signer.generate('device');
+      const entry = registerDevice(t.home, root, { host: `mac-${i + 1}`, name, publicKeyPem: signer.publicKeyPem, principalKind: kind });
+      return { kind, cred: { principalId: entry.principalId, deviceId: entry.deviceId, signer } };
+    });
+    const sock = path.join(t.home, 'g.sock');
+    const authed: Array<{ connId: unknown; principal: unknown; principalKind: unknown }> = [];
+    const dispatcher = createKernelDispatcher({
+      authenticator: new SocketAuthenticator({ home: t.home, endpointPath: sock, kernelSigner: kernel, trust: root }),
+      status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: kernel.keyId, custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: root.rootKeyId }) },
+      mods: createModRelayPort(h),
+      log: async (k, p, ids) => void (k === 'socket.auth.ok' && authed.push({ connId: ids?.connId, principal: p.principal, principalKind: p.principalKind })),
+    });
+    const srv = await listenSocket({ socketPath: sock, handle: dispatcher.handle, onConnect: dispatcher.onConnect, onDisconnect: dispatcher.onDisconnect });
+    cleanups.push(() => srv.close());
+    const reg = readRegistry(t.home, new RootVerifier(root.publicKeyPem));
+    const serverKey = { keyId: kernel.keyId, publicKeyPem: reg.kernelKeys.get(kernel.keyId)! };
+
+    type Out = { result?: { result?: { relayedFor?: Record<string, string>; out?: { ok: boolean; keys?: string[]; hsid?: unknown; repo?: unknown; gesture?: unknown } } }; error?: unknown };
+    const state = async (name: string): Promise<unknown> => ((await h.callTool(name, 'probe.read', { op: 'state.get' })) as { v?: string }).v;
+    const before = { 'acme.probe': await state('acme.probe'), [FIRST_PARTY_PROBE]: await state(FIRST_PARTY_PROBE) };
+    const seen: unknown[][] = [];
+    for (const { kind, cred } of creds) {
+      const s = await connectGnomon({ socketPath: sock, client: { name: 't', version: '0', surface: 'cli' }, serverKey, device: cred });
+      cleanups.push(() => s.conn.close());
+      // the class the KERNEL authenticated this connection as: its own socket.auth.ok row for this connId (status is refused for some classes)
+      expect(authed.filter((x) => x.connId === s.connId)).toEqual([{ connId: s.connId, principal: cred.principalId, principalKind: kind }]);
+      for (const name of [FIRST_PARTY_PROBE, 'acme.probe']) {
+        // a stamp, a forged relayedFor and a focus on a live session ride along: none of them earns a write
+        const call = async (args: Record<string, unknown>): Promise<Out> => (await s.conn.call('mod.command', { name, commandId: 'probe.who', args: { ...args, gesture: { n: 1, kind: 'pointer' }, focus: { hsid: LIVE } }, relayedFor: { principal: 'p:evil/x', surface: 'gui' } })) as Out;
+        const append = await call({ op: 'append.forged' });
+        const set = await call({ op: 'state.set', value: `${kind} ${name}` });
+        const get = await call({ op: 'state.get' });
+        const args = await call({ op: 'args' });
+        expect(append.error).toBeUndefined();
+        seen.push([kind, name, append.result?.result?.relayedFor?.principal === cred.principalId, append.result?.result?.relayedFor?.surface, append.result?.result?.out?.ok, set.result?.result?.out?.ok, get.result?.result?.out?.ok, args.result?.result?.out?.keys, args.result?.result?.out?.gesture]);
+      }
+    }
+    // class, mod, relayedFor.principal is the connection's, surface the mod was told, append, state.set, state.get, arg keys, gesture
+    const row = (kind: string, name: string, surface: string | undefined, keys: string[] = ['op']): unknown[] => [kind, name, true, surface, false, false, true, keys, null];
+    expect(seen).toEqual([
+      row('human', FIRST_PARTY_PROBE, 'cli', ['op', 'hsid', 'repo']), // a human may join a live focus; it is still read-only
+      row('human', 'acme.probe', 'cli'),
+      row('agent', FIRST_PARTY_PROBE, undefined),
+      row('agent', 'acme.probe', undefined),
+      row('session', FIRST_PARTY_PROBE, undefined),
+      row('session', 'acme.probe', undefined),
+      row('voice', FIRST_PARTY_PROBE, undefined),
+      row('voice', 'acme.probe', undefined),
+      row('mod', FIRST_PARTY_PROBE, undefined),
+      row('mod', 'acme.probe', undefined),
+    ]);
+    expect(rows).toEqual([]);
+    expect({ 'acme.probe': await state('acme.probe'), [FIRST_PARTY_PROBE]: await state(FIRST_PARTY_PROBE) }).toEqual(before);
+    // the human on a device key may join a live session's focus (the first-party mod is told hsid and repo): still read-only
+    const cli = await connectGnomon({ socketPath: sock, client: { name: 't', version: '0', surface: 'cli' }, serverKey, device: creds[0]!.cred });
+    cleanups.push(() => cli.conn.close());
+    const joined = (await cli.conn.call('mod.command', { name: FIRST_PARTY_PROBE, commandId: 'probe.who', args: { op: 'args', focus: { hsid: LIVE } } })) as Out;
+    expect(joined.result?.result?.out).toMatchObject({ keys: ['op', 'hsid', 'repo'], hsid: LIVE, repo: 'repo:0123456789abcdef' });
+  }, 60_000);
 });

@@ -138,10 +138,12 @@ import { loadLocalConfig, localChainHighWater, localChainRemoved, type LoadedLoc
 import { LocalConfigCards } from '../local/config-request.js';
 import { defaultLocalRunner, nodeVersionOf, runnerVersionOf } from '../local/bundled-runner.js';
 import { linkedFolders } from '../manifest/install.js';
+import { sweepStaging } from '../manifest/snapshot.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { StagedCardPickup } from '../modhost/control.js';
 import { FeedBacklog, FEED_BACKLOG_KINDS, type FeedSourceRow } from '../modhost/feed.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
+import { createModBridge, type ModBridgeOptions, type ModBridgeSeams } from '../modhost/mcp-bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 import { VoiceControl } from '../voice/voice-control.js';
@@ -380,7 +382,15 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
  * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
  */
 export interface DaemonSeams {
-  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
+  supervisor?: {
+    claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>>; exitHold?: () => Promise<void>;
+    /** S1.4 P5 (the CI e2e job, Aegis ruling 1(a)): stub ONLY the session floor's SIP answer; honoured only with `claudePath` (the fake claude) */
+    sessionSipStub?: boolean;
+    /** S1.4 P5 (Aegis ruling 2): a test loop origin set on the real Session at open (no production path sets one in 8.0) */
+    loopOriginFor?: (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
+  };
+  /** #mod-tool-bridge: a TEST allowlist and pin rule (production: MOD_BRIDGE_TOOLS, the dimension's three tools since S1.4 P5, and the kernel's current pins) */
+  modBridge?: ModBridgeSeams & Pick<ModBridgeOptions, 'foldWindowMs'>;
   billing?: BillingScanSource;
   /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
   drainDeadlineMs?: number;
@@ -711,8 +721,27 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         } catch {
           /* shutdown before the voice child existed */
         }
+        // #mod-tool-bridge: the folded suspect and counter rows of live sessions are written and awaited BEFORE the
+        // children stop, so they are in the log ahead of each session's `session.exited` whatever the exit path's timing.
+        try {
+          await supervisor.flushBridge();
+        } catch {
+          /* shutdown before the supervisor existed */
+        }
         await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
+        // #mod-tool-bridge, the second flush: a bridge call in flight when the mod above was killed is refused
+        // (`mod-refused`) AFTER the first flush, and a call that arrived between the first flush and the sweep opens a
+        // new suspect fold. The session's exit path (#onExit → closeSession) would write them, but shutdown never waits
+        // for it (it awaits the session-env sweep and the fuse first), so they could reach a closed log. Both producers
+        // are gone now (the mods and the session children are stopped), so this flush is final: it writes the folds of
+        // every session #onExit has not removed and awaits the appends (bounded), before `log.close` below. A
+        // session whose #onExit runs later finds its folds empty and writes nothing twice.
+        try {
+          await supervisor.flushBridge();
+        } catch {
+          /* shutdown before the supervisor existed */
+        }
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
         emit({ kind: 'daemon.exit', reason });
         hub.close();
@@ -1111,6 +1140,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // TD-2026-10-19-063: the GUI re-pin of the claude binary. A refused open and a poll of the resolved source
   // pre-stage ONE re-pin card per new sha; only its approved (fresh-presence) effect writes the pin.
   const supSeams = seams.supervisor ?? {};
+  // S1.4 P5 (the CI job; Aegis ruling 1): the ONE switch for the test-only SIP stub, read off DaemonSeams only: the
+  // session profile's floor (supervisor sessionSipStub) and the mod profile's floor (ModHost modSipStub) answer SIP
+  // true, only with a `claudePath` seam (tests pass the fake). No other floor is ever passed it.
+  const sipStubOn = seams.supervisor?.sessionSipStub === true && typeof seams.supervisor.claudePath === 'string' && seams.supervisor.claudePath.length > 0;
   const claudeRow = claudeCodePlatform(process.platform);
   const repin = new ClaudeRepinCards({
     home,
@@ -1166,6 +1199,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // Aegis L3: a trusted server that is on nowhere any more is dropped again (a disabled drop row that failed to write)
   mcpServers.reconcileTrust();
+  // #mod-tool-bridge (S1.4-P2): the `gnomon-mods` SDK server's ports. The mod host is built below (it needs the
+  // supervisor), so it is read at call time. Receipts and the folded refusal counter are appended in-process as
+  // USERLAND rows under p:<ns>/mods-mcp (L7 holds as for mod rows and the kernel-speakable row: the kernel key signs
+  // them as an attestation; readers attribute by principal). Production passes no allowlist: MOD_BRIDGE_TOOLS (the
+  // dimension's three tools since S1.4 P5) and isCurrentFirstPartyPin decide what a session lists.
+  const modBridge = createModBridge({
+    mods: () => deskMods.list(),
+    host: () => mods,
+    ns: () => authority.ns,
+    append: (row) => log.append({ kind: row.kind, principal: row.principal, payload: row.payload, session: row.session, as: 'userland', ...(row.causes ? { causes: row.causes } : {}) }),
+    ...(seams.modBridge?.foldWindowMs !== undefined ? { foldWindowMs: seams.modBridge.foldWindowMs } : {}),
+  }, { ...(seams.modBridge?.allow ? { allow: seams.modBridge.allow } : {}), ...(seams.modBridge?.currentPin ? { currentPin: seams.modBridge.currentPin } : {}) });
   const supervisor: SessionSupervisor = new SessionSupervisor({
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // TD-2026-10-27-833 slice C2': local sessions reach the same servers (first-party Paradigm + the enabled ones)
@@ -1224,7 +1269,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // P8-D87: the effective run mode at each permission request
     runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
     gitVerbs,
-    ...(seams.supervisor ?? {}),
+    modBridge,
+    ...(() => {
+      // the CI SIP stub reaches the supervisor only with a `claudePath` seam (tests pass the fake); sessionSipProbe checks it again
+      const { sessionSipStub: _stub, ...rest } = seams.supervisor ?? {};
+      return { ...rest, ...(sipStubOn ? { sessionSipStub: true } : {}) };
+    })(),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,
@@ -1252,6 +1302,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #mod-host feed backlog (founder report 2026-10-23): ONE incremental fold of this boot's released rows (feed.ts
   // FeedBacklog; requireBoot: nothing counts until this boot's daemon.start is released, Aegis L)
   const feedFold = new FeedBacklog({ requireBoot: true });
+  // #manifest-loader: copies a dead process left in mods/.staging are removed once, here, before the mod host exists
+  // (entries younger than an hour are kept: `gnomon mod install` stages in the CLI process and may be mid-copy)
+  sweepStaging(home);
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({
     home,
@@ -1266,12 +1319,19 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     kernelPrincipal,
     ...(opts.platform ? { platform: opts.platform } : {}),
+    ...(sipStubOn ? { modSipStub: true } : {}),
     kernelCall: (req) => modKernelCall(req),
     onCallEnd: (name, callId) => modKernelCall.endCall(name, callId),
     // K3 (#paradigm-context-mod): the focused hsid → its LIVE session cwd, joined here (never from client input)
     focusCwd: (hsid) => supervisor.scopeOf(hsid)?.cwd ?? null,
     // Aegis M1: an agent/session caller is joined only to the session whose principal it is
     focusPrincipal: (hsid) => supervisor.principalOf(hsid),
+    // S1.3 (Aegis A4): a first-party command's focus → the LIVE session's repo scope (`repo:<16 hex>`, the same
+    // id the offer router uses); null for anything that is not a live session, so nothing is composed for it
+    focusRepo: (hsid) => {
+      const sc = supervisor.scopeOf(hsid);
+      return sc ? deskRepoScope(sc.repoKey) : null;
+    },
     // founder report 2026-10-23: a mod started after a session opened is primed with this boot's state in force.
     // Aegis M: the fold below is fed as rows are released (flushFeed), so a prime is O(state) with no disk read; only a
     // fold that missed rows (queue overflow) re-reads, bounded to this boot (fromSeq = its daemon.start seq).
@@ -1341,7 +1401,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       append: async (row) => {
         // B1: modns.* is userland-owned (L7) ⇒ appended `as: 'userland'` under the MOD principal; the kernel key signs it as an
         // attestation that the kernel accepted a mod-originated row — readers attribute it by principal, never by keyId
-        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}) });
+        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}), ...(row.causes ? { causes: row.causes } : {}), ...(row.scope ? { scope: { org: null, team: null, repo: row.scope.repo } } : {}) });
         return { seq: r.seq };
       },
   });
@@ -1788,7 +1848,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // (drained + exited ⇒ resume; drained without an exit ⇒ the sweep's) and the cards the old kernel left pending
   const resumePlan = planResume(
     (function* (): Generator<ResumeRow> {
-      for (const v of log.read({ reader: { class: 'human' }, kinds: ['permit.grant', 'permit.reattributed', 'session.open', 'session.sandbox', 'session.drained', 'session.exited', 'session.refused', 'approval.request', 'approval.decide', 'approval.expire'] })) {
+      for (const v of log.read({ reader: { class: 'human' }, kinds: ['turn.sent', 'permit.grant', 'permit.reattributed', 'session.open', 'session.sandbox', 'session.drained', 'session.exited', 'session.refused', 'approval.request', 'approval.decide', 'approval.expire'] })) {
         if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), at: v.event.at, payload: v.event.payload };
       }
     })(),

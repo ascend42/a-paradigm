@@ -79,6 +79,9 @@ _pm_lines_off() {
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
+# Warnings from every check accumulate here. Initialised ONCE: a later reset
+# (there used to be one at Check 6) discards the warnings of earlier checks.
+ADVISORY=""
 AUTO_FIXED=""
 AUTO_FIX_COUNT=0
 PARADIGM_AUTO_FIX="\${PARADIGM_AUTO_FIX:-0}"
@@ -681,7 +684,6 @@ fi
 
 _pm_mark check6-aspect-advisory
 # --- Check 6: Aspect coverage advisory ---
-ADVISORY=""
 _SEV=$(_check_severity "aspect-advisory" "warn")
 if [ "$_SEV" != "off" ]; then
   HAS_ASPECTS=false
@@ -711,8 +713,9 @@ if [ "$_SEV" != "off" ]; then
     # advisories). Detection above runs unconditionally for data-continuity
     # symmetry with Check 10; only the user-facing emission is gated.
     if [ "$ASPECT_UPDATED" = false ] && [ "$HAS_COMPLIANCE_CLAIMANT" = "true" ]; then
-      ADVISORY="  This project defines ~aspects with code anchors. Check if existing
-  ~aspects need updated anchors or applies-to patterns."
+      ADVISORY="$ADVISORY
+  - (aspects) This project defines ~aspects with code anchors. Check if existing
+    ~aspects need updated anchors or applies-to patterns."
     fi
   fi
 fi
@@ -1905,7 +1908,13 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  6. paradigm_habits (op: check) — evaluate habit compliance" >&2
   echo "" >&2
   echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
-  echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
+  # Point only at help that exists: name the troubleshooting doc when this
+  # project has one, otherwise a command every install has.
+  if [ -f "$CWD/.paradigm/docs/troubleshooting.md" ]; then
+    echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
+  else
+    echo "Help: Run \\\`paradigm doctor\\\` to check this project's setup (\\\`paradigm doctor --explain\\\` describes each issue)." >&2
+  fi
   exit 2
 fi
 
@@ -2935,7 +2944,13 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  6. paradigm_habits (op: check) — evaluate habit compliance" >&2
   echo "" >&2
   echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
-  echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
+  # Point only at help that exists: name the troubleshooting doc when this
+  # project has one, otherwise a command every install has.
+  if [ -f "$CWD/.paradigm/docs/troubleshooting.md" ]; then
+    echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
+  else
+    echo "Help: Run \\\`paradigm doctor\\\` to check this project's setup (\\\`paradigm doctor --explain\\\` describes each issue)." >&2
+  fi
 
   # Output followup_message JSON to stdout for Cursor's compliance loop.
   # Cursor auto-submits this as the next user message, creating a retry loop.

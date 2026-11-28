@@ -63,6 +63,7 @@ export interface PackageTree {
 }
 
 const O_NOFOLLOW: number = fs.constants.O_NOFOLLOW ?? 0;
+const O_NONBLOCK: number = fs.constants.O_NONBLOCK ?? 0;
 
 export function computePackageHash(files: readonly TreeFile[]): string {
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -77,7 +78,7 @@ export function hashHex(h: string): string {
   return m[1]!;
 }
 
-function refuseSnapshot(reason: SnapshotRefusalReason, relPath: string, name: string, emit: ManifestEventSink): never {
+export function refuseSnapshot(reason: SnapshotRefusalReason, relPath: string, name: string, emit: ManifestEventSink): never {
   emit('mod.snapshot.refused', { name, reason, path: relPath });
   emit('manifest.refuse', { name, code: 'SNAPSHOT', reason, path: relPath });
   throw new ManifestRefusal('SNAPSHOT', `snapshot copier refused ${relPath} (${reason})`, { name, snapshotReason: reason, path: relPath });
@@ -133,7 +134,8 @@ export function walkSource(root: string, name: string, emit: ManifestEventSink):
 export function readChecked(e: WalkEntry, name: string, emit: ManifestEventSink): Buffer {
   let fd: number;
   try {
-    fd = fs.openSync(e.abs, fs.constants.O_RDONLY | O_NOFOLLOW);
+    // O_NONBLOCK: a file swapped for a FIFO since the walk must not block the open (the fstat below refuses it)
+    fd = fs.openSync(e.abs, fs.constants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   } catch {
     refuseSnapshot('changed-during-copy', e.rel, name, emit);
   }
@@ -308,6 +310,73 @@ export function removeTree(p: string): void {
   fs.rmSync(p, { recursive: true, force: true });
 }
 
+const STAGING_ENTRY = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+/** A `.staging` entry younger than this may belong to a stage running in another process (the CLI stages too). */
+export const STAGING_SWEEP_MIN_AGE_MS = 60 * 60 * 1000;
+
+/** rmdir one directory only when it is empty (never recursive); any failure leaves it in place. */
+function rmdirIfEmpty(dir: string): void {
+  try {
+    fs.rmdirSync(dir);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOTEMPTY' || code === 'ENOENT' || code === 'EEXIST') return;
+    // win32 refuses rmdir on a read-only directory (EPERM/EACCES): make it writable and try once more, only if it is empty
+    try {
+      if (fs.lstatSync(dir).isDirectory() && fs.readdirSync(dir).length === 0) {
+        fs.chmodSync(dir, 0o700);
+        fs.rmdirSync(dir);
+      }
+    } catch {
+      /* best effort: a leftover empty directory is harmless, a masked refusal is not */
+    }
+  }
+}
+
+/**
+ * After a refused stage: drop the EMPTY `staged/`, `pinned/` and `mods/<id>/` it left (non-recursive, so a
+ * directory that holds another pin, a staged card or a marker file stays exactly as it is).
+ */
+export function pruneEmptyModDir(home: string, name: string): void {
+  const dir = modDir(home, name);
+  rmdirIfEmpty(path.join(dir, 'staged'));
+  rmdirIfEmpty(path.join(dir, 'pinned'));
+  rmdirIfEmpty(dir);
+}
+
+/**
+ * Remove what a dead process left in `mods/.staging` (a copy that never reached its rename). Called once at kernel
+ * start. Only ULID-named entries directly inside a real (not symlinked) `.staging` are removed, nothing is followed,
+ * and an entry younger than `minAgeMs` is kept: the CLI stages in its own process and may be mid-copy right now.
+ */
+export function sweepStaging(home: string, opts: { now?: number; minAgeMs?: number } = {}): string[] {
+  const dir = path.join(home, 'mods', '.staging');
+  const now = opts.now ?? Date.now();
+  const minAge = opts.minAgeMs ?? STAGING_SWEEP_MIN_AGE_MS;
+  const removed: string[] = [];
+  let names: string[];
+  try {
+    if (!fs.lstatSync(dir).isDirectory()) return removed; // a symlink or a file here is not ours to walk
+    names = fs.readdirSync(dir).sort();
+  } catch {
+    return removed;
+  }
+  for (const n of names) {
+    if (!STAGING_ENTRY.test(n)) continue;
+    const a = path.join(dir, n);
+    try {
+      const st = fs.lstatSync(a);
+      if (now - st.mtimeMs < minAge) continue;
+      if (st.isDirectory()) removeTree(a);
+      else fs.rmSync(a, { force: true }); // lstat said not a directory: unlink the entry itself, never its target
+      removed.push(n);
+    } catch {
+      /* best effort; the next start tries again */
+    }
+  }
+  return removed;
+}
+
 export interface SnapshotResult extends PackageTree {
   dir: string;
   /** false when an identical snapshot was already pinned (content-addressed reuse). */
@@ -344,6 +413,7 @@ export function snapshotFolder(home: string, source: string, name: string, emit:
     return { ...strip(tree), dir: dst, created: true };
   } catch (err) {
     removeTree(staging);
+    pruneEmptyModDir(home, name); // `pinned/` may have been made just before the failing rename
     throw err;
   }
 }

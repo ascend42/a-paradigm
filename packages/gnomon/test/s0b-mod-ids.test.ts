@@ -4,12 +4,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MANIFEST_FORMAT } from '@a-company/gnomon-contracts';
-import { aliasOf, checkGrantRow, FORMAT_1_SUPPORTED, HISTORICAL_FIRST_PARTY_PINS, LEGACY_ALIASES, ownsModKind, type ResolvedGrants } from '../src/kernel/manifest/grants.js';
+import { aliasOf, checkGrantRow, FORMAT_1_SUPPORTED, historicalFirstPartyPins, isHistoricalFirstPartyPin, LEGACY_ALIASES, ownsModKind, type ResolvedGrants } from '../src/kernel/manifest/grants.js';
 import { blockFor, checkPublisherSource, checkServerCollision, publisherDisplay, type InstallCardDetail } from '../src/kernel/manifest/install.js';
 import { canonicalManifestHash, enginesAdmit, manifestHash, readManifest, upgradeManifestV1, validateManifest, type ManifestV2 } from '../src/kernel/manifest/manifest.js';
 import { ManifestRefusal } from '../src/kernel/manifest/refusal.js';
 
-const base = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ manifest: 2, kind: 'mod', publisher: 'acme', name: 'board', version: '1.0.0', abi: 'mod-abi:v1', ...over });
+const base = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ manifest: 2, kind: 'mod', publisher: 'acme', name: 'panel', version: '1.0.0', abi: 'mod-abi:v1', ...over });
 const code = (fn: () => unknown): string | undefined => {
   try {
     fn();
@@ -67,7 +67,7 @@ describe('S0b formats', () => {
   });
 
   it('a legacy name maps to gnomon.N only for an alias, at the first-party tier, from a historical pin; else local.N', () => {
-    const pin = [...HISTORICAL_FIRST_PARTY_PINS][0]!;
+    const pin = historicalFirstPartyPins()[0]!;
     expect(aliasOf('workshop', 'first-party', pin)).toBe('gnomon.workshop');
     expect(aliasOf('workshop', 'local', pin)).toBe('local.workshop');
     expect(aliasOf('workshop', 'first-party', `sha256:${'0'.repeat(64)}`)).toBe('local.workshop');
@@ -96,6 +96,24 @@ describe('S0b identity', () => {
     for (const n of ['workshop', 'ledger-pro', 'neur0ns', 'paradigm-context', 'claude-helper', 'constellation']) expect(code(() => validateManifest(base({ name: n }), local)), n).toBe('PUBLISHER');
   });
 
+  it('S1.2: the seven dimension names are reserved, as a non-gnomon mod name and as a publisher', () => {
+    const seven = ['dimension', 'dimensions', 'dim', 'dims', 'board', 'boards', 'doodle'];
+    for (const n of seven) {
+      expect(code(() => validateManifest(base({ name: n }), local)), `name ${n}`).toBe('PUBLISHER');
+      expect(code(() => validateManifest(base({ publisher: n }), local)), `publisher ${n}`).toBe('PUBLISHER');
+      // look-alikes of each (the fixed skeleton) are refused too
+      expect(code(() => validateManifest(base({ name: n.replace('o', '0').replace('i', '1') }), local)), `skeleton ${n}`).toBe('PUBLISHER');
+    }
+    // the first-party mod itself
+    expect(validateManifest(base({ publisher: 'gnomon', name: 'dimension' }), { tier: 'first-party' }).name).toBe('dimension');
+    expect(code(() => validateManifest(base({ publisher: 'gnomon', name: 'dimension' }), local))).toBe('PUBLISHER');
+    // RECORDED (ruling O3, for Aegis): the prefix rule is on the skeleton, so an unrelated third-party name that merely
+    // starts with a reserved one is refused. This is the existing rule for ledger and workshop, now wider.
+    for (const n of ['dimmer', 'dim-sum', 'boardgame', 'board-a', 'doodler', 'dimensional']) expect(code(() => validateManifest(base({ name: n }), local)), n).toBe('PUBLISHER');
+    // a reserved name inside or at the end of another name is not refused
+    for (const n of ['starboard', 'dash-board', 'my-dim', 'panel']) expect(() => validateManifest(base({ name: n }), local), n).not.toThrow();
+  });
+
   it('the 60-character id cap is separate from the segment regexes', () => {
     expect(validateManifest(base({ publisher: 'p'.repeat(35), name: 'n'.repeat(24) }), local).name).toBe('n'.repeat(24));
     expect(code(() => validateManifest(base({ publisher: 'p'.repeat(36), name: 'n'.repeat(24) }), local))).toBe('SCHEMA');
@@ -103,14 +121,14 @@ describe('S0b identity', () => {
 
   it('env own-prefix is <PUB>__<NAME>__ below first-party; the denylist still applies', () => {
     const mcp = (env: string[]) => base({ provides: { mcp: [{ command: '/bin/x', config: { env } }] } });
-    expect(() => validateManifest(mcp(['ACME__BOARD__URL']), local)).not.toThrow();
-    expect(code(() => validateManifest(mcp(['ACME_BOARD_URL']), local))).toBe('SCHEMA');
-    expect(code(() => validateManifest(mcp(['BOARD__URL']), local))).toBe('SCHEMA');
+    expect(() => validateManifest(mcp(['ACME__PANEL__URL']), local)).not.toThrow();
+    expect(code(() => validateManifest(mcp(['ACME_PANEL_URL']), local))).toBe('SCHEMA');
+    expect(code(() => validateManifest(mcp(['PANEL__URL']), local))).toBe('SCHEMA');
     expect(() => validateManifest(mcp(['OPENAI_API_KEY']), local)).not.toThrow();
     expect(code(() => validateManifest(mcp(['PATH']), local))).toBe('SCHEMA');
     // config.secret must name a declared env entry
-    expect(code(() => validateManifest(base({ provides: { mcp: [{ command: '/bin/x', config: { env: ['ACME__BOARD__T'], secret: ['ACME__BOARD__X'] } }] } }), local))).toBe('SCHEMA');
-    expect(() => validateManifest(base({ provides: { mcp: [{ command: '/bin/x', config: { env: ['ACME__BOARD__T'], secret: ['ACME__BOARD__T'] } }] } }), local)).not.toThrow();
+    expect(code(() => validateManifest(base({ provides: { mcp: [{ command: '/bin/x', config: { env: ['ACME__PANEL__T'], secret: ['ACME__PANEL__X'] } }] } }), local))).toBe('SCHEMA');
+    expect(() => validateManifest(base({ provides: { mcp: [{ command: '/bin/x', config: { env: ['ACME__PANEL__T'], secret: ['ACME__PANEL__T'] } }] } }), local)).not.toThrow();
   });
 
   it('provides.mcp: one entry, no name; the qualified handoff tool fits 64', () => {
@@ -118,7 +136,7 @@ describe('S0b identity', () => {
     expect(code(() => validateManifest(base({ provides: { mcp: [{ command: '/bin/x' }, { command: '/bin/y' }] } }), local))).toBe('SCHEMA');
     const offer = (tool: string) => ({ kind: 'map', phase: 'diverge', title: 'Map it', summary: 'Maps it.', contextIn: [], resultOut: 'map', reach: 'mcp', handoffTool: tool, related: [], restraint: 'Not for a quick question.' });
     const at = (tool: string) => base({ provides: { mcp: [{ command: '/bin/x' }], offers: [offer(tool)] } });
-    const room = 64 - 'mcp__gm_acme_board__'.length;
+    const room = 64 - 'mcp__gm_acme_panel__'.length;
     expect(() => validateManifest(at('t'.repeat(room)), local)).not.toThrow();
     expect(code(() => validateManifest(at('t'.repeat(room + 1)), local))).toBe('SCHEMA');
   });
@@ -126,7 +144,7 @@ describe('S0b identity', () => {
 
 describe('S0b publisher against the source', () => {
   const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
-  const gh = (owner: string) => `git:https://github.com/${owner}/board#${SHA}`;
+  const gh = (owner: string) => `git:https://github.com/${owner}/panel#${SHA}`;
   it('github.com: the publisher must be the URL owner (spoofing refused)', () => {
     expect(checkPublisherSource(m('acme'), gh('acme'), grants())).toBeNull();
     expect(checkPublisherSource(m('acme'), gh('Acme'), grants())).toBeNull();
@@ -136,16 +154,16 @@ describe('S0b publisher against the source', () => {
   it('founder brands: ascend42 only as github.com/ascend42; a-company from no source', () => {
     expect(checkPublisherSource(m('ascend42'), gh('ascend42'), grants())).toBeNull();
     expect(code(() => checkPublisherSource(m('ascend42'), 'package', grants()))).toBe('PUBLISHER');
-    expect(code(() => checkPublisherSource(m('ascend42'), `git:https://gitlab.com/ascend42/board#${SHA}`, grants()))).toBe('PUBLISHER');
+    expect(code(() => checkPublisherSource(m('ascend42'), `git:https://gitlab.com/ascend42/panel#${SHA}`, grants()))).toBe('PUBLISHER');
     expect(code(() => validateManifest(base({ publisher: 'a-company' }), local))).toBe('PUBLISHER');
   });
 
   it('other hosts: TOFU (host, namespace) binding; another binding refused unless re-bound; display "acme @ host"', () => {
-    const src = `git:https://gitlab.com/acme/sub/board#${SHA}`;
+    const src = `git:https://gitlab.com/acme/sub/panel#${SHA}`;
     expect(checkPublisherSource(m('acme'), src, grants())).toEqual({ host: 'gitlab.com', namespace: 'acme/sub', rebind: false, from: null });
     const bound = grants({ publishers: new Map([['acme', { host: 'gitlab.com', namespace: 'acme/sub' }]]) });
     expect(checkPublisherSource(m('acme'), src, bound)).toBeNull();
-    const elsewhere = `git:https://codeberg.org/acme/board#${SHA}`;
+    const elsewhere = `git:https://codeberg.org/acme/panel#${SHA}`;
     expect(code(() => checkPublisherSource(m('acme'), elsewhere, bound))).toBe('PUBLISHER');
     expect(checkPublisherSource(m('acme'), elsewhere, bound, { rebind: true })).toEqual({ host: 'codeberg.org', namespace: 'acme', rebind: true, from: { host: 'gitlab.com', namespace: 'acme/sub' } });
     expect(code(() => checkPublisherSource(m('acme'), gh('acme'), bound))).toBe('PUBLISHER');
@@ -156,23 +174,23 @@ describe('S0b publisher against the source', () => {
 
   it('COLLISION: the derived server name against the user .mcp.json', () => {
     const withMcp = validateManifest(base({ provides: { mcp: [{ command: '/bin/x' }] } }), local);
-    expect(checkServerCollision('/nonexistent', withMcp, grants())).toBe('gm_acme_board');
-    expect(code(() => checkServerCollision('/nonexistent', withMcp, grants(), ['gm_acme_board']))).toBe('COLLISION');
-    expect(checkServerCollision('/nonexistent', validateManifest(base(), local), grants(), ['gm_acme_board'])).toBeUndefined();
+    expect(checkServerCollision('/nonexistent', withMcp, grants())).toBe('gm_acme_panel');
+    expect(code(() => checkServerCollision('/nonexistent', withMcp, grants(), ['gm_acme_panel']))).toBe('COLLISION');
+    expect(checkServerCollision('/nonexistent', validateManifest(base(), local), grants(), ['gm_acme_panel'])).toBeUndefined();
   });
 });
 
 describe('S0b install card', () => {
   const detail = (over: Partial<InstallCardDetail> = {}): InstallCardDetail => ({
-    name: 'acme.board', publisher: 'acme', publisherDisplay: 'acme (unverified, local folder)', format: 2, versionClass: 'update', prevVersion: '1.0.0',
-    kind: 'mod', version: '1.1.0', source: 'linked:/src/board', tier: 'local', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'2'.repeat(64)}`,
+    name: 'acme.panel', publisher: 'acme', publisherDisplay: 'acme (unverified, local folder)', format: 2, versionClass: 'update', prevVersion: '1.0.0',
+    kind: 'mod', version: '1.1.0', source: 'linked:/src/panel', tier: 'local', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'2'.repeat(64)}`,
     effects: [], egress: [], capabilities: [], events: [], tools: [], views: [], readPaths: [], packages: [], commands: [], keybindings: [], knowledge: [], mcp: [], hooks: [], opaque: {},
     replaces: { packageHash: `sha256:${'3'.repeat(64)}`, manifestHash: `sha256:${'4'.repeat(64)}` }, widened: [], files: { added: [], changed: [], removed: [] }, stagedBy: 'p:x/y', ...over,
   });
   const lines = (d: InstallCardDetail) => (blockFor(d).block as { children: Array<{ text: string }> }).children.map((c) => c.text);
   it('line 3 classifies the bytes; the header verb and publisher; a downgrade is prominent', () => {
     const l = lines(detail());
-    expect(l[0]).toMatch(/^Update mod acme\.board 1\.1\.0 \(mod\) by acme \(unverified, local folder\) from /);
+    expect(l[0]).toMatch(/^Update mod acme\.panel 1\.1\.0 \(mod\) by acme \(unverified, local folder\) from /);
     expect(l[3]).toBe('version: update 1.0.0 → 1.1.0');
     const d = lines(detail({ versionClass: 'downgrade', version: '0.9.0' }));
     expect(d[0]).toMatch(/^Downgrade mod/);
@@ -183,9 +201,9 @@ describe('S0b install card', () => {
 
   it('a short card only when nothing widens; a folder replacing git gets the full card with SOURCE CHANGED', () => {
     expect(lines(detail()).some((t) => t.startsWith('nothing widens'))).toBe(true);
-    const swapped = lines(detail({ sourceChangedFrom: `git:https://github.com/acme/board#${SHA}` }));
+    const swapped = lines(detail({ sourceChangedFrom: `git:https://github.com/acme/panel#${SHA}` }));
     expect(swapped.some((t) => t.startsWith('nothing widens'))).toBe(false);
-    expect(swapped).toContain(`SOURCE CHANGED: git:https://github.com/acme/board#${SHA} → linked:/src/board`);
+    expect(swapped).toContain(`SOURCE CHANGED: git:https://github.com/acme/panel#${SHA} → linked:/src/panel`);
     expect(swapped.some((t) => t.startsWith('effects:'))).toBe(true);
     const looks = lines(detail({ looksLike: 'acrne' }));
     expect(looks).toContain('publisher acme looks like acrne (installed)');
@@ -194,7 +212,7 @@ describe('S0b install card', () => {
 
 describe('S0b reservations, skeletons and boundaries (tester additions)', () => {
   const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
-  const gh = (owner: string) => `git:https://github.com/${owner}/board#${SHA}`;
+  const gh = (owner: string) => `git:https://github.com/${owner}/panel#${SHA}`;
   it('founder brands: a-company, warpline, nevr, nevrland, conductor refused at validation, so from every source', () => {
     for (const p of ['a-company', 'warpline', 'nevr', 'nevrland', 'conductor']) {
       expect(code(() => validateManifest(base({ publisher: p }), local)), p).toBe('PUBLISHER');
@@ -206,7 +224,7 @@ describe('S0b reservations, skeletons and boundaries (tester additions)', () => 
 
   it('ascend42 and its skeletons: github.com/ascend42 only; folder, other host and look-alike owners refused', () => {
     expect(validateManifest(base({ publisher: 'ascend42' }), local).publisher).toBe('ascend42');
-    expect(code(() => checkPublisherSource(m('ascend42'), 'linked:/src/board', grants()))).toBe('PUBLISHER');
+    expect(code(() => checkPublisherSource(m('ascend42'), 'linked:/src/panel', grants()))).toBe('PUBLISHER');
     for (const p of ['a5cend42', 'ascencl42', 'ascend-42']) {
       const c = code(() => checkPublisherSource(m(p), gh(p), grants()));
       const v = code(() => validateManifest(base({ publisher: p }), local));
@@ -233,14 +251,14 @@ describe('S0b reservations, skeletons and boundaries (tester additions)', () => 
     expect(code(() => validateManifest(base({ publisher: 'p'.repeat(40) }), local))).toBe('SCHEMA');
     expect(code(() => validateManifest(base({ name: 'n'.repeat(25) }), local))).toBe('SCHEMA');
     for (const p of ['-acme', 'acme-', 'ac--me', 'Acme', 'acmé', 'ac_me']) expect(code(() => validateManifest(base({ publisher: p }), local)), p).toBe('SCHEMA');
-    expect(code(() => validateManifest(base({ name: '1board' }), local))).toBe('SCHEMA');
+    expect(code(() => validateManifest(base({ name: '1panel' }), local))).toBe('SCHEMA');
     expect(code(() => validateManifest(base({ publisher: 'p'.repeat(39), name: 'n'.repeat(24) }), local))).toBe('SCHEMA');
     expect(validateManifest(base({ publisher: 'p'.repeat(36), name: 'n'.repeat(23) }), local).name).toHaveLength(23);
   });
 
   it('env prefix: hyphens become a single _, so a forged __ cannot reach another mod', () => {
     const mcp = (pub: string, name: string, env: string[]) => base({ publisher: pub, name, provides: { mcp: [{ command: '/bin/x', config: { env } }] } });
-    expect(() => validateManifest(mcp('my-co', 'dash-board', ['MY_CO__DASH_BOARD__URL']), local)).not.toThrow();
+    expect(() => validateManifest(mcp('my-co', 'dash-panel', ['MY_CO__DASH_PANEL__URL']), local)).not.toThrow();
     // my.co-x / my-co.x style splits cannot produce each other's prefix
     expect(code(() => validateManifest(mcp('my', 'co-dash', ['MY__CO__DASH__URL']), local))).toBe('SCHEMA');
   });
@@ -259,7 +277,7 @@ describe('S0b reservations, skeletons and boundaries (tester additions)', () => 
 
 describe('Aegis S0b M4: re-binding back to github.com', () => {
   const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
-  const gh = (owner: string) => `git:https://github.com/${owner}/board#${SHA}`;
+  const gh = (owner: string) => `git:https://github.com/${owner}/panel#${SHA}`;
   it('a GitHub re-bind returns a github.com binding; that binding is then the same identity', () => {
     const onGitlab = grants({ publishers: new Map([['acme', { host: 'gitlab.com', namespace: 'acme' }]]) });
     expect(code(() => checkPublisherSource(m('acme'), gh('acme'), onGitlab))).toBe('PUBLISHER');
@@ -267,7 +285,7 @@ describe('Aegis S0b M4: re-binding back to github.com', () => {
     const onGithub = grants({ publishers: new Map([['acme', { host: 'github.com', namespace: 'acme' }]]) });
     expect(checkPublisherSource(m('acme'), gh('acme'), onGithub)).toBeNull();
     // and leaving GitHub again needs a re-bind
-    expect(code(() => checkPublisherSource(m('acme'), `git:https://gitlab.com/acme/board#${SHA}`, onGithub))).toBe('PUBLISHER');
+    expect(code(() => checkPublisherSource(m('acme'), `git:https://gitlab.com/acme/panel#${SHA}`, onGithub))).toBe('PUBLISHER');
   });
 
   it('grant.publisher on github.com is valid only when the namespace is the publisher', () => {
@@ -280,10 +298,10 @@ describe('Aegis S0b M4: re-binding back to github.com', () => {
 describe('Aegis S0b L3: the implicit github claim uses effective pins only', () => {
   const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
   const row = (kind: 'grant.install' | 'grant.uninstall', source: string) =>
-    ({ schemaVersion: 'grantRow:v2', kind, createdAt: '2026-10-20T00:00:00.000Z', name: 'acme.board', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'2'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', source }) as never;
-  const gl = `git:https://gitlab.com/acme/board#${SHA}`;
+    ({ schemaVersion: 'grantRow:v2', kind, createdAt: '2026-10-20T00:00:00.000Z', name: 'acme.panel', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'2'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', source }) as never;
+  const gl = `git:https://gitlab.com/acme/panel#${SHA}`;
   it('an uninstalled github mod no longer claims the publisher; a live one still does', () => {
-    const gh = row('grant.install', `git:https://github.com/acme/board#${SHA}`);
+    const gh = row('grant.install', `git:https://github.com/acme/panel#${SHA}`);
     const live = grants({ installs: [gh], pins: [gh] });
     expect(code(() => checkPublisherSource(m('acme'), gl, live))).toBe('PUBLISHER');
     const gone = grants({ installs: [gh], pins: [gh, row('grant.uninstall', 'package')] });

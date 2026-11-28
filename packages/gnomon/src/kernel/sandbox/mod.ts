@@ -33,7 +33,7 @@ export const MOD_PROFILE = Object.freeze({
   version: MOD_PROFILE_VERSION,
   allow: Object.freeze({
     read: Object.freeze(['the Node runtime', 'the pinned snapshot', '<home>/mods/<name>/state/', 'knowledge:provide read paths']),
-    write: Object.freeze(['<home>/mods/<name>/state/', '<home>/mods/<name>/blobs/ (write effect only)']),
+    write: Object.freeze(['<home>/mods/<name>/state/ (write effect only)', '<home>/mods/<name>/blobs/ (write effect only)']),
     network: 'the kernel egress proxy port (network effect + egress grant only)',
     exec: 'node only',
   }),

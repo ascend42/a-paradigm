@@ -30,14 +30,131 @@ components:
       catalog is ONLY the app's Contents/Resources/gnomon-mods (#app-bundle;
       never a folder beside the app); elsewhere the nearest gnomon-mods above
       the module (clone, npm package).
+      InstalledModView.note (S1.2): a host-composed sentence for a stopped mod
+      the host refused ABI at init (needs an update for this Gnomon), read from
+      the host's status().needsUpdate; never mod text.
     tags: [mods, gui]
     signals: []
     tests:
       - test/mods-admin.test.ts
       - test/socket-abi.test.ts
       - test/app-bundle.test.ts
+  mod-tool-bridge:
+    description: >-
+      #mod-tool-bridge (Dimensions S1.4-P2; spec 3.8, 12.3; G-MOD-19,
+      G-MOD-22). A SPEC NODE: it carries falsifiers. src/kernel/modhost/
+      mcp-bridge.ts: the kernel's second SDK-type MCP server for a Claude Code
+      session, named gnomon-mods, answered in-process on the session's control
+      channel. No process, socket, profile or credential: the caller is the
+      session the kernel spawned.
+      modBridgeAnswer(message, ports, session) is the pure answerer (shaped
+      like kernelMcpAnswer): of the message only method, id,
+      params.protocolVersion and the OWN keys params.name and params.arguments
+      are read; it never throws, so exactly one answer exists on every path.
+      THE LIST RULE (modBridgeTools), re-derived on every tools/call: the mod
+      is in the desk set (installed, verified, granted, unpaused), on the
+      closed allowlist with the tool, first-party (publisher gnomon, tier
+      first-party), at a CURRENT pin (isCurrentFirstPartyPin: in
+      FIRST_PARTY_PACKAGE_HASHES and neither superseded, retired nor historical); the
+      tool declares no network or spend effect and carries a schema of type
+      object whose description is at most 1,024 chars with no Cc/Cf/Zl/Zp and
+      whose canonical JSON is at most 8 KiB; a name two listed mods declare is
+      listed for neither. MOD_BRIDGE_TOOLS, the PRODUCTION allowlist, is ONE
+      line since S1.4-P5 (Aegis M1 met): gnomon.dimension with dim-view,
+      dim-draw and dim-undo, outer object and inner array frozen. A removal
+      (pause, repin, uninstall) takes effect at the next call; an addition
+      at respawn (no listChanged). Tests may pass another allowlist at the
+      daemon, only through DaemonSeams.modBridge (src/kernel/testing.ts),
+      never ModBridgeOptions; test/dimension-bridge-e2e.test.ts passes none.
+      ModHostOptions.modSipStub (TEST SEAM, S1.4 P5 review): set by the
+      daemon only from DaemonSeams.supervisor (sessionSipStub with a
+      claudePath seam); the host passes it only as modLaunchPlan's `sip`
+      argument (probe undefined) and mod.sandbox says sipStubbed:true on
+      darwin when it applied. A floor refusal is ModRefusal SANDBOX (routed
+      UNSUPPORTED, data.modCode SANDBOX), which the page says as
+      sandbox-unavailable.
+      A CALL, in order: unknown tool (-32602); session not running; held
+      (Aegis M2: effective mode manual with no approved plan, or a loop
+      origin; the bridge refuses itself because an allow rule or a hook can
+      skip can_use_tool); no outstanding turn (no-turn); checkBridgeArguments
+      (A1: a plain object, at most 128 KiB canonical, depth 32, 8,192 keys
+      and elements, no own __proto__/constructor/prototype key at any depth,
+      over bridge.ts walkPayloadKeys); the caps (4 calls a second and one in
+      flight per session on BridgeRate, 2 queued or running per mod across
+      sessions, M7); then the call port: host.admit, then the ONE production
+      caller of ModHost's tool call, with a host-built toolRelayedFor
+      {principal, surface, agent, hsid, turn} or none when the agent label
+      fails its pattern.
+      THE RESULT: serialised in a try; escapeBridgeJson writes every Cc, Cf,
+      Zl, Zp code point and every < as a \u escape (M5); fenceBridgeResult
+      wraps it once in <gnomon-mod-result mod tool trust="T3"> with
+      MOD_BRIDGE_FENCE_SENTENCE (data whatever its by, a person's marks
+      included); over 256 KiB after escaping, or unserialisable, is a fixed
+      error. A ModRefusal is MOD_BRIDGE_MOD_SENTENCES[code], never its text.
+      THE RECEIPT (A2): inject.receipt appended through the append port
+      BEFORE the answer is returned, as a userland row under
+      p:<ns>/mods-mcp (session hsid, causes [turn]) with exactly hsid, turn,
+      requester, owner, tool, refs, shas, bytes, outcome. outcome ok = the
+      fenced text was handed over (sha256 of the exact text; refs
+      dim:<ulid>@<seq> only from the result's own dim and seq against their
+      patterns); error = the mod answered but nothing could be handed over. A
+      failed append hands the fixed sentence and nothing else; a session that
+      stopped meanwhile gets neither. Kernel-composed refusals are FOLDED
+      (RowFold, perWindow 0): one counter row per session per 10 s window,
+      outcome refused, coalesced, count, byWhy over MOD_BRIDGE_REFUSALS;
+      closeSession(hsid) writes it at session exit.
+      REVIEW FIXES (S1.4-P2): bridgeHeld({loop, mode, planApproved}) is the
+      one derivation of held (loop wins over manual); the supervisor's stamp
+      and its permission pass both call it. A call is BOUND to the pin its
+      tool was listed at: BridgeTool.packageHash goes to the call port as
+      expectPackageHash and host.ts refuses NOT_RUNNING{why:'pin-changed'}
+      (MOD_PIN_CHANGED) in the tick of the dispatch when the running child is
+      another package; the model gets MOD_BRIDGE_SENTENCES.pinChanged. The
+      receipt wait is bounded (MOD_BRIDGE_LIMITS.receiptWaitMs, 5 s): an
+      append that never settles is the fixed receipt sentence.
+      closeSession and flush are async and resolve once the pending counter
+      appends settled (bounded); a refusal after closeSession opens no fold
+      (a bounded set of ended sessions). MOD_BRIDGE_COUNTER_KEYS is the
+      counter row's key list; MOD_BRIDGE_RECEIPT_KEYS (nine) is for outcome
+      ok or error. The list rule also requires the mod and tool names to
+      pass the fence's id pattern. allow and currentPin are ModBridgeSeams
+      (second argument), never on ModBridgeOptions. A reader of receipts
+      accepts a row only under p:<ns>/mods-mcp whose signature verifies
+      under the kernel key; in S1.4 the only one is the e2e's G-MOD-22
+      checker (verifyLog under the kernel keys). Generic log views do not
+      filter by principal: only the socket append gate keeps forged
+      receipts out.
+      createModBridge(o) builds the ports over the mod host (read at call
+      time) and the log. The kernel imports nothing from gnomon-mods or the
+      mod SDK. Known limit: a sub-agent arrives on the same channel and is
+      stamped as the session's agent. Not served: local sessions.
+      The supervisor half (the stamp, the mcp.json entry, the permission
+      pass, the detector) is under #supervisor.
+    path: src/kernel/modhost/mcp-bridge.ts
+    tags: [kernel, mods, mcp, security, S1.4]
+    signals: []
+    tests:
+      - test/mods-bridge.test.ts
+      - test/mods-bridge-session.test.ts
+      - test/mods-bridge-attack.test.ts
+      - test/mods-bridge-stamps.test.ts
+      - test/mods-bridge-kernel.test.ts
+      - test/dimension-bridge-e2e.test.ts
+      - test/dimension-relay.test.ts
+    oracles: [G-MOD-19, G-MOD-22]
   mod-host:
     description: >-
+      Stage cleanup (security triage): control.ts modNames no longer truncates
+      in silence. Up to MAX_PICKUP_MODS names it returns every mod directory as
+      before; above that it first skips names that hold neither a pinned
+      snapshot nor a staged card nor any regular file of their own (a pause
+      marker or a start / uninstall request: a legacy format-1 install keeps
+      its markers under mods/gnomon.<name>/ with no pin there), by listing and
+      lstat only, so leftover directories
+      cannot push a real mod out of the pickup scans, and if real mods alone
+      still exceed the cap it logs one warning per home through an optional
+      Paradigm-logger-shaped port (PickupOptions.logger; the daemon wires none
+      today, as with the supervisor's port).
       TD-2026-10-20-514: the uninstall card shows its grant.uninstall row in
       detail.rootRows, prepares it (pin still effective) and commits it via
       appendSignedGrantRows: ONE presence; a dropped request expires the card.
@@ -193,4 +310,151 @@ components:
       children; mutation-checked): log.read-only mods get no usage kind and
       turn.result exactly {hsid}; a mod without paradigm.read:summary never
       receives the slice (relayed, forged, or via the feed).
+      Dimensions S1.2 (C1, C2; G-MOD-12, G-MOD-13; modAbiId moved 7aaf92f4 ->
+      fb9bd26a, kitId and clientApiId unchanged): relayedFor is built by the
+      contracts pickRelayedFor with fields fixed per method. view.render gets
+      {principal, connId}; command.run adds surface (gui | cli, derived by the
+      socket dispatcher from the connection credential, never from params);
+      tool.call gets {principal, surface bridge | voice, agent} from the
+      host-known toolRelayedFor option of callTool and, only when
+      #identityAllowed (publisher gnomon, or the log.read capability), hsid and
+      turn. A tool stamp lacking principal, surface or agent is neither sent nor
+      stamped (fail closed). The same object rides the bound call context as
+      CallStamp (effects.ts) and the bridge's clampModAppend applies it to every
+      log.append made inside that call: a mod-supplied payload.relayedFor is
+      always removed, the host's is written when there is a stamp, an idle, view
+      or host-initiated append has no relayedFor key, the 16 KiB cap is measured
+      after stamping, and row causes come only from the stamp (the turn of an
+      entitled tool call; a mod-supplied causes is never read). No caller passes
+      toolRelayedFor yet: the MCP bridge that knows the calling session's agent
+      and turn is S1.4, so until then tool-call rows are unstamped and a
+      dimension fold reads them as the unknown hand. Tests:
+      test/mod-stamp.test.ts.
+      S1.2 review fixes (these replace the field lists in the paragraph above):
+      (A1) the socket dispatcher stamps a surface only for a human-class caller
+      (relaySurfaceOf); an agent, session, mod or voice caller gets none, so its
+      command rows fold as the unknown hand. (A2) clampModAppend refuses a
+      top-level __proto__, constructor or prototype payload key by key class and
+      stores the payload on a null-prototype object. (A3) on tool.call the
+      calling session's principal is identity: an unentitled mod is sent, and
+      stamped with, surface and agent only; principal, hsid and turn go to a
+      gnomon-published mod or one granted log.read. The host-known
+      toolRelayedFor must be whole (principal, a tool surface, an agent label)
+      or nothing is sent or stamped. The mod's echoed init.abi and modAbiId are
+      shown in the ABI refusal only when they have the expected shape. modAbiId
+      for the whole S1.2 move: 7aaf92f4 -> fb9bd26a. DEFERRED, tracked here: to
+      S1.3, an integration test of the first-party branch of #identityAllowed
+      with gnomon.dimension (only the log.read branch and the unentitled branch
+      are tested end to end today).
+      Compatibility acceptance (G-MOD-15, Aegis S1.2 point 9;
+      test/mod-abi-compat.test.ts): at init a mod must echo MOD_ABI_ID, with ONE
+      bounded exception. An installed snapshot whose exact packageHash is a key
+      of SUPERSEDED_FIRST_PARTY_PINS (manifest/install.ts), first-party by hash,
+      source package, publisher gnomon and declaring no tool, may echo the one
+      prior modAbiId listed for that hash (compatModAbiId). It then starts as
+      before with one extra mod.health{ok, why: abi-compat} row; no grant is
+      written and no tier or identity changes; the root-signed grant and the
+      snapshot rehash stand in loadMod as always. Any other mod answering
+      another id is refused ABI, and the refusal is STICKY in memory
+      (#needsUpdate: name to the refused packageHash): later relays are refused
+      ABI with why needs-update and a host-composed sentence without spawning
+      the child, so a view paint cannot run it into the restart cap and the DOWN
+      text never shows for this cause; an operator start, or a different pin
+      after the Update card, tries once more. status().needsUpdate lists the
+      names. G-MOD-14 is the A1 rule above.
+      Dimensions S1.3 pass P1 (Aegis A2, A4, A7, B1; G-MOD-17, G-MOD-18; no
+      contract id moved). These replace what the paragraphs above say about a
+      command's effects and about top-level prototype keys. (1) COMMAND READ
+      CAP, generic to every mod (effects.ts commandCap, applied in effectsFor):
+      a command runs with its mod's declared effects only when the host's own
+      stamp (the pickRelayedFor output, never the request) has an own surface
+      gui AND the mod's publisher is gnomon. Every other command context is
+      capped at read: a human on a device key (surface cli), an agent, session,
+      voice or mod caller (no surface), a third-party mod on any surface, and a
+      direct runCommand with no relayedFor. A capped state.set or log.append is
+      refused EFFECT with cap command-read and logged mod.effect.refused; no
+      row is appended and no state is set. The egress proxy reads the same
+      set, so a capped command opens no tunnel. Consequence: a third-party
+      mod's command cannot write in S1.3 (the SDK example's command is the
+      read-only hello.show; its write is in the hello.count tool). Filed for before any
+      third-party mod with commands: a per-command effects field in the
+      manifest. (2) HOST-COMPOSED COMMAND ARGS (host.ts #composeRelayedArgs,
+      every mod, every caller, a host-initiated runCommand included): the
+      client's own keys are copied onto a null-prototype object minus
+      HOST_ARG_KEYS (repo, hsid, focus, paradigm, gesture) and the prototype
+      keys; args that are not a plain object compose to an empty one. For a
+      gnomon-published mod only, the host then sets args.hsid and args.repo,
+      both or neither: the client's focus.hsid when #mayJoin allows the caller
+      (a human any session, an agent or session principal only its own) AND
+      the ModHostOptions.focusRepo port knows it as a live session and returns
+      its repo scope (repo:<16 hex>, the daemon's supervisor.scopeOf through
+      deskRepoScope; never a path). No port, a throw, or any other return
+      value composes neither. #composeRelayedInput (views) now composes onto a
+      null-prototype object and drops prototype keys as well. (3) ROW SCOPE:
+      a joined focus rides the call as CallStamp.scope {repo}; clampModAppend
+      copies it to ModAppendRow.scope and the daemon writes the envelope scope
+      {org: null, team: null, repo}. A mod-supplied scope is never read. (4)
+      PROTOTYPE KEYS AT ANY DEPTH (bridge.ts checkModPayloadKeys): an own
+      __proto__, constructor or prototype key anywhere in a payload, arrays
+      included, refuses the append (LOG, why prototype-key); the walk is
+      iterative and refuses beyond depth 32 (why payload-depth) or 4,096
+      visited keys and elements (why payload-size), before any copy or
+      canonicalisation. A mod-supplied relayedFor is walked too. Tests:
+      test/mod-stamp.test.ts (the per-class table, args survival, the join,
+      row scope, deep keys), test/mod-daemon.test.ts (real unix-socket device
+      connections per class; the real log taking the scope),
+      test/relay-gesture.test.ts (a real GUI connection), test/mod-focus.test.ts.
+      The gesture stamp itself is #socket (socket/gesture.ts, G-MOD-16).
+      Dimensions S1.4 pass P1 (kernel generics; Aegis A4, A7; G-MOD-21; no
+      contract id moved). (1) COMMAND EFFECTS (effects.ts commandEffects,
+      toolEffects, declaredEffects): the command call context carries a
+      host-internal commandId, set in host.ts runCommand from the id it checked
+      against the manifest. A command whose manifest entry declares effects
+      runs with exactly that set (read and write only: the loader refuses
+      network or spend on a command, and commandEffects cuts to COMMAND_EFFECTS
+      again); a command without the field is READ-ONLY for every mod
+      (G-MOD-20, flipped in S1.4 P3 in the one commit that ships the dimension
+      manifest with effects on every command and its pin; the installed S1.3
+      dimension tree, which declares none, is read-only from then on). The dev cap and the
+      command read cap of S1.3 (1) are applied after, so commandCap stays the
+      outer cap: a third-party command declaring write is still read-only on
+      every surface. A command context with no command id, or an id the
+      manifest does not declare, is read-only (fail closed; runCommand checks
+      the id first, so no production caller builds one). declaredEffects (the
+      launch plan's input) counts a command's declared effects ONLY for a
+      gnomon-published mod, so a first-party mod whose only write is on a
+      command gets its write paths, and a third-party mod with read-only tools
+      and a command declaring write launches without them (its command could
+      never write anyway). (2) HUMAN RESERVE (bridge.ts
+      MOD_APPEND_TOOL_ROWS_PER_SEC = 5, inside MOD_APPEND_ROWS_PER_SEC = 20, one
+      1 s window per mod): KernelCallRequest carries a host-internal callKind
+      (tool, command or idle; a view render counts as idle) that host.ts takes
+      from the bound call context alone. An append whose callKind is not
+      command counts against the tool share and is refused once 5 such rows sit
+      in the window, so commands always keep 15 rows a second. It fails closed:
+      an idle, missing or unknown kind is in the tool share, never the reserve.
+      callKind is never read from a mod request (a mod-supplied one stays in
+      the verb's params, where the clamp drops it), never sent to the child and
+      in no ABI descriptor. The reserve RESTS ON THE COMMAND READ CAP: command
+      means "a person on the GUI" only because a command whose stamp is not
+      surface gui, or whose mod is not gnomon-published, is refused every write
+      before the bridge is reached (test/command-effects.test.ts pins the two
+      together). (3) APPEND_BUDGET (refusal.ts): an append over the
+      row total, the tool share or the per-call byte budget is refused with
+      modCode APPEND_BUDGET (it was LOG; same route, BAD_REQUEST and usage, so
+      the socket code and the JSON-RPC number are unchanged) and detail budget
+      (rows, tool-rows or bytes), written false, and retryAfterMs for the two
+      row budgets (whole milliseconds, 1 to the window, whatever the clock
+      did). The windows are counted on performance.now(), a monotonic clock, by
+      default, so a wall-clock step neither empties nor holds a window; the
+      ports are unchanged and tests still inject a clock. It is thrown before the log port is called, so it is a
+      definite "not written": the mod reads error.data.data.modCode and may
+      keep its fold. Any other failed append (an error from the log, a lost
+      reply, a timeout) still leaves the mod unable to tell. A refused append
+      takes no slot; an append the log port failed keeps the slot it took. The
+      dimension mod reads it since S1.4 P3: an APPEND_BUDGET refusal keeps its
+      fold and answers append-busy; every other failed append drops it. Tests: test/command-effects.test.ts,
+      test/mod-append-budget.test.ts (G-MOD-21), test/mod-call-kind.test.ts (a
+      real child: the forged kind, the code the mod is given, and every line
+      the host wrote to the child's stdin).
     tags: [kernel, mods, sandbox, M1.11]

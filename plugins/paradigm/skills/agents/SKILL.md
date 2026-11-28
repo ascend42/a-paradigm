@@ -1,6 +1,6 @@
 ---
 name: agents
-description: Manage your agent team — roster, onboard, bench/activate, detail, install from GitHub or nevr.land. Use when the user says "agents", "show my agents", "onboard agents", "install agent", "bench agent", or wants to manage their AI team.
+description: Manage your agent team — roster, onboard, bench/activate, detail, install from GitHub. Use when the user says "agents", "show my agents", "onboard agents", "install agent", "bench agent", or wants to manage their AI team.
 ---
 
 # Agent Team Management
@@ -103,13 +103,6 @@ Install an agent from an external source.
 1. Fetch the .agent YAML from the repository
 2. Save to `~/.paradigm/agents/<id>.agent`
 3. Report what was installed
-
-**nevr.land format:** `@<namespace>/<agent-name>`
-1. Fetch from `https://nevr.land/api/agents/<namespace>/<agent-name>`
-2. Display the agent's contract: description, trust level, pricing, terms
-3. Ask for confirmation before installing
-4. Save to `~/.paradigm/agents/<id>.agent`
-5. Report what was installed
 
 If the source format is unclear, ask the user to clarify.
 

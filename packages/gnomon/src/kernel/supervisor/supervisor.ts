@@ -112,7 +112,7 @@ import { privateToUser } from '../../platform/owner-only.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
-import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
+import { sessionLaunchPlan, sessionSandboxFidelity, sessionSipProbe } from '../sandbox/session.js';
 import type { LocalMcpServer, McpListCache } from '../local/mcp-client.js';
 import type { PoolTrust } from '../local/trust-book.js';
 import type { ResultPolicyPort } from '../local/result-policy.js';
@@ -148,6 +148,8 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { GIT_VERB_TOOLS, GIT_VERBS_GUIDANCE, KERNEL_MCP_SERVER, kernelToolName, kernelWorktreeDirs } from '../git/verbs.js';
 import { sessionSystemPrompt } from './host-guidance.js';
 import { KERNEL_MCP_ENTRY, kernelMcpAnswer } from './kernel-mcp.js';
+import { bridgeHeld, MOD_BRIDGE_ENTRY, MOD_BRIDGE_LIMITS, MOD_BRIDGE_SERVER, modBridgeAnswer, newBridgeRate, type BridgeRate, type BridgeSession, type ModBridge } from '../modhost/mcp-bridge.js';
+import { RowFold } from '../modhost/fold.js';
 import { childNodePath } from '../lifecycle/sea.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -239,6 +241,8 @@ export interface ResumeInput {
   layersHash: string;
   gitHash: string | null;
   permit: PermitV1 | null;
+  /** the highest turn number the drained run sent (its turn.sent rows): the resumed run continues after it */
+  lastTurn?: number;
 }
 
 export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
@@ -325,6 +329,20 @@ export interface SupervisorOptions {
   macosMajor?: () => number | null;
   /** TEST RIG ONLY: the SIP probe (default: the platform's csrutil). Tests pass false to exercise the SIP refusal, true to run the rig on a SIP-off host. */
   sipEnabled?: () => boolean | null;
+  /**
+   * TEST SEAM ONLY (S1.4 P5, the CI e2e job; Aegis ruling 1(a)): stub the `sip` answer of the SESSION profile's floor,
+   * honoured only with `claudePath` set (the fake claude). The daemon passes it only from `DaemonSeams.supervisor`
+   * (src/kernel/testing.ts); no env, CLI or config reads it. The session.sandbox row then carries `sipStub: true`.
+   */
+  sessionSipStub?: boolean;
+  /**
+   * TEST SEAM ONLY (S1.4 P5, Aegis ruling 2): the loop origin a Claude session gets on its real `Session` at open
+   * (by the request's cwd). The daemon passes it only from `DaemonSeams.supervisor` (src/kernel/testing.ts). No
+   * production path sets a loop origin in 8.0 (loop act sessions are local, loop-clamp.ts), so the bridge's loop
+   * refusal is proven through this seam: the stamp and the permission pass both read `Session.loopOrigin`.
+   * No client verb or session.open field reaches it.
+   */
+  loopOriginFor?: (req: { cwd: string }) => { loopId: string; runId: string; authoredBy: string } | undefined;
   /** #local-runner (M1.8): the local lane's endpoints + runner; absent ⇒ model:local raises a fallback card */
   local?: LocalLaneConfig;
   /** TEST RIG ONLY: the local probe's fetch */
@@ -346,8 +364,19 @@ export interface SupervisorOptions {
    * GIT_VERBS_GUIDANCE line in its appended system prompt, and its mcp_message control requests answered here.
    */
   gitVerbs?: GitVerbs;
+  /**
+   * #mod-tool-bridge (S1.4-P2): the mod tool bridge's ports. Present AND listing at least one tool at spawn ⇒ the
+   * Claude session's mcp.json gets the SDK server `gnomon-mods`, written last. Its mcp_message control requests are
+   * answered here whether or not the git verbs exist (win32 has none). The production allowlist is empty until P5,
+   * so a real kernel writes no entry in this pass.
+   */
+  modBridge?: ModBridge;
+  /** TEST RIG ONLY: the clock of the bridge detector's suspect fold (default performance.now) */
+  bridgeNow?: () => number;
   /** TEST RIG ONLY: the session scratch base (default the identity's DARWIN_USER_TEMP_DIR) */
   scratchBase?: string;
+  /** TEST RIG ONLY: awaited at the start of a session's exit path (#onExit), so a test can hold it past a daemon stop */
+  exitHold?: () => Promise<void>;
 }
 
 /** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
@@ -471,7 +500,35 @@ interface Session {
    * it. While set, only the loop's own trust-card modeRefs auto-pass and every card carries the loop origin.
    */
   loopOrigin?: { loopId: string; runId: string; authoredBy: string; trustCard?: string };
+  /**
+   * #mod-tool-bridge: each outstanding turn's kernel-stamped origin, kept in LOCKSTEP with turnIds (pushed, spliced and
+   * cleared with it), so a bridge call is stamped `voice` or `bridge` from the turn it runs in.
+   */
+  turnOrigins: TurnOrigin[];
+  /** #mod-tool-bridge: this session's call-rate state (it dies with the session) */
+  bridgeRate: BridgeRate;
+  /** #mod-tool-bridge detector: tool_use ids of bridge-tool can_use_tool requests the kernel ALLOWED (bounded; matching only) */
+  bridgeAllowed: Set<string>;
+  /** #mod-tool-bridge detector: the fold of this session's suspect rows (one row per window, with a count) */
+  bridgeSuspect?: RowFold;
+  /** #mod-tool-bridge detector: suspect appends in flight (awaited, bounded, when the fold is closed) */
+  bridgeSuspectPending?: Set<Promise<unknown>>;
 }
+
+/** A turn's origin as `turn.sent` records it. */
+export type TurnOrigin = 'hand' | 'voice' | 'voice-unverified';
+/** #mod-tool-bridge: the host-known agent label of a Claude Code session (the backend is the only label the host knows). */
+export const BRIDGE_AGENT_LABEL = 'claude';
+/** The model-visible name prefix of a bridge tool. */
+export const BRIDGE_TOOL_PREFIX = `mcp__${MOD_BRIDGE_SERVER}__`;
+/**
+ * #mod-tool-bridge detector (Aegis, probe ruling): the ONE message field read outside `params.name` and
+ * `params.arguments`. An own key, a string of at most 128 characters matching this pattern, used ONLY to match an
+ * allowed can_use_tool request. It never reaches a stamp, a gate, a receipt or a row.
+ */
+export const BRIDGE_TOOL_USE_ID_KEY = 'claudecode/toolUseId';
+export const BRIDGE_TOOL_USE_ID = /^[A-Za-z0-9_-]{1,128}$/;
+export const BRIDGE_SUSPECT_WINDOW_MS = 10_000;
 
 /**
  * Aegis round 2 (H, M2): the session's Gnomon-made dirs under the kernel's own temp dir (realpath'd): a 0700 TMPDIR per
@@ -740,6 +797,8 @@ export class SessionSupervisor {
   /** P8-D94: raised, undecided repo-hook cards by repoKey|setHash|hookId (bounded: MAX_PENDING_HOOK_CARDS) */
   readonly #pendingHookCards = new Map<string, string>();
   readonly #platform: string;
+  /** the SESSION profile's SIP probe (sessionSipProbe: the CI stub only with a `claudePath` seam (tests pass the fake); never the local lane's floors) */
+  readonly #sessionSip: (() => boolean | null) | undefined;
   /** Aegis M2: the kernel git verbs, never on win32 (its session profile has no .git / kernel-worktree denies yet) */
   readonly #gitVerbs: GitVerbs | undefined;
   readonly #identity: SessionIdentity | null;
@@ -777,6 +836,7 @@ export class SessionSupervisor {
   constructor(o: SupervisorOptions) {
     this.#o = o;
     this.#platform = o.platform ?? process.platform;
+    this.#sessionSip = sessionSipProbe(o);
     this.#gitVerbs = this.#platform === 'win32' ? undefined : o.gitVerbs;
     // the session identity is resolved ONCE, at daemon start, from the OS (runner/env.ts), never from the daemon's env
     this.#identity = (o.identity ?? sessionIdentity)();
@@ -1085,14 +1145,24 @@ export class SessionSupervisor {
       const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
       const desk = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
       // #kernel-mcp: the kernel's own SDK server, last, so no distro or mod server can take its name
-      const mcpServers = this.#gitVerbs ? { ...desk, [KERNEL_MCP_SERVER]: { ...KERNEL_MCP_ENTRY } } : desk;
+      const withKernel = this.#gitVerbs ? { ...desk, [KERNEL_MCP_SERVER]: { ...KERNEL_MCP_ENTRY } } : desk;
+      // #mod-tool-bridge: the bridge's SDK entry, AFTER the desk merge and last, so no repo, distro or mod server can
+      // take the name; only when the list rule yields a tool NOW (never in production before P5). This is the Claude
+      // Code spawn path: a local session never comes here. The entry is the constant: no env, no path, no token.
+      let bridged = false;
+      try {
+        bridged = (this.#o.modBridge?.tools().length ?? 0) > 0;
+      } catch {
+        bridged = false; // an unreadable list never adds a server
+      }
+      const mcpServers = bridged ? { ...withKernel, [MOD_BRIDGE_SERVER]: { ...MOD_BRIDGE_ENTRY } } : withKernel;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       // the screen-socket deny follows the TMPDIR the session actually gets (the OS one), not the daemon's inherited one
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : (osTmp ?? env.TMPDIR)) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])], agentSockets: [...new Set([process.env.SSH_AUTH_SOCK, this.#o.env?.().SSH_AUTH_SOCK].filter((x): x is string => typeof x === 'string' && path.isAbsolute(x)))] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
-          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras, hsid }, this.#platform, this.#o.macosMajor, this.#sessionSip);
           const ch = spawn(p.command, p.args, { cwd: req.cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
           let stdout = '';
           const t = setTimeout(() => ch.kill('SIGKILL'), 15_000);
@@ -1145,7 +1215,7 @@ export class SessionSupervisor {
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
       const argv = drv.argv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), appendSystemPrompt: sessionSystemPrompt({ ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}), gitVerbs: this.#gitVerbs ? GIT_VERBS_GUIDANCE : null }), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
-      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#sessionSip);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
       if (wNow !== wHash || gitHash(req.worktree ?? req.cwd) !== gHash) {
@@ -1180,16 +1250,18 @@ export class SessionSupervisor {
       await this.#o.children.track({ kind: 'session', child: c, hsid, intent });
       tracked = true;
       const s: Session = {
-        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], consumedTurns: 0, replayLive: false,
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
+        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], turnOrigins: [], bridgeRate: newBridgeRate(), bridgeAllowed: new Set(), consumedTurns: 0, replayLive: false,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: r?.lastTurn ?? 0, seq: 0, meter: drv.newMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
         ...(repoCtx ? { skills: { dir: repoCtx.pluginDir, ctx: { skills: repoCtx.skills, refused: repoCtx.refused } } } : {}), binary: { exec: priv.exec, sha256: priv.sha256 },
       };
+      const seamLoop = this.#o.loopOriginFor?.({ cwd: req.cwd });
+      if (seamLoop) s.loopOrigin = { loopId: seamLoop.loopId, runId: seamLoop.runId, authoredBy: seamLoop.authoredBy };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path
       await this.#o.log('session.sandbox', {
-        hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
+        hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), ...(this.#sessionSip !== this.#o.sipEnabled && this.#platform === 'darwin' ? { sipStubbed: true } : {}), profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
         binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, hooksMode, settingSources: [...settingSources], repoHooksApproved: approved.map((h) => h.hookId), permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
         ...(r ? { resumedFrom: r.drainedEventId, drainOutcome: r.outcome } : {}),
         ...(trace ? { traced: true } : traceRefused ? { traced: false, traceRefused } : {}),
@@ -1324,6 +1396,7 @@ export class SessionSupervisor {
   async #onExit(s: Session): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    if (this.#o.exitHold) await this.#o.exitHold().catch(() => undefined);
     // Aegis M-B: every exit path (exited, drained, killed) empties this session's session-env/<uuid>, links never followed
     await this.#emptySessionEnv(s.hsid, s.uuid);
     if (this.#platform === 'win32') this.#releaseWin32(s.hsid);
@@ -1335,7 +1408,11 @@ export class SessionSupervisor {
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
     s.turnIds = [];
+    s.turnOrigins = [];
     s.consumedTurns = 0;
+    // #mod-tool-bridge: the session's folded rows are written now; its rate state dies with it
+    await this.#closeBridgeSuspect(s);
+    await this.#o.modBridge?.closeSession(s.hsid).catch(() => undefined);
     await this.#dropUncertain(s, 'session-exited'); // Aegis M1: a timed-out switch's held permit ends with the session
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
@@ -1432,6 +1509,7 @@ export class SessionSupervisor {
         }
         const k = Math.min(Math.max(1, s.consumedTurns), Math.max(s.turnPermits.length, s.turnIds.length, 1));
         const closedIds = s.turnIds.splice(0, k);
+        s.turnOrigins.splice(0, k); // lockstep with turnIds
         const closedPermits = s.turnPermits.splice(0, k);
         s.consumedTurns = Math.max(0, s.consumedTurns - k);
         const turn = closedIds[closedIds.length - 1];
@@ -1512,6 +1590,24 @@ export class SessionSupervisor {
 
   /** #kernel-mcp: one JSON-RPC message to the kernel's own `gnomon` SDK server (any other server name: a control error). */
   async #onMcp(s: Session, ev: Extract<AdapterEvent, { kind: 'mcp-message' }>): Promise<void> {
+    // #mod-tool-bridge: dispatched by server name FIRST, independent of the git verbs (win32 has none)
+    const bridge = this.#o.modBridge;
+    if (bridge && ev.serverName === MOD_BRIDGE_SERVER) {
+      let line: string;
+      try {
+        // the caller, captured NOW: synchronously, before the first await, from the Session object ONLY. A `result`
+        // line may splice turnIds while the call waits; nothing in ev.message ever reaches the stamp.
+        // Only a tools/call has a caller: initialize, tools/list and the rest read nothing of the session.
+        const m = ev.message as { method?: unknown } | null;
+        const caller = m !== null && typeof m === 'object' && m.method === 'tools/call' ? this.#bridgeSession(s) : null;
+        this.#bridgeDetect(s, ev.message);
+        line = drv.mcpResponseLine(ev.requestId, await modBridgeAnswer(ev.message, bridge, () => (s.state === 'running' ? caller : null)));
+      } catch {
+        line = drv.errorLine(ev.requestId, 'the mod tool bridge could not answer'); // still exactly one answer
+      }
+      await this.#write(s, line, { answer: 'mcp', requestId: ev.requestId, channel: 'mods-mcp' });
+      return;
+    }
     const verbs = this.#gitVerbs;
     if (!verbs || ev.serverName !== KERNEL_MCP_SERVER) {
       await this.#write(s, drv.errorLine(ev.requestId, `no sdk mcp server named ${ev.serverName.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId, channel: 'kernel-mcp' });
@@ -1519,6 +1615,81 @@ export class SessionSupervisor {
     }
     const answer = await kernelMcpAnswer(ev.message, verbs, () => (s.state === 'running' ? this.#verbSession(s) : null));
     await this.#write(s, drv.mcpResponseLine(ev.requestId, answer), { answer: 'mcp', requestId: ev.requestId, channel: 'kernel-mcp' });
+  }
+
+  /**
+   * #mod-tool-bridge: who is calling, read from the Session NOW. `turn` is the newest consumed outstanding turn (the
+   * offer router's rule); none ⇒ null, and the call is refused `no-turn` (a background sub-agent's late call lands
+   * there). `held` is Aegis M2: the EFFECTIVE mode, through the same function #onPermission uses (the stricter of the
+   * chosen mode and the strictness ceiling), and the loop origin. The bridge refuses on it itself, because a settings
+   * allow rule or a hook can let a tool run with no can_use_tool request at all.
+   */
+  #bridgeSession(s: Session): BridgeSession {
+    const mode = this.#modeTransition(s, repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]));
+    const i = Math.max(1, s.consumedTurns) - 1;
+    const origin = s.turnOrigins[i];
+    return {
+      hsid: s.hsid,
+      principal: s.principalId,
+      agent: BRIDGE_AGENT_LABEL,
+      turn: s.turnIds[i] ?? null,
+      surface: origin === 'voice' || origin === 'voice-unverified' ? 'voice' : 'bridge',
+      held: bridgeHeld({ loop: s.loopOrigin !== undefined, mode, planApproved: s.planApproved }),
+      rate: s.bridgeRate,
+      running: () => s.state === 'running',
+    };
+  }
+
+  /** #mod-tool-bridge: write this session's suspect row now and wait (bounded) for it to be in the log. */
+  async #closeBridgeSuspect(s: Session): Promise<void> {
+    s.bridgeSuspect?.flush();
+    const set = s.bridgeSuspectPending;
+    if (!set || set.size === 0) return;
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([Promise.all([...set]), new Promise((res) => (timer = setTimeout(res, MOD_BRIDGE_LIMITS.receiptWaitMs)))]);
+    clearTimeout(timer);
+  }
+
+  /**
+   * #mod-tool-bridge: at daemon stop, BEFORE the children are stopped and the log closes: every live session's
+   * suspect row and the bridge's counter rows are written and awaited (bounded), so a shutdown loses none.
+   */
+  async flushBridge(): Promise<void> {
+    for (const s of this.#sessions.values()) await this.#closeBridgeSuspect(s).catch(() => undefined);
+    await this.#o.modBridge?.flush().catch(() => undefined);
+  }
+
+  /**
+   * #mod-tool-bridge detector (the ungated-tool detector, extended): a bridge `tools/call` whose
+   * `_meta["claudecode/toolUseId"]` matches no can_use_tool request the kernel allowed is SUSPECT (an allow rule in a
+   * settings layer, a hook, or a forged line skipped the request). It never blocks: the call is served or refused by
+   * the bridge's own gates alone. A matched id is spent. Folded to one approval.suspect row per session per 10 s
+   * window, with a count; the row names no message field.
+   */
+  #bridgeDetect(s: Session, message: unknown): void {
+    const obj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+    if (s.state !== 'running' || !obj(message) || message.method !== 'tools/call') return; // a dead session gets no fold
+    const params = Object.hasOwn(message, 'params') && obj(message.params) ? message.params : {};
+    const meta = Object.hasOwn(params, '_meta') && obj(params._meta) ? params._meta : null;
+    const raw: unknown = meta !== null && Object.hasOwn(meta, BRIDGE_TOOL_USE_ID_KEY) ? meta[BRIDGE_TOOL_USE_ID_KEY] : undefined;
+    const id = typeof raw === 'string' && BRIDGE_TOOL_USE_ID.test(raw) ? raw : null;
+    if (id !== null && s.bridgeAllowed.delete(id)) return;
+    const suspect = this.#o.broker?.suspect;
+    if (typeof suspect !== 'function') return;
+    s.bridgeSuspect ??= new RowFold({
+      perWindow: 0, // never an individual row: one counted row per window
+      windowMs: BRIDGE_SUSPECT_WINDOW_MS,
+      now: this.#o.bridgeNow ?? (() => performance.now()),
+      field: 'byWhy',
+      base: { hsid: s.hsid, server: MOD_BRIDGE_SERVER },
+      write: (payload) => {
+        const p = (this.#o.broker?.suspect?.('ungated-tool-use', payload, s.hsid) ?? Promise.resolve()).catch(() => undefined);
+        const set = (s.bridgeSuspectPending ??= new Set());
+        set.add(p);
+        void p.finally(() => set.delete(p));
+      },
+    });
+    s.bridgeSuspect.hit(id !== null ? 'unmatched' : raw === undefined ? 'missing' : 'malformed', {});
   }
 
   /**
@@ -1575,6 +1746,33 @@ export class SessionSupervisor {
     if (mode === 'manual' && manualHolds(ev.toolName) && !s.planApproved) {
       // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
       await this.#write(s, drv.denyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
+      return;
+    }
+    // #mod-tool-bridge: an allowlisted mod tool passes like a kernel verb: approval.auto{modeRef:'mod-tool'} BEFORE the
+    // allow (no row ⇒ deny), never a card, never an Always rule, never `updatedPermissions` (allowLine carries none).
+    // The row is the audit record, NOT the gate: the bridge refuses manual mode and loop sessions itself (Aegis M2).
+    // Any other name under the bridge's prefix is denied with no card. Manual mode was already denied above.
+    if (ev.toolName.startsWith(BRIDGE_TOOL_PREFIX)) {
+      const name = ev.toolName.slice(BRIDGE_TOOL_PREFIX.length);
+      let listed = false;
+      try {
+        listed = this.#o.modBridge?.tools().some((t) => t.name === name) ?? false;
+      } catch {
+        listed = false;
+      }
+      // the same derivation the bridge's own gate uses (bridgeHeld): a held session never gets the audit row or the allow
+      const held = bridgeHeld({ loop: s.loopOrigin !== undefined, mode, planApproved: s.planApproved });
+      let logged = false;
+      if (listed && held === null && mayAuto('mod-tool') && b && typeof b.auto === 'function') {
+        try {
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: 'mod-tool' });
+          logged = true;
+        } catch {
+          logged = false;
+        }
+      }
+      if (logged && ev.toolUseId !== null && BRIDGE_TOOL_USE_ID.test(ev.toolUseId)) boundedSet(s.bridgeAllowed, ev.toolUseId);
+      await this.#write(s, logged ? drv.allowLine(requestId, structuredClone(ev.input)) : drv.denyLine(requestId, !listed ? 'Denied: this mod tool is not available.' : held === 'loop' ? 'Denied: loop sessions never call mod tools.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'mod-tool' });
       return;
     }
     // #kernel-mcp: the kernel's own verb tools carry their own gate (^git-init-gate / ^git-push-gate: run mode, card,
@@ -2013,6 +2211,8 @@ export class SessionSupervisor {
     s.replyEnding = false;
     const n = ++s.turns;
     s.turnIds.push(turnId(s.hsid, n));
+    // lockstep with turnIds; the same value turn.sent records below
+    s.turnOrigins.push(p.voiceOrigin?.sentBy === 'unverified' ? 'voice-unverified' : (p.voiceOrigin?.sentBy ?? null) !== null ? 'voice' : 'hand');
     s.replayLive = true; // re-review L-2: the first turn sent makes the stream live too
     const contentHash = turnContentHash(p.text);
     // origin kernel: a KERNEL-templated turn (#offer-router's open text), never model or client text

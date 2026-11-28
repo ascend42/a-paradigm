@@ -1,0 +1,12 @@
+{
+  "repo": "https://github.com/ascend42/a-paradigm",
+  "base_path": "/a-paradigm/",
+  "pages": [
+    { "id": "hub", "file": "index.html", "nav": "Overview", "built": true },
+    { "id": "paradigm", "file": "paradigm/index.html", "nav": "Paradigm", "built": true },
+    { "id": "gnomon", "file": "gnomon/index.html", "nav": "Gnomon", "built": true },
+    { "id": "warpline", "file": "warpline/index.html", "nav": "Warpline", "built": true },
+    { "id": "learn", "file": "learn/index.html", "nav": "Learn", "built": true },
+    { "id": "404", "file": "404.html", "nav": null, "built": true }
+  ]
+}

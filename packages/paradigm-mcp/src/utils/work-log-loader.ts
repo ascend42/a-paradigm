@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { writeUniqueRecord } from './unique-record.js';
 import type { WorkLogEntry, WorkLogFilter, WorkOutcome } from '../types/knowledge-streams.js';
 
 const WORK_LOG_DIR = '.paradigm/work-log';
@@ -17,12 +18,20 @@ const WORK_LOG_DIR = '.paradigm/work-log';
 // ID Generation
 // ────────────────────────────────────────────────────────
 
-function generateWorkLogId(agent: string): string {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10);
+/** `WL-<agent>-<date>-<suffix>`; the suffix is allocated by writeUniqueRecord. */
+function workLogIdFor(agent: string, date: string, suffix: string): string {
   const sanitized = agent.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 20);
-  const counter = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-  return `WL-${sanitized}-${date}-${counter}`;
+  return `WL-${sanitized}-${date}-${suffix}`;
+}
+
+/**
+ * The date folder an id belongs to, from `WL-<agent>-<date>-<suffix>`.
+ * The agent part may itself contain hyphens (`ui-builder`), so the date is the
+ * LAST `YYYY-MM-DD` that is followed by a suffix, not the second field.
+ */
+export function workLogDateFromId(id: string): string | null {
+  const match = /^WL-.+-(\d{4}-\d{2}-\d{2})-[^-]+$/.exec(id);
+  return match ? match[1] : null;
 }
 
 function getDateDir(rootDir: string, date: string): string {
@@ -36,19 +45,17 @@ function getDateDir(rootDir: string, date: string): string {
 export function recordWorkLog(rootDir: string, entry: Omit<WorkLogEntry, 'id' | 'timestamp'>): WorkLogEntry {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
-  const id = generateWorkLogId(entry.agent);
-
-  const full: WorkLogEntry = {
-    id,
-    timestamp: now.toISOString(),
-    ...entry,
-  };
-
-  const dir = getDateDir(rootDir, date);
-  fs.mkdirSync(dir, { recursive: true });
-
-  const filePath = path.join(dir, `${id}.yaml`);
-  fs.writeFileSync(filePath, yaml.dump(full, { lineWidth: 120, noRefs: true }), 'utf8');
+  // Never overwrite: the id space is 999 per agent per DAY, so two logs on
+  // the same day used to collide often and the later one replaced the earlier.
+  let full!: WorkLogEntry;
+  writeUniqueRecord(
+    getDateDir(rootDir, date),
+    (suffix) => workLogIdFor(entry.agent, date, suffix),
+    (id) => {
+      full = { id, timestamp: now.toISOString(), ...entry };
+      return yaml.dump(full, { lineWidth: 120, noRefs: true });
+    },
+  );
 
   return full;
 }
@@ -121,10 +128,9 @@ export function loadWorkLogEntry(rootDir: string, id: string): WorkLogEntry | nu
   const baseDir = path.join(rootDir, WORK_LOG_DIR);
   if (!fs.existsSync(baseDir)) return null;
 
-  // Extract date from ID format: WL-{agent}-{date}-{counter}
-  const match = id.match(/WL-[^-]+-(\d{4}-\d{2}-\d{2})-/);
-  if (match) {
-    const filePath = path.join(baseDir, match[1], `${id}.yaml`);
+  const date = workLogDateFromId(id);
+  if (date) {
+    const filePath = path.join(baseDir, date, `${id}.yaml`);
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf8');
       return yaml.load(content) as WorkLogEntry;

@@ -6,6 +6,7 @@
  * Needs the built child (dist/transport/gnomon-web.js): `npm run test:gnomon`
  * builds first.
  */
+import { contentSecurityPolicy } from '../src/kernel/web/rules.js';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as net from 'node:net';
@@ -184,6 +185,27 @@ describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-onl
     const rpcGet = await rawHttp(port, 'GET', '/rpc', GOOD(port));
     expect(rpcGet.status).toBe(426);
     expect(rpcGet.headers['cache-control']).toBe('no-store');
+  });
+
+  it('boards S1.0 (Excalidraw fixture): the endpoint serves every board file from the pinned snapshot under the unchanged CSP', async () => {
+    const { ep } = await rig();
+    await ep.ensureListening();
+    const port = ep.port;
+    const board = [...guiBundleFiles()].filter(([n]) => n.startsWith('board/'));
+    expect(board.map(([n]) => n)).toEqual(expect.arrayContaining(['board/board.js', 'board/board.css', 'board/LICENSES.txt']));
+    const TYPES: Record<string, string> = { js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', txt: 'text/plain; charset=utf-8', png: 'image/png', svg: 'image/svg+xml' };
+    for (const [n, bytes] of board) {
+      const r = await rawHttp(port, 'GET', `/${n}`, { Host: `127.0.0.1:${port}` });
+      expect(r.status, n).toBe(200);
+      expect(r.body.equals(bytes), n).toBe(true);
+      expect(r.headers['content-type'], n).toBe(TYPES[n.slice(n.lastIndexOf('.') + 1)]);
+      expect(r.headers['content-security-policy'], n).toBe(contentSecurityPolicy(port));
+      expect(r.headers, n).toMatchObject({ 'cross-origin-resource-policy': 'same-origin', 'x-content-type-options': 'nosniff' });
+    }
+    // nothing beside the pinned members: no sourcemap, no directory listing, no font or locale the engine might ask for
+    for (const miss of ['/board/board.js.map', '/board/board.css.map', '/board/', '/board', '/board/fonts/Excalifont/Excalifont-Regular.woff2', '/board/locales/de-DE.js', '/board/subset-worker.chunk.js']) {
+      expect((await rawHttp(port, 'GET', miss, { Host: `127.0.0.1:${port}` })).status, miss).toBe(404);
+    }
   });
 
   it('/blob: GUI token required, content hash verified, PNG served, SVG and disguised HTML 415; /diag appends gui.log', async () => {
@@ -512,13 +534,12 @@ setInterval(() => undefined, 1000);`;
 });
 
 describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
-  it('mod.command is refused (no gesture proof yet) and status reports it available:false; mod.view is served with relayedFor from the GUI connection', async () => {
+  it('mod.command without a gesture stamp is refused FORBIDDEN ungranted (needs gesture) before the port (G-MOD-16; the full cases are relay-gesture.test.ts) and status reports it available; mod.view is served with relayedFor from the GUI connection', async () => {
     const seen: unknown[] = [];
+    const commands: unknown[] = [];
     const mods: ModRelayPort = {
       view: async (rf, req) => (seen.push({ rf, req }), { label: 'mod:acme.probe' }),
-      command: async () => {
-        throw new Error('must not be reached');
-      },
+      command: async (rf, req) => (commands.push({ rf, req }), { result: null }),
       status: (full) => ({ full }),
     };
     const { ep } = await rig({ mods });
@@ -527,13 +548,19 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
     const connId = (auth.result as { connId: string }).connId;
     ws.sendJson(rpc(3, 'status', {}));
     const st = (await ws.nextJson()).result as { relays: Array<{ relay: string; available: boolean }>; mods: unknown };
-    expect(st.relays).toEqual([expect.objectContaining({ relay: 'mod.view', available: true }), expect.objectContaining({ relay: 'mod.command', available: false })]);
+    expect(st.relays).toEqual([expect.objectContaining({ relay: 'mod.view', available: true }), expect.objectContaining({ relay: 'mod.command', available: true })]);
     expect(st.mods).toEqual({ full: true }); // GUI = the human class
     ws.sendJson(rpc(4, 'mod.command', { name: 'acme.probe', commandId: 'probe.who', args: {} }));
-    expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.10' } } } });
+    expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'FORBIDDEN', data: { reason: 'ungranted', needs: 'gesture', why: 'missing' } } } });
+    expect(commands).toEqual([]);
+    // with a stamp the port is reached, with the surface derived from the credential and the stamp removed
+    ws.sendJson(rpc(6, 'mod.command', { name: 'acme.probe', commandId: 'probe.who', args: { a: 1, gesture: { n: 1, kind: 'pointer' } }, relayedFor: { principal: 'p:evil/x', surface: 'cli' } }));
+    expect(await ws.nextJson()).toMatchObject({ result: { result: null } });
+    expect(commands).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human', surface: 'gui' }, req: { name: 'acme.probe', commandId: 'probe.who', args: { a: 1 } } }]);
     ws.sendJson(rpc(5, 'mod.view', { name: 'acme.probe', viewId: 'probe.view', input: {}, relayedFor: { principal: 'p:evil/x', connId: 'z' } }));
     expect(await ws.nextJson()).toMatchObject({ result: { label: 'mod:acme.probe' } });
-    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human' }, req: { name: 'acme.probe', viewId: 'probe.view', input: {} } }]);
+    // S1.2 C2: the dispatcher derives `surface` from the connection credential (host-side; view.render never forwards it)
+    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human', surface: 'gui' }, req: { name: 'acme.probe', viewId: 'probe.view', input: {} } }]);
   });
 });
 

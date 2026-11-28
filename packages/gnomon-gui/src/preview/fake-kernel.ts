@@ -11,7 +11,9 @@
  * the page (WebCrypto, never stored), `auth`, `status`, `log.read` (one
  * backlog page, then the follow subscription), `approve` (the card leaves as
  * an approval.decide row), and `log.append` / `session.send` (accepted, no
- * effect), `mod.view` for the Paradigm Context mod (paradigm-context.ts). `session.open` is refused in plain words. NOT part of the
+ * effect), `mod.view` for the Paradigm Context mod (paradigm-context.ts), and `mod.command` for the dimension mod
+ * when the page gave it one (dim-mod.ts: the mod's real checks and fold behind a stand-in of the host: the gesture
+ * stamp is counted as the kernel counts it, the row is stamped and appended, and comes back on the followed log). `session.open` is refused in plain words. NOT part of the
  * kernel-served bundle (test/preview.test.ts).
  */
 import { checkCap } from '@a-company/gnomon-contracts';
@@ -20,13 +22,14 @@ import { CLIENT_API_ID, authServerPreimage, utf8, type HelloResult, type LogRow 
 import { GUI_FEATURES, RPC, type Transport } from '../core/client.js';
 import { bytesToBase64Url, CARD_ACTION_DOMAIN, keyIdOfSpki } from '../core/server-sig.js';
 import { HUMAN_PRINCIPAL, KERNEL_PRINCIPAL, PREVIEW_LOG_ID, type Fixture } from './fixtures.js';
+import { PREVIEW_DIM_REPO, type PreviewDimMod } from './dim-mod.js';
 import { PARADIGM_CONTEXT_MOD, PARADIGM_CONTEXT_VIEW, paradigmContextView } from './paradigm-context.js';
 
 /** A marker the bundle-exclusion test looks for in the embedded bundle (it must never be there). */
 export const PREVIEW_MARKER = 'gnomon-preview:fake-kernel:v1';
 
 /** Every method the preview kernel answers (test/preview.test.ts checks app.ts calls nothing else). */
-export const PREVIEW_METHODS: readonly string[] = Object.freeze(['hello', 'auth', 'status', 'log.read', 'approve', 'log.append', 'session.send', 'session.open', 'mod.view']);
+export const PREVIEW_METHODS: readonly string[] = Object.freeze(['hello', 'auth', 'status', 'log.read', 'approve', 'log.append', 'session.send', 'session.open', 'mod.view', 'mod.command']);
 
 export interface PreviewKey {
   subtle: SubtleCrypto;
@@ -74,6 +77,9 @@ function capsOf(n: unknown, depth = 0, out: unknown[] = []): unknown[] {
   return out;
 }
 
+const GESTURE_KINDS: readonly string[] = ['pointer', 'key', 'paste', 'menu'];
+const PREVIEW_CONN = 'conn:01JAPREVX4K7Q2M9FBH3N8RTWC';
+
 const refusal = (code: string, reason: string, message: string): { code: number; message: string; data: Record<string, unknown> } => ({ code: -32000, message, data: { schemaVersion: 'refusal:v1', code, message, data: { reason }, next: [] } });
 
 export class FakeKernel implements Transport {
@@ -89,6 +95,13 @@ export class FakeKernel implements Transport {
   #nonce = '';
   #following = false;
   readonly #rowListeners = new Set<(r: LogRow) => void>();
+  /** the dimension mod this kernel relays to, when the page gave one (the board's live fixture) */
+  dim: PreviewDimMod | null = null;
+  /** DEV test hook (boards S1.3 P4b-3): who the NEXT connection authenticates as (a test signs in as someone else after the link went). Preview only. */
+  principal: string = HUMAN_PRINCIPAL;
+  /** the gesture stamp last seen on this connection, and how many commands rode it (the kernel's own rule: fan-out 4) */
+  #stamp = { n: 0, used: 0 };
+  #conn = 0;
   /** Resolves once the page subscribed (log.read follow): the backlog is in the store. */
   readonly followed: Promise<void>;
   #resolveFollowed!: () => void;
@@ -110,6 +123,20 @@ export class FakeKernel implements Transport {
     if (!this.#open) return;
     this.#open = false;
     queueMicrotask(() => this.onClose?.(1000));
+  }
+
+  /** DEV: the same kernel on a NEW connection (a reconnect): the stamp count starts again, nothing is followed yet. */
+  reopen(): void {
+    this.#open = true;
+    this.#following = false;
+    this.#stamp = { n: 0, used: 0 };
+    this.#conn += 1;
+    this.onMessage = null;
+    this.onClose = null;
+  }
+
+  get connId(): string {
+    return this.#conn === 0 ? PREVIEW_CONN : `${PREVIEW_CONN.slice(0, -1)}${this.#conn % 10}`;
   }
 
   /** Rows appended after load (a decided card), for the Workshop strip. */
@@ -137,12 +164,45 @@ export class FakeKernel implements Transport {
   }
 
   /** Append a row as the kernel would and deliver it to the follow subscription. */
-  append(kind: string, payload: Record<string, unknown>, session?: string): void {
+  append(kind: string, payload: Record<string, unknown>, session?: string, more: { principal?: string; scope?: Record<string, unknown> } = {}): number {
     const head = this.rows.length ? this.rows[this.rows.length - 1]!.seq : 0;
-    const row: LogRow = { seq: head + 1, view: 'full', event: { schemaVersion: 'event:v1', log: PREVIEW_LOG_ID, seq: head + 1, at: new Date().toISOString(), principal: KERNEL_PRINCIPAL, kind, payload, ...(session ? { session } : {}) } };
+    const row = { seq: head + 1, view: 'full', event: { schemaVersion: 'event:v1', log: PREVIEW_LOG_ID, seq: head + 1, at: new Date().toISOString(), principal: more.principal ?? KERNEL_PRINCIPAL, kind, payload, ...(session ? { session } : {}), ...(more.scope ? { scope: more.scope } : {}) } } as LogRow;
     this.rows.push(row);
     for (const fn of this.#rowListeners) fn(row);
     if (this.#following) this.#emit({ jsonrpc: '2.0', rpc: RPC, method: 'event', params: { row } });
+    return head + 1;
+  }
+
+  /** `mod.command` for the dimension mod: the kernel's gesture check, the host's composed args and stamp, then the mod. */
+  #dimCommand(p: Record<string, unknown>): unknown {
+    const mod = this.dim;
+    const args = (p.args && typeof p.args === 'object' ? p.args : {}) as Record<string, unknown>;
+    const forbid = (why: string): never => {
+      const r = refusal('FORBIDDEN', 'ungranted', 'a mod command needs a gesture stamp (preview)');
+      Object.assign(r.data.data as Record<string, unknown>, { needs: 'gesture', why });
+      throw r;
+    };
+    if (!mod || p.name !== 'gnomon.dimension') throw refusal('NOT_FOUND', 'not-found', 'no such mod in the preview');
+    const g = args.gesture as { n?: unknown; kind?: unknown } | undefined;
+    if (!g || typeof g !== 'object') return forbid('missing');
+    if (Object.keys(g).length !== 2 || !Number.isSafeInteger(g.n) || (g.n as number) < 1) return forbid('malformed');
+    if (typeof g.kind !== 'string' || !GESTURE_KINDS.includes(g.kind)) return forbid('kind');
+    const n = g.n as number;
+    if (n < this.#stamp.n) return forbid('replayed');
+    if (n === this.#stamp.n && this.#stamp.used >= 4) return forbid('spent');
+    this.#stamp = n === this.#stamp.n ? { n, used: this.#stamp.used + 1 } : { n, used: 1 };
+    // the host composes: the stamp and the focus never reach the mod; hsid and repo are the host's
+    const focus = args.focus as { hsid?: unknown } | undefined;
+    const composed: Record<string, unknown> = {};
+    for (const k of Object.keys(args)) if (!['gesture', 'focus', 'hsid', 'repo', 'paradigm'].includes(k)) composed[k] = args[k];
+    if (focus && typeof focus.hsid === 'string') Object.assign(composed, { hsid: focus.hsid, repo: PREVIEW_DIM_REPO });
+    const relayedFor = { principal: this.principal, connId: this.connId, surface: 'gui' };
+    if (mod.silent && p.commandId === 'dim.op') return new Promise(() => undefined);
+    const runIt = (): unknown => ({ result: mod.run(String(p.commandId), composed, relayedFor, (kind, payload) => this.append(kind, { ...payload, relayedFor }, undefined, { principal: `${HUMAN_PRINCIPAL.replace(/\/[^/]*$/, '')}/mod-gnomon.dimension`, scope: { repo: PREVIEW_DIM_REPO } })) });
+    // DEV (P4b-3): held until the test releases it, then answered in the order it came
+    if (mod.holding && p.commandId === 'dim.op') return new Promise((res) => void mod.waiting.push(() => res(runIt())));
+    const result = mod.run(String(p.commandId), composed, relayedFor, (kind, payload) => this.append(kind, { ...payload, relayedFor }, undefined, { principal: `${HUMAN_PRINCIPAL.replace(/\/[^/]*$/, '')}/mod-gnomon.dimension`, scope: { repo: PREVIEW_DIM_REPO } }));
+    return { result };
   }
 
   async #answer(method: string, p: Record<string, unknown>): Promise<unknown> {
@@ -158,7 +218,7 @@ export class FakeKernel implements Transport {
         return hello;
       }
       case 'auth':
-        return { guiToken: 'preview-gui-token', principal: HUMAN_PRINCIPAL, connId: 'conn:01JAPREVX4K7Q2M9FBH3N8RTWC' };
+        return { guiToken: 'preview-gui-token', principal: this.principal, connId: this.connId };
       case 'status':
         // #gui-folder-field: the kernel opens the chooser (a shot sets __ffPreview.chooser false for no-chooser)
         // founder report 2026-10-23 (dictation at the caret): a shot may show live words (__vxPreview.capture: status.voice.capture)
@@ -169,8 +229,12 @@ export class FakeKernel implements Transport {
           queueMicrotask(() => this.#resolveFollowed());
           return { subscription: 'sub:preview', since: head, logId: PREVIEW_LOG_ID, head };
         }
-        return { rows: this.rows, next: head, cursor: { logId: PREVIEW_LOG_ID, seq: head }, head, caughtUp: true, logId: PREVIEW_LOG_ID };
+        // a resume reads on from its cursor (the live board's reconnect); the first read has none
+        const since = p.since && typeof p.since === 'object' && Number.isSafeInteger((p.since as { seq?: unknown }).seq) ? ((p.since as { seq: number }).seq) : 0;
+        return { rows: since > 0 ? this.rows.filter((r) => r.seq > since) : this.rows, next: head, cursor: { logId: PREVIEW_LOG_ID, seq: head }, head, caughtUp: true, logId: PREVIEW_LOG_ID };
       }
+      case 'mod.command':
+        return this.#dimCommand(p);
       case 'approve': {
         const cardId = String(p.cardId ?? '');
         const req = this.rows.find((r) => r.view === 'full' && r.event.kind === 'approval.request' && (r.event.payload as { card?: { cardId?: string } }).card?.cardId === cardId);
@@ -244,8 +308,11 @@ export function fakeWebSocketClass(make: (url: string) => FakeKernel): new (url:
     onclose: ((e: { code: number }) => void) | null = null;
     onerror: (() => void) | null = null;
     readonly #k: FakeKernel;
+    /** the kernel's connection this socket is (a reconnect gives the SAME kernel a new one) */
+    readonly #conn: string;
     constructor(url: string) {
       this.#k = make(url);
+      this.#conn = this.#k.connId;
       this.#k.onMessage = (data) => this.onmessage?.({ data });
       this.#k.onClose = (code) => {
         this.readyState = 3;
@@ -260,6 +327,12 @@ export function fakeWebSocketClass(make: (url: string) => FakeKernel): new (url:
       this.#k.send(s);
     }
     close(): void {
+      // a socket a reconnect replaced closes by itself: the kernel's live connection is another one (Aegis N1)
+      if (this.#conn !== this.#k.connId) {
+        if (this.readyState === 3) return;
+        this.readyState = 3;
+        return void setTimeout(() => this.onclose?.({ code: 1000 }), 0);
+      }
       this.#k.close();
     }
   };

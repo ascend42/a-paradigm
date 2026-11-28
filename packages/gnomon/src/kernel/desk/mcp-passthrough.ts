@@ -40,7 +40,7 @@ import { mcpServerName, mintId, parseModId } from '@a-company/gnomon-contracts';
 import type { RowVerifier } from '../identity/registry.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { checkAgainstGrants, effectiveInstall, grantsPath, pinDirKey, readGrants } from '../manifest/grants.js';
-import { MANIFEST_FILE, readManifest, resolveMcpLaunch, validateMcpUserConfig, type ManifestMcp, type ManifestV2, type McpUserConfig } from '../manifest/manifest.js';
+import { MANIFEST_FILE, readManifest, resolveMcpLaunch, validateMcpUserConfig, type ManifestMcp, type ManifestV2, type McpUserConfig, type TrustTier } from '../manifest/manifest.js';
 import { computePackageHash, hashPinnedTree, modDir, pinnedDir } from '../manifest/snapshot.js';
 import { isUserPaused, modNames } from '../modhost/control.js';
 
@@ -49,6 +49,9 @@ export interface DeskMod {
   /** the mod id <publisher>.<name> (S0b) */
   name: string;
   manifest: ManifestV2;
+  /** S1.4 (#mod-tool-bridge): the installed snapshot's package hash and the manifest's trust tier, as verified here */
+  packageHash?: string;
+  tier?: TrustTier;
 }
 
 /**
@@ -74,9 +77,10 @@ export function readDeskMods(home: string, trust: RowVerifier): DeskMod[] {
       const dir = pinnedDir(home, pinDirKey(row), row.packageHash);
       if (computePackageHash(hashPinnedTree(dir)) !== row.packageHash) continue;
       const pub = parseModId(name)?.publisher;
-      const r = readManifest(fs.readFileSync(path.join(dir, MANIFEST_FILE)), { tier: grants.trust.get(row.manifestHash) ?? 'local', ...(row.legacyName ? { legacyPublisher: pub === 'gnomon' ? 'gnomon' : 'local' } : {}) });
+      const tier = grants.trust.get(row.manifestHash) ?? 'local';
+      const r = readManifest(fs.readFileSync(path.join(dir, MANIFEST_FILE)), { tier, ...(row.legacyName ? { legacyPublisher: pub === 'gnomon' ? 'gnomon' : 'local' } : {}) });
       if (r.manifestHash !== row.manifestHash || (row.upgradedHash !== undefined && r.upgradedHash !== row.upgradedHash) || !checkAgainstGrants(r.manifest, row.manifestHash, grants).ok) continue;
-      out.push({ name, manifest: r.manifest });
+      out.push({ name, manifest: r.manifest, packageHash: row.packageHash, tier });
     } catch {
       continue;
     }

@@ -39,7 +39,7 @@ async function connected(name: string): Promise<{ client: GnomonClient; store: G
 
 describe('#gui-preview fixtures', () => {
   it('names the fixtures the harness promises', () => {
-    expect([...FIXTURE_NAMES].sort()).toEqual(['always-scopes', 'app-menu', 'ask-card', 'choices', 'choices-multi', 'desk', 'edits-by-rule', 'empty', 'git-verbs', 'host-slip-long', 'host-slips', 'loops', 'loops-many', 'loops-none', 'loops-paused', 'loops-trust', 'loops-waiting', 'mcp-batch-card', 'mcp-batch-waiting', 'mcp-fp-missing', 'mcp-none', 'mcp-not-offered', 'mcp-servers', 'mcp-waiting', 'mcp-windows', 'model-switch', 'model-unconfirmed', 'offer-armed', 'offer-muted', 'offer-slip', 'paradigm-context', 'reply-show-ladder', 'reply-show-only', 'rules-0', 'rules-1', 'rules-200', 'rules-5', 'rules-50', 'rules-close', 'rules-off-open', 'rules-refused', 'rules-staged', 'rules-tighten', 'rules-waiting', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'turn-hook', 'turn-hooks', 'turn-steps', 'voice-armed', 'voice-crashed', 'voice-input', 'voice-ladder', 'voice-mic-fault', 'voice-mic-missing', 'voice-settings', 'workshop', 'workshop-absent', 'workshop-paused']);
+    expect([...FIXTURE_NAMES].sort()).toEqual(['always-scopes', 'app-menu', 'ask-card', 'board', 'choices', 'choices-multi', 'desk', 'edits-by-rule', 'empty', 'git-verbs', 'host-slip-long', 'host-slips', 'loops', 'loops-many', 'loops-none', 'loops-paused', 'loops-trust', 'loops-waiting', 'mcp-batch-card', 'mcp-batch-waiting', 'mcp-fp-missing', 'mcp-none', 'mcp-not-offered', 'mcp-servers', 'mcp-waiting', 'mcp-windows', 'model-switch', 'model-unconfirmed', 'offer-armed', 'offer-muted', 'offer-slip', 'paradigm-context', 'reply-show-ladder', 'reply-show-only', 'rules-0', 'rules-1', 'rules-200', 'rules-5', 'rules-50', 'rules-close', 'rules-off-open', 'rules-refused', 'rules-staged', 'rules-tighten', 'rules-waiting', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'turn-hook', 'turn-hooks', 'turn-steps', 'voice-armed', 'voice-crashed', 'voice-input', 'voice-ladder', 'voice-mic-fault', 'voice-mic-missing', 'voice-settings', 'workshop', 'workshop-absent', 'workshop-paused']);
   });
 
   it.each(FIXTURE_NAMES)('%s parses as kernel rows: JSON-clean, seq 1..n, registered kinds, valid hsids and card:v1 cards', (name) => {
@@ -128,6 +128,45 @@ describe('#gui-preview fake kernel (the real client over it)', () => {
     for (const c of caps) expect(checkCap(c).ok).toBe(true);
     const { client: c2 } = await connected('workshop-absent');
     await expect(c2.call('mod.view', { name: 'gnomon.workshop', viewId: 'workshop.strip', input: {} })).rejects.toThrow(/not running/);
+  });
+});
+
+describe('#gui-preview the dimension mod behind the fake kernel (boards S1.3 P4a)', () => {
+  it('the real session over the fake kernel: open, draw, the row comes back on the followed log, the fold is the mod\'s; the stamp is counted as the kernel counts it', async () => {
+    const { PreviewDimMod } = await import('../src/preview/dim-mod.js');
+    const { DimSessions } = await import('../src/core/dim-session.js');
+    const { DimStore } = await import('../src/core/dim-store.js');
+    const { RpcError } = await import('../src/core/client.js');
+    const { client, kernel } = await connected('empty');
+    const mod = new PreviewDimMod();
+    kernel.dim = mod;
+    const dims = new DimStore();
+    const sessions = new DimSessions({ store: dims });
+    client.onNotification((method, params) => {
+      const row = method === 'event' ? (params as { row?: unknown }).row : undefined;
+      if (row) sessions.apply([row]);
+    });
+    sessions.connect({ client, principal: 'p:01jaqk7v/matt', connId: kernel.connId });
+    const press = (type: string): Event => ({ isTrusted: true, type }) as unknown as Event;
+    const dim = 'dim:01JD1D00000000000000000001';
+    const s = sessions.open({ dim, hsid: 'hsid-preview', opened: 'command', title: 'Preview' }, press('click'));
+    expect(await s.opened(), JSON.stringify(s.lastNotice())).toBe(true);
+    s.edit([{ type: 'add', node: { id: '01JD1M00000000000000000001', kind: 'rect', x: 1, y: 1, z: 'V', w: 10, h: 10 } } as never], press('pointerup'));
+    for (let i = 0; i < 200 && (s.status().pending > 0 || s.status().verified !== true); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(s.status()).toMatchObject({ keep: 'saved', pending: 0, canUndo: true, title: 'Preview', verified: true });
+    expect(s.hash()).toBe(mod.hash(dim));
+    expect(dims.rows(dim).map((r) => (r.payload as { relayedFor: { surface: string } }).relayedFor.surface)).toEqual(['gui', 'gui']);
+    // the mod's own validator refuses what the page did not check (a second add of the same id, sent raw)
+    const raw = (n: number, args: Record<string, unknown>): Promise<{ result: Record<string, unknown> }> => client.call('mod.command', { name: 'gnomon.dimension', commandId: 'dim.op', args: { dim, focus: { hsid: 'hsid-preview' }, gesture: { n, kind: 'pointer' }, ...args } });
+    const again = await raw(3, { ops: [{ type: 'add', node: { id: '01JD1M00000000000000000001', kind: 'rect', x: 1, y: 1, z: 'V', w: 10, h: 10 } }] });
+    expect(again.result).toMatchObject({ ok: false, code: 'ops-refused' });
+    // the kernel's stamp rule: none, a number that goes back, and a fifth use are refused
+    const why = (p: Promise<unknown>): Promise<unknown> => p.then(() => 'sent', (e: unknown) => (e instanceof RpcError ? e.refusal.data?.why : String(e)));
+    expect(await why(raw(2, { ops: [] }))).toBe('replayed');
+    expect(await why(client.call('mod.command', { name: 'gnomon.dimension', commandId: 'dim.op', args: { dim, ops: [] } }))).toBe('missing');
+    for (let i = 0; i < 3; i++) await raw(3, { ops: [] });
+    expect(await why(raw(3, { ops: [] }))).toBe('spent');
+    expect(await why(client.call('mod.command', { name: 'acme.other', commandId: 'x.y', args: { gesture: { n: 9, kind: 'key' } } }))).not.toBe('sent');
   });
 });
 

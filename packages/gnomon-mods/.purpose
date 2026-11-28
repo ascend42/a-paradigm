@@ -34,6 +34,8 @@ components:
       `gnomon mod install packages/gnomon-mods/workshop` + the root-key card.
       Fixtures strip.json / strip-reduced.json with golden renders
       (test/workshop-mod.test.ts, every OS).
+      1.1.1 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES.
     tags: [mods, first-party, M1.11]
     oracles: [G-WSP-01]
 
@@ -66,6 +68,8 @@ components:
       `npm run repin:first-party` in packages/gnomon
       (packages/gnomon/scripts/repin-first-party.mjs, which renders the
       Workshop, Ledger and Paradigm Context goldens from their pure models).
+      1.1.1 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES.
     tags: [mods, first-party]
   paradigm-context-mod:
     description: >-
@@ -98,6 +102,9 @@ components:
       goldens (test/paradigm-context-mod.test.ts, light and dark);
       regenerate with `npm run repin:first-party`; tier first-party once
       pinned in FIRST_PARTY_PACKAGE_HASHES (1.1.1 sha256:22bab5bf…, repinned 2026-10-23 for the fitted zone heads and the one-line empty state).
+      1.1.2 (Dimensions S1.2): echoes the moved modAbiId; no behaviour change;
+      re-pinned in FIRST_PARTY_PACKAGE_HASHES (sha256:bd25b714…, superseding the
+      1.1.1 pin named above).
     tags: [mods, first-party]
   neurons-mod:
     description: >-
@@ -145,3 +152,125 @@ components:
       test/constellation-mod.test.ts.
     tags: [mods, first-party, desk]
     oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
+  dimension-mod:
+    description: >-
+      S1.4 E-fix round 2 (Aegis I-1, Arky R1, Aegis N-3): undoCore packs the
+      undo BY MARK (plan.marks; a mark that fits no row alone is
+      skipped.refused), and writes prior only on the person's OWN undo.
+      S1.4 E-fix (T-2026-11-27-006): undoCore writes undo.prior
+      (dimUndoPriorOf) on the person's dim.undo rows only, so a mark the
+      person undid whole shows no countermark or words sign and a redo brings
+      them back; dim-shape.mjs rebuilt and 1.2.0 re-pinned in place.
+      E3 review (Aegis A1): a person's undo or redo of their own act pins
+      nothing (undidPerson only when another hand undid a person's act).
+      S1.4 E3: dim.open and dim.check answer pins (pinList: the sets still
+      pinned, oldest first, at most 8, in the of shape; GUI answers only),
+      so the page's standing notices follow the mod.
+      #dimension-mod (spec §12.7; S1.3 P2, S1.4 P3, S1.4 E1, E2; first-party, 1.2.0) -
+      packages/gnomon-mods/dimension, id gnomon.dimension: the ONE writer of
+      dimension rows. Nine commands, each declaring effects (dim.open,
+      dim.attach, dim.op, dim.close, dim.grant, dim.undo read+write; dim.select,
+      dim.check, dim.seen read). S1.4 E1 (edit-anything): dim.op takes a
+      ULID act; undo/restored/of are refused on every args and input surface
+      and only the mod writes markers; per-fold history in memory (checkpoint
+      per change-set, 512-row ring, 32 sets and 8 pins per board, 1,000,000
+      checkpoint entries per mod, dropped with the fold); pins for sets that
+      touched a person's marks or undid a person's action, and agent-on-agent
+      sets while a person is present (a gui command within 10 min); dim.seen
+      releases one pinned set; dim.undo plans with planDimUndo as the person,
+      packs at most 4 rows with a mod-minted act and the undo marker, answers
+      {ok, seq, hash, attr, applied, skipped, more?}, never charged
+      (undoCore shared with E2); dim-draw base and changed-since; foreign
+      sub-budgets per id (32 touches, 16 deletes, 16 words a turn) charged
+      before the append; attr beside hash on dim.check and dim.op; dim-view
+      changes carry set and undo, attribution compact (hands indices) within
+      one bridge-escaped answer budget (240 KiB); keyframe v3 carries attribution, goneBy
+      and the history's set keys (v1/v2 ignored). Tests: test/dimension-edit.test.ts.
+      S1.4 E2: tool dim-undo{dim?, of, ids?, opId?} (read, write) through
+      undoCore as the calling agent; symmetric per the founder (own turn,
+      another agent's, a person's action; Aegis H1/H2 not adopted). Order:
+      grant, op-id memo (shared with dim-draw), named-from-view (shownTo,
+      else undo-set-bad), one person set per agent turn (undo-not-allowed),
+      budget; every op charged to the turn and per id to the foreign
+      sub-budgets inside fit before the first append (re-add of another
+      hand's mark = 1 touch), over budget answers more, refunds only for ops
+      never written; grant re-checked between rows. Review fixes: shown =
+      sets the view answer carries (a reset shows none); a re-add with
+      words or foreign wordsBy charges words; cancel before the first row;
+      a draw's oid in the rows is op-id-reused for an undo. Tests:
+      test/dimension-undo-tool.test.ts.
+      It declares the four modns.gnomon.dimension.* kinds and the two
+      auxiliary ones (grant, draw.refused); tools dim-view (read), dim-draw
+      and dim-undo (read, write) for an attached session's agent (S1.4: see below), live in production since S1.4 P5 (MOD_BRIDGE_TOOLS names exactly these three; a new session after install lists them, a running one at respawn); no view, keybinding,
+      offer, capability or egress. model.mjs is pure: actorOf (a human only
+      for a host stamp with surface gui and no agent), apply(state, ops,
+      actor) (the one entry: validateDimOps, rows built from its accepted
+      copies), titleProblem, grantDefault, readArgs (closed arg shapes, read
+      field by field, never spread), rowProblem and the keyframe codec.
+      index.mjs is the stdio loop plus a mod-to-host request helper. Every
+      command checks the stamp, the args, the attached session and the repo
+      before any append; the 512-dimension cap, the 16-session attach cap
+      and the row-size check run before the append; mod state and the fold
+      move only after a seq. State: `dims`, `idx:<ulid>` {repo, firstSeq,
+      lastSeq, title, log}, `kfs`, and keyframes `kf:<ulid>` + chunks of at
+      most 60 KiB for the 4 most recent dimensions (at close and every 256
+      ops, skipped above 256 KiB, 640 KiB in all), each bound to its log id.
+      The LOG is the truth and the index a hint: a cold open verifies the
+      keyframe (sum, dimHash, log id), then pages log.read for the four
+      kinds from its seq to the log head, one foldDim per page, and heals
+      the index; a dimension with rows but no index is adopted from its first
+      start row and that row's repo scope; entries of another log are pruned
+      once (`log` key); a failed append drops the in-memory fold. apply
+      measures the caller's ops (16 KiB, 4,096 values, depth 32) BEFORE the
+      validator reads them. dim-shape.mjs is GENERATED from
+      #contract-dim-shape by packages/gnomon/scripts/build-dimension-mod.mjs
+      and compared with a fresh build by a test. Tier first-party
+      (packageHash pinned). 1.0.1 (S1.4 P0): dim-shape.mjs rebuilt from the
+      tightened contract (scan cap, wider strip set, view re-validation,
+      DIM_AUX_KINDS, the write-grant fold) and grantDefault now reads the
+      published dimGrantDefault; no command, tool, kind or state key changes.
+      The 1.0.0 pin is replaced and RETIRED (RETIRED_FIRST_PARTY_PINS in
+      #manifest-loader), not superseded. An install already pinned at 1.0.0
+      keeps loading first-party, because loadMod takes the tier from that
+      install's signed grant.trust row, until the person approves the Update
+      card; 1.0.0 can no longer be staged, approved from an old card or
+      rolled back to (test/retired-pins.test.ts). Tested in test/dimension-mod.test.ts (rules,
+      caps, keyframes, isolation) and test/dimension-relay.test.ts (the
+      relay table per caller class over real connections, a mod's own
+      log.read, first-party identity). 1.1.0 (S1.4 P3, never shipped before
+      this pass): dim.grant{dim, write} for a person on the GUI, target = the
+      attached focus hsid the host joins (a client hsid is stripped; a session
+      that is not live cannot be granted), grant rows folded through the
+      shared foldDimGrants on every log page, keyframe v2 carrying the grant
+      map and the op-id memo as lists (v1 ignored); dim.open and dim.grant
+      answer the effective map (M9), attach writes no grant (M10).
+      dim.select (memory only), dim.check {seq, hash} with no write (the page's
+      hash point after an agent turn), hash on dim.op. Tools: toolActorOf
+      (whole agent stamp, turn of the same hsid), readToolInput (closed
+      shape), dim-view (opens default from dim.open and dim.attach, since,
+      limit, own selection, strokes as count+box), dim-draw (order of checks,
+      resolveSugar, ONE validation, packRows into 4 rows inside 64 KiB less a
+      count-row reserve, oid = sha256(hsid,0,dim,0,opId)[0:16] on the row,
+      memo of 256 oids and 32 answers, `turns` budget of 64 ops charged
+      BEFORE the first row and never refunded, grant re-read between rows,
+      count row of closed keys at most 8 per hsid and turn). appendTool lets
+      a tool append only op and draw.refused (M4). cancel is honoured between
+      log pages and rows (M3); an APPEND_BUDGET refusal keeps the fold
+      (append-busy, A4). PLAYBOOK.md is the long form of the agent rules.
+      Review fixes (S1.4 P3): a tool never adopts (an unindexed dim is
+      dim-unknown before any log read); ops of rows definitely not written
+      are refunded, a failed append never is; dimHash cached per fold (WeakMap);
+      a cold repeat says inputUnknown; NEW_KEY_FIX for an undefined new:<key>;
+      the op-id input is canonical JSON and measured first; read-only calls
+      never saveIdx; an agent may add inside another hand's frame, and since S1.4
+      E0 may update, move or delete any mark (dimMayEdit in the bundled
+      dim-shape; every change attributed in the fold; playbook and descriptions
+      say so; the full teaching, act/undo markers and dim.undo land in E1). I-3:
+      the kernel continues a resumed session's turn numbers (#supervisor), so
+      the budget's "an older turn is refused" holds across resumes.
+      State keys added: opens, turns. Tested in test/dimension-tools.test.ts
+      (G-DDL-03, G-DDL-09, A8, M3, M4, M8, M9, A4 with a real-window clock,
+      G-MOD-20) and test/dimension-kinds.test.ts (all six kinds refused for
+      every other writer).
+    tags: [mods, first-party, dimensions]
+    oracles: [G-DDL-01, G-DDL-03, G-DDL-09, G-MOD-16, G-MOD-17, G-MOD-18, G-MOD-20]

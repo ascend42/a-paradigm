@@ -17,6 +17,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { writeUniqueRecord } from './unique-record.js';
 import type {
   TeamDecision,
   DecisionFilter,
@@ -27,11 +28,9 @@ import { log } from './mcp-logger.js';
 const DECISIONS_DIR = '.paradigm/decisions';
 const LORE_DIR = '.paradigm/lore';
 
-function generateDecisionId(): string {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10);
-  const counter = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-  return `TD-${date}-${counter}`;
+/** `TD-<date>-<suffix>`; the suffix is allocated by writeUniqueRecord. */
+function decisionIdFor(now: Date, suffix: string): string {
+  return `TD-${now.toISOString().slice(0, 10)}-${suffix}`;
 }
 
 // ── Write Operations ──
@@ -41,19 +40,17 @@ export function recordDecision(
   entry: Omit<TeamDecision, 'id' | 'timestamp'>
 ): TeamDecision {
   const now = new Date();
-  const id = generateDecisionId();
-
-  const full: TeamDecision = {
-    id,
-    timestamp: now.toISOString(),
-    ...entry,
-  };
-
-  const dir = path.join(rootDir, DECISIONS_DIR);
-  fs.mkdirSync(dir, { recursive: true });
-
-  const filePath = path.join(dir, `${id}.yaml`);
-  fs.writeFileSync(filePath, yaml.dump(full, { lineWidth: 120, noRefs: true }), 'utf8');
+  // Never overwrite: the id space is 999 per DAY, so two decisions on the same
+  // day used to collide and the later one replaced the earlier.
+  let full!: TeamDecision;
+  writeUniqueRecord(
+    path.join(rootDir, DECISIONS_DIR),
+    (suffix) => decisionIdFor(now, suffix),
+    (id) => {
+      full = { id, timestamp: now.toISOString(), ...entry };
+      return yaml.dump(full, { lineWidth: 120, noRefs: true });
+    },
+  );
 
   return full;
 }

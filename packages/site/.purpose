@@ -121,8 +121,8 @@ flows:
     steps:
       - HeroSection with animated node graph
       - SymbolsSection with five symbol cards
-      - HowItWorksSection with alternating code/text steps
-      - MetricsSection with stats grid
+      - HowItWorksSection with alternating code/text steps; its terminal blocks are excerpts of captured CLI output, labelled as example runs, never hand-written
+      - MetricsSection with stats grid; every figure has a command or test behind it (sources in the file), no savings or timing claims
       - CTASection with get-started prompt
 
   $docs-site-integration:

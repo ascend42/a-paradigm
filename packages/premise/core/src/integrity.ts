@@ -85,3 +85,35 @@ export function findDanglingReferences(symbols: SymbolEntry[]): DanglingReferenc
     .filter((e) => e.declared === false)
     .map((e) => ({ symbol: e.symbol, referencedBy: [...e.referencedBy], filePath: e.filePath }));
 }
+
+/** A declared symbol with no edge to or from any other symbol. */
+export interface IsolatedSymbol {
+  symbol: string;
+  filePath: string;
+}
+
+/**
+ * THE definition of an isolated symbol, shared by `paradigm integrity`,
+ * `paradigm doctor`, `paradigm status` and the MCP integrity check: a DECLARED
+ * symbol with no connection to the rest of the project.
+ *
+ * Connected means any of:
+ *  - an edge to or from another symbol on the live index (structured lists,
+ *    flow steps, a `parent`, bare ids in structured fields, prose mentions,
+ *    gate prizes);
+ *  - for a gate, at least one portal.yaml route that names it: a gate that
+ *    protects a route is in use, whether or not a .purpose mentions it;
+ *  - for an aspect, at least one code anchor or `applies-to` pattern: an
+ *    aspect is attached to code, not to other symbols.
+ *
+ * A symbol with outgoing references and no incoming ones is a root (a feature,
+ * a top-level grouping), not an isolate. A reference stub is never an isolate:
+ * it is reported as an undeclared reference.
+ */
+export function findIsolatedSymbols(symbols: SymbolEntry[]): IsolatedSymbol[] {
+  return symbols
+    .filter((s) => s.declared !== false && s.referencedBy.length === 0 && s.references.length === 0)
+    .filter((s) => !(s.type === 'gate' && (s.routes?.length ?? 0) > 0))
+    .filter((s) => !(s.type === 'aspect' && ((s.anchors?.length ?? 0) > 0 || (s.appliesTo?.length ?? 0) > 0)))
+    .map((s) => ({ symbol: s.symbol, filePath: s.filePath }));
+}

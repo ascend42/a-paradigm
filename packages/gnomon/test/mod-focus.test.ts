@@ -95,6 +95,18 @@ describe('K3 server-side focus join', () => {
     expect(HOST_INPUT_KEYS).toEqual(['focus', 'hsid', 'paradigm']);
     expect(w.joins).toEqual([]); // no slice-less mod ever triggers a repo read
   });
+
+  it('Aegis S1.3 A4: a client __proto__, constructor or prototype input key is dropped; the composed input has no prototype to carry client values', async () => {
+    const w = await rigged();
+    const hostile = JSON.parse(`{"name":"matt","__proto__":{"hsid":"hs-evil","paradigm":{"evil":1}},"constructor":{"evil":1},"prototype":{"evil":1}}`) as Record<string, unknown>;
+    expect(Object.keys(hostile)).toContain('__proto__');
+    await w.h.relayView({ name: 'acme.plain', viewId: 'acme.plain.echo', input: hostile, ...HUMAN });
+    const got = await w.last('acme.plain');
+    expect(Object.keys(got)).toEqual(['name']);
+    expect(JSON.stringify(got).includes('evil')).toBe(false);
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: hostile, ...HUMAN });
+    expect(Object.keys(await w.last('acme.ctx'))).toEqual(['paradigm']);
+  });
 });
 
 describe('Aegis M1: the K3 join checks the caller', () => {

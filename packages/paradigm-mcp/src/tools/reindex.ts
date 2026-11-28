@@ -99,6 +99,45 @@ export function getReindexToolsList() {
   ];
 }
 
+/**
+ * The compact summary of a rebuild: what `paradigm_reindex` returns and what
+ * the CLI `paradigm reindex --json` prints. The full RebuildResult is 80KB+
+ * and destroys context windows.
+ */
+export function summarizeRebuild(result: RebuildResult): Record<string, unknown> {
+  // Undeclared references are warnings: reported as danglingCount, not issues.
+  const brokenRefs = result.integrityReport?.brokenReferences ?? [];
+  const danglingCount = brokenRefs.filter((b) => b.refType === 'undeclared').length;
+  const issues = (brokenRefs.length - danglingCount)
+    + (result.integrityReport?.duplicateSymbols?.length || 0)
+    + (result.componentAnchorIssues || 0)
+    + (result.crossFileIssues || 0);
+
+  const summary: Record<string, unknown> = {
+    success: true,
+    symbolCount: result.symbolCount,
+    breakdown: result.breakdown,
+    flowCount: result.flowCount,
+    filesWritten: result.filesWritten.length,
+    ...(result.aspectGraphStats ? { aspects: result.aspectGraphStats.aspects, loreLinks: result.aspectGraphStats.loreLinks } : {}),
+    ...(result.protocolHealth ? { protocols: result.protocolHealth.total, staleProtocols: result.protocolHealth.stale } : {}),
+    ...(result.syllabusHealth ? {
+      syllabi: result.syllabusHealth.total,
+      syllabiNeedingRatification: result.syllabusHealth.stale + result.syllabusHealth.broken + result.syllabusHealth.expired,
+    } : {}),
+    ...(result.scenarioHealth ? { scenarios: result.scenarioHealth.total } : {}),
+    ...(issues > 0 ? { issues } : {}),
+    ...(danglingCount > 0 ? { danglingCount } : {}),
+  };
+
+  // v5.38.0: consistency report — transformation CLASSES only, never content.
+  if (result.consistency) {
+    summary.consistency = result.consistency;
+  }
+
+  return summary;
+}
+
 // ============================================================================
 // Tool Handler
 // ============================================================================
@@ -134,36 +173,7 @@ export async function handleReindexTool(
     toolCache.clear();
     invalidateFeatureCache();
 
-    // Return compact summary — full result is 80KB+ and destroys context windows.
-    // Undeclared references are warnings: reported as danglingCount, not issues.
-    const brokenRefs = result.integrityReport?.brokenReferences ?? [];
-    const danglingCount = brokenRefs.filter((b) => b.refType === 'undeclared').length;
-    const issues = (brokenRefs.length - danglingCount)
-      + (result.integrityReport?.duplicateSymbols?.length || 0)
-      + (result.componentAnchorIssues || 0)
-      + (result.crossFileIssues || 0);
-
-    const summary: Record<string, unknown> = {
-      success: true,
-      symbolCount: result.symbolCount,
-      breakdown: result.breakdown,
-      flowCount: result.flowCount,
-      filesWritten: result.filesWritten.length,
-      ...(result.aspectGraphStats ? { aspects: result.aspectGraphStats.aspects, loreLinks: result.aspectGraphStats.loreLinks } : {}),
-      ...(result.protocolHealth ? { protocols: result.protocolHealth.total, staleProtocols: result.protocolHealth.stale } : {}),
-      ...(result.syllabusHealth ? {
-        syllabi: result.syllabusHealth.total,
-        syllabiNeedingRatification: result.syllabusHealth.stale + result.syllabusHealth.broken + result.syllabusHealth.expired,
-      } : {}),
-      ...(result.scenarioHealth ? { scenarios: result.scenarioHealth.total } : {}),
-      ...(issues > 0 ? { issues } : {}),
-      ...(danglingCount > 0 ? { danglingCount } : {}),
-    };
-
-    // v5.38.0: consistency report — transformation CLASSES only, never content.
-    if (result.consistency) {
-      summary.consistency = result.consistency;
-    }
+    const summary = summarizeRebuild(result);
 
     const text = JSON.stringify(summary, null, 2);
     trackToolCall(text.length, name);

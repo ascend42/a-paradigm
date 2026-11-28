@@ -1,7 +1,8 @@
 /**
  * Registry types — Full B (a) marketplace primitives, contracts-only.
  *
- * Forward-compat surfaces for the eventual nevr.land marketplace. Local code
+ * Typed shapes written for a marketplace registry. The nevr.land registry they
+ * were designed for was removed in 8.0.2 and must not be re-added. Local code
  * MAY emit/consume them but MUST NOT depend on registry-side behavior beyond
  * the typed shape itself. NOTE: `PartnerCoverage` now has a live consumer
  * (registry.ts) — treat "contracts-only" per-type, not file-wide.
@@ -33,9 +34,9 @@ export interface PartnerBundle {
 /**
  * Typed metadata that an agent's install should prompt-install its partners.
  *
- * Contracts-only at v6.0.3 — install resolution against this shape lands with
- * nevr.land MVP. Until then, this type exists to keep the install hint
- * surface forward-compat.
+ * Contracts-only: nothing resolves an install against this shape. The registry
+ * it was written for (nevr.land) was removed in 8.0.2; the type remains so the
+ * install hint surface keeps its shape.
  */
 export interface ReciprocalInstallMeta {
   /** Partner agent id whose install is recommended */

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { RpcError, type GnomonClient } from '../src/core/client.js';
 import { workshopInstallKey } from '../src/core/mod-panels.js';
-import { configRequest, configurable, folderPathError, installRequest, linkRequest, modsViewOf, pauseRequest, startRequest, uninstallRequest, workshopSource, type InstalledMod } from '../src/core/mods.js';
+import { configRequest, configurable, folderPathError, installRequest, linkRequest, modsViewOf, pauseRequest, startRequest, stateText, uninstallRequest, workshopSource, type InstalledMod } from '../src/core/mods.js';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
 import type { StackCard } from '../src/core/store.js';
 import { emptyUi, paintMods, requestMod, splitArgs } from '../src/ui/mods-panel.js';
@@ -176,6 +176,27 @@ describe('#gui-mods-panel renders from status', () => {
   });
 });
 
+describe('#gui-mods-panel: a stopped mod that needs an update (G-MOD-15)', () => {
+  const mod = (over: Record<string, unknown>) => ({ mods: { installed: [{ name: 'gnomon.workshop', version: '1.1.0', tier: 'first-party', source: 'package', packageHash: H('7'), state: 'stopped', ...over }], available: [], catalog: { root: '/r' } } });
+
+  it('shows the kernel-composed note as the state line, with the Update key beside it', () => {
+    const b = painted(mod({ note: 'needs an update for this Gnomon', update: { version: '1.1.1', path: '/r/workshop', packageHash: H('8') } }), []);
+    const w = row(b, 'gnomon.workshop');
+    expect(w.text).toContain('needs an update for this Gnomon');
+    expect(w.text).not.toContain('down');
+    expect(keys(w)).toContain('update');
+    expect(stateText(modsViewOf(mod({ note: 'needs an update for this Gnomon' })).installed[0]!)).toBe('needs an update for this Gnomon');
+  });
+
+  it('the note is shown only for a stopped mod and only when it is plain words of bounded length', () => {
+    const noteOf = (over: Record<string, unknown>): string => stateText(modsViewOf(mod(over)).installed[0]!);
+    expect(noteOf({})).toBe('stopped');
+    expect(noteOf({ note: 'needs an update for this Gnomon', state: 'running' })).toBe('running');
+    expect(noteOf({ note: 'needs an update for this Gnomon', state: 'paused' })).toBe('paused');
+    for (const bad of [7, null, '', 'x'.repeat(81), 'two\nlines', 'a <b>tag</b>', 'bidi \u202e text', '[ Allow ]', ' leading space']) expect(noteOf({ note: bad })).toBe('stopped');
+  });
+});
+
 describe('#gui-mods-panel actions: one request each', () => {
   it('Install / Update, Add from folder, Pause, Start, Uninstall', () => {
     expect(installRequest('/repo/packages/gnomon-mods/workshop')).toEqual({ kind: 'request.mod.install', payload: { source: 'folder', path: '/repo/packages/gnomon-mods/workshop' } });
@@ -223,6 +244,13 @@ describe('#gui-mods-panel actions: one request each', () => {
   it('the palette has "Mods…", and a mod block may not open it', () => {
     expect(GUI_COMMANDS.find((c) => c.id === 'mods.open')?.title).toContain('Mods');
     expect(BLOCK_SAFE_COMMANDS.has('mods.open')).toBe(false);
+  });
+
+  it('a block may not open a board or the Dimensions list (Aegis H1, review of PR #119)', () => {
+    expect(GUI_COMMANDS.find((c) => c.id === 'board.open')).toBeDefined();
+    expect(GUI_COMMANDS.find((c) => c.id === 'dimensions.list')).toBeDefined();
+    for (const id of ['board.open', 'dimensions.list']) expect(BLOCK_SAFE_COMMANDS.has(id), id).toBe(false);
+    for (const id of BLOCK_SAFE_COMMANDS) expect(id).not.toMatch(/^(board|dimensions)\./);
   });
 });
 

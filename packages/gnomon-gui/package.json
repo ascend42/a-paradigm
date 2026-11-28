@@ -17,9 +17,12 @@
     "preview:shots": "node scripts/preview-shots.mjs"
   },
   "devDependencies": {
-    "@a-company/gnomon-contracts": "1.0.0",
+    "@a-company/gnomon-contracts": "1.1.0",
+    "@excalidraw/excalidraw": "0.18.1",
     "@types/node": "^24.0.0",
     "esbuild": "^0.28.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"
   },

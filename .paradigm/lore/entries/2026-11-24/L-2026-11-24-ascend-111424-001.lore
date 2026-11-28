@@ -1,0 +1,76 @@
+id: L-2026-11-24-ascend-111424-001
+type: milestone
+timestamp: '2026-11-24T11:14:24.220Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Two audits of our own repo, and the first fixes from each: the Stop hook is seven times lighter and lint passes'
+summary: 'With builders busy on dimensions, two read-only audits ran over Paradigm and Gnomon: performance (Bolt) and symbol hygiene (Rune, Cid). The first work package from each merged into feat/gnomon-dimensions the same night: PR #108 (the compliance check and doctor stop walking the whole tree) and PR #106 (this repo''s symbol index is whole; `paradigm lint` exits 0).'
+symbols_touched:
+  - '#portal-compliance'
+  - '#project-files'
+  - '#doctor-command'
+  - '#paradigm-cli'
+  - '#hooks'
+symbols_created:
+  - '#project-files'
+  - '#doctor-shared-file-list'
+  - '#compliance-check-timings'
+  - '#internal-commands'
+learnings:
+  - 'Measure where a person waits before optimising: the per-turn hook mattered, the path a reviewer suspected did not'
+  - 'When speeding up an enforcement check, review it as a safety change: ask which files the new method can no longer see'
+  - A repo that dogfoods a framework should run the framework's own lint in CI; five unparsable files went unnoticed
+  - An equivalence test between an old and a new method must include a case that blocks, or it proves nothing about blocking
+  - Agents running test suites leave large temp directories; watch free disk on long unattended sessions
+verification:
+  status: partial
+  details:
+    paradigm-suite: 1331 passed locally; no CI workflow runs it
+    portal-check: 2483 ms to 220 ms on this checkout
+    lint: exit 0
+    not-confirmed: Stop hook timing on a real turn
+tags:
+  - performance
+  - symbols
+  - hooks
+  - doctor
+  - audit
+  - dogfood
+  - T-2026-11-24-004
+body: |-
+  Performance (.paradigm/research/session-2026-11-24/performance-audit.md):
+  - The cost a person feels is the Stop hook: 3.3 to 3.9 s on every code-touching turn in this repo. Most of it was one `find` from the project root, run twice, over about 80,000 entries (Warpline objects and Swift build trees the prune list did not know).
+  - Fix (#108): one file list per run from `git ls-files`, with a pruned walk as the fallback. Portal check 2,483 ms to 220 ms on this checkout; doctor 2.8 s to 0.5 s in a scratch copy. Not yet confirmed on a real Stop.
+  - Already fast and left alone: CLI start-up (about 60 ms), per-edit and per-prompt hooks, MCP tool handlers.
+  - Corrected an earlier reviewer: decoding the embedded GUI bundle takes 0.44 ms and is not a hot path. The real problem is size and reach: the agent client imports two helpers from the daemon CLI, which drags the GUI bundle into six places in a global install.
+  - Also found: two Paradigm MCP servers per session (plugin and .mcp.json); `paradigm_search` defaults to detailed output (65,000 characters for a two-word query against 948 concise).
+
+  Symbol hygiene (symbol-hygiene-audit.md):
+  - Five `.purpose` files failed YAML parsing and were silently dropped from the index (94 symbol entries). `paradigm lint` exited 1 on the framework's own repo.
+  - `status` counts 232 phantom symbols scraped from prose, including `$HOME` as a flow.
+  - `status` and `doctor` disagree on gates, files and isolated symbols; doctor's "1 lore file" is a checker bug (714 exist).
+  - Fix (#106): the five files parse; 43 anchors, 11 line ranges, 2 file fields and 3 parents corrected; 26 duplicate definitions removed; AGENTS.md no longer links the wrong GitHub org.
+
+  What review added:
+  - On #108, framed as enforcement code: a broad ignore pattern could hide a new gate file from the git list with no signal, so an undeclared gate would pass where the old walk blocked; and the code scan and the file list covered different trees, giving a false block for a gate declared inside a submodule. The builder reproduced all four scenarios (16 of 23 new tests failed on the first version) before fixing. Also: the git timeout equalled the hook's own 30 s timeout, so a hang would have meant no enforcement at all.
+  - On #106: quoting two prefixed signal keys was the wrong repair (they index double-prefixed; the prefix was dropped instead), and a rename had been applied to a spec row the spec itself says stands as history.
+  - The builder on #106 found the audit understated one defect: prefixed keys inside a section block are double-prefixed in the index itself, in 27 files.
+
+  Left open on purpose: two fail-open paths in the compliance check (a crashing portal check passes; a missing search tool reads as no matches), which need their own change because fixing them starts blocking; casing for 28 twin symbol pairs; 11 portal routes with no handler.
+
+  Operational note: the Mac's disk reached 100% during these runs (test temp directories and worktree dependency folders); 3.8 GB of the session's own leftovers were cleared.
+linked_tasks:
+  - T-2026-11-24-004
+  - T-2026-11-24-005
+linked_commits:
+  - fb35a171
+  - e72b8410
+  - a154198d
+  - 8db8fbdb
+  - f37bb87f
+git_context:
+  ref: 5d0d969c54a4397bbaecef4c2ea18b76b8826981
+  branch: feat/gnomon-dims-s1.1
+  dirty: true

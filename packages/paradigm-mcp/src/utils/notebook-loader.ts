@@ -360,8 +360,8 @@ export function addNotebookEntry(
 
   // Generate stable deterministic ID: nb-{agentId}-{slug}
   // Slug derived from the TOPICAL concept (skipping grouping/structured tags) —
-  // no timestamps, no random suffixes. Stable IDs are required for the nevr.land
-  // merge-by-id algorithm. See pickSlugConcept / T-2026-06-25-012.
+  // no timestamps, no random suffixes. Stable IDs let entries merge by id
+  // across republishes. See pickSlugConcept / T-2026-06-25-012.
   const conceptSlug =
     slugify(pickSlugConcept(entry.concepts) || entry.context.split(' ').slice(0, 4).join(' ')) || 'entry';
   const agentSlug = slugify(agentId);

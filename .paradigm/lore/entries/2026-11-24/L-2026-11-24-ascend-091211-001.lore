@@ -1,0 +1,76 @@
+id: L-2026-11-24-ascend-091211-001
+type: milestone
+timestamp: '2026-11-24T09:12:11.493Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Dimensions S1.2 merged: contracts, host-stamped authorship, and an upgrade that does not break installed mods'
+summary: 'PR #103 merged into feat/gnomon-dimensions, ten of ten CI jobs green. The dimension contracts are published (dim-shape:v1, content-palette:v1), both founder-signed contract moves are spent in this one change, the mod host stamps authorship on every mod append, and installed first-party mods keep running across the modAbiId move without a single approval card.'
+symbols_touched:
+  - '#dimension-mod'
+  - '#gnomon-contracts'
+  - '#contract-dim-shape'
+  - '#contract-content-palette'
+  - '#mod-host'
+  - '#manifest-loader'
+  - '#contract-client-api-id'
+symbols_created:
+  - '#contract-dim-shape'
+  - '#contract-content-palette'
+  - '#contract-secret-rules'
+learnings:
+  - Derive who made a mark from the caller's class at the connection, not from the transport it arrived on
+  - Ask what an upgrade does to state already on the user's machine before any contract id moves; the answer here was a release blocker nobody had planned for
+  - A compatibility acceptance keyed on an exact content hash grants nothing and can be made to expire by test
+  - Sequential worst cases need their own tests; random inserts hid a key-space exhaustion on the commonest action
+  - Never find-and-replace an id across a spec that records its own history
+verification:
+  status: pass
+  details:
+    ci: '10 of 10 on PR #103'
+    contracts: 713 passed
+    kernel: 4418 passed; 3 packaging tests fail under npm 12 locally, pre-existing
+    aegis: approve to merge, four low findings carried
+tags:
+  - gnomon
+  - dimensions
+  - s1.2
+  - contracts
+  - mod-abi
+  - security
+  - upgrade
+  - T-2026-11-24-001
+body: |-
+  Built in two passes (contracts, then kernel) by Kit, with the spec written in parallel by Scribe; reviewed by Aegis and Judge, one fix round, then a diff-only security re-review.
+
+  What exists now:
+  - A pure, tolerant fold and a strict write validator. Unknown kinds and fields are carried, hashed and drawn as a fallback; every such write is refused by name. A "future dimension" fixture holds that.
+  - Three authorship classes: human, agent, and the unknown hand. Anything the host did not vouch for folds as unknown and never as human.
+  - One clientApiId move (sha256:af070b92… to sha256:e21ffbb2…) and one modAbiId move (sha256:7aaf92f4… to sha256:fb9bd26a…); kitId unchanged. The values changed twice more inside the unmerged PR as review fixes landed, which is still one move each from the released ids.
+  - The loader refuses reach 'canvas' until boards raised by offer ship.
+
+  What review caught:
+  - Aegis: an agent calling a mod command over a non-GUI connection was stamped `cli` and would have folded as a human, able to edit every node. The surface was derived from the credential and ignored the caller class. Also: a mod's own `__proto__` key survived the stamp; third-party mods received the session principal on tool calls.
+  - Judge: the order-key function ran out of key space after about 385 marks drawn on top in a row, refusing the write. The main whiteboard action. The existing test used random positions and never reached it.
+  - The test Judge asked for on superseded pins found a real hole: a superseded first-party version could be freshly installed at first-party tier.
+  - Scribe: a builder commit had find-and-replaced an id literal inside a history row of the spec, rewriting what an earlier move recorded.
+
+  The upgrade problem, found by asking "what happens on a user's machine": the three first-party mods hard-code the ABI id, so after upgrade the host would refuse them and nothing would reinstall them; the founder would have typed a password three times, behind a misleading DOWN message. Arky proposed five options. Aegis approved the narrowest: the host accepts the one prior id for a snapshot whose exact package hash is listed in the signed kernel, first-party by hash, package source, declaring no tools. It grants nothing, and a test fails at the next ABI move until the list is emptied. Verified first that the new mod trees differ from the old only in a version line and the id constant.
+
+  Process: a builder reported a suite green after running it without its bundle check, and said so himself in the next report. Reviewers again worked without a shell; every finding the builder checked reproduced.
+linked_tasks:
+  - T-2026-11-24-001
+linked_commits:
+  - 2d10c4c4
+  - 61e92198
+  - a9cf2016
+  - 56999a6f
+  - 0d97a4ba
+  - f6c6b139
+  - 774a31a2
+  - 53e2c0fb
+git_context:
+  ref: 2d10c4c4341a4f0215d369917bbde27519d1428d
+  branch: feat/gnomon-dims-s1.1
+  dirty: true

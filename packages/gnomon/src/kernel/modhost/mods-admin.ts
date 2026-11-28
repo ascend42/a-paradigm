@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { isModId, MOD_INSTALL_LIMITS, parseModId, validateKindPayload } from '@a-company/gnomon-contracts';
 import type { RowVerifier } from '../identity/registry.js';
 import { effectiveInstall, pinDirKey, readGrants } from '../manifest/grants.js';
-import { FIRST_PARTY_PACKAGE_HASHES, stageInstall } from '../manifest/install.js';
+import { isFirstPartyPin, stageInstall } from '../manifest/install.js';
 import { MANIFEST_FILE, readManifest, type ManifestV2, type TrustTier } from '../manifest/manifest.js';
 import { ManifestRefusal, noEvents } from '../manifest/refusal.js';
 import { hashSourceTree, pinnedDir } from '../manifest/snapshot.js';
@@ -44,6 +44,7 @@ import { readDeskMods, readMcpConfigRequest, readMcpOverrides, requestMcpConfig,
 import type { DeskTallyView } from '../desk/desk-stats.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { isUserPaused, requestStart, requestUninstall, uninstallRequested, writePause } from './control.js';
+import { NEEDS_UPDATE_NOTE } from './host.js';
 
 export const MOD_INSTALL_REQUEST = 'request.mod.install' as const;
 export const MOD_LINK_REQUEST = 'request.mod.link' as const;
@@ -118,6 +119,8 @@ export interface InstalledModView {
   /** running | paused | stopped (installed, not running) | error (its pinned manifest no longer reads) */
   state: 'running' | 'paused' | 'stopped' | 'error';
   pausedWhy: string | null;
+  /** HOST-COMPOSED, never mod text: why a stopped mod is not running (today only: it was refused ABI at init) */
+  note: string | null;
   uninstallRequested: boolean;
   mcp: { server: string; overridden: boolean; configRequested: boolean; configurable: { command: boolean; args: boolean; env: string[]; secret: string[] }; command: string; args: string[] } | null;
   offers: Array<{ kind: string; title: string }>;
@@ -243,7 +246,7 @@ export class ModsAdmin {
           packageHash = null;
         }
         const description = typeof raw.description === 'string' ? raw.description.slice(0, MAX_DESCRIPTION) : null;
-        out.push({ name, version: raw.version.slice(0, 64), description, path: dir, packageHash, tier: packageHash && FIRST_PARTY_PACKAGE_HASHES.has(packageHash) ? 'first-party' : 'local' });
+        out.push({ name, version: raw.version.slice(0, 64), description, path: dir, packageHash, tier: packageHash && isFirstPartyPin(packageHash) ? 'first-party' : 'local' });
       } catch {
         continue;
       }
@@ -257,7 +260,8 @@ export class ModsAdmin {
   status(): { installed: InstalledModView[]; available: CatalogEntry[]; catalog: { root: string | null } } {
     const { home, trust } = this.#o;
     const grants = readGrants(home, trust);
-    const host = this.#o.host.status() as { running?: Array<{ name?: unknown; dev?: unknown }>; paused?: Array<{ name?: unknown; why?: unknown }> };
+    const host = this.#o.host.status() as { running?: Array<{ name?: unknown; dev?: unknown }>; paused?: Array<{ name?: unknown; why?: unknown }>; needsUpdate?: unknown };
+    const needsUpdate = new Set(Array.isArray(host.needsUpdate) ? host.needsUpdate.filter((n): n is string => typeof n === 'string') : []);
     const running = new Set((host.running ?? []).map((r) => r.name).filter((n): n is string => typeof n === 'string'));
     const paused = new Map((host.paused ?? []).filter((p) => typeof p.name === 'string').map((p) => [p.name as string, typeof p.why === 'string' ? p.why : 'user']));
     const overrides = readMcpOverrides(home);
@@ -292,6 +296,7 @@ export class ModsAdmin {
         dev: row.dev !== undefined,
         state,
         pausedWhy: state === 'paused' ? (userPaused ? 'user' : (paused.get(name) ?? null)) : null,
+        note: state === 'stopped' && needsUpdate.has(name) ? NEEDS_UPDATE_NOTE : null,
         uninstallRequested: uninstallRequested(home, name) !== null,
         mcp: entry
           ? {

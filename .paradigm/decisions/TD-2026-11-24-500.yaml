@@ -1,0 +1,56 @@
+id: TD-2026-11-24-500
+timestamp: '2026-11-24T04:44:11.821Z'
+title: 'Gnomon boards: whiteboard first on Excalidraw, free hues, Constellation merges into boards'
+decision: >-
+  Build the co-authored whiteboard (S1, spec §12.7 Doodle core) first, on Excalidraw as the engine, reskinned to the
+  Gnomon design system. Board content may use free hues, kept in a content palette separate from the UI's mineral and
+  semantic colours. Constellation merges into boards as a node kind or mod; its separate app winds down over time. Team
+  consensus carried in: agents propose boards via offer slips; hybrid truth (kernel-log ops, compacted to
+  .paradigm/boards/ per-node files via a human export card with redaction); declarative board mods; webpage snapshots,
+  no live iframes; boards never cover approval surfaces.
+rationale: >-
+  Founder chose the whiteboard as the core of the vision (FigJam-style collaboration with agents) over the live context
+  board, and Excalidraw for speed to a drawable surface. Costs accepted: P12 export fixes (self-hosted fonts, no eval in
+  the font-subset worker, data: images), React in the GUI, and a full reskin so the stock hand-drawn look does not ship
+  (house rule). Free hues follow FigJam's model; Luna's condition is a separate content palette.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: neutral
+  - id: security
+    role: agent
+    stance: neutral
+  - id: designer-luna
+    role: agent
+    stance: dissented
+  - id: advocate
+    role: agent
+    stance: dissented
+  - id: forge
+    role: agent
+    stance: supported
+  - id: dx
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Live context board first with a custom renderer
+    rejected_because: Founder prioritised the collaborative whiteboard
+  - option: Whiteboard on a custom renderer
+    rejected_because: Slower to a drawable surface
+  - option: Two-week falsifier before any build
+    rejected_because: Founder chose to build; T-DDL-01 usage metric remains the kill check
+  - option: Paper stocks only for content colour
+    rejected_because: Founder wants FigJam-like free colour
+symbols_affected:
+  - '#doodle-mod'
+  - '#gnomon'
+status: active
+tags:
+  - gnomon
+  - boards
+  - doodle
+  - excalidraw
+  - constellation

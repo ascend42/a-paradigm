@@ -10,7 +10,7 @@
  *     1 `health`                       host → mod   liveness + abi echo
  *     2 `view.render{viewId, input, width, prefs, cancelToken, relayedFor?}` host → mod   pure render → display-block:v1
  *     3 `command.run{commandId, args, relayedFor?}`  host → mod   user command
- *     4 `tool.call{name, input, cancelToken}`        host → mod   agent tool; effects enforced by the host
+ *     4 `tool.call{name, input, cancelToken, relayedFor?}` host → mod   agent tool; effects enforced by the host
  *     5 `event{event}`                 host → mod   filtered feed (a notification)
  *     6 `state.get{key}`               mod → host   per-mod KV (effect `read`)
  *     7 `state.set{key, value}`        mod → host   per-mod KV (effect `write`)
@@ -20,10 +20,15 @@
  *
  * §12.3 lists `state.get` / `state.set` in one row; counted here as two RPCs
  * (six table rows + the split = 8), which is the reading that makes "≤ 8"
- * exact. `relayedFor{principal, connId}` is a top-level param of the two
- * relayed host→mod calls (§12.2 "every input a view or command receives from
- * a client carries the host-stamped relayedFor"); absent when the host itself
- * renders (fixtures, Tier 0 templates).
+ * exact. `relayedFor` is a HOST-STAMPED top-level param whose fields are fixed
+ * per method (RELAYED_FOR_FIELDS, S1.2 C2): `view.render` {principal, connId};
+ * `command.run` adds `surface` (gui | cli); `tool.call` carries {principal,
+ * {surface (bridge | voice), agent} and, only for a first-party mod or one
+ * granted `log.read`, {principal, hsid, turn}. It is absent when the host itself renders
+ * or runs (fixtures, Tier 0 templates). The host writes the SAME object into
+ * the reserved payload key `relayedFor` of every row the mod appends inside
+ * that call and removes a mod-supplied one (S1.2 C1). `pickRelayedFor` is the
+ * one builder. Adding these moved modAbiId once (S1.2); clientApiId unchanged.
  *
  * CALL-ID BINDING (M1.11 slice 2, Aegis): every host → mod `view.render`,
  * `command.run` and `tool.call` carries a host-minted `callId`; a mod → host
@@ -76,7 +81,7 @@ export const MOD_ABI_RPCS: readonly ModRpcDescriptor[] = deepFreeze([
   { method: 'health', direction: 'host->mod', form: 'request', params: [], result: ['ok', 'abi'], effect: null },
   { method: 'view.render', direction: 'host->mod', form: 'request', params: ['viewId', 'input', 'width', 'prefs', 'cancelToken', 'callId', 'relayedFor'], result: ['block'], effect: null },
   { method: 'command.run', direction: 'host->mod', form: 'request', params: ['commandId', 'args', 'callId', 'relayedFor'], result: ['result'], effect: null },
-  { method: 'tool.call', direction: 'host->mod', form: 'request', params: ['name', 'input', 'cancelToken', 'callId'], result: ['result'], effect: null },
+  { method: 'tool.call', direction: 'host->mod', form: 'request', params: ['name', 'input', 'cancelToken', 'callId', 'relayedFor'], result: ['result'], effect: null },
   { method: 'event', direction: 'host->mod', form: 'notification', params: ['event'], result: [], effect: null },
   { method: 'state.get', direction: 'mod->host', form: 'request', params: ['key', 'callId'], result: ['value'], effect: 'read' },
   { method: 'state.set', direction: 'mod->host', form: 'request', params: ['key', 'value', 'callId'], result: [], effect: 'write' },
@@ -92,9 +97,64 @@ export const MOD_NEVER_PROXIED = Object.freeze(['approve'] as const);
 /** §12.2 block limits: a block over either is refused BAD_REQUEST. */
 export const MOD_BLOCK_LIMITS = deepFreeze({ maxBytes: 256 * 1024, maxNodes: 2_000 });
 
+/** `mod.view` → `view.render`: {principal, connId}. `mod.command` → `command.run`: plus `surface`. */
 export interface RelayedFor {
   principal: string;
   connId: string;
+  surface?: 'gui' | 'cli';
+}
+/** `tool.call` only. Never sent on `view.render` or `command.run`. */
+export interface ToolRelayedFor {
+  /** the calling session's principal; identity: sent only to a first-party mod or one granted `log.read` */
+  principal: string;
+  /** `voice` is derived by the host from the cause turn's source */
+  surface: 'bridge' | 'voice';
+  /** the host-known label of the session's agent; never a nickname the agent chose, never tool input */
+  agent: string;
+  /** only for a first-party mod or one granted `log.read` */
+  hsid?: string;
+  turn?: string;
+}
+
+/** The fields `relayedFor` may carry, per host → mod method (CLOSED). */
+export const RELAYED_FOR_FIELDS = deepFreeze({
+  'view.render': ['principal', 'connId'],
+  'command.run': ['principal', 'connId', 'surface'],
+  'tool.call': ['principal', 'surface', 'agent', 'hsid', 'turn'],
+} as const);
+export type RelayedForMethod = keyof typeof RELAYED_FOR_FIELDS;
+/**
+ * The identity fields per method, and who may receive them: a `gnomon`-published mod, or one granted `log.read`.
+ * On `tool.call` the calling session's `principal` is identity too (Aegis S1.2 A3: a principal may be unique to a
+ * session), so an unentitled mod is told only the `surface` and the `agent` label. The client relays keep
+ * `principal` and `connId` for every mod, as before.
+ */
+export const RELAYED_FOR_IDENTITY = deepFreeze({ fields: { 'view.render': [], 'command.run': [], 'tool.call': ['principal', 'hsid', 'turn'] }, onlyFor: ['first-party', 'log.read'] } as const);
+/** The `surface` values each method may carry. */
+export const RELAYED_FOR_SURFACES = deepFreeze({ 'command.run': ['gui', 'cli'], 'tool.call': ['bridge', 'voice'] } as const);
+/** The reserved payload key of a mod's appended row that only the host writes. */
+export const RELAYED_FOR_APPEND_KEY = 'relayedFor' as const;
+/** No relayedFor value is longer than this; a longer one is dropped (the row cap is measured after stamping). */
+export const RELAYED_FOR_VALUE_MAX = 256;
+
+/**
+ * THE one builder of a `relayedFor` the host sends and stamps. From host-known `raw` it keeps only the method's
+ * fields, only non-empty strings of bounded length, drops the method's identity fields unless `identity` is true, and drops a
+ * `surface` the method may not carry. It never invents a value: a field the host does not know is absent (a row
+ * stamped without `principal` or `surface` then folds as the unknown hand, never as human).
+ */
+export function pickRelayedFor(method: RelayedForMethod, raw: Readonly<Record<string, unknown>> | null | undefined, identity: boolean): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const surfaces: readonly string[] = method === 'view.render' ? [] : RELAYED_FOR_SURFACES[method];
+  for (const f of RELAYED_FOR_FIELDS[method] as readonly string[]) {
+    if (!identity && (RELAYED_FOR_IDENTITY.fields[method] as readonly string[]).includes(f)) continue;
+    const v = Object.prototype.hasOwnProperty.call(raw, f) ? (raw as Record<string, unknown>)[f] : undefined;
+    if (typeof v !== 'string' || v.length === 0 || v.length > RELAYED_FOR_VALUE_MAX) continue;
+    if (f === 'surface' && !surfaces.includes(v)) continue;
+    out[f] = v;
+  }
+  return out;
 }
 
 export const MOD_ABI_DESCRIPTOR = deepFreeze({
@@ -106,7 +166,7 @@ export const MOD_ABI_DESCRIPTOR = deepFreeze({
   effects: MOD_EFFECTS,
   neverProxied: MOD_NEVER_PROXIED,
   blockLimits: MOD_BLOCK_LIMITS,
-  relayedFor: ['principal', 'connId'],
+  relayedFor: { fields: RELAYED_FOR_FIELDS, identity: RELAYED_FOR_IDENTITY, surfaces: RELAYED_FOR_SURFACES, appendKey: RELAYED_FOR_APPEND_KEY, valueMax: RELAYED_FOR_VALUE_MAX },
 });
 
 export function computeModAbiId(descriptor: unknown = MOD_ABI_DESCRIPTOR, kitId: string = computeKitId()): string {

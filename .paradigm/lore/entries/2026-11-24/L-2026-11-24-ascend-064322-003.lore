@@ -1,0 +1,41 @@
+id: L-2026-11-24-ascend-064322-003
+type: human-note
+timestamp: '2026-11-24T06:43:22.507Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Founder opens a second front: public hero pages and a new way of teaching Paradigm'
+summary: 'Mid-session the founder asked for public hero pages for Paradigm, Gnomon and Warpline on GitHub Pages, quantifying their value, plus a reformatted way of teaching Paradigm with best practices. Product changes that surface while explaining the tools are wanted, not out of scope. Tone: clear and upfront that it is being built.'
+symbols_touched:
+  - '#gnomon'
+  - '#warpline'
+  - '#site'
+tags:
+  - hero-pages
+  - docs
+  - teaching
+  - positioning
+  - founder
+  - T-2026-11-24-002
+body: |-
+  Founder's words (2026-11-23):
+  - "a set of hero pages that explain paradigm, gnomon, and warpline that will be linked on the github as pages. these should be 'sexy' and very informative to quantify the value prop of these things in the repo and lets reformat how we teach people how to utilize paradigm to it's fullest with best practices."
+  - "if you come up with things to change across these while you figure out ways to explain these tools and paradigm at large, let that splinter off into even more changes."
+  - "with how things are, i want to expand on the value of paradigm and gnomon as things have continued to transpire lately."
+  - "it's fine if warpline is the most sparse as we haven't even really run a full test of it and how it works with a server and what that even looks like at large"
+  - "lets just be clear and upfront about things. we're building it and it's time to take it all to the next level in quality and function"
+
+  How it was started (T-2026-11-24-002): three agents in parallel, none writing code. North/Sage gather an evidence dossier where every number carries the command or file:line that produces it. Sheila/Nora/Helix audit the first hour and propose a learning path and the best-practices list. Luna sets the design direction, a specimen and a build brief, with an honest-status component (not a pill badge) as part of the system.
+
+  State found: GitHub Pages is not enabled on the repo; earlier static pages exist in docs/site/ and docs/warpline-overview.html; packages/site is the useparadigm.dev site with a parked design system draft.
+
+  Also this session: the atelier CLI and MCP binary were missing globally (the repo's .mcp.json runs a bare atelier-mcp); installing @a-company/atelier 1.0.4 globally fixed both. The local a-atelier checkout is at an unpublished 1.0.5.
+
+  Git arrangement for the night: every milestone PRs into the integration branch feat/gnomon-dimensions; the founder PRs that into main in the morning, timed with a publish.
+linked_tasks:
+  - T-2026-11-24-002
+git_context:
+  ref: 53b5a636c15a78bb8f3b5acf48d3630e7a62a77d
+  branch: feat/gnomon-boards-s1.0
+  dirty: true

@@ -12,8 +12,12 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { appendGrantRow, MANIFEST_FILE, readStaged, removeTree, stageInstall, type ManifestV2 } from '../src/kernel/manifest/index.js';
 import { installPresenceBinding } from '../src/kernel/manifest/install.js';
+import { readManifest } from '../src/kernel/manifest/manifest.js';
+import { noEvents } from '../src/kernel/manifest/refusal.js';
+import { snapshotFolder } from '../src/kernel/manifest/snapshot.js';
 import { createModHostForTest, decideInstallCard, mintTestPresence } from '../src/kernel/testing.js';
 import type { ModHostOptions, ModHostSeams } from '../src/kernel/modhost/host.js';
+import { createModBridge, type ModBridge, type ModBridgeOptions, type ModBridgeSeams } from '../src/kernel/modhost/mcp-bridge.js';
 import { PKG_ROOT } from './helpers.js';
 
 export const SDK_RUNTIME = path.resolve(PKG_ROOT, '..', 'gnomon-mod-sdk', 'dist', 'runtime.js');
@@ -34,6 +38,9 @@ const run = async (input, api) => {
   if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
   if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done' })));
+  if (input.op === 'append.forged') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done', payload: { note: input.note ?? 'n', relayedFor: { principal: 'p:evil/x', surface: 'gui', agent: 'arky', hsid: 'hs-evil', turn: 'turn:hs-evil/9' } }, causes: ['turn:hs-evil/9'] })));
+  if (input.op === 'append.raw') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done', payload: JSON.parse(input.text) })));
+  if (input.op === 'args') return { ok: true, keys: Object.keys(input), args: input, hsid: input.hsid ?? null, repo: input.repo ?? null, gesture: input.gesture ?? null };
   if (input.op === 'send') return attempt(async () => JSON.stringify(await api.kernel('session.send', input.params ?? {})));
   if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
   if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
@@ -52,11 +59,11 @@ const run = async (input, api) => {
   return null;
 };
 serveMod({
-  views: { 'probe.view': async (input) => input && input.raw ? input.raw : ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'hi' }) },
-  commands: { 'probe.who': async (_a, ctx) => ({ relayedFor: ctx.relayedFor ?? null }) },
+  views: { 'probe.view': async (input, ctx) => input && input.raw ? input.raw : ({ schemaVersion: 'display-block:v1', type: 'Text', text: input && input.who ? JSON.stringify(ctx.relayedFor ?? null) : 'hi' }) },
+  commands: { 'probe.who': async (a, ctx, api) => (a && a.op ? { relayedFor: ctx.relayedFor ?? null, out: await run(a, api) } : { relayedFor: ctx.relayedFor ?? null }) },
   tools: {
     'probe.read': (input, _c, api) => run(input, api),
-    'probe.write': (input, _c, api) => run(input.op ? input : { op: 'state.set', value: 2 }, api),
+    'probe.write': async (input, c, api) => (input.who ? { relayedFor: c.relayedFor ?? null, out: await run(input, api) } : run(input.op ? input : { op: 'state.set', value: 2 }, api)),
     'probe.net': (input, _c, api) => run(input.op ? input : { op: 'egress', host: input.host }, api),
     'probe.spend': (input, _c, api) => run(input, api),
   },
@@ -79,7 +86,7 @@ export function probeManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
         { name: 'probe.spend', effects: ['read', 'spend'] },
       ],
       views: [{ id: 'probe.view', slot: 'panel', placement: 'append' }],
-      commands: [{ id: 'probe.who', title: 'Who acted' }],
+      commands: [{ id: 'probe.who', title: 'Who acted', effects: ['read', 'write'] }],
       events: ['modns.acme.probe.done'],
     },
     requires: { capabilities: ['log.append:modns.acme.probe.*'], egress: [{ host: 'api.example.com', purpose: 'test' }] },
@@ -122,6 +129,50 @@ export function install(r: Rig, folder: string, opts: { via?: 'package' | 'linke
   appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: d.manifestHash, capabilities: ['log.append:modns.acme.probe.*', 'log.append:modns.example.hello.*'] });
   if (opts.egress) appendGrantRow(r.home, r.auth, { kind: 'grant.egress', manifestHash: d.manifestHash, hosts: opts.egress });
   return { manifestHash: d.manifestHash, packageHash: d.packageHash };
+}
+
+/** The probe as a `gnomon`-published mod (S1.3: only a first-party mod's command may write, and only it is given hsid and repo). */
+export const FIRST_PARTY_PROBE = 'gnomon.probe';
+export function firstPartyProbeManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
+  return probeManifest({ publisher: 'gnomon', provides: { ...probeManifest().provides, events: ['modns.gnomon.probe.done'] }, requires: { capabilities: ['log.append:modns.gnomon.probe.*'], egress: 'none' }, ...over });
+}
+
+/**
+ * Install a `gnomon`-published mod as an earlier kernel left one behind: the pinned snapshot plus root-signed
+ * grant.trust{first-party}, grant.capability and grant.install rows (the tier is derived from provenance, so no card
+ * path can produce it for a test tree). Returns the mod id.
+ */
+export function installFirstParty(r: Rig, m: ManifestV2 = firstPartyProbeManifest(), source = PROBE_SOURCE.replaceAll('modns.acme.probe.', `modns.gnomon.${m.name}.`)): string {
+  const name = `gnomon.${m.name}`;
+  const snap = snapshotFolder(r.home, writeModFolder(path.join(r.root, 'src', name), m, source), name, noEvents);
+  const read = readManifest(fs.readFileSync(path.join(snap.dir, MANIFEST_FILE)), { tier: 'first-party' });
+  const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
+  appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
+  const caps = read.manifest.requires?.capabilities ?? [];
+  if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: read.manifestHash, capabilities: [...caps] });
+  appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
+  return name;
+}
+
+/**
+ * S1.4 P5: an EDITED first-party tree installed as installFirstParty does (the trust and install grant rows written
+ * directly), so the production pin rule, not the install refusal, is what a test meets. Returns the package hash.
+ */
+export function installFirstPartyTree(r: Rig, dir: string, name: string): string {
+  const snap = snapshotFolder(r.home, dir, name, noEvents);
+  const read = readManifest(fs.readFileSync(path.join(snap.dir, MANIFEST_FILE)), { tier: 'first-party' });
+  const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZZC';
+  appendGrantRow(r.home, r.auth, { kind: 'grant.trust', manifestHash: read.manifestHash, tier: 'first-party', cardId });
+  const caps = read.manifest.requires?.capabilities ?? [];
+  if (caps.length) appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: read.manifestHash, capabilities: [...caps] });
+  appendGrantRow(r.home, r.auth, { kind: 'grant.install', name, manifestHash: read.manifestHash, packageHash: snap.packageHash, cardId, source: 'package' });
+  return snap.packageHash;
+}
+
+/** createModBridge with the test seams (`allow`, `currentPin`) taken out of one options object, as the tests write it. */
+export function testModBridge(o: ModBridgeOptions & ModBridgeSeams): ModBridge {
+  const { allow, currentPin, ...rest } = o;
+  return createModBridge(rest, { ...(allow ? { allow } : {}), ...(currentPin ? { currentPin } : {}) });
 }
 
 export function host(r: Rig, seams: ModHostSeams = {}, over: Partial<ModHostOptions> = {}) {

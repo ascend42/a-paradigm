@@ -1,0 +1,23 @@
+id: L-2026-11-24-ascend-034709-001
+type: insight
+timestamp: '2026-11-24T03:47:09.886Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon''s next level: a shared active-context canvas (founder vision)'
+summary: 'Founder picked "Paradigm-native desk" as Gnomon''s next direction and named the dream: a canvas where nodes appear as work happens, an active context display human and agent agree on, live status of everything in flight, webpages and assets in the same surface, speech and gesture input now, VR/AR later. a-star''s infinite canvas, units and loops are the prior art to mine; Constellation overlaps. Notes at .paradigm/research/gnomon-canvas-vision.md. Next: team analysis, then options.'
+symbols_touched:
+  - '#gnomon'
+files_created:
+  - .paradigm/research/gnomon-canvas-vision.md
+tags:
+  - gnomon
+  - vision
+  - canvas
+  - mod-playbooks
+  - a-star
+git_context:
+  ref: d5eeb750efc2f3c7a0b6c1a16fd9d4717b16b2bc
+  branch: main
+  dirty: true

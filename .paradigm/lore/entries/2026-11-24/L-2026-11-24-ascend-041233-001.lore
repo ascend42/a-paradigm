@@ -1,0 +1,30 @@
+id: L-2026-11-24-ascend-041233-001
+type: insight
+timestamp: '2026-11-24T04:12:33.864Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon boards: FigJam-style shared canvases, repo-committed like lore, extensible by mods'
+summary: 'Founder extended the canvas vision: boards raised like artifacts where the founder and agents draw, write, and place images, diagrams and webpages to explore ideas together; saved, shared, and later committed to repos (like lore) so teammates open them; board mods let developers add node types, tools and live widgets on top. Existing groundwork: Gnomon spec OPEN 12 and probe P12 (Excalidraw under the GUI CSP), whose WKWebView failure (T-2026-11-06-003) now matters for boards. Team analysis launched: Arky (architecture), Aegis (threat model), Luna (design), Loid/Jinx/Helix (learning loop, devil''s advocate, DX).'
+symbols_touched:
+  - '#gnomon'
+files_modified:
+  - .paradigm/research/gnomon-canvas-vision.md
+tags:
+  - gnomon
+  - vision
+  - canvas
+  - boards
+  - mods
+  - a-star
+linked_lore:
+  - L-2026-11-24-ascend-034709-001
+linked_tasks:
+  - T-2026-11-06-003
+  - T-2026-10-20-012
+  - T-2026-10-27-001
+git_context:
+  ref: d5eeb750efc2f3c7a0b6c1a16fd9d4717b16b2bc
+  branch: main
+  dirty: true

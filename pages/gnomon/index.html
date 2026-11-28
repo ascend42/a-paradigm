@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gnomon: every decision from every session, on one stack</title>
+<meta name="description" content="Gnomon is a signed Mac app that runs your Claude Code sessions inside a macOS sandbox. Every permission request, question and plan arrives as a card on one decision stack, and your answer is signed. What is built, what is not, and how to check the app yourself.">
+<!-- Copy: pages/content/gnomon.md. Numbers: pages/facts.json, stamped by pages/build/stamp.mjs. Do not type a digit into this file. -->
+<!-- frame:head -->
+<script>try{var t=localStorage.getItem("pages-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preload" href="../assets/fonts/Fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/pages.css">
+<script src="../assets/pages.js" defer></script>
+<!-- /frame -->
+</head>
+<body>
+<div class="wrap">
+<!-- frame:mast -->
+  <a class="key skip" href="#main">Skip to the page</a>
+  <header class="mast">
+    <a class="mast-name" href="../index.html">Paradigm</a>
+    <nav aria-label="Pages">
+      <a href="../index.html">Overview</a>
+      <a href="../paradigm/index.html">Paradigm</a>
+      <a href="../gnomon/index.html" aria-current="page">Gnomon</a>
+      <a href="../warpline/index.html">Warpline</a>
+      <a href="../learn/index.html">Learn</a>
+    </nav>
+    <div class="mast-side">
+      <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+    </div>
+  </header>
+<!-- /frame -->
+
+  <main id="main">
+    <div class="hero">
+      <div class="hero-lead">
+        <h1 class="display">Every decision from every session, on one stack. Your answer is signed.</h1>
+        <p class="lede">Gnomon is a signed Mac app that runs your Claude Code sessions inside a macOS sandbox. Every permission request, question and plan arrives as a card on one decision stack, and you answer with Touch ID or your password.</p>
+        <ul class="standing" aria-label="Where Gnomon stands">
+          <li><span class="mark built" aria-hidden="true"></span><b>Built</b><span>signed and notarized app. <!-- fact:gnomon.platform -->Apple silicon, macOS 15 or later<!-- /fact --> only.</span></li>
+          <li><span class="mark progress" aria-hidden="true"></span><b>In progress</b><span>boards, <!-- fact:gnomon.boards -->first slice on a branch<!-- /fact -->.</span></li>
+          <li><span class="mark untested" aria-hidden="true"></span><b>Untested</b><span>on any Mac but the one it was built on.</span></li>
+          <li><span></span><span class="of">as of <!-- fact:gnomon.notarized.measured -->2026-11-23<!-- /fact --> · real: <code>spctl</code> on the npm package; <code>git log</code> · <a href="#standing">every row</a></span></li>
+        </ul>
+        <h2 class="h3" id="preflight-h">Before you run it, all four must hold</h2>
+        <ol class="preflight" aria-labelledby="preflight-h">
+          <!-- rows:gnomon.requirements -->
+<li>An Apple silicon Mac with macOS 15 or later and System Integrity Protection on</li>
+<li>Claude Code from the native installer, signed in with your Claude subscription</li>
+<li>Touch ID or your login password</li>
+<li>Node 24 or later</li>
+<!-- /rows -->
+        </ol>
+        <p class="preflight-note">Gnomon refuses API-key billing. Node is for the install; the app runs on its own pinned Node. <span class="mono quiet"><!-- src:gnomon.requirements -->real · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/README.md#L62-L67">README.md:62-67</a> · run 2026-11-23<!-- /src --></span></p>
+        <div class="cmd"><code>gnomon</code></div>
+        <p class="plain">The first run sets up this Mac. It asks for Touch ID or your password <!-- fact:gnomon.setup-prompts -->2<!-- /fact --> times, then opens the desk.</p>
+        <p class="plain">The Mac helper does not yet check which program is calling it. Another program running as you could ask it to sign. Every signature still needs your Touch ID or password.</p>
+        <div class="next"><a class="key pri" href="../learn/index.html#gnomon-track">Start the Gnomon track</a><a href="#start">Every step</a></div>
+      </div>
+
+      <figure class="hero-exhibit">
+        <!-- No real decision card or signed log row has been captured (placeholder gnomon-card-and-log-row in facts.json): nobody launched Gnomon for this page. The plate is a drawing and says so inside itself. It shows no hash and no log row. -->
+        <div class="gplate stamps">
+          <div role="img" aria-label="A drawing of one decision card on top of a stack of others. It names who is asking and what they want, and has two keys: Deny, and Approve with Touch ID. It carries a stamp that reads Signed. This is an illustration, not a capture.">
+            <div class="gstack" aria-hidden="true">
+              <div class="gcard">
+                <div class="gcard-head"><span>a request</span><span>from one of your sessions</span></div>
+                <p class="gcard-what">What the session wants to do, in its own words.</p>
+                <div class="gbars"><i class="w-a"></i><i class="w-b"></i><i class="w-c"></i></div>
+                <div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve · Touch ID</span></div>
+                <span class="gstamp">Signed</span>
+              </div>
+            </div>
+            <ul class="gnotes" aria-hidden="true">
+              <li>One stack for every session. Silence means deny, and only a person decides.</li>
+              <li>Signed with a key in the Secure Enclave.</li>
+            </ul>
+          </div>
+          <p class="prov"><b>illustration</b><span>A drawing, not a capture. Nobody launched Gnomon for this page.</span></p>
+        </div>
+        <figcaption class="prov">One frame shows the request, both answers and the stamp, which the app never does. The lines under the card are the changelog's: <!-- ref:gnomon.proof-stack --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">CHANGELOG.md:231</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/approval-broker.test.ts">packages/gnomon/test/approval-broker.test.ts</a><!-- /ref -->.</figcaption>
+        <div class="fact lead">
+          <div class="fact-n"><!-- fact:gnomon.verify-commands -->4<!-- /fact --><small>commands</small></div>
+          <p class="fact-claim">let anyone check the app without trusting us: it is Developer ID signed, notarized by Apple and stapled, and its zip matches the hash we publish.</p>
+          <p class="fact-src"><!-- src:gnomon.notarized -->recorded 2026-11-23, not re-run · spctl -a -vv Gnomon.app on @a-company/gnomon-darwin-arm64@8.1.0; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/gnomon-verification.txt">pages/captures/gnomon-verification.txt</a><!-- /src --> · <a href="#measured">the commands and what they printed</a></p>
+        </div>
+      </figure>
+    </div>
+
+    <section class="section" id="holds" aria-labelledby="holds-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="holds-h">What it holds.</h2>
+        <p class="prose">Run several Claude Code sessions and each one asks for permission in its own terminal. Each can read your credentials. Nothing records who approved what. You end up approving by reflex, in whichever window is in front.</p>
+        <dl class="claims">
+          <div>
+            <dt>One stack</dt>
+            <dd><p>Requests from every session arrive in one place, as cards. Silence means deny, and only a person decides. An “Always allow” rule is built from signed rows in the log, and you can list and revoke rules with <code>gnomon rules list</code>.</p>
+              <p class="mono quiet">Proof: <!-- ref:gnomon.proof-stack --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">CHANGELOG.md:231</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/approval-broker.test.ts">packages/gnomon/test/approval-broker.test.ts</a><!-- /ref --></p></dd>
+          </div>
+          <div>
+            <dt>Signed and chained</dt>
+            <dd><p>Your answer is signed with a key held in the Mac's Secure Enclave. Every session, approval and grant goes into one log where each row carries the hash of the row before it. Change, delete or cut off a row and the chain no longer checks. <code>gnomon replay</code> verifies it.</p>
+              <p class="mono quiet">Proof: <!-- ref:gnomon.proof-log --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md">docs/specs/gnomon.md</a>, section 3.2; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/kernel-log.test.ts">packages/gnomon/test/kernel-log.test.ts</a><!-- /ref --></p></dd>
+          </div>
+          <div>
+            <dt>Sandboxed sessions</dt>
+            <dd><p>Claude Code runs headless under a default-deny sandbox profile. Sessions cannot read <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.gnomon</code> or other credential stores.</p>
+              <p class="mono quiet">Proof: <!-- ref:gnomon.proof-sandbox --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L238">CHANGELOG.md:238</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/session-sandbox.test.ts">packages/gnomon/test/session-sandbox.test.ts</a><!-- /ref --></p></dd>
+          </div>
+          <div>
+            <dt>Spending, measured</dt>
+            <dd><p>Gnomon meters usage across sessions and shows it. It does not cap it. The changelog's words: “<!-- fact:gnomon.spend -->measures and does not enforce<!-- /fact -->”. The spec's words for runaway spend: “visible, not prevented”.</p>
+              <p class="mono quiet">Proof: <!-- fact:gnomon.spend.source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L235">CHANGELOG.md:235</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1893">docs/specs/gnomon.md:1893</a><!-- /fact --></p></dd>
+          </div>
+        </dl>
+        <p class="prose">For the first three rows, “proof” means the spec states it and a test file names it. We did not run those suites for this page.</p>
+        <figure class="proof">
+          <!-- excerpt:gnomon.threat-row-3 wrap=1 -->
+<div class="proof-head"><span>docs/specs/gnomon.md</span><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1893">line 1893 ↗</a></div>
+<pre tabindex="0" class="wrap"><span class="ln">1893</span>| 3 | Runaway fan-out / quota drain / founder lock-out | metering only (P8-D92): every permit attributed, per-message usage from stream events, per-user/repo/session/model/backend spend and subscription-window usage in `status`, informational `budget.ladder` rows, quota errors recorded, GUI | **visible, not prevented**: by founder ruling P8-D92 nothing caps, reserves, pauses or kills a runaway fan-out or a quota drain, so the founder can be locked out of the subscription window by their own armada (law 2: stated, not hidden); out-of-kernel `claude -p` (visible count) |</pre>
+<!-- /excerpt -->
+          <figcaption class="prov"><b>real</b><span>The spec's threat table, the row for runaway spend, as it is in the file. The last cell is what is still exposed.</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="measured" aria-labelledby="measured-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="measured-h">Don't take our word for the app. Run four commands.</h2>
+        <p class="prose">The app you install is Developer ID signed, notarized by Apple and stapled, and its zip matches the hash we publish. You can check all of it yourself, without trusting us. Download the package from npm, unpack it, and run the checks. This is what we ran, and what we got:</p>
+        <figure class="proof">
+          <!-- capture:gnomon-verification lines=7-17 -->
+<div class="proof-head"><span>pages/captures/gnomon-verification.txt</span><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/gnomon-verification.txt">recorded 2026-11-23, not re-run ↗</a></div>
+<pre tabindex="0">$ npm pack @a-company/gnomon-darwin-arm64@8.1.0 ; tar -xzf … ; ditto -x -k Gnomon.app.zip app
+$ cat Gnomon.app.zip.sha256 ; shasum -a 256 Gnomon.app.zip
+45eb7ad6d3b627776537b93b3c167a0b266c2a16cd19c7bb2d32b3f583d693c6  (both)
+$ codesign --verify --deep --strict Gnomon.app
+Gnomon.app: valid on disk / satisfies its Designated Requirement
+$ spctl -a -vv Gnomon.app
+Gnomon.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)
+$ xcrun stapler validate Gnomon.app
+The validate action worked!</pre>
+<!-- /capture -->
+          <figcaption class="prov"><b>real</b><span>Recorded output on version <!-- fact:gnomon.version -->8.1.0<!-- /fact -->, with every step, including unpacking the zip. <!-- src:gnomon.stapled -->recorded 2026-11-23, not re-run · xcrun stapler validate Gnomon.app; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/gnomon-verification.txt">pages/captures/gnomon-verification.txt</a><!-- /src -->. Published hash: <!-- fact:gnomon.sha256 -->45eb7ad6d3b627776537b93b3c167a0b266c2a16cd19c7bb2d32b3f583d693c6<!-- /fact -->.</span></figcaption>
+        </figure>
+
+        <div class="facts">
+          <div class="fact">
+            <div class="fact-n"><!-- fact:gnomon.threats -->32<!-- /fact --><small>threats</small></div>
+            <div>
+              <p class="fact-claim">listed in the spec, each with what is still exposed after our defence. One of them says runaway spend is “visible, not prevented”.</p>
+              <p class="fact-src"><!-- src:gnomon.threats -->real · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1887-L1923">docs/specs/gnomon.md:1887-1923</a> · run 2026-11-23<!-- /src --></p>
+            </div>
+          </div>
+          <div class="fact">
+            <div class="fact-n"><!-- fact:gnomon.spec-ids-tested.referenced_by_tests -->223<!-- /fact --><small>of <!-- fact:gnomon.spec-ids-tested.in_specs -->367<!-- /fact --> test ids</small></div>
+            <div>
+              <p class="fact-claim">in the Gnomon specs are referenced by a test file. <!-- fact:gnomon.spec-ids-tested.no_test -->144<!-- /fact --> are not. Most of those belong to features that are not built.</p>
+              <p class="fact-src"><!-- src:gnomon.spec-ids-tested -->recorded 2026-11-23, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/hero-pages/evidence-dossier.md">.paradigm/research/hero-pages/evidence-dossier.md</a> (3B, G2)<!-- /src --> · “referenced by a test file” is weaker than “the test passes”</p>
+            </div>
+          </div>
+          <div class="fact">
+            <div class="fact-n"><!-- fact:gnomon.ci-latest -->7 of 8<!-- /fact --><small>CI jobs</small></div>
+            <div>
+              <p class="fact-claim">passed on the latest run on main. The macOS probes job failed.</p>
+              <p class="fact-src"><!-- src:gnomon.ci-latest -->recorded 2026-11-12, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/hero-pages/evidence-dossier.md">.paradigm/research/hero-pages/evidence-dossier.md</a> (3B, G5; gh run view 43286257168 --json jobs)<!-- /src --></p>
+            </div>
+          </div>
+          <div class="fact">
+            <div class="fact-n"><!-- fact:gnomon.first-release-days -->7<!-- /fact --><small>days</small></div>
+            <div>
+              <p class="fact-claim">from the first package commit to the first npm release. That is how new this is.</p>
+              <p class="fact-src"><!-- src:gnomon.first-release-days -->recorded 2026-11-23, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.paradigm/research/hero-pages/evidence-dossier.md">.paradigm/research/hero-pages/evidence-dossier.md</a> (3B, G8); <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L212">CHANGELOG.md:212</a><!-- /src --></p>
+            </div>
+          </div>
+        </div>
+        <!-- No log-row excerpt: a real row with its hash link and the gnomon replay output was not captured (placeholder gnomon-card-and-log-row). The excerpt for this page is the threat row above. -->
+      </div>
+    </section>
+
+    <section class="section" id="desk" aria-labelledby="desk-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="desk-h">The desk, drawn.</h2>
+        <figure class="gplate">
+          <div role="img" aria-label="A drawing of the Gnomon desk. Sessions are listed on the left, grouped by project. One session is in the centre, with its card pinned above the composer. The stack on the right holds every card from every session, and the same card sits on top of it. A workshop strip runs along the foot. This is an illustration, not a screenshot.">
+            <p class="desk-note" aria-hidden="true">On a narrow screen the drawing stacks: sessions first, then the session, then the stack.</p>
+            <div class="desk" aria-hidden="true">
+              <div class="dz">
+                <b>Sessions</b>
+                <small>one project</small>
+                <div class="gline on">this session</div>
+                <div class="gline">a second session</div>
+                <small>another project</small>
+                <div class="gline">a third session</div>
+              </div>
+              <div class="dz">
+                <b>The session</b>
+                <div class="dsay"><i class="w-a"></i><i class="w-d"></i><i class="w-c"></i></div>
+                <div class="dsay"><i class="w-b"></i><i class="w-a"></i></div>
+                <div class="gcard mini cast"><div class="gcard-head"><span>a request</span><span>pinned here</span></div><div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve</span></div></div>
+                <div class="dcomposer"></div>
+              </div>
+              <div class="dz">
+                <b>The stack</b>
+                <div class="gstack"><div class="gcard mini cast"><div class="gcard-head"><span>a request</span><span>the same card</span></div><div class="gkeys"><span class="gkey">Deny</span><span class="gkey pri">Approve</span></div></div></div>
+                <div class="gcard mini"><div class="gcard-head"><span>a request</span><span>from a second session</span></div></div>
+                <div class="gcard mini"><div class="gcard-head"><span>a request</span><span>from a third session</span></div></div>
+              </div>
+              <div class="dz dz-shop">
+                <b>Workshop</b>
+                <span>Needs you</span>
+                <span>Working</span>
+                <span>one status line</span>
+              </div>
+            </div>
+          </div>
+          <figcaption class="prov"><b>illustration</b><span>A drawing of the desk in the app's own palette. It is not a screenshot. The words on it name what each part is; the bars stand for a conversation we did not invent. The region names: <!-- ref:gnomon.desk-source --><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.atelier/systems/gnomon/DESIGN.md#L36-L46">.atelier/systems/gnomon/DESIGN.md:36-46</a><!-- /ref -->.</span></figcaption>
+        </figure>
+        <dl class="claims">
+          <div>
+            <dt>Sessions, on the left</dt>
+            <dd><p>Your active sessions, grouped by project. Each project has its own colour.</p></dd>
+          </div>
+          <div>
+            <dt>The session, in the centre</dt>
+            <dd><p>The conversation with one session, and one composer. Cards that belong to this session are pinned above the composer.</p></dd>
+          </div>
+          <div>
+            <dt>The stack, on the right</dt>
+            <dd><p>Every card from every session, most urgent first. Decide a card here or in its session, and it leaves both.</p></dd>
+          </div>
+          <div>
+            <dt>Workshop, along the foot</dt>
+            <dd><p>What needs you, what is working, and one status line.</p></dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="section" id="lately" aria-labelledby="lately-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="lately-h">What changed lately.</h2>
+        <ol class="lately">
+          <li class="lately-row"><div class="lately-when">In progress, not released</div><div><p class="lately-lead">Boards: <!-- fact:gnomon.boards -->first slice on a branch<!-- /fact -->.</p><p class="lately-moved"><span class="mark progress" aria-hidden="true"></span>boards: in progress · <!-- fact:gnomon.boards.source -->decision TD-2026-11-24-500; branch feat/gnomon-boards-s1.0<!-- /fact --></p></div></li>
+          <!-- lately:gnomon rows=2 -->
+<li class="lately-row"><div class="lately-when">2026-10-29 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L75">8.1.0</a></div><div><p class="lately-lead">“Local models in Gnomon can use tools, and you stay in charge of every one.”</p></div></li>
+<li class="lately-row"><div class="lately-when">2026-10-24 · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231">8.0.2</a></div><div><p class="lately-lead">“Gnomon, the Paradigm 8.0 kernel, ships as a signed Mac app installed through npm.”</p><p class="lately-moved"><span class="mark built" aria-hidden="true"></span>the app: not built to built</p></div></li>
+<!-- /lately -->
+        </ol>
+        <p class="prov"><b>real</b><span>Each dated row is the release's own lead sentence, copied from the changelog line it links to. Gnomon ships inside Paradigm releases, so the versions are Paradigm's.</span></p>
+      </div>
+    </section>
+
+    <section class="section" id="standing" aria-labelledby="standing-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="standing-h">Where it stands.</h2>
+        <ul class="ledger-key" aria-label="What the five words mean">
+          <!-- frame:standing-key -->
+<li><span class="mark built" aria-hidden="true"></span><b>Built</b> released, and exercised by tests or daily use</li>
+<li><span class="mark nothold" aria-hidden="true"></span><b>Did not hold</b> measured against a bar set beforehand, and it did not clear it</li>
+<li><span class="mark progress" aria-hidden="true"></span><b>In progress</b> being built or measured now</li>
+<li><span class="mark untested" aria-hidden="true"></span><b>Untested</b> exists, and has not been run end to end</li>
+<li><span class="mark notbuilt" aria-hidden="true"></span><b>Not built</b> does not exist yet</li>
+<!-- /frame -->
+        </ul>
+        <ul class="ledger" aria-labelledby="standing-h">
+          <!-- standing:gnomon.ledger -->
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The app: Developer ID signed, notarized, stapled, hash-matched</div><div class="ledger-ev">four commands in <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/pages/captures/gnomon-verification.txt">pages/captures/gnomon-verification.txt</a></div></li>
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The decision stack: requests arrive as cards, silence means deny, each answer is signed</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L231-L238">CHANGELOG.md:231-238</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/approval-broker.test.ts">packages/gnomon/test/approval-broker.test.ts</a> (named, not run by us today)</div></li>
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">The hash-chained log: a changed, deleted or cut-off row is detected</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md">docs/specs/gnomon.md</a> section 3.2; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/kernel-log.test.ts">packages/gnomon/test/kernel-log.test.ts</a> (named, not run by us today)</div></li>
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">Sandboxed sessions: credential folders denied</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L238">CHANGELOG.md:238</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/session-sandbox.test.ts">packages/gnomon/test/session-sandbox.test.ts</a> (named, not run by us today)</div></li>
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">Subscription only: refuses to start a session that would bill API credits</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1338">docs/specs/gnomon.md:1338</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/test/session-preflight.test.ts">packages/gnomon/test/session-preflight.test.ts</a> (named)</div></li>
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">Local models with tools, under the same cards</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L75">CHANGELOG.md:75</a></div></li>
+<li class="ledger-row is-built"><div class="ledger-state"><span class="mark built" aria-hidden="true"></span>Built</div><div class="ledger-what">A published threat list with what is still exposed for each</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1887-L1923">docs/specs/gnomon.md:1887-1923</a></div></li>
+<li class="ledger-row is-progress"><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">Boards</div><div class="ledger-ev">branch feat/gnomon-boards-s1.0; TD-2026-11-24-500</div></li>
+<li class="ledger-row is-progress"><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">Test coverage of the spec: 223 of 367 test ids are referenced by a test file</div><div class="ledger-ev">dossier 3B, G2</div></li>
+<li class="ledger-row is-progress"><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">CI: 7 of 8 jobs passed on the latest run on main; the macOS probes job failed</div><div class="ledger-ev">gh run view 43286257168 (2026-11-12)</div></li>
+<li class="ledger-row is-progress"><div class="ledger-state"><span class="mark progress" aria-hidden="true"></span>In progress</div><div class="ledger-what">Windows: tested in CI and probes, not shipped</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L295">CHANGELOG.md:295</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/.github/workflows/gnomon.yml#L45">.github/workflows/gnomon.yml:45</a></div></li>
+<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Loops: specified, off in the app you install</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L130">CHANGELOG.md:130</a></div></li>
+<li class="ledger-row is-untested"><div class="ledger-state"><span class="mark untested" aria-hidden="true"></span>Untested</div><div class="ledger-what">Any machine but the founder's: no outside reports yet</div><div class="ledger-ev">dossier section 5</div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">A spending cap. Gnomon meters spending and does not stop it</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L235">CHANGELOG.md:235</a>; <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/docs/specs/gnomon.md#L1893">docs/specs/gnomon.md:1893</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">The helper checking which program calls it</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L298">CHANGELOG.md:298</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">Spawning from contracts, kernel linking, CI signing: specified, not built</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L302">CHANGELOG.md:302</a></div></li>
+<li class="ledger-row is-notbuilt"><div class="ledger-state"><span class="mark notbuilt" aria-hidden="true"></span>Not built</div><div class="ledger-what">Intel Macs and Linux: refused. Windows is under In progress</div><div class="ledger-ev"><a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md#L295">CHANGELOG.md:295</a></div></li>
+<!-- /standing -->
+        </ul>
+        <p class="mono quiet">as of <!-- fact:as_of -->2026-11-23<!-- /fact --> · every row is stamped from pages/facts.json · the log's write cost: <!-- fact:gnomon.log-append -->p99 0.055 ms over 1,000,000 appends<!-- /fact -->, <!-- src:gnomon.log-append -->recorded 2026-10-17, not re-run · <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/packages/gnomon/probes/results/p-log-fsync-armG-1e6.darwin.json">packages/gnomon/probes/results/p-log-fsync-armG-1e6.darwin.json</a><!-- /src --></p>
+        <div class="split">
+          <div>
+            <h3 class="h3">Limits</h3>
+            <ul class="rows">
+              <li>Apple silicon only.</li>
+              <li>Needs a Claude subscription. It refuses API-key billing.</li>
+              <li>It shows spending. It does not cap it.</li>
+              <li>The helper does not yet check its caller.</li>
+              <li>Loops are off in the app you install.</li>
+              <li>The evidence so far is from one machine.</li>
+              <li>The sandbox uses <code>sandbox-exec</code>, which Apple has deprecated. The spec lists that as a residual risk.</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="h3">Requirements</h3>
+            <ul class="rows">
+              <!-- rows:gnomon.requirements -->
+<li>An Apple silicon Mac with macOS 15 or later and System Integrity Protection on</li>
+<li>Claude Code from the native installer, signed in with your Claude subscription</li>
+<li>Touch ID or your login password</li>
+<li>Node 24 or later</li>
+<!-- /rows -->
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="start" aria-labelledby="start-h">
+      <div class="section-n" aria-hidden="true"></div>
+      <div class="section-body">
+        <h2 class="h2" id="start-h">The first thing to do.</h2>
+        <ol class="steps">
+          <li class="step">
+            <h3 class="step-term">Check the four requirements.</h3>
+            <div class="step-body">
+              <p>They are <a href="#preflight-h">at the top of this page</a>. Gnomon refuses to start a session if Claude Code is not the native install, or if an API key is set in your environment.</p>
+            </div>
+          </li>
+          <li class="step">
+            <h3 class="step-term">If you have not installed Paradigm yet, do that.</h3>
+            <div class="step-body">
+              <p>It brings the <code>gnomon</code> command.</p>
+              <div class="cmd"><code>npm install -g @a-company/paradigm</code></div>
+            </div>
+          </li>
+          <li class="step">
+            <h3 class="step-term">In a repo, run it.</h3>
+            <div class="step-body">
+              <div class="cmd"><code>gnomon</code></div>
+            </div>
+          </li>
+          <li class="step">
+            <h3 class="step-term">Start a session and let it ask for something.</h3>
+            <div class="step-body">
+              <p>You should see a card on the stack. Approve it with Touch ID or your password. That card is the product: one request, one signed answer, one row in the log.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <nav class="onward" aria-label="Where to go next">
+      <p class="entry-name"><a href="../warpline/index.html"><small>Next</small>Warpline</a></p>
+      <a class="key pri" href="../learn/index.html">Start the path</a>
+    </nav>
+  </main>
+
+<!-- frame:foot -->
+  <footer class="foot">
+    <a href="https://github.com/ascend42/a-paradigm">Repository ↗</a>
+    <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/CHANGELOG.md">Changelog ↗</a>
+    <a href="https://github.com/ascend42/a-paradigm/blob/6f29f25aea36ca64642cac0032e1ee5792f15033/LICENSE">MIT licence ↗</a>
+    <span>Facts last stamped 2026-11-23</span>
+  </footer>
+<!-- /frame -->
+</div>
+</body>
+</html>

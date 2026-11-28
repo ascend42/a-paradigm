@@ -1,10 +1,14 @@
 version: "2.0"
 description: >-
-  The Warpline Engine. Phase 1: the Convergence/Divergence Oracle — a read-only
-  tool that lifts two git branches to a content-addressed store of MEANING (the
-  Paradigm symbol graph), predicts the merge from meaning (clean / knot /
-  dangling), runs git's actual merge read-only, and scores where meaning and
-  bytes agreed or diverged. Phase 2 (the native WRITE PATH): #fabric/#pick seal
+  The Warpline Engine. Phase 1: the Convergence/Divergence Oracle — a tool that
+  leaves git history and the user's files alone, lifts two git branches to a
+  content-addressed store of MEANING (the Paradigm symbol graph), predicts the
+  merge from meaning (clean / knot / dangling), runs git's actual merge without
+  changing any ref, and scores where meaning and bytes agreed or diverged. The
+  oracle is NOT write-free: each run records under .warpline/ in the repo it runs
+  in (oracle.jsonl, states/, warp/) and reads each ref through a temporary git
+  worktree that it removes; user-facing text must say that, not "read-only".
+  `weave --preview`, `consolidate`, `diff` and `orient` write nothing. Phase 2 (the native WRITE PATH): #fabric/#pick seal
   the working meaning into this project's OWN durable history (#strand records in
   .warpline/fabric.jsonl + the .warpline/refs/selvage tip), single-writer, NO git
   merge — git coexists (TD-2026-06-25-564). Multi-writer SCRATCH+CAS+WEFT is
@@ -2862,6 +2866,11 @@ components:
       covers native, git, --json shape and the fork → propose progression.
       `orient:v1` is ADDITIVE ONLY (fields added, never removed/renamed/retyped);
       the fields are documented in README.md and docs/specs/warpline-flows.md §4.
+      The human `agent guide` line (orient.ts agentGuideLine) reports the
+      Warpline guidance BLOCK, not the files: "<file> has the Warpline guidance
+      block", "<file> has no Warpline guidance block" (the file exists without
+      it), or "no <file>". It used to say "AGENTS.md missing, CLAUDE.md missing"
+      for files that exist without the block. The JSON shape is unchanged.
     type: module
     tags: [warpline, cli, read-only, f4, orientation]
     components:

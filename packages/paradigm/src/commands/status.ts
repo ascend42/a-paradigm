@@ -1,5 +1,9 @@
 /**
  * paradigm status - Show project status
+ *
+ * Every number printed here comes from #project-counts, the module `paradigm
+ * doctor` reads too, so the two commands report the same gates, .purpose files
+ * and isolated symbols.
  */
 
 import * as fs from 'fs';
@@ -7,13 +11,15 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../utils/logger.js';
+import { dim } from '../utils/cli-output.js';
+import { listProjectFiles } from '../core/project-files.js';
 import {
-  aggregateFromDirectory,
-  buildSymbolIndex,
-  getSymbolCounts,
-} from '@a-company/premise-core';
-import { findPurposeFiles } from '@a-company/purpose-core';
-import { findGateFiles } from '@a-company/portal-core';
+  collectProjectCounts,
+  listPurposeFiles,
+  listPortalFiles,
+  GATE_COUNT_SCOPE,
+  describeGateCounts,
+} from '../core/project-counts.js';
 
 export async function statusCommand() {
   const cwd = process.cwd();
@@ -38,11 +44,12 @@ export async function statusCommand() {
   console.log(`  .purpose:   ${hasPurpose ? chalk.green('✓ Found') : chalk.yellow('○ Not found')}`);
   console.log(`  portal.yaml:  ${hasGate ? chalk.green('✓ Found') : chalk.yellow('○ Not found')}`);
 
-  // Find all files
+  // Find all files: one list (#project-files), the same one doctor reads
   spinner.start('Counting files...');
-  
-  const purposeFiles = await findPurposeFiles(cwd);
-  const gateFiles = await findGateFiles(cwd);
+
+  const projectFiles = listProjectFiles(cwd);
+  const purposeFiles = listPurposeFiles(projectFiles);
+  const gateFiles = listPortalFiles(projectFiles);
 
   spinner.stop();
 
@@ -54,23 +61,26 @@ export async function statusCommand() {
   // Aggregate and count symbols
   if (hasDream || hasPurpose || hasGate) {
     spinner.start('Aggregating symbols...');
-    
+
     try {
-      const result = await aggregateFromDirectory(cwd);
-      const index = buildSymbolIndex(result);
-      const counts = getSymbolCounts(index);
+      const counts = await collectProjectCounts(cwd, projectFiles);
 
       spinner.stop();
+
+      if (counts.purposeFilesNotIndexed.length > 0) {
+        const n = counts.purposeFilesNotIndexed.length;
+        dim(`  ${n} .purpose file${n === 1 ? ' is' : 's are'} not in the symbol index (unparsable, or under build output): ${counts.purposeFilesNotIndexed.slice(0, 3).join(', ')}${n > 3 ? ', …' : ''}`);
+      }
 
       console.log(chalk.white('\nSymbol Index'));
       console.log(chalk.gray('─'.repeat(40)));
 
       const symbolLines = [
-        { prefix: '#', name: 'Components', count: counts.component, color: chalk.green },
-        { prefix: '$', name: 'Flows', count: counts.flow, color: chalk.yellow },
-        { prefix: '^', name: 'Gates', count: counts.gate, color: chalk.red },
-        { prefix: '!', name: 'Signals', count: counts.signal, color: chalk.cyan },
-        { prefix: '~', name: 'Aspects', count: counts.aspect, color: chalk.magenta },
+        { prefix: '#', name: 'Components', count: counts.symbols.component, color: chalk.green },
+        { prefix: '$', name: 'Flows', count: counts.symbols.flow, color: chalk.yellow },
+        { prefix: '^', name: 'Gates', count: counts.symbols.gate, color: chalk.red },
+        { prefix: '!', name: 'Signals', count: counts.symbols.signal, color: chalk.cyan },
+        { prefix: '~', name: 'Aspects', count: counts.symbols.aspect, color: chalk.magenta },
       ];
 
       for (const { prefix, name, count, color } of symbolLines) {
@@ -79,20 +89,37 @@ export async function statusCommand() {
         }
       }
 
-      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      const total = counts.totalSymbols;
       console.log(chalk.gray('─'.repeat(40)));
       console.log(`  Total:          ${chalk.cyan(total.toString())}`);
-      
-      tracker.success('Status retrieved', { symbols: total, files: purposeFiles.length + gateFiles.length });
+      console.log(`  Isolated:       ${chalk.cyan(counts.isolated.length.toString())}`);
+
+      dim('  Declared symbols only.');
+      if (counts.undeclaredReferences > 0) {
+        const n = counts.undeclaredReferences;
+        dim(`  ${n} undeclared reference${n === 1 ? '' : 's'} not counted (paradigm integrity lists them).`);
+      }
+      if (counts.gates.total > 0) {
+        dim(`  Gates: ${GATE_COUNT_SCOPE}; ${describeGateCounts(counts.gates)}.`);
+      }
+      dim('  Isolated: declared, with no connection to another symbol.');
+
+      tracker.success('Status retrieved', {
+        symbols: total,
+        gates: counts.symbols.gate,
+        isolated: counts.isolated.length,
+        purposeFiles: purposeFiles.length,
+        portalFiles: gateFiles.length,
+      });
 
       // Show errors if any
-      if (result.errors.length > 0) {
+      if (counts.errors.length > 0) {
         console.log(chalk.white('\nWarnings'));
         console.log(chalk.gray('─'.repeat(40)));
-        for (const error of result.errors) {
+        for (const error of counts.errors) {
           console.log(chalk.yellow(`  ⚠ ${error.source}: ${error.message}`));
         }
-        log.command('status').warn('Aggregation had errors', { count: result.errors.length });
+        log.command('status').warn('Aggregation had errors', { count: counts.errors.length });
       }
     } catch (error) {
       spinner.fail('Failed to aggregate');

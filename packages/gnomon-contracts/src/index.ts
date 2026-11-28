@@ -43,3 +43,6 @@ export * from './setup.js';
 export * from './claude-model.js';
 export * from './offer.js';
 export * from './mod-id.js';
+export * from './secret-rules.js';
+export * from './content-palette.js';
+export * from './dim.js';

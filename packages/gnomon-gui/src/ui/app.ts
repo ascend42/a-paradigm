@@ -38,7 +38,7 @@ import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { renderHostSlips, wireHostSlips } from './host-slip.js';
 import { copyTextOf, hostHintsOf, type HostHint } from '../core/host-hints.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
-import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
+import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, wireRowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { changedBefore, hasLive, LiveTicker, liveText, stepClockText, workParts } from '../core/live-turn.js';
 import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '../core/turn-steps.js';
@@ -72,7 +72,15 @@ import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, Rep
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
-import { loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
+import { loadBoard } from '../core/board.js';
+import { DIM_LIST_COPY, followBoth, parseBoardCommand, type DimensionRow } from '../core/board-open.js';
+import { DimSessions } from '../core/dim-session.js';
+import { DimStore, parseTurnRef } from '../core/dim-store.js';
+import { mountBoardDock } from './board-dock.js';
+import { mountBoardTurn, type BoardTurnStrip } from './board-turn.js';
+import { escFoldsFromComposer, latestTurn, refusalBrief } from '../core/board-turn.js';
+import { cardHasFocus } from './card-focus.js';
+import { hhmm, loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -91,7 +99,41 @@ const put = (el: HTMLElement, s: string): void => {
 const hintBox: CwdHintTarget = { input: { value: '' }, note: { textContent: '', hidden: true }, dialog: { hidden: true } };
 const hintTarget = (): CwdHintTarget => hintBox;
 
+/** #gui-board-dock: the open board follows the page's theme (set once the dock is mounted) */
+let boardLook: (theme: 'day' | 'night') => void = () => undefined;
 const store = new GuiStore();
+/**
+ * #gui-dim-session (boards S1.3 P4b-1): ONE set of dimension sessions per page. Every row the GUI store takes also
+ * goes to it (`logStore` is the one store `followLog` is handed), it is given the `GnomonClient` ITSELF on every new
+ * socket, told when the link closes, and reset wherever the GUI store is.
+ */
+// S1.4 P4b: a grant targets the focus hsid the host joins to a LIVE session, so a session that is not live has its
+// draw key disabled (never "may not edit")
+const dimSessions = new DimSessions({
+  store: new DimStore(),
+  live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'),
+  // Aegis E3 r4: a turn's close in the page's own rows (newest first): a turn.result of that session at turn n or later
+  closeOf: (hsid, n) => {
+    const rows = store.transcript(hsid);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i]!;
+      if (r.kind !== 'turn.result' || !r.payload || typeof r.payload !== 'object') continue;
+      const t = parseTurnRef((r.payload as { turn?: unknown }).turn);
+      if (t && t.hsid === hsid && t.n >= n) return typeof r.at === 'string' && Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : Date.now();
+    }
+    return null;
+  },
+});
+let boardRepaint: () => void = () => undefined;
+/** true while the page waits for a restart to reconnect by itself; false when the Reconnect dialog is the only way back */
+let linkComing = false;
+const logStore = followBoth(store, {
+  apply: (rows) => {
+    dimSessions.apply(rows);
+    boardRepaint();
+  },
+  reset: () => dimSessions.reset(),
+});
 let client: GnomonClient | null = null;
 let session: Session | null = null;
 let verifyKey: string | null = null;
@@ -166,6 +208,7 @@ const motionQ = matchMedia('(prefers-reduced-motion: reduce)');
 function applyLook(): void {
   document.documentElement.dataset.theme = resolveTheme(theme, darkQ.matches);
   document.documentElement.dataset.motion = resolveMotion(motion, motionQ.matches);
+  boardLook(document.documentElement.dataset.theme === 'night' ? 'night' : 'day');
   // #gui-wordmark-menu: the theme row in the open Gnomon menu shows the choice (auto names what it resolves to now)
   if (document.getElementById('wordmark-menu')?.hidden === false) paintAppMenu();
 }
@@ -262,27 +305,33 @@ function dropRow(el: HTMLElement): void {
   rowsToWatch.delete(el);
 }
 let memo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
+/** #gui-board-turn: the chat's own (non-raw) items while the raw view is on: the turn strip reads the conversation */
+let chatMemo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
 
 const transcriptId = (): string => `${focused ?? (feedView ? 'feed' : 'empty')}${rawMode ? '\u0000raw' : ''}`;
 
-function currentItems(): { items: ChatItem[]; hidden: number } {
+function currentItems(rawView = rawMode): { items: ChatItem[]; hidden: number } {
   // S2.3: nothing focused and the kernel feed view not open ⇒ the quiet empty centre, no rows
   if (!focused && !feedView) return { items: [], hidden: 0 };
   const base = focused ? store.transcript(focused) : store.kernelFeed;
   const mine = local.filter((r) => (r.session ?? null) === focused);
   // T-2026-10-21-007: a running turn shows its working row only while the session is live (a kernel restart ends it)
   const live = !!focused && isLiveState(store.sessions.get(focused)?.state ?? 'seen');
-  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}.${localRev}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
-  if (memo?.key === key) return memo.out;
+  const key = `${focused ?? (feedView ? 'feed' : 'empty')}${rawView ? '\u0000raw' : ''}\u0000${base.length}\u0000${mine.length}.${localRev}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
+  // #gui-board-turn: the chat's items asked for while the raw view is on are memoized apart (never the view's memo)
+  const own = rawView === rawMode;
+  const m = own ? memo : chatMemo;
+  if (m?.key === key) return m.out;
   const rows = mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
   // the kernel feed has no conversation: it stays the raw row list
-  const raw = rawMode || !focused;
+  const raw = rawView || !focused;
   const base2 = chatItems(rows, { raw, live });
   // S2.5: tool and auto rows fold into one activity line (raw mode and the kernel feed never fold)
   // raw rows fold the same way: an expanded one shows its whole line under it
   // #gui-turn-steps: the working key's list unfolds (and a step to its rows, rowDetail: the raw fold's redaction)
   const out = raw ? { items: foldRaw(base2.items, expandedActs), hidden: base2.hidden } : { items: foldActivity(withStepFolds(base2.items, rows, expandedActs, rowDetail), expandedActs), hidden: base2.hidden };
-  memo = { key, out };
+  if (own) memo = { key, out };
+  else chatMemo = { key, out };
   return out;
 }
 
@@ -297,6 +346,7 @@ function resetTranscript(): void {
   if (focused) void slashMenu?.flow.ensureSkills(focused); // the host slips of its replies read its loaded skills
   unmountAll();
   memo = null;
+  chatMemo = null;
   items = [];
   follow.jump();
   heights = widths.restore(transcriptId(), width, 0);
@@ -564,7 +614,7 @@ function itemEl(it: FoldedItem): HTMLElement {
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
-  const at = it.at ? it.at.slice(11, 16) : '';
+  const at = hhmm(it.at); // Mika 1 (review of PR #120): local time, never the UTC slice; the turn strip says the same
   // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (the plain origin; TD-2026-10-23-939)
   const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: 'sent-by' }, `${spoken ? spoken.sent : it.sentLabel}`) : null;
   const body = label
@@ -790,6 +840,7 @@ const liveTicker = new LiveTicker(() => {
     // #gui-turn-steps: the unfolded list's live step counts too
     for (const sc of el.querySelectorAll<HTMLElement>('.step-clock[data-since]')) put(sc, stepClockText(sc.dataset.since!, now));
   }
+  turnStrip?.tick(now); // #gui-board-turn: the strip's working key ticks with the chat's
   sayWork(now);
 });
 
@@ -798,6 +849,75 @@ const liveTicker = new LiveTicker(() => {
  * where it is while heights are measured and items arrive (no jump, no reset to the top). `remeasure` (a width
  * change) rebuilds the height index from the per-width cache and keeps the same reading position.
  */
+/* ── #gui-board-turn (boards S1.3 P4b-2): the latest turn under an open board ── */
+/** set once the dock is mounted (the strip reads it); null before */
+let turnStrip: BoardTurnStrip | null = null;
+const NO_TURN = latestTurn([]);
+/**
+ * Paint the turn strip from the chat's items (the conversation's, never the raw view's): shown while a board is
+ * open, the you row and the turn row as core/board-turn.ts orders them. What the strip never copies (a live choice,
+ * an offer slip, a host slip, a run row) is said as ` · needs you` or ` · more in the chat`.
+ */
+function paintBoardTurn(): void {
+  // in the next frame, once per frame: the strip's height moves the feed, and a paint run from a ResizeObserver
+  // (the viewport's, the dock's) must not change what that observer watches inside its own delivery
+  if (turnPaintQueued || !turnStrip) return;
+  turnPaintQueued = true;
+  requestAnimationFrame(() => {
+    turnPaintQueued = false;
+    paintBoardTurnNow();
+  });
+}
+let turnPaintQueued = false;
+function paintBoardTurnNow(): void {
+  const strip = turnStrip;
+  if (!strip) return;
+  if (!focused || !boardDock.isOpen()) return strip.paint({ open: false, turn: NO_TURN, agent: 'Claude', room: () => 0, kept: false });
+  const its: FoldedItem[] = rawMode ? currentItems(false).items : items;
+  let u = its.length - 1;
+  while (u >= 0 && its[u]!.role !== 'user') u--;
+  const slipped = new Set(slipViews(store.offers(focused), its).map((v) => v.itemKey));
+  for (let i = u + 1; i < its.length; i++) if (its[i]!.role === 'assistant' && hostHintsFor(its[i]!.key, its[i]!.text).length) slipped.add(its[i]!.key);
+  strip.paint({
+    open: true,
+    // S1.4 P4b: the tail ' · drew N on the board', counted from the rows of the latest ENDED turn (never the reply)
+    turn: { ...latestTurn(its, { liveChoice: liveChoiceKey(its), slipped }), drew: dimSessions.drewFor(focused) },
+    agent: agentLabel() === 'local model' ? 'local model' : 'Claude',
+    // the board's room measured WITHOUT the strip (Luna: two rows at 300px), so the switch cannot flicker
+    room: () => (boardDock.current()?.leaf.room() ?? 0) + $('board-turn').offsetHeight,
+    kept: boardDock.kept(),
+    notices: boardDock.noticeStrip(),
+  });
+  // (deferred: the ticker also runs while only the strip shows a running turn, the raw view's case)
+  liveTicker.sync(hasLive(items) || strip.live());
+}
+/**
+ * T-2026-11-26-001: the press after show chat's fold (a fast double press) lands where the strip WAS, on page chrome
+ * that takes no focus, and a mousedown there moved focus off the chat to BODY. For the length of a double-click after
+ * the chat takes focus, a press on something that takes no focus leaves focus where show chat put it.
+ */
+const SHOW_CHAT_HOLD_MS = 500;
+let showChatHeldUntil = 0;
+document.addEventListener('mousedown', (e) => {
+  if (performance.now() >= showChatHeldUntil) return;
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || t.closest('button, a[href], input, textarea, select, [tabindex], [contenteditable]')) return;
+  e.preventDefault(); // (the default of a mousedown is the focus move; the press itself still happens)
+}, true);
+/**
+ * Show chat (and the strip's working key) after the board folded: the chat at its latest row with focus in it, the
+ * #jump-latest path. The working key also leaves its turn's steps unfolded and puts focus on that key in the chat.
+ */
+function showChatAt(workKey: string | null): void {
+  showChatHeldUntil = performance.now() + SHOW_CHAT_HOLD_MS;
+  if (workKey) expandedActs.add(stepsFoldKey(workKey));
+  if (workKey) remountItem(workKey);
+  follow.jump();
+  paintTranscript();
+  const key = workKey ? $('viewport').querySelector<HTMLElement>(`.work-key[data-item="${CSS.escape(workKey)}"]`) : null;
+  (key ?? $('viewport')).focus({ preventScroll: true });
+}
+
 /** The page's own scroll writes, so the scroll handler can tell them from the user's (they must not change stickiness). */
 let selfTop = -1;
 let lastTop = 0;
@@ -847,7 +967,8 @@ function paintTranscript(remeasure = false): void {
     remountItem(live);
   }
   syncSlips(items);
-  liveTicker.sync(hasLive(items));
+  paintBoardTurn(); // #gui-board-turn: the latest turn under an open board, from the items just painted
+  liveTicker.sync(hasLive(items) || !!turnStrip?.live());
   sayWork(Date.now()); // #gui-turn-steps: a turn that ended clears what was said
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
@@ -1670,7 +1791,7 @@ slashMenu = mountSlashMenu(document, {
     for (const it of items) if (it.runKey === v.key) remountItem(it.key);
     paintTranscript();
   },
-  command: (id, trusted) => run(id, trusted),
+  command: (id, trusted, event) => run(id, trusted, event),
   openTools: (hsid, trusted) => void toolsDrawer?.open(hsid, 'tools', trusted, $('composer-text')),
   skillRan: (hsid, name, args, turn) => {
     // a skill run posts as the human's turn: "you ran skill /name args", stamped with its turn id (pairs with turn.sent)
@@ -1882,6 +2003,51 @@ const voiceSheet = mountVoiceSheet(document, {
   },
 });
 // #gui-mods-panel: the Mods sheet (header Mods key, ⌘K "Mods…", the Workshop footer's key); requests only, never a decision
+// #gui-board-dock (boards S1.3 P4b-1): the board leaf over the chat header and the chat, its edge tab, its opening rules
+const boardDock = mountBoardDock({
+  pane: $('pane-transcript'),
+  feed: $('pane-transcript').querySelector('.feed') as HTMLElement,
+  sessions: dimSessions,
+  load: () => loadBoard(), // the engine chunk is fetched on the first open, never with the app
+  theme: () => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day'),
+  cardFocused: () => cardHasFocus(document),
+  pinned: () => $('pinned').querySelectorAll('.card').length,
+  // the open board's row in the palette's Dimensions list changes its words in place while the list is open (aegis C2.4)
+  checkChanged: () => void (palDims && !$('palette').hidden && paintPalette()),
+  focused: () => focused,
+  sessionInfo: (hsid) => {
+    const s = store.sessions.get(hsid);
+    const p = projectOfCard({ repo: null, hsid });
+    return { name: s ? sessionTitle(s) : hsid.slice(-10), fullName: s ? sessionFullTitle(s) || sessionTitle(s) : '', project: p?.name ?? 'this project', hue: `h${p?.hue ?? 0}`, repo: s?.repo ?? null };
+  },
+  principal: () => session?.principal ?? null,
+  say: (text, kind) => notice(text, kind, { source: 'board' }),
+  reconnecting: () => linkComing,
+  fallbackFocus: () => $('composer-text'),
+  // the leaf head's Dimensions ▾ key: the same list as /boards (design board-leaf anatomy), on its own trusted press
+  dimensions: () => openDimensions(),
+  turn: () => paintBoardTurn(),
+  localModel: (hsid) => backendWord(store.sessions.get(hsid)?.backend) === 'local model',
+});
+// #gui-board-turn: the strip's keys press through the dock (trusted only; a held board is not folded), then the chat
+turnStrip = mountBoardTurn({
+  el: $('board-turn'),
+  onShowChat: (e) => boardDock.showChat(e, () => showChatAt(null)),
+  onWorkKey: (e, key) => boardDock.showChat(e, () => showChatAt(key)),
+  // S1.4 E3: the notices' keys, the U2 freeze, and focus to the board when a focused key's row leaves
+  onNoticeKey: (what, target, e) => boardDock.noticeKey(what, target, e),
+  onFreeze: (on) => boardDock.freezeNotices(on),
+  onFocusBoard: () => boardDock.focusBoard(),
+  onTrace: (key) => boardDock.traceNotice(key),
+  // Mika E3 B3: the +k menu stays over the board's stage, above the hands foot (it never covers a draw key or the stop)
+  menuRoom: () => {
+    const foot = document.querySelector('.bd-host .bd-foot')?.getBoundingClientRect();
+    const stage = document.querySelector('.bd-host .bd-stage')?.getBoundingClientRect();
+    return foot && stage ? { top: stage.top, bottom: foot.top, left: stage.left, right: stage.right } : null;
+  },
+});
+boardRepaint = () => boardDock.repaint();
+boardLook = (t) => boardDock.setTheme(t);
 const loopsView = mountLoopsView({
   doc: document,
   host: $('pane-transcript'),
@@ -1923,7 +2089,7 @@ async function revokeGrant(grantId: string): Promise<void> {
 /* ── connection ─────────────────────────────────────────────────── */
 /** Backlog + follow with the {logId, seq} cursor; a cursor-epoch refusal clears the store and re-reads (core/client.ts). */
 function subscribe(c: GnomonClient): Promise<void> {
-  return followLog(c, store);
+  return followLog(c, logStore);
 }
 
 /** Read once at load: the wrapper's frozen marker, else the browser (T-2026-10-18-018 N1). */
@@ -1962,7 +2128,12 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   }
   const previousPin = localStorage.getItem(PIN_KEY);
   if (pin.store) localStorage.setItem(PIN_KEY, pin.store);
+  // Aegis N1 (review of PR #119): a `gui.reconnect` attaches while the previous socket may still be open. Once this
+  // one is live the previous one is closed: it can feed nothing more. (Its close does not end the link: the onClose
+  // guard below is for the socket that is live.)
+  const previous = client;
   client = c;
+  if (previous && previous !== c) previous.close();
   session = out.session;
   if (verifyKey !== pin.verifyWith) verified.clear(); // I4: decisions verified under another key are not reused
   verifyKey = pin.verifyWith;
@@ -1991,12 +2162,14 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   // connection are in its title=, the Gnomon menu's who line and Settings → About (Kernel connection)
   setLink('connected', { principal: out.session.principal, connId: out.session.connId });
   c.onNotification((method, params) => {
+    // Aegis N1: only the LIVE socket feeds the page (no row into the stores, no follow restarted over an old socket)
+    if (client !== c) return;
     if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
     const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
     if (p.row) {
-      store.apply([p.row]);
-      const r = rowOf(p.row);
+      logStore.apply([p.row]); // the GUI store and the dimension sessions, both
+      const r = wireRowOf(p.row); // Aegis L1: never a page-only field from the wire
       if (r) {
         dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
         offerVoiceRow(r); // #gui-offer-slip L1: only a LIVE heard "not now" dismisses (never a backlog replay)
@@ -2013,12 +2186,18 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
-    } else if (p.end) void followLog(c, store).catch(() => undefined);
+    } else if (p.end) void followLog(c, logStore).catch(() => undefined);
   });
   c.onClose(() => {
+    // Aegis M2: only the LIVE socket's close ends the link. After `gui.reconnect` made a second socket live, the
+    // first one closing must not null the client or hold the board still on a link that is up.
+    if (client !== c) return;
     client = null;
     session = null;
     stopStatusPolls();
+    linkComing = restarting(sessionStorage); // the board's held-still line says "Reconnecting" only when the page is
+    dimSessions.linkDown(); // #gui-dim-session: an open board is held still; nothing is queued
+    boardDock.repaint();
     paintCapture(voiceStatusOf(status), false);
     if (restarting(sessionStorage)) return void awaitRestart();
     showReconnect('the connection ended; the GUI session ended with it (D54)');
@@ -2034,11 +2213,18 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
   paintVoice();
+  // aegis I-6: only a backlog read to its end gives the rebuilt boards their grant map
+  let backlog = true;
   try {
     await subscribe(c);
   } catch (err) {
+    backlog = false;
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', 'fail');
   }
+  // the backlog is read: the sessions get THIS socket's client object itself (a gesture stamp is numbered per client
+  // object), and an open dimension is rebuilt from the log as it now stands. Never for a socket that already closed.
+  if (client === c) dimSessions.connect({ client: c, principal: out.session.principal, connId: out.session.connId }, { backlog });
+  boardDock.repaint();
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
   offerLiveSince = store.head; // #gui-offer-slip: a slip shown after this slides in
   syncDictationContext();
@@ -2134,7 +2320,10 @@ function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = e
   // 2026-10-23: only here, on the send path; in refusalText every voice-* refusal (an attach, an input change) read
   // "not sent by voice · … next: press Enter to send it"
   const why = err instanceof RpcError ? (voiceRefusalText(err.refusal) ?? refusalText(err.refusal)) : 'may not have been sent: the connection to the kernel failed';
-  if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why });
+  const voice = err instanceof RpcError ? voiceRefusalText(err.refusal) : null;
+  // #gui-board-turn: the strip says the refusal's message (never its code), or the chat's own not-sent words
+  const brief = refusalBrief({ voice, message: err instanceof RpcError ? err.refusal.message : null });
+  if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why, brief });
   schedule(new Set([`transcript:${hsid}`]));
 }
 
@@ -2271,6 +2460,9 @@ const cardInPile = (cardId: string): Element | null => cardIn($('stack'), cardId
  * clears when it arrives (checkCardWait).
  */
 function focusCard(cardId: string, what: CardLabel = 'card'): void {
+  // G-DDL-08 (Aegis ruling 7): no programmatic card focus while a text is being typed on the board, so a card
+  // arriving mid-word cannot take the next keystroke. The card stays where it is, in the stack.
+  if (boardDock.cardBlocked()) return; // (it says a line: the card waits, the text is finished first)
   uncoverStack(stackCovers);
   const el = cardInPile(cardId);
   if (!el) {
@@ -2287,6 +2479,7 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
  * so a second Enter cannot allow it.
  */
 function focusCardGroup(cardId: string, what: CardLabel = 'grant card'): void {
+  if (boardDock.cardBlocked()) return; // G-DDL-08: as focusCard
   uncoverStack(stackCovers);
   const el = cardInPile(cardId) as HTMLElement | null;
   if (!el) {
@@ -2322,6 +2515,7 @@ function localCardRequest(cardId: string): { at: number; line: string; entries: 
 function focus(hsid: string | null): void {
   if (width) widths.save(transcriptId(), width, heights);
   focused = hsid;
+  boardDock.sessionChanged(); // the board leaf follows the session: the open dimension is left and what it lost is said
   modPanelsFocus(hsid); // K3: the mod panels re-render for the new focus (the host joins it to the repo); first, so a later paint error never skips it
   if (hsid) feedView = false;
   closeDrawers();
@@ -3206,6 +3400,11 @@ function paintModeMenu(): void {
 function openMoreMenu(): void {
   // #gui-capability-browser (C6'b1): "Tools and memory…" for a local attended session only
   $('tools-open').hidden = !focused || !toolsSessionOf(focused);
+  // #gui-board-dock: "Open board"; with no session focused the row is aria-disabled and its title says why
+  const bo = $('board-open');
+  if (focused) bo.removeAttribute('aria-disabled');
+  else bo.setAttribute('aria-disabled', 'true');
+  bo.title = focused ? 'Open this session’s board (/board)' : 'Open a session first';
   $('more-menu').hidden = false;
   $('more-btn').setAttribute('aria-expanded', 'true');
 }
@@ -3800,10 +3999,28 @@ function closeAppMenu(focusTrigger = false): void {
 
 let palSel = 0;
 let palItems: Command[] = [];
+/** #gui-board-dock: the palette as the Dimensions list (`/boards`, ⌘K "Dimensions: list"); null is the command palette */
+let palDims: DimensionRow[] | null = null;
+/**
+ * Aegis F2: the Dimensions list's order is FROZEN while it is open (the first paint's order, joined by dim; a new
+ * dimension joins at the end), and the selection is kept by dim, never by index: an agent's row re-sorts `rows()` by
+ * `lastSeq`, and an index would make Enter open (and attach this session to) another board.
+ */
+let palOrder: string[] | null = null;
+let palSelDim: string | null = null;
+function openDimensions(): void {
+  palSel = 0;
+  openPalette('', true);
+}
 /** what had focus before ⌘K: Esc and a press on the scrim hand focus back to it (design-system sheet: Esc returns focus to whatever opened it) */
 let palOpener: HTMLElement | null = null;
-function openPalette(prefix = ''): void {
+function openPalette(prefix = '', dims = false): void {
   closeAppMenu();
+  palDims = dims ? [] : null;
+  palOrder = null;
+  palSelDim = null;
+  $<HTMLInputElement>('palette-input').setAttribute('aria-label', dims ? 'Dimensions' : 'command');
+  $<HTMLInputElement>('palette-input').placeholder = dims ? 'find a dimension' : 'command or verb';
   if ($('palette').hidden) palOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   $('palette').hidden = false;
   const i = $<HTMLInputElement>('palette-input');
@@ -3814,12 +4031,35 @@ function openPalette(prefix = ''): void {
 /** founder 2026-10-23: Esc (wherever focus is inside it) and a press on the scrim close the palette, like every other sheet */
 function closePalette(): void {
   if ($('palette').hidden) return;
+  palDims = null;
+  palOrder = null;
+  palSelDim = null;
   $('palette').hidden = true;
   const back = palOpener;
   palOpener = null;
   if (back?.isConnected) back.focus();
 }
 function paintPalette(): void {
+  if (palDims) {
+    // the Dimensions list in the palette's pattern: this repo's dimensions, newest first; a press opens one
+    const q = $<HTMLInputElement>('palette-input').value.trim().toLowerCase();
+    const fresh = boardDock.rows();
+    if (!palOrder) palOrder = fresh.map((r) => r.dim);
+    for (const r of fresh) if (!palOrder.includes(r.dim)) palOrder.push(r.dim);
+    const at = (dim: string): number => palOrder!.indexOf(dim);
+    palDims = fresh.sort((a, b) => at(a.dim) - at(b.dim)).filter((r) => !q || r.title.toLowerCase().includes(q));
+    const kept = palSelDim ? palDims.findIndex((r) => r.dim === palSelDim) : -1;
+    palSel = kept >= 0 ? kept : Math.min(palSel, Math.max(0, palDims.length - 1));
+    palSelDim = palDims[palSel]?.dim ?? null;
+    const list = $('palette-list');
+    clear(list);
+    list.appendChild(h(doc, 'div', { class: 'menu-h', role: 'presentation' }, 'Dimensions') as unknown as HTMLElement);
+    // (design dimension-list.slash_boards: the palette's rows take the menu's words: the mark, the title, the time, line 2)
+    palDims.forEach((r, i) => list.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}`, role: 'option', 'data-dim': r.dim, ...(r.current ? { 'aria-current': 'true' } : {}) }, h(doc, 'span', { class: 'pal-mark', 'aria-hidden': 'true' }, r.mark), h(doc, 'span', { class: 'pal-title' }, r.title), h(doc, 'span', { class: `pal-kbd${r.bad ? ' bad' : ''}` }, [r.time, `${r.lead}${r.line2}`].filter(Boolean).join(' · '))) as unknown as HTMLElement));
+    // none at all, or none that match what was typed: two different things, said as what they are
+    if (!palDims.length) list.appendChild(h(doc, 'div', { class: 'pal-row unavailable' }, h(doc, 'span', { class: 'pal-title' }, q ? 'No dimension matches that' : focused ? DIM_LIST_COPY.empty : 'Open a session first')) as unknown as HTMLElement);
+    return;
+  }
   palItems = filterCommands(paletteEntries(status as never), $<HTMLInputElement>('palette-input').value);
   palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
   const l = $('palette-list');
@@ -3827,7 +4067,7 @@ function paintPalette(): void {
   palItems.forEach((c, i) => l.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}${c.verb && !c.available ? ' unavailable' : ''}`, role: 'option', 'data-id': c.id }, h(doc, 'span', { class: 'pal-title' }, c.title), h(doc, 'kbd', { class: 'pal-kbd' }, c.keys ?? c.why ?? c.id)) as unknown as Node));
 }
 /** Run a command; `trusted` is the gesture's browser trust flag (Event.isTrusted; Aegis L2/L3): a request-making command needs it. */
-function run(id: string, trusted: boolean): void {
+function run(id: string, trusted: boolean, event?: Event): void {
   // focus goes back to the opener first, so a sheet the command opens records that (not the hidden palette field) as its own opener
   closePalette();
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
@@ -3847,6 +4087,14 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'slash.open') openSlash(trusted); // #gui-slash-menu: the focused session's "/" menu
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
+  else if (id === 'board.open') {
+    // #gui-board-dock: on the press that ran the command (its key or click), handed in by the caller: it mints the
+    // gesture stamp. A caller with no event of its own (the settings sheet, a block button) opens nothing.
+    if (trusted && event?.isTrusted) boardDock.command('', event);
+  } else if (id === 'dimensions.list') {
+    // the list opens only on the person's own press (a synthetic click on its palette row opens nothing)
+    if (trusted) openDimensions();
+  }
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
   else if (id === 'menu.gnomon') openAppMenu('first');
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
@@ -3867,6 +4115,7 @@ function run(id: string, trusted: boolean): void {
     // S2.3: the raw kernel feed, on demand only (it is never the default centre)
     if (width) widths.save(transcriptId(), width, heights);
     focused = null;
+    boardDock.sessionChanged();
     feedView = true;
     resetTranscript();
     paintSessions();
@@ -4009,14 +4258,36 @@ function wire(): void {
     if (SCROLL_KEYS.has(k)) intent.mark(performance.now(), INTENT_MS.key);
     if (k === 'ArrowUp' || k === 'PageUp' || k === 'Home') releaseUp();
   });
-  new ResizeObserver(() => {
-    const w = $('viewport').clientWidth;
+  /**
+   * The width the chat's rows are laid out at: the viewport less the edge-tab inset (#gui-board-dock P4b-2 item 4:
+   * while a board or Loops edge tab shows, the rows step in from it; styles.css --edge-tab-inset). Heights are kept
+   * per row width, so a tab coming or going re-measures the rows (the viewport itself does not change size).
+   */
+  const rowWidth = (): number => $('viewport').clientWidth - (parseFloat(getComputedStyle($('pane-transcript')).getPropertyValue('--edge-tab-inset')) || 0);
+  const relayout = (): void => {
+    const w = rowWidth();
     if (w !== width) {
       if (width) widths.save(transcriptId(), width, heights);
       width = w;
+      // the re-measure remounts every row: a key that had focus (show chat's working key) gets it back
+      const had = (document.activeElement as HTMLElement | null)?.closest?.('#viewport [data-act]') as HTMLElement | null;
+      const act = had?.dataset.act ?? null;
       paintTranscript(true);
+      if (act !== null) $('viewport').querySelector<HTMLElement>(`[data-act="${CSS.escape(act)}"]`)?.focus({ preventScroll: true });
     } else paintTranscript();
-  }).observe($('viewport'));
+  };
+  new ResizeObserver(relayout).observe($('viewport'));
+  // the tab classes are toggled by the dock and the Loops view: a change re-lays the rows (no size change to observe)
+  let tabsOn = '';
+  new MutationObserver(() => {
+    const p = $('pane-transcript').classList;
+    const on = `${p.contains('lp-tab-on')}${p.contains('bd-tab-on')}`;
+    if (on === tabsOn) return;
+    tabsOn = on;
+    // next frame: a tab and the strip change with the same fold, and the sizes they change settle first (a relayout
+    // inside that layout pass left a ResizeObserver loop undelivered)
+    requestAnimationFrame(relayout);
+  }).observe($('pane-transcript'), { attributes: true, attributeFilter: ['class'] });
   $('status-line').addEventListener('click', (e) => run('view.kernel-feed', e.isTrusted)); // S5.4: the readout links to the kernel feed
   $('jump-latest').addEventListener('click', () => {
     follow.jump();
@@ -4039,7 +4310,7 @@ function wire(): void {
   };
   wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
   // #gui-host-hints: Copy (the shown command to the clipboard) and open (a Gnomon screen), trusted presses only
-  wireHostSlips($('viewport'), { copy: onHostCopy, open: (id, e) => run(id, e.isTrusted) });
+  wireHostSlips($('viewport'), { copy: onHostCopy, open: (id, e) => run(id, e.isTrusted, e) });
   $('viewport').addEventListener('click', (e) => {
     const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
     if (c) return onChoice(e, c);
@@ -4109,11 +4380,11 @@ function wire(): void {
       return paintAppMenu();
     }
     if (id.startsWith('theme.') || id.startsWith('layout.') || id.startsWith('pane.') || id.startsWith('workshop.')) {
-      run(id, e.isTrusted); // presentation only: the menu stays open on its choice (applyLook / applyLayout repaint it)
+      run(id, e.isTrusted, e); // presentation only: the menu stays open on its choice (applyLook / applyLayout repaint it)
       return paintAppMenu();
     }
     closeAppMenu(true); // a sheet returns focus to the wordmark when it closes
-    run(id, e.isTrusted);
+    run(id, e.isTrusted, e);
   });
   document.addEventListener('click', (e) => {
     if (!$('wordmark-menu').hidden && !(e.target as HTMLElement).closest('.wm-wrap')) closeAppMenu();
@@ -4169,9 +4440,24 @@ function wire(): void {
   }
   $('stack-scope').addEventListener('click', (e) => run('stack.scope.toggle', e.isTrusted));
   $('loops-word').addEventListener('click', () => loopsView.open());
+  // #gui-board-dock: `/board` sent with the SEND key runs on that key's own click (a submit event mints no stamp;
+  // the text used to go to the agent as a message and cost a turn)
+  $('composer-send').addEventListener('click', (e) => {
+    const ta = $<HTMLTextAreaElement>('composer-text');
+    const bc = parseBoardCommand(ta.value);
+    if (!bc) return;
+    e.preventDefault(); // no submit: the command is not a message
+    if (!e.isTrusted) return;
+    ta.value = '';
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    if (bc.cmd === 'board') boardDock.command(bc.arg, e, true); // typed, as with Enter (`command`)
+    else openDimensions();
+  });
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const t = $<HTMLTextAreaElement>('composer-text');
+    // a board command never goes to the agent as text, whatever submitted the form
+    if (parseBoardCommand(t.value)) return notice('Press Enter or send to run that command', 'info', { source: 'board' });
     // Aegis M3: a dictated draft stays shown until the kernel took it (the reducer then sets what remains)
     const viaDictation = dictationOn() && dict.focusedHere && dict.parts.length > 0 && hasDraft(dict);
     // L2: a chip pick is marked picked only once the kernel took it; the composer clears only when the message went out
@@ -4236,6 +4522,15 @@ function wire(): void {
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // #gui-board-dock: `/board`, `/board <title>` and `/boards` typed in the composer run on this Enter (its stamp)
+      const ta = $<HTMLTextAreaElement>('composer-text');
+      const bc = parseBoardCommand(ta.value);
+      if (bc) {
+        if (e.repeat || !e.isTrusted) return;
+        ta.value = '';
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        return bc.cmd === 'board' ? boardDock.command(bc.arg, e) : openDimensions();
+      }
       $<HTMLFormElement>('composer').requestSubmit();
     }
   });
@@ -4317,6 +4612,11 @@ function wire(): void {
   });
   // fidelity 2: the ⋯ menu holds the item counts and the raw toggle (the comp's header has neither)
   $('more-btn').addEventListener('click', () => ($('more-menu').hidden ? openMoreMenu() : closeMoreMenu()));
+  $('board-open').addEventListener('click', (e) => {
+    if ($('board-open').getAttribute('aria-disabled') === 'true') return;
+    closeMoreMenu();
+    boardDock.menu(e); // the row's own click: a pointer entry (`menu`)
+  });
   $('tools-open').addEventListener('click', (e) => {
     closeMoreMenu();
     openTools(e.isTrusted, $('more-btn'));
@@ -4358,12 +4658,29 @@ function wire(): void {
   });
   $('palette-input').addEventListener('input', () => {
     palSel = 0;
+    palSelDim = null;
     paintPalette();
   });
   $('palette-input').addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') palSel = Math.min(palSel + 1, palItems.length - 1);
-    else if (e.key === 'ArrowUp') palSel = Math.max(palSel - 1, 0);
-    else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted);
+    // (one else-chain: the arrows of BOTH palettes reach the preventDefault and the repaint below; the Dimensions
+    // list also keeps its selection by dim, aegis F2 and its re-check)
+    if (e.key === 'ArrowDown') {
+      palSel = Math.min(palSel + 1, (palDims ?? palItems).length - 1);
+      if (palDims) palSelDim = palDims[palSel]?.dim ?? null;
+    } else if (e.key === 'ArrowUp') {
+      palSel = Math.max(palSel - 1, 0);
+      if (palDims) palSelDim = palDims[palSel]?.dim ?? null;
+    } else if (e.key === 'Enter' && palDims) {
+      // a row of the Dimensions list opens on THIS press (attach then open when it is not this session's)
+      const row = palDims[palSel];
+      e.preventDefault();
+      // never on a key REPEAT (Aegis, review of PR #123): the Enter that opened the list from the head's key, still
+      // held, arrived here and chose row 0, which could leave the open board for one nobody picked
+      if (e.repeat) return;
+      if (!row) return;
+      closePalette();
+      return void boardDock.choose(row.dim, e, row.seen);
+    } else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted, e);
     else if (e.key === 'Escape') {
       if (dict.grace) return; // "Sending… Esc keeps it" wins: the document handler keeps the draft, the palette stays
       e.stopPropagation(); // the document handler would close it a second time
@@ -4374,8 +4691,15 @@ function wire(): void {
     paintPalette();
   });
   $('palette-list').addEventListener('click', (e) => {
+    const dimRow = (e.target as HTMLElement).closest('[data-dim]') as HTMLElement | null;
+    if (dimRow) {
+      const dim = dimRow.dataset.dim!;
+      const seen = palDims?.find((r) => r.dim === dim)?.seen;
+      closePalette();
+      return void boardDock.choose(dim, e, seen);
+    }
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
-    if (r) run(r.dataset.id!, e.isTrusted);
+    if (r) run(r.dataset.id!, e.isTrusted, e);
   });
   $('palette').addEventListener('click', (e) => {
     if (e.target === $('palette')) closePalette(); // a press on the scrim closes it
@@ -4387,6 +4711,13 @@ function wire(): void {
     if (e.key === '`' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && document.hasFocus() && !editableFocus() && canAttach(status)) {
       e.preventDefault();
       return void micToggle(e.isTrusted);
+    }
+    // #gui-board-dock (Aegis ruling 7): ⌥B, by the key's place (on a Mac its `key` is ∫), Alt alone. It only folds
+    // the open board or reopens the one this session has; it never types into the composer and never makes a board
+    if (e.code === 'KeyB' && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      if (!e.repeat) boardDock.key(e);
+      return;
     }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
@@ -4425,11 +4756,15 @@ function wire(): void {
       modsPanel.close();
     } else if (e.key === 'Escape' && !editableFocus() && $('palette').hidden && loopsView.escape()) {
       e.preventDefault(); // #gui-loops: an unfolded trust card folds first, then the Loops leaf folds to its edge tab
+    } else if (e.key === 'Escape' && !editableFocus() && !cardHasFocus(document) && $('palette').hidden && !e.repeat && boardDock.escape(e)) {
+      e.preventDefault(); // #gui-board-dock: Esc from outside the leaf folds it (held still too: the link down, out of date)
     } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
       closeModeMenu();
     } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {
       e.preventDefault();
       void stopSpeaking(e.isTrusted);
+    } else if (escFoldsFromComposer(e, { inComposer: document.activeElement === $('composer-text'), cardFocused: cardHasFocus(document) }) && boardDock.escape(e)) {
+      e.preventDefault(); // #gui-board-turn (Luna ruling 4): Esc in the composer folds the board; focus stays in the composer
     } else if (e.key === 'Escape' && !editableFocus() && toasts().dismissNewestFail()) {
       e.preventDefault(); // #gui-toast: a fail stays until closed (its close key, or Esc)
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
@@ -4447,6 +4782,11 @@ function wire(): void {
  * already call the kernel client directly, so this widens nothing (the send still needs a trusted press). */
 export function devArmOfferOnce(): void {
   if (__GNOMON_PREVIEW__) devArmOffer = true; // L1: false in scripts/build.mjs, so the served bundle drops it
+}
+
+/** DEV ONLY (#gui-preview `?dim=1`): the dock, the sessions and the programmatic card focus, for the real-engine tests of the mounted board. */
+export function devBoard(): { dock: typeof boardDock; sessions: DimSessions; focusCard: (cardId: string) => void } | null {
+  return __GNOMON_PREVIEW__ ? { dock: boardDock, sessions: dimSessions, focusCard: (cardId) => focusCard(cardId) } : null; // false in scripts/build.mjs: the served bundle drops it
 }
 
 /** DEV ONLY (#gui-preview rules-*): open Settings › Rules in a staged state for the reference shots (presses need trust). */

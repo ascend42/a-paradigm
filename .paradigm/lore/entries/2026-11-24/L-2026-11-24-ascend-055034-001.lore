@@ -1,0 +1,27 @@
+id: L-2026-11-24-ascend-055034-001
+type: milestone
+timestamp: '2026-11-24T05:50:34.970Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon boards S1 plan approved; paused before S1.0
+summary: 'Arky wrote the S1 build plan (seven milestones S1.0-S1.6: engine under the unchanged CSP, reskin and content palette, contracts and spec, human-only live board, agents draw, offer-raised boards, lore export and kill metric T-DDL-01). Aegis approved with conditions; two blockers: RelayedFor lacks a host-stamped agent field (needs a modAbiId move before S1.2), and S1.6 lore export must carry only refs and counts. The founder approved the plan and paused at a checkpoint before building; the modAbiId and clientApiId sign-offs stay open.'
+symbols_touched:
+  - '#gnomon'
+  - '#doodle-mod'
+files_created:
+  - .paradigm/research/gnomon-canvas/s1-build-plan.md
+  - .paradigm/research/gnomon-canvas/aegis-s1-review.md
+tags:
+  - gnomon
+  - boards
+  - doodle
+  - plan
+linked_lore:
+  - L-2026-11-24-ascend-041554-001
+  - L-2026-11-24-ascend-044411-550
+git_context:
+  ref: d5eeb750efc2f3c7a0b6c1a16fd9d4717b16b2bc
+  branch: main
+  dirty: true

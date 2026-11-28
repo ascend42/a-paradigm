@@ -3,7 +3,7 @@
   "kind": "mod",
   "publisher": "gnomon",
   "name": "workshop",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "abi": "mod-abi:v1",
   "description": "The Workshop (spec §11.6): needs-you caps per pending card and working caps per session, every attribute from kernel events.",
   "provides": {

@@ -50,6 +50,24 @@ describe('§2.4 rule 4 amended (G-DMN-04): drained-without-exit is swept, never 
     expect(res.orphans).toBe(1);
   });
 
+  it('S1.4 P3 (I-3): a candidate carries lastTurn, the highest n of its own kernel-signed turn.sent rows; a forged row or another hsid\'s turn is not read', () => {
+    const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
+    const H2 = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+    const rows: Row[] = [
+      k('session.open', { hsid: H, by: HUMAN, principalClass: 'human', cwd: '/x', backend: 'claude-code', uuid }, H),
+      k('permit.grant', { permit: { ...permit, hsid: H } }),
+      k('session.sandbox', { hsid: H, layersHash: 'sha256:aa', gitHash: 'sha256:bb', permitId: permit.permitId }, H),
+      k('turn.sent', { hsid: H, turn: `turn:${H}/39` }, H),
+      k('turn.sent', { hsid: H, turn: `turn:${H}/40` }, H),
+      k('turn.sent', { hsid: H, turn: `turn:${H2}/90` }, H),
+      { ...k('turn.sent', { hsid: H, turn: `turn:${H}/99` }, H), keyId: 'key:other' },
+      k('session.drained', { uuid, reason: 'upgrade' }, H),
+      k('session.exited', { hsid: H, reason: 'drain-clean' }),
+    ];
+    expect(planResume(rows, TRUST).resume[0]!.lastTurn).toBe(40);
+    expect(planResume(rows.filter((x) => x.kind !== 'turn.sent'), TRUST).resume[0]!.lastTurn).toBeUndefined();
+  });
+
   it('Aegis L1: a kernel-signed session.refused{resume} uses the record up (terminal); L4: the open row\'s class is carried', () => {
     const rows: Row[] = [
       k('session.open', { hsid: hsidB, by: HUMAN, principalClass: 'human', cwd: '/x', backend: 'claude-code', uuid }, hsidB),

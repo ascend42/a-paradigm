@@ -36,7 +36,11 @@ export const WINDOWS_DEVICE_NAMES: readonly string[] = Object.freeze([
   ...Array.from({ length: 10 }, (_, i) => `lpt${i}`),
 ]);
 /** The first-party mod names (bundled or planned): a publisher too, and never a non-gnomon mod name. */
-export const FIRST_PARTY_MOD_NAMES: readonly string[] = Object.freeze(['workshop', 'ledger', 'paradigm-context', 'neurons', 'constellation']);
+export const FIRST_PARTY_MOD_NAMES: readonly string[] = Object.freeze([
+  'workshop', 'ledger', 'paradigm-context', 'neurons', 'constellation',
+  // S1.2: the dimension mod and its mediums
+  'dimension', 'dimensions', 'dim', 'dims', 'board', 'boards', 'doodle',
+]);
 /**
  * Founder brands [F]: `ascend42` only as the github.com owner `ascend42`; the rest are refused from every source
  * (`a-company` always: github.com/a-company belongs to an unrelated person; the others until the founder binds an owner).

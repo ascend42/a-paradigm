@@ -12,7 +12,7 @@
  *   - `Button` carries only a command id (`command`) and a label;
  *   - `Image{blob, alt, w, h}` needs `alt` and a `sha256:` blob id — the
  *     bytes are served by the endpoint's /blob route, never inlined;
- *   - `Canvas{ds, readOnly?}` only NAMES a doodle session (a surface the host
+ *   - `Canvas{dim, readOnly?}` only NAMES a dimension (a surface the host
  *     owns); a mod never ships canvas content;
  *   - `Text{text, tone?, cap?}`: a `cap` (S5, the Workshop's hats) is the
  *     closed contracts shape `{shape, hue, filled, state, label}` checked by
@@ -25,7 +25,7 @@
  * The full display-block:v1 contract (a JSON Schema in gnomon-contracts) is
  * M1.1's; this gate is the kernel's fail-closed subset until it lands.
  */
-import { KIT_V1_BLOCKS, MOD_BLOCK_LIMITS, checkCap } from '@a-company/gnomon-contracts';
+import { DIM_ID_PATTERN, KIT_V1_BLOCKS, MOD_BLOCK_LIMITS, checkCap } from '@a-company/gnomon-contracts';
 import { sanitizeLine } from '../broker/card.js';
 import { ModRefusal } from './refusal.js';
 
@@ -43,7 +43,7 @@ const KEYS: Record<string, readonly string[]> = {
   Progress: ['value', 'max', 'label'],
   Button: ['label', 'command'],
   Image: ['blob', 'alt', 'w', 'h'],
-  Canvas: ['ds', 'readOnly'],
+  Canvas: ['dim', 'readOnly'],
 };
 
 export interface SanitizedBlock {
@@ -138,7 +138,9 @@ export function sanitizeModBlock(raw: unknown, modName: string): SanitizedBlock 
         out.h = num(n.h, `${at}.h`);
         break;
       case 'Canvas':
-        out.ds = str(n.ds, `${at}.ds`);
+        out.dim = str(n.dim, `${at}.dim`);
+        // a dimension id and nothing else: a Canvas names a board, it never carries words or a path
+        if (!DIM_ID_PATTERN.test(out.dim as string)) throw new ModRefusal('BLOCK', `${at}.dim is not a dimension id`, { name: modName, at });
         if (n.readOnly !== undefined) out.readOnly = n.readOnly === true;
         break;
     }

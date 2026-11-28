@@ -75,7 +75,7 @@ The Paradigm stop hook will remind you to update `.purpose` files when you modif
 
 ## Scanning
 
-After modifying `.purpose` files, run `paradigm scan` to rebuild the symbol index. The pre-commit hook does this automatically before each commit.
+After modifying `.purpose` files, run `paradigm reindex` to rebuild the symbol index. The pre-commit hook does this automatically before each commit.
 
 ## Best Practices
 

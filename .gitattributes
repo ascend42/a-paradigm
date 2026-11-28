@@ -18,7 +18,8 @@ packages/gnomon-gui/static/fonts/*.txt text eol=lf
 *.woff2 binary
 packages/gnomon-gui/static/fonts/*.woff2 binary
 packages/gnomon-gui/src/** text eol=lf
-packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf
+# generated base64 (several MB): LF-pinned as text, but collapsed in review and never rendered as a line diff
+packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf linguist-generated=true -diff
 packages/gnomon-contracts/src/** text eol=lf
 
 # The generated client-API doc is a byte-compared fixed point (G-HON-04 rule) on every OS
@@ -47,3 +48,12 @@ packages/warpline/test/fixtures/frozen-fabric/** -text
 # merge line-wise; commit history itself is derived from git, never written here.
 .paradigm/history/log.jsonl merge=union
 # <<< paradigm history <<<
+
+# The future-dimension fixture (G-DDL-10) is hashed from parsed JSON; keep LF on every OS anyway.
+packages/gnomon-contracts/test/fixtures/dim-future.json text eol=lf
+
+# Superseded first-party mod trees (S1.2): the tests hash them against SUPERSEDED_FIRST_PARTY_PINS; keep LF on every OS.
+packages/gnomon/test/fixtures/first-party-superseded/** text eol=lf
+
+# #gui-board goldens (G-DDL-07) are compared as decoded pixels; never convert or diff them as text
+packages/gnomon-gui/test/goldens/**/*.png binary

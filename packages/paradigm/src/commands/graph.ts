@@ -91,7 +91,7 @@ function loadSymbolsFromIndex(projectDir: string): SymbolData[] {
 }
 
 function resolveSymbol(name: string, all: SymbolData[]): SymbolData | undefined {
-  const stripped = name.replace(/^[#$^!~]/, '');
+  const stripped = name.replace(/^[#$^!~]+/, '');
   return all.find((s) => s.id === stripped || s.name === stripped || s.id === name || s.name === name);
 }
 

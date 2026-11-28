@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules' | 'mcp';
+  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules' | 'mcp' | 'board';
   /** #gui-rules-view: the Rules block's staged state for the shot (none, off-open, staged, tighten, close, refused, waiting) */
   rulesState?: string;
 }
@@ -819,6 +819,9 @@ const loopsFx = (name: string, title: string, kind: 'desk' | 'paused' | 'many' |
 
 export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   desk: fixture('desk', 'Desk: 5 active, 12 past, the billing chat, 4 cards', deskChain(), statusOf(VOICE_RUNNING), BILLING),
+  // #gui-board (boards S1.0, DEV ONLY): the stock engine mounted over the transcript through the real lazy loader,
+  // under the kernel's CSP (scripts/preview.mjs). No product code opens a board yet; the reskin is S1.1.
+  board: fixture('board', 'Board leaf (S1.1): rail, tray, pins and seals over the reskinned engine (?board= open, tray, empty, yielded, loading, failed, crashed, short, tiny)', deskChain(), statusOf(VOICE_RUNNING), BILLING, false, { open: 'board' }),
   empty: fixture('empty', 'Fresh install: no sessions, voice app not started', emptyChain(), statusOf({ attached: false, clientConnected: false, client: { phase: 'stopped', restarts: 0, devUnsigned: false }, enrolled: [] }, { runModes: false }), null),
   'voice-armed': fixture('voice-armed', 'Dictate attached to billing, hearing', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, level: 0.62, dictation: { activity: 'speaking', holdToggles: 0, at: T('14:08:05') } }), BILLING),
   'voice-crashed': fixture('voice-crashed', 'Dictate attached, the voice app crashed (backoff)', deskChain({ voice: 'crashed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: false, client: { phase: 'backoff', restarts: 2, devUnsigned: false, lastError: 'gnomon-voice-io exited (SIGABRT): the input device went away' } }), BILLING),

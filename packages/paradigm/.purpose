@@ -484,10 +484,10 @@ components:
     description: Validates .purpose files against schema
     type: utility
   cost-handler:
-    description: Handles paradigm cost command
+    description: Handles paradigm cost. Prints the size of .purpose files, portal files, scan-index.json and Cursor rules in estimated tokens, states how they were counted, and makes no savings or reduction claim
     type: handler
   token-estimator:
-    description: Estimates token counts for context files
+    description: Estimates a file's token size as characters / 3.5 rounded up (a size estimate, not a tokenizer count)
     type: utility
   scan-handler:
     description: Handles paradigm scan command
@@ -619,9 +619,9 @@ components:
     description: Launches the Sentinel codebase intelligence UI
     type: service
   university-launcher:
-    description: Launches the Paradigm University learning platform
+    description: Starts the Platform with only the Academy section enabled and opens it (the standalone University UI and server were retired in 7.11.0; content packs live in the Academy)
     type: service
-    file: src/commands/university.ts
+    file: src/commands/university/serve.ts
   triage-handler:
     description: Handles Sentinel CLI triage commands
     type: handler

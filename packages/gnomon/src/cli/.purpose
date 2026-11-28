@@ -421,6 +421,28 @@ components:
     tags: [gnomon, cli, audit, read-only, paradigm-8, dogfood]
     tests:
       - test/trace-cli.test.ts
+  dim-cli:
+    description: >-
+      #dim-cli (spec §12.7; S1.3 P2; scale amendment A9) - src/cli/dim-cli.ts
+      `gnomon dim replay <dim> [--to <seq>] [<home>] [--json]` and `gnomon dim
+      stats [<dim>] [<home>] [--json]`. Both verify the kernel log first (as
+      `gnomon desk stats` does) and refuse an unverified one; neither needs a
+      daemon or a relay (a cli-surface WRITE is refused in S1.3). replay folds
+      one dimension with ONE foldDim pass from its first row (G-DDL-01 for
+      the CLI, asserted by counting rows read) and prints the state, the hash
+      and every mark with its hand. Everything printed, text and --json, is
+      stripped of control, format and line-separator characters. stats folds
+      the five A9 signals (reopens, agent-mark survival, round trips, voice
+      co-occurrence, closed inside a minute with no human op) plus ops by
+      session; a GUI row's session after a second attach comes from the
+      nearest preceding start or attach row; the hand of a row is the
+      contract fold's own `by`. It states that undoing a delete of an agent's
+      mark re-authors it as human (Aegis B3).
+    type: module
+    tags: [gnomon, cli, dimensions, read-only]
+    tests:
+      - test/dim-cli.test.ts
+      - test/dimension-relay.test.ts
   mod-cli:
     description: >-
       #mod-cli (spec §12.4, §12.5, §3.1 I3; §19.1 M1.11 slice 3) -
@@ -462,6 +484,8 @@ components:
       effectiveInstall = the last install/uninstall pin row naming the mod.
       start and uninstall are refused from a kernel-spawned shell. list and
       status read the grant table offline (trust from identity.json or a
-      DEV home's root).
+      DEV home's root). homeTrust (that trust root) lives in the leaf
+      src/cli/home-trust.ts and is re-exported here; the agent client imports
+      the leaf, not this verb family (test/agent-entry-fence.test.ts).
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]

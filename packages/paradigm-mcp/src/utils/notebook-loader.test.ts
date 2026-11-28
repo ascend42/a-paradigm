@@ -393,7 +393,7 @@ describe('addNotebookEntry', () => {
     );
 
     // ID format: nb-{agentSlug}-{conceptSlug} — stable, deterministic, no random suffix.
-    // Required by the nevr.land merge-by-id algorithm.
+    // Stable IDs let entries merge by id.
     expect(entry.id).toBe('nb-test-agent-jwt-tokens');
   });
 

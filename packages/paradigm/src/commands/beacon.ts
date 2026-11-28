@@ -15,6 +15,7 @@ import {
   buildSymbolIndex,
   getAllSymbols,
   getSymbolCounts,
+  splitDeclared,
   type SymbolEntry,
 } from '@a-company/premise-core';
 
@@ -252,7 +253,8 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
     // Aggregate symbols
     const result = await aggregateFromDirectory(absolutePath);
     const index = buildSymbolIndex(result);
-    const symbols = getAllSymbols(index);
+    // Declared symbols only, as getSymbolCounts counts them: a reference stub is not a landmark
+    const symbols = splitDeclared(getAllSymbols(index)).declared;
 
     spinner && (spinner.text = 'Finding landmarks...');
     const landmarks = findLandmarks(absolutePath);

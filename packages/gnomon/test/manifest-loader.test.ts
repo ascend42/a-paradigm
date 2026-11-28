@@ -53,6 +53,8 @@ import {
   realpathLoose,
   removeTree,
   stageInstall,
+  snapshotFolder,
+  sweepStaging,
   uninstallHome,
   uninstallRepo,
   validateManifest,
@@ -61,7 +63,9 @@ import {
 import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
 import { installPresenceBinding, rollbackPresenceBinding } from '../src/kernel/manifest/install.js';
 import { PKG_ROOT } from './helpers.js';
-import { spawnSync } from 'node:child_process';
+import { privateTmpRoot } from './daemon-helpers.js';
+import { modNames, MAX_PICKUP_MODS } from '../src/kernel/modhost/control.js';
+import { spawn, spawnSync } from 'node:child_process';
 import { SESSION_DENY_REALISATION } from '../src/platform/session-denies.js';
 
 const tmps: string[] = [];
@@ -214,6 +218,38 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
     ]) {
       expect(refusalOf(() => validateManifest(baseManifest({ provides }), { tier: 'local' })).manifestCode).toBe('SCHEMA');
     }
+  });
+
+  it('S1.4 (Aegis A7): a command may declare effects, read and write only; network or spend on a command is refused at load', () => {
+    const p = baseManifest().provides!;
+    const withEffects = (effects: unknown): Partial<ManifestV2> => ({ provides: { ...p, commands: [{ id: 'lens.toggle', title: 'Toggle diff lens', effects }] } }) as unknown as Partial<ManifestV2>;
+    // present: kept exactly as declared; absent: no field is invented
+    for (const effects of [['read'], ['write'], ['read', 'write'], ['write', 'read']]) {
+      expect(validateManifest(baseManifest(withEffects(effects)), { tier: 'local' }).provides!.commands![0]!.effects).toEqual(effects);
+    }
+    expect(Object.hasOwn(validateManifest(baseManifest(), { tier: 'local' }).provides!.commands![0]!, 'effects')).toBe(false);
+    const fpOk = fpManifest();
+    fpOk.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects: ['read', 'write'] }];
+    expect(validateManifest(fpOk, { tier: 'first-party' }).provides!.commands![0]!.effects).toEqual(['read', 'write']);
+    // refused at load, for every tier, first-party included: the tool-only effects, an unknown value, an empty list,
+    // a repeat, and anything that is not a list
+    const bad: unknown[] = [['network'], ['spend'], ['read', 'network'], ['read', 'write', 'spend'], ['exec'], [], ['read', 'read'], 'write', { write: true }, [['write']], [null], null];
+    for (const effects of bad) {
+      const r = refusalOf(() => validateManifest(baseManifest(withEffects(effects)), { tier: 'local' }));
+      expect([JSON.stringify(effects), r.manifestCode]).toEqual([JSON.stringify(effects), 'SCHEMA']);
+      const fpm = fpManifest();
+      fpm.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects } as unknown as NonNullable<NonNullable<ManifestV2['provides']>['commands']>[number]];
+      const fp = refusalOf(() => validateManifest(fpm, { tier: 'first-party' }));
+      expect([JSON.stringify(effects), fp.manifestCode]).toEqual([JSON.stringify(effects), 'SCHEMA']);
+    }
+    // the same refusal through the real entry (raw bytes in): nothing is staged for such a tree
+    const home = tmp();
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(withEffects(['read', 'spend'])));
+    expect(refusalOf(() => stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: root() })).manifestCode).toBe('SCHEMA');
+    // a tool keeps all four
+    expect(validateManifest(baseManifest({ provides: { ...p, tools: [{ name: 'lens.diff', effects: ['read', 'write', 'network', 'spend'] }] } }), { tier: 'local' })).toBeTruthy();
+    // the command entry stays closed: one more key is still refused
+    expect(refusalOf(() => validateManifest(baseManifest({ provides: { ...p, commands: [{ id: 'lens.toggle', title: 't', effects: ['read'], network: true }] } } as unknown as Partial<ManifestV2>), { tier: 'local' })).manifestCode).toBe('SCHEMA');
   });
 
   it('mod fields: effects, append-only card/status slots, modns events, reserved keys, command-bound keybindings', () => {
@@ -577,6 +613,276 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
 
 /* ── linked folders + widening ────────────────────────────────────────────── */
 
+describe('#manifest-loader: a refused or failed stage leaves nothing behind (security triage, stage cleanup)', () => {
+  /** A private (never world-writable) temp directory, removed after the test. */
+  const ptmp = (): string => {
+    const d = fs.mkdtempSync(path.join(privateTmpRoot(), 'gst-'));
+    tmps.push(d);
+    return d;
+  };
+  const DIMENSION_TREE = path.resolve(PKG_ROOT, '..', 'gnomon-mods', 'dimension');
+  const thrown = (fn: () => unknown): unknown => {
+    try {
+      fn();
+    } catch (err) {
+      return err;
+    }
+    throw new Error('expected a throw');
+  };
+
+  it('a refused first-party stage (gnomon.dimension with one byte changed) leaves no mods/gnomon.dimension, and the real tree then stages as first-party', () => {
+    const home = ptmp();
+    const auth = root();
+    const copy = path.join(ptmp(), 'gnomon.dimension');
+    fs.cpSync(DIMENSION_TREE, copy, { recursive: true });
+    fs.appendFileSync(path.join(copy, 'model.mjs'), ' ');
+    const err = refusalOf(() => stageInstall({ home, source: copy, via: 'package', requestedBy: HUMAN, trust: auth }));
+    expect(err.message).toMatch(/publisher gnomon is first-party only/);
+    expect(fs.existsSync(path.join(home, 'mods', 'gnomon.dimension'))).toBe(false);
+    // nothing but an empty .staging is left under mods/
+    expect(Object.keys(treeBytes(path.join(home, 'mods')))).toEqual(['.staging/']);
+    const ok = stageInstall({ home, source: DIMENSION_TREE, via: 'package', requestedBy: HUMAN, trust: auth });
+    expect(ok.state === 'staged' && ok.record.detail.tier).toBe('first-party');
+    expect(ok.state === 'staged' && fs.existsSync(pinnedDir(home, 'gnomon.dimension', ok.record.detail.packageHash))).toBe(true);
+  });
+
+  it('a refusal for a mod id that already has an installed pin leaves the pin and its directory byte-identical and loadable', () => {
+    const home = ptmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(ptmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    const dir = path.join(home, 'mods', 'acme.diff-lens');
+    const before = treeBytes(dir);
+    // same id, a manifest the loader refuses (kind provider is first-party only)
+    const bad = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest({ kind: 'provider', version: '1.3.0' }), { 'extra.js': 'x' });
+    expect(refusalOf(() => stageInstall({ home, source: bad, via: 'package', requestedBy: HUMAN, trust: auth })).manifestCode).toBe('TIER');
+    expect(fs.readdirSync(path.join(home, 'mods')).sort()).toEqual(['.staging', 'acme.diff-lens']); // the refused copy went nowhere else
+    expect(treeBytes(dir)).toEqual(before);
+    expect(fs.readdirSync(path.join(dir, 'pinned'))).toHaveLength(1);
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).manifest.version).toBe('1.2.0');
+  });
+
+  it('a failure after the manifest block (the staged record cannot be written) leaves no new snapshot directory, and leaves a pre-existing identical snapshot in place', () => {
+    const auth = root();
+    const src = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n' });
+    // (a) a fresh home: `staged` is a file, so writeStaged fails after the snapshot was created
+    const home = ptmp();
+    const dir = path.join(home, 'mods', 'acme.diff-lens');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'staged'), 'in the way');
+    const err = thrown(() => stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth }));
+    expect(err).not.toBeInstanceOf(ManifestRefusal);
+    // the directory holds something (the file in the way), so it stays; the snapshot and the empty pinned/ do not
+    expect(fs.readdirSync(dir)).toEqual(['staged']);
+    expect(fs.readFileSync(path.join(dir, 'staged'), 'utf8')).toBe('in the way');
+    // (b) the identical snapshot was already there (an earlier stage or an install made it): it is not this call's to remove
+    const home2 = ptmp();
+    const snap = snapshotFolder(home2, src, 'acme.diff-lens', () => undefined);
+    expect(snap.created).toBe(true);
+    const kept = treeBytes(snap.dir);
+    fs.writeFileSync(path.join(home2, 'mods', 'acme.diff-lens', 'staged'), 'in the way');
+    expect(thrown(() => stageInstall({ home: home2, source: src, via: 'package', requestedBy: HUMAN, trust: auth }))).not.toBeInstanceOf(ManifestRefusal);
+    expect(treeBytes(snap.dir)).toEqual(kept);
+    expect(Object.keys(kept).length).toBeGreaterThan(1);
+  });
+
+  it(
+    'a symlink and a fifo at the manifest path are refused before anything reads them (no hang), and leave nothing in the home',
+    () => {
+      const auth = root();
+      const real = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest());
+      const linked = path.join(ptmp(), 'diff-lens');
+      fs.mkdirSync(linked);
+      // sorts before the manifest: the walk would refuse THIS first (native-addon), so a symlink refusal can only be the early check
+      fs.writeFileSync(path.join(linked, 'a.node'), 'x');
+      let made = true;
+      try {
+        fs.symlinkSync(path.join(real, MANIFEST_FILE), path.join(linked, MANIFEST_FILE), 'file');
+      } catch {
+        made = false; // no symlink privilege (stock Windows)
+      }
+      if (made) {
+        const home = ptmp();
+        const ev = events();
+        const r = refusalOf(() => stageInstall({ home, source: linked, via: 'package', requestedBy: HUMAN, trust: auth, emit: ev.emit }));
+        expect([r.manifestCode, r.detail.snapshotReason, r.detail.path]).toEqual(['SNAPSHOT', 'symlink', MANIFEST_FILE]);
+        expect(ev.kinds()).toEqual(['mod.snapshot.refused', 'manifest.refuse']);
+        expect(fs.readdirSync(home)).toEqual([]);
+      }
+      const piped = path.join(ptmp(), 'diff-lens');
+      fs.mkdirSync(piped);
+      const mk = spawnSync('mkfifo', [path.join(piped, MANIFEST_FILE)]);
+      // capability is what the filesystem made, not mkfifo's exit code (MSYS mkfifo on Windows makes a plain file or nothing)
+      if (mk.status === 0 && fs.lstatSync(path.join(piped, MANIFEST_FILE), { throwIfNoEntry: false })?.isFIFO()) {
+        const home = ptmp();
+        // A read of a fifo blocks the whole thread, so the test timeout could never fire. The watchdog opens the
+        // write end after 3 s (again and again: the path is read more than once), which releases a blocked reader; the
+        // elapsed time then fails the test instead of hanging the run.
+        const watchdog = spawn('sh', ['-c', 'sleep 3; while :; do : > "$0"; done', path.join(piped, MANIFEST_FILE)], { stdio: 'ignore' });
+        try {
+          const t0 = Date.now();
+          const r = refusalOf(() => stageInstall({ home, source: piped, via: 'package', requestedBy: HUMAN, trust: auth }));
+          expect([r.manifestCode, r.detail.snapshotReason, r.detail.path]).toEqual(['SNAPSHOT', 'special-file', MANIFEST_FILE]);
+          expect(fs.readdirSync(home)).toEqual([]);
+          // the linked path refuses the same way
+          expect(refusalOf(() => stageInstall({ home, source: piped, via: 'linked', requestedBy: HUMAN, trust: auth })).detail.snapshotReason).toBe('special-file');
+          expect(Date.now() - t0, 'the manifest path was read before it was checked').toBeLessThan(2_000);
+        } finally {
+          watchdog.kill('SIGKILL');
+        }
+      }
+    },
+    10_000,
+  );
+
+  it('the .staging sweep removes a stale copy and nothing else: a fresh entry, a foreign name, a link target and the pins stay', () => {
+    const home = ptmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(ptmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
+    expect(st.state).toBe('staged');
+    const staging = path.join(home, 'mods', '.staging');
+    const STALE = '01JD1S0000000000000000STA1';
+    const FRESH = '01JD1S0000000000000000FRE1';
+    const LINK = '01JD1S0000000000000000N1NK';
+    const now = Date.now();
+    const old = new Date(now - 2 * 60 * 60 * 1000);
+    for (const n of [STALE, FRESH]) {
+      fs.mkdirSync(path.join(staging, n, 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(staging, n, 'dist', 'index.js'), 'x', { mode: 0o400 });
+    }
+    fs.mkdirSync(path.join(staging, 'not-ours'));
+    const outside = ptmp();
+    fs.writeFileSync(path.join(outside, 'keep.txt'), 'keep');
+    let linked = true;
+    try {
+      fs.symlinkSync(outside, path.join(staging, STALE, 'dist', 'out'), 'dir'); // a link INSIDE the stale copy is not followed either
+      fs.symlinkSync(outside, path.join(staging, LINK), 'dir');
+      fs.lutimesSync(path.join(staging, LINK), old, old);
+    } catch {
+      linked = false; // no symlink privilege (stock Windows)
+    }
+    fs.utimesSync(path.join(staging, STALE), old, old);
+    fs.utimesSync(path.join(staging, 'not-ours'), old, old);
+    const modBefore = treeBytes(path.join(home, 'mods', 'acme.diff-lens'));
+    expect(sweepStaging(home, { now })).toEqual(linked ? [LINK, STALE].sort() : [STALE]);
+    expect(fs.readdirSync(staging).sort()).toEqual([FRESH, 'not-ours'].sort());
+    expect(fs.readdirSync(outside)).toEqual(['keep.txt']);
+    expect(fs.readFileSync(path.join(outside, 'keep.txt'), 'utf8')).toBe('keep');
+    expect(treeBytes(path.join(home, 'mods', 'acme.diff-lens'))).toEqual(modBefore);
+    // a second pass and a home without mods/ are no-ops
+    expect(sweepStaging(home, { now })).toEqual([]);
+    expect(sweepStaging(ptmp())).toEqual([]);
+  });
+
+  it('modNames with 300 empty leftover directories still returns every real mod; a marker-only directory counts as real; a list that is still over the cap is cut with one warning', () => {
+    const home = ptmp();
+    const mods = path.join(home, 'mods');
+    const HEX = 'a'.repeat(64);
+    // below the cap nothing is filtered (a directory holding only a marker is still listed)
+    fs.mkdirSync(path.join(mods, 'aaa.marker-only'), { recursive: true });
+    expect(modNames(home)).toEqual(['aaa.marker-only']);
+    for (let i = 0; i < 300; i++) fs.mkdirSync(path.join(mods, `aaa.left-${String(i).padStart(3, '0')}`, i % 2 ? 'pinned' : '.'), { recursive: true });
+    fs.mkdirSync(path.join(mods, 'zzz.real-pin', 'pinned', HEX), { recursive: true });
+    fs.mkdirSync(path.join(mods, 'zzz.real-card', 'staged'), { recursive: true });
+    fs.writeFileSync(path.join(mods, 'zzz.real-card', 'staged', 'card-01JD1S0000000000000000CARD.json'), '{}');
+    // a legacy format-1 install keeps its pin under mods/<bareName>/ and its markers here: no pinned/<hex>, only a marker file
+    fs.mkdirSync(path.join(mods, 'zzz.marked'));
+    fs.writeFileSync(path.join(mods, 'zzz.marked', 'paused'), '');
+    expect(fs.readdirSync(mods).length).toBeGreaterThan(MAX_PICKUP_MODS);
+    const warned: Array<Record<string, unknown> | undefined> = [];
+    const logger = { component: (id: string) => ({ warn: (_m: string, data?: Record<string, unknown>) => void warned.push({ id, ...data }) }) };
+    expect(modNames(home, logger)).toEqual(['zzz.marked', 'zzz.real-card', 'zzz.real-pin']);
+    expect(warned).toEqual([]);
+    // more REAL mods than the cap: the first MAX_PICKUP_MODS by name, and exactly one warning for the home
+    for (let i = 0; i < MAX_PICKUP_MODS; i++) fs.mkdirSync(path.join(mods, `mmm.real-${String(i).padStart(3, '0')}`, 'pinned', HEX), { recursive: true });
+    const cut = modNames(home, logger);
+    expect([cut.length, cut[0], cut.includes('zzz.real-pin')]).toEqual([MAX_PICKUP_MODS, 'mmm.real-000', false]);
+    modNames(home, logger);
+    expect(warned).toEqual([{ id: '#mod-host', held: MAX_PICKUP_MODS + 3, cap: MAX_PICKUP_MODS, dropped: 3 }]);
+  });
+
+  it(
+    'a file swapped for a fifo between the walk and the read is refused without blocking (readChecked opens non-blocking)',
+    () => {
+      const w = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'a.js': 'one' });
+      const e = walkSource(w, 'acme.diff-lens', () => undefined).find((x) => x.rel === 'a.js')!;
+      fs.rmSync(path.join(w, 'a.js'));
+      const mk = spawnSync('mkfifo', [path.join(w, 'a.js')]);
+      if (!(mk.status === 0 && fs.lstatSync(path.join(w, 'a.js'), { throwIfNoEntry: false })?.isFIFO())) return; // no fifo on this filesystem
+      // as in the manifest test: a blocked open freezes the thread, so a watchdog releases it and the elapsed time fails the test
+      const watchdog = spawn('sh', ['-c', 'sleep 3; while :; do : > "$0"; done', path.join(w, 'a.js')], { stdio: 'ignore' });
+      try {
+        const t0 = Date.now();
+        expect(refusalOf(() => readChecked(e, 'acme.diff-lens', () => undefined)).detail.snapshotReason).toBe('changed-during-copy');
+        expect(Date.now() - t0, 'the open blocked on the fifo').toBeLessThan(2_000);
+      } finally {
+        watchdog.kill('SIGKILL');
+      }
+    },
+    10_000,
+  );
+
+  it('a failed re-stage of content equal to the installed pin leaves the installed tree, even when this call had to copy it again', () => {
+    const home = ptmp();
+    const auth = root();
+    const src = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n' });
+    const st = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    const pin = pinnedDir(home, 'acme.diff-lens', st.record.detail.packageHash);
+    const tree = treeBytes(pin);
+    // the pinned tree and every staged record are gone (a damaged home), so only the grant row still names the hash:
+    // the re-stage copies the tree again (created by THIS call) and then fails after the manifest block
+    removeTree(pin);
+    removeTree(path.join(home, 'mods', 'acme.diff-lens', 'staged'));
+    const opts = { home, source: src, via: 'linked' as const, requestedBy: HUMAN, trust: auth, get readPaths(): string[] { throw new Error('injected after the manifest block'); } };
+    expect(thrown(() => stageInstall(opts))).toMatchObject({ message: 'injected after the manifest block' });
+    expect(treeBytes(pin)).toEqual(tree);
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).manifest.version).toBe('1.2.0');
+  });
+
+  it('a snapshot that vanished while its card was being written (another stage of the same content failed and removed it) is refused, and the card is taken back', () => {
+    const home = ptmp();
+    const auth = root();
+    const src = writeMod(path.join(ptmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n' });
+    // the other stage: it created the snapshot this call will reuse
+    const other = snapshotFolder(home, src, 'acme.diff-lens', () => undefined);
+    const ev = events();
+    // …and removes it after this call reused it (readPaths is read while the card is built, after the snapshot step)
+    const opts = { home, source: src, via: 'package' as const, requestedBy: HUMAN, trust: auth, emit: ev.emit, get readPaths(): string[] { removeTree(other.dir); return []; } };
+    const r = refusalOf(() => stageInstall(opts));
+    expect([r.manifestCode, r.detail.snapshotReason]).toEqual(['SNAPSHOT', 'changed-during-copy']);
+    expect(ev.kinds()).not.toContain('manifest.staged');
+    // no card names the missing snapshot, and nothing of the mod is left
+    expect(fs.existsSync(path.join(home, 'mods', 'acme.diff-lens'))).toBe(false);
+    // staging again copies afresh and stages
+    expect(stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth }).state).toBe('staged');
+  });
+
+  it('a decision whose record cannot be rewritten in place never deletes the record (it is written beside and renamed), and no temp file is left', () => {
+    const home = ptmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(ptmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    const dir = path.join(home, 'mods', 'acme.diff-lens', 'staged');
+    const [file] = fs.readdirSync(dir);
+    const token = bound(home, 'acme.diff-lens', st.cardId);
+    fs.chmodSync(path.join(dir, file!), 0o400); // an in-place write fails here (not for root, and then nothing is at risk)
+    try {
+      decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: token, authority: auth });
+    } catch {
+      /* win32 refuses a rename over a read-only file: the decision fails, the record must still be there */
+    }
+    expect(fs.readdirSync(dir)).toEqual([file]);
+    const rec = readStaged(home, 'acme.diff-lens', st.cardId);
+    expect(rec?.card.cardId).toBe(st.cardId);
+    // the rows were appended, so the record is what lets the decision finish: it reads decided, or still pending and re-decidable
+    expect(readGrants(home, auth).installs).toHaveLength(1);
+    expect(['decided', 'pending']).toContain(rec?.card.state);
+  });
+});
+
 describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) and manifest widening', () => {
   it('a change in a linked folder pauses the mod, stages a re-approve card with the file diff and the widening; the snapshot is unchanged', () => {
     const home = tmp();
@@ -637,6 +943,83 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     expect(texts.find((t) => t.startsWith('WIDENED'))).toMatch(/hooks \+.*PreToolUse.*steal\.js/);
     expect(texts.some((t) => t.includes('hooks: PreToolUse: node steal.js'))).toBe(true);
     expect(rec.detail.mcp).toEqual(['gm_acme_diff-lens: node srv.js']); // S0b: the kernel derives the server name
+  });
+
+  it('S1.4 (Aegis A7): a tree that adds write to a command raises an Update card that shows cmd:<id>:write', () => {
+    const home = tmp();
+    const auth = root();
+    const declared = (effects: Array<'read' | 'write'>): ManifestV2 => {
+      const m = baseManifest();
+      m.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', effects }];
+      return m;
+    };
+    const src = writeMod(path.join(tmp(), 'diff-lens'), declared(['read']));
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).state).toBe('ready');
+    // the ONLY change is the command's effects: no tool, command id or capability is added
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(declared(['read', 'write']), null, 2));
+    const ev = events();
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
+    if (paused.state !== 'paused') throw new Error('expected paused');
+    expect(ev.kinds()).toEqual(['mod.paused', 'manifest.widened', 'manifest.staged']);
+    expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['effects']);
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
+    expect(rec.detail.widened).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
+    const texts = (rec.card.block.children as Array<{ text: string }>).map((c) => c.text);
+    // the long card, never the short "nothing widens" one
+    expect(texts.some((t) => t.includes('nothing widens'))).toBe(false);
+    expect(texts.find((t) => t.startsWith('WIDENED'))).toBe('WIDENED: effects +cmd:lens.toggle:write');
+    // the card's effects line names write as well, though no tool declares it
+    expect(texts.find((t) => t.startsWith('effects:'))).toMatch(/^effects: read, write · /);
+  });
+
+  it('S1.4 P3: a tree that REMOVES effects from a command only narrows: absent means read, so nothing widens', () => {
+    const home = tmp();
+    const auth = root();
+    const m = (effects?: Array<'read' | 'write'>): ManifestV2 => {
+      const b = baseManifest();
+      b.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', ...(effects ? { effects } : {}) }];
+      return b;
+    };
+    const src = writeMod(path.join(tmp(), 'diff-lens'), m(['read']));
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(m(), null, 2));
+    const ev = events();
+    const loaded = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
+    expect(ev.seen.some((e) => e.kind === 'manifest.widened')).toBe(false);
+    if (loaded.state === 'paused') {
+      const texts = (readStaged(home, 'acme.diff-lens', loaded.cardId!)!.card.block.children as Array<{ text: string }>).map((c) => c.text);
+      expect(texts.some((t) => t.startsWith('WIDENED'))).toBe(false);
+    }
+  });
+
+  it('S1.4: detectWidening keys a command effect as cmd:<id>:<effect>; an absent field adds no key (P3: absent is read); narrowing adds nothing', () => {
+    const a = baseManifest();
+    const cmd = (effects?: Array<'read' | 'write'>): ManifestV2 => {
+      const m = baseManifest();
+      m.provides!.commands = [{ id: 'lens.toggle', title: 'Toggle diff lens', ...(effects ? { effects } : {}) }];
+      return m;
+    };
+    expect(detectWidening(a, cmd())).toEqual([]);
+    expect(detectWidening(a, cmd(['read']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:read'] }]);
+    expect(detectWidening(cmd(['read']), cmd(['read', 'write']))).toEqual([{ field: 'effects', added: ['cmd:lens.toggle:write'] }]);
+    expect(detectWidening(cmd(['read', 'write']), cmd(['read']))).toEqual([]);
+    // P3: dropping the field narrows (absent is read only), so nothing is added
+    expect(detectWidening(cmd(['read', 'write']), cmd())).toEqual([]);
+    expect(detectWidening(cmd(['read']), cmd())).toEqual([]);
+    // two trees that both leave the field out differ in nothing, and a first install lists the default key
+    expect(detectWidening(cmd(), cmd())).toEqual([]);
+    expect(detectWidening(null, a).find((w) => w.field === 'effects')!.added).toEqual(['lens.diff:read']);
+    // a first install lists the command entries beside the tool entries
+    expect(detectWidening(null, cmd(['read', 'write'])).find((w) => w.field === 'effects')!.added).toEqual(['cmd:lens.toggle:read', 'cmd:lens.toggle:write', 'lens.diff:read']);
+    // a tool named `cmd` keeps its own one-colon key and never reads as a command entry
+    const t = baseManifest();
+    t.provides!.tools!.push({ name: 'cmd', effects: ['write'] });
+    expect(detectWidening(a, t).find((w) => w.field === 'effects')!.added).toEqual(['cmd:write']);
   });
 
   it('detectWidening reports additions by field and ignores removals', () => {
@@ -1065,23 +1448,23 @@ describe('Aegis S0b M2: the TOFU binding race', () => {
   it('two first-binding cards for different hosts: approving one makes the other refuse PUBLISHER at decide', () => {
     const home = tmp();
     const auth = root();
-    const a = stageGit(home, auth, 'board-a', 'gitlab.com');
-    const b = stageGit(home, auth, 'board-b', 'codeberg.org');
+    const a = stageGit(home, auth, 'panel-a', 'gitlab.com');
+    const b = stageGit(home, auth, 'panel-b', 'codeberg.org');
     const linesOf = (st: typeof a) => (st.record.card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
     expect(a.record.detail.rebind).toEqual({ host: 'gitlab.com', namespace: 'acme', from: null });
     expect(linesOf(a)).toContain('publisher acme: first binding to gitlab.com/acme');
     expect(linesOf(a).some((t) => t.startsWith('PUBLISHER RE-BIND'))).toBe(false);
-    decideInstallCard(home, 'acme.board-a', a.cardId, 'install', { presenceToken: bound(home, 'acme.board-a', a.cardId), authority: auth });
+    decideInstallCard(home, 'acme.panel-a', a.cardId, 'install', { presenceToken: bound(home, 'acme.panel-a', a.cardId), authority: auth });
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'gitlab.com', namespace: 'acme' });
-    const r = refusalOf(() => decideInstallCard(home, 'acme.board-b', b.cardId, 'install', { presenceToken: bound(home, 'acme.board-b', b.cardId), authority: auth }));
+    const r = refusalOf(() => decideInstallCard(home, 'acme.panel-b', b.cardId, 'install', { presenceToken: bound(home, 'acme.panel-b', b.cardId), authority: auth }));
     expect(r.manifestCode).toBe('PUBLISHER');
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'gitlab.com' });
     // re-staged with an explicit re-bind, the card names what it replaces
-    const src = writeMod(path.join(tmp(), 'board-c'), baseManifest({ name: 'board-c', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: [], egress: 'none' } }));
-    const c = stageInstall({ home, source: src, via: 'git', git: { url: 'https://codeberg.org/acme/board-c', commit: SHA40 }, rebindPublisher: true, requestedBy: HUMAN, trust: auth });
+    const src = writeMod(path.join(tmp(), 'panel-c'), baseManifest({ name: 'panel-c', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: [], egress: 'none' } }));
+    const c = stageInstall({ home, source: src, via: 'git', git: { url: 'https://codeberg.org/acme/panel-c', commit: SHA40 }, rebindPublisher: true, requestedBy: HUMAN, trust: auth });
     if (c.state !== 'staged') throw new Error('staged');
     expect(linesOf(c as typeof a)).toContain('PUBLISHER RE-BIND from gitlab.com/acme: acme → codeberg.org/acme');
-    decideInstallCard(home, 'acme.board-c', c.cardId, 'install', { presenceToken: bound(home, 'acme.board-c', c.cardId), authority: auth });
+    decideInstallCard(home, 'acme.panel-c', c.cardId, 'install', { presenceToken: bound(home, 'acme.panel-c', c.cardId), authority: auth });
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'codeberg.org' });
   });
 });

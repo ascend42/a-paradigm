@@ -146,11 +146,129 @@ components:
       Events: §9.1 kinds only (manifest.*, mod.*); the spec declares no
       signals. Refusals are refusal:v1 with data.manifestCode (not
       data.reason, which would move clientApiId).
+      Dimensions S1.2: (a) C7, G-DSK-09: an offer whose reach is not mcp is
+      refused SCHEMA with the field and the reach in the detail, at every tier,
+      at install and at load; reach canvas is published in offer-spec:v1 and
+      stays inert until boards raised by an offer ship (S1.5). (b) Seven more
+      reserved first-party names from the contracts list (dimension, dimensions,
+      dim, dims, board, boards, doodle): refused as a publisher and, for any
+      publisher but gnomon, as a mod name, a prefix of one or a skeleton of
+      either, so dimmer and boardgame under another publisher are refused
+      (recorded in test/s0b-mod-ids.test.ts for ruling O3). (c)
+      FIRST_PARTY_PACKAGE_HASHES re-pinned for workshop 1.1.1, ledger 1.1.1 and
+      paradigm-context 1.1.2 (the modAbiId move changes the three trees that
+      echo the id); the previous format-2 pins stay as
+      SUPERSEDED_FIRST_PARTY_PINS so an existing install keeps its tier, and
+      they are never an alias source. S1.3 P2 adds the pin of
+      packages/gnomon-mods/dimension 1.0.0 (#dimension-mod); it declares two
+      tools, so compatModAbiId never applies to it, and it needs no prior id
+      (it echoes the current modAbiId). An installed snapshot of an earlier
+      version is NOT refreshed by the kernel: it is refused ABI at init until
+      the human approves the Update card the Mods panel offers (or runs gnomon
+      mod install on the shipped folder). S1.4 P0 replaces that pin with
+      dimension 1.0.1 (dim-shape.mjs rebuilt from the tightened contract) and
+      adds RETIRED_FIRST_PARTY_PINS: an exact hash of a first-party tree this
+      kernel no longer ships, with the reason (the dimension 1.0.0 hash is the
+      first). The rule for a first-party refresh that is NOT an ABI move (the
+      refresh path of .paradigm/research/gnomon-canvas/first-party-mod-refresh.md
+      stays: no kernel-side refresh, the person approves an Update card): the
+      old hash leaves FIRST_PARTY_PACKAGE_HASHES and enters the retired set. It
+      is not a superseded pin (that table only lets a tree echoing a PRIOR
+      modAbiId keep starting, and never lists a tree with tools). deriveTier
+      answers local for a retired hash, but an install ALREADY pinned at it
+      keeps loading first-party, because loadMod takes the tier from that
+      install's root-signed grant.trust row and never from deriveTier, until
+      the Update card is approved. A retired hash is refused TIER (why retired)
+      as a fresh stage (stageInstall, package or linked; its snapshot is not
+      kept), as the approval of a card an earlier kernel staged (prepareInstall;
+      the card can still be denied) and as a rollback target (rollbackMod), so
+      an update cannot be undone into the retired build, which would load
+      first-party again from its old trust row. The 1.0.0 tree is kept as data
+      in test/fixtures/first-party-retired/dimension-1.0.0.json and hashed
+      against the retired pin by test/retired-pins.test.ts.
+      Last review round of S1.4 P0 (Aegis F1, F2, N-a). The pin tables are
+      MODULE-PRIVATE: FIRST_PARTY_PACKAGE_HASHES, SUPERSEDED_FIRST_PARTY_PINS,
+      RETIRED_FIRST_PARTY_PINS and TRUSTED_MANIFEST_KEYS in install.ts and
+      HISTORICAL_FIRST_PARTY_PINS in grants.ts are not exported. Readers ask
+      isFirstPartyPin, isSupersededPin, isRetiredPin, isHistoricalFirstPartyPin,
+      supersededPriorModAbiId or retiredPinReason, or take a fresh frozen copy
+      (firstPartyPins, supersededPins, retiredPins, historicalFirstPartyPins).
+      The only way to change a table is the internal seam withPinTables
+      (registerSeams manifest; withPinTablesForTest in testing.ts), which
+      restores all three after the call; test/pin-tables.test.ts holds that
+      the two modules export no Set, Map or unfrozen array. rollbackMod takes
+      "the tree pinned now" from effectiveInstall, which honours
+      grant.uninstall, for the superseded and the retired check alike: after an
+      uninstall no hash is exempt. rederiveInstallDetail refuses a retired
+      hash before it re-reads the snapshot, and expireRetiredStaged closes the
+      pending staged record (state expired, no decision); the staged-card
+      pickup in modhost/control.ts calls it, so a card an earlier kernel staged
+      for a retired build is neither raised nor left pending
+      (test/mods-admin.test.ts).
+      S1.2 review fix (J5, Aegis 9a): rollback protection. stageInstall refuses
+      TIER (why superseded) a NEW stage of a tree in
+      SUPERSEDED_FIRST_PARTY_PINS; only an install already pinned at that hash
+      keeps its tier. The old trees are vendored under
+      packages/gnomon/test/fixtures/first-party-superseded and hashed against
+      the pins by test/superseded-pins.test.ts.
+      S1.1 carry-over: rollbackMod refuses TIER (why superseded) a target row
+      whose package hash is in SUPERSEDED_FIRST_PARTY_PINS unless it is the
+      tree pinned now, so an earlier approved row at a superseded pin is not
+      re-pinned by a rollback either (tested per tree, default and explicit
+      target, in test/superseded-pins.test.ts).
+      SUPERSEDED_FIRST_PARTY_PINS is now a map from an exact package hash to the
+      one prior modAbiId that tree echoes (the three format-2 first-party trees
+      of the previous release; no format-1 pin), with
+      SUPERSEDED_PINS_WRITTEN_FOR naming the modAbiId it was written for: when
+      modAbiId next moves the expiry test in test/mod-abi-compat.test.ts fails
+      until the table is emptied or each entry re-justified (no chains).
+      Stage cleanup (security triage): a stage that ends in a throw leaves
+      nothing. The snapshot is discarded on ANY throw from the manifest block
+      through the written staged record (discardSnapshot), only when this call
+      created it (SnapshotResult.created) and neither the effective install nor
+      a staged record names it; the empty staged/, pinned/ and mods/<id>/ are
+      then removed by a non-recursive rmdir (pruneEmptyModDir), so a directory
+      holding another pin, a card or a marker is untouched. A partly written
+      staged record of the call's own card id is removed. The manifest path is
+      refused SNAPSHOT (symlink / special-file) by lstat before anything reads
+      it, and rawManifestOf opens it O_NOFOLLOW | O_NONBLOCK and checks the
+      descriptor, so a FIFO there cannot block the process. sweepStaging runs
+      once at kernel start (daemon.ts, before the mod host): it removes
+      ULID-named entries directly inside a real mods/.staging, follows nothing,
+      and keeps entries younger than STAGING_SWEEP_MIN_AGE_MS because the CLI
+      stages in its own process. What a staged, undecided or denied card leaves
+      on disk is unchanged. Review fixes (Aegis, PR 115): readChecked also
+      opens O_NONBLOCK, so a file swapped for a FIFO after the walk is refused
+      by the fstat instead of blocking (loadMod re-hashes linked folders in the
+      kernel). writeStaged writes beside the record and renames over it, and on
+      failure removes only its temp file, so a decision that cannot rewrite its
+      record never deletes it after the rows are appended. After the card is
+      written stageInstall checks the snapshot still exists (a concurrent stage
+      of identical content may have created, failed and removed it); if not it
+      takes the card back and refuses SNAPSHOT changed-during-copy.
+      Dimensions S1.4 pass P1 (Aegis A7; no contract id moved): a
+      provides.commands entry may carry effects. Its closed keys are id, title,
+      args, effects; effects is optional and, when present, a non-empty list of
+      distinct values from COMMAND_EFFECTS (read, write). network or spend on a
+      command is refused SCHEMA at load for every tier, first-party included,
+      and the refusal never echoes the manifest's value. What a command does
+      with the field is #mod-host (modhost/effects.ts). detectWidening keys a
+      command's declared effect as cmd:<id>:<effect> in the effects field,
+      beside the tool keys <tool>:<effect> (neither a tool name nor a command
+      id can hold a colon, so the keys never collide): a tree that adds write
+      to a command gets the long Update card with "WIDENED: effects
+      +cmd:<id>:write" and a manifest.widened row. A command with NO effects
+      field adds no key: since S1.4 P3 an absent field means read only
+      (G-MOD-20), so a tree that drops the field only narrows and raises no
+      card (the cmd:<id>:*default key of P1 is removed). The install card's effects line counts a command's
+      declared effects with the tools'. Tests: test/manifest-loader.test.ts.
     path: src/kernel/manifest/
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]
     tests:
       - test/manifest-offers.test.ts
       - test/manifest-loader.test.ts
+      - test/retired-pins.test.ts
+      - test/pin-tables.test.ts
       - test/seams-fence.test.ts
     oracles: [G-MAN-01, G-MAN-02, G-MAN-03, G-HON-04, G-LAW-04, G-WIN-04]

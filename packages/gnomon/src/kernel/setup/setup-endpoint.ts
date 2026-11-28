@@ -48,7 +48,7 @@ import { WebEndpoint, type WebEndpointOptions } from '../web/endpoint.js';
 import { appendIdentityJournal, identityJournalPath, identityPath, readIdentity, type IdentityRecord } from '../identity/provision.js';
 import { deviceKeyPath } from '../identity/device-key.js';
 import { HardwareRootAuthority } from '../identity/hardware.js';
-import { readRegistry, registryPath } from '../identity/registry.js';
+import { isReservedPrincipalName, readRegistry, registryPath } from '../identity/registry.js';
 import { Provisioner, type ProvisionEvent } from '../identity/provisioner.js';
 import type { HelperTransport, HelperVerifier, PinnedHelper } from '../identity/helper.js';
 import { runPreflight, type PreflightReport } from './preflight.js';
@@ -410,6 +410,8 @@ export class SetupEndpoint {
         case 'setup.preflight':
           return this.#reportView(await this.#job(() => this.#preflight()));
         case 'setup.name':
+          // the contracts validator checks the pattern; the reserved names are the kernel's (S1.4, Aegis I4)
+          if (isReservedPrincipalName(String(params.name))) throw new RpcRefusal('BAD_REQUEST', 'setup-params', 'that name is reserved for the kernel; choose another');
           this.#name = String(params.name);
           return { name: this.#name };
         case 'setup.purge': {

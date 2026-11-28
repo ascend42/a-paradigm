@@ -42,7 +42,8 @@ components:
       the manifest-declared title); ID_PREFIXES.offer (offer:<ULID>); descriptor field
       desk. src/offer.ts: offer-spec:v1 (OfferSpecV1, validateOfferSpecV1, published
       schemas/offer-spec.v1.schema.json), closed OFFER_PHASES, OFFER_DECISIONS,
-      OFFER_REACHES, CONTEXT_SOURCES (recent-messages, open-files, repo-path,
+      OFFER_REACHES (mcp, and from S1.2 canvas: published here, kept inert by the
+      manifest loader's refusal until boards raised by offer ship), CONTEXT_SOURCES (recent-messages, open-files, repo-path,
       selection, session-summary; at most 8), OFFERS_PER_MOD_MAX 6, THE shared text
       rule isOfferText / isOfferQuestion (240 code points, no control/format/separator,
       no edge whitespace), and offerBlockOf(text): the ONE strict, linear parser of a
@@ -128,7 +129,8 @@ components:
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner
       shaped, ASCII, no u flag), MOD_NAME_PATTERN (1..24), MOD_ID_PATTERN with the 60-char
       total checked separately (isModId), parseModId/formatModId; data the kernel applies:
-      RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES, FIRST_PARTY_MOD_NAMES, FOUNDER_BRANDS
+      RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES, FIRST_PARTY_MOD_NAMES (from S1.2 also
+      dimension, dimensions, dim, dims, board, boards, doodle), FOUNDER_BRANDS
       (ascend42 github.com-only; a-company/warpline/nevr/nevrland/conductor refused),
       FIRST_PARTY_DISPLAY_NAMES, modSkeleton (fixed confusable transform); derived names:
       mcpServerName (gm_<pub>_<name> <= 28 else gx_<name[0..13]>_<hash10>), qualifiedToolName
@@ -279,6 +281,250 @@ components:
       - test/contracts.test.ts
       - test/m1-1-reservations.test.ts
 
+  contract-dim-shape:
+    description: >-
+      S1.4 E-fix round 2 (Aegis I-1): planDimUndo returns marks (each op's
+      mark, parallel to ops); dimUndoPriorOf(prior, planOps, rowOps) keeps an
+      entry only when every plan op naming that mark is in the row.
+      S1.4 E-fix (T-2026-11-27-006, Aegis I-1 after P5): dimUndoMarkOf honours
+      undo.prior ([id, otherBy, wordsBy], at most 64, each only for an update
+      or move target of the same row); on a person's own honoured undo (human
+      gui hand, an agent's turn or that person's own act) the fold puts each
+      named mark's otherBy and wordsBy back to the carried hands
+      (settlePrior): an agent's or the unknown hand always, a clear or a human
+      only when the mark's newest change was the undone hand's, wordsBy only
+      when the row wrote a words field. planDimUndo returns prior for the
+      marks it undoes whole (no skipped field, untouched since the set's first
+      row on it, not a re-add); dimUndoPriorOf picks a packed row's entries.
+      An agent's undo is a change (prior ignored). Outside the hash;
+      dimAttrDigest moves; keyframe v3 unchanged.
+      S1.4 E1 (Aegis, defence in depth): the fold keeps goneBy (the original
+      hand of each deleted id, outside the hash and the digest); a restored
+      entry gives restoredFrom only for an old id deleted before that row with
+      that same hand (test/dim-edit-anything.test.ts, the G5 chain and Q-b).
+      S1.4 EDIT-ANYTHING (pass E0; TD-2026-11-26-715/-241/-310, Aegis
+      rulings 2-4): dimMayEdit(actor) replaces the owner rule (any human with a
+      principal or agent with principal and label may edit any core mark; fails
+      closed; not-owner kept in the hashed list, unused, fix reworded). The fold
+      records changedBy/changedSeq/changedHsid, otherBy/otherSeq, wordsBy/wordsSeq
+      (G1) and restoredFrom (G5) OUTSIDE dimCanonical, set only by applyOp when an
+      op applies; the view shows them through dimViewBy; dimAttrDigest (G7)
+      vouches for them (not in the descriptor). Readers dimActOf, dimChangeSetOf,
+      dimUndoMarkOf honour the mod-written act and undo row markers (own keys,
+      patterns, caps). planDimUndo: the shared field-level undo planner (later
+      changes win and are counted; re-add under a minted id with the original
+      hand; per-mark validation as the undoer, remainder whole at most twice);
+      dimInvertRows is the page's inverse, shared.
+      Review fixes: restored entry [newId, oldId, by, wordsBy?, otherBy?]
+      (I-1); otherBy/wordsBy against the original hand (I-2); planner rows
+      carry seqs (I-2), `of` marks continuations (I-3), per-mark counts with
+      `partial`. Tested in
+      test/dim-edit-anything.test.ts.
+      dim-shape:v1 (Dimensions S1.2, spec §12.7; .paradigm/research/gnomon-canvas/
+      s1.2-draft.md and its rulings): src/dim.ts. A dimension is the space; mediums
+      (board, doodle) display things inside it; its truth is op rows appended by the
+      dimension mod (DIM_MOD_ID gnomon.dimension, DIM_KINDS session.start / attach /
+      op / session.end). Vocabulary: DIM_CORE_KINDS (stroke rect ellipse diamond
+      arrow text frame; later kinds are namespaced <ns>:<kind>), closed DIM_NODE_KEYS
+      and DIM_NODE_REQUIRED per kind, DIM_OP_TYPES (add update move delete, plus
+      lock unlock clear which are in the vocabulary and refused), DIM_LIMITS, integer
+      board units with y down, the base-62 order key z (dimZBetween, dimZCompare).
+      READS ARE TOLERANT: foldDimRow / foldDim are pure and never throw; unknown
+      kinds and unknown fields are carried and hashed, unknown op types are counted
+      in `unapplied`, a row with a higher v folds by the v1 rules, ids are never
+      reused, __proto__ / constructor / prototype keys are dropped. `by` (who drew a
+      node) is derived only from the host-written payload.relayedFor of the adding
+      row; a row with no well-formed stamp folds as cls `unknown`, never as human
+      (Aegis ruling 5). dimCanonical / dimHash: the hash covers every node field and
+      `by`, never seq, connId, surface, hsid or counters, so a replay at other seqs
+      hashes the same; DIM_HASH_VECTOR_ROWS and DIM_HASH_VECTOR_HASH are the one
+      vector published in the client API descriptor (G-DDL-04). WRITES ARE CLOSED:
+      validateDimOps refuses by name (DIM_REFUSAL_CODES, one fixed `fix` sentence per
+      code, input never echoed) an unknown or non-core kind, an unknown field, a
+      wrong type or range, a failing colour (colour-bad, may name a swatch; S1.4
+      P0b: color and fill are checked by role and contrast, a text mark's color at
+      the text floor, and the line on its own fill as the node would stand after
+      the op, refused on the field being written, the line when an add writes
+      both; a contrast refusal's fix is contentContrastFix, a fixed sentence
+      naming the offered swatch, not hashed, and DIM_REFUSAL_CODES did not move;
+      the refusal carries contrast {why, night}, a closed word the GUI names), a
+      dangling from / to / parent, an edit by an actor that is not a well-formed
+      hand (dimMayEdit; since S1.4 E0 any hand may edit any mark), an edit
+      of a non-core node, more than 64 ops, and any secret match (whole batch
+      refused; every string at any depth, plus for each touched node the strings as
+      they would stand, joined and pairwise, so a credential split over two updates
+      or two fields is found; residual: a split across two nodes or by ordinary
+      spaces). validateDimRef (C3): schemes sym spec td l t n s wl knot dim, 128
+      characters, a restricted id character set, no `..` or `//`; refs are plain
+      strings, never resolved. dimViewOf (C4): a core node shows its listed fields
+      and by; any other node shows id, the pattern-checked kind name, x, y and by;
+      carried fields are left out; dimFallbackLabel puts the fixed lead word `kind`
+      before a kind name. Imports only ./internal.js, ./content-palette.js and
+      ./secret-rules.js (a test holds this) so the mod can bundle it; no DOM, no
+      node:*. Not built here: the mod, the GUI leaf, the bridge tools dim-view /
+      dim-draw (host stamping of relayedFor is #mod-host, S1.2). Serves #dimension-mod and
+      $dimension-session: spec symbols that no .purpose declares, since no
+      dimension mod package exists. The code written for them so far is these
+      contracts and the lazy board chunk (#gui-board, packages/gnomon-gui).
+      S1.2 review fixes: byOf and hsidOf read the stamp as own keys only; a
+      bridge or voice stamp with no agent, and any stamp with no principal (an
+      unentitled mod's tool row), fold as the unknown hand; the published vector
+      now holds all three by classes. Order keys: an open end counts
+      (dimZBetween(a, null) and (null, b) step a counter whose head character
+      says how many digits follow, so ten thousand appends or prepends in a row
+      stay a few characters long), a key between two keys is the digit-wise
+      midpoint, and dimZBetween throws RangeError when no key of legal length
+      fits (it never returns one that fails DIM_Z_PATTERN). dimZPlace(below,
+      above) is the TOTAL form for stored data a renderer reads: a malformed
+      neighbour key is an open end; equal or out-of-order neighbours place above
+      the lower one; with no room at all the lower key is reused and ties are
+      ordered by id. A move re-reads no node in the secret check. foldDimRow
+      copies the whole state per row, so a row-by-row replay is quadratic in
+      entry copies; a replay or scrub uses foldDim(rows, upToSeq, from) from a
+      kept state, one copy and one pass (test/dim-fold-cost.test.ts counts the
+      copies; no behaviour or hash change). DEFERRED,
+      tracked here: to S1.3, the engine mapping (gnomon-gui src/board/dim-map.ts
+      and its goldens) and the check that nothing in contracts or mods imports
+      the board.
+      S1.4 P0 (write-side tightening; no contract id moves, the fold and the hash
+      vector are unchanged): DIM_SCAN_LIMITS { freeStringsPerNode 16,
+      stringsPerBatch 4096 }, outside DIM_LIMITS and the descriptor. A node over
+      16 free strings (a valid core node has at most 10) is read as its join
+      only, on refused ops and stored nodes alike; a batch over 4,096 strings,
+      the op type not counted, is refused whole as field-range on ops before a
+      string is read (the largest valid batch, 64 moves of 64 ids, is exactly at
+      the cap). dimTextForScan is NFKD, strip, NFC and also drops Mn, Me and
+      Default_Ignorable_Code_Point, so a mark that NFKC would fuse into a
+      precomposed letter is removed too and an accented letter is scanned as its
+      base letter; the residuals of the secret check are listed in the comment at
+      that function (visible separators, look-alikes, encodings, three or more
+      strings, over-cap nodes, two nodes, numbers, the title, keys, earlier
+      rows). dimViewOf shows a field of a core node only when its stored value
+      passes today's write check: a failing ref is left out by itself, a failing
+      colour, an over-long string or a wrong type is left out, and parent, from
+      and to are shown on the id pattern alone. DIM_AUX_KINDS
+      (modns.gnomon.dimension.grant, modns.gnomon.dimension.draw.refused): fixed
+      names, not in DIM_KINDS, not hashed, ignored by the fold; written only by
+      the dimension mod (S1.4 P3). dimOpOid(hsid, dim, opId) (16 hex of
+      sha256 over hsid, 0x00, dim, 0x00, opId; null outside the forms; Aegis
+      A8), DIM_OP_ID_PATTERN and dimRowBy(row) (the bounded hand of a row) are
+      exported for the tools, outside the descriptor
+      (test/dim-tools.test.ts, which also holds that a session principal built
+      as the kernel builds it matches DIM_VIEW_PRINCIPAL_PATTERN).
+      The ONE write-grant fold (Aegis S1.4 M4, M9), shared by the mod and the
+      page through dim-shape.mjs: foldDimGrants(rows, dim, from),
+      dimGrantDefault(state, hsid) (first attached on, later attached off) and
+      dimMayDraw(state, grants, hsid) (the last honoured row, else the default;
+      never for a session that is not attached). A grant row is honoured only
+      when its host-written relayedFor folds as the human hand with surface gui
+      and no agent; bridge, voice, cli and unstamped rows change nothing.
+      Review fixes of S1.4 P0 (Aegis I1, N1 to N4, N6; Judge 2, 4 to 8, 10).
+      The view: a node whose id is not DIM_NODE_ID_PATTERN is left out whole,
+      the title is shown only when it is at most DIM_LIMITS.title with no Cc, Cf,
+      Zl or Zp (else ''), dim only when it matches DIM_ID_PATTERN (else null); a
+      stored empty refs list is shown as []; a core node in the view may lack
+      required fields; the view does NOT re-run the secret scan. The scan: the
+      batch cap counts from the root the scan walks (an add's node, an update's
+      patch), so strings at the deepest level it reads are counted; every string
+      is read in THREE forms (dimTextForScan, dimTextForScanS12 which is the S1.2
+      NFKC form, and the raw string), because the new form can lose a word
+      boundary before a credential; the contract has no length bound (the 16 KiB
+      bound is the mod's); the residuals comment is restated (LF, CR and TAB are
+      stripped and so rejoined, non-ASCII spaces fold to U+0020 and stay, U+2800
+      is not stripped, structural strings are never joined, a node that already
+      matches a rule lets a new split secret of that rule pass). The grant fold:
+      DimGrants is a Map of hsid to { write, seq }; nothing is folded unless dim
+      matches DIM_ID_PATTERN; an honoured row whose v is not 1 folds as write
+      false (an authorization row fails closed on a version it does not know); a
+      row at or below the seq already folded for its hsid changes nothing, and a
+      row with no integer seq is skipped; dimMayDraw does not read ended (the
+      caller does); the map is never carried through a plain object keyed by
+      hsid. Last review round (Aegis N-b, N-c, N-d): foldDimGrants never
+      throws on a from that is no Map (it answers with an empty map) or on rows
+      that cannot be iterated; dimMayDraw reads a present but malformed entry,
+      and a grants value that is no Map, as may not draw; dimTextForScanS12 is
+      module-private; the stated time bound of the scan-cap test is also held
+      for a 4,096-string op of non-ASCII strings read in three texts each (the
+      measured figures, with method and machine, are in the test comment).
+      DEFERRED, tracked here: the grant map is not bounded by this fold
+      (the mod refuses a grant for a session that is not attached).
+    path: src/dim.ts
+    type: module
+    tags: [gnomon, contracts, dimension, paradigm-8]
+    tests:
+      - test/dim-fold.test.ts
+      - test/dim-fold-cost.test.ts
+      - test/dim-validate.test.ts
+      - test/dim-move.test.ts
+      - test/dim-grants.test.ts
+  contract-content-palette:
+    description: >-
+      content-palette:v1 (Dimensions S1.2; Luna's S1.1 design in
+      .atelier/systems/gnomon/design-system.yaml content_palette; Aegis rulings 1 to
+      4): src/content-palette.ts. PROTOCOL (in the client API descriptor): the schema
+      version, CONTENT_SWATCH_NAMES (ink graphite paper lemon leaf sky cobalt orchid
+      raspberry) and CUSTOM_COLOUR_PATTERN (custom:#rrggbb, the day value).
+      PRESENTATION (not descriptor inputs, so a re-tuned value cannot move
+      clientApiId): per-role day and night values (line, fill), the neutrals as theme
+      tokens, CONTENT_RESERVED_COLOURS (the mineral and semantic colours, copied from
+      foundations.color and compared with it by the test; night state.warn-bg is the
+      one named exception, a wash whose composites the test computes),
+      CONTENT_MIN_DISTANCE 0.06, NIGHT_TRANSFORM. The metric is Euclidean distance in
+      OKLab and this file is its ONLY implementation (a test scans packages/ for a
+      second copy of the matrices): sRGB linearised from a literal 256-entry table,
+      Lab quantised to integers, every threshold compare an integer compare. ONE
+      behaviour per layer: contentColourCheck (the write validator and the picker)
+      REFUSES a failing colour and may offer the nearest named swatch, never
+      substitutes; resolveContentColour (the renderer) is total and re-runs the
+      current check, drawing a failing stored token as ink (line) or no fill, never
+      stepping it towards a passing colour. Rules: a custom value must keep the
+      minimum from every day reserved colour, and both of its night transforms from
+      every night reserved colour; a neutral is exempt as a LINE only; a fill, named
+      or custom, is also tested against text.primary and line.key-edge of each theme
+      with no exemption (custom:#16150F as a fill is refused). contentPaletteProblems
+      validates the tables; contrastRatio is the WCAG 2 ratio from the same table.
+      Pure, no DOM, no node:*.
+      CONTRAST RULE (S1.4 P0b, design content_palette.contrast_rule, Luna
+      2026-11-25 on Aegis S1.2 nit 6): contrastClears is the WCAG 2 ratio from the
+      same table, luminance quantised (LUMINANCE_QUANTUM; the lighter down, the
+      darker up) and compared as integers with no rounding up (4.499 fails 4.5).
+      A day value on the day surfaces AND its night transform on the night
+      surfaces. CONTENT_CONTRAST_FLOORS: a line 3.0 against surface.ground and
+      surface.sheet, the colour of a TEXT mark 4.5 (contentColourCheck's third
+      argument {text: true}), a fill keeps 4.5 for text.primary; a neutral line is
+      exempt from the distance rule only. contentPairCheck: a mark's line on its
+      own fill 3.0 in both themes, judged on the field being written (offer ink for
+      a line, paper for a fill). A contrast refusal carries why (faint-line,
+      faint-text, faint-fill, pair-line, pair-fill) and night (only the night value
+      fails); CONTENT_CONTRAST_WORDS are the tray's words and contentContrastFix
+      the agent's fixed sentence. resolveContentPair is the paint-time recheck (a
+      failing pair draws its line as ink). Every named token passes every part
+      (contentPaletteProblems checks it). Consequence: orange #FF8800, gold #FFD700
+      and #1E90FF pass as fills and not as lines.
+      DEFERRED, tracked here: to S1.3, running the vectors and the swatch night
+      table in Chrome and WKWebView (they run in Node only today).
+    path: src/content-palette.ts
+    type: module
+    tags: [gnomon, contracts, dimension, colour, paradigm-8]
+    tests:
+      - test/content-palette.test.ts
+  contract-secret-rules:
+    description: >-
+      The secret pattern table as data (Dimensions S1.2, ruling O4):
+      src/secret-rules.ts. SECRET_RULES is an ordered frozen list of {kind, source,
+      flags, group?} (private keys, AWS, GitHub, Slack, Anthropic, OpenAI, JWT, npm,
+      Stripe, GitLab, Google keys, passwords in URLs, bearer headers, generic
+      key=value assignments). ONE table, two users: the kernel's evidence redactor
+      (#loop-check, packages/gnomon/src/kernel/loops/secret-scan.ts, builds its
+      regexes with compileSecretRules; G-LOOP-27 output unchanged) and the dimension
+      write validator (secretKindsIn: the kinds that match, never the matched text).
+      Not an input of the client API descriptor, so a new rule never moves
+      clientApiId. Pure, no DOM, no node:*.
+    path: src/secret-rules.ts
+    type: module
+    tags: [gnomon, contracts, dimension, secrets, paradigm-8]
+    tests:
+      - test/secret-rules.test.ts
   contract-project-hue:
     description: >-
       The ONE project-hue function (critique 2026-10-20 S2.1): projectHue(key)
@@ -313,7 +559,8 @@ components:
       Ids (§4.2, §3.1, S32-13) — ULID (ulid, monotonicUlidFactory with
       in-ms increment and overflow refusal, isUlid, ulidTime) over
       globalThis.crypto.getRandomValues; prefixed ULID ids ev/log/conn/card/arm/
-      permit:v1/brief/msg/ds (mintId, isId); hsid:v1 (mintHsid, non-monotonic so
+      permit:v1/brief/msg/dim/offer (mintId, isId; `dim` is a dimension id, S1.2,
+      replacing the never-minted `ds`); hsid:v1 (mintHsid, non-monotonic so
       hsid-short stays fully random), hsid:v1d derivation (deriveHsidV1d),
       hsid-short = lowercase Crockford of the ULID's 80 random bits, 16 chars
       (hsidShort); turn ids turn:<hsid>/<n> (turnId, parseTurnId); keyId,
@@ -463,7 +710,19 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). TD-2026-10-20-086 F6 + T-2026-10-20-007
+      kitId and clientApiId (§12.3, §12.8). Dimensions S1.2 (ONE deliberate move)
+      moved clientApiId
+      sha256:af070b92e89fe985cb43d7b6f5a720d1f43e7ee0f6aa08d0c87db3e713a4f060 →
+      sha256:e21ffbb2ca618808d3692028d0457a8bf1010f23698e56bd1dd3c115d60142ea:
+      the new descriptor key `dimension` (shape: the dim-shape:v1 vocabulary, limits,
+      patterns, refusal codes and one fixed fold vector; palette: schemaVersion,
+      swatch NAMES and the custom token pattern only, never a colour value, so a
+      re-tuned colour cannot move the id), `canvas` added to OFFER_REACHES, seven
+      reserved first-party names (dimension, dimensions, dim, dims, board, boards,
+      doodle), ref scheme `dim` registered and `doodle` dropped, ID_PREFIXES.ds
+      replaced by dim, paradigm.doodle.exported renamed paradigm.dimension.exported.
+      kitId and modAbiId unchanged (test/dim-move.test.ts holds all three literals).
+      Earlier moves follow. TD-2026-10-20-086 F6 + T-2026-10-20-007
       (one deliberate move) moved clientApiId
       sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4 →
       sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f:

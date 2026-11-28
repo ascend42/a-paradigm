@@ -13,6 +13,8 @@ node_modules
 # Build output
 dist/
 build/
+# the public pages keep their stamp and check scripts in pages/build; they are source, not output
+!/pages/build/
 out/
 *.tsbuildinfo
 

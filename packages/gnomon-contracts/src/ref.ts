@@ -4,10 +4,10 @@
  *   ref = scheme ":" id ["@" rev]
  *
  * Kernel built-ins (§3.7): ev hsid cc gkey dev permit card contract node pev peer.
- * Package-registered (§3.7/§4.4): spec sym wl n s td l t knot doodle.
+ * Package-registered (§3.7/§4.4): spec sym wl n s td l t knot dim (`dim` by the dimension mod, §12.7).
  * `peer:<logId>/<ref>` names an object on a paired kernel (reserved in M1.1 for
  * P8-R9) and never dereferences a local object. The `voice` scheme is dropped
- * (A23-2). Aliases: `# $ ^ ! ~` → sym:, `TD-` → td:, `L-` → l:, `T-` → t:.
+ * (A23-2), and so is `doodle` (S1.2: replaced by `dim` before anything emitted one). Aliases: `# $ ^ ! ~` → sym:, `TD-` → td:, `L-` → l:, `T-` → t:.
  *
  * Spec gap resolved here: §3.9 rewrites `turn:` refs at receipt
  * (`peer:<logId>/turn:…`) and §4.2 defines `turn:<hsid>/<n>`, but neither
@@ -33,14 +33,14 @@ export const KERNEL_REF_SCHEMES = [
   'peer',
   'turn',
 ] as const;
-export const PACKAGE_REF_SCHEMES = ['spec', 'sym', 'wl', 'n', 's', 'td', 'l', 't', 'knot', 'doodle'] as const;
+export const PACKAGE_REF_SCHEMES = ['spec', 'sym', 'wl', 'n', 's', 'td', 'l', 't', 'knot', 'dim'] as const;
 export const REF_SCHEMES = [...KERNEL_REF_SCHEMES, ...PACKAGE_REF_SCHEMES] as const;
 export type RefScheme = (typeof REF_SCHEMES)[number];
 
 /** Schemes reserved one release ahead (§4.9 / A26-11): `peer` (P8-R9, M1.1). */
 export const RESERVED_REF_SCHEMES: readonly RefScheme[] = ['peer'];
 /** Dropped schemes: a ref using one is refused even in tolerant mode. */
-export const DROPPED_REF_SCHEMES = ['voice'] as const;
+export const DROPPED_REF_SCHEMES = ['voice', 'doodle'] as const;
 
 export const REF_ALIASES: ReadonlyArray<{ prefix: string; scheme: RefScheme; keepPrefix: boolean }> = [
   { prefix: '#', scheme: 'sym', keepPrefix: true },

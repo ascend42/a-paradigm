@@ -137,6 +137,27 @@ function hasBlock(file: string): boolean | null {
   return scanAgentGuide(text.replace(/^\uFEFF/, '')).kind === 'one';
 }
 
+/**
+ * The `agent guide` line of the human `warpline orient` output. It reports the
+ * Warpline guidance BLOCK, not the files: a file that exists without the block
+ * reads "has no Warpline guidance block", never "missing" (the file is there).
+ * `agentGuide.agentsMd` is false both for no file and for a file without the
+ * block (frozen orient:v1 shape), so the file's existence is checked here.
+ */
+export function agentGuideLine(
+  r: Pick<OrientReport, 'root' | 'agentGuide'>,
+  fileExists: (file: string) => boolean = fs.existsSync,
+): string {
+  const state = (name: string, block: boolean | null): string => {
+    if (block === true) return `${name} has the Warpline guidance block`;
+    const exists = block === false || fileExists(path.join(r.root, name));
+    return exists ? `${name} has no Warpline guidance block` : `no ${name}`;
+  };
+  const agents = state('AGENTS.md', r.agentGuide.agentsMd ? true : null);
+  const claude = state('CLAUDE.md', r.agentGuide.claudeMd);
+  return `agent guide  ${agents}; ${claude}`;
+}
+
 /** The nearest ANCESTOR of `root` holding a `.warpline/` directory, or null. */
 function enclosingWarplineRoot(root: string): string | null {
   let dir = path.dirname(path.resolve(root));

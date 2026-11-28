@@ -48,6 +48,14 @@
   opacity: 0.6;
 }
 
+/* Always-visible caption: the terminal is an illustration, not captured output. */
+.chromeNote {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
 /* ── Body ── */
 
 .body {

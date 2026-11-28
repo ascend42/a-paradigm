@@ -25,7 +25,8 @@ components:
       - walk.ts
     tags: [feature, brain, security]
   brain-detect:
-    description: Local detectors run BEFORE persistence — PEM keys, AWS/GitHub/Slack/Anthropic/OpenAI key shapes, KEY/SECRET/TOKEN/PASSWORD assignments, Luhn card numbers, US SSN, passport MRZ → quarantined; Slack/Discord/WhatsApp/messages.json chat exports → third-party-data. Returns detector ids only. ReDoS-hardened: secret-assignment is a hand-written separator/key-token/value scanner (placeholder check on value only); no nested quantifiers; per-line 4096-char overlapping windows; pre-emptive budgetMs (parse_ms) → DetectorTimeoutError → quarantined detector-timeout. Adds google-api-key, stripe-key, jwt, iban (mod-97). No BIP39.
+    description: >-
+      Local detectors run BEFORE persistence — PEM keys, AWS/GitHub/Slack/Anthropic/OpenAI key shapes, KEY/SECRET/TOKEN/PASSWORD assignments, Luhn card numbers, US SSN, passport MRZ → quarantined; Slack/Discord/WhatsApp/messages.json chat exports → third-party-data. Returns detector ids only. ReDoS-hardened: secret-assignment is a hand-written separator/key-token/value scanner (placeholder check on value only); no nested quantifiers; per-line 4096-char overlapping windows; pre-emptive budgetMs (parse_ms) → DetectorTimeoutError → quarantined detector-timeout. Adds google-api-key, stripe-key, jwt, iban (mod-97). No BIP39.
     type: service
     anchors:
       - detect.ts

@@ -13,10 +13,10 @@
   - `--json` emits `orient:v1`: `schema`, `root`, `mode`, `initialized`, `selvage`, `enclosingRoot`, `agentGuide {agentsMd, claudeMd}`, `daemon {state, mcpConfigured, mcpTokens}`, `agent {id, source}`, `position`, `next [{verb, command}]`, `nextBecause`, `humanOnly [{verb, command}]`, `limits`. Field meanings: `docs/specs/warpline-flows.md` §4.
   - **Additive only:** `orient:v1` only ever gains fields (enum sets only grow); nothing is removed, renamed or retyped without a new schema (`orient:v2`). Ignore fields you do not know.
 
-**Read instruments (run on any git repo):**
+**Instruments that leave git history and your files alone (run on any git repo):**
 
-- `warpline oracle <A> <B>` — predict a merge from meaning, run git's real merge, score where they agree or diverge.
-- `warpline weave --preview <A> <B>` / `warpline consolidate <refs...>` — pre-merge forecast; N-way fold forecast.
+- `warpline oracle <A> <B>` — predict a merge from meaning, run git's real merge, score where they agree or diverge. It is not write-free: it records its result under `.warpline/` in the repo it runs in (a row in `oracle.jsonl`, plus `states/` and `warp/`), creating the directory if it is not there, and it reads each ref through a temporary `git worktree` that it removes. Add `.warpline/` to `.gitignore` if you only want to try it.
+- `warpline weave --preview <A> <B>` / `warpline consolidate <refs...>` — pre-merge forecast; N-way fold forecast. These write nothing.
 - `warpline diff` / `warpline status` — semantic diff; a rename is the empty delta.
 - `warpline lifeline <symbol>` — meaning-aware blame that survives file renames.
 - The TS code-lens lifts real TypeScript function bodies into meaning (checker-resolved references, deterministic, pinned compiler) — no `.purpose` files required.
@@ -31,18 +31,25 @@
 
 ## What it is not (yet)
 
-- **Not signed.** The fabric is tamper-*evident* (hash-chained identities; edits, reorders, and drops are caught by `fabric verify`), but attribution is self-asserted — cryptographic signatures are on the roadmap (M3).
+- **Signed between agents, not between agent and human.** The fabric is tamper-*evident* (hash-chained identities; edits, reorders, and drops are caught by `fabric verify`). Strands can carry Ed25519 agent signatures (`warpline key`, checked by `warpline fsck`), so agent-to-agent attribution is cryptographic. The human/agent boundary is enforced by permissions and gates, not by a signature.
 - **Not a meaning→code compiler.** Bytes are materialized from Warpline's own content-addressed store; weaving code *from* meaning is the long-run direction, not a shipped verb.
 - **Not round-tripped.** `export --git` (reconstruct git commits from picks, drift-free) is unproven — it is the gate we hold the "replacement" word behind.
 - **Not multi-generation.** Admission currently allows one merge generation and fails closed beyond it (by design, until merge recipes are verify-authenticated).
 
 ## Install / run
 
-Workspace package, not yet published:
+Published on npm as `@a-company/warpline`:
+
+```
+npm i -g @a-company/warpline
+warpline --help
+```
+
+To run from a clone instead:
 
 ```
 npm run build            # in packages/warpline
-node dist/cli.js --help  # or the `warpline` bin when linked
+node dist/cli.js --help
 ```
 
 ## Docs

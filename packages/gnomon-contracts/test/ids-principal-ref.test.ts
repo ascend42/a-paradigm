@@ -161,11 +161,18 @@ describe('principals: compare by full rootKeyId, never ns (G-ID-08 contract half
 
 describe('ref:v1 (§4.4)', () => {
   it('all listed schemes register, peer is reserved, voice is dropped', () => {
-    for (const s of ['ev', 'hsid', 'cc', 'gkey', 'dev', 'permit', 'card', 'contract', 'node', 'pev', 'peer', 'spec', 'sym', 'wl', 'n', 's', 'td', 'l', 't', 'knot', 'doodle']) {
+    for (const s of ['ev', 'hsid', 'cc', 'gkey', 'dev', 'permit', 'card', 'contract', 'node', 'pev', 'peer', 'spec', 'sym', 'wl', 'n', 's', 'td', 'l', 't', 'knot', 'dim']) {
       expect(REF_SCHEMES).toContain(s);
     }
     expect(RESERVED_REF_SCHEMES).toEqual(['peer']);
     expect(parseRef('voice:abc')).toBeUndefined();
+    // S1.2: `doodle` is dropped like `voice` (refused even in tolerant mode); `dim` replaces it
+    expect(REF_SCHEMES).not.toContain('doodle');
+    expect(parseRef('doodle:x')).toBeUndefined();
+    expect(validateRefV1('doodle:x', { mode: 'tolerant' })).toEqual(['malformed ref: doodle:x']);
+    expect(validateRefV1('doodle:x')).toEqual(['malformed ref: doodle:x']);
+    expect(parseRef('dim:01JVA1D0000000000000000001@42')).toEqual({ scheme: 'dim', id: '01JVA1D0000000000000000001', rev: '42', registered: true });
+    expect(validateRefV1('dim:01JVA1D0000000000000000001@42')).toEqual([]);
   });
   it('aliases', () => {
     expect(expandRefAlias('#approval-broker')).toBe('sym:#approval-broker');
