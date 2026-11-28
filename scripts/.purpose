@@ -24,6 +24,6 @@ components:
       - release
       - gnomon
   pre-publish-check:
-    description: Pre-publish sanity checks run before npm publish.
+    description: Pre-publish sanity checks run before npm publish (build, version pairs, CHANGELOG entry, plugins/paradigm/hooks/hooks.json, and this checkout's built `paradigm doctor`).
     type: utility
     file: pre-publish-check.mjs
