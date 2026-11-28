@@ -21,7 +21,7 @@
  *     banner at the top sends every one-press mod on one grouped card.
  */
 import { RpcError, type GnomonClient, type ShownRefusal } from '../core/client.js';
-import { bannerText, configRequest, configurable, deskText, folderPathError, installRequest, linkRequest, mcpText, modsViewOf, offerLines, oneTapOffer, pauseRequest, resultText, reviewOffers, setupBanner, SETUP_COPY, setupRequest, startRequest, stateText, uninstallRequest, type ConfigForm, type InstalledMod, type ModPending, type ModRequest, type ModsView } from '../core/mods.js';
+import { bannerKey, bannerText, configRequest, configurable, deskText, folderPathError, installRequest, linkRequest, mcpText, modsViewOf, offerFacts, oneTapOffer, projectRowText, quoteArgs, pauseRequest, resultText, reviewOffers, setupBanner, SETUP_COPY, setupRequest, startRequest, stateText, uninstallRequest, type ConfigForm, type InstalledMod, type ModPending, type ModRequest, type ModsView } from '../core/mods.js';
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { FolderField, fieldView, type FolderFieldView } from '../core/folder-field.js';
 import { focusFolder, folderFieldEl, routeFolderPress } from './folder-field.js';
@@ -36,7 +36,8 @@ export interface ModsDeps {
 }
 
 export interface ModsPanel {
-  open(): void;
+  /** Mika A4: with a mod name, the sheet scrolls to that row and focuses it */
+  open(mod?: string): void;
   close(): void;
   isOpen(): boolean;
   repaint(): void;
@@ -88,8 +89,9 @@ const key = (doc: MiniDoc, act: string, label: string, attrs: Record<string, str
   return b;
 };
 
-function resultEl(doc: MiniDoc, r: ModResult | undefined): MiniEl | null {
-  return r ? h(doc, 'p', { class: `meta mod-result${r.fail ? ' fail' : ''}`, role: r.fail ? 'alert' : 'status' }, r.text) : null;
+/** A request's result line; focusable (tabindex -1) so focus can land on it after a send (Mika A3). */
+function resultEl(doc: MiniDoc, r: ModResult | undefined, at = ''): MiniEl | null {
+  return r ? h(doc, 'p', { class: `meta mod-result${r.fail ? ' fail' : ''}`, role: r.fail ? 'alert' : 'status', tabindex: '-1', 'data-result-for': at }, r.text) : null;
 }
 
 const PENDING_WORDS: Record<ModPending['what'], string> = { install: 'install card waiting', update: 'update card waiting', uninstall: 'uninstall card waiting', configure: 'launch-change card waiting' };
@@ -122,19 +124,28 @@ function reviewForm(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
     for (const o of offers) ch.appendChild(h(doc, 'button', { class: 'key quiet', type: 'button', 'aria-pressed': o.declId === pick.declId ? 'true' : 'false', 'data-mod-act': 'review-pick', 'data-mod-name': m.name, 'data-decl': o.declId }, `${o.name} · ${o.source}`));
     f.appendChild(ch);
   }
-  for (const l of offerLines(pick)) f.appendChild(h(doc, 'p', { class: 'meta mod-offer-line' }, l));
-  if (m.mcp!.configurable.args) f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, 'arguments (separate with spaces; quote one that holds a space)', h(doc, 'input', { class: 'field', type: 'text', name: 'review-args', 'aria-label': 'arguments', maxlength: '4096', value: pick.args.join(' ') })));
+  const argsShown = m.mcp!.configurable.args;
+  const facts = offerFacts(pick, argsShown);
+  // Mika A6: the scope note first, in warn ink
+  if (facts.scope) f.appendChild(h(doc, 'p', { class: 'meta mod-scope-note' }, facts.scope));
+  // Mika A7: source, command and env as one label/value group
+  const grid = h(doc, 'div', { class: 'mod-review-facts', role: 'group', 'aria-label': 'what would be copied' });
+  for (const [k, val] of facts.pairs) grid.appendChild(h(doc, 'div', { class: 'mod-fact' }, h(doc, 'span', { class: 'meta mod-fact-k' }, k), h(doc, 'span', { class: 'meta mod-fact-v' }, val)));
+  f.appendChild(grid);
+  for (const l of facts.notes) f.appendChild(h(doc, 'p', { class: 'meta mod-offer-line' }, l));
+  // Aegis N6: quoted, so splitArgs gives the same list back (an untouched field sends nothing)
+  if (argsShown) f.appendChild(h(doc, 'label', { class: 'meta mod-field mod-review-first-field' }, 'arguments (separate with spaces; quote one that holds a space)', h(doc, 'input', { class: 'field', type: 'text', name: 'review-args', 'aria-label': 'arguments', maxlength: '4096', value: quoteArgs(pick.args) })));
   for (const e of m.mcp!.configurable.env.filter((x) => !m.mcp!.configurable.secret.includes(x))) {
     const copied = pick.envNames.includes(e);
-    f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, `env ${e}${copied ? ` · ${SETUP_COPY.copied}; type to replace it` : ''}`, h(doc, 'input', { class: 'field', type: 'text', name: `review-env:${e}`, 'data-env': e, 'aria-label': `env ${e}`, maxlength: '4096' })));
+    f.appendChild(h(doc, 'label', { class: `meta mod-field${!argsShown ? ' mod-review-first-field' : ''}` }, `env ${e}`, h(doc, 'input', { class: 'field', type: 'text', name: `review-env:${e}`, 'data-env': e, 'aria-label': `env ${e}`, maxlength: '4096', ...(copied ? { placeholder: SETUP_COPY.copiedPlaceholder } : {}) })));
   }
   if (ui.configError) f.appendChild(h(doc, 'p', { class: 'meta mod-result fail', role: 'alert' }, ui.configError));
-  f.appendChild(h(doc, 'div', { class: 'mod-keys' }, key(doc, 'review-send', SETUP_COPY.send, { 'data-mod-name': m.name, 'data-decl': pick.declId }, ui, `setup:${m.name}`), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-mod-act': 'review-cancel' }, 'cancel')));
+  f.appendChild(h(doc, 'div', { class: 'mod-keys' }, key(doc, 'review-send', SETUP_COPY.send, { 'data-mod-name': m.name, 'data-decl': pick.declId }, ui, `setup:${m.name}`), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-mod-act': 'review-cancel', 'data-mod-name': m.name }, SETUP_COPY.cancel)));
   return f;
 }
 
 function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
-  const row = h(doc, 'div', { class: `mod-row mod-state-${m.state}`, role: 'group', 'aria-label': m.name, 'data-mod': m.name });
+  const row = h(doc, 'div', { class: `mod-row mod-state-${m.state}`, role: 'group', 'aria-label': m.name, 'data-mod': m.name, tabindex: '-1' });
   row.appendChild(
     h(
       doc,
@@ -152,25 +163,27 @@ function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
   row.appendChild(h(doc, 'p', { class: 'meta mod-facts' }, `publisher ${m.publisher} · ${m.source} · pin `, h(doc, 'code', { title: 'the pinned packageHash (prefix)' }, m.pin)));
   row.appendChild(h(doc, 'p', { class: 'meta mod-mcp' }, `MCP: ${mcpText(m)}`));
   // a repo's .mcp.json match is shown, disabled, with its reason (Aegis condition 3); never offered
-  for (const o of (m.mcp?.launch === 'needs-config' ? m.mcp.setup : []).filter((x) => x.problem)) row.appendChild(h(doc, 'p', { class: 'meta mod-offer-off', 'aria-disabled': 'true' }, `your ${o.name} server (${o.source}) can't be copied: ${o.problem}`));
+  for (const o of (m.mcp?.launch === 'needs-config' ? m.mcp.setup : []).filter((x) => x.problem)) row.appendChild(h(doc, 'p', { class: 'meta mod-offer-off', 'aria-disabled': 'true' }, o.source === 'project' ? projectRowText(o.name) : `your ${o.name} server (${o.source}) can't be copied: ${o.problem}`));
+  if (m.mcp?.setupSkipped) row.appendChild(h(doc, 'p', { class: 'meta mod-result fail', role: 'status' }, `the setup card skipped it: its server changed before you allowed it (card ${m.mcp.setupSkipped.cardId.slice(-6)})`));
   if (m.offers.length) row.appendChild(h(doc, 'p', { class: 'meta mod-offers' }, `offers: ${m.offers.map((o) => (o.title ? `${o.title} (${o.kind})` : o.kind)).join(' · ')}`));
   if (m.offers.length || m.desk.shown || m.desk.suppressed || m.desk.kept) row.appendChild(h(doc, 'p', { class: 'meta mod-desk', title: 'the Desk counts of gnomon desk stats' }, `Desk: ${deskText(m.desk)}`));
   for (const p of pendingEls(doc, m.pending)) row.appendChild(p);
   const keys = h(doc, 'div', { class: 'mod-keys' });
   const n = { 'data-mod-name': m.name };
-  if (m.state === 'paused') keys.appendChild(key(doc, 'start', 'Start', n, ui, `start:${m.name}`));
-  else if (m.state !== 'error') keys.appendChild(key(doc, 'pause', 'Pause', n, ui, `pause:${m.name}`));
+  // Mika A9: the setup key first; Configure steps aside while a review is on offer
   const tap = oneTapOffer(m);
   const review = m.mcp?.launch === 'needs-config' && !m.mcp.setupPending && !m.pending.length && reviewOffers(m).length > 0;
   if (tap) keys.appendChild(key(doc, 'setup', SETUP_COPY.key, { ...n, 'data-decl': tap.declId }, ui, `setup:${m.name}`));
-  if (review && ui.reviewOpen !== m.name) keys.appendChild(h(doc, 'button', { class: tap ? 'key quiet' : 'key', type: 'button', 'data-mod-act': 'review', ...n }, tap ? SETUP_COPY.review : SETUP_COPY.reviewOnly));
-  if (configurable(m) && ui.configOpen !== m.name) keys.appendChild(key(doc, 'configure', 'Configure', n, ui, `configure:${m.name}`));
+  if (review && ui.reviewOpen !== m.name) keys.appendChild(h(doc, 'button', { class: tap ? 'key quiet' : 'key', type: 'button', 'data-mod-act': 'review', ...n }, SETUP_COPY.review));
+  if (m.state === 'paused') keys.appendChild(key(doc, 'start', 'Start', n, ui, `start:${m.name}`));
+  else if (m.state !== 'error') keys.appendChild(key(doc, 'pause', 'Pause', n, ui, `pause:${m.name}`));
+  if (configurable(m) && !review && ui.configOpen !== m.name) keys.appendChild(key(doc, 'configure', 'Configure', n, ui, `configure:${m.name}`));
   if (m.update && !m.pending.some((p) => p.what === 'update')) keys.appendChild(key(doc, 'update', `Update to ${m.update.version}`, { ...n, 'data-path': m.update.path }, ui, `update:${m.name}`));
   if (!m.uninstallRequested && !m.pending.some((p) => p.what === 'uninstall')) keys.appendChild(key(doc, 'uninstall', 'Uninstall', n, ui, `uninstall:${m.name}`));
   row.appendChild(keys);
   if (ui.configOpen === m.name && m.mcp) row.appendChild(configForm(doc, m, ui));
   if (ui.reviewOpen === m.name && m.mcp && reviewOffers(m).length) row.appendChild(reviewForm(doc, m, ui));
-  const r = resultEl(doc, ui.results.get(m.name));
+  const r = resultEl(doc, ui.results.get(m.name), m.name);
   if (r) row.appendChild(r);
   return row;
 }
@@ -193,8 +206,8 @@ export function paintMods(doc: MiniDoc, body: { firstChild: unknown; removeChild
   const b = setupBanner(v);
   if (b) {
     const s = h(doc, 'section', { class: 'settings-sec mods-sec mods-setup', 'data-section': 'setup', 'aria-label': 'Mod servers to set up' });
-    s.appendChild(h(doc, 'p', { class: 'meta mods-setup-line', role: 'status' }, bannerText(b), ' ', b.oneTap.length ? key(doc, 'setup-all', b.oneTap.length === 1 ? SETUP_COPY.bannerKeyOne : SETUP_COPY.bannerKey, { 'data-items': JSON.stringify(b.oneTap) }, ui, 'setup-all') : null));
-    const rb = resultEl(doc, ui.results.get('setup-all'));
+    s.appendChild(h(doc, 'p', { class: 'meta mods-setup-line', role: 'status' }, bannerText(b), ' ', b.oneTap.length ? key(doc, 'setup-all', bannerKey(b.oneTap), { 'data-items': JSON.stringify(b.oneTap) }, ui, 'setup-all') : null));
+    const rb = resultEl(doc, ui.results.get('setup-all'), 'setup-all');
     if (rb) s.appendChild(rb);
     body.appendChild(s);
   }
@@ -309,13 +322,20 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     back?.focus();
     back = null;
   };
-  const open = (): void => {
+  const focusRow = (mod: string): boolean => {
+    const row = body.querySelector(`[data-mod="${CSS.escape(mod)}"]`) as HTMLElement | null;
+    if (!row) return false;
+    row.scrollIntoView({ block: 'center' });
+    row.focus();
+    return true;
+  };
+  const open = (mod?: string): void => {
     back = document.activeElement as HTMLElement | null;
     addField.setStatus(d.status());
     cmdField.setStatus(d.status());
     overlay.hidden = false;
     repaint();
-    closeBtn.focus();
+    if (!mod || !focusRow(mod)) closeBtn.focus();
     void d.refreshStatus().then(repaint, () => undefined);
   };
   const send = async (busyKey: string, resultKey: string, req: ModRequest): Promise<void> => {
@@ -331,6 +351,12 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     if (!r.fail && req.kind === 'request.mod.link') addField.clear();
     await d.refreshStatus().catch(() => undefined);
     repaint();
+    // Mika A3: after a setup send, focus lands on its result (else the row), never lost to the body
+    if (req.kind === 'request.mod.setup') {
+      const res = body.querySelector(`[data-result-for="${CSS.escape(resultKey)}"]`) as HTMLElement | null;
+      if (res) res.focus();
+      else focusRow(resultKey);
+    }
   };
   body.addEventListener('input', (e) => {
     const t = e.target as HTMLInputElement;
@@ -377,7 +403,9 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     if (act === 'review-cancel') {
       ui.reviewOpen = null;
       ui.configError = null;
-      return repaint();
+      repaint();
+      // Mika A3: focus goes back to the row's Review first key
+      return void (body.querySelector(`[data-mod-act="review"][data-mod-name="${CSS.escape(name)}"]`) as HTMLElement | null)?.focus();
     }
     if (act === 'review-send') {
       const m = modsViewOf(d.status(), d.cards()).installed.find((x) => x.name === name);
@@ -387,7 +415,7 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
       const argsEl = form.querySelector('[name="review-args"]') as HTMLInputElement | null;
       const typedArgs = argsEl ? splitArgs(argsEl.value) : null;
       // only what the person changed travels: the copied values stay in the kernel
-      const args = typedArgs && typedArgs.join(' ') !== offer.args.join(' ') ? typedArgs : undefined;
+      const args = typedArgs && JSON.stringify(typedArgs) !== JSON.stringify(offer.args) ? typedArgs : undefined;
       const env: Record<string, string> = {};
       for (const i of form.querySelectorAll<HTMLInputElement>('[data-env]')) if (i.value !== '') env[i.dataset.env!] = i.value;
       ui.configError = null;

@@ -2105,15 +2105,21 @@ function paintModNotice(): void {
   modNoticeKey = k;
   while (modNotice.firstChild) modNotice.removeChild(modNotice.firstChild);
   modNotice.hidden = ls.length === 0;
+  const doc = document as unknown as MiniDoc;
   for (const l of ls) {
-    const b = h(document as unknown as MiniDoc, 'button', { class: 'key quiet', type: 'button', 'data-notice-items': JSON.stringify(l.items) }, l.key);
-    modNotice.appendChild(h(document as unknown as MiniDoc, 'p', { class: 'meta k-line kernel-owned mod-notice-line' }, `${l.text} · `, b) as unknown as Node);
+    // Mika A8: the words carry their own " ·"; the keys wrap beside them
+    const line = h(doc, 'p', { class: 'meta k-line kernel-owned mod-notice-line', 'data-notice-state': l.state }, h(doc, 'span', { class: 'mod-notice-text' }, l.text));
+    for (const key of l.keys) line.appendChild(h(doc, 'button', { class: key.quiet ? 'key quiet' : 'key', type: 'button', 'data-notice-act': key.act, 'data-notice-items': JSON.stringify(key.items ?? []), 'data-notice-mod': key.mod ?? '', 'data-notice-card': key.cardId ?? '' }, key.label));
+    modNotice.appendChild(line as unknown as Node);
   }
 }
 modNotice.addEventListener('click', (e) => {
   if (!e.isTrusted) return; // G-GUI-04
-  const b = (e.target as HTMLElement).closest('[data-notice-items]') as HTMLButtonElement | null;
+  const b = (e.target as HTMLElement).closest('[data-notice-act]') as HTMLButtonElement | null;
   if (!b || b.disabled) return;
+  const act = b.dataset.noticeAct;
+  if (act === 'card') return void focusCard(b.dataset.noticeCard ?? '');
+  if (act === 'mods') return void modsPanel.open(b.dataset.noticeMod || undefined);
   const items = JSON.parse(b.dataset.noticeItems ?? '[]') as Array<{ name: string; from: string }>;
   if (!items.length) return void modsPanel.open();
   b.disabled = true;

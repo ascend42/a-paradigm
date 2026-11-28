@@ -76,6 +76,8 @@ export interface ModMcp {
   launch: 'ok' | 'needs-config';
   setup: SetupOffer[];
   setupPending: string | null;
+  /** Aegis N3: the newest setup card skipped this mod (its server changed before you allowed it) */
+  setupSkipped: { cardId: string; why: string } | null;
 }
 
 export interface InstalledMod {
@@ -193,7 +195,7 @@ export function modsViewOf(status: unknown, cards: Iterable<StackCard> = []): Mo
       pausedWhy: str(m.pausedWhy),
       note: noteOf(m.note),
       uninstallRequested: m.uninstallRequested === true,
-      mcp: mcp && str(mcp.server) ? { server: str(mcp.server)!, overridden: mcp.overridden === true, configRequested: mcp.configRequested === true, configurable: { command: cfg?.command === true, args: cfg?.args === true, env: strs(cfg?.env), secret: strs(cfg?.secret) }, command: str(mcp.command) ?? '', args: strs(mcp.args), launch: mcp.launch === 'needs-config' ? 'needs-config' : 'ok', setup: setupOffersOf(mcp.setup), setupPending: str(mcp.setupPending) } : null,
+      mcp: mcp && str(mcp.server) ? { server: str(mcp.server)!, overridden: mcp.overridden === true, configRequested: mcp.configRequested === true, configurable: { command: cfg?.command === true, args: cfg?.args === true, env: strs(cfg?.env), secret: strs(cfg?.secret) }, command: str(mcp.command) ?? '', args: strs(mcp.args), launch: mcp.launch === 'needs-config' ? 'needs-config' : 'ok', setup: setupOffersOf(mcp.setup), setupPending: str(mcp.setupPending), setupSkipped: skippedOf(mcp.setupSkipped) } : null,
       offers: (Array.isArray(m.offers) ? m.offers : []).map(obj).filter((o): o is Record<string, unknown> => !!o).map((o) => ({ kind: str(o.kind) ?? '', title: str(o.title) ?? '' })).slice(0, 16),
       desk: { shown: num(desk?.shown), suppressed: num(desk?.suppressed), kept: num(desk?.kept) },
       update: upd && str(upd.path) && str(upd.version) ? { version: str(upd.version)!, path: str(upd.path)! } : null,
@@ -247,16 +249,33 @@ function setupOffersOf(v: unknown): SetupOffer[] {
 
 /* ── #gui-mod-setup ─────────────────────────────────────────────────────── */
 
+function skippedOf(v: unknown): { cardId: string; why: string } | null {
+  const o = obj(v);
+  return o && str(o.cardId) && str(o.why) ? { cardId: str(o.cardId)!, why: str(o.why)! } : null;
+}
+
+/** Word rulings (Luna, the orchestrator): sentence-case keys; "Review first" is the one name for reviewing. */
 export const SETUP_COPY = Object.freeze({
   key: 'Set up from your Claude Code config',
   review: 'Review first',
-  reviewOnly: 'Set up from your Claude Code config…',
-  bannerKey: 'Set them up',
-  bannerKeyOne: 'Set it up',
   copied: 'copied from your ~/.claude.json, value not shown',
+  copiedPlaceholder: 'copied · type to replace',
   send: 'Set up',
-  failedKey: 'Review its setup',
+  cancel: 'Cancel',
+  openMods: 'Open Mods',
+  reviewRest: 'Review the rest in Mods',
+  showCard: 'Show the card',
 });
+
+/** A mod's short name for words (Mika A8: never a gm_ id): `gnomon.neurons` / `gm_gnomon_neurons` → `neurons`. */
+export function shortName(modOrServer: string): string {
+  const dot = modOrServer.indexOf('.');
+  if (/^g[mx]_/.test(modOrServer)) return modOrServer.replace(/^g[mx]_[a-z0-9-]+_/, '');
+  return dot > 0 ? modOrServer.slice(dot + 1) : modOrServer;
+}
+
+/** The names as one phrase: "a", "a and b", "a, b and c". */
+const listed = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
 
 /** The candidate one press sends (the kernel's preselected, one-press candidate), or null. */
 export function oneTapOffer(m: Pick<InstalledMod, 'mcp' | 'pending'>): SetupOffer | null {
@@ -274,7 +293,7 @@ export function setupRequest(items: ReadonlyArray<{ name: string; from: string; 
   return { kind: 'request.mod.setup', payload: { items: items.map((i) => ({ name: i.name, from: i.from, ...(i.args ? { args: [...i.args] } : {}), ...(i.env && Object.keys(i.env).length ? { env: { ...i.env } } : {}) })) } };
 }
 
-/** The Mods banner: how many mod servers wait for setup, and the one-press items. */
+/** The Mods banner: the mod servers that wait for setup, and the one-press items. */
 export function setupBanner(v: Pick<ModsView, 'installed'>): { waiting: string[]; oneTap: Array<{ name: string; from: string }> } | null {
   const waiting = v.installed.filter((m) => m.mcp?.launch === 'needs-config' && m.state !== 'paused' && !m.mcp.setupPending && !m.pending.length);
   if (!waiting.length) return null;
@@ -282,48 +301,74 @@ export function setupBanner(v: Pick<ModsView, 'installed'>): { waiting: string[]
   return { waiting: waiting.map((m) => m.name), oneTap };
 }
 
-export function bannerText(b: { waiting: string[]; oneTap: unknown[] }): string {
+/**
+ * Mika A5: "3 mod servers aren't set up. neurons is ready in one press; ledger and paradigm-context need a look first."
+ * (short names; the ready part only when one is ready, the look part only when one needs it).
+ */
+export function bannerText(b: { waiting: string[]; oneTap: Array<{ name: string }> }): string {
   const n = b.waiting.length;
-  const k = b.oneTap.length;
+  const ready = b.oneTap.map((o) => shortName(o.name));
+  const look = b.waiting.filter((w) => !b.oneTap.some((o) => o.name === w)).map(shortName);
   const lead = n === 1 ? "1 mod server isn't set up." : `${n} mod servers aren't set up.`;
-  if (!k) return `${lead} Set ${n === 1 ? 'it' : 'them'} up from ${n === 1 ? 'its row' : 'their rows'} below.`;
-  return `${lead} ${k === n ? (n === 1 ? 'It' : n === 2 ? 'Both' : 'All') : `${k} of ${n}`} can be set up from your Claude Code config.`;
+  const readyWords = ready.length === 0 ? '' : ready.length === n && n > 1 ? (n === 2 ? 'Both are ready in one press' : `All ${n} are ready in one press`) : `${listed(ready)} ${ready.length === 1 ? 'is' : 'are'} ready in one press`;
+  const lookWords = look.length ? `${listed(look)} ${look.length === 1 ? 'needs' : 'need'} a look first` : '';
+  return `${lead} ${[readyWords, lookWords].filter(Boolean).join('; ')}.`;
 }
 
-/** The plain lines "Review first" shows for one candidate (names only). */
-export function offerLines(o: SetupOffer): string[] {
+/** The banner key: `Set up neurons` (one), `Set up both` (two), `Set up all 3` (three or more). */
+export function bannerKey(oneTap: ReadonlyArray<{ name: string }>): string {
+  return oneTap.length === 1 ? `Set up ${shortName(oneTap[0]!.name)}` : oneTap.length === 2 ? 'Set up both' : `Set up all ${oneTap.length}`;
+}
+
+/** Args as one field value that splitArgs turns back into the same list (Aegis N6). */
+export function quoteArgs(args: readonly string[]): string {
+  return args.map((a) => (a === '' ? '""' : !/[\s"']/.test(a) ? a : !a.includes('"') ? `"${a}"` : `'${a}'`)).join(' ');
+}
+
+/** Mika A6: a repo .mcp.json candidate, never offered. */
+export const projectRowText = (name: string): string => `Not offered: ${name} in a repo's .mcp.json (a repo can't set a launch for every repo)`;
+
+/**
+ * Mika A7: "Review first" for one candidate, as a label/value group (names only) and plain notes. The scope note
+ * comes first (warn ink). `argsShown` false: the args line joins the group (the field is not offered).
+ */
+export function offerFacts(o: SetupOffer, argsShown: boolean): { scope: string | null; pairs: Array<[string, string]>; notes: string[] } {
   const src = o.source === 'user' ? 'your ~/.claude.json (every project)' : o.source === 'plugin' ? `the Claude Code plugin ${o.plugin?.id ?? '?'}${o.plugin?.version ? ` ${o.plugin.version}` : ''} (third-party code)` : o.source === 'local' ? 'your ~/.claude.json, for one folder' : "a repo's .mcp.json";
-  return [
-    `from ${src}, as ${o.name}`,
-    `command ${o.command ?? '?'}${o.realCommand && o.realCommand !== o.command ? ` → ${o.realCommand}` : ''}`,
-    `args ${o.args.join(' ') || '(none)'}`,
-    ...o.envNames.map((n) => `${n} ${SETUP_COPY.copied}`),
-    ...(o.envDropped.length ? [`not copied, this mod does not take them: ${o.envDropped.join(', ')}`] : []),
-    ...(o.envSecret.length ? [`not copied, marked secret (Gnomon cannot keep a mod secret yet): ${o.envSecret.join(', ')}`] : []),
-    ...(o.scopeNote ? [o.scopeNote] : []),
-  ];
+  return {
+    scope: o.scopeNote,
+    pairs: [
+      ['from', `${src}, as ${o.name}`],
+      ['command', `${o.command ?? '?'}${o.realCommand && o.realCommand !== o.command ? ` → ${o.realCommand}` : ''}`],
+      ...(argsShown ? [] : ([['args', o.args.join(' ') || '(none)']] as Array<[string, string]>)),
+      ...(o.envNames.length ? ([['env', `${o.envNames.join(', ')} · ${SETUP_COPY.copied}`]] as Array<[string, string]>) : []),
+    ],
+    notes: [
+      ...(o.envDropped.length ? [`not copied, this mod does not take them: ${o.envDropped.join(', ')}`] : []),
+      ...(o.envSecret.length ? [`not copied, marked secret (Gnomon cannot keep a mod secret yet): ${o.envSecret.join(', ')}`] : []),
+    ],
+  };
 }
 
-/** The session's kernel-voiced line for one mod server (GUI constant words and the server name only). */
+/** The session's notice for one mod server (GUI constant words and short names only). */
 export interface ModServerNotice {
   server: string;
   mod: string | null;
-  state: 'unset' | 'failed';
-  text: string;
-  key: string;
+  state: 'unset' | 'failed' | 'pending';
+  cardId?: string;
 }
 const GM = /^g[mx]_[A-Za-z0-9_.-]{1,80}$/;
 
 /**
- * The mod servers this session does not have: a needs-config mod (status) is `unset`; a gm_ server a session listed
- * as failed (Claude's init `mcp_servers[].status`, or a local-lane session.mcp{state:'failed'}) is `failed`. Only the
- * server NAME is read from a row: never its error or detail (Aegis condition 12).
+ * The mod servers this session does not have. A needs-config mod (status) is `unset`; a mod whose setup card waits is
+ * `pending` (Mika A2); a gm_ server failed in the NEWEST init of this session (Aegis N2), or a local-lane
+ * session.mcp{state:'failed'}, is `failed`. Only the server NAME is read from a row, never its error or detail.
  */
 export function modServerNotices(v: Pick<ModsView, 'installed'>, rows: Iterable<{ kind: string; payload?: unknown }>): ModServerNotice[] {
-  const failed = new Set<string>();
+  let initFailed = new Set<string>();
+  const laneFailed = new Set<string>();
   for (const r of rows) {
     const p = obj(r.payload);
-    if (r.kind === 'session.mcp' && p?.state === 'failed' && typeof p.server === 'string' && GM.test(p.server)) failed.add(p.server);
+    if (r.kind === 'session.mcp' && p?.state === 'failed' && typeof p.server === 'string' && GM.test(p.server)) laneFailed.add(p.server);
     if (r.kind === 'turn.event' && typeof p?.line === 'string' && p.line.length < 262144 && p.line.includes('"init"')) {
       let m: unknown;
       try {
@@ -333,43 +378,67 @@ export function modServerNotices(v: Pick<ModsView, 'installed'>, rows: Iterable<
       }
       const o = obj(m);
       if (o?.type !== 'system' || o.subtype !== 'init' || !Array.isArray(o.mcp_servers)) continue;
+      initFailed = new Set();
       for (const s of o.mcp_servers.slice(0, 64)) {
         const x = obj(s);
-        if (typeof x?.name === 'string' && GM.test(x.name) && x.status === 'failed') failed.add(x.name);
+        if (typeof x?.name === 'string' && GM.test(x.name) && x.status === 'failed') initFailed.add(x.name);
       }
     }
   }
+  const failed = new Set([...initFailed, ...laneFailed]);
   const out: ModServerNotice[] = [];
   const byServer = new Map(v.installed.filter((m) => m.mcp).map((m) => [m.mcp!.server, m]));
   for (const m of v.installed) {
-    if (m.mcp?.launch !== 'needs-config' || m.state === 'paused' || failed.has(m.mcp.server)) continue;
-    out.push({ server: m.mcp.server, mod: m.name, state: 'unset', text: `${m.mcp.server} isn't set up, so this session doesn't have it`, key: SETUP_COPY.key });
+    if (m.mcp?.launch !== 'needs-config' || m.state === 'paused') continue;
+    const card = m.mcp.setupPending ?? m.pending.find((p) => p.what === 'configure')?.cardId ?? null;
+    if (card) out.push({ server: m.mcp.server, mod: m.name, state: 'pending', cardId: card });
+    else if (!failed.has(m.mcp.server)) out.push({ server: m.mcp.server, mod: m.name, state: 'unset' });
   }
-  for (const server of [...failed].sort()) out.push({ server, mod: byServer.get(server)?.name ?? null, state: 'failed', text: `${server} failed to start`, key: SETUP_COPY.failedKey });
+  for (const server of [...failed].sort()) out.push({ server, mod: byServer.get(server)?.name ?? null, state: 'failed' });
   return out;
 }
 
-/** The names as one phrase: "a", "a and b", "a, b and c". */
-const listed = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+export interface NoticeKey {
+  label: string;
+  act: 'setup' | 'mods' | 'card';
+  quiet?: boolean;
+  items?: Array<{ name: string; from: string }>;
+  mod?: string | null;
+  cardId?: string;
+}
+export interface NoticeLine {
+  state: ModServerNotice['state'];
+  /** ends with " ·" (Mika A8: the separator is part of the words, the keys follow) */
+  text: string;
+  keys: NoticeKey[];
+}
 
 /**
- * The session's line(s), grouped (the design's ONE kernel-voiced line per kind): every server that isn't set up on one
- * line whose key sends every one-press mod on one card (none: it opens Mods), every failed server on one line whose key
- * opens Mods. GUI words and server names only.
+ * The session's lines (Mika A1, A2; Aegis I2), grouped per kind, short names only:
+ *   unset    "<a>, <b> and <c> aren't set up, so this session doesn't have them ·" with keys that follow the items:
+ *            all one press: "Set up from your Claude Code config"; some: "Set up <ready>" + quiet "Review the rest in
+ *            Mods"; none: "Open Mods"
+ *   pending  one line per card: "<a> waits on its card in the stack ·" "Show the card"
+ *   failed   "<a> failed to start in this session · Gnomon can't see why from here ·" "Open Mods" (never a cause: the
+ *            kernel cannot tell a sandbox refusal from a bad launch)
  */
-export function noticeLines(ns: readonly ModServerNotice[], v: Pick<ModsView, 'installed'>): Array<{ state: 'unset' | 'failed'; text: string; key: string; items: Array<{ name: string; from: string }> }> {
-  const out: Array<{ state: 'unset' | 'failed'; text: string; key: string; items: Array<{ name: string; from: string }> }> = [];
+export function noticeLines(ns: readonly ModServerNotice[], v: Pick<ModsView, 'installed'>): NoticeLine[] {
+  const out: NoticeLine[] = [];
   const unset = ns.filter((n) => n.state === 'unset');
-  const failed = ns.filter((n) => n.state === 'failed');
   if (unset.length) {
     const items = unset.flatMap((n) => {
       const m = v.installed.find((x) => x.name === n.mod);
       const o = m ? oneTapOffer(m) : null;
       return m && o ? [{ name: m.name, from: o.declId }] : [];
     }).slice(0, 8);
-    out.push({ state: 'unset', text: unset.length === 1 ? unset[0]!.text : `${listed(unset.map((n) => n.server))} aren't set up, so this session doesn't have them`, key: SETUP_COPY.key, items });
+    const names = unset.map((n) => shortName(n.mod ?? n.server));
+    const rest = unset.find((n) => !items.some((i) => i.name === n.mod))?.mod ?? null;
+    const keys: NoticeKey[] = items.length === unset.length ? [{ label: SETUP_COPY.key, act: 'setup', items }] : items.length ? [{ label: `Set up ${listed(items.map((i) => shortName(i.name)))}`, act: 'setup', items }, { label: SETUP_COPY.reviewRest, act: 'mods', mod: rest, quiet: true }] : [{ label: SETUP_COPY.openMods, act: 'mods', mod: unset[0]!.mod }];
+    out.push({ state: 'unset', text: `${listed(names)} ${names.length === 1 ? "isn't" : "aren't"} set up, so this session doesn't have ${names.length === 1 ? 'it' : 'them'} ·`, keys });
   }
-  if (failed.length) out.push({ state: 'failed', text: `${listed(failed.map((n) => n.server))} failed to start`, key: SETUP_COPY.failedKey, items: [] });
+  for (const n of ns.filter((x) => x.state === 'pending')) out.push({ state: 'pending', text: `${shortName(n.mod ?? n.server)} waits on its card in the stack ·`, keys: [{ label: SETUP_COPY.showCard, act: 'card', cardId: n.cardId! }] });
+  const failed = ns.filter((n) => n.state === 'failed');
+  if (failed.length) out.push({ state: 'failed', text: `${listed(failed.map((n) => shortName(n.mod ?? n.server)))} failed to start in this session · Gnomon can't see why from here ·`, keys: [{ label: SETUP_COPY.openMods, act: 'mods', mod: failed[0]!.mod }] });
   return out;
 }
 
