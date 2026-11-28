@@ -14,7 +14,9 @@ import { McpConfigCards, MCP_SECRET_ARG_REFUSAL, overrideLaunches, readMcpConfig
 import { discoverMcpServers } from '../src/kernel/desk/mcp-servers.js';
 import { McpServers, writeMcpServersStore } from '../src/kernel/desk/mcp-server-cards.js';
 import { candidateOf, matchOf, MOD_SETUP_MAX, ModSetup, preselectedOf, setupCandidates, setupRow, SETUP_PROBLEM_TEXT, type SetupCandidate } from '../src/kernel/desk/mcp-setup.js';
-import { runModConfig } from '../src/cli/desk-cli.js';
+import { pickFromClaude, runModConfig } from '../src/cli/desk-cli.js';
+import { ENV_SECRET_LINE, RUNS_IN_TEXT } from '../src/kernel/desk/mcp-server-cards.js';
+import { MOD_SETUP_REQUEST, SETUP_DISCOVERY_TTL_MS } from '../src/kernel/desk/mcp-setup.js';
 import { privateTmpRoot } from './daemon-helpers.js';
 
 const CANARY = 'CANARY-vault-9f31c7e2';
@@ -26,7 +28,7 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-const NEURONS: ManifestMcp = { command: 'neurons', args: ['mcp'], config: { command: true, args: true, env: ['NEURONS_VAULT', 'NEURONS_TOKEN'], secret: ['NEURONS_TOKEN'] } } as ManifestMcp;
+const NEURONS: ManifestMcp = { command: 'neurons', args: ['mcp'], config: { command: true, args: true, env: ['NEURONS_VAULT', 'NEURONS_TOKEN', 'NEURONS_LOG'], secret: ['NEURONS_TOKEN'] } } as ManifestMcp;
 const CONSTELLATION: ManifestMcp = { command: 'constellation-mcp', args: [], config: { command: true, args: true, env: [] } } as ManifestMcp;
 const modOf = (name: string, entry: ManifestMcp, tier: DeskMod['tier'] = 'first-party'): DeskMod => ({ name, manifest: { name, provides: { mcp: [entry] } } as unknown as ManifestV2, tier });
 
@@ -75,10 +77,10 @@ function fakeBroker() {
   };
 }
 
-function setupOf(t: ReturnType<typeof rig>, mods: DeskMod[], extra: { liveRepos?: string[]; maxCardChars?: number } = {}) {
+function setupOf(t: ReturnType<typeof rig>, mods: DeskMod[], extra: { liveRepos?: string[]; maxCardChars?: number; runsIn?: 'session' | 'mod-mcp'; now?: () => number; discover?: (i: never) => never } = {}) {
   const b = fakeBroker();
   const events: Array<Record<string, unknown>> = [];
-  const s = new ModSetup({ home: t.home, broker: b.broker, mods: () => mods, userHome: t.userHome, pathDirs: () => [t.bin], launchKey: KEY, emit: (e) => events.push(e), ...(extra.liveRepos ? { liveRepos: () => extra.liveRepos! } : {}), ...(extra.maxCardChars ? { maxCardChars: extra.maxCardChars } : {}) });
+  const s = new ModSetup({ home: t.home, broker: b.broker, mods: () => mods, userHome: t.userHome, pathDirs: () => [t.bin], launchKey: KEY, emit: (e) => events.push(e), ...(extra.liveRepos ? { liveRepos: () => extra.liveRepos! } : {}), ...(extra.maxCardChars ? { maxCardChars: extra.maxCardChars } : {}), ...(extra.runsIn ? { runsIn: extra.runsIn } : {}), ...(extra.now ? { now: extra.now } : {}), ...(extra.discover ? { discover: extra.discover } : {}) });
   return { s, b, events };
 }
 
@@ -218,7 +220,7 @@ describe('#mcp-setup request.mod.setup and its grouped card', () => {
     expect(card).toMatchObject({ kind: 'grant', handOnly: true, detail: { action: 'mod.mcp.setup', rootRows: [] } });
     expect(card.detail.mods.map((m: { name: string }) => m.name)).toEqual(['gnomon.neurons', 'gnomon.constellation']);
     const lines: string[] = card.lines;
-    expect(lines[1]).toBe('requested via: the Mods panel in the Gnomon app, on your own connection');
+    expect(lines[1]).toBe('requested via: the Gnomon app, on your own connection');
     expect(lines.join('\n')).not.toContain('a request file');
     expect(lines.some((l) => l === 'mod 1 of 2: gnomon.neurons:')).toBe(true);
     expect(lines.some((l) => l.includes("inside the session's sandbox"))).toBe(true);
@@ -425,5 +427,106 @@ describe('gnomon mod config --from-claude', () => {
     expect(code).toBe(1);
     expect(err.join('')).toContain('not-installed');
     expect(readMcpConfigRequest(t.home, 'gnomon.neurons')).toBeNull();
+  });
+});
+
+describe('Aegis follow-ups (8.2 mod-setup review)', () => {
+  const write = (t: ReturnType<typeof rig>, servers: Record<string, unknown>) => fs.writeFileSync(path.join(t.userHome, '.claude.json'), JSON.stringify({ mcpServers: servers }));
+
+  it('I1: --from-claude with no server takes only a one-press candidate; the acme.github name-squat on GITHUB_TOKEN is refused until named', () => {
+    const t = rig({ github: { command: '/usr/bin/true', env: { GITHUB_TOKEN: 'ghp_value' } } });
+    const entry = { command: 'github-mcp', args: [], config: { command: true, args: true, env: ['GITHUB_TOKEN'] } } as ManifestMcp;
+    const squat = modOf('acme.github', entry, 'local');
+    const cs = setupCandidates({ mods: [squat], decls: decls(t), overrides: {} }).get('acme.github')!;
+    expect(cs[0]).toMatchObject({ match: 'name', oneTap: false });
+    const r = pickFromClaude(cs, true);
+    expect(r).toMatchObject({ why: expect.stringContaining('--from-claude <server>') });
+    expect(JSON.stringify(r)).not.toContain('ghp_value');
+    expect(pickFromClaude(cs, 'github')).toMatchObject({ pick: { decl: { name: 'github' } } });
+    // a first-party mod and a user source is one press: taken without a name
+    const t2 = rig({ neurons: { command: '/usr/bin/true' } });
+    expect(pickFromClaude(setupCandidates({ mods: [modOf('gnomon.neurons', NEURONS)], decls: decls(t2), overrides: {} }).get('gnomon.neurons')!, true)).toHaveProperty('pick');
+  });
+
+  it('N3: a skipped item is named in status (skippedOf), and cleared when it is set', async () => {
+    const t = rig({});
+    write(t, { neurons: neuronsServer(t), constellation: { command: t.node, args: [] } });
+    const { s, b } = setupOf(t, [modOf('gnomon.neurons', NEURONS), modOf('gnomon.constellation', CONSTELLATION)]);
+    await s.request(HUMAN, { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }, { name: 'gnomon.constellation', from: 'user::constellation' }] });
+    write(t, { neurons: neuronsServer(t, { args: [t.script, 'other'] }), constellation: { command: t.node, args: [] } });
+    await b.decide(0, 'allow');
+    expect(s.skippedOf('gnomon.neurons')).toEqual({ cardId: b.raised[0]!.cardId, mod: 'gnomon.neurons', why: 'changed' });
+    expect(s.skippedOf('gnomon.constellation')).toBeNull();
+  });
+
+  it('N4: a typed env name never masks a change of the copied one at allow', async () => {
+    const t = rig({});
+    write(t, { neurons: neuronsServer(t), constellation: { command: t.node, args: [] } });
+    const { s, b, events } = setupOf(t, [modOf('gnomon.neurons', NEURONS), modOf('gnomon.constellation', CONSTELLATION)]);
+    await s.request(HUMAN, { items: [{ name: 'gnomon.neurons', from: 'user::neurons', env: { NEURONS_LOG: 'debug' } }, { name: 'gnomon.constellation', from: 'user::constellation' }] });
+    write(t, { neurons: neuronsServer(t, { env: { NEURONS_VAULT: '/moved' } }), constellation: { command: t.node, args: [] } });
+    await b.decide(0, 'allow');
+    expect(events).toContainEqual(expect.objectContaining({ event: 'mcp.setup.skipped', mod: 'gnomon.neurons', why: 'changed' }));
+    expect(readMcpOverrides(t.home)['gnomon.neurons']).toBeUndefined();
+  });
+
+  it('N7: status reads share one discovery until a source file changes or the TTL passes; local candidates never re-fire offered', () => {
+    const t = rig({});
+    write(t, { neurons: neuronsServer(t) });
+    let calls = 0;
+    let now = 1_000;
+    const discover = ((i: never) => (calls++, discoverMcpServers(i))) as never;
+    const repo = path.join(t.root, 'repo');
+    fs.mkdirSync(repo);
+    let live: string[] = [];
+    const b = fakeBroker();
+    const events: Array<Record<string, unknown>> = [];
+    const s = new ModSetup({ home: t.home, broker: b.broker, mods: () => [modOf('gnomon.neurons', NEURONS)], userHome: t.userHome, pathDirs: () => [t.bin], launchKey: KEY, emit: (e) => events.push(e), liveRepos: () => live, now: () => now, discover });
+    s.offers();
+    s.offers();
+    expect(calls).toBe(1);
+    now += SETUP_DISCOVERY_TTL_MS;
+    s.offers();
+    expect(calls).toBe(2);
+    write(t, { neurons: neuronsServer(t), extra: { command: '/usr/bin/true' } });
+    fs.utimesSync(path.join(t.userHome, '.claude.json'), new Date(), new Date(Date.now() + 5000));
+    s.offers();
+    expect(calls).toBe(3);
+    const offered = events.filter((e) => e.event === 'mcp.setup.offered').length;
+    const repoReal = fs.realpathSync.native(repo);
+    fs.writeFileSync(path.join(t.userHome, '.claude.json'), JSON.stringify({ mcpServers: { neurons: neuronsServer(t), extra: { command: '/usr/bin/true' } }, projects: { [repoReal]: { mcpServers: { neurons: { command: t.node } } } } }));
+    live = [repo];
+    s.offers();
+    expect(s.offers().get('gnomon.neurons')!.some((r) => r.source === 'local')).toBe(true);
+    expect(events.filter((e) => e.event === 'mcp.setup.offered').length).toBe(offered);
+  });
+
+  it('N8: the request-file card waits while a setup card is pending for the mod', async () => {
+    const t = rig({});
+    const mod = modOf('gnomon.neurons', NEURONS);
+    requestMcpConfig(t.home, mod, { command: t.node, args: ['ok'] });
+    const b = fakeBroker();
+    let busy = true;
+    const cards = new McpConfigCards({ home: t.home, broker: b.broker, mods: () => [mod], requestedBy: 'p:x/cli', launchKey: KEY, busy: () => busy });
+    await cards.scan();
+    expect(b.raised).toHaveLength(0);
+    expect(readMcpConfigRequest(t.home, 'gnomon.neurons')).not.toBeNull();
+    busy = false;
+    await cards.scan();
+    expect(b.raised).toHaveLength(1);
+  });
+
+  it('relay prep: how a mod server runs decides the sandbox, values and starts lines; the secret line is one constant', async () => {
+    const t = rig({});
+    write(t, { neurons: neuronsServer(t) });
+    for (const runsIn of ['session', 'mod-mcp'] as const) {
+      const { s, b } = setupOf(t, [modOf('gnomon.neurons', NEURONS)], { runsIn });
+      await s.request(HUMAN, { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] });
+      const lines = (b.raised[0]!.lines as string[]).join('\n');
+      for (const k of ['sandbox', 'values', 'starts'] as const) expect(lines).toContain(RUNS_IN_TEXT[runsIn][k]);
+      expect(lines).toContain(ENV_SECRET_LINE(['NEURONS_TOKEN']));
+    }
+    expect(RUNS_IN_TEXT['mod-mcp'].sandbox).not.toBe(RUNS_IN_TEXT.session.sandbox);
+    expect(MOD_SETUP_REQUEST).toBe('request.mod.setup');
   });
 });

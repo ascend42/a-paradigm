@@ -24,8 +24,26 @@
  *       (#mcp-setup, 8.2 fixes item 1) The same request, with the copy built from the matching server in your Claude
  *       Code config (the server named, else the preselected one). It goes through the same request-file card, which
  *       cannot verify where the request came from, so that card never claims "from your Claude Code config". The
- *       command resolves on the default session PATH (the CLI does not read the daemon's config).
+ *       command resolves on the default session PATH (the CLI does not read the daemon's config). Aegis I1 (conditions
+ *       1, 2, 6): with no server named, only a ONE-PRESS candidate is taken (a first-party mod; a user source, or a
+ *       plugin matched by command and name); anything else is refused with the candidates listed, and the person
+ *       names one. The lines that card cannot carry (plugin third-party and outlives lines, a local scope line, the
+ *       default-PATH line) are printed before the request is written.
  */
+
+/** Aegis I1: the candidate `--from-claude [<server>]` takes, or why not (names only). */
+export function pickFromClaude(cs: readonly SetupCandidate[], server: string | true): { pick: SetupCandidate } | { why: string; list: string[] } {
+  const list = cs.map((c) => `${c.decl.name} (${c.decl.source}${c.decl.plugin ? ` ${c.decl.plugin.id}` : ''})${c.problem ? `: ${SETUP_PROBLEM_TEXT[c.problem]}` : ''}`).slice(0, 8);
+  if (!cs.length) return { why: 'no server in your Claude Code config matches this mod', list };
+  if (server === true) {
+    const one = cs.find((c) => c.oneTap && !c.problem && c.config);
+    return one ? { pick: one } : { why: 'none of these is safe to take without naming it: name one with --from-claude <server>', list };
+  }
+  const named = cs.find((c) => c.decl.name === server || c.decl.id === server);
+  if (!named) return { why: `no matching server is named ${server.slice(0, 64)}`, list };
+  if (!named.config) return { why: named.problem ? SETUP_PROBLEM_TEXT[named.problem] : 'it cannot be copied as it is', list };
+  return { pick: named };
+}
 import * as path from 'node:path';
 import { kernelPrincipalOf, resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import { readKernelPubs } from '../kernel/identity/index.js';
@@ -34,7 +52,7 @@ import { daemonState } from '../kernel/lifecycle/pidfile.js';
 import { isModId, OFFER_SUPPRESS_REASONS } from '@a-company/gnomon-contracts';
 import os from 'node:os';
 import { deskLaunchKey, launchCardLines, readDeskMods, readMcpOverrides, requestMcpConfig, serverNameOf } from '../kernel/desk/mcp-passthrough.js';
-import { preselectedOf, setupCandidates, SETUP_PROBLEM_TEXT } from '../kernel/desk/mcp-setup.js';
+import { PLUGIN_OUTLIVES, PLUGIN_THIRD_PARTY, setupCandidates, SETUP_PROBLEM_TEXT, type SetupCandidate } from '../kernel/desk/mcp-setup.js';
 import { discoverMcpServers } from '../kernel/desk/mcp-servers.js';
 import { sessionPathFor } from '../kernel/runner/env.js';
 import { resolveMcpLaunch } from '../kernel/manifest/manifest.js';
@@ -205,14 +223,21 @@ export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr:
       refused(io.stderr, 'forbidden', 'configured', `${name} already launches; it is not waiting for setup`, ['gnomon mod config <mod> --command <abs> --args … to change it']);
       return DESK_EXIT_REFUSED;
     }
-    const pick = fromClaude === true ? preselectedOf(cs) : (cs.find((c) => c.decl.name === fromClaude || c.decl.id === fromClaude) ?? null);
-    if (!pick || !pick.config) {
-      const why = pick?.problem ? SETUP_PROBLEM_TEXT[pick.problem] : cs.length ? 'no server in your Claude Code config can be copied as it is' : 'no server in your Claude Code config matches this mod';
-      refused(io.stderr, 'not_found', 'no-candidate', why, cs.map((c) => `${c.decl.name} (${c.decl.source})${c.problem ? `: ${SETUP_PROBLEM_TEXT[c.problem]}` : ''}`).slice(0, 8));
+    const r = pickFromClaude(cs, fromClaude);
+    if ('why' in r) {
+      refused(io.stderr, 'not_found', 'no-candidate', r.why, r.list.length ? [...r.list, `gnomon mod config ${name} --from-claude <server>`] : []);
       return DESK_EXIT_REFUSED;
     }
-    config = pick.config;
+    const pick = r.pick;
+    config = pick.config!;
     io.stdout.write(`FROM       your ${pick.decl.name} server (${pick.decl.source})${pick.envDropped.length ? ` · not copied: ${pick.envDropped.join(', ')}` : ''}${pick.envSecret.length ? ` · secret, not copied: ${pick.envSecret.join(', ')}` : ''}\n`);
+    // Aegis I1: what the request-file card cannot carry, said here before anything is written
+    const notes = [
+      ...(pick.decl.plugin ? [PLUGIN_THIRD_PARTY(pick.decl.plugin.id, pick.decl.plugin.version, pick.decl.plugin.root), PLUGIN_OUTLIVES] : []),
+      ...(pick.scopeNote ? [pick.scopeNote] : []),
+      ...(pick.decl.command && !path.isAbsolute(pick.decl.command) ? [`${pick.decl.command} was found on the default session PATH as ${pick.decl.resolved}`] : []),
+    ];
+    for (const l of notes) io.stdout.write(`NOTE       ${l}\n`);
   }
   try {
     requestMcpConfig(ctx.home, mod, config, ctx.now?.());

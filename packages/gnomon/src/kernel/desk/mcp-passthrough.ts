@@ -380,11 +380,11 @@ export function launchCardLines(mod: string, server: string, launch: McpLaunch, 
 
 /** The kernel half: raise a root-class card per pending request; `allow` writes the store. */
 export class McpConfigCards {
-  readonly #o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string; launchKey: Buffer; platform?: string };
+  readonly #o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string; launchKey: Buffer; platform?: string; busy?: (mod: string) => boolean };
   readonly #raised = new Map<string, string>();
   #seen = new Map<string, string>();
 
-  constructor(o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string; launchKey: Buffer; platform?: string }) {
+  constructor(o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string; launchKey: Buffer; platform?: string; busy?: (mod: string) => boolean }) {
     this.#o = o;
   }
 
@@ -397,6 +397,8 @@ export class McpConfigCards {
     const mods = new Map(this.#o.mods().map((m) => [m.name, m]));
     for (const name of modNames(home)) {
       if (this.#raised.has(name)) continue;
+      // Aegis N8: a #mcp-setup card waiting for this mod holds the request file back (raised once that card is decided)
+      if (this.#o.busy?.(name)) continue;
       const req = readMcpConfigRequest(home, name);
       if (!req) continue;
       const stamp = JSON.stringify(req);

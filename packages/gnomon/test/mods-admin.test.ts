@@ -22,6 +22,7 @@ import { privateTmpRoot } from './daemon-helpers.js';
 import { readDeskMods, readMcpConfigRequest, readMcpOverrides, writeMcpOverride } from '../src/kernel/desk/mcp-passthrough.js';
 import { ModSetup } from '../src/kernel/desk/mcp-setup.js';
 import { runModConfig } from '../src/cli/desk-cli.js';
+import { createKernelDispatcher } from '../src/kernel/socket/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 const MODS = path.resolve(PKG_ROOT, '..', 'gnomon-mods');
@@ -288,6 +289,57 @@ describe('#mcp-setup through #mods-admin (8.2 fixes item 1)', () => {
     expect(readMcpOverrides(t.home)['gnomon.neurons']).toEqual({ command: t.node, args: ['/x/main.js', 'mcp'], env: { NEURONS_VAULT: CANARY } });
     expect(t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!.mcp).toMatchObject({ launch: 'ok', setup: [] });
     expect(JSON.stringify(t.events)).not.toContain(CANARY);
+  });
+
+  it('N3: status names nothing skipped by default (setupSkipped null)', async () => {
+    const t = await setupRig();
+    expect(t.admin2.status().installed.find((x) => x.name === 'gnomon.neurons')!.mcp).toMatchObject({ setupSkipped: null });
+  });
+
+  it('N8: a config request is refused card-pending while a setup card waits for the same mod', async () => {
+    const t = await setupRig();
+    const res = await t.admin2.request(GUI, 'request.mod.setup', { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] });
+    await expect(t.admin2.request(GUI, 'request.mod.config', { name: 'gnomon.neurons', args: ['x'] })).rejects.toMatchObject({ refusal: { data: { why: 'card-pending', cardId: res.cardId } } });
+    expect(readMcpConfigRequest(t.home, 'gnomon.neurons')).toBeNull();
+  });
+
+  it('I1: --from-claude says when the command was found on the default session PATH', async () => {
+    const t = await setupRig();
+    fs.writeFileSync(path.join(t.root, '.claude.json'), JSON.stringify({ mcpServers: { neurons: { command: 'node', args: ['/x/main.js', 'mcp'] } } }));
+    const out: string[] = [];
+    const io = { stdout: { write: (s: string) => void out.push(s) }, stderr: { write: () => undefined } } as never;
+    expect(runModConfig(['gnomon.neurons', '--from-claude'], io, { home: t.home, trust: t.auth, env: {}, userHome: t.root, pathDirs: [t.bin] })).toBe(0);
+    expect(out.join('')).toContain(`NOTE       node was found on the default session PATH as ${t.node}`);
+  });
+
+  it('N5: through the real dispatcher, neither the reply, a refusal nor the dispatcher log carries a value', async () => {
+    const t = await setupRig();
+    const logged: unknown[] = [];
+    const d = createKernelDispatcher({
+      authenticator: {
+        now: () => Date.now(),
+        checkToken: () => ({ ok: true }),
+        authenticate: (s: Record<string, unknown>) => {
+          s.phase = 'authenticated';
+          s.principal = HUMAN;
+          Object.assign(s, { principalKind: 'human', deviceId: 'dev:local/mac', credential: 'gui' });
+          return { ok: true, credential: 'gui', principal: HUMAN, deviceId: 'dev:local/mac', via: 'launch', guiToken: 'g', commit: () => undefined, abort: () => undefined };
+        },
+      } as never,
+      status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: 'k', custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: null }) },
+      log: async (kind: string, payload: Record<string, unknown>) => void logged.push({ kind, payload }),
+      requests: { status: () => ({}), mods: t.admin2 } as never,
+    } as never);
+    const ctx = { connId: 'conn:test-1', closed: false, close() {}, authenticated() {}, notify: () => true, writableLength: () => 0, writeHighWater: 1 << 16 };
+    d.onConnect(ctx as never);
+    await d.handle({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'auth', params: { who: { kind: 'human', credential: 'gui' } } }, ctx as never);
+    let rid = 1;
+    const call = (params: unknown) => d.handle({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: ++rid, method: 'log.append', params }, ctx as never).catch((e: unknown) => ({ refused: e, message: (e as Error).message }));
+    const refused = await call({ kind: 'request.mod.setup', payload: { items: [{ name: 'gnomon.neurons', from: 'user::neurons', args: ['--token', CANARY] }] } });
+    const ok = await call({ kind: 'request.mod.setup', payload: { items: [{ name: 'gnomon.neurons', from: 'user::neurons' }] } });
+    expect(JSON.stringify(refused)).toContain('secret-arg');
+    expect(JSON.stringify(ok), JSON.stringify(ok).slice(0, 900)).toContain('pending');
+    expect(JSON.stringify([refused, ok, logged])).not.toContain(CANARY);
   });
 
   it('gnomon mod config --from-claude writes the same copy through the request file', async () => {

@@ -1582,7 +1582,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   log.onCommit((e) => folderPicker.observe(e));
   // #mcp-passthrough (Aegis D2): `gnomon mod config` requests reach the human only as a root-class card
   let mcpCardsTimer: NodeJS.Timeout | null = null;
-  const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli`, launchKey: deskLaunchKey(home) });
+  const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli`, launchKey: deskLaunchKey(home), busy: (mod) => modSetup.pendingOf(mod) !== null });
   // #mods-admin (the GUI Mods panel): the `gnomon mod` verbs as human requests + status.mods.installed/available,
   // with the Desk counts of `gnomon desk stats` kept live by #desk-stats' DeskTally
   const deskTally = new DeskTally({ log, kernelPrincipal });

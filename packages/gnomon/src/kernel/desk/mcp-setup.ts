@@ -52,7 +52,8 @@ import { RpcRefusal } from '../socket/rpc.js';
 import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
 import { checkMcpOverride, effectiveLaunch, isAbsoluteCommand, launchHashOf, readMcpConfigRequest, readMcpOverrides, serverNameOf, writeMcpOverride, type DeskMod, type McpLaunch, type McpOverrides } from './mcp-passthrough.js';
 import { autoAllowRules, discoverMcpServers, fetchesOf, inlineOf, mcpServerRow, shellOf, shownArgs, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
-import { mcpServerFactLines, readMcpServersStore } from './mcp-server-cards.js';
+import { ENV_SECRET_LINE, mcpServerFactLines, readMcpServersStore, RUNS_IN_TEXT, type McpRunsIn } from './mcp-server-cards.js';
+import type { DiscoverInput } from './mcp-servers.js';
 
 export const MOD_SETUP_REQUEST = 'request.mod.setup' as const;
 /** At most this many mods on one setup card (more is refused, never cut). */
@@ -249,7 +250,8 @@ export function setupRow(c: SetupCandidate, preselected: boolean): SetupRow {
 
 export const PLUGIN_THIRD_PARTY = (id: string, version: string | null, root: string): string => `the plugin ${id}${version ? ` ${version}` : ''} is third-party code, installed at ${root}`;
 export const PLUGIN_OUTLIVES = 'this copy stays on if you later disable, update or uninstall the plugin in Claude Code';
-export const REQUESTED_VIA = (credential: string | undefined): string => (credential === 'gui' ? 'requested via: the Mods panel in the Gnomon app, on your own connection' : "requested via: this home's device connection");
+/** Aegis N1: a gui request comes from the Gnomon app (the Mods row, its banner or the session line), never named narrower. */
+export const REQUESTED_VIA = (credential: string | undefined): string => (credential === 'gui' ? 'requested via: the Gnomon app, on your own connection' : "requested via: this home's device connection");
 
 /** One item ready for the card: the merged copy, its launch and hash, what the person edited. */
 export interface SetupItem {
@@ -259,6 +261,8 @@ export interface SetupItem {
   launch: McpLaunch;
   hash: string;
   edited: Array<'command' | 'args' | 'env'>;
+  /** Aegis N4: the person's own edits as typed (the allow re-check re-applies THESE on a fresh copy, never the merged env) */
+  edits: Edits;
   /** the enabled user servers that run the same command and args */
   duplicates: string[];
 }
@@ -270,25 +274,25 @@ export function mergedRow(it: Pick<SetupItem, 'cand' | 'launch'>): McpServerRow 
 }
 
 /** The lines of one mod's block on the setup card (names only, never a value). */
-export function setupItemLines(it: SetupItem, o: { userHome: string }): string[] {
+export function setupItemLines(it: SetupItem, o: { userHome: string; runsIn?: McpRunsIn }): string[] {
   const d = it.cand.decl;
   const server = serverNameOf(it.cand.mod);
   const real = realOr(it.launch.command);
   return [
     `set how mod ${it.cand.mod} launches its MCP server ${server}, from your ${d.name} server`,
-    ...mcpServerFactLines(mergedRow(it), { scope: 'all', via: 'settings', at: 0, launchHash: it.hash, pluginRoot: d.plugin?.root ?? null, autoAllowed: autoAllowRules(o.userHome, server) }),
+    ...mcpServerFactLines(mergedRow(it), { runsIn: o.runsIn ?? 'session', scope: 'all', via: 'settings', at: 0, launchHash: it.hash, pluginRoot: d.plugin?.root ?? null, autoAllowed: autoAllowRules(o.userHome, server) }),
     `command ${it.launch.command}${real !== it.launch.command ? ` → ${real}` : ''}`,
     ...(it.edited.length ? [`edited by you: ${it.edited.join(', ')}`] : []),
     ...(d.plugin ? [PLUGIN_THIRD_PARTY(d.plugin.id, d.plugin.version, d.plugin.root), PLUGIN_OUTLIVES] : []),
     ...(it.cand.scopeNote ? [it.cand.scopeNote] : []),
     ...(it.cand.envDropped.length ? [`not copied (this mod does not take them): ${it.cand.envDropped.join(', ')}`] : []),
-    ...(it.cand.envSecret.length ? [`not copied (marked secret; Gnomon cannot store a secret for a mod yet): ${it.cand.envSecret.join(', ')}`] : []),
+    ...(it.cand.envSecret.length ? [ENV_SECRET_LINE(it.cand.envSecret)] : []),
     ...it.duplicates.map((n) => `also on as your server ${n}; sessions get both`),
-    'every new session in every repo starts this command as you, under the session sandbox',
+    RUNS_IN_TEXT[o.runsIn ?? 'session'].starts,
   ];
 }
 
-export function setupCardLines(items: readonly SetupItem[], o: { userHome: string; credential: string | undefined }): string[] {
+export function setupCardLines(items: readonly SetupItem[], o: { userHome: string; credential: string | undefined; runsIn?: McpRunsIn }): string[] {
   const n = items.length;
   return [
     n === 1 ? `Set up mod ${items[0]!.cand.mod}'s MCP server from your Claude Code config` : `Set up ${n} mod MCP servers from your Claude Code config`,
@@ -320,6 +324,20 @@ export interface ModSetupOptions {
   platform?: string;
   emit?: (e: Record<string, unknown>) => void;
   maxCardChars?: number;
+  /** relay prep (TD-2026-11-28-361): how a mod server runs; 'session' until mod servers get their own sandbox */
+  runsIn?: McpRunsIn;
+  /** Aegis N7: the clock for the offers' discovery cache (tests inject it) and the discovery itself (a test seam) */
+  now?: () => number;
+  discover?: (i: DiscoverInput) => McpServerDecl[];
+}
+
+/** Aegis N7: status reads reuse one discovery for this long while none of its input files changed. */
+export const SETUP_DISCOVERY_TTL_MS = 5_000;
+/** Aegis N3: why the newest setup card skipped a mod (status names it). */
+export interface SetupSkipped {
+  cardId: string;
+  mod: string;
+  why: SetupSkip;
 }
 
 const bad = (field: string, why: SetupRefusal, at: string, data: Record<string, unknown> = {}): RpcRefusal =>
@@ -333,6 +351,10 @@ export class ModSetup {
   readonly #pending = new Map<string, string>();
   /** mod → the candidate-set key last offered (mcp.setup.offered fires on a change only; Aegis note 4) */
   readonly #offered = new Map<string, string>();
+  /** Aegis N3: mod → its skip on the newest allowed card */
+  readonly #skipped = new Map<string, SetupSkipped>();
+  /** Aegis N7: the offers' discovery, cached on its input files' stamps and a short TTL */
+  #cache: { key: string; at: number; decls: McpServerDecl[] } | null = null;
 
   constructor(o: ModSetupOptions) {
     this.#o = o;
@@ -342,9 +364,37 @@ export class ModSetup {
     return this.#o.platform ?? process.platform;
   }
 
-  #candidates(mods: readonly DeskMod[] = this.#o.mods()): Map<string, SetupCandidate[]> {
-    const decls = discoverMcpServers({ userHome: this.#o.userHome, repos: this.#o.liveRepos?.() ?? [], pathDirs: this.#o.pathDirs(), platform: this.#platform() });
+  #discover(repos: readonly string[], cached: boolean): McpServerDecl[] {
+    const input: DiscoverInput = { userHome: this.#o.userHome, repos, pathDirs: this.#o.pathDirs(), platform: this.#platform() };
+    const run = (): McpServerDecl[] => (this.#o.discover ?? discoverMcpServers)(input);
+    if (!cached) return run();
+    const stamp = (f: string): string => {
+      try {
+        const st = fs.statSync(f);
+        return `${st.size}:${st.mtimeMs}`;
+      } catch {
+        return '-';
+      }
+    };
+    const u = this.#o.userHome;
+    const files = [path.join(u, '.claude.json'), path.join(u, '.claude', 'settings.json'), path.join(u, '.claude', 'plugins', 'installed_plugins.json'), ...repos.map((r) => path.join(r, '.mcp.json'))];
+    const key = JSON.stringify([input.pathDirs, repos, files.map(stamp)]);
+    const now = (this.#o.now ?? Date.now)();
+    if (this.#cache && this.#cache.key === key && now - this.#cache.at < SETUP_DISCOVERY_TTL_MS) return this.#cache.decls;
+    const decls = run();
+    this.#cache = { key, at: now, decls };
+    return decls;
+  }
+
+  /** The candidates now. `cached` (status reads only): reuse a fresh discovery; a request and its allow re-discover. */
+  #candidates(mods: readonly DeskMod[] = this.#o.mods(), cached = false): Map<string, SetupCandidate[]> {
+    const decls = this.#discover(this.#o.liveRepos?.() ?? [], cached);
     return setupCandidates({ mods, decls, overrides: readMcpOverrides(this.#o.home), platform: this.#platform() });
+  }
+
+  /** Aegis N3: the skip the newest allowed card recorded for this mod, or null. */
+  skippedOf(mod: string): SetupSkipped | null {
+    return this.#skipped.get(mod) ?? null;
   }
 
   /** The waiting setup card of a mod, or null. */
@@ -362,13 +412,15 @@ export class ModSetup {
   /** status.mods.installed[].mcp.setup per needs-config mod (names only). */
   offers(): Map<string, SetupRow[]> {
     const out = new Map<string, SetupRow[]>();
-    for (const [mod, cs] of this.#candidates()) {
+    for (const [mod, cs] of this.#candidates(undefined, true)) {
       const pre = preselectedOf(cs);
       out.set(mod, cs.map((c) => setupRow(c, c === pre)));
-      const key = cs.map((c) => `${c.decl.id}:${c.problem ?? 'ok'}`).join('|');
+      // Aegis N7: local candidates follow the live sessions; they never re-fire the offer event
+      const stable = cs.filter((c) => c.decl.source !== 'local');
+      const key = stable.map((c) => `${c.decl.id}:${c.problem ?? 'ok'}`).join('|');
       if (this.#offered.get(mod) !== key) {
         this.#offered.set(mod, key);
-        for (const c of cs) this.#o.emit?.({ event: 'mcp.setup.offered', mod, declId: c.decl.id, source: c.decl.source });
+        for (const c of stable) this.#o.emit?.({ event: 'mcp.setup.offered', mod, declId: c.decl.id, source: c.decl.source });
       }
     }
     return out;
@@ -387,7 +439,7 @@ export class ModSetup {
     const cands = this.#candidates(mods);
     const overrides = readMcpOverrides(this.#o.home);
     const store = readMcpServersStore(this.#o.home);
-    const discovered = discoverMcpServers({ userHome: this.#o.userHome, repos: [], pathDirs: this.#o.pathDirs(), platform: this.#platform() });
+    const discovered = this.#discover([], false);
     const onUser = discovered.filter((d) => d.transport === 'stdio' && d.resolved && store.enabled.some((e) => e.id === d.id));
     const seen = new Set<string>();
     const items: SetupItem[] = list.map((raw, i) => {
@@ -415,7 +467,7 @@ export class ModSetup {
       item.duplicates = onUser.filter((d) => d.resolved === item.launch.command && JSON.stringify(d.args) === JSON.stringify(item.launch.args)).map((d) => d.name);
       return item;
     });
-    const lines = setupCardLines(items, { userHome: this.#o.userHome, credential: asker.credential });
+    const lines = setupCardLines(items, { userHome: this.#o.userHome, credential: asker.credential, runsIn: this.#o.runsIn ?? 'session' });
     const shown = batchCardBlock(lines);
     if (shown.size > (this.#o.maxCardChars ?? MAX_CARD_CHARS)) throw bad('items', 'too-large', '');
     const cardId = mintId('card');
@@ -429,7 +481,7 @@ export class ModSetup {
       const again = (this.#candidates([mod]).get(mod.name) ?? []).find((c) => c.decl.id === it.cand.decl.id);
       if (!again || (again.problem && !(again.problem === 'secret-arg' && it.edited.includes('args')))) return 'changed';
       try {
-        const re = this.#merge(again, entry, editsOf(it), '');
+        const re = this.#merge(again, entry, it.edits, '');
         return re.hash === it.hash ? null : 'changed';
       } catch {
         return 'changed';
@@ -457,9 +509,11 @@ export class ModSetup {
           for (const it of items) {
             const why = stillSame(it);
             if (why) {
+              this.#skipped.set(it.cand.mod, { cardId, mod: it.cand.mod, why });
               this.#o.emit?.({ event: 'mcp.setup.skipped', mod: it.cand.mod, cardId, why });
               continue;
             }
+            this.#skipped.delete(it.cand.mod);
             // exactly the config whose hash the card showed (Aegis Q6), never a fresh copy
             writeMcpOverride(home, it.cand.mod, it.config);
             this.#o.emit?.({ event: 'mcp.setup.set', mod: it.cand.mod, cardId, launchHash: it.hash });
@@ -500,23 +554,16 @@ export class ModSetup {
       throw bad(edited.length ? `${at}.${edited.join(',')}` : `${at}.from`, 'not-permitted', at);
     }
     const launch = resolveMcpLaunch(entry, config);
-    return { cand, entry, config, launch, hash: launchHashOf(launch, this.#o.launchKey), edited, duplicates: [] };
+    return { cand, entry, config, launch, hash: launchHashOf(launch, this.#o.launchKey), edited, edits, duplicates: [] };
   }
 }
 
-interface Edits {
+export interface Edits {
   command?: string;
   args?: string[];
   env?: Record<string, string>;
 }
 
-function editsOf(it: SetupItem): Edits {
-  return {
-    ...(it.edited.includes('command') ? { command: it.config.command! } : {}),
-    ...(it.edited.includes('args') ? { args: [...(it.config.args ?? [])] } : {}),
-    ...(it.edited.includes('env') ? { env: { ...(it.config.env ?? {}) } } : {}),
-  };
-}
 
 function parseEdits(raw: Record<string, unknown>, at: string): Edits {
   const e: Edits = {};

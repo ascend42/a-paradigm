@@ -46,7 +46,7 @@ import { userMcpServerNames } from '../manifest/user-mcp.js';
 import { appBundleOf } from '../lifecycle/app-bundle.js';
 import { effectiveLaunch, isAbsoluteCommand, readDeskMods, readMcpConfigRequest, readMcpOverrides, requestMcpConfig, serverNameOf } from '../desk/mcp-passthrough.js';
 import { shownArgs } from '../desk/mcp-servers.js';
-import { MOD_SETUP_REQUEST, type ModSetup, type SetupRow } from '../desk/mcp-setup.js';
+import { MOD_SETUP_REQUEST, type ModSetup, type SetupRow, type SetupSkipped } from '../desk/mcp-setup.js';
 import type { DeskTallyView } from '../desk/desk-stats.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { isUserPaused, requestStart, requestUninstall, uninstallRequested, writePause } from './control.js';
@@ -133,7 +133,7 @@ export interface InstalledModView {
    * 9). launch: needs-config when that command is not absolute (never launched). setup: the Claude Code servers it
    * can be set up from (needs-config mods only; names only). setupPending: the waiting setup card.
    */
-  mcp: { server: string; overridden: boolean; configRequested: boolean; configurable: { command: boolean; args: boolean; env: string[]; secret: string[] }; command: string; args: string[]; launch: 'ok' | 'needs-config'; setup: SetupRow[]; setupPending: string | null } | null;
+  mcp: { server: string; overridden: boolean; configRequested: boolean; configurable: { command: boolean; args: boolean; env: string[]; secret: string[] }; command: string; args: string[]; launch: 'ok' | 'needs-config'; setup: SetupRow[]; setupPending: string | null; setupSkipped: SetupSkipped | null } | null;
   offers: Array<{ kind: string; title: string }>;
   desk: DeskTallyView;
   /** the shipped first-party tree differs from the pin: installing it raises a re-pin (Update) card */
@@ -324,6 +324,7 @@ export class ModsAdmin {
               launch: isAbsoluteCommand(eff!.command) ? 'ok' : 'needs-config',
               setup: offers.get(name) ?? [],
               setupPending: this.#o.setup?.pendingOf(name) ?? null,
+              setupSkipped: this.#o.setup?.skippedOf(name) ?? null,
             }
           : null,
         offers: (manifest?.provides?.offers ?? []).map((o) => ({ kind: String((o as { kind?: unknown }).kind ?? ''), title: String((o as { title?: unknown }).title ?? '') })),
@@ -428,6 +429,9 @@ export class ModsAdmin {
     const mod = readDeskMods(this.#o.home, this.#o.trust).find((m) => m.name === name);
     if (!mod) throw new RpcRefusal('NOT_FOUND', 'not-installed', `${name} is not an installed, granted, running-eligible mod (a paused mod is not configured)`, { name });
     if (!mod.manifest.provides?.mcp?.[0]) throw new RpcRefusal('NOT_FOUND', 'no-server', `${name} declares no mcp server`, { name });
+    // Aegis N8: one launch card per mod at a time (a setup card waiting refuses a config request; the reverse is #mcp-setup's)
+    const setupCard = this.#o.setup?.pendingOf(name) ?? null;
+    if (setupCard) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${name} already has a setup card waiting: decide it first`, { name, why: 'card-pending', cardId: setupCard });
     try {
       requestMcpConfig(this.#o.home, mod, config, this.#o.now?.());
     } catch (err) {
