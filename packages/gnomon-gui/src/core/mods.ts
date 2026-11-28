@@ -14,11 +14,20 @@
  *     kernel. A git URL is slice S4 and is not offered.
  *   Every key is ONE request (log.append{kind:'request.mod.*', payload}); the kernel stages and raises the normal
  *   card, which the human decides in the stack (Touch ID, root key). The GUI never signs and never decides here.
+ *
+ * #gui-mod-setup (8.2 fixes item 1, #mcp-setup): a mod whose effective launch is not absolute is `needs-config` and its
+ * server never reaches a session. status.mods.installed[].mcp.setup lists the Claude Code servers it can be set up
+ * from (names only: the GUI never holds a value). One press sends request.mod.setup{items:[{name, from}]} with the
+ * preselected candidate, and the card in the stack is the review; "Review first" opens the form filled from the row.
+ * One press only for a candidate the kernel marked oneTap (first-party mod; user source, or plugin by command and
+ * name); a local candidate is never preselected; a project one is a disabled row. The banner sends every one-press
+ * mod on one grouped card. modServerNotices derives the session's kernel-voiced line from status and log rows: GUI
+ * constant words and the server name only, never a row's detail (a failed row may carry stderr).
  */
 import { MOD_INSTALL_LIMITS } from '@a-company/gnomon-contracts';
 import type { StackCard } from './store.js';
 
-export type ModRequestKind = 'request.mod.install' | 'request.mod.link' | 'request.mod.pause' | 'request.mod.start' | 'request.mod.uninstall' | 'request.mod.config';
+export type ModRequestKind = 'request.mod.install' | 'request.mod.link' | 'request.mod.pause' | 'request.mod.start' | 'request.mod.uninstall' | 'request.mod.config' | 'request.mod.setup';
 export interface ModRequest {
   kind: ModRequestKind;
   payload: Record<string, unknown>;
@@ -36,13 +45,37 @@ export interface ModPending {
   what: 'install' | 'update' | 'uninstall' | 'configure';
 }
 
+/** One Claude Code server a needs-config mod can be set up from (status: names, never values). */
+export interface SetupOffer {
+  declId: string;
+  name: string;
+  source: 'user' | 'plugin' | 'local' | 'project';
+  plugin: { id: string; version: string | null } | null;
+  match: 'name' | 'command' | 'both';
+  command: string | null;
+  realCommand: string | null;
+  args: string[];
+  envNames: string[];
+  envDropped: string[];
+  envSecret: string[];
+  /** why it cannot be copied (the kernel's words), or null */
+  problem: string | null;
+  scopeNote: string | null;
+  oneTap: boolean;
+  preselected: boolean;
+}
+
 export interface ModMcp {
   server: string;
   overridden: boolean;
   configRequested: boolean;
   configurable: { command: boolean; args: boolean; env: string[]; secret: string[] };
+  /** the EFFECTIVE launch (the kernel's override when one is in force), args as the kernel shows them */
   command: string;
   args: string[];
+  launch: 'ok' | 'needs-config';
+  setup: SetupOffer[];
+  setupPending: string | null;
 }
 
 export interface InstalledMod {
@@ -105,6 +138,17 @@ export function modCards(cards: Iterable<StackCard>): Map<string, Array<{ cardId
   const out = new Map<string, Array<{ cardId: string; kind: 'install' | 'uninstall' | 'configure' }>>();
   for (const c of cards) {
     const d = obj(c.card.detail);
+    // #gui-mod-setup: one setup card names every mod on it (detail.mods[]); each row says a card is waiting
+    if (d?.action === 'mod.mcp.setup' && Array.isArray(d.mods)) {
+      for (const m of d.mods.slice(0, 16)) {
+        const n = str(obj(m)?.name);
+        if (!n || !MOD_ID.test(n)) continue;
+        const l = out.get(n) ?? [];
+        l.push({ cardId: c.cardId, kind: 'configure' });
+        out.set(n, l);
+      }
+      continue;
+    }
     const name = str(d?.name);
     if (!name || !MOD_ID.test(name)) continue;
     const kind = c.kind === 'install' ? 'install' : d?.action === 'mod.uninstall' ? 'uninstall' : d?.action === 'mod.mcp.config' ? 'configure' : null;
@@ -149,7 +193,7 @@ export function modsViewOf(status: unknown, cards: Iterable<StackCard> = []): Mo
       pausedWhy: str(m.pausedWhy),
       note: noteOf(m.note),
       uninstallRequested: m.uninstallRequested === true,
-      mcp: mcp && str(mcp.server) ? { server: str(mcp.server)!, overridden: mcp.overridden === true, configRequested: mcp.configRequested === true, configurable: { command: cfg?.command === true, args: cfg?.args === true, env: strs(cfg?.env), secret: strs(cfg?.secret) }, command: str(mcp.command) ?? '', args: strs(mcp.args) } : null,
+      mcp: mcp && str(mcp.server) ? { server: str(mcp.server)!, overridden: mcp.overridden === true, configRequested: mcp.configRequested === true, configurable: { command: cfg?.command === true, args: cfg?.args === true, env: strs(cfg?.env), secret: strs(cfg?.secret) }, command: str(mcp.command) ?? '', args: strs(mcp.args), launch: mcp.launch === 'needs-config' ? 'needs-config' : 'ok', setup: setupOffersOf(mcp.setup), setupPending: str(mcp.setupPending) } : null,
       offers: (Array.isArray(m.offers) ? m.offers : []).map(obj).filter((o): o is Record<string, unknown> => !!o).map((o) => ({ kind: str(o.kind) ?? '', title: str(o.title) ?? '' })).slice(0, 16),
       desk: { shown: num(desk?.shown), suppressed: num(desk?.suppressed), kept: num(desk?.kept) },
       update: upd && str(upd.path) && str(upd.version) ? { version: str(upd.version)!, path: str(upd.path)! } : null,
@@ -167,6 +211,142 @@ export function modsViewOf(status: unknown, cards: Iterable<StackCard> = []): Mo
   const otherPending: ModsView['otherPending'] = [];
   for (const [name, cs] of pending) if (!used.has(name)) for (const c of cs) if (c.kind === 'install') otherPending.push({ name, cardId: c.cardId, what: 'install' });
   return { unsupported: false, error, installed, available, otherPending, catalogRoot: str(obj(mods.catalog)?.root) };
+}
+
+const SOURCES = new Set(['user', 'plugin', 'local', 'project']);
+const MATCHES = new Set(['name', 'command', 'both']);
+function setupOffersOf(v: unknown): SetupOffer[] {
+  const out: SetupOffer[] = [];
+  for (const raw of Array.isArray(v) ? v.slice(0, 16) : []) {
+    const o = obj(raw);
+    const declId = str(o?.declId);
+    const source = str(o?.source);
+    if (!o || !declId || !source || !SOURCES.has(source)) continue;
+    const pl = obj(o.plugin);
+    out.push({
+      declId,
+      name: str(o.name) ?? '?',
+      source: source as SetupOffer['source'],
+      plugin: pl && str(pl.id) ? { id: str(pl.id)!, version: str(pl.version) } : null,
+      match: MATCHES.has(str(o.match) ?? '') ? (o.match as SetupOffer['match']) : 'name',
+      command: str(o.command),
+      realCommand: str(o.realCommand),
+      args: strs(o.args),
+      envNames: strs(o.envNames),
+      envDropped: strs(o.envDropped),
+      envSecret: strs(o.envSecret),
+      problem: str(o.problem),
+      scopeNote: str(o.scopeNote),
+      // a project row is never copied, whatever a status says (Aegis condition 3)
+      oneTap: o.oneTap === true && source !== 'project' && source !== 'local' && !str(o.problem),
+      preselected: o.preselected === true && source !== 'local' && source !== 'project' && !str(o.problem),
+    });
+  }
+  return out;
+}
+
+/* ── #gui-mod-setup ─────────────────────────────────────────────────────── */
+
+export const SETUP_COPY = Object.freeze({
+  key: 'Set up from your Claude Code config',
+  review: 'Review first',
+  reviewOnly: 'Set up from your Claude Code config…',
+  bannerKey: 'Set them up',
+  bannerKeyOne: 'Set it up',
+  copied: 'copied from your ~/.claude.json, value not shown',
+  send: 'Set up',
+  failedKey: 'Review its setup',
+});
+
+/** The candidate one press sends (the kernel's preselected, one-press candidate), or null. */
+export function oneTapOffer(m: Pick<InstalledMod, 'mcp' | 'pending'>): SetupOffer | null {
+  if (!m.mcp || m.mcp.launch !== 'needs-config' || m.mcp.setupPending || m.pending.length) return null;
+  return m.mcp.setup.find((o) => o.preselected && o.oneTap) ?? null;
+}
+
+/** The candidates "Review first" may pre-fill (never a project row, never a disqualified one). */
+export function reviewOffers(m: Pick<InstalledMod, 'mcp'>): SetupOffer[] {
+  return (m.mcp?.setup ?? []).filter((o) => o.source !== 'project' && !o.problem);
+}
+
+/** One request for every item (one grouped card). */
+export function setupRequest(items: ReadonlyArray<{ name: string; from: string; args?: string[]; env?: Record<string, string> }>): ModRequest {
+  return { kind: 'request.mod.setup', payload: { items: items.map((i) => ({ name: i.name, from: i.from, ...(i.args ? { args: [...i.args] } : {}), ...(i.env && Object.keys(i.env).length ? { env: { ...i.env } } : {}) })) } };
+}
+
+/** The Mods banner: how many mod servers wait for setup, and the one-press items. */
+export function setupBanner(v: Pick<ModsView, 'installed'>): { waiting: string[]; oneTap: Array<{ name: string; from: string }> } | null {
+  const waiting = v.installed.filter((m) => m.mcp?.launch === 'needs-config' && m.state !== 'paused' && !m.mcp.setupPending && !m.pending.length);
+  if (!waiting.length) return null;
+  const oneTap = waiting.map((m) => ({ m, o: oneTapOffer(m) })).filter((x) => x.o).slice(0, 8).map((x) => ({ name: x.m.name, from: x.o!.declId }));
+  return { waiting: waiting.map((m) => m.name), oneTap };
+}
+
+export function bannerText(b: { waiting: string[]; oneTap: unknown[] }): string {
+  const n = b.waiting.length;
+  const k = b.oneTap.length;
+  const lead = n === 1 ? "1 mod server isn't set up." : `${n} mod servers aren't set up.`;
+  if (!k) return `${lead} Set ${n === 1 ? 'it' : 'them'} up from ${n === 1 ? 'its row' : 'their rows'} below.`;
+  return `${lead} ${k === n ? (n === 1 ? 'It' : n === 2 ? 'Both' : 'All') : `${k} of ${n}`} can be set up from your Claude Code config.`;
+}
+
+/** The plain lines "Review first" shows for one candidate (names only). */
+export function offerLines(o: SetupOffer): string[] {
+  const src = o.source === 'user' ? 'your ~/.claude.json (every project)' : o.source === 'plugin' ? `the Claude Code plugin ${o.plugin?.id ?? '?'}${o.plugin?.version ? ` ${o.plugin.version}` : ''} (third-party code)` : o.source === 'local' ? 'your ~/.claude.json, for one folder' : "a repo's .mcp.json";
+  return [
+    `from ${src}, as ${o.name}`,
+    `command ${o.command ?? '?'}${o.realCommand && o.realCommand !== o.command ? ` → ${o.realCommand}` : ''}`,
+    `args ${o.args.join(' ') || '(none)'}`,
+    ...o.envNames.map((n) => `${n} ${SETUP_COPY.copied}`),
+    ...(o.envDropped.length ? [`not copied, this mod does not take them: ${o.envDropped.join(', ')}`] : []),
+    ...(o.envSecret.length ? [`not copied, marked secret (Gnomon cannot keep a mod secret yet): ${o.envSecret.join(', ')}`] : []),
+    ...(o.scopeNote ? [o.scopeNote] : []),
+  ];
+}
+
+/** The session's kernel-voiced line for one mod server (GUI constant words and the server name only). */
+export interface ModServerNotice {
+  server: string;
+  mod: string | null;
+  state: 'unset' | 'failed';
+  text: string;
+  key: string;
+}
+const GM = /^g[mx]_[A-Za-z0-9_.-]{1,80}$/;
+
+/**
+ * The mod servers this session does not have: a needs-config mod (status) is `unset`; a gm_ server a session listed
+ * as failed (Claude's init `mcp_servers[].status`, or a local-lane session.mcp{state:'failed'}) is `failed`. Only the
+ * server NAME is read from a row: never its error or detail (Aegis condition 12).
+ */
+export function modServerNotices(v: Pick<ModsView, 'installed'>, rows: Iterable<{ kind: string; payload?: unknown }>): ModServerNotice[] {
+  const failed = new Set<string>();
+  for (const r of rows) {
+    const p = obj(r.payload);
+    if (r.kind === 'session.mcp' && p?.state === 'failed' && typeof p.server === 'string' && GM.test(p.server)) failed.add(p.server);
+    if (r.kind === 'turn.event' && typeof p?.line === 'string' && p.line.length < 262144 && p.line.includes('"init"')) {
+      let m: unknown;
+      try {
+        m = JSON.parse(p.line);
+      } catch {
+        continue;
+      }
+      const o = obj(m);
+      if (o?.type !== 'system' || o.subtype !== 'init' || !Array.isArray(o.mcp_servers)) continue;
+      for (const s of o.mcp_servers.slice(0, 64)) {
+        const x = obj(s);
+        if (typeof x?.name === 'string' && GM.test(x.name) && x.status === 'failed') failed.add(x.name);
+      }
+    }
+  }
+  const out: ModServerNotice[] = [];
+  const byServer = new Map(v.installed.filter((m) => m.mcp).map((m) => [m.mcp!.server, m]));
+  for (const m of v.installed) {
+    if (m.mcp?.launch !== 'needs-config' || m.state === 'paused' || failed.has(m.mcp.server)) continue;
+    out.push({ server: m.mcp.server, mod: m.name, state: 'unset', text: `${m.mcp.server} isn't set up, so this session doesn't have it`, key: SETUP_COPY.key });
+  }
+  for (const server of [...failed].sort()) out.push({ server, mod: byServer.get(server)?.name ?? null, state: 'failed', text: `${server} failed to start`, key: SETUP_COPY.failedKey });
+  return out;
 }
 
 /** An absolute folder path the kernel will accept (POSIX `/…`, Windows `X:\…` / `X:/…`); the error, else null. */
@@ -248,6 +428,7 @@ export function stateText(m: Pick<InstalledMod, 'state' | 'pausedWhy' | 'uninsta
 /** The MCP line of an installed mod. */
 export function mcpText(m: Pick<InstalledMod, 'mcp' | 'state'>): string {
   if (!m.mcp) return 'no MCP server';
+  if (m.mcp.launch === 'needs-config' && m.state !== 'paused') return `${m.mcp.server} · isn't set up, so sessions don't get it${m.mcp.setupPending ? ' · a setup card waits' : ''}`;
   const on = m.state === 'paused' ? 'off while paused' : 'passed to new sessions';
   return `${m.mcp.server} · ${on}${m.mcp.overridden ? ' · your launch override' : ''}${m.mcp.configRequested ? ' · a change waits on its card' : ''}`;
 }
@@ -266,6 +447,7 @@ export function resultText(kind: ModRequestKind, r: unknown): string {
   const note = str(o?.note);
   if (kind === 'request.mod.pause') return `${str(o?.name) ?? 'the mod'} paused: it stops now and its MCP server leaves new sessions`;
   if (kind === 'request.mod.start') return `${str(o?.name) ?? 'the mod'} starting from its pinned snapshot`;
+  if (kind === 'request.mod.setup') return 'the setup card is in the stack: allow it there (Touch ID); nothing changes until you do';
   if (o?.state === 'unchanged') return note ?? 'already installed: nothing to approve';
   return note ?? 'requested: decide the card in the stack';
 }

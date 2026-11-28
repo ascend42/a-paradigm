@@ -1360,6 +1360,16 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .mod-result { padding-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mod-result.fail, .workshop-install-result.fail { color: var(--fail); }
 .mod-config { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px; }
+/* #gui-mod-setup (8.2 fixes item 1): the setup banner is a line under a rule, never a box; a disabled candidate reads
+   quieter; the review form's facts are the kernel's words, one per line */
+.mods-setup { border-bottom: 1px solid var(--rule); padding-bottom: 10px; }
+.mods-setup-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mod-offer-off { color: var(--sec); }
+.mod-review .mod-offer-line { overflow-wrap: anywhere; }
+.mod-choose { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+/* the session's kernel-voiced line for a mod server it does not have (above the pinned cards) */
+.mod-notice { border-top: 1px solid var(--rule); padding: 6px 20px 0; }
+.mod-notice-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--sec); }
 .mod-field { display: flex; flex-direction: column; gap: 2px; }
 .mod-folder { display: flex; gap: 6px; align-items: center; }
 .mod-folder .field { flex: 1; min-width: 0; }

@@ -60,7 +60,8 @@ import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, 
 import { CLIENT_POLL_MS, clientOf, clientPillOf, micTitleLine, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
 import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, placeWords, plainAppend, type TextRange, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, uncheckedWords, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
-import { mountMods } from './mods-panel.js';
+import { mountMods, requestMod } from './mods-panel.js';
+import { modServerNotices, modsViewOf, oneTapOffer, setupRequest } from '../core/mods.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { mountTierPicker, type TierPicker } from './tier-picker.js';
 import { KeptFlow, mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
@@ -1850,6 +1851,11 @@ const mcpServers = new McpServersController({
     settings.close();
     focusCardGroup(cardId);
   },
+  // #gui-mod-setup: Settings › MCP servers points at Mods for mod servers that need setup
+  openMods: () => {
+    settings.close();
+    modsPanel.open();
+  },
   focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
   connId: () => session?.connId ?? null, // a card's skips are shown only to the connection that decided it
   // C5'b: the trust panel moves focus only when it is already in the panel (or on its Trust… key)
@@ -2072,7 +2078,52 @@ const loopsView = mountLoopsView({
   onCardClick: (e) => onCardPress(e),
 });
 const modsPanel = mountMods(document, { client: () => client, status: () => status, cards: () => store.cards.values(), refreshStatus: () => refreshStatus(), focusCard: (cardId) => focusCard(cardId) });
-store.onChange(() => modsPanel.repaint());
+store.onChange(() => {
+  modsPanel.repaint();
+  paintModNotice();
+});
+
+/**
+ * #gui-mod-setup (8.2 fixes item 1): one kernel-voiced line at the foot of the focused session's transcript for a mod
+ * server it does not have: "gm_x isn't set up, so this session doesn't have it · Set up from your Claude Code config"
+ * (one press when the kernel marks a one-press candidate, else Mods opens at the row) or "gm_x failed to start · Review
+ * its setup". GUI constant words and the server name only: a failed row's detail (it may echo env values) is never shown.
+ */
+const modNotice = document.createElement('div');
+modNotice.id = 'mod-notice';
+modNotice.className = 'mod-notice';
+modNotice.setAttribute('role', 'status');
+modNotice.setAttribute('aria-label', 'mod servers this session does not have');
+modNotice.hidden = true;
+document.getElementById('pinned')?.before(modNotice);
+let modNoticeKey = '';
+function paintModNotice(): void {
+  const view = modsViewOf(status, store.cards.values());
+  const ns = focused ? modServerNotices(view, store.transcript(focused)) : [];
+  const k = JSON.stringify(ns.map((n) => [n.server, n.state]));
+  if (k === modNoticeKey) return;
+  modNoticeKey = k;
+  modNotice.replaceChildren();
+  modNotice.hidden = ns.length === 0;
+  for (const n of ns) {
+    const b = h(document as unknown as MiniDoc, 'button', { class: 'key quiet', type: 'button', 'data-notice-server': n.server, 'data-notice-mod': n.mod ?? '', 'data-notice-state': n.state }, n.key);
+    modNotice.appendChild(h(document as unknown as MiniDoc, 'p', { class: 'meta k-line kernel-owned mod-notice-line' }, `${n.text} · `, b) as unknown as Node);
+  }
+}
+modNotice.addEventListener('click', (e) => {
+  if (!e.isTrusted) return; // G-GUI-04
+  const b = (e.target as HTMLElement).closest('[data-notice-server]') as HTMLButtonElement | null;
+  if (!b || b.disabled) return;
+  const m = modsViewOf(status, store.cards.values()).installed.find((x) => x.name === b.dataset.noticeMod);
+  const tap = m && b.dataset.noticeState === 'unset' ? oneTapOffer(m) : null;
+  if (!m || !tap) return void modsPanel.open();
+  b.disabled = true;
+  void requestMod(client, setupRequest([{ name: m.name, from: tap.declId }])).then((r) => {
+    toasts().show(r.text, { kind: r.fail ? 'fail' : 'info' });
+    b.disabled = false;
+    return refreshStatus();
+  });
+});
 /** Settings → Revoke: the standing feed's own request (request.grant.standing.revoke, a tighten, no presence). */
 async function revokeGrant(grantId: string): Promise<void> {
   if (!client) return notice('not connected: the grant was not revoked', 'fail', { source: 'revoke' });
@@ -3204,6 +3255,7 @@ async function refreshStatus(): Promise<void> {
   localModel.statusChanged(); // #gui-local-model: a card waiting from an earlier load; the check after an Allow
   rulesUi = rulesReconcile(rulesUi, rulesStatusOf(status), (cardId) => store.cards.has(cardId)); // #gui-rules-view
   mcpServers.reconcile(); // #gui-mcp-servers: marks for servers gone, broken or already on drop
+  paintModNotice(); // #gui-mod-setup: the session's line for a mod server it does not have
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
   modPanelsStatus(status); // a mod installed, paused or removed: its views (and the Workshop key) follow

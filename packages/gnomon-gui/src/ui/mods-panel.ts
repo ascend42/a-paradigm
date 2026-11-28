@@ -15,9 +15,13 @@
  *   - #gui-folder-field (TD-2026-10-23-162, rule paths-are-chosen): Add from folder is the compact folder field (the
  *     kernel checks it holds gnomon-manifest.json; Add is disabled, with its reason, until it does) and Configure's
  *     command is the file variant (Choose file…; the kernel checks it is an executable file). No placeholder paths.
+ *   - #gui-mod-setup (8.2 fixes item 1): a needs-config mod's main key is "Set up from your Claude Code config" (one
+ *     request.mod.setup; the card in the stack is the review) with a quiet "Review first" beside it, which opens the
+ *     form filled from the kernel's row (names only; a value the person types is the only value the GUI sends). A
+ *     banner at the top sends every one-press mod on one grouped card.
  */
 import { RpcError, type GnomonClient, type ShownRefusal } from '../core/client.js';
-import { configRequest, configurable, deskText, folderPathError, installRequest, linkRequest, mcpText, modsViewOf, pauseRequest, resultText, startRequest, stateText, uninstallRequest, type ConfigForm, type InstalledMod, type ModPending, type ModRequest, type ModsView } from '../core/mods.js';
+import { bannerText, configRequest, configurable, deskText, folderPathError, installRequest, linkRequest, mcpText, modsViewOf, offerLines, oneTapOffer, pauseRequest, resultText, reviewOffers, setupBanner, SETUP_COPY, setupRequest, startRequest, stateText, uninstallRequest, type ConfigForm, type InstalledMod, type ModPending, type ModRequest, type ModsView } from '../core/mods.js';
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { FolderField, fieldView, type FolderFieldView } from '../core/folder-field.js';
 import { focusFolder, folderFieldEl, routeFolderPress } from './folder-field.js';
@@ -69,6 +73,9 @@ export interface ModsUi {
   addWhy: string | null;
   /** Configure: the command as the file variant of the folder field */
   cmdView: FolderFieldView;
+  /** #gui-mod-setup: the mod whose "Review first" form is open, and the candidate picked in it */
+  reviewOpen?: string | null;
+  reviewPick?: string | null;
 }
 
 const blankView = (purpose: 'mod' | 'command'): FolderFieldView => fieldView(new FolderField({ purpose, call: () => Promise.reject(new Error('not connected')), changed: () => undefined }), 'compact');
@@ -104,6 +111,28 @@ function configForm(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
   return f;
 }
 
+/** #gui-mod-setup "Review first": the kernel's row for the picked candidate, a chooser when there are several. */
+function reviewForm(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
+  const offers = reviewOffers(m);
+  const pick = offers.find((o) => o.declId === ui.reviewPick) ?? offers.find((o) => o.preselected) ?? offers[0]!;
+  const f = h(doc, 'div', { class: 'mod-config mod-review', role: 'group', 'aria-label': `Review the setup of ${m.name}`, 'data-review-for': m.name });
+  f.appendChild(h(doc, 'p', { class: 'meta' }, `${m.mcp!.server} would launch the way your Claude Code runs it. Change a field only if you want it different; nothing runs until you allow its card.`));
+  if (offers.length > 1) {
+    const ch = h(doc, 'div', { class: 'mod-choose', role: 'group', 'aria-label': 'which of your servers' });
+    for (const o of offers) ch.appendChild(h(doc, 'button', { class: 'key quiet', type: 'button', 'aria-pressed': o.declId === pick.declId ? 'true' : 'false', 'data-mod-act': 'review-pick', 'data-mod-name': m.name, 'data-decl': o.declId }, `${o.name} · ${o.source}`));
+    f.appendChild(ch);
+  }
+  for (const l of offerLines(pick)) f.appendChild(h(doc, 'p', { class: 'meta mod-offer-line' }, l));
+  if (m.mcp!.configurable.args) f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, 'arguments (separate with spaces; quote one that holds a space)', h(doc, 'input', { class: 'field', type: 'text', name: 'review-args', 'aria-label': 'arguments', maxlength: '4096', value: pick.args.join(' ') })));
+  for (const e of m.mcp!.configurable.env.filter((x) => !m.mcp!.configurable.secret.includes(x))) {
+    const copied = pick.envNames.includes(e);
+    f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, `env ${e}${copied ? ` · ${SETUP_COPY.copied}; type to replace it` : ''}`, h(doc, 'input', { class: 'field', type: 'text', name: `review-env:${e}`, 'data-env': e, 'aria-label': `env ${e}`, maxlength: '4096' })));
+  }
+  if (ui.configError) f.appendChild(h(doc, 'p', { class: 'meta mod-result fail', role: 'alert' }, ui.configError));
+  f.appendChild(h(doc, 'div', { class: 'mod-keys' }, key(doc, 'review-send', SETUP_COPY.send, { 'data-mod-name': m.name, 'data-decl': pick.declId }, ui, `setup:${m.name}`), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-mod-act': 'review-cancel' }, 'cancel')));
+  return f;
+}
+
 function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
   const row = h(doc, 'div', { class: `mod-row mod-state-${m.state}`, role: 'group', 'aria-label': m.name, 'data-mod': m.name });
   row.appendChild(
@@ -122,6 +151,8 @@ function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
   if (m.description) row.appendChild(h(doc, 'p', { class: 'meta mod-desc' }, m.description));
   row.appendChild(h(doc, 'p', { class: 'meta mod-facts' }, `publisher ${m.publisher} · ${m.source} · pin `, h(doc, 'code', { title: 'the pinned packageHash (prefix)' }, m.pin)));
   row.appendChild(h(doc, 'p', { class: 'meta mod-mcp' }, `MCP: ${mcpText(m)}`));
+  // a repo's .mcp.json match is shown, disabled, with its reason (Aegis condition 3); never offered
+  for (const o of (m.mcp?.launch === 'needs-config' ? m.mcp.setup : []).filter((x) => x.problem)) row.appendChild(h(doc, 'p', { class: 'meta mod-offer-off', 'aria-disabled': 'true' }, `your ${o.name} server (${o.source}) can't be copied: ${o.problem}`));
   if (m.offers.length) row.appendChild(h(doc, 'p', { class: 'meta mod-offers' }, `offers: ${m.offers.map((o) => (o.title ? `${o.title} (${o.kind})` : o.kind)).join(' · ')}`));
   if (m.offers.length || m.desk.shown || m.desk.suppressed || m.desk.kept) row.appendChild(h(doc, 'p', { class: 'meta mod-desk', title: 'the Desk counts of gnomon desk stats' }, `Desk: ${deskText(m.desk)}`));
   for (const p of pendingEls(doc, m.pending)) row.appendChild(p);
@@ -129,11 +160,16 @@ function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
   const n = { 'data-mod-name': m.name };
   if (m.state === 'paused') keys.appendChild(key(doc, 'start', 'Start', n, ui, `start:${m.name}`));
   else if (m.state !== 'error') keys.appendChild(key(doc, 'pause', 'Pause', n, ui, `pause:${m.name}`));
+  const tap = oneTapOffer(m);
+  const review = m.mcp?.launch === 'needs-config' && !m.mcp.setupPending && !m.pending.length && reviewOffers(m).length > 0;
+  if (tap) keys.appendChild(key(doc, 'setup', SETUP_COPY.key, { ...n, 'data-decl': tap.declId }, ui, `setup:${m.name}`));
+  if (review && ui.reviewOpen !== m.name) keys.appendChild(h(doc, 'button', { class: tap ? 'key quiet' : 'key', type: 'button', 'data-mod-act': 'review', ...n }, tap ? SETUP_COPY.review : SETUP_COPY.reviewOnly));
   if (configurable(m) && ui.configOpen !== m.name) keys.appendChild(key(doc, 'configure', 'Configure', n, ui, `configure:${m.name}`));
   if (m.update && !m.pending.some((p) => p.what === 'update')) keys.appendChild(key(doc, 'update', `Update to ${m.update.version}`, { ...n, 'data-path': m.update.path }, ui, `update:${m.name}`));
   if (!m.uninstallRequested && !m.pending.some((p) => p.what === 'uninstall')) keys.appendChild(key(doc, 'uninstall', 'Uninstall', n, ui, `uninstall:${m.name}`));
   row.appendChild(keys);
   if (ui.configOpen === m.name && m.mcp) row.appendChild(configForm(doc, m, ui));
+  if (ui.reviewOpen === m.name && m.mcp && reviewOffers(m).length) row.appendChild(reviewForm(doc, m, ui));
   const r = resultEl(doc, ui.results.get(m.name));
   if (r) row.appendChild(r);
   return row;
@@ -153,6 +189,15 @@ export function paintMods(doc: MiniDoc, body: { firstChild: unknown; removeChild
     return;
   }
   if (v.error) sec('error', 'Mods', `The kernel could not read its mods: ${v.error}. The terminal form is gnomon mod list.`).setAttribute('role', 'alert');
+  // #gui-mod-setup: the banner (every one-press mod on one grouped card)
+  const b = setupBanner(v);
+  if (b) {
+    const s = h(doc, 'section', { class: 'settings-sec mods-sec mods-setup', 'data-section': 'setup', 'aria-label': 'Mod servers to set up' });
+    s.appendChild(h(doc, 'p', { class: 'meta mods-setup-line', role: 'status' }, bannerText(b), ' ', b.oneTap.length ? key(doc, 'setup-all', b.oneTap.length === 1 ? SETUP_COPY.bannerKeyOne : SETUP_COPY.bannerKey, { 'data-items': JSON.stringify(b.oneTap) }, ui, 'setup-all') : null));
+    const rb = resultEl(doc, ui.results.get('setup-all'));
+    if (rb) s.appendChild(rb);
+    body.appendChild(s);
+  }
   const inst = sec('installed', `Installed (${v.installed.length})`, v.installed.length ? undefined : 'No mod is installed yet. Install one below; the kernel raises its card in the stack and you allow it there with Touch ID.');
   for (const m of v.installed) inst.appendChild(installedEl(doc, m, ui));
   const avail = sec('available', 'Available', v.available.length ? 'First-party mods shipped with this Gnomon. Install raises the install card in the stack.' : v.catalogRoot ? 'Every first-party mod shipped with this Gnomon is installed.' : 'This kernel found no first-party mods beside it (the gnomon-mods folder). Add one from a folder below.');
@@ -220,7 +265,7 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
   overlay.appendChild(card);
   document.body.appendChild(overlay);
 
-  const ui = emptyUi() as { busy: Set<string>; results: Map<string, ModResult>; configOpen: string | null; configError: string | null; addView: FolderFieldView; addWhy: string | null; cmdView: FolderFieldView };
+  const ui = { ...emptyUi(), reviewOpen: null, reviewPick: null } as { busy: Set<string>; results: Map<string, ModResult>; configOpen: string | null; configError: string | null; addView: FolderFieldView; addWhy: string | null; cmdView: FolderFieldView; reviewOpen: string | null; reviewPick: string | null };
   let back: HTMLElement | null = null;
   const call = (req: { kind: string; payload: Record<string, unknown> }): Promise<unknown> => {
     const c = d.client();
@@ -282,6 +327,7 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     ui.busy.delete(busyKey);
     ui.results.set(resultKey, r);
     if (!r.fail && req.kind === 'request.mod.config') ui.configOpen = null;
+    if (!r.fail && req.kind === 'request.mod.setup') ui.reviewOpen = null;
     if (!r.fail && req.kind === 'request.mod.link') addField.clear();
     await d.refreshStatus().catch(() => undefined);
     repaint();
@@ -314,6 +360,39 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     if (act === 'start') return void send(`start:${name}`, name, startRequest(name));
     if (act === 'uninstall') return void send(`uninstall:${name}`, name, uninstallRequest(name));
     if (act === 'install' || act === 'update') return void send(`${act}:${name}`, name, installRequest(b.dataset.path!));
+    // #gui-mod-setup: one press = one request; the card in the stack is the review
+    if (act === 'setup') return void send(`setup:${name}`, name, setupRequest([{ name, from: b.dataset.decl! }]));
+    if (act === 'setup-all') {
+      const items = JSON.parse(b.dataset.items ?? '[]') as Array<{ name: string; from: string }>;
+      return void (items.length ? send('setup-all', 'setup-all', setupRequest(items)) : undefined);
+    }
+    if (act === 'review' || act === 'review-pick') {
+      ui.reviewOpen = name;
+      ui.reviewPick = act === 'review-pick' ? (b.dataset.decl ?? null) : null;
+      ui.configOpen = null;
+      ui.configError = null;
+      repaint();
+      return void (act === 'review' ? (body.querySelector(`[data-review-for="${CSS.escape(name)}"] input`) as HTMLElement | null)?.focus() : undefined);
+    }
+    if (act === 'review-cancel') {
+      ui.reviewOpen = null;
+      ui.configError = null;
+      return repaint();
+    }
+    if (act === 'review-send') {
+      const m = modsViewOf(d.status(), d.cards()).installed.find((x) => x.name === name);
+      const form = body.querySelector(`[data-review-for="${CSS.escape(name)}"]`);
+      const offer = m ? reviewOffers(m).find((o) => o.declId === b.dataset.decl) : undefined;
+      if (!m?.mcp || !form || !offer) return;
+      const argsEl = form.querySelector('[name="review-args"]') as HTMLInputElement | null;
+      const typedArgs = argsEl ? splitArgs(argsEl.value) : null;
+      // only what the person changed travels: the copied values stay in the kernel
+      const args = typedArgs && typedArgs.join(' ') !== offer.args.join(' ') ? typedArgs : undefined;
+      const env: Record<string, string> = {};
+      for (const i of form.querySelectorAll<HTMLInputElement>('[data-env]')) if (i.value !== '') env[i.dataset.env!] = i.value;
+      ui.configError = null;
+      return void send(`setup:${name}`, name, setupRequest([{ name, from: offer.declId, ...(args ? { args } : {}), env }]));
+    }
     if (act === 'configure') {
       ui.configOpen = name;
       ui.configError = null;
